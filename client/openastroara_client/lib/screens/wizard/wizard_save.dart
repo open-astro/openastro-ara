@@ -9,6 +9,8 @@ import '../../models/profile_draft.dart'
 import '../../services/profile_api.dart';
 import '../../util/guide_optics.dart';
 import '../../util/host_port.dart';
+import '../../widgets/guider/guider_setup_wizard.dart'
+    show parseAlpacaChoiceEndpoint;
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/camera_electronics_state.dart';
@@ -187,10 +189,22 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
         g.calibrationCadence == CalibrationCadence.eachSession,
     // §63.17 — null (untouched picker) keeps the base profile's selection.
     guiderCamera: g.guiderCamera,
+    guiderMount: g.guiderMount,
+    guiderAuxMount: g.guiderAuxMount,
+    guiderRotator: g.guiderRotator,
+    // A camera picked on another Alpaca server retargets the daemon's Alpaca
+    // config (same rule as the §63.17 setup wizard's Apply) — without this the
+    // pick would silently not take effect.
+    guiderAlpacaHost: parseAlpacaChoiceEndpoint(g.guiderCamera ?? '')?.host,
+    guiderAlpacaPort: parseAlpacaChoiceEndpoint(g.guiderCamera ?? '')?.port,
     // §63.19 — null keeps the base for anything the user left untouched.
     guiderSetupType: setupType,
     guideFocalLength: focalLength,
     guidePixelSize: g.guidePixelSizeUm,
+    // §76.2 — the wizard's chosen exposure range persists in the profile so a
+    // later darks rebuild covers the same range guiding runs in.
+    guideExposureMinMs: g.darkMinExposureMs,
+    guideExposureMaxMs: g.darkMaxExposureMs,
   );
 }
 
@@ -211,9 +225,35 @@ PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft 
     indexDownloadPath: d.clearedFields.contains(ClearableField.starDatabasePath)
         ? defaults.indexDownloadPath
         : ps.starDatabasePath,
+    // Search radius is deliberately NOT derived (§76.1): it reflects mount
+    // pointing uncertainty, not optics — image scale says nothing about how
+    // far off a goto lands, so the §37.8 default stands.
     searchRadiusDeg: ps.searchRadiusDeg,
-    downsampleFactor: ps.downsampleFactor,
+    // §76.1 derived-never-asked: the wizard no longer has a plate-solve
+    // screen, so an unset downsample is seeded from the rig's image scale —
+    // but only when the base is still at the section default: a cloned
+    // profile where the user hand-tuned the value keeps that tuning (null →
+    // copyWith keeps base).
+    downsampleFactor: ps.downsampleFactor ??
+        (base.downsampleFactor == defaults.downsampleFactor
+            ? derivedAstapDownsample(
+                d.camera.pixelSizeMicrons, d.telescope.focalLengthMm)
+            : null),
   );
+}
+
+/// §76 S5 — seed ASTAP's downsample from the imaging train's pixel scale
+/// (206.265 × µm ÷ mm arcsec/px): solvers want ~1.5–3″/px, so oversampled
+/// rigs bin down (scale < 0.75″ → 4, < 1.5″ → 2) and everything else runs
+/// full-res. Null when the scale isn't computable (either fact missing) —
+/// copyWith then keeps the base value, same as every unset field.
+int? derivedAstapDownsample(double? pixelSizeUm, double? focalLengthMm) {
+  if (pixelSizeUm == null || pixelSizeUm <= 0) return null;
+  if (focalLengthMm == null || focalLengthMm <= 0) return null;
+  final scale = 206.265 * pixelSizeUm / focalLengthMm;
+  if (scale >= 1.5) return 1;
+  if (scale >= 0.75) return 2;
+  return 4;
 }
 
 /// §37.4 screen 12 — map the draft's autofocus subset onto the profile's
@@ -224,13 +264,47 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
   return base.copyWith(
     exposureSeconds: af.exposureSeconds,
     steps: af.steps,
-    stepSize: af.stepSize,
+    // §76 S5 — with no autofocus screen, an unset step size is seeded from
+    // the focuser's read step size + the optics' focal ratio when both are
+    // known — but only when the base is still at the section default: a
+    // cloned profile's hand-tuned step size survives (null keeps the base).
+    stepSize: af.stepSize ??
+        (base.stepSize == const AutofocusSettings().stepSize
+            ? derivedAutofocusStepSize(
+                focuserStepUm: d.focuser.stepSizeMicrons,
+                focalLengthMm: d.telescope.focalLengthMm,
+                apertureMm: d.telescope.apertureMm)
+            : null),
     runAfterFilterChange: af.runAfterFilterChange,
     // §59.4 — the draft carries the wire string (null = untouched, keep base).
     telescopeType: af.telescopeType == null
         ? null
         : telescopeTypeFromWire(af.telescopeType),
   );
+}
+
+/// §76 S5 — seed the autofocus step size (focuser steps per AF point) from
+/// the critical-focus zone: CFZ ≈ 2.2 µm × f-ratio² (the standard visual
+/// approximation), one AF step ≈ half the CFZ so the V-curve samples it.
+/// Needs the focuser's µm/step (often unreported — e.g. ZWO EAF) and the
+/// optics; null (keep base default) when either is missing. Clamped to
+/// [5, 500] so a degenerate train can't produce a useless 1-step or a
+/// hardware-grinding multi-thousand-step seed.
+int? derivedAutofocusStepSize({
+  double? focuserStepUm,
+  double? focalLengthMm,
+  double? apertureMm,
+}) {
+  if (focuserStepUm == null || focuserStepUm <= 0) return null;
+  if (focalLengthMm == null || focalLengthMm <= 0) return null;
+  if (apertureMm == null || apertureMm <= 0) return null;
+  final fRatio = focalLengthMm / apertureMm;
+  final cfzUm = 2.2 * fRatio * fRatio;
+  final steps = (cfzUm / 2 / focuserStepUm).round();
+  // .toInt() for explicitness: int.clamp(int, int) IS statically int since
+  // Dart 2.17 (the SDK special-cases it), but spelling it out spares every
+  // future reader the num-vs-int double-take (review r3).
+  return steps.clamp(5, 500).toInt();
 }
 
 /// §37.4 screen 13 — map the draft's file-saving choices onto the profile's

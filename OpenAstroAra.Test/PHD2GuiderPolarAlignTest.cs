@@ -62,9 +62,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Capture_request_rejects_a_save_without_a_path() {
-            Assert.Throws<ArgumentException>(() =>
-                PHD2Guider.BuildCaptureSolverFrameRequest(1000, null, null, null, path: null, save: true));
+        public void Capture_request_allows_a_save_without_a_path_but_rejects_a_blank_one() {
+            // §45 capture-fetch — save WITHOUT a path is the daemon-side default save (the
+            // daemon picks a sandbox filename and reports it on SingleFrameComplete); the
+            // pre-fetch contract that required a caller path is gone. An EXPLICIT blank
+            // path is still a caller bug.
+            var request = PHD2Guider.BuildCaptureSolverFrameRequest(1000, null, null, null, path: null, save: true);
+            Assert.That(request.Parameters!.Save, Is.True);
+            Assert.That(request.Parameters.Path, Is.Null);
             Assert.Throws<ArgumentException>(() =>
                 PHD2Guider.BuildCaptureSolverFrameRequest(1000, null, null, null, path: "   ", save: true));
         }

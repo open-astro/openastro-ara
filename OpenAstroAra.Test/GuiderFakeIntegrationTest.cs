@@ -210,6 +210,56 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_profile_switch_push_flips_the_daemon_to_the_new_profiles_twin() {
+            // §63.4 — POST /profiles/{id}/select fires a guider push; the push's ensure step
+            // must land the daemon on the NEW profile's twin (create it here), not keep
+            // pushing into the old one.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var created = new List<string?>();
+            var selected = new List<string?>();
+            var daemonProfiles = new List<(int Id, string Name)> { (1, "Rig A") };
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "Rig A" });
+            fake.OnRpc("get_profiles", _ => {
+                var arr = new JsonArray();
+                foreach (var (pid, name) in daemonProfiles) {
+                    arr.Add(new JsonObject { ["id"] = pid, ["name"] = name });
+                }
+                return arr;
+            });
+            fake.OnRpc("create_profile", req => {
+                var name = req["params"]?["name"]?.GetValue<string>();
+                created.Add(name);
+                daemonProfiles.Add((daemonProfiles.Count + 1, name ?? ""));
+                return new JsonObject { ["id"] = daemonProfiles.Count, ["name"] = name, ["selected"] = true };
+            });
+            fake.OnRpc("set_profile_by_name", req => {
+                selected.Add(req["params"]?["name"]?.GetValue<string>());
+                return JsonValue.Create(0);
+            });
+
+            var activeAra = (Id: Guid.NewGuid(), Name: "Rig A");
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                araProfileResolver: () => (activeAra.Id, activeAra.Name));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.Not.Null);
+            await WaitUntilAsync(() => selected.Count > 0 || created.Count > 0).ConfigureAwait(false);
+            created.Clear();
+            selected.Clear();
+
+            // The ARA-side profile switch (what /profiles/{id}/select performs) then a push.
+            activeAra = (Guid.NewGuid(), "Rig B");
+            await svc.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(created, Does.Contain("Rig B"),
+                "the push's ensure step must create the NEW profile's twin on the daemon");
+        }
+
+        [Test]
         public async Task Deleting_an_ara_profile_deletes_its_guider_twin_with_dark_files() {
             // §63.4 delete hook — the service tries the twin under BOTH the display name
             // (current scheme) and the legacy ara-<slug>-<id8> name, dark files included.

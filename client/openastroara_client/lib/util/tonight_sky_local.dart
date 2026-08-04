@@ -693,6 +693,61 @@ double _julianDate(DateTime utc) =>
 }
 
 /// Illuminated disc fraction 0–1 (Meeus ch. 48, sun at infinity).
+/// Public sun/moon altitude snapshot for display surfaces (weather panel):
+/// geometric altitudes (deg) of the sun and moon at [atUtc] from the site.
+({double sunAltDeg, double moonAltDeg}) sunMoonAltitudeDeg(
+    DateTime atUtc, double latitudeDeg, double longitudeDeg) {
+  final lst = _localSiderealTimeDeg(atUtc, longitudeDeg);
+  final sun = _sunEquatorialDeg(atUtc);
+  final moon = _moonEquatorialDeg(atUtc);
+  return (
+    sunAltDeg:
+        _altitudeFromHourAngleDeg(sun.$2, latitudeDeg, _mod360(lst - sun.$1)),
+    moonAltDeg: _altitudeFromHourAngleDeg(
+        moon.$2, latitudeDeg, _mod360(lst - moon.$1)),
+  );
+}
+
+/// SQM-derived sky metrics — pure functions of the meter reading, matching
+/// the formulas WeeWX's SQM extension publishes (verified against the live
+/// feed): Schaefer NELM, sky luminance in cd/m², and NSU relative to a
+/// 21.60 mag/arcsec² reference sky.
+({double nelm, double luminanceCdM2, double nsu}) sqmDerived(
+    double sqmMagArcsec2) {
+  // Clamp to the physically plausible meter range (review r2): a garbage
+  // reading (e.g. 0) would overflow 10^(4.316 - sqm/5) to Infinity and
+  // propagate; real skies span ~16 (city) to ~22 (pristine) mag/arcsec².
+  final sqm = sqmMagArcsec2.clamp(5.0, 30.0);
+  final nelm =
+      7.93 - 5.0 * (math.log(math.pow(10, 4.316 - sqm / 5.0) + 1) / math.ln10);
+  final lum = 10.8e4 * math.pow(10, -0.4 * sqm);
+  final nsu = math.pow(10, (21.60 - sqm) / 2.5);
+  return (nelm: nelm, luminanceCdM2: lum.toDouble(), nsu: nsu.toDouble());
+}
+
+/// Public moon-phase snapshot for display surfaces (e.g. the weather panel):
+/// illuminated fraction [0..1] plus waxing/waning (from the fraction's trend
+/// over the next day) and a human phase name derived from both.
+({double illuminatedFraction, bool waxing, String phaseName}) moonPhase(
+    DateTime atUtc) {
+  final f = _moonIlluminatedFraction(atUtc);
+  final waxing =
+      _moonIlluminatedFraction(atUtc.add(const Duration(hours: 24))) >= f;
+  final String name;
+  if (f < 0.03) {
+    name = 'new moon';
+  } else if (f > 0.97) {
+    name = 'full moon';
+  } else if (f < 0.35) {
+    name = waxing ? 'waxing crescent' : 'waning crescent';
+  } else if (f < 0.65) {
+    name = waxing ? 'first quarter' : 'last quarter';
+  } else {
+    name = waxing ? 'waxing gibbous' : 'waning gibbous';
+  }
+  return (illuminatedFraction: f, waxing: waxing, phaseName: name);
+}
+
 double _moonIlluminatedFraction(DateTime atUtc) {
   final sun = _sunEquatorialDeg(atUtc);
   final moon = _moonEquatorialDeg(atUtc);

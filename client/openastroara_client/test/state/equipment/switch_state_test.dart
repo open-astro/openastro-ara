@@ -25,6 +25,7 @@ class _FakeSavedServerService implements SavedServerService {
 /// Pure [SwitchClient] fake — records calls, serves a scripted list that the
 /// actions mutate so the post-action refresh sees the change.
 class _FakeSwitchApi implements SwitchClient {
+  final removed = <String>[];
   List<SwitchDevice> devices = const [];
   final List<String> calls = [];
   bool throwOnConnect = false;
@@ -69,6 +70,9 @@ class _FakeSwitchApi implements SwitchClient {
             : d)
         .toList();
   }
+
+  @override
+  Future<void> remove(String deviceId) async => removed.add(deviceId);
 
   @override
   Future<void> setValue({

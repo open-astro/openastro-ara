@@ -27,6 +27,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(profileGatePassedProvider), isFalse);
     expect(container.read(offlineModeProvider), isFalse);
+    // §30 — Launchpad means SCREEN ONE: the router must show the server
+    // chooser, not resume at the profile box.
+    expect(container.read(serverChooserRequestedProvider), isTrue);
   });
 
   testWidgets('cancel leaves the session untouched', (tester) async {
@@ -37,5 +40,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(profileGatePassedProvider), isTrue);
     expect(container.read(offlineModeProvider), isTrue);
+    expect(container.read(serverChooserRequestedProvider), isFalse);
+  });
+
+  test('confirming a server clears the chooser request (gate round-trip)', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(serverChooserRequestedProvider.notifier).request();
+    expect(container.read(serverChooserRequestedProvider), isTrue);
+    container.read(serverChooserRequestedProvider.notifier).clear();
+    expect(container.read(serverChooserRequestedProvider), isFalse);
   });
 }

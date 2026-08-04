@@ -217,6 +217,15 @@ class _SwitchCard extends ConsumerWidget {
                   icon: const Icon(Icons.link_off, size: 18),
                   onPressed: () => _disconnect(context, ref),
                 ),
+                // The stuck-device escape hatch: a dead/duplicate switch stays
+                // listed until removed. Only while NOT connected (the server
+                // refuses removal of a live switch — disconnect first).
+                if (!device.isConnected)
+                  IconButton(
+                    tooltip: 'Remove this switch',
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    onPressed: () => _remove(context, ref),
+                  ),
               ],
             ),
             Text(
@@ -241,6 +250,41 @@ class _SwitchCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _remove(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final name = device.name.isEmpty
+        ? 'switch ${device.alpacaDeviceNumber}'
+        : device.name;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove $name?'),
+        content: const Text(
+            'The switch is dropped from the list and will no longer '
+            'auto-connect on boot. Reconnect it any time via Add switch.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AraColors.accentError),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await ref.read(switchListProvider.notifier).remove(device.deviceId);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text("Couldn't remove: ${_msg(e)}"),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 
   Future<void> _disconnect(BuildContext context, WidgetRef ref) async {

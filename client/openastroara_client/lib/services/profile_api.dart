@@ -451,13 +451,13 @@ class ProfileApi {
     );
   }
 
-  /// GET the active profile's PHD2 settings.
+  /// GET the active profile's OpenAstro Guider settings.
   Future<Phd2Settings> getPhd2Settings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/phd2');
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's PHD2 settings.
+  /// PUT the active profile's OpenAstro Guider settings.
   Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/phd2',
@@ -708,7 +708,7 @@ class ProfileApi {
     'switch': v.autoConnect(EquipmentDeviceType.switchDevice),
   };
 
-  // ── PHD2 settings JSON mapping ─────────────────────────────────────────
+  // ── OpenAstro Guider settings JSON mapping ─────────────────────────────────────────
 
   static Phd2Settings _phd2SettingsFromJson(
     Map<String, dynamic> j,
@@ -742,6 +742,9 @@ class ProfileApi {
     guiderRotator: (j['guider_rotator'] as String?) ?? '',
     guiderAlpacaHost: (j['guider_alpaca_host'] as String?) ?? '',
     guiderAlpacaPort: (j['guider_alpaca_port'] as num?)?.toInt() ?? 0,
+    // §76.2 guide exposure range (defaults match the server's optional fields).
+    guideExposureMinMs: (j['guide_exposure_min_ms'] as num?)?.toInt() ?? 1000,
+    guideExposureMaxMs: (j['guide_exposure_max_ms'] as num?)?.toInt() ?? 6000,
   );
 
   static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
@@ -769,6 +772,8 @@ class ProfileApi {
     'guider_rotator': v.guiderRotator,
     'guider_alpaca_host': v.guiderAlpacaHost,
     'guider_alpaca_port': v.guiderAlpacaPort,
+    'guide_exposure_min_ms': v.guideExposureMinMs,
+    'guide_exposure_max_ms': v.guideExposureMaxMs,
   };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────

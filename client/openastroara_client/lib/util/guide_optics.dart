@@ -8,7 +8,7 @@ library;
 /// Derived guide focal length (mm, rounded to the nearest integer) for an
 /// off-axis guider: `opticsFocalLengthMm × reducerFactor`.
 ///
-/// Returns 0 ("unset" — the daemon keeps the PHD2 profile default) when the
+/// Returns 0 ("unset" — the daemon keeps the OpenAstro Guider profile default) when the
 /// main optics aren't configured yet (focal length ≤ 0) or the reducer factor
 /// is non-positive (physically impossible; the optics section rejects it too).
 int derivedOagGuideFocalLength(double opticsFocalLengthMm, double reducerFactor) {

@@ -6,7 +6,7 @@ import 'package:openastroara/screens/wizard/wizard_screens.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 
-/// The connection under test is DAEMON→PHD2 (the SBC's network), so the fake
+/// The connection under test is DAEMON→OpenAstro Guider (the SBC's network), so the fake
 /// records what host:port the daemon was asked to reach and scripts the
 /// resulting link state.
 class _FakeGuider implements GuiderClient {
@@ -23,7 +23,7 @@ class _FakeGuider implements GuiderClient {
 
   @override
   Future<GuiderStatus?> getStatus() async => GuiderStatus(
-        name: 'PHD2',
+        name: 'OpenAstro Guider',
         connectionState: connectedAfter
             ? GuiderConnectionState.connected
             : GuiderConnectionState.disconnected,
@@ -44,7 +44,7 @@ void main() {
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-          home: Scaffold(body: Builder(builder: (c) => wizardScreenBuilders[10]!(c)))),
+          home: Scaffold(body: Builder(builder: (c) => wizardScreenBuilders[4]!(c)))),
     ));
     await tester.pump();
   }
@@ -54,7 +54,7 @@ void main() {
     final api = _FakeGuider();
     await pump(tester, api);
 
-    // The user's SBC case: PHD2 on another machine, non-default port.
+    // The user's SBC case: OpenAstro Guider on another machine, non-default port.
     await tester.enterText(find.byType(TextField).first, 'sbc.local:8080');
     await tester.ensureVisible(find.text('Test connection'));
     await tester.tap(find.text('Test connection'));
@@ -63,11 +63,11 @@ void main() {
 
     expect(api.lastHost, 'sbc.local');
     expect(api.lastPort, 8080);
-    expect(find.textContaining('Connected to PHD2 at sbc.local:8080'),
+    expect(find.textContaining('Connected to OpenAstro Guider at sbc.local:8080'),
         findsOneWidget);
   });
 
-  testWidgets('an unreachable PHD2 reports a hint instead of hanging',
+  testWidgets('an unreachable OpenAstro Guider reports a hint instead of hanging',
       (tester) async {
     final api = _FakeGuider()..connectedAfter = false;
     await pump(tester, api);
@@ -79,7 +79,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(api.lastPort, 4400, reason: 'blank field falls back to the default');
-    expect(find.textContaining('No PHD2 answered'), findsOneWidget);
+    expect(find.textContaining('No OpenAstro Guider answered'), findsOneWidget);
     expect(find.textContaining('Enable Server'), findsOneWidget);
   });
 
@@ -88,7 +88,7 @@ void main() {
     await tester.ensureVisible(find.text('Test connection'));
     await tester.tap(find.text('Test connection'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('the server is what talks to PHD2'),
+    expect(find.textContaining('the server is what talks to OpenAstro Guider'),
         findsOneWidget);
   });
 }

@@ -22,7 +22,14 @@ class PlanOfflineButton extends ConsumerWidget {
         );
     final button = TextButton.icon(
       onPressed: hasProfiles
-          ? () => ref.read(offlineModeProvider.notifier).enter()
+          ? () {
+              // Entering offline mode ANSWERS a Launchpad-forced chooser visit
+              // just as much as confirming a server does — clear the request so
+              // the flag can't linger true and silently redirect a future
+              // exit-offline path back to screen one (review r4 symmetry note).
+              ref.read(serverChooserRequestedProvider.notifier).clear();
+              ref.read(offlineModeProvider.notifier).enter();
+            }
           : null,
       icon: const Icon(Icons.cloud_off_outlined, size: 18),
       label: Text(label),

@@ -119,6 +119,22 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         }
     }
 
+    public Task<bool> RemoveAsync(string deviceId, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_connections.TryGetValue(deviceId, out var conn)) {
+                return Task.FromResult(false);
+            }
+            if (ProjectDto(conn).State == EquipmentConnectionState.Connected) {
+                throw new InvalidOperationException(
+                    "the switch is connected — disconnect it before removing it");
+            }
+            _connections.Remove(deviceId);
+            return Task.FromResult(true);
+        }
+    }
+
     public Task<SwitchDto?> GetAsync(string deviceId, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
         lock (_gate) {

@@ -92,27 +92,19 @@ final wizardStepValidProvider =
 /// Static wizard catalog so the shell can look up screen metadata + the
 /// stage progress label without per-screen widgets being instantiated.
 class ProfileWizard {
-  static const int totalSteps = 17;
+  static const int totalSteps = 5;
 
+  /// §76.2 — the five Wizard 2.0 screens. Device facts are read from Alpaca
+  /// on the "Your equipment" screen (never asked); everything the old 17-step
+  /// wizard collected beyond real decisions now defaults and lives in Options.
+  ///
   /// 1-based step → (stage number, stage label, screen title)
   static const Map<int, WizardStepInfo> steps = <int, WizardStepInfo>{
-    1: WizardStepInfo(stage: 1, stageLabel: 'Profile basics', title: 'Profile name + location'),
-    2: WizardStepInfo(stage: 2, stageLabel: 'Equipment discovery', title: 'Connect to AlpacaBridge'),
-    3: WizardStepInfo(stage: 2, stageLabel: 'Equipment discovery', title: 'Discover + assign equipment'),
-    4: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Telescope'),
-    5: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Camera'),
-    6: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Filter Wheel'),
-    7: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Focuser'),
-    8: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Mount'),
-    9: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Rotator'),
-    10: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Guider (PHD2)'),
-    11: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'Plate solving (ASTAP)'),
-    12: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'Autofocus'),
-    13: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'File saving + naming'),
-    14: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'Imaging defaults'),
-    15: WizardStepInfo(stage: 5, stageLabel: 'Safety + site', title: 'Safety policies'),
-    16: WizardStepInfo(stage: 5, stageLabel: 'Safety + site', title: 'Site preferences'),
-    17: WizardStepInfo(stage: 6, stageLabel: 'Done', title: 'Review + Save'),
+    1: WizardStepInfo(stage: 1, stageLabel: 'Welcome', title: 'Profile name + location'),
+    2: WizardStepInfo(stage: 2, stageLabel: 'Connect', title: 'Connect to AlpacaBridge'),
+    3: WizardStepInfo(stage: 3, stageLabel: 'Your equipment', title: 'Your equipment'),
+    4: WizardStepInfo(stage: 4, stageLabel: 'Guiding', title: 'OpenAstro Guider'),
+    5: WizardStepInfo(stage: 5, stageLabel: 'Done', title: 'Review + Save'),
   };
 }
 

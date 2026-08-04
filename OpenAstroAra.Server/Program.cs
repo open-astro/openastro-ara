@@ -313,6 +313,8 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>()));
         builder.Services.AddSingleton<IPolarAlignmentLog>(sp =>
             new SqlitePolarAlignmentLog(sp.GetRequiredService<IAraDatabase>()));
+        // §45 capture-fetch — one shared HttpClient for the daemon's capture endpoint.
+        builder.Services.AddSingleton<IPolarAlignFrameFetcher, HttpPolarAlignFrameFetcher>();
         builder.Services.AddSingleton<IPolarAlignService>(sp =>
             new PolarAlignService(
                 sp.GetRequiredService<GuiderService>(),
@@ -321,7 +323,8 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
-                sp.GetRequiredService<IPolarAlignmentLog>()));
+                sp.GetRequiredService<IPolarAlignmentLog>(),
+                sp.GetRequiredService<IPolarAlignFrameFetcher>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control

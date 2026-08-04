@@ -56,7 +56,7 @@ GuiderRuntimeState _runtimeFromWire(String? token) {
 }
 
 /// Snapshot of the guider's link + runtime state, with the latest guiding RMS
-/// (total/RA/Dec, arcsec) and the active PHD2 profile name when connected.
+/// (total/RA/Dec, arcsec) and the active OpenAstro Guider profile name when connected.
 class GuiderStatus {
   /// Daemon device id; `null` when the descriptor omitted it (distinguishable
   /// from an explicitly-empty id).
@@ -91,7 +91,10 @@ class GuiderStatus {
     final runtimeMap = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     return GuiderStatus(
       deviceId: _str(json['device_id']),
-      name: _str(json['name']) ?? 'Guider',
+      // The guider daemon self-reports its upstream product name ("PHD2");
+      // the client brands it OpenAstro Guider everywhere (Joey's ruling), so
+      // normalize once here rather than at every display site.
+      name: _brandName(_str(json['name'])),
       connectionState: _connectionFromWire(_str(json['state'])),
       runtimeState: _runtimeFromWire(_str(runtimeMap['state'])),
       rmsTotal: _asDouble(runtimeMap['rms_total']),
@@ -105,6 +108,13 @@ class GuiderStatus {
   // is expected) degrades to null rather than throwing — the factory tolerates
   // any malformed value, not only nulls.
   static String? _str(dynamic v) => v is String ? v : null;
+
+  static String _brandName(String? raw) {
+    if (raw == null || raw.isEmpty) return 'Guider';
+    // Word-boundary so a fork name embedding "phd2" mid-token isn't spliced.
+    return raw.replaceAll(
+        RegExp(r'\bphd2\b', caseSensitive: false), 'OpenAstro Guider');
+  }
 
   static double? _asDouble(dynamic v) {
     final d = v is num

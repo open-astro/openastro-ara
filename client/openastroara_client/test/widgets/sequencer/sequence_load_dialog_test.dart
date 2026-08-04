@@ -59,7 +59,7 @@ class _FakeClient implements SequenceClient {
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   @override
-  Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
   @override

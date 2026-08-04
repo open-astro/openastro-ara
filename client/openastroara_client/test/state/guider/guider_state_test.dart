@@ -53,7 +53,7 @@ class _FakeGuiderApi implements GuiderClient {
     }
     status = const GuiderStatus(
       deviceId: 'phd2',
-      name: 'PHD2',
+      name: 'OpenAstro Guider',
       connectionState: GuiderConnectionState.connecting,
       runtimeState: GuiderRuntimeState.stopped,
     );
@@ -67,14 +67,14 @@ class _FakeGuiderApi implements GuiderClient {
     }
     status = const GuiderStatus(
       deviceId: 'phd2',
-      name: 'PHD2',
+      name: 'OpenAstro Guider',
       connectionState: GuiderConnectionState.disconnected,
       runtimeState: GuiderRuntimeState.stopped,
     );
   }
 }
 
-/// Serves the profile's phd2 section — the remote-PHD2 case.
+/// Serves the profile's phd2 section — the remote-OpenAstro Guider case.
 class _Phd2ProfileApi extends ProfileApi {
   _Phd2ProfileApi() : super(const AraServer(hostname: 'test', port: 1));
   @override
@@ -107,7 +107,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.4,
@@ -123,7 +123,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.disconnected,
           runtimeState: GuiderRuntimeState.stopped,
         );
@@ -142,12 +142,12 @@ void main() {
     test('a no-args connect() targets the PROFILE phd2 host/port, not localhost',
         () async {
       // The equipment-strip guider dialog calls connect() bare. Pre-fix that
-      // sent localhost:4400 and bypassed a remote PHD2 (the SBC at :8080) the
+      // sent localhost:4400 and bypassed a remote OpenAstro Guider (the SBC at :8080) the
       // user configured in Settings → Guider.
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.disconnected,
           runtimeState: GuiderRuntimeState.stopped,
         );
@@ -171,7 +171,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.disconnected,
           runtimeState: GuiderRuntimeState.stopped,
         )
@@ -189,7 +189,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
         );
@@ -207,7 +207,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.disconnected,
           runtimeState: GuiderRuntimeState.stopped,
         )
@@ -230,7 +230,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
         )

@@ -42,6 +42,34 @@ String friendlyAlpacaChoiceLabel(
   return '$name (${endpoint.host}:${endpoint.port}/${endpoint.device})';
 }
 
+/// §63.20 cross-server options (shared with the §76 wizard's guiding screen):
+/// the daemon only ever offers ONE Alpaca choice per slot (its currently-
+/// configured server/device), so gear on other Alpaca servers would be
+/// invisible. Synthesize a daemon-format `Alpaca <Slot> [host:port/N]` choice
+/// for every device of [alpacaType] known in [namesByEndpoint] (keys
+/// `"host:port|type/N"`). Daemon-offered strings stay first; duplicates
+/// collapse. [onlyEndpoint] ("host:port") limits synthesis to one server —
+/// the guider has a SINGLE Alpaca server per profile, derived from the
+/// CAMERA's endpoint, so mount/rotator slots must only offer that server.
+/// Pure — unit-testable.
+List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
+    String slotWord, Map<String, String> namesByEndpoint,
+    {String? onlyEndpoint}) {
+  final merged = <String>[...daemonChoices];
+  for (final key in namesByEndpoint.keys) {
+    final bar = key.indexOf('|');
+    if (bar < 0) continue;
+    final endpoint = key.substring(0, bar);
+    if (onlyEndpoint != null && endpoint != onlyEndpoint) continue;
+    final typeSlot = key.substring(bar + 1);
+    if (!typeSlot.startsWith('$alpacaType/')) continue;
+    final synthesized =
+        'Alpaca $slotWord [$endpoint/${typeSlot.substring(alpacaType.length + 1)}]';
+    if (!merged.contains(synthesized)) merged.add(synthesized);
+  }
+  return merged;
+}
+
 ({String host, int port, int device})? parseAlpacaChoiceEndpoint(String choice) {
   final m = RegExp(r'\[([^\[\]:]+):(\d+)/(\d+)\]\s*$').firstMatch(choice);
   if (m == null) return null;
@@ -60,7 +88,7 @@ Future<void> showGuiderSetupWizard(BuildContext context) => showDialog<void>(
       builder: (_) => const GuiderSetupWizard(),
     );
 
-/// Guider setup wizard — the PHD2 "new profile wizard" flow, redone for Ara
+/// Guider setup wizard — the OpenAstro Guider "new profile wizard" flow, redone for Ara
 /// (mirrors the original `profile_wizard.cpp` steps: connection → guide
 /// camera → guide optics → mount → apply → dark library). Every gear picker
 /// is fed by the daemon's LIVE choice strings (`GET /equipment/guider/
@@ -188,37 +216,12 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           o: friendlyAlpacaChoiceLabel(o, alpacaType, _alpacaNames),
       };
 
-  /// §63.20 cross-server options: the daemon only ever offers ONE Alpaca
-  /// choice per slot (its currently-configured server/device), so a guide
-  /// camera on another Alpaca server (e.g. AlpacaBridge) would be invisible.
-  /// Synthesize a choice string for every device of [alpacaType] found on any
-  /// known Alpaca server — the daemon-format `Alpaca <Slot> [host:port/N]`,
-  /// which the server push parses to retarget the daemon's Alpaca config on
-  /// Apply. Daemon-offered strings stay first; duplicates collapse.
-  ///
-  /// [onlyEndpoint] ("host:port") limits synthesis to one server: PHD2 has a
-  /// SINGLE Alpaca server per profile and the push derives it from the
-  /// CAMERA's endpoint, so a mount/rotator picked on any other server would
-  /// be silently dropped on Apply — those slots must only offer the camera's
-  /// server (review r1 on this PR).
+  /// See [mergedAlpacaOptions] — bound to this wizard's discovered names.
   List<String> _mergedOptions(
-      List<String> daemonChoices, String alpacaType, String slotWord,
-      {String? onlyEndpoint}) {
-    final merged = <String>[...daemonChoices];
-    for (final key in _alpacaNames.keys) {
-      // key = "host:port|type/N"
-      final bar = key.indexOf('|');
-      if (bar < 0) continue;
-      final endpoint = key.substring(0, bar);
-      if (onlyEndpoint != null && endpoint != onlyEndpoint) continue;
-      final typeSlot = key.substring(bar + 1);
-      if (!typeSlot.startsWith('$alpacaType/')) continue;
-      final synthesized =
-          'Alpaca $slotWord [$endpoint/${typeSlot.substring(alpacaType.length + 1)}]';
-      if (!merged.contains(synthesized)) merged.add(synthesized);
-    }
-    return merged;
-  }
+          List<String> daemonChoices, String alpacaType, String slotWord,
+          {String? onlyEndpoint}) =>
+      mergedAlpacaOptions(daemonChoices, alpacaType, slotWord, _alpacaNames,
+          onlyEndpoint: onlyEndpoint);
 
   /// The selected guide camera's Alpaca server ("host:port"), or null for
   /// non-Alpaca / unset camera selections.
@@ -228,7 +231,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   }
 
   /// True when [selection] names a device on a DIFFERENT Alpaca server than
-  /// the camera — the push would silently drop its device number (PHD2 has
+  /// the camera — the push would silently drop its device number (OpenAstro Guider has
   /// one Alpaca server, derived from the camera).
   bool _isCrossServerPick(String selection) {
     final cam = _cameraEndpoint;
@@ -385,9 +388,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     }
   }
 
-  // Dark-library build parameters, mirroring the original PHD2 darks dialog:
+  // Dark-library build parameters, mirroring the original OpenAstro Guider darks dialog:
   // read-only exposure dropdowns over the daemon's standard duration list
-  // (10 ms … 15 s) with PHD2's defaults (min 1.0 s, max 6.0 s), and a
+  // (10 ms … 15 s) with OpenAstro Guider's defaults (min 1.0 s, max 6.0 s), and a
   // 1–20 frame count (spin range in the original; a dropdown here).
   static const darkExposuresMs = [
     10, 20, 50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, //
@@ -397,7 +400,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   int _darkMinExpMs = 1000;
   int _darkMaxExpMs = 6000;
 
-  /// PHD2's exposure label format: "0.05 s", "1.0 s", "15.0 s".
+  /// OpenAstro Guider's exposure label format: "0.05 s", "1.0 s", "15.0 s".
   static String exposureLabel(int ms) => ms < 1000
       ? '${(ms / 1000).toStringAsFixed(2)} s'
       : '${(ms / 1000).toStringAsFixed(1)} s';
@@ -699,7 +702,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               'pointing (leave it on daemon default otherwise).'),
           const SizedBox(height: 12),
           // Mount/rotator synthesis is limited to the CAMERA's Alpaca server:
-          // PHD2 has one Alpaca server per profile (derived from the camera on
+          // OpenAstro Guider has one Alpaca server per profile (derived from the camera on
           // Apply), so a pick on any other server would be silently dropped.
           _choiceDropdown(
             label: 'Mount',

@@ -19,6 +19,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
@@ -121,7 +122,8 @@ namespace OpenAstroAra.Server.Services {
                 ITelescopeMediator mount,
                 IProfileStore profileStore,
                 IWsBroadcaster? ws = null,
-                IPolarAlignmentLog? log = null) {
+                IPolarAlignmentLog? log = null,
+                IPolarAlignFrameFetcher? frameFetcher = null) {
             _guider = guider;
             _logger = logger;
             _solver = solver;
@@ -129,6 +131,8 @@ namespace OpenAstroAra.Server.Services {
             _profileStore = profileStore;
             _ws = ws;
             _log = log;
+            _ownsFetcher = frameFetcher is null; // the DI-provided fetcher is container-owned
+            _frameFetcher = frameFetcher ?? new HttpPolarAlignFrameFetcher();
         }
 
         public Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct) {
@@ -200,6 +204,9 @@ namespace OpenAstroAra.Server.Services {
                     _liveIterations = 0;
                     _startedAt = DateTimeOffset.UtcNow;
                     gen = ++_generation;
+                    _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
+                    // _abandonedCaptureDebts is deliberately NOT reset: a capture abandoned by the
+                    // JUST-STOPPED run may still deliver its event into this run (review r2).
                     startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
@@ -285,6 +292,9 @@ namespace OpenAstroAra.Server.Services {
             _runCts?.Cancel();
             _runCts?.Dispose();
             _opLock.Dispose();
+            if (_ownsFetcher && _frameFetcher is IDisposable d) {
+                d.Dispose(); // only the self-constructed default — a DI-injected fetcher is container-owned
+            }
         }
 
         // ── the routine ──────────────────────────────────────────────────────────────────────
@@ -471,12 +481,34 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignSolveOutcome> SolveSeedFrameAsync(
                 PHD2Guider guiderClient, string workDir, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+            var anyFrameReachedSolver = false;
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
                 var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture), hint, settings, gen, ct).ConfigureAwait(false);
                 await PublishFrameCompleteAsync(gen, frameId, s.Success, s.Success ? 0 : attempt).ConfigureAwait(false);
                 if (s.Success) {
                     return s;
                 }
+                // _lastCaptureFault reflects THIS attempt (set on any capture-layer fault, cleared
+                // when the fetch delivers a frame to the solver) — a null here means the attempt
+                // failed in the SOLVER, i.e. a real focus/sky problem exists regardless of what the
+                // capture layer does on later attempts (review r4: classifying by the LAST attempt
+                // alone let one trailing transient RPC fault relabel a genuine solve problem as
+                // capture_rejected, pointing the operator at the wrong layer).
+                lock (_gate) {
+                    if (_generation == gen && _lastCaptureFault is null) {
+                        anyFrameReachedSolver = true;
+                    }
+                }
+            }
+            string? captureFault;
+            lock (_gate) {
+                captureFault = _generation == gen ? _lastCaptureFault : null;
+            }
+            // A capture-layer fault (daemon rejected the capture, NO frame ever reached the solver)
+            // is NOT a sky/focus problem — blame the right layer, with the daemon's own message.
+            if (captureFault is not null && !anyFrameReachedSolver) {
+                throw new RoutineFailedException("capture_rejected",
+                    $"the {frameId} seed frame could not be captured after {SeedSolveAttempts} attempts: {captureFault}");
             }
             throw new RoutineFailedException("seed_solve_failed",
                 $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the guide optics configuration");
@@ -492,49 +524,106 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
                 PHD2Guider guiderClient, string workDir, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            var path = Path.Combine(workDir, frameId + ".fits");
+            var localPath = Path.Combine(workDir, frameId + ".fits");
             var tcs = new TaskCompletionSource<SingleFrameCompleteEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
-            // Correlate the completion to THIS capture: a stale event for a previously timed-out
-            // capture carries the old path and must not resolve the new frame's wait (it would
-            // silently solve the wrong FITS). Failure events may carry no path — accept those; the
-            // captures are strictly serialized per run, so an uncorrelated failure can only belong
-            // to the immediately preceding abandoned capture and counts as a failed solve either way.
+            // §45 capture-fetch: the capture saves DAEMON-SIDE (save:true, no path — the daemon
+            // sandboxes saves to its own directory and rejects foreign paths, the first-real-rig
+            // failure), so completions can no longer be correlated by requested path. Captures are
+            // strictly serialized per run (the PA lease is single-client and this method is the only
+            // capture site), so the first completion after our RPC is ours — EXCEPT the event a
+            // previously TIMED-OUT capture still owes. Accepting that stale event would silently
+            // fetch/solve the PREVIOUS frame and feed seconds-old RA/Dec into the seed/adjust
+            // geometry (review r1). The timeout path below records the debt (_abandonedCaptures);
+            // this handler pays it by SWALLOWING exactly that many events — the stale capture then
+            // surfaces as a clean timed-out/failed solve, never as misattributed data.
+            // Set when this wait swallowed an event against a debt. Events can't be correlated to
+            // captures (the daemon broadcast carries no request id), so the swallow is a guess: if
+            // the abandoned capture never delivers (daemon hung — the common timeout cause), the
+            // swallowed event was actually THIS capture's own completion. When that happens this
+            // capture times out too — and it must NOT enqueue a fresh debt (review r3: doing so
+            // re-arms the mistake against the NEXT capture, cascading one lost event through the
+            // whole seed budget with each misfire refreshing the TTL). One swallow pays one debt,
+            // rightly or wrongly; the cost of a wrong guess is capped at one retried capture.
+            int swallowedThisWait = 0;
             void OnComplete(object? sender, SingleFrameCompleteEventArgs e) {
-                if (e.Path == path || (!e.Success && string.IsNullOrEmpty(e.Path))) {
-                    tcs.TrySetResult(e);
+                if (TryConsumeStaleDebt()) {
+                    Interlocked.Exchange(ref swallowedThisWait, 1);
+                    LogCaptureFailed(frameId, "swallowed a stale SingleFrameComplete owed by an abandoned capture");
+                    return; // keep waiting for THIS capture's own event
                 }
+                tcs.TrySetResult(e);
             }
             guiderClient.SingleFrameComplete += OnComplete;
             try {
                 // The capture RPC gets the same one-failed-solve treatment as the solver call
                 // below: a daemon-side rejection (camera busy, guiding running) or a dropped
                 // guider is transient — it must feed the consecutive-failure/pause path (and the
-                // seed retry loop), not hard-fail the routine (§45.11).
+                // seed retry loop), not hard-fail the routine (§45.11). The rejection text is kept
+                // so an exhausted seed loop can say "the daemon refused the capture" instead of
+                // blaming focus/sky (capture_rejected).
                 try {
                     var exposureMs = Math.Max(1, (int)Math.Round(settings.ExposureSeconds * 1000.0));
                     await guiderClient.CaptureSolverFrameAsync(
                         exposureMs: exposureMs, binning: settings.Binning > 1 ? settings.Binning : null,
-                        gain: null, subframe: null, path: path, save: true, ct).ConfigureAwait(false);
+                        gain: null, subframe: null, path: null, save: true, ct).ConfigureAwait(false);
                 } catch (GuiderRpcException ex) {
-                    LogCaptureFailed(frameId, ex.Message);
+                    RecordCaptureFault(gen, frameId, ex.Message);
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 } catch (InvalidOperationException ex) {
-                    LogCaptureFailed(frameId, ex.Message);
+                    RecordCaptureFault(gen, frameId, ex.Message);
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
-                var completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
+                SingleFrameCompleteEventArgs completed;
+                try {
+                    completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    // Stop/restart cancelled the wait AFTER the RPC ack — the daemon still owes this
+                    // capture's event, and without the debt the NEXT run would adopt it as fresh
+                    // data (review r2: the common abandonment path, not just the timeout). Unless
+                    // this wait already swallowed one (see swallowedThisWait) — then the books are
+                    // square and a second debt would cascade (review r3).
+                    if (Volatile.Read(ref swallowedThisWait) == 0) {
+                        RecordAbandonedCapture();
+                    }
+                    throw;
+                }
                 lock (_gate) {
                     if (_generation == gen) {
                         _framesCaptured++;
                         _lastFrameId = frameId;
                     }
                 }
-                if (!completed.Success || string.IsNullOrEmpty(completed.Path)) {
-                    LogCaptureFailed(frameId, completed.Error ?? "no saved path");
+                var filename = completed.Filename ?? (completed.Path is { Length: > 0 } p ? Path.GetFileName(p) : null);
+                if (!completed.Success || string.IsNullOrEmpty(filename)) {
+                    RecordCaptureFault(gen, frameId, completed.Error ?? "no saved filename on SingleFrameComplete");
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                }
+                // Fetch the daemon-saved FITS over the guider#77 HTTP capture endpoint into the run's
+                // work dir — the only frame transport that works when the daemon runs on another
+                // machine (and equally fine same-host). A failed download is one failed solve.
+                var host = guiderClient.ConnectedHost;
+                if (string.IsNullOrEmpty(host)) {
+                    RecordCaptureFault(gen, frameId, "guider connection endpoint unknown — cannot fetch the saved frame");
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
                 try {
-                    return await _solver.SolveAsync(completed.Path, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                    await _frameFetcher.FetchAsync(
+                        host, guiderClient.ConnectedRpcPort, filename, localPath, ct).ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    throw;
+                } catch (Exception ex) {
+                    RecordCaptureFault(gen, frameId,
+                        $"fetching the saved frame '{filename}' from the guider failed: {ex.Message} " +
+                        "(daemon builds before openastro-guider#77 have no capture endpoint)");
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                }
+                lock (_gate) {
+                    if (_generation == gen) {
+                        _lastCaptureFault = null; // the capture layer delivered — any failure now is a solve failure
+                    }
+                }
+                try {
+                    return await _solver.SolveAsync(localPath, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
@@ -545,11 +634,68 @@ namespace OpenAstroAra.Server.Services {
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
             } catch (TimeoutException) {
-                LogCaptureFailed(frameId, "SingleFrameComplete timed out");
+                // The daemon may still deliver this capture's event later — the next capture's
+                // handler must swallow it rather than adopt its (stale) frame. But if THIS wait
+                // already swallowed an event, the likeliest story is that the swallow ate our own
+                // completion (the earlier abandoned capture never delivered): the old debt is paid,
+                // and enqueueing a new one would hand the mistake to the next capture in a chain
+                // (review r3). No swallow → genuinely lost event → record the debt.
+                if (Volatile.Read(ref swallowedThisWait) == 0) {
+                    RecordAbandonedCapture();
+                }
+                RecordCaptureFault(gen, frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
                 guiderClient.SingleFrameComplete -= OnComplete;
-                TryDeleteFile(path);
+                TryDeleteFile(localPath);
+            }
+        }
+
+        // §45 capture-fetch — downloads daemon-saved frames over the guider's HTTP capture endpoint.
+        private readonly IPolarAlignFrameFetcher _frameFetcher;
+        private readonly bool _ownsFetcher;
+
+        // §45 capture-fetch — timestamps of ABANDONED captures (timed out OR cancelled by a
+        // Stop/restart after the RPC ack) that still owe a SingleFrameComplete. Guarded by _gate.
+        // Debts survive run boundaries by design (review r2: a Stop→Start abandons a capture whose
+        // late event would otherwise be adopted by the NEW run as fresh data) and EXPIRE after
+        // StaleDebtTtl so a daemon that never delivers can't starve future captures — worst case
+        // one swallowed-then-retried capture per anomaly.
+        private readonly Queue<DateTimeOffset> _abandonedCaptureDebts = new();
+        internal TimeSpan StaleDebtTtl { get; set; } = TimeSpan.FromSeconds(60);
+
+        private void RecordAbandonedCapture() {
+            lock (_gate) {
+                _abandonedCaptureDebts.Enqueue(DateTimeOffset.UtcNow);
+            }
+        }
+
+        private bool TryConsumeStaleDebt() {
+            lock (_gate) {
+                var cutoff = DateTimeOffset.UtcNow - StaleDebtTtl;
+                while (_abandonedCaptureDebts.Count > 0 && _abandonedCaptureDebts.Peek() < cutoff) {
+                    _abandonedCaptureDebts.Dequeue(); // expired — the daemon evidently never delivered
+                }
+                if (_abandonedCaptureDebts.Count == 0) {
+                    return false;
+                }
+                _abandonedCaptureDebts.Dequeue();
+                return true;
+            }
+        }
+
+        // §45 — the most recent CAPTURE-layer fault (RPC rejection, missing filename, failed fetch,
+        // completion timeout) for the current run; null once a capture gets as far as the solver.
+        // Lets an exhausted seed loop report capture_rejected with the daemon's actual message
+        // instead of blaming focus/sky for a frame that was never taken.
+        private string? _lastCaptureFault;
+
+        private void RecordCaptureFault(int gen, string frameId, string message) {
+            LogCaptureFailed(frameId, message);
+            lock (_gate) {
+                if (_generation == gen) {
+                    _lastCaptureFault = message;
+                }
             }
         }
 

@@ -37,6 +37,10 @@ class LaunchpadButton extends ConsumerWidget {
         if (ok != true) return;
         ref.read(offlineModeProvider.notifier).exit();
         ref.read(profileGatePassedProvider.notifier).reset();
+        // All the way back to screen one: the server chooser, not the
+        // profile box (with servers saved the router would otherwise
+        // resume the flow one step in).
+        ref.read(serverChooserRequestedProvider.notifier).request();
       },
       icon: const Icon(Icons.rocket_launch_outlined, size: 16),
       label: const Text('Launchpad'),

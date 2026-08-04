@@ -82,7 +82,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       ),
       SettingsPanelInfo(
         id: 'eq.guider',
-        label: 'Guider (PHD2)',
+        label: 'OpenAstro Guider',
         groupId: 'equipment',
       ),
       SettingsPanelInfo(
@@ -207,11 +207,6 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
     id: 'system',
     label: 'System',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(
-        id: 'app.monitoring',
-        label: 'Monitoring',
-        groupId: 'system',
-      ),
       // Was "Sky Atlas → Data Manager". Stellarium renders its own sky, so the
       // atlas needs no downloads — what remains is COMPUTE data (DSO catalog
       // for Tonight's Sky, star catalogs for plate solving, ephemerides),

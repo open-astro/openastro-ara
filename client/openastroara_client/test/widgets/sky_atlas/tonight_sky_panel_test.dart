@@ -64,7 +64,7 @@ class _RecordingClient implements SequenceClient {
   // The interface members the panel never calls — explicit overrides keep the
   // analyzer happy without `noSuchMethod` swallowing a real miss.
   @override
-  Future<SequencePage> list({int limit = 50}) => throw UnimplementedError();
+  Future<SequencePage> list({int limit = 50, String? cursor}) => throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() => throw UnimplementedError();
   @override

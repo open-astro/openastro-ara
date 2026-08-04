@@ -4,7 +4,7 @@ import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
 
-/// §63 PHD2 / guider settings. Phase 12h.6k wires the daemon round-trip
+/// §63 OpenAstro Guider settings. Phase 12h.6k wires the daemon round-trip
 /// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
 /// re-cal-guider policy lives in `safetyPoliciesProvider` (crosses the
 /// §35/§63 boundary, belongs with the rest of meridian behavior).
@@ -51,6 +51,12 @@ class Phd2Settings {
   final String guiderAlpacaHost;
   final int guiderAlpacaPort; // 0 = unset
 
+  // §76.2 — the user's guide exposure RANGE (ms): one choice, two consumers
+  // (dark-library coverage + guiding bounds). Defaults match the guider
+  // daemon's own 1.0–6.0 s.
+  final int guideExposureMinMs;
+  final int guideExposureMaxMs;
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -76,6 +82,8 @@ class Phd2Settings {
     this.guiderRotator = '',
     this.guiderAlpacaHost = '',
     this.guiderAlpacaPort = 0,
+    this.guideExposureMinMs = 1000,
+    this.guideExposureMaxMs = 6000,
   });
 
   Phd2Settings copyWith({
@@ -103,6 +111,8 @@ class Phd2Settings {
     String? guiderRotator,
     String? guiderAlpacaHost,
     int? guiderAlpacaPort,
+    int? guideExposureMinMs,
+    int? guideExposureMaxMs,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -130,6 +140,8 @@ class Phd2Settings {
         guiderRotator: guiderRotator ?? this.guiderRotator,
         guiderAlpacaHost: guiderAlpacaHost ?? this.guiderAlpacaHost,
         guiderAlpacaPort: guiderAlpacaPort ?? this.guiderAlpacaPort,
+        guideExposureMinMs: guideExposureMinMs ?? this.guideExposureMinMs,
+        guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
       );
 }
 
@@ -145,7 +157,7 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   }
 
   void setPort(int v) {
-    // Privileged ports (<1024) and dynamic (>65535) rejected. PHD2 default
+    // Privileged ports (<1024) and dynamic (>65535) rejected. OpenAstro Guider default
     // is 4400; non-default deployments may rebind to other unprivileged
     // ports.
     if (v < 1024 || v > 65535) return;

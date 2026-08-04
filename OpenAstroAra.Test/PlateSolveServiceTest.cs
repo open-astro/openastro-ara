@@ -112,5 +112,33 @@ namespace OpenAstroAra.Test {
             Assert.Throws<PlateSolverConfigurationException>(
                 () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
         }
+
+        // ── ARA-store optics precedence (the dual-profile-systems fix): the user configures
+        // optics in the ARA profile's §36 section; the legacy Equipment-layer profile stays
+        // NaN forever, and the solve must not read it when the ARA section is set. ──
+
+        [Test]
+        public void Solve_geometry_prefers_the_ara_optics_with_reducer_folded_in() {
+            var optics = new OpenAstroAra.Server.Contracts.OpticsSettingsDto(
+                FocalLengthMm: 448, ReducerFactor: 0.8, SensorWidthPx: 0, SensorHeightPx: 0,
+                PixelSizeUm: 3.76, ApertureMm: 91);
+            var (focal, pixel) = PlateSolveService.ResolveSolveGeometry(optics, double.NaN, 3.8);
+            Assert.That(focal, Is.EqualTo(448 * 0.8).Within(1e-9),
+                "the effective focal length folds the reducer in");
+            Assert.That(pixel, Is.EqualTo(3.76).Within(1e-9));
+        }
+
+        [Test]
+        public void Solve_geometry_falls_back_to_legacy_values_per_field() {
+            // Unset ARA optics (0 = unset) → legacy values field-by-field; null store → all legacy.
+            var unset = new OpenAstroAra.Server.Contracts.OpticsSettingsDto(
+                FocalLengthMm: 0, ReducerFactor: 1, SensorWidthPx: 0, SensorHeightPx: 0,
+                PixelSizeUm: 0, ApertureMm: 0);
+            var (focal, pixel) = PlateSolveService.ResolveSolveGeometry(unset, 750, 2.4);
+            Assert.That(focal, Is.EqualTo(750));
+            Assert.That(pixel, Is.EqualTo(2.4));
+            var (nf, np) = PlateSolveService.ResolveSolveGeometry(null, 750, 2.4);
+            Assert.That((nf, np), Is.EqualTo((750.0, 2.4)));
+        }
     }
 }

@@ -67,6 +67,8 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             string fitsPath, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(fitsPath);
 
+        // ARA store → legacy settings first (same rule and reason as PlateSolveService).
+        LegacyProfileBridge.SyncPlateSolve(_profileService, _store);
         var profile = _profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException("Cannot polar-align: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;

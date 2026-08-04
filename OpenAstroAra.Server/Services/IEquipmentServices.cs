@@ -119,6 +119,12 @@ public interface ISwitchService {
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct);
     Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct);
+
+    /// <summary>Drop a NON-connected switch from the known list (the stuck-device escape hatch: a
+    /// dead/duplicate switch otherwise stays listed until a daemon restart). True when removed,
+    /// false for an unknown id; throws InvalidOperationException (→ 409) for a Connected switch —
+    /// disconnect it first so a removal is always an explicit two-step on live hardware.</summary>
+    Task<bool> RemoveAsync(string deviceId, CancellationToken ct);
 }
 
 public interface IObservingConditionsService {

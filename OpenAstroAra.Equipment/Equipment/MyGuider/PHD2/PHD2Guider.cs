@@ -179,6 +179,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private bool initialized;
 
+        /// <summary>§45 capture-fetch — the resolved host/RPC port of the last SUCCESSFUL connect
+        /// (set only after the socket handshake; reset to null/0 by a failed attempt). The daemon's
+        /// HTTP capture endpoint lives on the same host at rpc+<see cref="HttpPortOffsetFromRpc"/>.</summary>
+        public string? ConnectedHost { get; private set; }
+        public int ConnectedRpcPort { get; private set; }
+
         public async Task<bool> Connect(CancellationToken token) {
             bool connected = false;
             IPHostEntry hostEntry;
@@ -220,6 +226,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             _ = Task.Run(RunListener, token);
 
             connected = await _tcs.Task;
+
+            // §45 capture-fetch invariant (review r5): these fields describe a LIVE connection only.
+            // Set after the socket handshake succeeds — never before — so a failed attempt can't
+            // leave a never-live (or stale prior) endpoint for the capture-frame URL builder; on
+            // failure they reset to the never-connected state.
+            ConnectedHost = connected ? phd2Ip.ToString() : null;
+            ConnectedRpcPort = connected ? serverPort : 0;
 
             try {
                 if (connected) {
@@ -1121,7 +1134,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // carries the outcome + saved-FITS path the PolarAlignService hands to its solver.
                         if (message.ToObject<PhdEventSingleFrameComplete>() is { } frame) {
                             Logger.Debug($"PHD2 - single frame complete (success: {frame.Success}; path: {frame.Path})");
-                            RaiseSingleFrameComplete(frame.Success, frame.Error, frame.Path);
+                            RaiseSingleFrameComplete(frame.Success, frame.Error, frame.Path, frame.Filename);
                         }
                         break;
                     }

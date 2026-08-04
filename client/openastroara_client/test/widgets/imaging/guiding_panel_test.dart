@@ -110,7 +110,7 @@ void main() {
       'when not guiding', (tester) async {
     await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.stopped,
         ));
@@ -125,7 +125,7 @@ void main() {
       'cells', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -163,7 +163,7 @@ void main() {
       (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -198,7 +198,7 @@ void main() {
     final gate = Completer<Phd2Settings>();
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -226,7 +226,7 @@ void main() {
     // Apply stays silently disabled for the whole dialog session.
     final api = _FakeGuiderApi()
       ..status = const GuiderStatus(
-        name: 'PHD2',
+        name: 'OpenAstro Guider',
         connectionState: GuiderConnectionState.connected,
         runtimeState: GuiderRuntimeState.guiding,
         rmsTotal: 0.5,
@@ -264,7 +264,7 @@ void main() {
       'until Apply', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -296,7 +296,7 @@ void main() {
       'in the shared provider', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -324,7 +324,7 @@ void main() {
   testWidgets('invalid numeric input never enters the draft', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -349,7 +349,7 @@ void main() {
   testWidgets('Apply commits the draft to the provider', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -370,7 +370,7 @@ void main() {
       (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
@@ -392,7 +392,7 @@ void main() {
       (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.disconnected,
           runtimeState: GuiderRuntimeState.stopped,
         ));

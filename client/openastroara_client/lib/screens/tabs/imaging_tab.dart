@@ -235,9 +235,18 @@ class _ImagingHeader extends ConsumerWidget {
             return StatusIndicator(
               level: diag.level,
               label: diag.label,
-              // Tap-to-expand the §51 panel is a later follow-up; null here so
-              // the affordance isn't misleading until then.
-              onTap: null,
+              // §51 — the health chip is the summary; tapping opens the same
+              // diagnostics panel that lives in the right-hand column, so the
+              // "why is it amber?" answer is one tap away from any scroll
+              // position.
+              onTap: () => showModalBottomSheet<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => const SingleChildScrollView(
+                  padding: EdgeInsets.only(bottom: 24),
+                  child: DiagnosticPanel(),
+                ),
+              ),
             );
           }),
         ],

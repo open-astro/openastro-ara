@@ -34,7 +34,7 @@ class _FakeGuiderApi implements GuiderClient {
 
 const _guiding = GuiderStatus(
   deviceId: 'phd2',
-  name: 'PHD2',
+  name: 'OpenAstro Guider',
   connectionState: GuiderConnectionState.connected,
   runtimeState: GuiderRuntimeState.guiding,
   rmsTotal: 0.5,
@@ -152,7 +152,7 @@ void main() {
       // A later refresh with a new RMS appends a second point.
       api.status = const GuiderStatus(
         deviceId: 'phd2',
-        name: 'PHD2',
+        name: 'OpenAstro Guider',
         connectionState: GuiderConnectionState.connected,
         runtimeState: GuiderRuntimeState.guiding,
         rmsTotal: 0.7,
@@ -185,7 +185,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.stopped,
           rmsTotal: 0.5,
@@ -199,7 +199,7 @@ void main() {
 
       api.status = const GuiderStatus(
         deviceId: 'phd2',
-        name: 'PHD2',
+        name: 'OpenAstro Guider',
         connectionState: GuiderConnectionState.connected,
         runtimeState: GuiderRuntimeState.starLost,
         rmsTotal: 2.5,
@@ -214,7 +214,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.dithering,
           rmsTotal: 0.9,
@@ -231,7 +231,7 @@ void main() {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
-          name: 'PHD2',
+          name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
         );

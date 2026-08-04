@@ -381,7 +381,13 @@ public sealed record Phd2SettingsDto(
     // optics: focal_length_mm × reducer_factor, per the planning-compute-lives-in-client rule; the server
     // just round-trips the choice and the derived guide_focal_length it receives). Default guide_scope
     // matches the historical behavior of the manual field.
-    string GuiderSetupType = "guide_scope");
+    string GuiderSetupType = "guide_scope",
+    // §76.2 — the user's guide exposure RANGE (ms): one choice with two consumers — the dark-library
+    // build covers exactly this range and guiding stays within it, so they can never disagree. Persisted
+    // here (not just passed to a build) so a later rebuild covers the same range. Defaults match the
+    // guider daemon's own (1.0–6.0 s); optional ctor params keep a pre-§76 profile.json deserializing.
+    int GuideExposureMinMs = 1000,
+    int GuideExposureMaxMs = 6000);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default

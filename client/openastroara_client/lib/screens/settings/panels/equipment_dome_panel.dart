@@ -48,13 +48,17 @@ class EquipmentDomePanel extends ConsumerWidget {
           hint: 'Off by default — dome connect actuates shutter',
         ),
         const SettingsSectionHeader('Slaving'),
-        const SettingsRow(
-          label: 'Slave to mount',
-          value: 'On (if connected)',
-          hint: '§35 — dome follows the mount azimuth',
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Dome slaving and shutter-on-park/unsafe follow the §35 safety '
+            'policies and the mount park routine; there is no separate dome '
+            'setting.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AraColors.textSecondary,
+                ),
+          ),
         ),
-        const SettingsRow(label: 'Close shutter on park', value: 'On'),
-        const SettingsRow(label: 'Close shutter on unsafe', value: 'On'),
       ],
     );
   }

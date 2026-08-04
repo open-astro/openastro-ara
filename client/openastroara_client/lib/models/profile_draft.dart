@@ -56,6 +56,17 @@ class ProfileDraft {
   /// again removes the key (the typed value wins).
   final Set<String> clearedFields = <String>{};
 
+  // §76.2 — whether the "Your equipment" screen has already auto-assigned
+  // discovered devices THIS wizard session: re-entering the screen (Back /
+  // review Edit) must not re-assign over a slot the user explicitly cleared.
+  bool equipmentAutoAssigned = false;
+
+  // §76.2 — friendly display names for assigned devices, keyed by uniqueId.
+  // Lives on the draft (not screen-local state) so re-entering the screen
+  // shows "Pegasus UPB" rather than the raw id (review r2): the screen widget
+  // is recreated on every visit, the draft persists for the session.
+  final Map<String, String> deviceNames = <String, String>{};
+
   // Server id of the profile this draft was persisted as, set on the first
   // successful create during Save. A retry after a mid-save failure re-uses it
   // (re-applying the sections) instead of orphaning a new profile each attempt.
@@ -165,6 +176,12 @@ class GuiderSettings {
   // GET /equipment/guider/choices). Null = untouched, keeps the base profile's
   // value on Save (like the other nullable draft fields).
   String? guiderCamera;
+  // §63.17 — mount / aux-mount / rotator selections (daemon choice strings,
+  // same format as guiderCamera). Null = untouched, keeps the base profile's
+  // value on Save; empty string = explicit "keep the guider's current pick".
+  String? guiderMount;
+  String? guiderAuxMount;
+  String? guiderRotator;
   // §63.19 — guide setup type ('guide_scope' | 'oag') + the guide-scope
   // optics. Null = untouched, keeps the base profile's value on Save. With
   // 'oag' the guide focal length is DERIVED from the telescope screen's
@@ -177,6 +194,21 @@ class GuiderSettings {
   double settleThresholdPx = 1.5;
   Duration settleDuration = const Duration(seconds: 10);
   CalibrationCadence calibrationCadence = CalibrationCadence.eachSession;
+
+  // §76.2 screen 4 — the user's guide exposure range (Joey: mount-dependent —
+  // an iOptron guides best at 0.5–2 s, slower mounts want longer). ONE choice,
+  // TWO consumers: the dark-library build coverage AND the guider's exposure
+  // bounds, so they can never disagree. Defaults = OpenAstro Guider's own
+  // (1.0–6.0 s).
+  int darkMinExposureMs = 1000;
+  int darkMaxExposureMs = 6000;
+
+  /// "Build dark library now" toggle — on Finish, S4 kicks the build over the
+  /// range above. Default ON (wizard time = capped-scope time).
+  bool buildDarksOnFinish = true;
+
+  /// Frames per exposure step for the darks build (advanced; guider default).
+  int darkFrameCount = 5;
 }
 
 enum CalibrationCadence { eachSession, onceReuse, neverRecalibrate }

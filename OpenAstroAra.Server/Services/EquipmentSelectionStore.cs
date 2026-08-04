@@ -45,6 +45,11 @@ public interface IEquipmentSelectionStore {
     /// auto-connect-on-boot stops attempting (and erroring on) it. Idempotent: returns the
     /// number of entries removed (0 when nothing was remembered).</summary>
     Task<int> ForgetAsync(DeviceType type, CancellationToken ct);
+
+    /// <summary>Drop the remembered entry for ONE switch (by its Alpaca UniqueId) so removing a
+    /// stuck switch also stops auto-connect-on-boot resurrecting it. Idempotent; returns the
+    /// number of entries removed.</summary>
+    Task<int> ForgetSwitchAsync(string uniqueId, CancellationToken ct);
 }
 
 /// <summary>
@@ -102,6 +107,42 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             LogWriteFailed(ex, device.Type);
         }
 #pragma warning restore CA1031
+        finally {
+            _gate.Release();
+        }
+    }
+
+    public async Task<int> ForgetSwitchAsync(string uniqueId, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(uniqueId);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var tmp = _path + ".tmp";
+        try {
+            var map = await ReadLocked(ct).ConfigureAwait(false);
+            // Match by the entry's UniqueId (the /switch/{id} address), not the storage key —
+            // legacy files keyed switches differently and ReadLocked re-keys on load.
+            var doomed = map.Where(kv => Canonical(kv.Value.Type) == Canonical(DeviceType.Switch)
+                                         && string.Equals(kv.Value.UniqueId, uniqueId, StringComparison.Ordinal))
+                            .Select(kv => kv.Key)
+                            .ToList();
+            if (doomed.Count == 0) {
+                return 0;
+            }
+            foreach (var key in doomed) {
+                map.Remove(key);
+            }
+            var json = JsonSerializer.Serialize(map, JsonOptions);
+            await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
+            File.Move(tmp, _path, overwrite: true);
+            return doomed.Count;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            SafeDeleteTmp(tmp);
+            throw;
+        }
+        catch (IOException) {
+            SafeDeleteTmp(tmp);
+            throw;
+        }
         finally {
             _gate.Release();
         }

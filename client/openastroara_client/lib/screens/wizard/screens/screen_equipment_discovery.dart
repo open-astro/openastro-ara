@@ -311,282 +311,30 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   }
 }
 
-/// A single assignable equipment slot on Screen 3 — binds a discovery [type] to
-/// a draft getter/setter.
-class _Slot {
-  final String label;
-  final EquipmentDeviceType type;
-  final String? Function(ProfileDraft) get;
-  final void Function(ProfileDraft, String?) set;
-  const _Slot(this.label, this.type, this.get, this.set);
-}
-
-const List<_Slot> _slots = <_Slot>[
-  _Slot('Camera', EquipmentDeviceType.camera, _gCamera, _sCamera),
-  _Slot('Filter Wheel', EquipmentDeviceType.filterWheel, _gFw, _sFw),
-  _Slot('Focuser', EquipmentDeviceType.focuser, _gFoc, _sFoc),
-  _Slot('Mount (Telescope)', EquipmentDeviceType.mount, _gMount, _sMount),
-  _Slot('Rotator', EquipmentDeviceType.rotator, _gRot, _sRot),
-  _Slot('Dome', EquipmentDeviceType.dome, _gDome, _sDome),
-  _Slot('Observing Conditions', EquipmentDeviceType.weather, _gOc, _sOc),
-  _Slot('Safety Monitor', EquipmentDeviceType.safetyMonitor, _gSafe, _sSafe),
-  _Slot('Flat Panel', EquipmentDeviceType.flatPanel, _gFlat, _sFlat),
-  // Guider (PHD2) is NOT a slot: it isn't an Alpaca device, so discovery has
-  // nothing to scan (the daemon 400s the attempt) — it's configured by
-  // host:port on the wizard's Guider step (with a Test connection button).
-  // Switch is NOT a slot either: a rig can carry several switch hubs (§6.4
-  // multi-switch), so it gets its own add-as-many-as-you-like section below.
-];
-
-String? _gCamera(ProfileDraft d) => d.equipment.cameraDeviceId;
-void _sCamera(ProfileDraft d, String? v) => d.equipment.cameraDeviceId = v;
-String? _gFw(ProfileDraft d) => d.equipment.filterWheelDeviceId;
-void _sFw(ProfileDraft d, String? v) => d.equipment.filterWheelDeviceId = v;
-String? _gFoc(ProfileDraft d) => d.equipment.focuserDeviceId;
-void _sFoc(ProfileDraft d, String? v) => d.equipment.focuserDeviceId = v;
-String? _gMount(ProfileDraft d) => d.equipment.mountDeviceId;
-void _sMount(ProfileDraft d, String? v) => d.equipment.mountDeviceId = v;
-String? _gRot(ProfileDraft d) => d.equipment.rotatorDeviceId;
-void _sRot(ProfileDraft d, String? v) => d.equipment.rotatorDeviceId = v;
-String? _gDome(ProfileDraft d) => d.equipment.domeDeviceId;
-void _sDome(ProfileDraft d, String? v) => d.equipment.domeDeviceId = v;
-String? _gOc(ProfileDraft d) => d.equipment.observingConditionsDeviceId;
-void _sOc(ProfileDraft d, String? v) =>
-    d.equipment.observingConditionsDeviceId = v;
-String? _gSafe(ProfileDraft d) => d.equipment.safetyMonitorDeviceId;
-void _sSafe(ProfileDraft d, String? v) => d.equipment.safetyMonitorDeviceId = v;
-String? _gFlat(ProfileDraft d) => d.equipment.flatPanelDeviceId;
-void _sFlat(ProfileDraft d, String? v) => d.equipment.flatPanelDeviceId = v;
-
-/// §37.2 Screen 3 — Discover + assign equipment.
-class ScreenEquipmentAssign extends ConsumerStatefulWidget {
-  const ScreenEquipmentAssign({super.key});
-
-  @override
-  ConsumerState<ScreenEquipmentAssign> createState() =>
-      _ScreenEquipmentAssignState();
-}
-
-class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
-  late final ProfileDraft _draft;
-
-  // Friendly names for already-assigned devices, remembered for this wizard
-  // session (the draft only persists the device id).
-  final Map<EquipmentDeviceType, String> _assignedNames = {};
-
-  // id → name for the multi-assign switch section (several per rig).
-  final Map<String, String> _switchNames = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _draft = ref.read(wizardControllerProvider).draft;
-  }
-
-  Future<void> _choose(_Slot slot) async {
-    final type = slot.type;
-    final server = ref.read(activeServerProvider);
-    // One-shot client for the sheet's scans — closed when the sheet is done
-    // (same leak avoidance as the Screen-2 probe).
-    final api = server == null ? null : EquipmentDiscoveryApi(server);
-    final picked = await showModalBottomSheet<_Choice>(
-      context: context,
-      backgroundColor: AraColors.bgPanel,
-      isScrollControlled: true,
-      builder: (_) => _DiscoverySheet(
-        slotLabel: slot.label,
-        type: type,
-        api: api,
-      ),
-    );
-    api?.close();
-    if (picked == null) return; // dismissed without choosing
-    if (!mounted) return;
-    setState(() {
-      slot.set(_draft, picked.device?.uniqueId);
-      if (picked.device != null) {
-        _assignedNames[type] = picked.device!.name;
-      } else {
-        _assignedNames.remove(type);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WizardScreenScaffold(
-      step: 3,
-      intro: 'Scan for Alpaca devices and assign each slot. Leave a slot as '
-          '"— None" if you don\'t use it. The guider connects to PHD2\'s '
-          'JSON-RPC, not Alpaca.',
-      children: [
-        for (final slot in _slots) _slotRow(context, slot),
-        _switchSection(context),
-      ],
-    );
-  }
-
-  /// Switches are add-as-many-as-you-use (§6.4 multi-switch): power boxes,
-  /// dew controllers, relay boards can all coexist on one rig.
-  Widget _switchSection(BuildContext context) {
-    final ids = _draft.equipment.switchDeviceIds;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: AraColors.bgPanel,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: AraColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Switches',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AraColors.textPrimary,
-                            )),
-                    const SizedBox(height: 2),
-                    Text(
-                      ids.isEmpty
-                          ? '— None (add every switch hub your rig uses)'
-                          : '${ids.length} assigned',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: ids.isNotEmpty
-                                ? AraColors.accentConnected
-                                : AraColors.textSecondary,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: () => unawaited(_addSwitch()),
-                child: const Text('Add switch'),
-              ),
-            ]),
-            if (ids.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final id in ids)
-                    InputChip(
-                      label: Text(_switchNames[id] ?? id),
-                      onDeleted: () => setState(() {
-                        ids.remove(id);
-                        _switchNames.remove(id);
-                      }),
-                    ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addSwitch() async {
-    final server = ref.read(activeServerProvider);
-    final api = server == null ? null : EquipmentDiscoveryApi(server);
-    final picked = await showModalBottomSheet<_Choice>(
-      context: context,
-      backgroundColor: AraColors.bgPanel,
-      isScrollControlled: true,
-      builder: (_) => _DiscoverySheet(
-        slotLabel: 'Switch',
-        type: EquipmentDeviceType.switchDevice,
-        api: api,
-      ),
-    );
-    api?.close();
-    if (picked?.device == null || !mounted) return;
-    final device = picked!.device!;
-    setState(() {
-      if (!_draft.equipment.switchDeviceIds.contains(device.uniqueId)) {
-        _draft.equipment.switchDeviceIds.add(device.uniqueId);
-      }
-      _switchNames[device.uniqueId] = device.name;
-    });
-  }
-
-  Widget _slotRow(BuildContext context, _Slot slot) {
-    final assignedId = slot.get(_draft);
-    final assignedLabel = assignedId == null
-        ? '— None'
-        : (_assignedNames[slot.type] ?? assignedId);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: AraColors.bgPanel,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: AraColors.border),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(slot.label,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AraColors.textPrimary,
-                          )),
-                  const SizedBox(height: 2),
-                  Text(
-                    assignedLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: assignedId != null
-                              ? AraColors.accentConnected
-                              : AraColors.textSecondary,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: () => _choose(slot),
-              child: Text(assignedId == null ? 'Choose' : 'Change'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Result of the discovery sheet: a chosen device, or an explicit "— None".
-class _Choice {
+/// Result of [DiscoverySheet]: a chosen device, or an explicit "— None".
+/// Shared by the §76 "Your equipment" screen's Choose/Change affordances.
+class DeviceChoice {
   final DiscoveredDevice? device; // null = "— None"
-  const _Choice(this.device);
+  const DeviceChoice(this.device);
 }
 
-class _DiscoverySheet extends StatefulWidget {
+class DiscoverySheet extends StatefulWidget {
   final String slotLabel;
   final EquipmentDeviceType type;
   final EquipmentDiscoveryApi? api;
 
-  const _DiscoverySheet({
+  const DiscoverySheet({
+    super.key,
     required this.slotLabel,
     required this.type,
     required this.api,
   });
 
   @override
-  State<_DiscoverySheet> createState() => _DiscoverySheetState();
+  State<DiscoverySheet> createState() => _DiscoverySheetState();
 }
 
-class _DiscoverySheetState extends State<_DiscoverySheet> {
+class _DiscoverySheetState extends State<DiscoverySheet> {
   late Future<List<DiscoveredDevice>> _future;
 
   @override
@@ -644,7 +392,7 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
               leading: const Icon(Icons.block, color: AraColors.textSecondary),
               title: const Text('— None'),
               subtitle: const Text('Don\'t use this device type'),
-              onTap: () => Navigator.of(context).pop(const _Choice(null)),
+              onTap: () => Navigator.of(context).pop(const DeviceChoice(null)),
             ),
             const Divider(height: 1, color: AraColors.border),
             SizedBox(
@@ -693,7 +441,7 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
                               ),
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.of(context).pop(_Choice(d)),
+                        onTap: () => Navigator.of(context).pop(DeviceChoice(d)),
                       );
                     },
                   );
