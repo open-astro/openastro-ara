@@ -930,25 +930,28 @@ public partial class Program {
         var araDb = app.Services.GetRequiredService<IAraDatabase>();
         araDb.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-        // Seed the frame catalog with fixture data on first run. Idempotent
-        // (skips if frames table already has rows) — survives daemon
-        // restart with persistence intact.
-        var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
-        if (frameRepo is SqliteFrameRepository sqliteRepo) {
-            sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
-        }
-        // §46.5 notifications fixture seed — same idempotent pattern.
+        // Fixture seeds — an M31 session, sample notifications, sample
+        // diagnostics events. These exist so CI's smoke gate and manual UI
+        // work have something to render before a rig has ever imaged.
+        //
+        // They must NEVER run on a real install. On an astrophotographer's
+        // machine they land in the same catalog as their own data and the
+        // Stats dashboard then reports a night they did not have: a target
+        // they never shot, integration hours they never earned, a "best
+        // frame" score for an image that does not exist. Opt in explicitly.
         var notificationSvc = app.Services.GetRequiredService<INotificationService>();
-        if (notificationSvc is SqliteNotificationService sqliteNotif) {
-            sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
-        }
-
-        // §51 diagnostics fixture seed — three events (one open issue + two
-        // historical) so the panel has data to render before the monitor
-        // worker is online.
         var diagnosticsSvc = app.Services.GetRequiredService<IDiagnosticsService>();
-        if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
-            sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        if (ShouldSeedSampleData()) {
+            var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
+            if (frameRepo is SqliteFrameRepository sqliteRepo) {
+                sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            if (notificationSvc is SqliteNotificationService sqliteNotif) {
+                sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
+                sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
         }
 
         // §28.2 — reconcile any interrupted-sequence checkpoint left by a
@@ -1064,6 +1067,25 @@ public partial class Program {
     ///   3. <c>~/.local/share/openastroara</c> — XDG-style per-user fallback
     ///      for developers running `dotnet run` outside systemd
     /// </summary>
+    /// <summary>
+    /// Whether to plant the sample M31 session, sample notifications and
+    /// sample diagnostics events into an empty catalog.
+    ///
+    /// Off unless <c>OPENASTROARA_SEED_SAMPLE_DATA</c> says otherwise — CI's
+    /// smoke gate sets it, and so should anyone doing UI work against an
+    /// empty database. A real rig must never get fixture rows: they are
+    /// indistinguishable from the user's own data once written, and the Stats
+    /// dashboard would credit them with a night they never had.
+    /// </summary>
+    private static bool ShouldSeedSampleData() {
+        var raw = System.Environment.GetEnvironmentVariable("OPENASTROARA_SEED_SAMPLE_DATA");
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        raw = raw.Trim();
+        return raw.Equals("1", StringComparison.Ordinal)
+            || raw.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || raw.Equals("yes", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ResolveProfileDir() {
         var envDir = System.Environment.GetEnvironmentVariable("OPENASTROARA_PROFILE_DIR");
         if (!string.IsNullOrWhiteSpace(envDir)) return envDir;
