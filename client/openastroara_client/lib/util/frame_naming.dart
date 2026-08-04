@@ -173,7 +173,13 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
   final segments = expanded
       .split('/')
       .map((s) {
-        var v = s;
+        // Mirror the server's FrameNaming.SanitizeSegment: filesystem-hostile
+        // characters become '-', and a segment that is nothing but dots
+        // (".", "..") vanishes rather than escaping the storage root.
+        var v = s.replaceAll(RegExp(r'[\\:*?"<>|\x00]'), '-');
+        if (RegExp(r'^\.+$').hasMatch(v)) {
+          return '';
+        }
         while (v.contains('__')) {
           v = v.replaceAll('__', '_');
         }

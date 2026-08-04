@@ -162,15 +162,21 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "helper_missing",
                     $"{HelperPath} is not installed — reinstall the openastroara-server package.", null);
             }
-            if (format && string.IsNullOrWhiteSpace(expectedLabel)) {
+            // An empty confirm label is legal only for the format path of a
+            // drive with no label to retype — the helper still refuses unless
+            // the drive's actual label is equally empty, so the retype gate
+            // stays real for every labeled drive.
+            if (format && expectedLabel is null) {
                 return new StorageConfigureResult(false, "label_required",
                     "Reformatting requires the drive's current label as confirmation.", null);
             }
-            // A filesystem UUID is strictly hex-and-dashes; anything else never
-            // matches a device, so reject it before it reaches a command line.
-            if (!UuidShape().IsMatch(uuid)) {
+            // The identifier is a filesystem UUID (strictly hex-and-dashes)
+            // or, for a brand-new blank disk that has no filesystem yet, a
+            // /dev/ node path. Anything else never matches a device — reject
+            // it before it reaches a command line.
+            if (!UuidShape().IsMatch(uuid) && !DevPathShape().IsMatch(uuid)) {
                 return new StorageConfigureResult(false, "bad_uuid",
-                    "That does not look like a filesystem UUID.", null);
+                    "That does not look like a filesystem UUID or device path.", null);
             }
             // Arguments are argv-passed one element each (no shell, no
             // re-splitting), and the helper re-validates everything it is
@@ -217,6 +223,9 @@ namespace OpenAstroAra.Server.Services {
 
         [System.Text.RegularExpressions.GeneratedRegex("^[0-9A-Fa-f-]{1,64}$")]
         private static partial System.Text.RegularExpressions.Regex UuidShape();
+
+        [System.Text.RegularExpressions.GeneratedRegex("^/dev/[A-Za-z0-9]{1,32}$")]
+        private static partial System.Text.RegularExpressions.Regex DevPathShape();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Probing external tools is best-effort: a missing/failing lsblk|findmnt|sudo must degrade to 'no devices' or a typed failure result, never crash the request. Log-and-recover boundary.")]

@@ -904,6 +904,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // write yourself. Computed from the site, so the Site coordinates
             // must exist; guarded by its own switch because celestial
             // geometry at a timestamp narrows down where a frame was taken.
+            // (0,0) as "not configured" is the product-wide convention (the
+            // client's site panel says "Coordinates not set" for exactly this
+            // pair). The one boat at that null-island point loses these
+            // headers; every unconfigured install avoids confidently wrong
+            // sun/moon numbers computed for a site that was never entered.
             if (prefs.HeaderEphemeris && (site.LatitudeDeg != 0 || site.LongitudeDeg != 0)) {
                 WriteEphemerisHeaders(fits, site, capturedAt);
             }

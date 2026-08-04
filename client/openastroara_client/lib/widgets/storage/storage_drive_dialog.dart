@@ -68,7 +68,9 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
     final api = StorageDevicesApi(server);
     try {
       final outcome = await api.configure(
-        uuid: device.uuid ?? '',
+        // A brand-new blank disk has no filesystem yet, hence no UUID — the
+        // server accepts its /dev/ path for exactly this onboarding case.
+        uuid: device.uuid ?? device.path,
         format: _needsErase,
         // What the user actually typed — the server re-checks it against the
         // drive's real label, so a stale client record can't erase the wrong
