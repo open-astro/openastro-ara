@@ -446,16 +446,20 @@ const Map<String, Help> helpRegistry = {
   ),
   'session.storage.filename_template': Help(
     key: 'session.storage.filename_template',
-    title: 'Filename template',
-    body: 'Output paths are built by substituting \$\$TOKEN\$\$ placeholders in this template. Tokens are uppercased and surrounded by double-dollars.\n\n'
-        '**Common tokens:**\n'
-        '* `\$\$DATEMINUS12\$\$` — session date (rolls over at noon UTC-12, so all-night exposures share one date)\n'
-        '* `\$\$DATETIME\$\$` — exposure-start timestamp\n'
-        '* `\$\$IMAGETYPE\$\$` — Light / Dark / Bias / Flat\n'
-        '* `\$\$FILTER\$\$` — current filter slot label\n'
-        '* `\$\$EXPOSURETIME\$\$` — exposure seconds\n'
-        '* `\$\$TARGETNAME\$\$` — target from the active sequence\n\n'
-        'Use `\\` (or `/`) as the path separator. Subdirectories are created automatically.',
+    title: 'Naming template',
+    body: 'Plain words in curly braces, `/` between folders — for example '
+        '`{night}/{type}/{datetime}_{filter}_{exposure}s`. Folders are '
+        'created automatically, and a part with no value (no filter wheel, '
+        'no target) simply vanishes from the name.\n\n'
+        '**Words you can use:**\n'
+        '* `{night}` — the night the frame belongs to (a 2 AM frame files under yesterday evening)\n'
+        '* `{datetime}`, `{date}`, `{time}` — when the exposure started\n'
+        '* `{type}` — Light / Dark / Bias / Flat\n'
+        '* `{target}` — what you were shooting\n'
+        '* `{filter}`, `{exposure}`, `{gain}`, `{offset}`, `{binning}`\n'
+        '* `{temp}` — sensor temperature, `{camera}` — camera name\n'
+        '* `{n}` — frame number\n\n'
+        'Templates imported from NINA (the `\$\$TOKEN\$\$` style) keep working as-is.',
     relatedSettings: ['session.storage.filename_template'],
   ),
   'session.storage.backup_retention_count': Help(

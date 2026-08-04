@@ -1,8 +1,10 @@
 /// §29.2 — the structured face of the filename template.
 ///
-/// The server speaks the inherited `$$TOKEN$$` language (and now actually
-/// names files with it). Nobody should have to *write* that language, so the
-/// UI edits this model instead: a folder scheme plus a set of name parts.
+/// Ara's template language is `{night}/{type}/{datetime}_{filter}` — plain
+/// words in braces, slash for folders. The server also reads the inherited
+/// NINA `$$TOKEN$$` dialect forever, but Ara only ever writes this one.
+/// Nobody should have to write either by hand, so the UI edits this model:
+/// a folder scheme plus a set of name parts.
 /// The model compiles to a template string for the server, and recognizes its
 /// own output when it reads one back. A template it can't recognize — a
 /// hand-written NINA import, say — flips the panel into custom mode where the
@@ -31,8 +33,8 @@ enum FolderScheme {
 /// same way.
 enum NamePart { target, filter, exposure, sensorTemp, gain, frameNumber }
 
-/// The structured template. [dateTime] is not modeled — every name starts
-/// with `$$DATETIME$$`; it is what makes names unique and sortable, so it is
+/// The structured template. Date & time is not modeled — every name starts
+/// with `{datetime}`; it is what makes names unique and sortable, so it is
 /// not optional.
 class FrameNamingModel {
   const FrameNamingModel({
@@ -56,40 +58,53 @@ class FrameNamingModel {
   /// The exact string the server stores and expands.
   String compile() {
     final folderTokens = switch (folders) {
-      FolderScheme.nightAndType => [r'$$DATEMINUS12$$', r'$$IMAGETYPE$$'],
-      FolderScheme.nightTargetType => [
-          r'$$DATEMINUS12$$', r'$$TARGETNAME$$', r'$$IMAGETYPE$$'
-        ],
-      FolderScheme.targetNightType => [
-          r'$$TARGETNAME$$', r'$$DATEMINUS12$$', r'$$IMAGETYPE$$'
-        ],
+      FolderScheme.nightAndType => ['{night}', '{type}'],
+      FolderScheme.nightTargetType => ['{night}', '{target}', '{type}'],
+      FolderScheme.targetNightType => ['{target}', '{night}', '{type}'],
       FolderScheme.none => <String>[],
     };
     final nameTokens = [
-      r'$$DATETIME$$',
+      '{datetime}',
       for (final part in NamePart.values)
         if (parts.contains(part))
           switch (part) {
-            NamePart.target => r'$$TARGETNAME$$',
-            NamePart.filter => r'$$FILTER$$',
-            NamePart.exposure => r'$$EXPOSURETIME$$s',
-            NamePart.sensorTemp => r'$$SENSORTEMP$$',
-            NamePart.gain => r'g$$GAIN$$',
-            NamePart.frameNumber => r'$$FRAMENR$$',
+            NamePart.target => '{target}',
+            NamePart.filter => '{filter}',
+            NamePart.exposure => '{exposure}s',
+            NamePart.sensorTemp => '{temp}',
+            NamePart.gain => 'g{gain}',
+            NamePart.frameNumber => '{n}',
           },
     ];
-    return [...folderTokens, nameTokens.join('_')].join(r'\\');
+    return [...folderTokens, nameTokens.join('_')].join('/');
   }
 
-  /// Recognize a template this model could have written (also accepts the
-  /// inherited NINA default). Null = custom, edit raw.
+  /// Rewrite the inherited `$$TOKEN$$` dialect into `{token}` form —
+  /// mirrors the server's Canonicalize so both sides recognize the same
+  /// templates.
+  static String canonicalize(String template) => template
+      .replaceAllMapped(RegExp(r'\$\$([A-Za-z0-9]+)\$\$'), (m) {
+        final legacy = m.group(1)!.toUpperCase();
+        const map = {
+          'DATEMINUS12': 'night',
+          'IMAGETYPE': 'type',
+          'SENSORTEMP': 'temp',
+          'EXPOSURETIME': 'exposure',
+          'FRAMENR': 'n',
+          'TARGETNAME': 'target',
+        };
+        return '{${map[legacy] ?? legacy.toLowerCase()}}';
+      })
+      // NINA writes '\\' between folders; collapse any run of separators to
+      // one so both dialects compare equal.
+      .replaceAll(r'\', '/')
+      .replaceAll(RegExp('/+'), '/')
+      .trim();
+
+  /// Recognize a template this model could have written — in either dialect.
+  /// Null = custom, edit raw.
   static FrameNamingModel? tryParse(String template) {
-    // The NINA-inherited default is the standard scheme in older clothes.
-    const ninaDefault =
-        r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s';
-    if (template.trim() == ninaDefault) {
-      return const FrameNamingModel();
-    }
+    final canonical = canonicalize(template);
     for (final folders in FolderScheme.values) {
       // parts is small: try every subset via bitmask (2^6).
       for (var mask = 0; mask < (1 << NamePart.values.length); mask++) {
@@ -98,7 +113,7 @@ class FrameNamingModel {
             if (mask & (1 << i) != 0) NamePart.values[i],
         };
         final candidate = FrameNamingModel(folders: folders, parts: parts);
-        if (candidate.compile() == template.trim()) return candidate;
+        if (candidate.compile() == canonical) return candidate;
       }
     }
     return null;
@@ -133,30 +148,29 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
   String date(DateTime t) => '${t.year}-${two(t.month)}-${two(t.day)}';
   final t = ctx.captured;
   final night = t.subtract(const Duration(hours: 12));
-  var expanded = template
-      .replaceAll(r'$$DATEMINUS12$$', date(night))
-      .replaceAll(r'$$DATETIME$$',
+  var expanded = FrameNamingModel.canonicalize(template)
+      .replaceAll('{night}', date(night))
+      .replaceAll('{datetime}',
           '${date(t)}_${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
-      .replaceAll(r'$$DATE$$', date(t))
-      .replaceAll(r'$$TIME$$', '${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
-      .replaceAll(r'$$IMAGETYPE$$', 'Light')
-      .replaceAll(r'$$TARGETNAME$$', ctx.target)
-      .replaceAll(r'$$FILTER$$', ctx.filter)
+      .replaceAll('{date}', date(t))
+      .replaceAll('{time}', '${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
+      .replaceAll('{type}', 'Light')
+      .replaceAll('{target}', ctx.target)
+      .replaceAll('{filter}', ctx.filter)
       .replaceAll(
-          r'$$EXPOSURETIME$$',
+          '{exposure}',
           ctx.exposureSec == ctx.exposureSec.roundToDouble()
               ? ctx.exposureSec.round().toString()
               : ctx.exposureSec.toString())
-      .replaceAll(r'$$SENSORTEMP$$', '${ctx.sensorTemp}C')
-      .replaceAll(r'$$GAIN$$', '${ctx.gain}')
-      .replaceAll(r'$$OFFSET$$', '30')
-      .replaceAll(r'$$BINNING$$', '1x1')
-      .replaceAll(r'$$CAMERA$$', 'ASI2600MM')
-      .replaceAll(r'$$FRAMENR$$', ctx.frameNumber.toString().padLeft(4, '0'));
+      .replaceAll('{temp}', '${ctx.sensorTemp}C')
+      .replaceAll('{gain}', '${ctx.gain}')
+      .replaceAll('{offset}', '30')
+      .replaceAll('{binning}', '1x1')
+      .replaceAll('{camera}', 'ASI2600MM')
+      .replaceAll('{n}', ctx.frameNumber.toString().padLeft(4, '0'));
   // Any token we didn't recognize vanishes, same as the server.
-  expanded = expanded.replaceAll(RegExp(r'\$\$[A-Za-z0-9]*\$\$'), '');
+  expanded = expanded.replaceAll(RegExp(r'\{[a-z0-9]*\}'), '');
   final segments = expanded
-      .replaceAll(r'\\', '/')
       .split('/')
       .map((s) {
         var v = s;

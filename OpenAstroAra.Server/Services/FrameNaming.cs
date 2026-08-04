@@ -39,10 +39,13 @@ public sealed record FrameNamingContext(
 
 /// <summary>
 /// §29.2 — expands the profile's filename template into the relative path a
-/// frame is written to. The template language is inherited (<c>$$TOKEN$$</c>,
-/// <c>\\</c> or <c>/</c> as folder separators) so existing NINA profiles keep
-/// meaning what they meant, but the daemon — not a Windows client — is now the
-/// thing that speaks it.
+/// frame is written to.
+///
+/// Ara's template language is <c>{night}/{type}/{datetime}_{filter}</c> —
+/// lowercase words in braces, slash for folders. The inherited NINA language
+/// (<c>$$DATEMINUS12$$</c>, <c>\\</c> separators) is accepted forever so
+/// imported profiles keep meaning what they meant, but it's a reading
+/// dialect, not the one Ara writes.
 ///
 /// Until this existed the template was stored, shown, imported, exported…
 /// and consulted by nothing: every capture landed as <c>{guid}.fits</c>. The
@@ -60,9 +63,9 @@ public static class FrameNaming {
     public static string? ExpandRelativePath(string? template, FrameNamingContext ctx) {
         if (string.IsNullOrWhiteSpace(template)) return null;
 
-        // Both separators mean "folder": the inherited default uses '\\',
-        // hand-written ones tend to use '/'.
-        var segments = template.Replace('\\', '/').Split('/');
+        // Both separators mean "folder": the inherited NINA default uses
+        // '\\', Ara's own templates use '/'.
+        var segments = Canonicalize(template).Replace('\\', '/').Split('/');
         var expanded = new List<string>();
         foreach (var segment in segments) {
             var value = SanitizeSegment(ExpandTokens(segment, ctx));
@@ -71,45 +74,74 @@ public static class FrameNaming {
         return expanded.Count == 0 ? null : string.Join(Path.DirectorySeparatorChar, expanded);
     }
 
+    /// <summary>
+    /// Rewrite the inherited <c>$$TOKEN$$</c> dialect into Ara's
+    /// <c>{token}</c> form so one expander serves both. Unknown legacy
+    /// tokens become unknown braced tokens and vanish the same way.
+    /// </summary>
+    public static string Canonicalize(string template) {
+        var sb = new StringBuilder(template.Length);
+        var i = 0;
+        while (i < template.Length) {
+            var start = template.IndexOf("$$", i, StringComparison.Ordinal);
+            if (start < 0) { sb.Append(template, i, template.Length - i); break; }
+            var end = template.IndexOf("$$", start + 2, StringComparison.Ordinal);
+            if (end < 0) { sb.Append(template, i, template.Length - i); break; }
+            sb.Append(template, i, start - i);
+            var legacy = template.Substring(start + 2, end - start - 2).ToUpperInvariant();
+            sb.Append('{').Append(legacy switch {
+                "DATEMINUS12" => "night",
+                "IMAGETYPE" => "type",
+                "SENSORTEMP" => "temp",
+                "EXPOSURETIME" => "exposure",
+                "FRAMENR" => "n",
+                "TARGETNAME" => "target",
+                _ => legacy.ToLowerInvariant(),
+            }).Append('}');
+            i = end + 2;
+        }
+        return sb.ToString();
+    }
+
     private static string ExpandTokens(string segment, FrameNamingContext ctx) {
         var sb = new StringBuilder(segment.Length + 16);
         var i = 0;
         while (i < segment.Length) {
-            var start = segment.IndexOf("$$", i, StringComparison.Ordinal);
+            var start = segment.IndexOf('{', i);
             if (start < 0) { sb.Append(segment, i, segment.Length - i); break; }
-            var end = segment.IndexOf("$$", start + 2, StringComparison.Ordinal);
+            var end = segment.IndexOf('}', start + 1);
             if (end < 0) { sb.Append(segment, i, segment.Length - i); break; }
             sb.Append(segment, i, start - i);
-            sb.Append(TokenValue(segment.Substring(start + 2, end - start - 2), ctx));
-            i = end + 2;
+            sb.Append(TokenValue(segment.Substring(start + 1, end - start - 1), ctx));
+            i = end + 1;
         }
         return sb.ToString();
     }
 
     private static string TokenValue(string token, FrameNamingContext ctx) {
         var t = ctx.CapturedLocal;
-        return token.ToUpperInvariant() switch {
-            "DATE" => t.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            "TIME" => t.ToString("HH-mm-ss", CultureInfo.InvariantCulture),
-            "DATETIME" => t.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture),
+        return token.Trim().ToLowerInvariant() switch {
+            "date" => t.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            "time" => t.ToString("HH-mm-ss", CultureInfo.InvariantCulture),
+            "datetime" => t.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture),
             // The astronomer's night: everything before local noon belongs to
             // the evening it started.
-            "DATEMINUS12" => t.AddHours(-12).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            "DATEUTC" => t.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            "TIMEUTC" => t.ToUniversalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture),
-            "IMAGETYPE" => Capitalize(ctx.ImageType),
-            "FILTER" => ctx.Filter ?? string.Empty,
-            "EXPOSURETIME" => FormatExposure(ctx.ExposureSec),
-            "GAIN" => ctx.Gain?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
-            "OFFSET" => ctx.Offset?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
-            "BINNING" => string.Create(CultureInfo.InvariantCulture, $"{ctx.BinX}x{ctx.BinY}"),
-            "SENSORTEMP" => ctx.SensorTemp is double temp
+            "night" => t.AddHours(-12).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            "dateutc" => t.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            "timeutc" => t.ToUniversalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture),
+            "type" => Capitalize(ctx.ImageType),
+            "filter" => ctx.Filter ?? string.Empty,
+            "exposure" => FormatExposure(ctx.ExposureSec),
+            "gain" => ctx.Gain?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            "offset" => ctx.Offset?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            "binning" => string.Create(CultureInfo.InvariantCulture, $"{ctx.BinX}x{ctx.BinY}"),
+            "temp" => ctx.SensorTemp is double temp
                 ? Math.Round(temp).ToString("0", CultureInfo.InvariantCulture) + "C"
                 : string.Empty,
-            "CAMERA" => ctx.CameraName ?? string.Empty,
-            "TARGETNAME" => ctx.TargetName ?? string.Empty,
-            "FRAMENR" => ctx.FrameNumber.ToString("0000", CultureInfo.InvariantCulture),
-            // Unknown token: vanish rather than leak $$X$$ into a filename.
+            "camera" => ctx.CameraName ?? string.Empty,
+            "target" => ctx.TargetName ?? string.Empty,
+            "n" or "number" or "frame" => ctx.FrameNumber.ToString("0000", CultureInfo.InvariantCulture),
+            // Unknown token: vanish rather than leak {x} into a filename.
             _ => string.Empty,
         };
     }

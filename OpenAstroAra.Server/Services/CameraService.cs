@@ -446,10 +446,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
-        double? sensorTemp = null;
+        double? sensorTemp = null, tempSetPoint = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
+        try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
-            targetName: targetName, sensorTemp: sensorTemp);
+            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint);
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -708,7 +709,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
@@ -750,8 +751,65 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
+        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint);
         fits.Complete(); // §28.7 atomic finish
         return path;
+    }
+
+    /// <summary>
+    /// The headers the FITS standard and forty years of astro software expect
+    /// (fits.gsfc.nasa.gov): who took it (SWCREATE/INSTRUME), through what
+    /// (FOCALLEN/APTDIA/XPIXSZ), of what (OBJECT), from where
+    /// (SITELAT/SITELONG/SITEELEV), and how cold the sensor was
+    /// (CCD-TEMP/SET-TEMP). Everything is best-effort: a header that's
+    /// sometimes absent beats a capture that can fail on a flaky read, so
+    /// each source is guarded and zero/unset profile values are skipped.
+    /// RA/DEC need the mount and land with the pointing follow-up.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
+    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint) {
+        try {
+            fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
+            if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
+                fits.SetHeader("OBJECT", targetName!, "target name");
+            }
+            if (_device?.Name is string cam && cam.Length > 0) {
+                fits.SetHeader("INSTRUME", cam, "camera");
+            }
+            if (sensorTemp is double ccd) {
+                fits.SetHeader("CCD-TEMP", ccd, "sensor temperature C");
+            }
+            if (tempSetPoint is double setp) {
+                fits.SetHeader("SET-TEMP", setp, "cooler set point C");
+            }
+
+            var profile = _profileStore;
+            if (profile is null) return;
+
+            var optics = profile.GetOpticsSettings();
+            var focal = optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1);
+            if (focal > 0) {
+                fits.SetHeader("FOCALLEN", focal, "effective focal length mm");
+            }
+            if (optics.ApertureMm > 0) {
+                fits.SetHeader("APTDIA", optics.ApertureMm, "aperture diameter mm");
+            }
+            if (optics.PixelSizeUm > 0) {
+                // Effective pixel size after binning — what plate solvers want.
+                fits.SetHeader("XPIXSZ", optics.PixelSizeUm * request.BinX, "pixel width um (binned)");
+                fits.SetHeader("YPIXSZ", optics.PixelSizeUm * request.BinY, "pixel height um (binned)");
+            }
+
+            var site = profile.GetSiteSettings();
+            if (site.LatitudeDeg != 0 || site.LongitudeDeg != 0) {
+                fits.SetHeader("SITELAT", site.LatitudeDeg, "observatory latitude deg");
+                fits.SetHeader("SITELONG", site.LongitudeDeg, "observatory longitude deg (E+)");
+                fits.SetHeader("SITEELEV", site.ElevationM, "observatory elevation m");
+            }
+        } catch (Exception ex) {
+            LogHeaderEnrichmentFailed(ex);
+        }
     }
 
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
@@ -1414,6 +1472,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         _faults.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Optional FITS headers could not all be written; frame is intact")]
+    private partial void LogHeaderEnrichmentFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Filename template failed for frame {FrameId}; using id-based name")]
     private partial void LogTemplateNamingFailed(Exception ex, Guid frameId);

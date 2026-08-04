@@ -50,6 +50,23 @@ namespace OpenAstroAra.Test {
                 FrameNumber: frameNr);
 
         [Test]
+        public void Aras_own_language_is_words_in_braces() {
+            var path = FrameNaming.ExpandRelativePath(
+                "{night}/{type}/{datetime}_{filter}_{exposure}s", Ctx());
+            Assert.That(path, Is.EqualTo($"2026-08-03{S}Light{S}2026-08-04_01-30-05_L_180s"));
+        }
+
+        [Test]
+        public void Both_dialects_name_the_same_frame_identically() {
+            var legacy = FrameNaming.ExpandRelativePath(
+                @"$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s", Ctx());
+            var ara = FrameNaming.ExpandRelativePath(
+                "{night}/{type}/{datetime}_{filter}_{exposure}s", Ctx());
+            Assert.That(ara, Is.EqualTo(legacy),
+                "an imported NINA profile and its Ara translation must file frames identically");
+        }
+
+        [Test]
         public void The_inherited_default_template_reads_as_a_night() {
             var path = FrameNaming.ExpandRelativePath(
                 @"$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s", Ctx());
