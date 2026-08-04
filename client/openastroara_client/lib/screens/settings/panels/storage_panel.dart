@@ -167,14 +167,10 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             if (v != null) n.setCompression(v);
           },
         ),
-        EditableTextRow(
-          label: 'Filename template',
-          helpKey: 'session.storage.filename_template',
-          currentValue: s.filenameTemplate,
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).filenameTemplate,
-          parse: n.setFilenameTemplate,
-          maxLines: 2,
+        const SettingsRow(
+          label: 'File naming',
+          value: 'Folders and filenames',
+          hint: 'Edit in Your night → File naming',
         ),
         const SettingsSectionHeader('Warn me when space runs low'),
         EditableNumberRow(
