@@ -7,6 +7,7 @@ import '../screens/calibration/calibration_screen.dart';
 import '../screens/library/image_library_screen.dart';
 import '../screens/stats/stats_dashboard_screen.dart';
 import '../screens/wizard/wizard_shell.dart';
+import 'notifications/notification_center.dart';
 import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../state/settings/settings_search.dart';
@@ -135,6 +136,8 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
           context: rootContext,
           builder: (_) => const BackupRestoreModal(),
         );
+      case 'action.notifications':
+        showNotificationCenter(rootContext);
       case 'action.wizard':
         Navigator.of(rootContext).push(
           MaterialPageRoute<void>(

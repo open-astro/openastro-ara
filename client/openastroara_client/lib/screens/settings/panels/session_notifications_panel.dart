@@ -9,6 +9,7 @@ import '../../../state/settings/notifications_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/notifications/notification_center.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §54 Notifications panel — editable form wired to
@@ -86,6 +87,17 @@ class _SessionNotificationsPanelState
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        // Choosing what you get told is only half of it — the other half is
+        // reading it later, which lives behind the bell.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showNotificationCenter(context),
+            icon: const Icon(Icons.notifications_none, size: 16),
+            label: const Text('Read your notifications'),
+          ),
+        ),
+        const SizedBox(height: 8),
         const SettingsSectionHeader('Channels'),
         SettingsSwitchRow(
           label: 'In-app banner',
