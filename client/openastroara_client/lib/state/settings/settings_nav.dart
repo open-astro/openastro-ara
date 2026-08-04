@@ -60,6 +60,17 @@ class SettingsGroup {
 /// `selectedSettingsPanelProvider`.
 const List<SettingsGroup> settingsTree = <SettingsGroup>[
   SettingsGroup(
+    id: 'location',
+    label: 'Location & sky',
+    panels: <SettingsPanelInfo>[
+      SettingsPanelInfo(
+        id: 'safety.site',
+        label: 'Where you observe',
+        groupId: 'location',
+      ),
+    ],
+  ),
+  SettingsGroup(
     id: 'equipment',
     label: 'Equipment',
     panels: <SettingsPanelInfo>[
@@ -142,7 +153,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
   ),
   SettingsGroup(
     id: 'session',
-    label: 'Session',
+    label: 'Your night',
     panels: <SettingsPanelInfo>[
       SettingsPanelInfo(
         id: 'session.storage',
@@ -166,23 +177,21 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       ),
     ],
   ),
+  // "Policies" and "Diagnostics mode" were our words for these. What the user
+  // is actually deciding is when Ara should stop on its own while they sleep,
+  // and how much it should write down when something goes wrong.
   SettingsGroup(
     id: 'safety',
-    label: 'Safety',
+    label: 'Unattended running',
     panels: <SettingsPanelInfo>[
       SettingsPanelInfo(
         id: 'safety.policies',
-        label: 'Policies',
+        label: 'When to stop',
         groupId: 'safety',
       ),
       SettingsPanelInfo(
         id: 'safety.diagnostics',
-        label: 'Diagnostics mode',
-        groupId: 'safety',
-      ),
-      SettingsPanelInfo(
-        id: 'safety.site',
-        label: 'Site preferences',
+        label: 'Extra logging',
         groupId: 'safety',
       ),
     ],
