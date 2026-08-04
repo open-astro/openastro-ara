@@ -446,7 +446,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
-        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos);
+        double? sensorTemp = null;
+        try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
+        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
+            targetName: targetName, sensorTemp: sensorTemp);
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -705,10 +708,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, $"{frameId}.fits");
+        // §29.2 — name the file the way the profile's template says, so what
+        // lands on disk reads as the user's night ("2026-08-03/Light/…_L_180s.fits"),
+        // not a directory of UUIDs. Any failure in naming falls back to the
+        // id-based name: naming must never cost a frame.
+        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp);
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
@@ -781,6 +788,69 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // Save-directory resolution: the user's §29 storage setting when present AND creatable, else
     // the daemon-local fallback (dev boxes where /media/openastroara doesn't exist). The "manual"
     // subdir keeps REST captures apart from future sequence-run target dirs.
+    /// <summary>
+    /// Expand the profile's filename template for this frame; unique-ify with
+    /// " (2)", " (3)"… on collision (a Finder convention people already know);
+    /// fall back to <c>{frameId}.fits</c> flat in [rootDir] when the template
+    /// is empty, expands to nothing, or the folders can't be created.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Naming is best-effort by §29.2: any IO/template fault degrades to the id-based filename rather than costing the frame. The falling-back log preserves the cause.")]
+    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp) {
+        var fallback = Path.Combine(rootDir, $"{frameId}.fits");
+        try {
+            var template = _profileStore?.GetStorageSettings().FilenameTemplate;
+            var relative = FrameNaming.ExpandRelativePath(template, new FrameNamingContext(
+                ImageType: imageType,
+                CapturedLocal: capturedAt.ToLocalTime(),
+                ExposureSec: request.ExposureSec,
+                Filter: request.FilterName,
+                Gain: request.Gain,
+                Offset: request.CameraOffset,
+                BinX: request.BinX,
+                BinY: request.BinY,
+                SensorTemp: sensorTemp,
+                TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == "Manual capture"
+                    ? null : targetName,
+                FrameNumber: NextFrameNumber(rootDir)));
+            if (relative is null) return fallback;
+
+            var candidate = Path.Combine(rootDir, relative + ".fits");
+            var parent = Path.GetDirectoryName(candidate);
+            if (parent is not null) Directory.CreateDirectory(parent);
+            for (var n = 2; File.Exists(candidate); n++) {
+                candidate = Path.Combine(rootDir, $"{relative} ({n}).fits");
+            }
+            return candidate;
+        } catch (Exception ex) {
+            LogTemplateNamingFailed(ex, frameId);
+            return fallback;
+        }
+    }
+
+    // Session-scoped counter: monotonic per daemon lifetime, seeded from the
+    // catalog's frame count so numbers keep climbing across restarts instead
+    // of resetting to 0001 and colliding into " (2)" suffixes.
+    private int _frameCounter = -1;
+    private readonly Lock _frameCounterLock = new();
+
+    private int NextFrameNumber(string rootDir) {
+        lock (_frameCounterLock) {
+            if (_frameCounter < 0) {
+                var count = 0;
+                try {
+                    count = Directory.Exists(rootDir)
+                        ? Directory.EnumerateFiles(rootDir, "*.fits", new EnumerationOptions {
+                              RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0,
+                          }).Count()
+                        : 0;
+                } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                _frameCounter = count;
+            }
+            return ++_frameCounter;
+        }
+    }
+
     internal string ResolveFramesDir() {
         var configured = _profileStore?.GetStorageSettings().SaveDirectory;
         if (!string.IsNullOrWhiteSpace(configured)) {
@@ -1344,6 +1414,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         _faults.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Filename template failed for frame {FrameId}; using id-based name")]
+    private partial void LogTemplateNamingFailed(Exception ex, Guid frameId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' stopped answering — marked Error (§42.3)")]
     private partial void LogConnectionLost(string device);
