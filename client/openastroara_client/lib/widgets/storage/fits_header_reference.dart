@@ -56,7 +56,7 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
     title: 'Who took it',
     controlledBy: 'Who took it',
     entries: [
-      FitsHeaderEntry('OBSERVER', 'Observer name', 'Joey Troy'),
+      FitsHeaderEntry('OBSERVER', 'Observer name', 'Jane Doe'),
       FitsHeaderEntry('TELESCOP', 'Telescope name', 'RedCat 51'),
     ],
   ),
@@ -64,10 +64,10 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
     title: 'Your site',
     controlledBy: 'Your site',
     entries: [
-      FitsHeaderEntry('SITELAT', 'Observatory latitude in degrees', '34.660965'),
+      FitsHeaderEntry('SITELAT', 'Observatory latitude in degrees', '32.780278'),
       FitsHeaderEntry(
-          'SITELONG', 'Observatory longitude in degrees (east+)', '-106.783272'),
-      FitsHeaderEntry('SITEELEV', 'Observatory elevation in meters', '1470.0'),
+          'SITELONG', 'Observatory longitude in degrees (east+)', '-105.820278'),
+      FitsHeaderEntry('SITEELEV', 'Observatory elevation in meters', '2788.0'),
     ],
   ),
   FitsHeaderGroup(
