@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,10 +50,13 @@ class _FakeClient implements NotificationsClient {
   void close() {}
 }
 
-AraNotification _n(String id, {required String title, bool read = false}) =>
+AraNotification _n(String id,
+        {required String title,
+        bool read = false,
+        Duration age = const Duration(minutes: 4)}) =>
     AraNotification(
       id: id,
-      postedUtc: DateTime.now().subtract(const Duration(minutes: 4)),
+      postedUtc: DateTime.now().subtract(age),
       severity: NotificationSeverity.warning,
       category: NotificationCategory.equipment,
       title: title,
@@ -109,16 +113,42 @@ void main() {
     expect(find.textContaining('Equipment · 4 minutes ago'), findsOneWidget);
   });
 
-  testWidgets('dismissing takes it out of the list', (tester) async {
+  testWidgets('dismiss appears when you reach for the row, not before',
+      (tester) async {
     final client = _FakeClient([_n('a', title: 'Guider gave up')]);
     await _pump(tester, client);
     await tester.tap(find.byType(IconButton).first);
     await tester.pumpAndSettle();
+
+    // At rest the row is just what happened — an unread dot, no controls.
+    expect(find.byTooltip('Dismiss'), findsNothing);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('Guider gave up')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Dismiss'), findsOneWidget);
+
     await tester.tap(find.byTooltip('Dismiss'));
     await tester.pumpAndSettle();
     expect(client.dismissed, ['a']);
     expect(find.text('Guider gave up'), findsNothing);
     expect(find.text("You're all caught up."), findsOneWidget);
+  });
+
+  testWidgets('a backlog reads as a timeline, not one undifferentiated wall',
+      (tester) async {
+    await _pump(
+        tester,
+        _FakeClient([
+          _n('a', title: 'Guider gave up'),
+          _n('b', title: 'Disk nearly full', age: const Duration(days: 1)),
+        ]));
+    await tester.tap(find.byType(IconButton).first);
+    await tester.pumpAndSettle();
+    expect(find.text('TODAY'), findsOneWidget);
+    expect(find.text('YESTERDAY'), findsOneWidget);
   });
 
   test('relative time reads the way you would say it', () {
