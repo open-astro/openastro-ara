@@ -57,4 +57,16 @@
     <Authors>Stefan Berg and the N.I.N.A. Contributors</Authors>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- §14e — the JPL DE421 planetary ephemeris (1900-2053) NOVAS' eph_manager
+         reads. NINA's Windows installer shipped this file; the port has to carry
+         it itself or every NOVAS body position is confidently wrong on a host
+         without it (found on rc91: sun at -73° in mid-morning). Copied next to
+         the binaries so NOVAS.EphemerisLocation (BaseDirectory/External/JPLEPH)
+         resolves in dev, publish and the deb alike. -->
+    <Content Include="External\JPLEPH">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>External\JPLEPH</Link>
+    </Content>
+  </ItemGroup>
 </Project>

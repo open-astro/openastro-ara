@@ -13,6 +13,7 @@ import '../../../util/frame_naming.dart';
 import '../../../util/friendly_error.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../widgets/storage/fits_header_reference.dart';
 
 /// §29.2 File naming. The old panel was a wall of `$$TOKEN$$` strings copied
 /// from NINA — a programming language where a preference belongs. This one
@@ -177,7 +178,13 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             ),
           ),
         ],
-        const SettingsSectionHeader('Written into every frame'),
+        SettingsSectionHeader(
+          'Written into every frame',
+          trailing: TextButton(
+            onPressed: () => showFitsHeaderReference(context),
+            child: const Text('See every header'),
+          ),
+        ),
         // §29.2 — the FITS header carries the whole story of the frame:
         // who, through what, from where, under what sky. Most of it is
         // automatic; the two identity lines are set here because they have
