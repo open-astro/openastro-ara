@@ -79,6 +79,13 @@ NUGET_OVERRIDES: dict[str, dict[str, str]] = {
     "Accord": _ACCORD,
     "Accord.Math": _ACCORD,
     "Accord.Statistics": _ACCORD,
+    "BitMiracle.LibTiff.NET": {
+        "license": "BSD-3-Clause AND IJG AND libtiff",
+        "source": "https://bitmiracle.github.io/libtiff.net/help/articles/license.html "
+        "(Bit Miracle BSD-3-Clause terms plus bundled IJG and libtiff notices; "
+        "verified 2026-08-04)",
+        "version": "2.4.660",
+    },
     "Common.Logging": _COMMON_LOGGING,
     "Common.Logging.Core": _COMMON_LOGGING,
     "IPNetwork2": {

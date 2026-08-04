@@ -125,9 +125,11 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 ## 5. Imaging pipeline tail (§26 / §2105 / §64)
 
 - ~~**libraw RAW decode**~~ — bounded/cancellable LibRaw C-ABI decode now feeds capture,
-  library previews, color channels, annotations, and analysis. Remaining DSLR/raster stubs:
-  `BaseImageData.SaveTiff`, `BaseImageData.FromFile` (non-FITS/XISF/RAW), and
-  `ImageArrayExposureData.FromBitmapSource`.
+  library previews, color channels, annotations, and analysis.
+- ~~**Headless raster import/export**~~ — signature-selected TIFF/JPEG/PNG loading now feeds
+  previews and inherited bitmap-source paths; exact 16-bit TIFF export supports none/LZW/ZIP
+  compression and metadata round trips. TIFF and 16-bit PNG retain source precision; JPEG and
+  8-bit PNG are explicitly preview-only imports.
 - ~~**OSC/colour annotation**~~ — shipped with the real fix: detection on a super-pixel
   CFA-weighted luminance plane (same half-res grid as the colour output, one debayer pass) +
   `EncodeColorAnnotated` colour overlay; `Annotate` now works on both sensor types.

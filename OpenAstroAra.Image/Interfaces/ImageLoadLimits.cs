@@ -24,7 +24,8 @@ public sealed record ImageLoadLimits(
     long MaxFileBytes = 2L * 1024 * 1024 * 1024,
     int MaxDimension = 100_000,
     long MaxPixelCount = 250_000_000,
-    int MaxHeaderBytes = 16 * 1024 * 1024) {
+    int MaxHeaderBytes = 16 * 1024 * 1024,
+    long MaxDecodedBytes = 2L * 1024 * 1024 * 1024) {
 
     public static ImageLoadLimits Default { get; } = new();
 
@@ -33,5 +34,6 @@ public sealed record ImageLoadLimits(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxDimension);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxPixelCount);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxHeaderBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxDecodedBytes);
     }
 }

@@ -72,17 +72,18 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (115 packages):
+License summary (116 packages):
     MIT: 78 packages
     Apache-2.0: 19 packages
     BSD-3-Clause: 8 packages
     Microsoft .NET Library License: 5 packages
     LGPL-2.1: 3 packages
     BSD-2-Clause: 1 package
+    BSD-3-Clause AND IJG AND libtiff: 1 package
     MIT AND Ms-PL: 1 package
 
 
-SERVER — OpenAstroAra.Server NuGet dependency graph (98 packages, transitive closure)
+SERVER — OpenAstroAra.Server NuGet dependency graph (99 packages, transitive closure)
 =====================================================================================
 
 ------------------------------------------------------------------------
@@ -142,6 +143,14 @@ Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
+
+------------------------------------------------------------------------
+Package:        BitMiracle.LibTiff.NET 2.4.660
+Authors:        Bit Miracle
+Copyright:      Copyright (C) 2008-2024, Bit Miracle
+License:        BSD-3-Clause AND IJG AND libtiff
+License source: https://bitmiracle.github.io/libtiff.net/help/articles/license.html (Bit Miracle BSD-3-Clause terms plus bundled IJG and libtiff notices; verified 2026-08-04)
+Project:        https://bitmiracle.com/libtiff/
 
 ------------------------------------------------------------------------
 Package:        Castle.Core 5.2.1

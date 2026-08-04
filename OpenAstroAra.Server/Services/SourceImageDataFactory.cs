@@ -16,12 +16,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Image.FileFormat.Raster;
 using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.FileFormat.XISF;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 
@@ -31,6 +33,9 @@ public enum SourceImageFormat {
     Fits,
     Xisf,
     Raw,
+    Tiff,
+    Jpeg,
+    Png,
 }
 
 /// <summary>Decoded one-plane source data. Pixels are normalized to unsigned 16-bit.</summary>
@@ -43,7 +48,7 @@ public sealed record SourceImageData(
     int SourceBitDepth,
     string? CfaPattern,
     ImageMetaData MetaData,
-    DecodedRawImage? ColorData = null);
+    DecodedColorImage? ColorData = null);
 
 public interface ISourceImageDataFactory {
     string DecoderCacheIdentity { get; }
@@ -78,19 +83,22 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
     private readonly ImageLoadLimits _limits;
     private readonly ILogger<SourceImageDataFactory> _logger;
     private readonly IRawImageDecoder _rawDecoder;
+    private readonly IRasterImageDecoder _rasterDecoder;
 
     public SourceImageDataFactory(IProfileService profileService,
             ImageLoadLimits? limits = null, ILogger<SourceImageDataFactory>? logger = null,
-            IRawImageDecoder? rawDecoder = null) {
+            IRawImageDecoder? rawDecoder = null, IRasterImageDecoder? rasterDecoder = null) {
         ArgumentNullException.ThrowIfNull(profileService);
         _profileService = profileService;
         _limits = limits ?? ImageLoadLimits.Default;
         _limits.Validate();
         _logger = logger ?? NullLogger<SourceImageDataFactory>.Instance;
         _rawDecoder = rawDecoder ?? new LibRawDecoder();
+        _rasterDecoder = rasterDecoder ?? new RasterImageDecoder();
     }
 
-    public string DecoderCacheIdentity => $"source-v3|libraw:{_rawDecoder.Version ?? "unavailable"}";
+    public string DecoderCacheIdentity =>
+        $"source-v4|libraw:{_rawDecoder.Version ?? "unavailable"}|raster:{_rasterDecoder.Version}";
 
     public async Task<SourceImageData> LoadAsync(string path, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -109,6 +117,8 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
             SourceImageFormat.Fits => await Task.Run(() => LoadFits(fullPath, ct), ct).ConfigureAwait(false),
             SourceImageFormat.Xisf => await LoadXisfAsync(fullPath, ct).ConfigureAwait(false),
             SourceImageFormat.Raw => await LoadRawAsync(fullPath, ct).ConfigureAwait(false),
+            SourceImageFormat.Tiff or SourceImageFormat.Jpeg or SourceImageFormat.Png =>
+                await LoadRasterAsync(fullPath, format, ct).ConfigureAwait(false),
             _ => throw new UnsupportedSourceImageFormatException("Unsupported source-image format."),
         };
     }
@@ -133,13 +143,14 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
     public async Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered,
             RawConverter rawConverter, CancellationToken ct = default) {
         var source = await LoadAsync(path, ct).ConfigureAwait(false);
-        if (isBayered && source.Format != SourceImageFormat.Raw && source.CfaPattern is null) {
+        if (isBayered && (source.Format is SourceImageFormat.Fits or SourceImageFormat.Xisf)
+            && source.CfaPattern is null) {
             source = source with { CfaPattern = SensorType.RGGB.ToString() };
         }
         return CreateImageData(source);
     }
 
-    private static async Task<SourceImageFormat> DetectFormatAsync(string path, CancellationToken ct) {
+    private async Task<SourceImageFormat> DetectFormatAsync(string path, CancellationToken ct) {
         var signature = new byte[32];
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
@@ -155,16 +166,97 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
         }
 
         var extension = Path.GetExtension(path).ToLowerInvariant();
-        if (LooksLikeRawSignature(signature.AsSpan(0, read)) || LibRawDecoder.IsKnownFileExtension(extension)) {
+        var rasterFormat = RasterImageDecoder.DetectSignature(signature.AsSpan(0, read));
+        if (rasterFormat == RasterImageFormat.Png) return SourceImageFormat.Png;
+        if (rasterFormat == RasterImageFormat.Jpeg) return SourceImageFormat.Jpeg;
+        if (rasterFormat == RasterImageFormat.Tiff) {
+            if (LibRawDecoder.IsKnownFileExtension(extension)
+                || await TiffHasDngVersionAsync(path, ct).ConfigureAwait(false)) {
+                return SourceImageFormat.Raw;
+            }
+            return SourceImageFormat.Tiff;
+        }
+        if (LooksLikeRawSignature(signature.AsSpan(0, read))
+            || LibRawDecoder.IsKnownFileExtension(extension)) {
             return SourceImageFormat.Raw;
         }
-        if (extension is ".fit" or ".fits" or ".fts" or ".fz" or ".xisf") {
+        if (extension is ".fit" or ".fits" or ".fts" or ".fz" or ".xisf"
+            or ".tif" or ".tiff" or ".jpg" or ".jpeg" or ".png") {
             throw new InvalidDataException(
-                $"Source image extension '{extension}' does not match a valid FITS or XISF signature.");
+                $"Source image extension '{extension}' does not match its required image signature.");
         }
         throw new UnsupportedSourceImageFormatException(
-            $"Source image format is unsupported (extension '{extension}'). Supported formats: FITS, XISF, camera RAW.");
+            $"Source image format is unsupported (extension '{extension}'). Supported formats: "
+            + "FITS, XISF, camera RAW, TIFF, JPEG, PNG.");
     }
+
+    private async Task<bool> TiffHasDngVersionAsync(string path, CancellationToken ct) {
+        var header = new byte[16];
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 4096, FileOptions.Asynchronous | FileOptions.RandomAccess);
+        var read = await stream.ReadAtLeastAsync(header, header.Length,
+            throwOnEndOfStream: false, ct).ConfigureAwait(false);
+        if (read < 8) return false;
+        var littleEndian = header[0] == (byte)'I' && header[1] == (byte)'I';
+        var bigEndian = header[0] == (byte)'M' && header[1] == (byte)'M';
+        if (!littleEndian && !bigEndian) return false;
+        var version = ReadUInt16(header.AsSpan(2, 2), littleEndian);
+        if (version == 42) {
+            var offset = ReadUInt32(header.AsSpan(4, 4), littleEndian);
+            return await TiffDirectoryHasDngVersionAsync(stream, offset, countBytes: 2,
+                entryBytes: 12, littleEndian, ct).ConfigureAwait(false);
+        }
+        if (version != 43 || read < 16
+            || ReadUInt16(header.AsSpan(4, 2), littleEndian) != 8
+            || ReadUInt16(header.AsSpan(6, 2), littleEndian) != 0) {
+            return false;
+        }
+        var bigOffset = ReadUInt64(header.AsSpan(8, 8), littleEndian);
+        return await TiffDirectoryHasDngVersionAsync(stream, bigOffset, countBytes: 8,
+            entryBytes: 20, littleEndian, ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> TiffDirectoryHasDngVersionAsync(FileStream stream, ulong offset,
+            int countBytes, int entryBytes, bool littleEndian, CancellationToken ct) {
+        if (offset > long.MaxValue || offset + (ulong)countBytes > (ulong)stream.Length) return false;
+        stream.Position = (long)offset;
+        var countBuffer = new byte[countBytes];
+        var countRead = await stream.ReadAtLeastAsync(countBuffer, countBytes,
+            throwOnEndOfStream: false, ct).ConfigureAwait(false);
+        if (countRead != countBytes) return false;
+        var count = countBytes == 2
+            ? ReadUInt16(countBuffer, littleEndian)
+            : ReadUInt64(countBuffer, littleEndian);
+        if (count == 0 || count > int.MaxValue) return false;
+        var directoryBytes = checked(count * (ulong)entryBytes);
+        if (directoryBytes > (ulong)_limits.MaxHeaderBytes
+            || directoryBytes > (ulong)(stream.Length - stream.Position)) {
+            return false;
+        }
+        var directory = new byte[(int)directoryBytes];
+        var read = await stream.ReadAtLeastAsync(directory, directory.Length,
+            throwOnEndOfStream: false, ct).ConfigureAwait(false);
+        if (read != directory.Length) return false;
+        for (var index = 0; index < (int)count; index++) {
+            if ((index & 0x3fff) == 0) ct.ThrowIfCancellationRequested();
+            if (ReadUInt16(directory.AsSpan(index * entryBytes, 2), littleEndian) == 50_706) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static ushort ReadUInt16(ReadOnlySpan<byte> value, bool littleEndian) => littleEndian
+        ? BinaryPrimitives.ReadUInt16LittleEndian(value)
+        : BinaryPrimitives.ReadUInt16BigEndian(value);
+
+    private static uint ReadUInt32(ReadOnlySpan<byte> value, bool littleEndian) => littleEndian
+        ? BinaryPrimitives.ReadUInt32LittleEndian(value)
+        : BinaryPrimitives.ReadUInt32BigEndian(value);
+
+    private static ulong ReadUInt64(ReadOnlySpan<byte> value, bool littleEndian) => littleEndian
+        ? BinaryPrimitives.ReadUInt64LittleEndian(value)
+        : BinaryPrimitives.ReadUInt64BigEndian(value);
 
     private async Task<SourceImageData> LoadRawAsync(string path, CancellationToken ct) {
         var decoded = await _rawDecoder.DecodeFileAsync(path, _limits, ct).ConfigureAwait(false);
@@ -195,10 +287,8 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
 
     private static bool LooksLikeRawSignature(ReadOnlySpan<byte> signature) {
         if (signature.Length >= 4
-            && ((signature[0] == (byte)'I' && signature[1] == (byte)'I'
-                 && signature[2] is 0x2a or 0x55 && signature[3] == 0)
-                || (signature[0] == (byte)'M' && signature[1] == (byte)'M'
-                    && signature[2] == 0 && signature[3] == 0x2a))) {
+            && signature[0] == (byte)'I' && signature[1] == (byte)'I'
+            && signature[2] == 0x55 && signature[3] == 0) {
             return true;
         }
         if (signature.StartsWith("IIRO"u8) || signature.StartsWith("MMOR"u8)
@@ -209,6 +299,42 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
             && signature.Slice(4, 4).SequenceEqual("ftyp"u8)
             && (signature.Slice(8, 3).SequenceEqual("crx"u8)
                 || signature.Slice(8, 3).SequenceEqual("cr3"u8));
+    }
+
+    private async Task<SourceImageData> LoadRasterAsync(string path, SourceImageFormat format,
+            CancellationToken ct) {
+        var rasterFormat = format switch {
+            SourceImageFormat.Tiff => RasterImageFormat.Tiff,
+            SourceImageFormat.Jpeg => RasterImageFormat.Jpeg,
+            SourceImageFormat.Png => RasterImageFormat.Png,
+            _ => throw new ArgumentOutOfRangeException(nameof(format)),
+        };
+        var decoded = await _rasterDecoder.DecodeFileAsync(path, rasterFormat, _limits, ct)
+            .ConfigureAwait(false);
+        ValidateGeometry(format.ToString(), decoded.Width, decoded.Height);
+        var pixels = decoded.BorrowLuminancePlane();
+        if (pixels.LongLength != (long)decoded.Width * decoded.Height) {
+            throw new InvalidDataException("Raster decoded pixel count does not match its dimensions.");
+        }
+        var metadata = new ImageMetaData();
+        if (decoded.Format == RasterImageFormat.Tiff
+            && decoded.Metadata.TryGetValue("TIFFIMAGEDESCRIPTION", out var description)) {
+            TiffMetadataCodec.TryDecode(description, decoded.Width, decoded.Height, out metadata);
+        }
+        var headers = new List<IGenericMetaDataHeader>(metadata.GenericHeaders);
+        foreach (var pair in decoded.Metadata) {
+            if (string.Equals(pair.Key, "TIFFIMAGEDESCRIPTION", StringComparison.Ordinal)) continue;
+            headers.Add(new StringMetaDataHeader(pair.Key, pair.Value));
+        }
+        headers.Add(new IntMetaDataHeader("RASTERSOURCEBITDEPTH", decoded.SourceBitDepth));
+        if (decoded.IsPreviewOnly) {
+            headers.Add(new StringMetaDataHeader("RASTERPREVIEWONLY", "true"));
+        }
+        metadata.GenericHeaders = headers;
+        var cfaPattern = RasterMetadata.ApplyColorModel(metadata,
+            hasColorPlanes: decoded.ColorData is not null);
+        return new SourceImageData(path, format, new ImageArray(pixels), decoded.Width,
+            decoded.Height, decoded.SourceBitDepth, cfaPattern, metadata, decoded.ColorData);
     }
 
     private SourceImageData LoadFits(string path, CancellationToken ct) {

@@ -205,6 +205,10 @@ Ara assumes you're asleep while it works:
 - Camera RAW files (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, and other formats supported by
   LibRaw) render as linear 16-bit color. RGB/luminance/channel controls operate on LibRaw's AHD
   output; **Download original** always returns the untouched camera file.
+- TIFF, JPEG, and PNG files are recognized by content, even when renamed. TIFF preserves unsigned
+  8/16-bit or normalized 32-bit floating-point image data. JPEG and PNG imports are preview-only;
+  16-bit PNG samples remain 16-bit. TIFF exports preserve linear 16-bit pixels and support none,
+  LZW, or ZIP compression. **Download original** never rewrites the source file.
 - **Stats** rolls the catalog up: per-target integration, focus-vs-temperature trends, guiding
   RMS history, frame-quality scoring, best-frames sorting, calendar heatmap, CSV export.
 

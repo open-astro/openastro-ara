@@ -237,12 +237,11 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
             }
             pixels = Crop(pixels, width, cropX, cropY, cropWidth, cropHeight);
             if (colorData is not null) {
-                colorData = new DecodedRawImage(cropWidth, cropHeight, colorData.SourceBitDepth,
+                colorData = new DecodedColorImage(cropWidth, cropHeight, colorData.SourceBitDepth,
                     Crop(colorData.BorrowRedPlane(), width, cropX, cropY, cropWidth, cropHeight),
                     Crop(colorData.BorrowGreenPlane(), width, cropX, cropY, cropWidth, cropHeight),
                     Crop(colorData.BorrowBluePlane(), width, cropX, cropY, cropWidth, cropHeight),
-                    colorData.DecoderVersion, colorData.DebayerMethod,
-                    colorData.CameraMake, colorData.CameraModel, colorData.OriginalCfaPattern);
+                    colorData.DecoderVersion, colorData.ProcessingMethod);
             }
             width = cropWidth;
             height = cropHeight;
@@ -253,7 +252,7 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
 
         if (colorData is not null) {
             return await RenderColorAsync(colorData.BorrowRedPlane(), colorData.BorrowGreenPlane(),
-                colorData.BorrowBluePlane(), pixels, width, height, colorData.DebayerMethod,
+                colorData.BorrowBluePlane(), pixels, width, height, colorData.ProcessingMethod,
                 request, ct).ConfigureAwait(false);
         }
         if (request.ApplyDebayer && Debayer.TryParse(cfaPattern, out var pattern)) {

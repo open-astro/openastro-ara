@@ -102,21 +102,8 @@ public sealed class LibRawConverter : IRawConverter {
     }
 
     public static ushort[] CreateLuminance(ushort[] red, ushort[] green, ushort[] blue,
-            CancellationToken cancellationToken) {
-        ArgumentNullException.ThrowIfNull(red);
-        ArgumentNullException.ThrowIfNull(green);
-        ArgumentNullException.ThrowIfNull(blue);
-        if (red.Length != green.Length || red.Length != blue.Length) {
-            throw new InvalidDataException("RAW color planes have mismatched lengths.");
-        }
-        var luminance = new ushort[red.Length];
-        for (var index = 0; index < luminance.Length; index++) {
-            if ((index & 0x3ffff) == 0) cancellationToken.ThrowIfCancellationRequested();
-            luminance[index] = (ushort)(((ulong)red[index] * 2126
-                + (ulong)green[index] * 7152 + (ulong)blue[index] * 722 + 5000) / 10000);
-        }
-        return luminance;
-    }
+            CancellationToken cancellationToken) =>
+        ColorPlaneMath.CreateLuminance(red, green, blue, cancellationToken);
 
     public static IReadOnlyList<IGenericMetaDataHeader> RawMetadataHeaders(DecodedRawImage decoded) {
         ArgumentNullException.ThrowIfNull(decoded);

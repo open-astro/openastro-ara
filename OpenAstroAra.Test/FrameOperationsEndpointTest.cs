@@ -140,6 +140,10 @@ public sealed class FrameOperationsEndpointTest {
                 It.Is<FramePreviewRequestDto>(r => r.StretchPalette == "raw-invalid"),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new RawImageDecodeException("safe native decode failure", -2));
+        repo.Setup(x => x.GetPreviewAsync(It.IsAny<Guid>(),
+                It.Is<FramePreviewRequestDto>(r => r.StretchPalette == "raster-invalid"),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new RasterImageDecodeException("safe raster decode failure"));
         var http = new DefaultHttpContext();
 
         var unsupported = await ImageEndpoints.RenderFramePreviewAsync(Guid.NewGuid(),
@@ -151,6 +155,9 @@ public sealed class FrameOperationsEndpointTest {
         var rawInvalid = await ImageEndpoints.RenderFramePreviewAsync(Guid.NewGuid(),
             Preview() with { StretchPalette = "raw-invalid" }, http, repo.Object,
             CancellationToken.None).ConfigureAwait(false);
+        var rasterInvalid = await ImageEndpoints.RenderFramePreviewAsync(Guid.NewGuid(),
+            Preview() with { StretchPalette = "raster-invalid" }, http, repo.Object,
+            CancellationToken.None).ConfigureAwait(false);
 
         Assert.Multiple(() => {
             Assert.That(Status(unsupported), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
@@ -158,6 +165,7 @@ public sealed class FrameOperationsEndpointTest {
                 Is.EqualTo("The frame source could not be decoded."));
             Assert.That(Status(invalid), Is.EqualTo(StatusCodes.Status400BadRequest));
             Assert.That(Status(rawInvalid), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+            Assert.That(Status(rasterInvalid), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         });
     }
 

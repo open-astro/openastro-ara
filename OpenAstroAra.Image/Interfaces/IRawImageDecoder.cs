@@ -23,56 +23,24 @@ namespace OpenAstroAra.Image.Interfaces;
 /// Linear, demosaiced 16-bit camera-RAW planes. Plane methods return borrowed buffers;
 /// callers must treat them as immutable. Copies would multiply RAW decode peak memory.
 /// </summary>
-public sealed class DecodedRawImage {
-    private readonly ushort[] _red;
-    private readonly ushort[] _green;
-    private readonly ushort[] _blue;
-
+public sealed class DecodedRawImage : DecodedColorImage {
     public DecodedRawImage(int width, int height, int sourceBitDepth,
             ushort[] red, ushort[] green, ushort[] blue,
             string decoderVersion, string debayerMethod,
             string? cameraMake = null, string? cameraModel = null,
-            string? originalCfaPattern = null) {
-        ArgumentNullException.ThrowIfNull(red);
-        ArgumentNullException.ThrowIfNull(green);
-        ArgumentNullException.ThrowIfNull(blue);
-        ArgumentException.ThrowIfNullOrWhiteSpace(decoderVersion);
-        ArgumentException.ThrowIfNullOrWhiteSpace(debayerMethod);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
-        if (sourceBitDepth <= 0 || sourceBitDepth > 64) {
-            throw new ArgumentOutOfRangeException(nameof(sourceBitDepth));
-        }
-        var expected = checked((long)width * height);
-        if (expected > int.MaxValue || red.LongLength != expected
-            || green.LongLength != expected || blue.LongLength != expected) {
-            throw new ArgumentException("Decoded RAW color-plane lengths must match width times height.");
-        }
-        Width = width;
-        Height = height;
-        SourceBitDepth = sourceBitDepth;
-        _red = red;
-        _green = green;
-        _blue = blue;
-        DecoderVersion = decoderVersion;
+            string? originalCfaPattern = null)
+        : base(width, height, sourceBitDepth, red, green, blue,
+            decoderVersion, debayerMethod) {
         DebayerMethod = debayerMethod;
         CameraMake = cameraMake;
         CameraModel = cameraModel;
         OriginalCfaPattern = originalCfaPattern;
     }
 
-    public int Width { get; }
-    public int Height { get; }
-    public int SourceBitDepth { get; }
-    public string DecoderVersion { get; }
     public string DebayerMethod { get; }
     public string? CameraMake { get; }
     public string? CameraModel { get; }
     public string? OriginalCfaPattern { get; }
-
-    public ushort[] BorrowRedPlane() => _red;
-    public ushort[] BorrowGreenPlane() => _green;
-    public ushort[] BorrowBluePlane() => _blue;
 }
 
 /// <summary>Headless camera-RAW decoder used by capture and library paths.</summary>

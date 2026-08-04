@@ -30,7 +30,7 @@ using System.Text;
 
 namespace OpenAstroAra.Test;
 
-/// <summary>Rank 1: bounded, signature-selected FITS, XISF, and camera-RAW source loading.</summary>
+/// <summary>Rank 1: bounded, signature-selected FITS, XISF, camera-RAW, and raster source loading.</summary>
 [TestFixture]
 public sealed class SourceImageDataFactoryTest {
     private string _root = null!;
@@ -343,6 +343,7 @@ public sealed class SourceImageDataFactoryTest {
         var factory = Factory();
 
         var source = await factory.LoadAsync(path, CancellationToken.None);
+        var rawColor = source.ColorData as DecodedRawImage;
         var inherited = await factory.CreateFromFile(path, bitDepth: 14, isBayered: true,
             RawConverter.DCRAW, CancellationToken.None);
         using var service = new PreviewImageService(Path.Combine(_root, "raw-preview-cache"), factory);
@@ -367,9 +368,10 @@ public sealed class SourceImageDataFactoryTest {
             Assert.That(source.Width, Is.EqualTo(64));
             Assert.That(source.Height, Is.EqualTo(48));
             Assert.That(source.CfaPattern, Is.Null);
-            Assert.That(source.ColorData, Is.Not.Null);
-            Assert.That(source.ColorData!.DebayerMethod, Is.EqualTo("libraw_ahd"));
-            Assert.That(source.ColorData.OriginalCfaPattern, Is.EqualTo("RGGB"));
+            Assert.That(rawColor, Is.Not.Null);
+            Assert.That(source.ColorData!.ProcessingMethod, Is.EqualTo("libraw_ahd"));
+            Assert.That(rawColor!.DebayerMethod, Is.EqualTo("libraw_ahd"));
+            Assert.That(rawColor.OriginalCfaPattern, Is.EqualTo("RGGB"));
             Assert.That(source.Data.FlatArray, Has.Length.EqualTo(64 * 48));
             Assert.That(source.MetaData.Camera.SensorType, Is.EqualTo(SensorType.Color));
             Assert.That(source.MetaData.Camera.Name, Is.EqualTo("OpenAstro Synthetic RGGB"));

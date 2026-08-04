@@ -404,7 +404,8 @@ public static class ImageEndpoints {
             return InvalidRequest(ex.Message);
         } catch (Exception ex) when (ex is NotSupportedException or InvalidDataException
                                      or OpenAstroAra.Fits.FitsException
-                                     or OpenAstroAra.Image.Interfaces.RawImageDecodeException) {
+                                     or OpenAstroAra.Image.Interfaces.RawImageDecodeException
+                                     or OpenAstroAra.Image.Interfaces.RasterImageDecodeException) {
             return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
                 title: "Unsupported or invalid frame source",
                 detail: "The frame source could not be decoded.",

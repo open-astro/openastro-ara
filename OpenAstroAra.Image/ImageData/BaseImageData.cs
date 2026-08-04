@@ -19,6 +19,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.FileFormat.FITS;
+using OpenAstroAra.Image.FileFormat.Raster;
 using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.FileFormat.XISF;
 using OpenAstroAra.Image.ImageAnalysis;
@@ -251,7 +252,10 @@ namespace OpenAstroAra.Image.ImageData {
             p.Set(ImagePatternKeys.Time, metadata.Image.ExposureStart.ToLocalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture));
             p.Set(ImagePatternKeys.TimeUtc, metadata.Image.ExposureStart.ToUniversalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture));
             p.Set(ImagePatternKeys.DateTime, metadata.Image.ExposureStart.ToLocalTime().ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture));
-            p.Set(ImagePatternKeys.MJD, metadata.Image.ExposureStart.ToMJD(), precision: 8);
+            if (metadata.Image.ExposureStart > DateTime.MinValue
+                && metadata.Image.ExposureStart < DateTime.MaxValue) {
+                p.Set(ImagePatternKeys.MJD, metadata.Image.ExposureStart.ToMJD(), precision: 8);
+            }
             p.Set(ImagePatternKeys.FrameNr, metadata.Image.ExposureNumber.ToString("0000", CultureInfo.InvariantCulture));
             p.Set(ImagePatternKeys.ImageType, metadata.Image.ImageType);
             p.Set(ImagePatternKeys.TargetName, metadata.Target.Name);
@@ -413,7 +417,7 @@ namespace OpenAstroAra.Image.ImageData {
 
                         case FileType.TIFF:
                         default:
-                            path = SaveTiff(fileSaveInfo);
+                            path = SaveTiff(fileSaveInfo, cancelToken);
                             break;
                     }
                 }
@@ -433,13 +437,16 @@ namespace OpenAstroAra.Image.ImageData {
             return uniquePath;
         }
 
-        private string SaveTiff(FileSaveInfo fileSaveInfo) {
-            // SaveTiff pending OpenCvSharp4 / SkiaSharp TIFF encoder per
-            // playbook §line-2105 — the WPF TiffBitmapEncoder pipeline was
-            // deleted in the net10.0 conversion. The headless daemon's
-            // primary capture path is FITS via OpenAstroAra.Fits; TIFF export
-            // arrives in a follow-up.
-            throw new NotImplementedException("SaveTiff pending OpenCvSharp4 wiring.");
+        private string SaveTiff(FileSaveInfo fileSaveInfo, CancellationToken cancellationToken) {
+            var directory = Path.GetDirectoryName(fileSaveInfo.FilePath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            var uniquePath = CoreUtil.GetUniqueFilePath(
+                fileSaveInfo.FilePath + fileSaveInfo.GetExtension(".tif"));
+            var description = TiffMetadataCodec.Encode(MetaData, Properties.Width, Properties.Height);
+            TiffImageWriter.WriteGrayscale16(uniquePath, Data.FlatArray,
+                Properties.Width, Properties.Height, fileSaveInfo.TIFFCompressionType,
+                description, cancellationToken);
+            return uniquePath;
         }
 
         private static CfitsioNative.COMPRESSION GetFITSCompression(FITSCompressionType fITSCompressionTypeEnum) {
@@ -555,6 +562,20 @@ namespace OpenAstroAra.Image.ImageData {
                     case ".fz":
                         return await FITS.Load(new Uri(path), isBayered, imageDataFactory, ct);
 
+                    case ".tif":
+                    case ".tiff":
+                        return await LoadRasterAsync(path, RasterImageFormat.Tiff,
+                            isBayered, imageDataFactory, ct).ConfigureAwait(false);
+
+                    case ".jpg":
+                    case ".jpeg":
+                        return await LoadRasterAsync(path, RasterImageFormat.Jpeg,
+                            isBayered: false, imageDataFactory, ct).ConfigureAwait(false);
+
+                    case ".png":
+                        return await LoadRasterAsync(path, RasterImageFormat.Png,
+                            isBayered: false, imageDataFactory, ct).ConfigureAwait(false);
+
                     default:
                         if (LibRawDecoder.IsKnownFileExtension(Path.GetExtension(path))) {
                             var info = new FileInfo(path);
@@ -571,8 +592,9 @@ namespace OpenAstroAra.Image.ImageData {
                                 Path.GetExtension(path).TrimStart('.'), new ImageMetaData(), ct)
                                 .ConfigureAwait(false);
                         }
-                        // Raster preview-only imports remain a separate source-factory slice.
-                        throw new NotSupportedException($"File format {Path.GetExtension(path)} pending OpenCvSharp4 wiring.");
+                        throw new NotSupportedException(
+                            $"File format {Path.GetExtension(path)} is unsupported. "
+                            + "Supported formats: FITS, XISF, camera RAW, TIFF, JPEG, PNG.");
                 }
             }, ct);
         }
@@ -583,13 +605,37 @@ namespace OpenAstroAra.Image.ImageData {
             }
 
             if (LibRawDecoder.IsKnownFileExtension(Path.GetExtension(path))) return true;
-            // Until raster import lands, FITS + XISF + camera RAW are supported headless.
-            var supportedExtensions = new Regex(@".*\.(xisf|fits?|fz|fts)", RegexOptions.IgnoreCase);
+            var supportedExtensions = new Regex(
+                @".*\.(xisf|fits?|fz|fts|tiff?|jpe?g|png)", RegexOptions.IgnoreCase);
             return supportedExtensions.IsMatch(path);
         }
 
-        // BitmapToImageArray (WPF BitmapDecoder + FormatConvertedBitmap) deleted;
-        // replacement lands with OpenCvSharp4 wiring per playbook §line-2105.
+        private static async Task<IImageData> LoadRasterAsync(string path, RasterImageFormat format,
+                bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
+            var decoded = await new RasterImageDecoder().DecodeFileAsync(
+                path, format, ImageLoadLimits.Default, ct).ConfigureAwait(false);
+            var metadata = new ImageMetaData();
+            if (format == RasterImageFormat.Tiff
+                && decoded.Metadata.TryGetValue("TIFFIMAGEDESCRIPTION", out var description)) {
+                TiffMetadataCodec.TryDecode(description, decoded.Width, decoded.Height, out metadata);
+            }
+            var headers = new List<IGenericMetaDataHeader>(metadata.GenericHeaders);
+            foreach (var pair in decoded.Metadata) {
+                if (string.Equals(pair.Key, "TIFFIMAGEDESCRIPTION", StringComparison.Ordinal)) continue;
+                headers.Add(new StringMetaDataHeader(pair.Key, pair.Value));
+            }
+            headers.Add(new IntMetaDataHeader("RASTERSOURCEBITDEPTH", decoded.SourceBitDepth));
+            if (decoded.IsPreviewOnly) {
+                headers.Add(new StringMetaDataHeader("RASTERPREVIEWONLY", "true"));
+            }
+            metadata.GenericHeaders = headers;
+            var cfaPattern = RasterMetadata.ApplyColorModel(metadata,
+                hasColorPlanes: decoded.ColorData is not null, assumeBayered: isBayered);
+            return imageDataFactory.CreateBaseImageData(decoded.BorrowLuminancePlane(),
+                decoded.Width, decoded.Height, bitDepth: 16,
+                isBayered: cfaPattern is not null,
+                metaData: metadata);
+        }
 
         #endregion "Load"
     }
