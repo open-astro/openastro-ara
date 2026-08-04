@@ -17,7 +17,7 @@ echo "deb [signed-by=/usr/share/keyrings/openastro.gpg] https://apt.openastro.ne
   | sudo tee /etc/apt/sources.list.d/openastro.list
 sudo apt update
 
-# 2. Install (apt resolves libcfitsio10 transitively)
+# 2. Install (apt resolves libcfitsio10 and libraw23t64 transitively)
 sudo apt install openastroara-server
 
 # 3. The systemd unit auto-starts on first install
@@ -157,8 +157,8 @@ sudo chown -R openastroara:openastroara /opt/openastroara /var/lib/openastroara 
 sudo chown root:openastroara /etc/openastroara
 sudo chmod 750 /etc/openastroara
 
-# 2. Install runtime dependency
-sudo apt install libcfitsio10
+# 2. Install runtime dependencies
+sudo apt install libcfitsio10 libraw23t64
 
 # 3. Copy your linux-arm64 publish output into /opt/openastroara/
 # (built via `dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -p:PublishAot=false -o ./publish/arm64`)
@@ -179,6 +179,10 @@ The captures volume isn't ext4. See [Storage setup](#storage-setup-required).
 
 **Daemon won't start, journalctl shows libcfitsio errors**
 `sudo apt install libcfitsio10` — the .deb dependency should pull this in automatically, but if you're on a sparse distro you may need it explicitly.
+
+**RAW preview reports that LibRaw is unavailable**
+`sudo apt install libraw23t64` — the `.deb` declares this dependency. Source builds
+need `libraw-dev`, which also provides the unversioned development symlink.
 
 **Client can't discover the daemon**
 - mDNS announces require LAN multicast — verify the Pi's network supports it (most home networks do; some enterprise networks block multicast)

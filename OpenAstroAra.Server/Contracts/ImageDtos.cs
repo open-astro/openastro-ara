@@ -69,7 +69,10 @@ public sealed record FrameDto(
     IReadOnlyList<string> Tags,
     // §38: focuser step position at capture (for the §50.4 focus-vs-temperature
     // view). Optional + last so existing constructions stay source-compatible.
-    int? FocuserPosition = null);
+    int? FocuserPosition = null,
+    string? AnalysisVersion = null,
+    DateTimeOffset? QuarantinedUtc = null,
+    string? QuarantineReason = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(
@@ -91,7 +94,8 @@ public sealed record FrameListItemDto(
     // as protected. Optional + last so existing constructions stay
     // source-compatible.
     DateTimeOffset? SyncedAt = null,
-    string? SyncTarget = null);
+    string? SyncTarget = null,
+    DateTimeOffset? QuarantinedUtc = null);
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
 public sealed record FramePreviewRequestDto(
@@ -100,7 +104,26 @@ public sealed record FramePreviewRequestDto(
     double? MidtonePoint,
     double? WhitePoint,
     int? MaxDimensionPx,
-    bool ApplyDebayer);
+    bool ApplyDebayer,
+    string? ChannelMode = null,
+    bool Invert = false,
+    double? Saturation = null,
+    double? AsinhBeta = null,
+    double? LinearClipLow = null,
+    double? LinearClipHigh = null,
+    int? CropX = null,
+    int? CropY = null,
+    int? CropWidth = null,
+    int? CropHeight = null,
+    bool AnnotateStars = false,
+    string? AnnotationColor = null,
+    double? AnnotationStrokeWidth = null,
+    double? AnnotationFontSize = null,
+    string? AnnotationFontFamily = null,
+    bool ShowAnnotationLabels = false,
+    int? MaxAnnotatedStars = null,
+    double? StarSensitivity = null,
+    int? StarNoiseReduction = null);
 
 /// <summary>Session — full detail.</summary>
 public sealed record SessionDto(
@@ -167,6 +190,18 @@ public sealed record BulkExportRequestDto(
 public sealed record BulkDeleteRequestDto(
     IReadOnlyList<Guid> FrameIds,
     bool DeleteFromDisk);
+
+/// <summary>POST /api/v1/frames/bulk/quarantine. Quarantine is reversible and
+/// changes catalog state only; source bytes remain untouched.</summary>
+public sealed record BulkQuarantineRequestDto(
+    IReadOnlyList<Guid> FrameIds,
+    bool Quarantined = true,
+    string? Reason = null);
+
+/// <summary>POST /api/v1/frames/{id}/reanalyze detector controls.</summary>
+public sealed record FrameReanalysisRequestDto(
+    double? StarSensitivity = null,
+    int? StarNoiseReduction = null);
 
 /// <summary>HFR drift analysis result per §40.7 / §51.</summary>
 public sealed record HfrAnalysisDto(

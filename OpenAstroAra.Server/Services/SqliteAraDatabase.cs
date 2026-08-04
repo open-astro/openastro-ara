@@ -102,6 +102,18 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 eccentricity       REAL,
                 guiding_rms_arcsec REAL,
                 snr_estimate       REAL,
+                analysis_version   TEXT,
+                analysis_state     TEXT,
+                analysis_failure_code TEXT,
+                analysis_failure_message TEXT,
+                preview_state      TEXT,
+                preview_failure_code TEXT,
+                preview_failure_message TEXT,
+                preview_checksum   TEXT,
+                debayer_method     TEXT,
+                preview_version    TEXT,
+                quarantined_utc    TEXT,
+                quarantine_reason  TEXT,
                 quality_score_json TEXT,
                 rating             INTEGER NOT NULL DEFAULT 0,
                 tags_json          TEXT NOT NULL DEFAULT '[]',
@@ -115,10 +127,37 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // earlier build is brought forward with an idempotent ADD COLUMN. (v0.0.1
         // ships no migrations runner — this is the sanctioned additive-column path.)
         await AddColumnIfMissingAsync(conn, "frames", "focuser_position", "INTEGER", ct);
-        // §44.6 backup stream: sync bookkeeping + the lazily-cached content hash.
-        await AddColumnIfMissingAsync(conn, "frames", "sync_target", "TEXT", ct);
-        await AddColumnIfMissingAsync(conn, "frames", "synced_at", "TEXT", ct);
-        await AddColumnIfMissingAsync(conn, "frames", "sha256", "TEXT", ct);
+        // Rank 1 / storage-integrity slice: capture attempts must remain explainable
+        // even when no completed frame row exists. No FK to frames by design: failed
+        // and interrupted attempts have a frame id but never enter the completed catalog.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS frame_storage_lifecycle (
+                frame_id          TEXT PRIMARY KEY NOT NULL,
+                session_id        TEXT NOT NULL REFERENCES sessions(id),
+                accepted_utc      TEXT NOT NULL,
+                completed_utc     TEXT,
+                temporary_path    TEXT,
+                final_path        TEXT NOT NULL,
+                byte_count        INTEGER,
+                checksum_sha256   TEXT,
+                image_format      TEXT NOT NULL,
+                cfa_pattern       TEXT,
+                state             TEXT NOT NULL CHECK (state IN
+                    ('accepted', 'exposing', 'downloading', 'persisting',
+                     'complete', 'failed', 'partial')),
+                failure_code      TEXT,
+                failure_message   TEXT,
+                updated_utc       TEXT NOT NULL,
+                CHECK (byte_count IS NULL OR byte_count >= 0),
+                CHECK (checksum_sha256 IS NULL OR length(checksum_sha256) = 64),
+                CHECK (failure_code IS NULL OR length(failure_code) <= 64),
+                CHECK (failure_message IS NULL OR length(failure_message) <= 512)
+            );
+            """, ct);
+        await ExecAsync(conn,
+            "CREATE INDEX IF NOT EXISTS idx_frame_storage_state_updated ON frame_storage_lifecycle(state, updated_utc);", ct);
+        await ExecAsync(conn,
+            "CREATE INDEX IF NOT EXISTS idx_frame_storage_final_path ON frame_storage_lifecycle(final_path);", ct);
 
         // §28 widening pass (pre-§40): sub-second calibration exposures need
         // exposure_seconds REAL (they rounded up to 1s as INTEGER), and gain must
@@ -138,15 +177,68 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // introduces the schema_version table (the #670 review commitment) so
         // future passes key on a version, not a DDL sniff.
         await MigrateTemperatureNullableAsync(conn, ct);
+
+        // §44.6 backup stream: sync bookkeeping + source hash. These MUST run
+        // after both frames-table rebuild migrations; otherwise DROP/RENAME of
+        // the widened table removes columns added immediately before the rebuild.
+        await AddColumnIfMissingAsync(conn, "frames", "sync_target", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "synced_at", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "sha256", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_version", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_state", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_failure_code", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_failure_message", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_state", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_failure_code", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_failure_message", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_checksum", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "debayer_method", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_version", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "quarantined_utc", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "quarantine_reason", "TEXT", ct);
+
         await ExecAsync(conn, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);", ct);
         await ExecAsync(conn, """
             INSERT INTO schema_version (version)
-            SELECT 4 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
-            UPDATE schema_version SET version = 4 WHERE version < 4;
+            SELECT 7 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+            UPDATE schema_version SET version = 7 WHERE version < 7;
+            """, ct);
+
+        // Derived work is process-owned. A daemon restart cannot truthfully leave
+        // an in-flight state running, and it must not silently retry expensive
+        // work the operator may have cancelled. The explicit rebuild/reanalyse
+        // endpoints are the restart mechanism.
+        await ExecAsync(conn, """
+            UPDATE frames
+            SET preview_state = 'interrupted',
+                preview_failure_code = 'daemon_restarted',
+                preview_failure_message = 'Preview rendering was interrupted by daemon restart.'
+            WHERE preview_state IN ('queued', 'rendering');
+
+            UPDATE frames
+            SET analysis_state = 'interrupted',
+                analysis_failure_code = 'daemon_restarted',
+                analysis_failure_message = 'Frame analysis was interrupted by daemon restart.'
+            WHERE analysis_state IN ('queued', 'analyzing');
+            """, ct);
+
+        // Existing completed frames predate the lifecycle ledger. Backfill once,
+        // preserving the lazily-computed backup-stream checksum when present.
+        await ExecAsync(conn, """
+            INSERT OR IGNORE INTO frame_storage_lifecycle
+                (frame_id, session_id, accepted_utc, completed_utc,
+                 temporary_path, final_path, byte_count, checksum_sha256,
+                 image_format, cfa_pattern, state, failure_code,
+                 failure_message, updated_utc)
+            SELECT id, session_id, captured_utc, captured_utc,
+                   NULL, file_path, file_size_bytes, sha256,
+                   'fits', NULL, 'complete', NULL, NULL, captured_utc
+            FROM frames;
             """, ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_quarantined_utc ON frames(quarantined_utc) WHERE quarantined_utc IS NOT NULL;", ct);
         // §50 stats-perf: most stats queries restrict to light frames and
         // order/group by captured_utc (targets, calendar, frame-quality,
         // best-frames, focus-temp). A partial covering index keeps the

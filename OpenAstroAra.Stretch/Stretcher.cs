@@ -37,6 +37,11 @@ public sealed record StretchParams(
     double LinearClipLow = 0.005,
     double LinearClipHigh = 0.995);
 
+/// <summary>Display pixels plus the exact normalized parameters used to produce them.</summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1819:Properties should not return arrays",
+    Justification = "The newly allocated display buffer is result-owned and intentionally transfers to the encoder without another full-frame copy.")]
+public sealed record StretchResult(byte[] Pixels, StretchParams AppliedParameters);
+
 /// <summary>
 /// Pure-math implementations of the §65.1 stretch palette. Each algorithm
 /// maps a <c>ReadOnlySpan&lt;ushort&gt;</c> (raw FITS pixels, 0–65535)
@@ -50,17 +55,51 @@ public sealed record StretchParams(
 public static class Stretcher {
     private const int MaxValue = 65535;
 
-    public static byte[] Apply(StretchAlgorithm algorithm, ReadOnlySpan<ushort> input, StretchParams? parameters = null) {
-        if (input.Length == 0) return Array.Empty<byte>();
+    public static byte[] Apply(StretchAlgorithm algorithm, ReadOnlySpan<ushort> input,
+            StretchParams? parameters = null) =>
+        ApplyDetailed(algorithm, input, parameters).Pixels;
+
+    /// <summary>Apply a stretch and return the exact black/mid/white/beta values used.</summary>
+    public static StretchResult ApplyDetailed(StretchAlgorithm algorithm, ReadOnlySpan<ushort> input,
+            StretchParams? parameters = null) {
+        if (input.Length == 0) return new StretchResult(Array.Empty<byte>(), parameters ?? new StretchParams());
+        var resolved = ResolveParameters(algorithm, input, parameters);
+        return new StretchResult(ApplyResolved(algorithm, input, resolved), resolved);
+    }
+
+    /// <summary>Resolve automatic percentile/STF parameters without producing display pixels.</summary>
+    public static StretchParams ResolveParameters(StretchAlgorithm algorithm, ReadOnlySpan<ushort> input,
+            StretchParams? parameters = null) {
+        if (input.Length == 0) return parameters ?? new StretchParams();
         var p = parameters ?? new StretchParams();
         return algorithm switch {
-            StretchAlgorithm.Linear => Linear(input, p),
-            StretchAlgorithm.Log => Log(input, p),
-            StretchAlgorithm.Asinh => Asinh(input, p),
-            StretchAlgorithm.Sqrt => Sqrt(input, p),
+            StretchAlgorithm.Linear or StretchAlgorithm.Sqrt => ResolvePercentileParameters(input, p),
+            StretchAlgorithm.Log => p with { Blackpoint = ResolveAutomaticBlackpoint(input, p) },
+            StretchAlgorithm.Asinh => p with {
+                Blackpoint = ResolveAutomaticBlackpoint(input, p),
+                Beta = p.Beta > 0 && double.IsFinite(p.Beta) ? p.Beta : 3.0,
+            },
+            StretchAlgorithm.Equalized => p,
+            StretchAlgorithm.Manual => ValidateManualParameters(p),
+            StretchAlgorithm.AutoStf => ResolveStfParameters(input, targetBackground: 0.25, shadowSigma: 2.8),
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null),
+        };
+    }
+
+    /// <summary>Apply already-resolved parameters. Useful for one luminance-derived RGB transform.</summary>
+    public static byte[] ApplyResolved(StretchAlgorithm algorithm, ReadOnlySpan<ushort> input,
+            StretchParams parameters) {
+        ArgumentNullException.ThrowIfNull(parameters);
+        if (input.Length == 0) return Array.Empty<byte>();
+        return algorithm switch {
+            StretchAlgorithm.Linear => RescaleClip(input,
+                parameters.Blackpoint * MaxValue, parameters.Whitepoint * MaxValue),
+            StretchAlgorithm.Log => LogResolved(input, parameters),
+            StretchAlgorithm.Asinh => AsinhResolved(input, parameters),
+            StretchAlgorithm.Sqrt => SqrtResolved(input, parameters),
             StretchAlgorithm.Equalized => Equalized(input),
-            StretchAlgorithm.Manual => Manual(input, p),
-            StretchAlgorithm.AutoStf => AutoStf(input),
+            StretchAlgorithm.Manual => Manual(input, ValidateManualParameters(parameters)),
+            StretchAlgorithm.AutoStf => Manual(input, ValidateManualParameters(parameters)),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null),
         };
     }
@@ -68,16 +107,11 @@ public static class Stretcher {
     // ── linear ─────────────────────────────────────────────────────────────
     // Black/white-point clip via percentiles; rescale to 0–255. Defaults
     // 0.5% / 99.5% per §65.1.
-    private static byte[] Linear(ReadOnlySpan<ushort> input, StretchParams p) {
-        var (bp, wp) = Percentiles(input, p.LinearClipLow, p.LinearClipHigh);
-        return RescaleClip(input, bp, wp);
-    }
-
     // ── log ────────────────────────────────────────────────────────────────
     // log(x - bp + 1) scaled to 0-255. bp defaults to 5th percentile if
     // not explicitly set via params (Blackpoint == 0).
-    private static byte[] Log(ReadOnlySpan<ushort> input, StretchParams p) {
-        var bp = p.Blackpoint > 0 ? p.Blackpoint * MaxValue : Percentile(input, 0.05);
+    private static byte[] LogResolved(ReadOnlySpan<ushort> input, StretchParams p) {
+        var bp = p.Blackpoint * MaxValue;
         var maxIn = Math.Log(MaxValue - bp + 1);
         if (maxIn <= 0) maxIn = 1;
         var output = new byte[input.Length];
@@ -92,9 +126,9 @@ public static class Stretcher {
 
     // ── asinh ──────────────────────────────────────────────────────────────
     // Lupton: asinh(beta * (x - bp)) / asinh(beta). Default beta = 3.0.
-    private static byte[] Asinh(ReadOnlySpan<ushort> input, StretchParams p) {
-        var bp = p.Blackpoint > 0 ? p.Blackpoint * MaxValue : Percentile(input, 0.05);
-        var beta = p.Beta > 0 ? p.Beta : 3.0;
+    private static byte[] AsinhResolved(ReadOnlySpan<ushort> input, StretchParams p) {
+        var bp = p.Blackpoint * MaxValue;
+        var beta = p.Beta;
         var denom = Math.Asinh(beta);
         if (denom == 0) denom = 1;
         var range = MaxValue - bp;
@@ -110,8 +144,9 @@ public static class Stretcher {
 
     // ── sqrt ───────────────────────────────────────────────────────────────
     // Gamma 0.5 after black/white-point clip.
-    private static byte[] Sqrt(ReadOnlySpan<ushort> input, StretchParams p) {
-        var (bp, wp) = Percentiles(input, p.LinearClipLow, p.LinearClipHigh);
+    private static byte[] SqrtResolved(ReadOnlySpan<ushort> input, StretchParams p) {
+        var bp = p.Blackpoint * MaxValue;
+        var wp = p.Whitepoint * MaxValue;
         var range = wp - bp;
         if (range <= 0) range = 1;
         var output = new byte[input.Length];
@@ -192,10 +227,6 @@ public static class Stretcher {
     // highlights clip at 99.998 percentile, midtone targets background 0.25.
     // Implementation: compute median + MAD via Quickselect (O(N) avg);
     // derive bp/mp/wp; apply Manual stretch with those params.
-    private static byte[] AutoStf(ReadOnlySpan<ushort> input) =>
-        // §65.1 adopted defaults: target background 0.25, shadow clip at 2.8 σ_MAD below the median.
-        Stf(input, targetBackground: 0.25, shadowSigma: 2.8);
-
     /// <summary>
     /// Screen-transfer-function auto-stretch with explicit knobs — <paramref name="targetBackground"/>
     /// is the 0..1 output the median lands at, <paramref name="shadowSigma"/> is the shadow clip in
@@ -203,6 +234,11 @@ public static class Stretcher {
     /// </summary>
     public static byte[] Stf(ReadOnlySpan<ushort> input, double targetBackground, double shadowSigma) {
         if (input.Length == 0) return Array.Empty<byte>();
+        return Manual(input, ResolveStfParameters(input, targetBackground, shadowSigma));
+    }
+
+    private static StretchParams ResolveStfParameters(ReadOnlySpan<ushort> input,
+            double targetBackground, double shadowSigma) {
         // Guard the public knobs: targetBackground is a log base → strict 0..1; a negative shadowSigma
         // would push bp above the median, making medianFraction negative and Math.Pow(neg, frac) NaN.
         targetBackground = Math.Clamp(targetBackground, 0.001, 0.999);
@@ -230,7 +266,14 @@ public static class Stretcher {
         input.CopyTo(values);
         var wpIndex = (int)Math.Floor(0.99998 * (values.Length - 1));
         double wp = Quickselect(values, wpIndex);
-        if (wp <= bp) wp = bp + 1;
+        if (wp <= bp) {
+            if (bp >= MaxValue) {
+                bp = MaxValue - 1;
+                wp = MaxValue;
+            } else {
+                wp = bp + 1;
+            }
+        }
 
         // The Manual stretch maps the *midpoint* input to 0.5 output (mpFraction^gamma = 0.5). To land
         // the median at `targetBackground` we need mpFraction = medianFraction ^ (ln0.5 / ln target):
@@ -239,10 +282,10 @@ public static class Stretcher {
         var medianFraction = (median - bp) / (wp - bp);
         var mpFraction = Math.Pow(medianFraction, Math.Log(0.5) / Math.Log(targetBackground));
         var mp = bp + mpFraction * (wp - bp);
-        return Manual(input, new StretchParams(
+        return new StretchParams(
             Blackpoint: bp / MaxValue,
             Midpoint: mp / MaxValue,
-            Whitepoint: wp / MaxValue));
+            Whitepoint: wp / MaxValue);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
@@ -263,6 +306,43 @@ public static class Stretcher {
         if (double.IsNaN(v01) || v01 <= 0) return 0;
         if (v01 >= 1) return 255;
         return (byte)Math.Round(v01 * 255.0);
+    }
+
+    private static StretchParams ResolvePercentileParameters(ReadOnlySpan<ushort> input, StretchParams p) {
+        if (!double.IsFinite(p.LinearClipLow) || !double.IsFinite(p.LinearClipHigh)
+            || p.LinearClipLow < 0 || p.LinearClipHigh > 1
+            || p.LinearClipLow >= p.LinearClipHigh) {
+            throw new ArgumentException(
+                $"linear clip percentiles require 0 <= low < high <= 1 (got {p.LinearClipLow}, {p.LinearClipHigh})");
+        }
+        var (bp, wp) = Percentiles(input, p.LinearClipLow, p.LinearClipHigh);
+        if (wp <= bp) {
+            if (bp >= MaxValue) {
+                bp = MaxValue - 1;
+                wp = MaxValue;
+            } else {
+                wp = bp + 1;
+            }
+        }
+        return p with { Blackpoint = bp / MaxValue, Whitepoint = wp / MaxValue };
+    }
+
+    private static double ResolveAutomaticBlackpoint(ReadOnlySpan<ushort> input, StretchParams p) {
+        if (!double.IsFinite(p.Blackpoint) || p.Blackpoint < 0 || p.Blackpoint > 1) {
+            throw new ArgumentException($"blackpoint must be between 0 and 1 (got {p.Blackpoint})");
+        }
+        return p.Blackpoint > 0 ? p.Blackpoint : Percentile(input, 0.05) / MaxValue;
+    }
+
+    private static StretchParams ValidateManualParameters(StretchParams p) {
+        if (!double.IsFinite(p.Blackpoint) || !double.IsFinite(p.Midpoint)
+            || !double.IsFinite(p.Whitepoint)
+            || p.Blackpoint < 0 || p.Midpoint < 0 || p.Midpoint > 1
+            || p.Whitepoint > 1 || p.Whitepoint <= p.Blackpoint) {
+            throw new ArgumentException(
+                $"manual stretch requires whitepoint > blackpoint within 0..1 (got bp={p.Blackpoint}, wp={p.Whitepoint})");
+        }
+        return p;
     }
 
     private static (double Bp, double Wp) Percentiles(ReadOnlySpan<ushort> input, double lo, double hi) {

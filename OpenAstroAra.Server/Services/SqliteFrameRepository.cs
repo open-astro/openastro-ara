@@ -15,6 +15,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Text.Json;
@@ -23,11 +24,9 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §28-backed <see cref="IFrameRepository"/>. Read path queries SQLite;
-/// the mutating Bulk* operations still return placeholder
-/// <c>Accepted</c> responses — a follow-up sub-PR makes them actually
-/// mutate rows. Preview + thumbnail still return the 1×1 PNG placeholder
-/// until §65 stretch pipeline lands. <c>OpenDownloadAsync</c> returns
-/// null until §72 FITS storage lands.
+/// Mutating bulk operations update catalog rows, previews and thumbnails render
+/// bounded FITS/XISF/RAW source data, downloads stream original files, and the Rank 1 storage
+/// ledger makes capture registration transactional and recoverable.
 ///
 /// Seeding: on first init, if the <c>frames</c> table is empty, three
 /// fixture rows are inserted with the same Guids the placeholder repo
@@ -44,7 +43,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         Guid.Parse("22222222-2222-2222-2222-222222222223"),
     };
 
-    // 1×1 JPEG, used until §65 stretch pipeline produces real previews.
+    // 1×1 fallback for seeded fixtures and catalog rows whose source is missing.
     private const string PlaceholderJpegBase64 =
         "/9j/4AAQSkZJRgABAQAASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
         "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIy" +
@@ -60,12 +59,19 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     private readonly IProfileStore _profile;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<SqliteFrameRepository> _logger;
+    private readonly ISourceImageDataFactory _sourceImages;
+    private readonly IPreviewImageService _previewImages;
 
-    public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, IWsBroadcaster? ws = null, ILogger<SqliteFrameRepository>? logger = null) {
+    public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, IWsBroadcaster? ws = null,
+            ILogger<SqliteFrameRepository>? logger = null, ISourceImageDataFactory? sourceImages = null,
+            IPreviewImageService? previewImages = null) {
         _db = db;
         _profile = profile;
         _ws = ws;
         _logger = logger ?? NullLogger<SqliteFrameRepository>.Instance;
+        _sourceImages = sourceImages ?? new SourceImageDataFactory(new HeadlessProfileService());
+        _previewImages = previewImages ?? new PreviewImageService(
+            Path.Combine(Path.GetDirectoryName(db.DatabasePath)!, "preview-cache"), _sourceImages);
     }
 
     /// <summary>
@@ -175,6 +181,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             Tags: Array.Empty<string>()),
             ct);
 
+        await BackfillCompletedStorageAsync(conn, ct).ConfigureAwait(false);
+
         LogSeededFrames();
     }
 
@@ -182,34 +190,87 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     public async Task InsertAsync(FrameDto frame, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(frame);
         await using var conn = _db.OpenConnection();
-        await InsertFrameAsync(conn, frame, ct).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await InsertFrameAsync(conn, frame, ct, transaction).ConfigureAwait(false);
+        await InsertCompletedStorageAsync(conn, transaction, frame, checksumSha256: null,
+            imageFormat: "fits", cfaPattern: null, completedUtc: frame.CapturedUtc, ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
         await PublishFrameCompleteAsync(frame, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct) {
+    public async Task UpdateAnalysisAsync(Guid frameId, FrameAnalysisMeasurement measurement, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(measurement);
+        ValidateAnalysis(measurement);
         await using var conn = _db.OpenConnection();
         var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE frames SET hfr = $hfr, star_count = $star_count WHERE id = $id";
-        cmd.Parameters.AddWithValue("$hfr", hfr);
-        cmd.Parameters.AddWithValue("$star_count", starCount);
+        cmd.CommandText = """
+            UPDATE frames
+            SET hfr = $hfr,
+                star_count = $star_count,
+                eccentricity = $eccentricity,
+                snr_estimate = $snr_estimate,
+                analysis_version = $analysis_version,
+                analysis_state = 'ready',
+                analysis_failure_code = NULL,
+                analysis_failure_message = NULL
+            WHERE id = $id
+            RETURNING session_id;
+            """;
+        cmd.Parameters.AddWithValue("$hfr", measurement.Hfr);
+        cmd.Parameters.AddWithValue("$star_count", measurement.StarCount);
+        cmd.Parameters.AddWithValue("$eccentricity", DbValue(measurement.Eccentricity));
+        cmd.Parameters.AddWithValue("$snr_estimate", DbValue(measurement.SnrEstimate));
+        cmd.Parameters.AddWithValue("$analysis_version", measurement.AnalysisVersion);
         cmd.Parameters.AddWithValue("$id", frameId.ToString("D"));
-        var updated = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        if (updated == 0) {
+        var sessionValue = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (sessionValue is not string sessionText) {
             // The frame vanished between capture and analysis (user delete) — nothing to report.
             return;
         }
-        await PublishFrameAnalyzedAsync(frameId, hfr, starCount, ct).ConfigureAwait(false);
+        await PublishFrameAnalyzedAsync(frameId, Guid.Parse(sessionText), measurement,
+            persisted: true, ct).ConfigureAwait(false);
+    }
+
+    private static void ValidateAnalysis(FrameAnalysisMeasurement measurement) {
+        if (!double.IsFinite(measurement.Hfr) || measurement.Hfr <= 0) {
+            throw new ArgumentOutOfRangeException(nameof(measurement), "HFR must be finite and positive.");
+        }
+        if (measurement.StarCount < 0) {
+            throw new ArgumentOutOfRangeException(nameof(measurement), "Star count must be non-negative.");
+        }
+        if (measurement.Eccentricity is { } eccentricity
+            && (!double.IsFinite(eccentricity) || eccentricity is < 0 or > 1)) {
+            throw new ArgumentOutOfRangeException(nameof(measurement),
+                "Eccentricity must be finite and between 0 and 1.");
+        }
+        if (measurement.SnrEstimate is { } snr
+            && (!double.IsFinite(snr) || snr < 0)) {
+            throw new ArgumentOutOfRangeException(nameof(measurement),
+                "SNR estimate must be finite and non-negative.");
+        }
+        if (string.IsNullOrWhiteSpace(measurement.AnalysisVersion)
+            || measurement.AnalysisVersion.Length > 64) {
+            throw new ArgumentException("Analysis version must contain 1 to 64 characters.",
+                nameof(measurement));
+        }
     }
 
     // §59.5 frame.analyzed — the post-capture star analysis landed; live listeners (library
     // strips showing the HFR badge) refresh the row without polling. Same raw-JSON posture
     // as frame.complete: numbers + a Guid are literal-safe.
-    private async Task PublishFrameAnalyzedAsync(Guid frameId, double hfr, int starCount, CancellationToken ct) {
+    private async Task PublishFrameAnalyzedAsync(Guid frameId, Guid sessionId,
+            FrameAnalysisMeasurement measurement, bool persisted, CancellationToken ct) {
         if (_ws is null) return;
         try {
+            var eccentricity = measurement.Eccentricity?.ToString("0.####",
+                System.Globalization.CultureInfo.InvariantCulture) ?? "null";
+            var snr = measurement.SnrEstimate?.ToString("0.####",
+                System.Globalization.CultureInfo.InvariantCulture) ?? "null";
+            var version = JsonSerializer.Serialize(measurement.AnalysisVersion,
+                AraJsonSerializerContext.Default.String);
             var json = $$"""
-                {"frame_id":"{{frameId:D}}","hfr":{{hfr.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}},"star_count":{{starCount}}}
+                {"frame_id":"{{frameId:D}}","session_id":"{{sessionId:D}}","state":"ready","persisted":{{(persisted ? "true" : "false")}},"hfr":{{measurement.Hfr.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}},"star_count":{{measurement.StarCount}},"eccentricity":{{eccentricity}},"snr_estimate":{{snr}},"analysis_version":{{version}}}
                 """;
             using var doc = JsonDocument.Parse(json);
             await _ws.PublishAsync(WsEventCatalog.FrameAnalyzed, doc.RootElement.Clone(), ct).ConfigureAwait(false);
@@ -320,21 +381,23 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         }
     }
 
-    private static async Task InsertFrameAsync(SqliteConnection conn, FrameDto f, CancellationToken ct) {
+    private static async Task InsertFrameAsync(SqliteConnection conn, FrameDto f, CancellationToken ct,
+            SqliteTransaction? transaction = null, string? checksumSha256 = null) {
         await using var cmd = conn.CreateCommand();
+        cmd.Transaction = transaction;
         cmd.CommandText = """
             INSERT INTO frames
                 (id, session_id, target_name, frame_type, filter_name,
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json, focuser_position)
+                 quality_score_json, rating, tags_json, focuser_position, sha256)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
                  $file_path, $file_size_bytes, $width, $height, $bit_depth,
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
-                 $quality_score_json, $rating, $tags_json, $focuser_position);
+                 $quality_score_json, $rating, $tags_json, $focuser_position, $sha256);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -363,6 +426,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$tags_json",
             JsonSerializer.Serialize(f.Tags, AraJsonSerializerContext.Default.IReadOnlyListString));
         cmd.Parameters.AddWithValue("$focuser_position", DbValue(f.FocuserPosition));
+        cmd.Parameters.AddWithValue("$sha256", (object?)checksumSha256 ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -381,7 +445,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var sql = """
             SELECT id, session_id, target_name, frame_type, filter_name,
                    exposure_seconds, captured_utc, hfr, star_count,
-                   quality_score_json, rating, synced_at, sync_target
+                   quality_score_json, rating, synced_at, sync_target,
+                   quarantined_utc
             FROM frames
             WHERE 1=1
             """;
@@ -429,7 +494,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 SyncedAt: await reader.IsDBNullAsync(11, ct)
                     ? null
                     : DateTimeOffset.Parse(reader.GetString(11)),
-                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12)));
+                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12),
+                QuarantinedUtc: await reader.IsDBNullAsync(13, ct)
+                    ? null
+                    : DateTimeOffset.Parse(reader.GetString(13))));
         }
         var hasMore = await reader.ReadAsync(ct);  // the pageSize+1 row
         var nextCursor = hasMore ? (offset + pageSize).ToString() : null;
@@ -444,7 +512,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    exposure_seconds, gain, "offset", temperature_c, captured_utc,
                    file_path, file_size_bytes, width, height, bit_depth,
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                   quality_score_json, rating, tags_json, focuser_position
+                   quality_score_json, rating, tags_json, focuser_position,
+                   analysis_version, quarantined_utc, quarantine_reason
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -489,43 +558,126 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             QualityScore: quality,
             Rating: reader.GetInt32(21),
             Tags: tags,
-            FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23));
+            FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23),
+            AnalysisVersion: await reader.IsDBNullAsync(24, ct) ? null : reader.GetString(24),
+            QuarantinedUtc: await reader.IsDBNullAsync(25, ct)
+                ? null
+                : DateTimeOffset.Parse(reader.GetString(25)),
+            QuarantineReason: await reader.IsDBNullAsync(26, ct) ? null : reader.GetString(26));
     }
 
-    public async Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
-        var (filePath, frameType) = await GetPathAndTypeAsync(id, ct);
-        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
-            return (PlaceholderJpegBytes, "image/jpeg");
-        }
+    public Task<FramePreviewResult?> GetPreviewAsync(Guid id, FramePreviewRequestDto request,
+            CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        FrameOperationService.ValidatePreviewRequest(request);
+        return RunFrameOperationLockedAsync("preview", id,
+            () => RenderPreviewCoreAsync(id, request, announceStart: false, ct), ct);
+    }
+
+    private async Task<FramePreviewResult?> RenderPreviewCoreAsync(Guid id,
+            FramePreviewRequestDto request, bool announceStart, CancellationToken ct) {
+        var previewSource = await GetPreviewSourceAsync(id, ct).ConfigureAwait(false);
+        if (previewSource is null) return null;
 
         var stretchDefaults = _profile.GetStretchDefaults();
-        var algorithm = ResolveAlgorithm(request.StretchPalette, frameType, stretchDefaults.LightDefault);
+        var algorithm = ResolveAlgorithm(request.StretchPalette, previewSource.FrameType, stretchDefaults.LightDefault);
         var stretchParams = BuildParams(request, algorithm, stretchDefaults);
+        ValidateStretchParameters(stretchParams);
+        _ = ParseChannelMode(request.ChannelMode);
 
-        // §65.4 variant cache: look for an existing JPEG on disk before
-        // re-running the stretch + encode. Cache key includes the algorithm
-        // ID + a hash of the manual stretch params (rounded to 3 decimal
-        // places so rapid slider drags don't blow the cache).
-        var cachePath = ComputeCacheKey(filePath, algorithm, stretchParams);
-        if (TryServeFromCache(cachePath) is byte[] cached) {
-            // Touch atime so the LRU sweep keeps the most-recently-served
-            // variants warm.
-            try { File.SetLastAccessTimeUtc(cachePath, DateTime.UtcNow); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* ignore */ }
-            return (cached, "image/jpeg");
+        StarAnnotationOptions? annotationOptions = null;
+        if (request.AnnotateStars) {
+            var annotationColor = NormalizeAnnotationColor(request.AnnotationColor);
+            annotationOptions = new StarAnnotationOptions(
+                Red: annotationColor.Red,
+                Green: annotationColor.Green,
+                Blue: annotationColor.Blue,
+                StrokeWidth: ToFiniteFloat(request.AnnotationStrokeWidth ?? 2, "AnnotationStrokeWidth"),
+                FontSize: ToFiniteFloat(request.AnnotationFontSize ?? 12, "AnnotationFontSize"),
+                FontFamily: request.AnnotationFontFamily,
+                ShowLabels: request.ShowAnnotationLabels,
+                MaxAnnotations: request.MaxAnnotatedStars ?? 250);
         }
 
-        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
-        byte[] jpeg;
-        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
-            var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
-        } else {
-            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height, maxDim: PreviewMaxDim);
+        if (announceStart) {
+            await SetPreviewStateAsync(id, "rendering", failureCode: null,
+                failureMessage: null, checksum: null, debayerMethod: null,
+                previewVersion: null, ct).ConfigureAwait(false);
+            await PublishFrameStateEventAsync(WsEventCatalog.FramePreviewStarted, id,
+                previewSource.SessionId, "rendering", ct).ConfigureAwait(false);
         }
-        TryWriteCache(cachePath, jpeg);
-        EvictVariantsIfNeeded(filePath);
-        return (jpeg, "image/jpeg");
+        if (!File.Exists(previewSource.FilePath)) {
+            await SetPreviewStateAsync(id, "missing", "source_unavailable",
+                "Source image is unavailable.", checksum: null, debayerMethod: null,
+                previewVersion: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishFrameFailureAsync(id, previewSource.SessionId, "preview",
+                "source_unavailable", "Source image is unavailable.",
+                CancellationToken.None).ConfigureAwait(false);
+            var placeholder = new FramePreviewResult(PlaceholderJpegBytes, "image/jpeg",
+                new PreviewCacheMetadata(2, id, new string('0', 64), "missing-source", 1, 1,
+                    AlgorithmToWire(algorithm), stretchParams, "none", "luminance",
+                    request.Invert, request.Saturation ?? 1, DateTimeOffset.UtcNow,
+                    Annotated: request.AnnotateStars,
+                    AnnotationColor: request.AnnotateStars
+                        ? NormalizeAnnotationColor(request.AnnotationColor).Wire
+                        : null,
+                    AnnotationLabels: request.AnnotateStars && request.ShowAnnotationLabels), CacheHit: false);
+            return placeholder;
+        }
+
+        try {
+            var result = await _previewImages.RenderAsync(new PreviewRenderRequest(
+                FrameId: id,
+                SourcePath: previewSource.FilePath,
+                SourceChecksumSha256: previewSource.ChecksumSha256,
+                Algorithm: algorithm,
+                Parameters: stretchParams,
+                MaxDimension: request.MaxDimensionPx ?? PreviewMaxDim,
+                ApplyDebayer: request.ApplyDebayer,
+                ChannelMode: ParseChannelMode(request.ChannelMode),
+                Invert: request.Invert,
+                Saturation: request.Saturation ?? 1,
+                CropX: request.CropX,
+                CropY: request.CropY,
+                CropWidth: request.CropWidth,
+                CropHeight: request.CropHeight,
+                AnnotateStars: request.AnnotateStars,
+                AnnotationOptions: annotationOptions,
+                StarSensitivity: request.StarSensitivity ?? 8.0,
+                StarNoiseReduction: request.StarNoiseReduction ?? 0), ct).ConfigureAwait(false);
+            var checksum = Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(result.Bytes)).ToLowerInvariant();
+            var previewVersion = $"schema-{result.Metadata.SchemaVersion}";
+            if (!announceStart && !result.CacheHit) {
+                await PublishFrameStateEventAsync(WsEventCatalog.FramePreviewStarted, id,
+                    previewSource.SessionId, "rendering", CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            await SetPreviewStateAsync(id, "ready", failureCode: null,
+                failureMessage: null, checksum, result.Metadata.DebayerMode,
+                previewVersion, CancellationToken.None).ConfigureAwait(false);
+            if (announceStart || !result.CacheHit) {
+                await PublishPreviewReadyAsync(id, previewSource.SessionId, result,
+                    checksum, CancellationToken.None).ConfigureAwait(false);
+            }
+            return result;
+        } catch (OperationCanceledException) {
+            await SetPreviewStateAsync(id, "interrupted", "preview_cancelled",
+                "Preview rendering was cancelled.", checksum: null, debayerMethod: null,
+                previewVersion: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishFrameFailureAsync(id, previewSource.SessionId, "preview",
+                "preview_cancelled", "Preview rendering was cancelled.",
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        } catch {
+            await SetPreviewStateAsync(id, "failed", "preview_failed",
+                "Preview rendering failed.", checksum: null, debayerMethod: null,
+                previewVersion: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishFrameFailureAsync(id, previewSource.SessionId, "preview",
+                "preview_failed", "Preview rendering failed.",
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) {
@@ -533,14 +685,20 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return (PlaceholderJpegBytes, "image/jpeg");
         }
-        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+        var source = await _sourceImages.LoadAsync(filePath, ct).ConfigureAwait(false);
+        var (pixels, width, height, bayerPat) =
+            (source.Data.FlatArray, source.Width, source.Height, source.CfaPattern);
         // Thumbnail: §65.4 always uses the default stretch (re-stretch on
         // thumbnails is not supported in v0.0.1). Per-frame-type override
         // still applies — calibration frames get linear.
         var stretchDefaults = _profile.GetStretchDefaults();
         var algorithm = ResolveAlgorithm(null, frameType, stretchDefaults.LightDefault);
         byte[] jpeg;
-        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+        if (source.ColorData is not null) {
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(
+                StretchColor(source.ColorData.BorrowRedPlane(), source.ColorData.BorrowGreenPlane(),
+                    source.ColorData.BorrowBluePlane(), pixels, algorithm), width, height);
+        } else if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
             var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
             jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
         } else {
@@ -552,20 +710,14 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     public async Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(
             Guid id, OpenAstroAra.Profile.Interfaces.IProfileService profileService, CancellationToken ct) {
-        // §18.I — reuse the proven preview FITS read path, then wrap the raw 16-bit pixels as IImageData for
-        // the plate-solver. The real profileService is passed in (the CLI solver writes a temp FITS via the
-        // image's SaveToDisk, which reads the profile for the file pattern). Star detection/annotator are
-        // genuinely untouched by solving → null. FITS frames are 16-bit; isBayered preserves the CFA flag.
+        // §18.I — use the same bounded, signature-detected FITS/XISF path as preview.
+        // The caller's profile service remains authoritative for plate-solver temp-file settings.
         var (filePath, _) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return null;
         }
-        // A corrupt/truncated FITS lets LoadFitsPixels throw → 500, consistent with GetPreviewAsync/
-        // GetThumbnailAsync on the same file (a malformed catalogued frame is an exceptional, not user-input, case).
-        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
-        return new OpenAstroAra.Image.ImageData.BaseImageData(
-            pixels, width, height, bitDepth: 16, isBayered: !string.IsNullOrEmpty(bayerPat),
-            new OpenAstroAra.Image.ImageData.ImageMetaData(), profileService, null!, null!);
+        var source = await _sourceImages.LoadAsync(filePath, ct).ConfigureAwait(false);
+        return _sourceImages.CreateImageData(source, profileService);
     }
 
     public async Task<(double RaDegrees, double DecDegrees)?> TryReadTargetCoordinatesAsync(Guid id, CancellationToken ct) {
@@ -627,12 +779,16 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return (reader.GetString(0), ParseFrameType(reader.GetString(1)));
     }
 
-    private static (ushort[] Pixels, int Width, int Height, string? BayerPattern) LoadFitsPixels(string filePath) {
-        using var fits = OpenAstroAra.Fits.FitsImage.Open(filePath);
-        var (w, h) = fits.GetDimensions();
-        var pixels = fits.ReadImageData16();
-        var bayer = fits.ReadHeaders().TryGetValue("BAYERPAT", out var bp) ? bp : null;
-        return (pixels, w, h, bayer);
+    private async Task<PreviewSource?> GetPreviewSourceAsync(Guid id, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT file_path, frame_type, sha256, session_id FROM frames WHERE id = $id LIMIT 1;";
+        cmd.Parameters.AddWithValue("$id", id.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
+        return new PreviewSource(reader.GetString(0), ParseFrameType(reader.GetString(1)),
+            await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? null : reader.GetString(2),
+            Guid.Parse(reader.GetString(3)));
     }
 
     // §65 OSC color — the mosaic→RGB preview recipe lives in Debayer.SuperPixelStretched, shared
@@ -641,6 +797,22 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         ushort[] mosaic, int width, int height, OpenAstroAra.Stretch.BayerPattern pattern,
         OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams) =>
         OpenAstroAra.Stretch.Debayer.SuperPixelStretched(mosaic, width, height, pattern, algorithm, stretchParams);
+
+    private static byte[] StretchColor(ushort[] red, ushort[] green, ushort[] blue,
+            ushort[] luminance, OpenAstroAra.Stretch.StretchAlgorithm algorithm) {
+        var parameters = OpenAstroAra.Stretch.Stretcher.ResolveParameters(algorithm, luminance);
+        var redDisplay = OpenAstroAra.Stretch.Stretcher.ApplyResolved(algorithm, red, parameters);
+        var greenDisplay = OpenAstroAra.Stretch.Stretcher.ApplyResolved(algorithm, green, parameters);
+        var blueDisplay = OpenAstroAra.Stretch.Stretcher.ApplyResolved(algorithm, blue, parameters);
+        var rgb = new byte[checked(redDisplay.Length * 3)];
+        for (var index = 0; index < redDisplay.Length; index++) {
+            var output = index * 3;
+            rgb[output] = redDisplay[index];
+            rgb[output + 1] = greenDisplay[index];
+            rgb[output + 2] = blueDisplay[index];
+        }
+        return rgb;
+    }
 
     /// <summary>
     /// §65.2 defaults policy: frame-type auto-override beats request
@@ -652,17 +824,22 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (frameType is FrameType.Dark or FrameType.Bias or FrameType.Flat or FrameType.DarkFlat) {
             return OpenAstroAra.Stretch.StretchAlgorithm.Linear;
         }
-        return ParseAlgorithm(requested) ?? ParseAlgorithm(profileLightDefault) ?? OpenAstroAra.Stretch.StretchAlgorithm.AutoStf;
+        if (!string.IsNullOrWhiteSpace(requested)) {
+            return ParseAlgorithm(requested) ?? throw new ArgumentException(
+                $"Unknown stretch palette '{requested}'. Supported palettes: auto_stf, linear, log, asinh, sqrt, equalized, manual.",
+                nameof(requested));
+        }
+        return ParseAlgorithm(profileLightDefault) ?? OpenAstroAra.Stretch.StretchAlgorithm.AutoStf;
     }
 
     private static OpenAstroAra.Stretch.StretchAlgorithm? ParseAlgorithm(string? value) =>
         value?.ToLowerInvariant() switch {
-            "auto_stf" => OpenAstroAra.Stretch.StretchAlgorithm.AutoStf,
+            "auto_stf" or "stf" or "auto" => OpenAstroAra.Stretch.StretchAlgorithm.AutoStf,
             "linear" => OpenAstroAra.Stretch.StretchAlgorithm.Linear,
             "log" => OpenAstroAra.Stretch.StretchAlgorithm.Log,
             "asinh" => OpenAstroAra.Stretch.StretchAlgorithm.Asinh,
             "sqrt" => OpenAstroAra.Stretch.StretchAlgorithm.Sqrt,
-            "equalized" => OpenAstroAra.Stretch.StretchAlgorithm.Equalized,
+            "equalized" or "histogram" => OpenAstroAra.Stretch.StretchAlgorithm.Equalized,
             "manual" => OpenAstroAra.Stretch.StretchAlgorithm.Manual,
             _ => null,
         };
@@ -679,10 +856,87 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             Blackpoint: request.BlackPoint ?? manualSeeds.Blackpoint,
             Midpoint: request.MidtonePoint ?? manualSeeds.Midpoint,
             Whitepoint: request.WhitePoint ?? manualSeeds.Whitepoint,
-            Beta: profileDefaults.AsinhDefaultBeta,
-            LinearClipLow: profileDefaults.LinearClipPercentilesLow,
-            LinearClipHigh: profileDefaults.LinearClipPercentilesHigh);
+            Beta: request.AsinhBeta ?? profileDefaults.AsinhDefaultBeta,
+            LinearClipLow: request.LinearClipLow ?? profileDefaults.LinearClipPercentilesLow,
+            LinearClipHigh: request.LinearClipHigh ?? profileDefaults.LinearClipPercentilesHigh);
     }
+
+    private static void ValidateStretchParameters(OpenAstroAra.Stretch.StretchParams parameters) {
+        if (!double.IsFinite(parameters.Blackpoint)
+            || !double.IsFinite(parameters.Midpoint)
+            || !double.IsFinite(parameters.Whitepoint)
+            || parameters.Blackpoint is < 0 or > 1
+            || parameters.Midpoint is < 0 or > 1
+            || parameters.Whitepoint is < 0 or > 1
+            || parameters.Whitepoint <= parameters.Blackpoint) {
+            throw new ArgumentException(
+                "Stretch points must be finite, inside 0..1, and white point must exceed black point.");
+        }
+        if (!double.IsFinite(parameters.Beta) || parameters.Beta <= 0) {
+            throw new ArgumentException("Asinh beta must be finite and positive.");
+        }
+        if (!double.IsFinite(parameters.LinearClipLow)
+            || !double.IsFinite(parameters.LinearClipHigh)
+            || parameters.LinearClipLow < 0
+            || parameters.LinearClipHigh > 1
+            || parameters.LinearClipLow >= parameters.LinearClipHigh) {
+            throw new ArgumentException(
+                "Linear clip percentiles must satisfy 0 <= low < high <= 1.");
+        }
+    }
+
+    private static PreviewChannelMode ParseChannelMode(string? value) => value?.Trim().ToLowerInvariant() switch {
+        null or "" or "rgb" or "color" => PreviewChannelMode.Rgb,
+        "luminance" or "gray" or "mono" => PreviewChannelMode.Luminance,
+        "red" => PreviewChannelMode.Red,
+        "green" => PreviewChannelMode.Green,
+        "blue" => PreviewChannelMode.Blue,
+        _ => throw new ArgumentException(
+            $"Unknown preview channel mode '{value}'. Supported modes: rgb, luminance, red, green, blue.",
+            nameof(value)),
+    };
+
+    private static (byte Red, byte Green, byte Blue, string Wire) NormalizeAnnotationColor(string? value) {
+        var normalized = value?.Trim().ToLowerInvariant();
+        normalized = normalized switch {
+            null or "" or "green" => "#00ff00",
+            "red" => "#ff0000",
+            "yellow" => "#ffff00",
+            "cyan" => "#00ffff",
+            "white" => "#ffffff",
+            _ => normalized,
+        };
+        if (normalized.Length != 7 || normalized[0] != '#'
+            || !byte.TryParse(normalized.AsSpan(1, 2), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var red)
+            || !byte.TryParse(normalized.AsSpan(3, 2), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var green)
+            || !byte.TryParse(normalized.AsSpan(5, 2), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var blue)) {
+            throw new ArgumentException(
+                $"Unknown annotation color '{value}'. Use #RRGGBB, green, red, yellow, cyan, or white.",
+                nameof(value));
+        }
+        return (red, green, blue, normalized);
+    }
+
+    private static float ToFiniteFloat(double value, string field) {
+        if (!double.IsFinite(value) || value is > float.MaxValue or < -float.MaxValue) {
+            throw new ArgumentOutOfRangeException(field, value, $"{field} must be finite.");
+        }
+        return (float)value;
+    }
+
+    private static string AlgorithmToWire(OpenAstroAra.Stretch.StretchAlgorithm algorithm) => algorithm switch {
+        OpenAstroAra.Stretch.StretchAlgorithm.AutoStf => "auto_stf",
+        OpenAstroAra.Stretch.StretchAlgorithm.Linear => "linear",
+        OpenAstroAra.Stretch.StretchAlgorithm.Log => "log",
+        OpenAstroAra.Stretch.StretchAlgorithm.Asinh => "asinh",
+        OpenAstroAra.Stretch.StretchAlgorithm.Sqrt => "sqrt",
+        OpenAstroAra.Stretch.StretchAlgorithm.Equalized => "equalized",
+        OpenAstroAra.Stretch.StretchAlgorithm.Manual => "manual",
+        _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null),
+    };
 
     public async Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct) {
         // §72: serve the captured FITS bytes from the path stored in the
@@ -717,7 +971,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // Idempotency-Key dedup at the persistence layer is a separate concern
     // (lands when the §60.5 in-memory dedup cache PR lands).
 
-    public async Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Rating is < 0 or > 5) {
+            throw new ArgumentOutOfRangeException(nameof(request), "Rating must be between 0 and 5.");
+        }
+        var normalized = request with { FrameIds = ValidateFrameIds(request.FrameIds) };
+        var fingerprint = FingerprintBulk("rate", normalized.FrameIds,
+            normalized.Rating.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return _bulkRateOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkRateCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkRateCoreAsync(BulkRateRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             await using var conn = _db.OpenConnection();
             await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
@@ -736,7 +1004,29 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-rate", idempotencyKey);
     }
 
-    public async Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        var ids = ValidateFrameIds(request.FrameIds);
+        var addTags = NormalizeTags(request.AddTags, nameof(request.AddTags));
+        var removeTags = NormalizeTags(request.RemoveTags, nameof(request.RemoveTags));
+        if (addTags.Count == 0 && removeTags.Count == 0) {
+            throw new ArgumentException("At least one tag must be added or removed.", nameof(request));
+        }
+        var normalized = request with {
+            FrameIds = ids,
+            AddTags = addTags,
+            RemoveTags = removeTags,
+        };
+        var fingerprint = FingerprintBulk("tag", ids,
+            string.Join("\u001f", addTags.Order(StringComparer.OrdinalIgnoreCase)),
+            string.Join("\u001f", removeTags.Order(StringComparer.OrdinalIgnoreCase)));
+        return _bulkTagOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkTagCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkTagCoreAsync(BulkTagRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0 && (request.AddTags.Count > 0 || request.RemoveTags.Count > 0)) {
             await using var conn = _db.OpenConnection();
             await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
@@ -763,7 +1053,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-tag", idempotencyKey);
     }
 
-    public async Task<OperationAcceptedDto> BulkMoveAsync(BulkMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkMoveAsync(BulkMoveRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.TargetSessionId == Guid.Empty) {
+            throw new ArgumentException("Target session id must not be empty.", nameof(request));
+        }
+        var normalized = request with { FrameIds = ValidateFrameIds(request.FrameIds) };
+        var fingerprint = FingerprintBulk("move", normalized.FrameIds,
+            normalized.TargetSessionId.ToString("D"));
+        return _bulkMoveOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkMoveCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkMoveCoreAsync(BulkMoveRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             await using var conn = _db.OpenConnection();
             await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
@@ -845,7 +1149,18 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return new FrameExportPrep(entries, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar");
     }
 
-    public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        var normalized = request with { FrameIds = ValidateFrameIds(request.FrameIds) };
+        var fingerprint = FingerprintBulk("delete", normalized.FrameIds,
+            normalized.DeleteFromDisk ? "true" : "false");
+        return _bulkDeleteOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkDeleteCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkDeleteCoreAsync(BulkDeleteRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's
             // nothing left to resolve them from. Only needed for disk deletion.
@@ -881,6 +1196,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             // previews, thumbnail) all go; locked/missing files are skipped.
             foreach (var fitsPath in paths) {
                 DeleteFrameFilesBestEffort(fitsPath);
+            }
+            foreach (var frameId in request.FrameIds) {
+                await _previewImages.DeleteFrameEntriesAsync(frameId, ct).ConfigureAwait(false);
             }
         }
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-delete", idempotencyKey);
@@ -932,17 +1250,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) {
+    public Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) =>
+        RunFrameOperationLockedAsync("preview", id,
+            () => DeletePreviewVariantsCoreAsync(id, ct), ct);
+
+    private async Task<bool> DeletePreviewVariantsCoreAsync(Guid id, CancellationToken ct) {
         var (filePath, _) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath)) return false;
-        // Frame exists in the catalog; missing FITS on disk doesn't make
-        // this 404 (user may have rotated storage). Variants live next to
-        // the FITS via the §65.4 cache-key pattern.
+        await _previewImages.DeleteFrameEntriesAsync(id, ct).ConfigureAwait(false);
+        // Remove legacy sidecars created before the external bounded cache landed.
         var dir = Path.GetDirectoryName(filePath);
         if (string.IsNullOrEmpty(dir)) return true;
         var stem = Path.GetFileNameWithoutExtension(filePath);
         var pattern = $"{stem}.preview.*.jpg";
         try {
+            try { File.Delete(Path.Combine(dir, $"{stem}.preview.jpg")); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             foreach (var variant in Directory.EnumerateFiles(dir, pattern)) {
                 try { File.Delete(variant); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* skip locked */ }
             }
@@ -950,153 +1272,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return true;
     }
 
-    // §65.4 cache cap. Six alt-stretch variants per frame plus the default
-    // = seven total. Settings → Image Processing → Preview Cache will expose
-    // this knob (range 1-20) in a future sub-PR; for now it's a const.
-    private const int MaxVariantsPerFrame = 6;
-
     // §65 preview payload cap. The full preview is a viewer aid, not the full-res download, so
     // cap its longest edge — a 60 MP OSC frame would otherwise debayer to a ~15 MP JPEG. 2048 px
     // keeps it crisp on any display while bounding payload/encode time; the FITS + the eventual
     // full-res export are unaffected. (Settings → Image Processing could expose this later.)
     private const int PreviewMaxDim = 2048;
 
-    // §29 storage-pressure threshold. When the captures volume free space
-    // drops below this, the §65.4 variant-eviction path nukes all alt-
-    // stretch variants for the current frame (NOT defaults, NOT FITS, NOT
-    // thumbnails). 1 GB is the v0.0.1 fixed value; §29.4 settings panel
-    // exposes it as a tunable in a future sub-PR.
-    private const long StoragePressureBytes = 1L * 1024L * 1024L * 1024L;
-
-    private static string ComputeCacheKey(string fitsPath, OpenAstroAra.Stretch.StretchAlgorithm algorithm,
-            OpenAstroAra.Stretch.StretchParams parameters) {
-        var stretchId = algorithm switch {
-            OpenAstroAra.Stretch.StretchAlgorithm.AutoStf => "auto_stf",
-            OpenAstroAra.Stretch.StretchAlgorithm.Linear => "linear",
-            OpenAstroAra.Stretch.StretchAlgorithm.Log => "log",
-            OpenAstroAra.Stretch.StretchAlgorithm.Asinh => "asinh",
-            OpenAstroAra.Stretch.StretchAlgorithm.Sqrt => "sqrt",
-            OpenAstroAra.Stretch.StretchAlgorithm.Equalized => "equalized",
-            OpenAstroAra.Stretch.StretchAlgorithm.Manual => "manual",
-            _ => "default",
-        };
-        var dir = Path.GetDirectoryName(fitsPath) ?? "";
-        var stem = Path.GetFileNameWithoutExtension(fitsPath);
-        // Manual stretch params hash so slider drags coalesce in the cache
-        // (§65.4 rounds to 3 decimal places to bound entry count).
-        if (algorithm == OpenAstroAra.Stretch.StretchAlgorithm.Manual) {
-            var bp = Math.Round(parameters.Blackpoint, 3);
-            var mp = Math.Round(parameters.Midpoint, 3);
-            var wp = Math.Round(parameters.Whitepoint, 3);
-            var hash = $"{bp:F3}_{mp:F3}_{wp:F3}".Replace('.', 'p');
-            return Path.Combine(dir, $"{stem}.preview.{stretchId}.{hash}.jpg");
-        }
-        return Path.Combine(dir, $"{stem}.preview.{stretchId}.jpg");
-    }
-
-    private static byte[]? TryServeFromCache(string cachePath) {
-        if (!File.Exists(cachePath)) return null;
-        try {
-            return File.ReadAllBytes(cachePath);
-        } catch (IOException) {
-            return null;
-        }
-    }
-
-    private static void TryWriteCache(string cachePath, byte[] bytes) {
-        try {
-            // Atomic write per §28.7 — temp + rename so a concurrent reader
-            // never sees a partial JPEG.
-            var tmp = cachePath + ".tmp";
-            File.WriteAllBytes(tmp, bytes);
-            File.Move(tmp, cachePath, overwrite: true);
-        } catch (IOException) {
-            // Cache write best-effort; serving the bytes inline is what
-            // matters. Storage pressure / read-only mounts shouldn't
-            // 500 the request.
-        }
-    }
-
-    private void EvictVariantsIfNeeded(string fitsPath) {
-        var dir = Path.GetDirectoryName(fitsPath);
-        if (string.IsNullOrEmpty(dir)) return;
-
-        // §65.4 storage-pressure check. If the captures volume is below the
-        // §29 critical threshold, evict ALL alt-stretch variants for this
-        // frame — not just past the per-frame cap. They're recoverable
-        // cache; FITS + defaults + thumbnails are not.
-        var aggressiveEviction = IsUnderStoragePressure(dir);
-
-        var stem = Path.GetFileNameWithoutExtension(fitsPath);
-        var pattern = $"{stem}.preview.*.jpg";
-        try {
-            var variants = Directory.EnumerateFiles(dir, pattern)
-                // Default stretch is the un-suffixed "preview.jpg" (legacy
-                // path); explicit stretch variants always have a .preview.<id>.
-                // Both compete for the same per-frame budget — but per §65.4
-                // thumbnails are excluded (named .thumb.jpg). Our naming
-                // above always includes .preview. so all matches are
-                // variant entries.
-                .Select(p => new FileInfo(p))
-                .OrderByDescending(fi => fi.LastAccessTimeUtc)
-                .ToList();
-
-            // Storage pressure: keep nothing. LRU cap: keep top N.
-            var keep = aggressiveEviction ? 0 : MaxVariantsPerFrame;
-            if (variants.Count <= keep) return;
-            foreach (var stale in variants.Skip(keep)) {
-                try {
-                    stale.Delete();
-                    EmitVariantEvictedAsync(fitsPath, stale.Name,
-                        reason: aggressiveEviction ? "storage_pressure" : "lru_eviction");
-                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* ignore */ }
-            }
-        } catch (DirectoryNotFoundException) { /* nothing to evict */ } catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
-    }
-
-    private static bool IsUnderStoragePressure(string dir) {
-        try {
-            var root = Path.GetPathRoot(Path.GetFullPath(dir));
-            if (string.IsNullOrEmpty(root)) return false;
-            var info = new DriveInfo(root);
-            return info.IsReady && info.AvailableFreeSpace < StoragePressureBytes;
-        } catch (ArgumentException) {
-            return false;
-        } catch (IOException) {
-            return false;
-        } catch (UnauthorizedAccessException) {
-            return false;
-        }
-    }
-
-    private void EmitVariantEvictedAsync(string fitsPath, string variantFileName, string reason) {
-        if (_ws is null) return;
-        var stretchId = ExtractStretchIdFromVariantName(variantFileName);
-        // Fire-and-forget; WS publish failure mustn't abort cache management.
-        _ = Task.Run(async () => {
-            try {
-                var json = $$"""
-                    {"frame_path":"{{fitsPath.Replace("\\", "\\\\").Replace("\"", "\\\"")}}","stretch_id":"{{stretchId}}","reason":"{{reason}}"}
-                    """;
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
-                await _ws.PublishAsync("frame.preview.variant.evicted", doc.RootElement.Clone(), CancellationToken.None);
-            } catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or InvalidOperationException or ObjectDisposedException) { /* swallow */ }
-        });
-    }
-
-    private static string ExtractStretchIdFromVariantName(string fileName) {
-        // <stem>.preview.<stretch-id>.jpg → return <stretch-id>
-        // <stem>.preview.manual.<hash>.jpg → return "manual"
-        var parts = fileName.Split('.');
-        // … some files have extra dots in the stem; locate the "preview"
-        // segment and take the next one as the stretch id.
-        for (var i = 0; i < parts.Length - 1; i++) {
-            if (parts[i].Equals("preview", StringComparison.OrdinalIgnoreCase)) {
-                return parts[i + 1];
-            }
-        }
-        return "unknown";
-    }
 
     // Frame type ↔ string. The enum is JSON-serialized as lowercase via
     // the global JsonStringEnumConverter, but we don't have a JSON
@@ -1119,6 +1300,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         "darkflat" => FrameType.DarkFlat,
         _ => Enum.TryParse<FrameType>(s, ignoreCase: true, out var ft) ? ft : FrameType.Light,
     };
+
+    private sealed record PreviewSource(string FilePath, FrameType FrameType,
+        string? ChecksumSha256, Guid SessionId);
 
     private static readonly string[] SampleTags = { "good-seeing" };
 

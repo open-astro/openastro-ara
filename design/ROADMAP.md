@@ -124,8 +124,9 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 
 ## 5. Imaging pipeline tail (§26 / §2105 / §64)
 
-- **libraw RAW decode + DSLR stubs** — `ExposureData.CreateRAWExposureData`,
-  `BaseImageData.SaveTiff`, `BaseImageData.FromFile` (non-FITS/XISF),
+- ~~**libraw RAW decode**~~ — bounded/cancellable LibRaw C-ABI decode now feeds capture,
+  library previews, color channels, annotations, and analysis. Remaining DSLR/raster stubs:
+  `BaseImageData.SaveTiff`, `BaseImageData.FromFile` (non-FITS/XISF/RAW), and
   `ImageArrayExposureData.FromBitmapSource`.
 - ~~**OSC/colour annotation**~~ — shipped with the real fix: detection on a super-pixel
   CFA-weighted luminance plane (same half-res grid as the colour output, one debayer pass) +

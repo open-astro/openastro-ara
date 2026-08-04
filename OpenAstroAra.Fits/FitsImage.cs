@@ -116,10 +116,13 @@ public sealed class FitsImage : IDisposable {
         if (CFitsIO.GetImageDimensions(_fptr, out var naxis, ref status) != 0) {
             throw new FitsException("ffgidm", status);
         }
-        if (naxis < 2) throw new InvalidOperationException($"FITS file is not a 2-D image (naxis={naxis})");
+        if (naxis is < 2 or > 999) throw new InvalidDataException($"FITS file has invalid axis count (naxis={naxis})");
         var dims = new long[naxis];
         if (CFitsIO.GetImageSize(_fptr, naxis, dims, ref status) != 0) {
             throw new FitsException("ffgisz", status);
+        }
+        if (dims[0] <= 0 || dims[1] <= 0 || dims[0] > int.MaxValue || dims[1] > int.MaxValue) {
+            throw new InvalidDataException($"FITS file has invalid dimensions {dims[0]}x{dims[1]}.");
         }
         // naxes is 1-indexed in FITS conventions; CFITSIO returns dim[0]=width
         // and dim[1]=height after fixing the row-major→column-major reorder.
@@ -133,9 +136,10 @@ public sealed class FitsImage : IDisposable {
     /// </summary>
     public unsafe void WriteImageData(ReadOnlySpan<ushort> data) {
         var (width, height) = GetDimensions();
-        if (data.Length != width * height) {
+        var pixelCount = GetPixelCount(width, height);
+        if (data.Length != pixelCount) {
             throw new ArgumentException(
-                $"Pixel buffer length ({data.Length}) doesn't match image dimensions ({width}×{height} = {width * height})",
+                $"Pixel buffer length ({data.Length}) doesn't match image dimensions ({width}×{height} = {pixelCount})",
                 nameof(data));
         }
         fixed (ushort* p = data) {
@@ -151,9 +155,10 @@ public sealed class FitsImage : IDisposable {
     /// <summary>Write a 32-bit float image plane.</summary>
     public unsafe void WriteImageData(ReadOnlySpan<float> data) {
         var (width, height) = GetDimensions();
-        if (data.Length != width * height) {
+        var pixelCount = GetPixelCount(width, height);
+        if (data.Length != pixelCount) {
             throw new ArgumentException(
-                $"Pixel buffer length ({data.Length}) doesn't match image dimensions ({width}×{height} = {width * height})",
+                $"Pixel buffer length ({data.Length}) doesn't match image dimensions ({width}×{height} = {pixelCount})",
                 nameof(data));
         }
         fixed (float* p = data) {
@@ -169,7 +174,7 @@ public sealed class FitsImage : IDisposable {
     /// <summary>Read the image plane as 16-bit unsigned pixels.</summary>
     public unsafe ushort[] ReadImageData16() {
         var (width, height) = GetDimensions();
-        var pixels = new ushort[width * height];
+        var pixels = new ushort[GetPixelCount(width, height)];
         fixed (ushort* p = pixels) {
             var firstpix = new long[] { 1, 1 };
             var status = 0;
@@ -184,7 +189,7 @@ public sealed class FitsImage : IDisposable {
     /// <summary>Read the image plane as 32-bit float pixels.</summary>
     public unsafe float[] ReadImageDataFloat() {
         var (width, height) = GetDimensions();
-        var pixels = new float[width * height];
+        var pixels = new float[GetPixelCount(width, height)];
         fixed (float* p = pixels) {
             var firstpix = new long[] { 1, 1 };
             var status = 0;
@@ -194,6 +199,14 @@ public sealed class FitsImage : IDisposable {
             }
         }
         return pixels;
+    }
+
+    private static int GetPixelCount(int width, int height) {
+        var count = (long)width * height;
+        if (count > int.MaxValue) {
+            throw new InvalidDataException($"FITS pixel count {count} exceeds the supported array limit.");
+        }
+        return (int)count;
     }
 
     /// <summary>Set or update a string-valued header card.</summary>
