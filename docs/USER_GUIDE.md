@@ -199,9 +199,15 @@ Ara assumes you're asleep while it works:
 
 ## 8. Image library and stats
 
-- **Library** organizes frames by session/target with a frame viewer (stretch presets + manual),
-  auto-rating with HFR drift, bulk operations, and **Resume Target** to pick up where a previous
-  night stopped.
+- **Library** organizes frames by session/target with a full frame viewer. Zoom and pan the
+  server-rendered preview; choose Auto STF, linear, log, asinh, square-root, histogram, or manual
+  stretch; inspect RGB/luminance/color channels; toggle OSC debayering, inversion, saturation,
+  and star annotations; then read the exact applied render values and complete capture/storage/
+  analysis metadata. Rate and tag frames in place, stream the original FITS to disk, rerun star
+  analysis, or rebuild a preview without changing source pixels. **Quarantine** is a reversible
+  catalog action for suspect frames and never deletes the source. Long operations show daemon
+  status and can be cancelled. The library also provides HFR drift, bulk operations, and
+  **Resume Target** to pick up where a previous night stopped.
 - **Stats** rolls the catalog up: per-target integration, focus-vs-temperature trends, guiding
   RMS history, frame-quality scoring, best-frames sorting, calendar heatmap, CSV export.
 

@@ -1,38 +1,1155 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/library/frame_viewer.dart';
 import '../../models/library/live_library.dart';
+import '../../state/library/frame_viewer_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/stream_save_location.dart';
 
-/// §40.5 frame viewer over the live wire model. 12f.2 shipped the pinch-zoom
-/// thumbnail + metadata; this slice adds the §65 stretched preview — a palette
-/// picker fetches the full-resolution server-rendered JPEG (`POST
-/// /frames/{id}/preview`), with the thumbnail as the instant first paint.
-/// Manual stretch sliders (§65.9) and rating/tag editing are later slices.
+/// Full Rank 1 frame viewer. Pixels remain server-owned: every control selects
+/// a non-destructive preview variant while metadata and long-operation state
+/// flow through [frameViewerProvider].
 class LiveFrameViewerScreen extends ConsumerStatefulWidget {
   final LibraryFrameItem frame;
-  const LiveFrameViewerScreen({super.key, required this.frame});
+
+  /// Test seam for the native directory picker.
+  final Future<String?> Function(String dialogTitle, String suggestedName)?
+  savePathPicker;
+
+  const LiveFrameViewerScreen({
+    super.key,
+    required this.frame,
+    this.savePathPicker,
+  });
 
   @override
   ConsumerState<LiveFrameViewerScreen> createState() =>
       _LiveFrameViewerScreenState();
 }
 
-/// Owns its TextEditingController so disposal happens with the dialog's own
-/// State (disposing in the caller races the route's exit animation).
-class _AddTagDialog extends StatefulWidget {
-  const _AddTagDialog();
+class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  CancelToken? _downloadToken;
+  bool _downloadBusy = false;
 
   @override
-  State<_AddTagDialog> createState() => _AddTagDialogState();
+  void dispose() {
+    _downloadToken?.cancel('frame viewer disposed');
+    super.dispose();
+  }
+
+  Future<void> _download() async {
+    final api = ref.read(libraryApiProvider);
+    final viewer = ref.read(frameViewerProvider(widget.frame.id)).value;
+    if (api == null ||
+        _downloadBusy ||
+        viewer?.metadata?.sourceExists != true) {
+      return;
+    }
+    final pick = widget.savePathPicker ?? pickStreamSavePath;
+    final format =
+        viewer?.metadata?.imageFormat ?? viewer?.metadata?.storage?.imageFormat;
+    final safeId = widget.frame.id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final savePath = await pick(
+      'Choose where to save the original frame',
+      'openastroara-$safeId.${_sourceExtension(format)}',
+    );
+    if (!mounted || savePath == null || savePath.trim().isEmpty) return;
+    final token = CancelToken();
+    _downloadToken = token;
+    setState(() => _downloadBusy = true);
+    try {
+      await api.downloadFrameTo(widget.frame.id, savePath, cancelToken: token);
+      if (!mounted) return;
+      final name = _pathBasename(savePath);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Saved $name')));
+    } on DioException catch (error) {
+      if (!mounted) return;
+      final message = error.type == DioExceptionType.cancel
+          ? 'Download cancelled.'
+          : 'Download failed: ${frameFailureMessage(error)}';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Download failed: ${frameFailureMessage(error)}'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadBusy = false);
+      _downloadToken = null;
+    }
+  }
+
+  void _cancelDownload() => _downloadToken?.cancel('cancelled by operator');
+
+  Future<void> _addTag() async {
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (_) => const _TextValueDialog(
+        title: 'Add tag',
+        action: 'Add',
+        hint: 'e.g. good seeing',
+        maxLength: 64,
+      ),
+    );
+    if (!mounted || tag == null || tag.isEmpty) return;
+    await ref
+        .read(frameViewerProvider(widget.frame.id).notifier)
+        .editTag(add: tag);
+  }
+
+  Future<void> _toggleQuarantine(bool currentlyQuarantined) async {
+    if (currentlyQuarantined) {
+      final restore = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Restore frame?'),
+          content: const Text(
+            'The source file was never deleted. Restore this frame to normal library use?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Restore'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || restore != true) return;
+      await ref
+          .read(frameViewerProvider(widget.frame.id).notifier)
+          .setQuarantined(false);
+      return;
+    }
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => const _TextValueDialog(
+        title: 'Quarantine frame',
+        action: 'Quarantine',
+        hint: 'Reason (cloud, trail, tracking, …)',
+        initialValue: 'Marked from WILMA frame viewer',
+        maxLength: 256,
+        destructive: true,
+      ),
+    );
+    if (!mounted || reason == null) return;
+    await ref
+        .read(frameViewerProvider(widget.frame.id).notifier)
+        .setQuarantined(true, reason: reason.isEmpty ? null : reason);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewer = ref.watch(frameViewerProvider(widget.frame.id));
+    final api = ref.watch(libraryApiProvider);
+    final thumbnailUrl = api?.thumbnailUrl(widget.frame.id);
+    final value = viewer.value;
+    final frame = value?.metadata?.frame;
+    final title = frame == null
+        ? '${widget.frame.filterName ?? widget.frame.frameType} · ${_exposure(widget.frame.exposureSeconds)}'
+        : '${frame.targetName} · ${frame.filterName ?? frame.frameType} · ${_exposure(frame.exposureSeconds)}';
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: Text(title, style: const TextStyle(fontSize: 14)),
+        actions: [
+          IconButton(
+            tooltip: 'Frame metadata',
+            onPressed: value?.metadata == null
+                ? null
+                : () => _scaffoldKey.currentState?.openEndDrawer(),
+            icon: const Icon(Icons.info_outline),
+          ),
+          if (_downloadBusy)
+            IconButton(
+              tooltip: 'Cancel download',
+              onPressed: _cancelDownload,
+              icon: const Icon(Icons.stop_circle_outlined),
+            )
+          else
+            IconButton(
+              tooltip: 'Download original frame',
+              onPressed: value?.metadata?.sourceExists == true
+                  ? _download
+                  : null,
+              icon: const Icon(Icons.download_outlined),
+            ),
+        ],
+      ),
+      endDrawer: value?.metadata == null
+          ? null
+          : Drawer(
+              child: SafeArea(
+                child: _MetadataPanel(
+                  metadata: value!.metadata!,
+                  applied: value.preview?.applied,
+                ),
+              ),
+            ),
+      body: viewer.when(
+        loading: () => _InitialLoading(thumbnailUrl: thumbnailUrl),
+        error: (error, _) => _FatalError(
+          message: frameFailureMessage(error),
+          onRetry: () => ref.invalidate(frameViewerProvider(widget.frame.id)),
+        ),
+        data: (state) => LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 900;
+            final image = _ImagePane(
+              state: state,
+              thumbnailUrl: thumbnailUrl,
+              onRetry: () => ref
+                  .read(frameViewerProvider(widget.frame.id).notifier)
+                  .retryPreview(),
+            );
+            final inspector = _Inspector(
+              frameId: widget.frame.id,
+              state: state,
+              downloadBusy: _downloadBusy,
+              onDownload: _download,
+              onCancelDownload: _cancelDownload,
+              onAddTag: _addTag,
+              onToggleQuarantine: () => _toggleQuarantine(
+                state.metadata?.frame.quarantinedUtc != null,
+              ),
+            );
+            if (wide) {
+              return Row(
+                children: [
+                  Expanded(child: image),
+                  const VerticalDivider(width: 1),
+                  SizedBox(width: 390, child: inspector),
+                ],
+              );
+            }
+            final inspectorHeight = (constraints.maxHeight * 0.46).clamp(
+              250.0,
+              430.0,
+            );
+            return Column(
+              children: [
+                Expanded(child: image),
+                const Divider(height: 1),
+                SizedBox(height: inspectorHeight, child: inspector),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
 
-class _AddTagDialogState extends State<_AddTagDialog> {
-  final _controller = TextEditingController();
+class _InitialLoading extends StatelessWidget {
+  final String? thumbnailUrl;
+  const _InitialLoading({required this.thumbnailUrl});
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      Positioned.fill(child: _PreviewImage(thumbnailUrl: thumbnailUrl)),
+      const Positioned(
+        top: 16,
+        right: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    ],
+  );
+}
+
+class _FatalError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _FatalError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.broken_image_outlined, size: 64),
+        const SizedBox(height: 12),
+        Text(message, textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+      ],
+    ),
+  );
+}
+
+class _ImagePane extends StatelessWidget {
+  final FrameViewerState state;
+  final String? thumbnailUrl;
+  final VoidCallback onRetry;
+
+  const _ImagePane({
+    required this.state,
+    required this.thumbnailUrl,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _ProgressStrip(state: state),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Semantics(
+                  label:
+                      'Astronomical frame preview. Pinch, scroll, or drag to inspect.',
+                  image: true,
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 12,
+                    boundaryMargin: const EdgeInsets.all(80),
+                    child: Center(
+                      child: _PreviewImage(
+                        bytes: state.preview?.bytes,
+                        thumbnailUrl: thumbnailUrl,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (state.previewLoading)
+                const Positioned(
+                  top: 12,
+                  right: 12,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AraColors.bgPanel,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                ),
+              if (state.previewError != null)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: Material(
+                    color: AraColors.bgPanel,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: AraColors.accentBusy,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(state.previewError!)),
+                          TextButton(
+                            onPressed: onRetry,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviewImage extends StatelessWidget {
+  final Uint8List? bytes;
+  final String? thumbnailUrl;
+  const _PreviewImage({this.bytes, this.thumbnailUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = const Icon(
+      Icons.image_outlined,
+      size: 64,
+      color: AraColors.textDisabled,
+    );
+    if (bytes != null) {
+      return Image.memory(
+        bytes!,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => fallback,
+      );
+    }
+    if (thumbnailUrl != null) {
+      return Image.network(
+        thumbnailUrl!,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => fallback,
+      );
+    }
+    return fallback;
+  }
+}
+
+class _ProgressStrip extends StatelessWidget {
+  final FrameViewerState state;
+  const _ProgressStrip({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final lifecycle = state.lifecycle;
+    final operation = state.operation;
+    return Container(
+      width: double.infinity,
+      color: AraColors.bgPanel,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              _StageChip(
+                label: 'Storage',
+                state: lifecycle.storageState,
+                progress: lifecycle.storageProgress,
+              ),
+              _StageChip(label: 'Analysis', state: lifecycle.analysisState),
+              _StageChip(label: 'Preview', state: lifecycle.previewState),
+              if (state.metadata?.frame.quarantinedUtc != null)
+                const Chip(
+                  avatar: Icon(Icons.inventory_2_outlined, size: 15),
+                  label: Text('Quarantined'),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          if (operation != null && !operation.isTerminal) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${_operationLabel(state.operationKind)} · ${operation.state}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                Text(
+                  '${operation.done}/${operation.total}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            LinearProgressIndicator(value: operation.progress),
+          ] else if (operation != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '${_operationLabel(state.operationKind)} · ${operation.state}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StageChip extends StatelessWidget {
+  final String label;
+  final String state;
+  final double? progress;
+  const _StageChip({required this.label, required this.state, this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = state.toLowerCase();
+    final failed =
+        normalized == 'failed' ||
+        normalized == 'missing' ||
+        normalized == 'partial' ||
+        normalized == 'interrupted';
+    final busy =
+        normalized == 'accepted' ||
+        normalized == 'exposing' ||
+        normalized == 'downloading' ||
+        normalized == 'persisting' ||
+        normalized == 'analyzing' ||
+        normalized == 'rendering';
+    final complete =
+        normalized == 'complete' ||
+        normalized == 'ready' ||
+        normalized == 'skipped';
+    return Chip(
+      avatar: Icon(
+        failed
+            ? Icons.error_outline
+            : busy
+            ? Icons.sync
+            : complete
+            ? Icons.check_circle_outline
+            : Icons.help_outline,
+        size: 15,
+        color: failed
+            ? AraColors.accentBusy
+            : busy
+            ? AraColors.accentBusy
+            : complete
+            ? AraColors.accentConnected
+            : AraColors.textDisabled,
+      ),
+      label: Text(
+        progress == null || !busy
+            ? '$label: $state'
+            : '$label: $state ${(progress! * 100).round()}%',
+      ),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _Inspector extends ConsumerWidget {
+  final String frameId;
+  final FrameViewerState state;
+  final bool downloadBusy;
+  final VoidCallback onDownload;
+  final VoidCallback onCancelDownload;
+  final VoidCallback onAddTag;
+  final VoidCallback onToggleQuarantine;
+
+  const _Inspector({
+    required this.frameId,
+    required this.state,
+    required this.downloadBusy,
+    required this.onDownload,
+    required this.onCancelDownload,
+    required this.onAddTag,
+    required this.onToggleQuarantine,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(frameViewerProvider(frameId).notifier);
+    final options = state.options;
+    final metadata = state.metadata;
+    final frame = metadata?.frame;
+    final operationRunning =
+        state.operation != null && !state.operation!.isTerminal;
+    final controlsBusy = state.mutationBusy;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (state.actionError != null) ...[
+            _InlineError(message: state.actionError!),
+            const SizedBox(height: 8),
+          ],
+          if (state.metadataError != null) ...[
+            _InlineError(message: state.metadataError!),
+            TextButton.icon(
+              onPressed: controller.refreshMetadata,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry metadata'),
+            ),
+          ],
+          Text('Display', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          InputDecorator(
+            key: const Key('frame-stretch-picker'),
+            decoration: const InputDecoration(
+              labelText: 'Stretch',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<FrameStretch>(
+                value: options.stretch,
+                isDense: true,
+                isExpanded: true,
+                items: [
+                  for (final value in FrameStretch.values)
+                    DropdownMenuItem(value: value, child: Text(value.label)),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    controller.setOptions(options.copyWith(stretch: value));
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          InputDecorator(
+            key: const Key('frame-channel-picker'),
+            decoration: const InputDecoration(
+              labelText: 'Channel',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<FrameChannel>(
+                value: options.channel,
+                isDense: true,
+                isExpanded: true,
+                items: [
+                  for (final value in FrameChannel.values)
+                    DropdownMenuItem(
+                      value: value,
+                      enabled:
+                          options.applyDebayer ||
+                          value == FrameChannel.luminance,
+                      child: Text(value.label),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    controller.setOptions(options.copyWith(channel: value));
+                  }
+                },
+              ),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Debayer OSC'),
+            subtitle: const Text('Display only; raw CFA stays untouched.'),
+            value: options.applyDebayer,
+            onChanged: (value) => controller.setOptions(
+              options.copyWith(
+                applyDebayer: value,
+                channel: value ? FrameChannel.rgb : FrameChannel.luminance,
+              ),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Star annotation'),
+            value: options.annotateStars,
+            onChanged: (value) =>
+                controller.setOptions(options.copyWith(annotateStars: value)),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Invert'),
+            value: options.invert,
+            onChanged: (value) =>
+                controller.setOptions(options.copyWith(invert: value)),
+          ),
+          _LabeledSlider(
+            key: const Key('frame-saturation-slider'),
+            label: 'Saturation',
+            value: options.saturation,
+            min: 0,
+            max: 2,
+            onChanged: (value) => controller.setOptions(
+              options.copyWith(saturation: value),
+              debounce: true,
+            ),
+          ),
+          if (options.stretch == FrameStretch.manual) ...[
+            _LabeledSlider(
+              key: const Key('frame-black-slider'),
+              label: 'Black',
+              value: options.blackPoint,
+              onChanged: (value) => controller.setOptions(
+                options.copyWith(
+                  blackPoint: value.clamp(0, options.whitePoint - 0.001),
+                ),
+                debounce: true,
+              ),
+            ),
+            _LabeledSlider(
+              key: const Key('frame-midtone-slider'),
+              label: 'Midtone',
+              value: options.midtonePoint,
+              onChanged: (value) => controller.setOptions(
+                options.copyWith(midtonePoint: value),
+                debounce: true,
+              ),
+            ),
+            _LabeledSlider(
+              key: const Key('frame-white-slider'),
+              label: 'White',
+              value: options.whitePoint,
+              onChanged: (value) => controller.setOptions(
+                options.copyWith(
+                  whitePoint: value.clamp(options.blackPoint + 0.001, 1),
+                ),
+                debounce: true,
+              ),
+            ),
+          ],
+          if (options.stretch == FrameStretch.asinh)
+            _LabeledSlider(
+              key: const Key('frame-asinh-slider'),
+              label: 'Asinh beta',
+              value: options.asinhBeta,
+              min: 0.1,
+              max: 20,
+              fractionDigits: 1,
+              onChanged: (value) => controller.setOptions(
+                options.copyWith(asinhBeta: value),
+                debounce: true,
+              ),
+            ),
+          if (options.stretch == FrameStretch.linear) ...[
+            _LabeledSlider(
+              label: 'Clip low',
+              value: options.linearClipLow,
+              onChanged: (value) => controller.setOptions(
+                options.copyWith(
+                  linearClipLow: value.clamp(0, options.linearClipHigh - 0.001),
+                ),
+                debounce: true,
+              ),
+            ),
+            _LabeledSlider(
+              label: 'Clip high',
+              value: options.linearClipHigh,
+              onChanged: (value) => controller.setOptions(
+                options.copyWith(
+                  linearClipHigh: value.clamp(options.linearClipLow + 0.001, 1),
+                ),
+                debounce: true,
+              ),
+            ),
+          ],
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: controller.resetPreview,
+                icon: const Icon(Icons.restart_alt, size: 16),
+                label: const Text('Reset display'),
+              ),
+              if (state.metadataRefreshing)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+            ],
+          ),
+          if (state.preview?.applied case final applied?)
+            _AppliedSummary(applied: applied),
+          const Divider(height: 24),
+          Text('Review', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          if (frame != null) ...[
+            Row(
+              children: [
+                for (var star = 1; star <= 5; star++)
+                  IconButton(
+                    tooltip: '$star stars',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: controlsBusy
+                        ? null
+                        : () => controller.setRating(
+                            star == frame.rating ? 0 : star,
+                          ),
+                    icon: Icon(
+                      star <= frame.rating ? Icons.star : Icons.star_border,
+                    ),
+                    color: star <= frame.rating
+                        ? AraColors.accentBusy
+                        : AraColors.textSecondary,
+                  ),
+              ],
+            ),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final tag in frame.tags)
+                  InputChip(
+                    label: Text(tag),
+                    visualDensity: VisualDensity.compact,
+                    onDeleted: controlsBusy
+                        ? null
+                        : () => controller.editTag(remove: tag),
+                  ),
+                ActionChip(
+                  avatar: const Icon(Icons.add, size: 14),
+                  label: const Text('tag'),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: controlsBusy ? null : onAddTag,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${frame.width}×${frame.height} · ${frame.bitDepth}-bit · '
+              'HFR ${frame.hfr?.toStringAsFixed(2) ?? '—'} · '
+              '${frame.starCount?.toString() ?? '—'} stars',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            ),
+          ],
+          const Divider(height: 24),
+          Text('Actions', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: downloadBusy
+                    ? onCancelDownload
+                    : metadata?.sourceExists == true
+                    ? onDownload
+                    : null,
+                icon: Icon(
+                  downloadBusy
+                      ? Icons.stop_circle_outlined
+                      : Icons.download_outlined,
+                ),
+                label: Text(
+                  downloadBusy ? 'Cancel download' : 'Download original',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: controlsBusy || operationRunning
+                    ? null
+                    : controller.reanalyze,
+                icon: const Icon(Icons.analytics_outlined),
+                label: const Text('Reanalyze'),
+              ),
+              OutlinedButton.icon(
+                onPressed: controlsBusy || operationRunning
+                    ? null
+                    : controller.rebuildPreview,
+                icon: const Icon(Icons.refresh_outlined),
+                label: const Text('Rebuild preview'),
+              ),
+              OutlinedButton.icon(
+                style: frame?.quarantinedUtc == null
+                    ? OutlinedButton.styleFrom(
+                        foregroundColor: AraColors.accentBusy,
+                      )
+                    : null,
+                onPressed: controlsBusy || operationRunning
+                    ? null
+                    : onToggleQuarantine,
+                icon: Icon(
+                  frame?.quarantinedUtc == null
+                      ? Icons.inventory_2_outlined
+                      : Icons.restore,
+                ),
+                label: Text(
+                  frame?.quarantinedUtc == null
+                      ? 'Quarantine'
+                      : 'Restore frame',
+                ),
+              ),
+            ],
+          ),
+          if (operationRunning) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: controlsBusy || state.operation?.state == 'cancelling'
+                  ? null
+                  : controller.cancelOperation,
+              icon: const Icon(Icons.cancel_outlined),
+              label: Text(
+                state.operation?.state == 'cancelling'
+                    ? 'Cancelling operation'
+                    : 'Cancel operation',
+              ),
+            ),
+          ],
+          if (state.operationTimedOut) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: controller.retryOperationStatus,
+              icon: const Icon(Icons.sync),
+              label: const Text('Check operation status'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AppliedSummary extends StatelessWidget {
+  final FramePreviewApplied applied;
+  const _AppliedSummary({required this.applied});
+
+  @override
+  Widget build(BuildContext context) {
+    String number(double? value) => value?.toStringAsFixed(4) ?? '—';
+    String percent(double? value) =>
+        value == null ? '—' : '${(value * 100).toStringAsFixed(3)}%';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanelAlt,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'Applied ${applied.algorithm} · ${applied.width}×${applied.height}\n'
+        'B ${number(applied.blackPoint)}  M ${number(applied.midtonePoint)}  '
+        'W ${number(applied.whitePoint)}\n'
+        'Clip ${percent(applied.linearClipLow)}–'
+        '${percent(applied.linearClipHigh)} · '
+        'Asinh β ${number(applied.asinhBeta)}\n'
+        '${applied.debayerMode} · ${applied.channelMode} · '
+        '${applied.inverted ? 'inverted' : 'normal'} · '
+        'saturation ${applied.saturation.toStringAsFixed(2)}\n'
+        '${applied.annotated ? '${applied.annotationCount} annotations' : 'no annotations'} · '
+        '${applied.rejectedAnnotationCount} rejected · '
+        'cache ${applied.cacheStatus}',
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+      ),
+    );
+  }
+}
+
+class _MetadataPanel extends StatelessWidget {
+  final FrameMetadata metadata;
+  final FramePreviewApplied? applied;
+  const _MetadataPanel({required this.metadata, required this.applied});
+
+  @override
+  Widget build(BuildContext context) {
+    final frame = metadata.frame;
+    final rows = <(String, String)>[
+      ('Frame ID', frame.id),
+      ('Session ID', frame.sessionId),
+      ('Target', frame.targetName),
+      ('Type', frame.frameType),
+      ('Filter', frame.filterName ?? '—'),
+      ('Exposure', _exposure(frame.exposureSeconds)),
+      ('Gain', frame.gain?.toString() ?? '—'),
+      ('Offset', frame.offset?.toString() ?? '—'),
+      (
+        'Sensor',
+        frame.temperatureC == null
+            ? '—'
+            : '${frame.temperatureC!.toStringAsFixed(1)}°C',
+      ),
+      (
+        'Focus',
+        frame.focuserPosition == null ? '—' : '${frame.focuserPosition} steps',
+      ),
+      ('Dimensions', '${frame.width}×${frame.height}'),
+      ('Bit depth', '${frame.bitDepth}'),
+      ('Source size', _humanBytes(frame.fileSizeBytes)),
+      ('Captured UTC', frame.capturedUtc.toIso8601String()),
+      ('HFR', frame.hfr?.toStringAsFixed(3) ?? '—'),
+      ('Stars', frame.starCount?.toString() ?? '—'),
+      ('Eccentricity', frame.eccentricity?.toStringAsFixed(3) ?? '—'),
+      ('SNR estimate', frame.snrEstimate?.toStringAsFixed(2) ?? '—'),
+      (
+        'Guiding RMS',
+        frame.guidingRmsArcsec == null
+            ? '—'
+            : '${frame.guidingRmsArcsec!.toStringAsFixed(2)}″',
+      ),
+      ('Source exists', metadata.sourceExists ? 'yes' : 'no'),
+      ('Format', metadata.imageFormat ?? '—'),
+      ('CFA pattern', metadata.cfaPattern ?? '—'),
+      ('Storage', metadata.storage?.state ?? '—'),
+      ('Analysis', metadata.analysisState ?? '—'),
+      ('Analysis version', frame.analysisVersion ?? '—'),
+      ('Preview', metadata.previewState ?? '—'),
+      ('Preview version', metadata.previewVersion ?? '—'),
+      ('Debayer', metadata.debayerMethod ?? applied?.debayerMode ?? '—'),
+      ('Source SHA-256', metadata.sourceChecksumSha256 ?? '—'),
+      if (frame.quarantinedUtc != null)
+        ('Quarantined UTC', frame.quarantinedUtc!.toIso8601String()),
+      if (frame.quarantineReason != null)
+        ('Quarantine reason', frame.quarantineReason!),
+      if (metadata.storage?.failureCode != null)
+        (
+          'Storage failure',
+          '${metadata.storage!.failureCode}: ${metadata.storage!.failureMessage ?? ''}',
+        ),
+      if (metadata.analysisFailureCode != null)
+        (
+          'Analysis failure',
+          '${metadata.analysisFailureCode}: ${metadata.analysisFailureMessage ?? ''}',
+        ),
+      if (metadata.previewFailureCode != null)
+        (
+          'Preview failure',
+          '${metadata.previewFailureCode}: ${metadata.previewFailureMessage ?? ''}',
+        ),
+    ];
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Frame metadata',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Close',
+              onPressed: () => Navigator.maybePop(context),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+        const Divider(),
+        for (final (label, value) in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                SelectableText(value),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _InlineError extends StatelessWidget {
+  final String message;
+  const _InlineError({required this.message});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: AraColors.bgPanelAlt,
+      border: Border.all(color: AraColors.accentBusy),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      message,
+      style: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: AraColors.accentBusy),
+    ),
+  );
+}
+
+class _LabeledSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int fractionDigits;
+  final ValueChanged<double> onChanged;
+
+  const _LabeledSlider({
+    super.key,
+    required this.label,
+    required this.value,
+    this.min = 0,
+    this.max = 1,
+    this.fractionDigits = 3,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ),
+      Expanded(
+        child: Slider(
+          value: value.clamp(min, max),
+          min: min,
+          max: max,
+          onChanged: onChanged,
+        ),
+      ),
+      SizedBox(
+        width: 52,
+        child: Text(
+          value.toStringAsFixed(fractionDigits),
+          textAlign: TextAlign.right,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+        ),
+      ),
+    ],
+  );
+}
+
+class _TextValueDialog extends StatefulWidget {
+  final String title;
+  final String action;
+  final String hint;
+  final String initialValue;
+  final int maxLength;
+  final bool destructive;
+
+  const _TextValueDialog({
+    required this.title,
+    required this.action,
+    required this.hint,
+    this.initialValue = '',
+    required this.maxLength,
+    this.destructive = false,
+  });
+
+  @override
+  State<_TextValueDialog> createState() => _TextValueDialogState();
+}
+
+class _TextValueDialogState extends State<_TextValueDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
 
   @override
   void dispose() {
@@ -41,469 +1158,68 @@ class _AddTagDialogState extends State<_AddTagDialog> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add tag'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      maxLength: widget.maxLength,
+      decoration: InputDecoration(hintText: widget.hint),
+      onSubmitted: (value) => Navigator.pop(context, value.trim()),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
-        FilledButton(
-            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-            child: const Text('Add')),
-      ],
-    );
-  }
+      FilledButton(
+        style: widget.destructive
+            ? FilledButton.styleFrom(backgroundColor: AraColors.accentBusy)
+            : null,
+        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+        child: Text(widget.action),
+      ),
+    ],
+  );
 }
 
-class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
-  static const _palettes = [
-    'auto_stf',
-    'linear',
-    'log',
-    'asinh',
-    'sqrt',
-    'equalized',
-    'manual',
-  ];
-
-  String _stretch = 'auto_stf';
-  Uint8List? _preview;
-  // The palette _preview was actually rendered with — on a failed re-fetch the
-  // dropdown reverts to this so the picker never claims a render that didn't
-  // happen (r1).
-  String? _loadedStretch;
-  // The knob values the visible manual render used — snapped back on a failed
-  // re-render so the sliders never disagree with the pixels (r1).
-  (double, double, double)? _loadedKnobs;
-  bool _loading = false;
-  String? _error;
-  // Guards against a slow older fetch overwriting a newer palette choice.
-  int _fetchGen = 0;
-  // Local echo of the rating after an edit (the list item is immutable).
-  late int _rating = widget.frame.rating;
-  bool _ratingBusy = false;
-  // Detail (tags + capture settings the list DTO lacks); null while loading.
-  LibraryFrameDetail? _detail;
-  bool _tagBusy = false;
-
-  // §65.9 manual stretch sliders (0–1 normalized; seeds match the server's
-  // profile defaults). Edits debounce 200 ms into a server re-render — the
-  // documented v0.0.1 UX (client-side real-time stretching is v0.1.0).
-  double _black = 0.02;
-  double _midtone = 0.5;
-  double _white = 0.98;
-  Timer? _sliderDebounce;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    _loadDetail();
-  }
-
-  Future<void> _loadDetail() async {
-    final api = ref.read(libraryApiProvider);
-    if (api == null) return;
-    try {
-      final detail = await api.frameDetail(widget.frame.id);
-      if (!mounted) return;
-      setState(() => _detail = detail);
-    } on Exception {
-      // Detail enriches the strip; the viewer stays functional without it.
-    }
-  }
-
-  Future<void> _editTags({String? add, String? remove}) async {
-    final api = ref.read(libraryApiProvider);
-    final detail = _detail;
-    if (api == null || detail == null) return;
-    setState(() => _tagBusy = true);
-    try {
-      await api.bulkTag([widget.frame.id],
-          addTags: [?add], removeTags: [?remove]);
-      if (!mounted) return;
-      final tags = [...detail.tags];
-      if (remove != null) tags.remove(remove);
-      if (add != null && !tags.contains(add)) tags.add(add);
-      setState(() {
-        _detail = LibraryFrameDetail(
-          id: detail.id,
-          gain: detail.gain,
-          offset: detail.offset,
-          temperatureC: detail.temperatureC,
-          focuserPosition: detail.focuserPosition,
-          width: detail.width,
-          height: detail.height,
-          tags: tags,
-        );
-        _tagBusy = false;
-      });
-    } on Exception catch (e) {
-      if (!mounted) return;
-      setState(() => _tagBusy = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Tag update failed: $e')));
-    }
-  }
-
-  Future<void> _promptAddTag() async {
-    final tag = await showDialog<String>(
-      context: context,
-      builder: (_) => const _AddTagDialog(),
-    );
-    if (tag == null || tag.isEmpty || !mounted) return;
-    await _editTags(add: tag);
-  }
-
-  @override
-  void dispose() {
-    _sliderDebounce?.cancel();
-    super.dispose();
-  }
-
-  void _onSliderChanged() {
-    // Coalesce drag events into one render request per 200 ms of quiet.
-    _sliderDebounce?.cancel();
-    _sliderDebounce = Timer(const Duration(milliseconds: 200), _load);
-  }
-
-  Future<void> _load() async {
-    final api = ref.read(libraryApiProvider);
-    if (api == null) return;
-    final gen = ++_fetchGen;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    final requested = _stretch;
-    try {
-      final bytes = await api.fetchPreview(
-        widget.frame.id,
-        stretch: requested,
-        blackPoint: requested == 'manual' ? _black : null,
-        midtonePoint: requested == 'manual' ? _midtone : null,
-        whitePoint: requested == 'manual' ? _white : null,
-      );
-      if (!mounted || gen != _fetchGen) return;
-      setState(() {
-        // Dio's ResponseType.bytes already yields a Uint8List — avoid copying
-        // a full-resolution image on every palette switch (r1).
-        _preview = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
-        _loadedStretch = requested;
-        if (requested == 'manual') {
-          _loadedKnobs = (_black, _midtone, _white);
-        }
-        _loading = false;
-      });
-    } on Exception catch (e) {
-      if (!mounted || gen != _fetchGen) return;
-      setState(() {
-        _loading = false;
-        _error = 'Preview unavailable: $e';
-        // Keep the last good render on screen, but snap the picker back to
-        // the palette it was actually rendered with (r1: the dropdown must
-        // never read as if the failed palette succeeded) — and the sliders
-        // back to the knobs of the visible render, so a re-drag doesn't
-        // resend the failing values and the UI matches the pixels.
-        if (_loadedStretch != null) {
-          _stretch = _loadedStretch!;
-        }
-        if (_loadedKnobs case (final b, final m, final w)) {
-          _black = b;
-          _midtone = m;
-          _white = w;
-        }
-      });
-    }
-  }
-
-  Future<void> _setRating(int rating) async {
-    final api = ref.read(libraryApiProvider);
-    if (api == null) return;
-    final previous = _rating;
-    setState(() {
-      _rating = rating; // optimistic — reverted on failure
-      _ratingBusy = true;
-    });
-    try {
-      await api.bulkRate([widget.frame.id], rating);
-      if (!mounted) return;
-      setState(() => _ratingBusy = false);
-      // The list item behind this viewer is stale now — refresh the strips.
-      ref.invalidate(sessionFramesProvider);
-    } on Exception catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _rating = previous;
-        _ratingBusy = false;
-      });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Rating failed: $e')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final api = ref.watch(libraryApiProvider);
-    final thumbUrl = api?.thumbnailUrl(widget.frame.id);
-    final f = widget.frame;
-    final exposure = f.exposureSeconds == f.exposureSeconds.roundToDouble()
-        ? f.exposureSeconds.toStringAsFixed(0)
-        : f.exposureSeconds.toString();
-    final d = _detail;
-    final rows = <(String, String)>[
-      ('Type', f.frameType),
-      ('Filter', f.filterName ?? '—'),
-      ('Exposure', '${exposure}s'),
-      if (d != null) ...[
-        ('Gain', d.gain?.toString() ?? '—'),
-        ('Offset', d.offset?.toString() ?? '—'),
-        // 0.0 may be the uncooled-camera sentinel (see LibraryFrameDetail) —
-        // rendered as-is until the server-side nullable pass lands.
-        ('Sensor', d.temperatureC != null ? '${d.temperatureC!.toStringAsFixed(1)}°C' : '—'),
-        if (d.focuserPosition != null) ('Focus', '${d.focuserPosition} steps'),
-        if (d.width > 0) ('Size', '${d.width}×${d.height}'),
-      ],
-      ('HFR', f.hfr?.toStringAsFixed(2) ?? '—'),
-      ('Stars', f.starCount?.toString() ?? '—'),
-      ('Captured', f.capturedUtc.toIso8601String()),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${f.filterName ?? f.frameType} · ${exposure}s',
-            style: const TextStyle(fontSize: 14)),
-        actions: [
-          // §65 stretch picker — server-side render per palette.
-          DropdownButton<String>(
-            value: _stretch,
-            underline: const SizedBox.shrink(),
-            items: [
-              for (final p in _palettes)
-                DropdownMenuItem(value: p, child: Text(p)),
-            ],
-            onChanged: _loading
-                ? null
-                : (v) {
-                    if (v == null || v == _stretch) return;
-                    // A pending slider debounce must not re-fetch after the
-                    // palette switch already rendered (r1).
-                    _sliderDebounce?.cancel();
-                    setState(() => _stretch = v);
-                    _load();
-                  },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: InteractiveViewer(
-                    maxScale: 8,
-                    child: Center(
-                      child: _preview != null
-                          ? Image.memory(
-                              _preview!,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                              // Undecodable bytes (truncated response) degrade
-                              // like the thumbnail path instead of a render error.
-                              errorBuilder: (_, _, _) => const Icon(
-                                  Icons.broken_image_outlined,
-                                  size: 64,
-                                  color: AraColors.textDisabled),
-                            )
-                          : thumbUrl != null
-                              ? Image.network(
-                                  thumbUrl,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, _, _) => const Icon(
-                                      Icons.broken_image_outlined,
-                                      size: 64,
-                                      color: AraColors.textDisabled),
-                                )
-                              : const Icon(Icons.image_outlined, size: 64),
-                    ),
-                  ),
-                ),
-                if (_loading)
-                  const Positioned(
-                    top: 12,
-                    right: 12,
-                    child: SizedBox(
-                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-                if (_error != null)
-                  Positioned(
-                    left: 12,
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      color: AraColors.bgPanel,
-                      child: Text(_error!,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AraColors.accentBusy)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (_stretch == 'manual')
-            Container(
-              width: double.infinity,
-              color: AraColors.bgPanelAlt,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _StretchSlider(
-                  label: 'Black',
-                  value: _black,
-                  onChanged: (v) {
-                    setState(() => _black = v.clamp(0.0, _white - 0.01));
-                    _onSliderChanged();
-                  },
-                ),
-                _StretchSlider(
-                  label: 'Midtone',
-                  value: _midtone,
-                  onChanged: (v) {
-                    setState(() => _midtone = v);
-                    _onSliderChanged();
-                  },
-                ),
-                _StretchSlider(
-                  label: 'White',
-                  value: _white,
-                  onChanged: (v) {
-                    setState(() => _white = v.clamp(_black + 0.01, 1.0));
-                    _onSliderChanged();
-                  },
-                ),
-              ]),
-            ),
-          Container(
-            width: double.infinity,
-            color: AraColors.bgPanel,
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // §40.5 rating editor — reuses the §40.8 bulk endpoint with a
-                // single id; tapping the current rating clears it.
-                Row(children: [
-                  for (var star = 1; star <= 5; star++)
-                    InkWell(
-                      onTap: _ratingBusy || api == null
-                          ? null
-                          : () => _setRating(star == _rating ? 0 : star),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Icon(
-                          star <= _rating ? Icons.star : Icons.star_border,
-                          size: 18,
-                          color: star <= _rating
-                              ? AraColors.accentBusy
-                              : AraColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  if (_ratingBusy)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: SizedBox(
-                          width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-                    ),
-                ]),
-                const SizedBox(height: 8),
-                // §40.5 tag editor — chips delete individual tags; the + chip
-                // adds one. Same single-id reuse of the §40.8 bulk endpoint.
-                if (d != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        for (final tag in d.tags)
-                          InputChip(
-                            label: Text(tag),
-                            visualDensity: VisualDensity.compact,
-                            onDeleted: _tagBusy
-                                ? null
-                                : () => _editTags(remove: tag),
-                          ),
-                        ActionChip(
-                          avatar: const Icon(Icons.add, size: 14),
-                          label: const Text('tag'),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _tagBusy ? null : _promptAddTag,
-                        ),
-                      ],
-                    ),
-                  ),
-                Wrap(
-                  spacing: 24,
-                  runSpacing: 6,
-                  children: [
-                    for (final (label, value) in rows)
-                      Text('$label: $value',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AraColors.textSecondary)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+String _exposure(double seconds) {
+  final value = seconds == seconds.roundToDouble()
+      ? seconds.toStringAsFixed(0)
+      : seconds.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
+  return '${value}s';
 }
 
-/// One labelled 0–1 stretch slider row (§65.9).
-class _StretchSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final ValueChanged<double> onChanged;
-  const _StretchSlider({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      SizedBox(
-          width: 60,
-          child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
-      Expanded(
-        child: Slider(
-          value: value.clamp(0.0, 1.0),
-          onChanged: onChanged,
-        ),
-      ),
-      SizedBox(
-          width: 44,
-          child: Text(value.toStringAsFixed(2),
-              textAlign: TextAlign.right,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary))),
-    ]);
+String _humanBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KiB';
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
   }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GiB';
 }
+
+String _sourceExtension(String? format) =>
+    switch (format?.trim().toLowerCase()) {
+      'xisf' => 'xisf',
+      'cr2' ||
+      'cr3' ||
+      'nef' ||
+      'arw' ||
+      'dng' ||
+      'raf' ||
+      'orf' ||
+      'rw2' => format!.trim().toLowerCase(),
+      _ => 'fits',
+    };
+
+String _pathBasename(String path) {
+  final name = path.split(RegExp(r'[/\\]')).last.trim();
+  return name.isEmpty ? 'frame' : name;
+}
+
+String _operationLabel(FrameOperationKind? kind) => switch (kind) {
+  FrameOperationKind.rebuildPreview => 'Preview rebuild',
+  FrameOperationKind.reanalyze => 'Reanalysis',
+  null => 'Frame operation',
+};
