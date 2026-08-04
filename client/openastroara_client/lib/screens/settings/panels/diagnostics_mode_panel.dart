@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -50,7 +51,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
       await ref.read(diagnosticsModeProvider.notifier).persistToServer(api);
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'save that'))));
     }
   }
 

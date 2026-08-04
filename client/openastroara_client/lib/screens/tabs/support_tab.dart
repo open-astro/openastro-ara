@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../util/stream_save_location.dart';
@@ -75,7 +76,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       });
     } catch (e) {
       if (!mounted || gen != _refreshGen) return;
-      setState(() => _error = 'Could not load logs: $e');
+      setState(() => _error = friendlyError(e, action: 'load the logs'));
     } finally {
       if (mounted && gen == _refreshGen) setState(() => _loading = false);
     }
@@ -100,7 +101,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
+        SnackBar(content: Text(friendlyError(e, action: 'download that'))),
       );
     } finally {
       if (mounted) setState(() => _downloading = false);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -38,7 +39,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     } catch (e) {
       // Hydration failures are non-fatal — the user can still edit + Save,
       // and a real failure will resurface on Save with a clearer error.
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -63,7 +64,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }

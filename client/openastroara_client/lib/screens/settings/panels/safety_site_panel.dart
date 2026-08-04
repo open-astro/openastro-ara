@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
@@ -42,7 +43,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       await ref.read(customHorizonProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = 'Could not load saved values: $e');
+        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
       }
     }
   }
@@ -77,7 +78,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       setState(
         () => _lastError = siteSaved
             ? 'Site preferences saved, but the horizon skyline failed: $e'
-            : 'Save failed: $e',
+            : friendlyError(e, action: 'save that'),
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/guider_equipment_choices.dart';
@@ -57,7 +58,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -95,7 +96,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
