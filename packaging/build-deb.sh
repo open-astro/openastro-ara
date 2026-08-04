@@ -43,7 +43,6 @@ cp -r "$SOURCE_TREE/." "$STAGE/"
 # Drop the publish output into /opt/openastroara within the package tree.
 mkdir -p "$STAGE/opt/openastroara"
 cp -r "$PUBLISH_DIR/." "$STAGE/opt/openastroara/"
-chmod 0755 "$STAGE/opt/openastroara/OpenAstroAra.Server"
 
 # Ship the license documents per §15/§17.2: the project license + NINA
 # lineage notice, and the generated third-party notices
@@ -72,10 +71,17 @@ done
 sed "s/@VERSION@/$VERSION/g" "$STAGE/DEBIAN/control.template" > "$STAGE/DEBIAN/control"
 rm "$STAGE/DEBIAN/control.template"
 
-# Set permissions per Debian policy:
-#   - maintainer scripts: 0755 (executable, root:root)
-#   - sudoers drop-in: 0440 (visudo requires this)
-#   - everything else: 0644 / 0755 by default from cp -r
+# Normalize source/publish umasks before applying executable exceptions. `cp -r`
+# otherwise leaks group-write bits from the checkout and execute bits from every
+# self-contained publish file into the package.
+find "$STAGE" -type d -exec chmod 0755 {} +
+find "$STAGE" -type f -exec chmod 0644 {} +
+
+# Set executable and restricted permissions per Debian policy.
+chmod 0755 "$STAGE/opt/openastroara/OpenAstroAra.Server"
+if [ -f "$STAGE/opt/openastroara/createdump" ]; then
+    chmod 0755 "$STAGE/opt/openastroara/createdump"
+fi
 chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postrm"
 chmod 0440 "$STAGE/etc/sudoers.d/openastroara"
 
