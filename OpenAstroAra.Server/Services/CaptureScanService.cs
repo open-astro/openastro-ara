@@ -55,7 +55,7 @@ public sealed record CaptureScanResult(
         new(false, reason, savePath, 0, 0);
 }
 
-public sealed partial class CaptureScanService {
+public sealed partial class CaptureScanService : IDisposable {
     private readonly IProfileStore _profile;
     private readonly IAraDatabase _db;
     private readonly ILogger<CaptureScanService> _logger;
@@ -76,6 +76,9 @@ public sealed partial class CaptureScanService {
     // inserts, and both would then catalog the same orphan (frames.file_path
     // has no unique constraint) — so scans serialize here.
     private readonly SemaphoreSlim _scanLock = new(1, 1);
+
+    // Singleton — the DI container disposes it at host shutdown.
+    public void Dispose() => _scanLock.Dispose();
 
     public async Task<CaptureScanResult> RunAsync(CancellationToken ct) {
         await _scanLock.WaitAsync(ct).ConfigureAwait(false);

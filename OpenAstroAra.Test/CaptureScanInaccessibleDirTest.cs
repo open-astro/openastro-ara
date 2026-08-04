@@ -59,6 +59,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
+            _scan.Dispose();
             // Restore permissions first or the recursive delete fails too.
             if (_lockedDir.Length > 0 && Directory.Exists(_lockedDir)) {
                 try {
