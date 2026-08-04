@@ -94,7 +94,7 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
         }
 
         var format = await DetectFormatAsync(fullPath, ct).ConfigureAwait(false);
-        LogLoadingSource(fullPath, format.ToString(), info.Length);
+        LogLoadingSource(fullPath, format, info.Length);
         return format switch {
             SourceImageFormat.Fits => await Task.Run(() => LoadFits(fullPath, ct), ct).ConfigureAwait(false),
             SourceImageFormat.Xisf => await LoadXisfAsync(fullPath, ct).ConfigureAwait(false),
@@ -320,5 +320,5 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "Loading source image {Path} as {Format} ({Bytes} bytes)")]
-    private partial void LogLoadingSource(string path, string format, long bytes);
+    private partial void LogLoadingSource(string path, SourceImageFormat format, long bytes);
 }
