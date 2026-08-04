@@ -410,19 +410,24 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Delete ${widget.count} frame(s)?'),
+      title: Text(widget.count == 1
+          ? 'Delete this frame?'
+          : 'Delete these ${widget.count} frames?'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Removes the frames from the catalog.'),
+          Text(_fromDisk
+              ? 'The FITS files are deleted for good. This can\'t be undone.'
+              : 'They leave your library. The FITS files stay on disk, so you '
+                  'can bring them back by rescanning.'),
           CheckboxListTile(
             value: _fromDisk,
             onChanged: (v) => setState(() => _fromDisk = v ?? false),
             dense: true,
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Also delete the FITS files from disk'),
+            title: const Text('Also delete the files from disk'),
           ),
         ],
       ),
@@ -435,7 +440,7 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
           style:
               FilledButton.styleFrom(backgroundColor: AraColors.accentError),
           onPressed: () => Navigator.of(context).pop(_fromDisk),
-          child: const Text('Delete'),
+          child: Text(widget.count == 1 ? 'Delete' : 'Delete ${widget.count}'),
         ),
       ],
     );
