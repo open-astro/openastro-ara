@@ -29,6 +29,13 @@ final notificationsApiProvider = Provider<NotificationsClient?>((ref) {
 /// for something that already happened and slow enough to be invisible.
 const Duration kNotificationPollInterval = Duration(minutes: 1);
 
+/// One page is 50; the rig had 57 waiting the first time this ran, so a
+/// single page would have shown 50 of them and undercounted the badge. Follow
+/// the cursor, but stop somewhere — nobody triages 500 notifications, and an
+/// inbox that never finishes loading is worse than one that admits a limit.
+const int _pageSize = 50;
+const int _maxPages = 10;
+
 /// Newest-first, dismissed entries excluded. Null = no server bound.
 class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
   int _gen = 0;
@@ -40,9 +47,29 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     final timer = Timer.periodic(kNotificationPollInterval, (_) => refresh());
     ref.onDispose(timer.cancel);
     final gen = ++_gen;
-    final page = await api.list(limit: 50);
+    final all = await _fetchAll(api);
     if (gen != _gen) return state.value;
-    return _visible(page.items);
+    return all;
+  }
+
+  /// True when the server had more than [_maxPages] pages — the list says so
+  /// rather than quietly pretending it's complete.
+  bool get truncated => _truncated;
+  bool _truncated = false;
+
+  Future<List<AraNotification>> _fetchAll(NotificationsClient api) async {
+    final acc = <AraNotification>[];
+    String? cursor;
+    var truncated = false;
+    for (var page = 0; page < _maxPages; page++) {
+      final res = await api.list(limit: _pageSize, cursor: cursor);
+      acc.addAll(res.items);
+      cursor = res.nextCursor;
+      if (!res.hasMore || cursor == null) break;
+      if (page == _maxPages - 1) truncated = true;
+    }
+    _truncated = truncated;
+    return _visible(acc);
   }
 
   static List<AraNotification> _visible(List<AraNotification> all) =>
@@ -52,8 +79,7 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     final api = ref.read(notificationsApiProvider);
     if (api == null) return;
     final gen = ++_gen;
-    final next = await AsyncValue.guard(
-        () async => _visible((await api.list(limit: 50)).items));
+    final next = await AsyncValue.guard(() => _fetchAll(api));
     if (ref.mounted && gen == _gen) state = next;
   }
 

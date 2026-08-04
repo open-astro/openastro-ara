@@ -42,14 +42,27 @@ class _FakeClient implements NotificationsClient {
   final List<String> markedRead = <String>[];
   final List<String> dismissed = <String>[];
   bool failMutations = false;
+  /// When true, serves [items] in pages of [limit] like the real server.
+  bool paginate = false;
 
   @override
   Future<CursorPage<AraNotification>> list({
     int limit = 50,
     String? cursor,
     bool? unreadOnly,
-  }) async =>
-      CursorPage(items: items, nextCursor: null, hasMore: false);
+  }) async {
+    if (!paginate) {
+      return CursorPage(items: items, nextCursor: null, hasMore: false);
+    }
+    final start = int.tryParse(cursor ?? '0') ?? 0;
+    final end = (start + limit).clamp(0, items.length);
+    final more = end < items.length;
+    return CursorPage(
+      items: items.sublist(start, end),
+      nextCursor: more ? '$end' : null,
+      hasMore: more,
+    );
+  }
 
   @override
   Future<AraNotification?> markRead(String id) async {
@@ -145,6 +158,30 @@ void main() {
     expect(client.markedRead, containsAll(<String>['a', 'b']));
     expect(client.markedRead, isNot(contains('c')));
     expect(container.read(unreadNotificationCountProvider), 0);
+  });
+
+  // The rig had 57 waiting the first time this ran. One page of 50 would have
+  // shown 50 and told the user "50 unread" — wrong by seven.
+  test('more than one page still counts every unread', () async {
+    final client = _FakeClient(
+        List.generate(57, (i) => _n('n$i')))
+      ..paginate = true;
+    final container = _container(client);
+    await container.read(savedServersProvider.future);
+    final items = await container.read(notificationInboxProvider.future);
+    expect(items, hasLength(57));
+    expect(container.read(unreadNotificationCountProvider), 57);
+    expect(container.read(notificationInboxProvider.notifier).truncated, isFalse);
+  });
+
+  test('an absurd backlog stops at a limit and admits it', () async {
+    final client = _FakeClient(List.generate(900, (i) => _n('n$i')))
+      ..paginate = true;
+    final container = _container(client);
+    await container.read(savedServersProvider.future);
+    final items = await container.read(notificationInboxProvider.future);
+    expect(items, hasLength(500), reason: '10 pages of 50, then it stops');
+    expect(container.read(notificationInboxProvider.notifier).truncated, isTrue);
   });
 
   test('severity and category survive the wire', () {

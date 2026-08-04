@@ -151,12 +151,26 @@ class _NotificationCenter extends ConsumerWidget {
                               'for you here.',
                         );
                       }
+                      final truncated = ref
+                          .read(notificationInboxProvider.notifier)
+                          .truncated;
                       return ListView.separated(
                         shrinkWrap: true,
                         padding: EdgeInsets.zero,
-                        itemCount: items.length,
+                        itemCount: items.length + (truncated ? 1 : 0),
                         separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (_, i) => _Row(item: items[i]),
+                        itemBuilder: (_, i) => i < items.length
+                            ? _Row(item: items[i])
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                child: Text(
+                                  'Showing the newest ${items.length}. Older '
+                                  'ones are still on your rig.',
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(color: AraColors.textDisabled),
+                                ),
+                              ),
                       );
                     },
                   ),
