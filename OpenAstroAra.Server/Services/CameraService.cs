@@ -870,6 +870,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 if (conditions.SkyQualityMagArcsec2 is double sqm) {
                     fits.SetHeader("SQM", sqm, "sky quality mag/arcsec^2");
                 }
+                if (conditions.SkyTemperatureC is double skyt) {
+                    fits.SetHeader("SKYTEMP", skyt, "sky temperature C");
+                }
                 if (conditions.TemperatureC is double amb) {
                     fits.SetHeader("AMBTEMP", amb, "ambient temperature C");
                 }
@@ -879,11 +882,77 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 if (conditions.DewPointC is double dew) {
                     fits.SetHeader("DEWPOINT", dew, "dew point C");
                 }
+                if (conditions.PressureHpa is double press) {
+                    fits.SetHeader("PRESSURE", press, "barometric pressure hPa");
+                }
+                if (conditions.WindSpeedMs is double wind) {
+                    fits.SetHeader("WINDSPD", wind, "wind speed m/s");
+                }
+                if (conditions.WindGustMs is double gust) {
+                    fits.SetHeader("WINDGUST", gust, "wind gust m/s");
+                }
+                if (conditions.WindDirectionDeg is double wdir) {
+                    fits.SetHeader("WINDDIR", wdir, "wind direction deg");
+                }
+                if (conditions.CloudCoverPct is double cloud) {
+                    fits.SetHeader("CLOUDCVR", cloud, "cloud cover pct");
+                }
+            }
+
+            // Where the sun and moon were — the two numbers that explain a
+            // bright background or a gradient better than any note you'd
+            // write yourself. Computed from the site, so the Site coordinates
+            // must exist; guarded by its own switch because celestial
+            // geometry at a timestamp narrows down where a frame was taken.
+            if (prefs.HeaderEphemeris && (site.LatitudeDeg != 0 || site.LongitudeDeg != 0)) {
+                WriteEphemerisHeaders(fits, site);
             }
         } catch (Exception ex) {
             LogHeaderEnrichmentFailed(ex);
         }
     }
+
+    /// <summary>
+    /// SUNALT / MOONALT / MOONILL / MOONPHSE at the moment of capture, from
+    /// SiteAstrometry — the same pure-C# math the sequencer's unattended and
+    /// resume paths already trust. Deliberately NOT the NOVAS bodies: those
+    /// P/Invoke a native library and read a JPL ephemeris file, neither of
+    /// which ships on the rig, and their absence produced confidently wrong
+    /// numbers (sun at -73 in mid-morning) rather than a clean failure.
+    /// Meeus-grade accuracy (~0.1-1 deg) is exactly right for a header.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort ephemeris for optional headers: any math fault must never fail the frame write. CA1031's log-and-recover boundary applies.")]
+    private void WriteEphemerisHeaders(FitsImage fits, SiteSettingsDto site) {
+        try {
+            var now = DateTimeOffset.UtcNow;
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(now, site.LongitudeDeg);
+            var (sunRa, sunDec) = SiteAstrometry.SunEquatorialDeg(now);
+            var sunAlt = SiteAstrometry.AltitudeFromHourAngleDeg(sunDec, site.LatitudeDeg, lst - sunRa);
+            fits.SetHeader("SUNALT", Math.Round(sunAlt, 2), "sun altitude deg");
+
+            var (moonRa, moonDec) = SiteAstrometry.MoonEquatorialDeg(now);
+            var moonAlt = SiteAstrometry.AltitudeFromHourAngleDeg(moonDec, site.LatitudeDeg, lst - moonRa);
+            fits.SetHeader("MOONALT", Math.Round(moonAlt, 2), "moon altitude deg");
+
+            var illum = SiteAstrometry.MoonIlluminatedFraction(now);
+            fits.SetHeader("MOONILL", Math.Round(illum * 100, 1), "moon illumination pct");
+            var waxing = SiteAstrometry.MoonIlluminatedFraction(now.AddHours(1)) > illum;
+            fits.SetHeader("MOONPHSE", PhaseLabel(illum, waxing), "moon phase");
+        } catch (Exception ex) {
+            LogHeaderEnrichmentFailed(ex);
+        }
+    }
+
+    /// <summary>Phase name from illuminated fraction + direction — the way a
+    /// person says it, without needing an ephemeris of phase angles.</summary>
+    private static string PhaseLabel(double illum, bool waxing) => illum switch {
+        < 0.02 => "New Moon",
+        > 0.98 => "Full Moon",
+        >= 0.47 and <= 0.53 => waxing ? "First Quarter" : "Last Quarter",
+        < 0.47 => waxing ? "Waxing Crescent" : "Waning Crescent",
+        _ => waxing ? "Waxing Gibbous" : "Waning Gibbous",
+    };
 
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
     // profile policy says abort. Best-effort by design: no profile store, an unprobeable volume,

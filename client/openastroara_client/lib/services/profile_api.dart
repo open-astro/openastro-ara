@@ -1140,6 +1140,7 @@ class ProfileApi {
         headerOptics: (j['header_optics'] as bool?) ?? true,
         headerTemperature: (j['header_temperature'] as bool?) ?? true,
         headerWeather: (j['header_weather'] as bool?) ?? true,
+        headerEphemeris: (j['header_ephemeris'] as bool?) ?? true,
       );
 
   static Map<String, dynamic> _filenamesSettingsToJson(FilenamesSettings v) => {
@@ -1150,6 +1151,7 @@ class ProfileApi {
     'header_optics': v.headerOptics,
     'header_temperature': v.headerTemperature,
     'header_weather': v.headerWeather,
+    'header_ephemeris': v.headerEphemeris,
   };
 
   static DateSeparator _dateSeparatorFromString(String? s) {

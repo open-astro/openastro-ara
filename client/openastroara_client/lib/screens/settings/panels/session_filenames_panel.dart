@@ -241,8 +241,16 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           helpKey: 'session.filenames.header_weather',
           value: fs.headerWeather,
           onChanged: fn.setHeaderWeather,
-          hint: 'Sky quality (SQM), ambient, humidity, dew point — when a '
-              'weather station is connected',
+          hint: 'Sky quality, ambient, humidity, dew point, pressure, wind, '
+              'cloud cover — when a weather station is connected',
+        ),
+        SettingsSwitchRow(
+          label: 'Sun & moon',
+          helpKey: 'session.filenames.header_ephemeris',
+          value: fs.headerEphemeris,
+          onChanged: fn.setHeaderEphemeris,
+          hint: 'Altitude of both, moon phase and illumination — computed '
+              'for your site at the moment of capture',
         ),
         const SettingsRow(
           label: 'Always written',

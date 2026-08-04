@@ -723,6 +723,18 @@ const Map<String, Help> helpRegistry = {
         'later.',
     relatedSettings: [],
   ),
+  'session.filenames.header_ephemeris': Help(
+    key: 'session.filenames.header_ephemeris',
+    title: 'Header: sun & moon',
+    body: 'Writes where the sun and moon were at the moment of capture '
+        '(SUNALT, MOONALT, MOONILL, MOONPHSE) — the two numbers that explain '
+        'a bright background or a gradient better than any note. Computed '
+        'from your site coordinates, so if you turn off the Site header for '
+        'privacy, consider this one too: celestial geometry at a timestamp '
+        'narrows down where a frame was taken.',
+    relatedSettings: ['session.filenames.header_site'],
+    keywords: ['moon', 'sun', 'phase', 'illumination', 'altitude', 'gradient'],
+  ),
   'session.filenames.compress_darks_and_bias': Help(
     key: 'session.filenames.compress_darks_and_bias',
     title: 'Compress bias + dark frames',

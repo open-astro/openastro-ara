@@ -174,7 +174,12 @@ public sealed record FilenamesSettingsDto(
     bool HeaderOptics = true,
     bool HeaderTemperature = true,
     bool HeaderWeather = true,
-    bool HeaderIdentity = true);
+    bool HeaderIdentity = true,
+    // Sun/moon altitude + moon phase. Its own switch (not part of Site)
+    // because the numbers are DERIVED from the site coordinates — celestial
+    // geometry at a timestamp constrains where a frame was taken, so turning
+    // Site off for privacy should be able to silence this too.
+    bool HeaderEphemeris = true);
 
 /// <summary>
 /// §35 safety policies — unsafe-weather + meridian-flip + altitude-limit

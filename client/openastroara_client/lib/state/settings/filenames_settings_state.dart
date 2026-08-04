@@ -29,6 +29,7 @@ class FilenamesSettings {
   final bool headerOptics;
   final bool headerTemperature;
   final bool headerWeather;
+  final bool headerEphemeris;
 
   const FilenamesSettings({
     this.dateSeparator = DateSeparator.forwardSlash,
@@ -38,6 +39,7 @@ class FilenamesSettings {
     this.headerOptics = true,
     this.headerTemperature = true,
     this.headerWeather = true,
+    this.headerEphemeris = true,
   });
 
   FilenamesSettings copyWith({
@@ -48,6 +50,7 @@ class FilenamesSettings {
     bool? headerOptics,
     bool? headerTemperature,
     bool? headerWeather,
+    bool? headerEphemeris,
   }) =>
       FilenamesSettings(
         dateSeparator: dateSeparator ?? this.dateSeparator,
@@ -58,6 +61,7 @@ class FilenamesSettings {
         headerOptics: headerOptics ?? this.headerOptics,
         headerTemperature: headerTemperature ?? this.headerTemperature,
         headerWeather: headerWeather ?? this.headerWeather,
+        headerEphemeris: headerEphemeris ?? this.headerEphemeris,
       );
 }
 
@@ -76,6 +80,8 @@ class FilenamesSettingsNotifier extends Notifier<FilenamesSettings>
   void setHeaderTemperature(bool v) =>
       state = state.copyWith(headerTemperature: v);
   void setHeaderWeather(bool v) => state = state.copyWith(headerWeather: v);
+  void setHeaderEphemeris(bool v) =>
+      state = state.copyWith(headerEphemeris: v);
 
   Future<void> hydrateFromServer(ProfileApi api) =>
       hydrateGuarded(() => api.getFilenamesSettings());
