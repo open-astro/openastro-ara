@@ -8,6 +8,7 @@ import '../../../state/settings/storage_settings_state.dart';
 import '../../../services/storage_space_api.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/storage/server_folder_picker.dart';
+import '../../../widgets/storage/storage_drive_dialog.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -100,9 +101,9 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Storage is currently on the SD card. Capture > 1 night will '
-                'wear the SD card out — connect a USB drive and click '
-                '"Reformat as ext4" to migrate. (§29 + §29.1.3 wizard)',
+                'Storage is on the SD card. Sustained capture wears SD cards '
+                'out — use "Choose drive…" below to move saving to a USB '
+                'drive or SSD (it is remounted automatically on every boot).',
               ),
             ),
           ]),
@@ -138,6 +139,17 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
               },
               icon: const Icon(Icons.folder_open, size: 16),
               label: const Text('Browse the server…'),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 280, bottom: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => showStorageDriveDialog(context, ref),
+              icon: const Icon(Icons.usb, size: 16),
+              label: const Text('Choose drive…'),
             ),
           ),
         ),

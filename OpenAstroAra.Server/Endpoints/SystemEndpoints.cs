@@ -257,6 +257,52 @@ public static class SystemEndpoints {
 
         // ─── Storage browse (§37.4/§29) — the save-directory picker's walk ───
         var storage = app.MapGroup("/api/v1/storage").WithTags("Storage");
+        // ─── §29.1.1/§29.1.3 USB store: enumerate, mount, reformat ───
+        storage.MapGet("/devices", async (IStorageDeviceService svc, CancellationToken ct) =>
+                Results.Ok(await svc.ListAsync(ct)))
+            .Produces<IReadOnlyList<StorageDeviceDto>>()
+            .WithName("ListStorageDevices")
+            .WithSummary("Block devices that could hold ARA data (the running system's disk is flagged, never offered).");
+
+        storage.MapPost("/configure", async (
+                StorageConfigureRequestDto request,
+                IStorageDeviceService svc,
+                IProfileStore profiles,
+                ActiveRunSessionRegistry runs,
+                CancellationToken ct) => {
+                if (string.IsNullOrWhiteSpace(request.Uuid)) {
+                    return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                // Never re-point (or reformat!) storage out from under a run.
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before changing the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await svc.ConfigureAsync(request.Uuid, request.Format, request.ConfirmLabel, ct)
+                    .ConfigureAwait(false);
+                if (!result.Success) {
+                    // 422 carries the helper's code so the client can offer the
+                    // right next step (e.g. not_ext4 → the reformat flow).
+                    return Results.Problem(
+                        title: result.Code,
+                        detail: result.Detail ?? result.Code,
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+                // Point capture at the freshly mounted store (§29.1.1 step 6).
+                var storageSettings = profiles.GetStorageSettings();
+                var saveDirectory = result.MountPoint ?? storageSettings.SaveDirectory;
+                profiles.PutStorageSettings(storageSettings with { SaveDirectory = saveDirectory });
+                return Results.Ok(new StorageConfigureResultDto(
+                    true, result.Code, result.Detail, result.MountPoint, saveDirectory));
+            })
+            .Produces<StorageConfigureResultDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ConfigureStorageDevice")
+            .WithSummary("Mount a drive as the ARA store (optionally reformatting it as ext4 first) and point saving at it.");
+
         storage.MapGet("/space", (IProfileStore profiles) => {
                 var configured = profiles.GetStorageSettings().SaveDirectory;
                 var isFallback = string.IsNullOrWhiteSpace(configured);

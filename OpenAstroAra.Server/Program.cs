@@ -212,6 +212,7 @@ public partial class Program {
         // reaction service stamps its outcome onto the same row. Constructor
         // activation injects both optional deps.
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
+        builder.Services.AddSingleton<IStorageDeviceService, StorageDeviceService>();
         builder.Services.AddSingleton<IFaultLogService, SqliteFaultLogService>();
         builder.Services.AddSingleton<EquipmentFaultHub>();
         builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());
