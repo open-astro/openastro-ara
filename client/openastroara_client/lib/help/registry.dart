@@ -681,6 +681,48 @@ const Map<String, Help> helpRegistry = {
         'started, so one session never splits across two folders.',
     relatedSettings: ['session.storage.filename_template'],
   ),
+  'session.filenames.header_identity': Help(
+    key: 'session.filenames.header_identity',
+    title: 'Header: who took it',
+    body: 'Writes the observer and telescope names into every frame '
+        '(OBSERVER, TELESCOP). Off, and shared frames carry no name.',
+    relatedSettings: ['session.filenames.observer', 'session.filenames.telescope'],
+  ),
+  'session.filenames.header_site': Help(
+    key: 'session.filenames.header_site',
+    title: 'Header: your site',
+    body: 'Writes your observing location into every frame (SITELAT, '
+        'SITELONG, SITEELEV). Useful for archives and airmass math — but a '
+        'frame you post publicly then carries your exact coordinates. Turn '
+        'this off if that matters to you; everything else keeps working.',
+    relatedSettings: ['safety.site.latitude_deg'],
+    keywords: ['privacy', 'location', 'coordinates', 'share'],
+  ),
+  'session.filenames.header_optics': Help(
+    key: 'session.filenames.header_optics',
+    title: 'Header: optics',
+    body: 'Writes focal length, aperture and pixel size into every frame '
+        '(FOCALLEN, APTDIA, XPIXSZ/YPIXSZ). Plate solvers and stacking '
+        'reports read these — leave it on unless you have a reason not to.',
+    relatedSettings: ['session.filenames.telescope'],
+  ),
+  'session.filenames.header_temperature': Help(
+    key: 'session.filenames.header_temperature',
+    title: 'Header: sensor temperature',
+    body: 'Writes the sensor temperature and cooler set point into every '
+        'frame (CCD-TEMP, SET-TEMP) — what lets calibration match darks to '
+        'lights by temperature.',
+    relatedSettings: [],
+  ),
+  'session.filenames.header_weather': Help(
+    key: 'session.filenames.header_weather',
+    title: 'Header: sky & weather',
+    body: 'Writes the sky the frame was taken under (SQM sky quality, '
+        'ambient temperature, humidity, dew point) whenever a weather '
+        'station is connected. Great for judging nights against each other '
+        'later.',
+    relatedSettings: [],
+  ),
   'session.filenames.compress_darks_and_bias': Help(
     key: 'session.filenames.compress_darks_and_bias',
     title: 'Compress bias + dark frames',

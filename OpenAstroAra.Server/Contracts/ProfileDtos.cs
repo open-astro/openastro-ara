@@ -165,7 +165,16 @@ public sealed record CalibrationStateDto(
 /// </summary>
 public sealed record FilenamesSettingsDto(
     string DateSeparator,
-    bool CompressDarksAndBias);
+    bool CompressDarksAndBias,
+    // §29.2 — which optional FITS header groups get written. All default on
+    // (a rich header is the right default); each is a deliberate off-switch,
+    // most notably Site: coordinates in a shared frame reveal where you live.
+    // Optional ctor defaults keep older profile.json deserializing.
+    bool HeaderSite = true,
+    bool HeaderOptics = true,
+    bool HeaderTemperature = true,
+    bool HeaderWeather = true,
+    bool HeaderIdentity = true);
 
 /// <summary>
 /// §35 safety policies — unsafe-weather + meridian-flip + altitude-limit

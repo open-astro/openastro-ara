@@ -792,10 +792,29 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// each source is guarded and zero/unset profile values are skipped.
     /// RA/DEC need the mount and land with the pointing follow-up.
     /// </summary>
+    /// <summary>All-on when the profile can't be read — a rich header is the
+    /// safe default for everything except a capture failure.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort profile read for header preferences; any store fault degrades to the all-on defaults rather than failing the write. CA1031's log-and-recover boundary applies.")]
+    private FilenamesSettingsDto ReadHeaderPrefsBestEffort() {
+        try {
+            return _profileStore?.GetFilenamesSettings()
+                ?? new FilenamesSettingsDto("forward_slash", true);
+        } catch (Exception) {
+            return new FilenamesSettingsDto("forward_slash", true);
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
     private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions) {
         try {
+            // §29.2 — the user chooses which optional groups their frames
+            // carry (Files & headers panel). All-on is the default; the off
+            // switches exist for real reasons — Site above all: coordinates
+            // in a shared frame reveal where someone lives.
+            var prefs = ReadHeaderPrefsBestEffort();
+
             fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
                 fits.SetHeader("OBJECT", targetName!, "target name");
@@ -803,38 +822,42 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             if (_device?.Name is string cam && cam.Length > 0) {
                 fits.SetHeader("INSTRUME", cam, "camera");
             }
-            if (sensorTemp is double ccd) {
-                fits.SetHeader("CCD-TEMP", ccd, "sensor temperature C");
-            }
-            if (tempSetPoint is double setp) {
-                fits.SetHeader("SET-TEMP", setp, "cooler set point C");
+            if (prefs.HeaderTemperature) {
+                if (sensorTemp is double ccd) {
+                    fits.SetHeader("CCD-TEMP", ccd, "sensor temperature C");
+                }
+                if (tempSetPoint is double setp) {
+                    fits.SetHeader("SET-TEMP", setp, "cooler set point C");
+                }
             }
 
             var profile = _profileStore;
             if (profile is null) return;
 
             var optics = profile.GetOpticsSettings();
-            if (!string.IsNullOrWhiteSpace(optics.TelescopeName)) {
+            if (prefs.HeaderIdentity && !string.IsNullOrWhiteSpace(optics.TelescopeName)) {
                 fits.SetHeader("TELESCOP", optics.TelescopeName, "telescope");
             }
-            var focal = optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1);
-            if (focal > 0) {
-                fits.SetHeader("FOCALLEN", focal, "effective focal length mm");
-            }
-            if (optics.ApertureMm > 0) {
-                fits.SetHeader("APTDIA", optics.ApertureMm, "aperture diameter mm");
-            }
-            if (optics.PixelSizeUm > 0) {
-                // Effective pixel size after binning — what plate solvers want.
-                fits.SetHeader("XPIXSZ", optics.PixelSizeUm * request.BinX, "pixel width um (binned)");
-                fits.SetHeader("YPIXSZ", optics.PixelSizeUm * request.BinY, "pixel height um (binned)");
+            if (prefs.HeaderOptics) {
+                var focal = optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1);
+                if (focal > 0) {
+                    fits.SetHeader("FOCALLEN", focal, "effective focal length mm");
+                }
+                if (optics.ApertureMm > 0) {
+                    fits.SetHeader("APTDIA", optics.ApertureMm, "aperture diameter mm");
+                }
+                if (optics.PixelSizeUm > 0) {
+                    // Effective pixel size after binning — what plate solvers want.
+                    fits.SetHeader("XPIXSZ", optics.PixelSizeUm * request.BinX, "pixel width um (binned)");
+                    fits.SetHeader("YPIXSZ", optics.PixelSizeUm * request.BinY, "pixel height um (binned)");
+                }
             }
 
             var site = profile.GetSiteSettings();
-            if (!string.IsNullOrWhiteSpace(site.ObserverName)) {
+            if (prefs.HeaderIdentity && !string.IsNullOrWhiteSpace(site.ObserverName)) {
                 fits.SetHeader("OBSERVER", site.ObserverName, "observer");
             }
-            if (site.LatitudeDeg != 0 || site.LongitudeDeg != 0) {
+            if (prefs.HeaderSite && (site.LatitudeDeg != 0 || site.LongitudeDeg != 0)) {
                 fits.SetHeader("SITELAT", site.LatitudeDeg, "observatory latitude deg");
                 fits.SetHeader("SITELONG", site.LongitudeDeg, "observatory longitude deg (E+)");
                 fits.SetHeader("SITEELEV", site.ElevationM, "observatory elevation m");
@@ -843,7 +866,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // The sky this frame was taken under, when a weather source is
             // connected. SQM feeds gradient/quality tooling; ambient explains
             // a warm sensor.
-            if (conditions is not null) {
+            if (prefs.HeaderWeather && conditions is not null) {
                 if (conditions.SkyQualityMagArcsec2 is double sqm) {
                     fits.SetHeader("SQM", sqm, "sky quality mag/arcsec^2");
                 }

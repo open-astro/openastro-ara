@@ -1135,11 +1135,21 @@ class ProfileApi {
       FilenamesSettings(
         dateSeparator: _dateSeparatorFromString(j['date_separator'] as String?),
         compressDarksAndBias: (j['compress_darks_and_bias'] as bool?) ?? true,
+        headerIdentity: (j['header_identity'] as bool?) ?? true,
+        headerSite: (j['header_site'] as bool?) ?? true,
+        headerOptics: (j['header_optics'] as bool?) ?? true,
+        headerTemperature: (j['header_temperature'] as bool?) ?? true,
+        headerWeather: (j['header_weather'] as bool?) ?? true,
       );
 
   static Map<String, dynamic> _filenamesSettingsToJson(FilenamesSettings v) => {
     'date_separator': _dateSeparatorToString(v.dateSeparator),
     'compress_darks_and_bias': v.compressDarksAndBias,
+    'header_identity': v.headerIdentity,
+    'header_site': v.headerSite,
+    'header_optics': v.headerOptics,
+    'header_temperature': v.headerTemperature,
+    'header_weather': v.headerWeather,
   };
 
   static DateSeparator _dateSeparatorFromString(String? s) {

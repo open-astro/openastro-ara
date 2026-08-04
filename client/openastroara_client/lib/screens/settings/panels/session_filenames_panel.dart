@@ -198,33 +198,57 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           parse: (v) =>
               ref.read(opticsSettingsProvider.notifier).setTelescopeName(v),
         ),
-        SettingsRow(
+        // Each group is a switch, not just a fact: your frames, your call.
+        SettingsSwitchRow(
+          label: 'Who took it',
+          helpKey: 'session.filenames.header_identity',
+          value: fs.headerIdentity,
+          onChanged: fn.setHeaderIdentity,
+          hint: 'The observer and telescope names above',
+        ),
+        SettingsSwitchRow(
           label: 'Your site',
-          value: site.latitudeDeg == 0 && site.longitudeDeg == 0
-              ? 'Not set'
+          helpKey: 'session.filenames.header_site',
+          value: fs.headerSite,
+          onChanged: fn.setHeaderSite,
+          hint: site.latitudeDeg == 0 && site.longitudeDeg == 0
+              ? 'Coordinates not set — see Where you observe'
               : '${site.latitudeDeg.toStringAsFixed(4)}°, '
                   '${site.longitudeDeg.toStringAsFixed(4)}°, '
-                  '${site.elevationM.round()} m',
-          hint: 'Edit in Location & sky → Where you observe',
+                  '${site.elevationM.round()} m — turn off before sharing '
+                  'frames if you don\'t want your location in them',
         ),
-        SettingsRow(
+        SettingsSwitchRow(
           label: 'Optics',
-          value: optics.focalLengthMm <= 0
-              ? 'Not set'
+          helpKey: 'session.filenames.header_optics',
+          value: fs.headerOptics,
+          onChanged: fn.setHeaderOptics,
+          hint: optics.focalLengthMm <= 0
+              ? 'Not set — see Imaging → Optics'
               : '${(optics.focalLengthMm * (optics.reducerFactor > 0 ? optics.reducerFactor : 1)).round()} mm'
                   '${optics.apertureMm > 0 ? ' · ${optics.apertureMm.round()} mm aperture' : ''}'
                   '${optics.pixelSizeUm > 0 ? ' · ${optics.pixelSizeUm} µm pixels' : ''}',
-          hint: 'Edit in Imaging → Optics (FOV)',
         ),
-        const SettingsRow(
-          label: 'Camera & exposure',
-          value: 'Automatic',
-          hint: 'Camera name, sensor temperature, gain, filter, binning',
+        SettingsSwitchRow(
+          label: 'Sensor temperature',
+          helpKey: 'session.filenames.header_temperature',
+          value: fs.headerTemperature,
+          onChanged: fn.setHeaderTemperature,
+          hint: 'Cooler set point and actual sensor temperature',
         ),
-        const SettingsRow(
+        SettingsSwitchRow(
           label: 'Sky & weather',
-          value: 'Automatic with a weather station',
-          hint: 'Sky quality (SQM), ambient temperature, humidity, dew point',
+          helpKey: 'session.filenames.header_weather',
+          value: fs.headerWeather,
+          onChanged: fn.setHeaderWeather,
+          hint: 'Sky quality (SQM), ambient, humidity, dew point — when a '
+              'weather station is connected',
+        ),
+        const SettingsRow(
+          label: 'Always written',
+          value: 'The essentials',
+          hint: 'Frame type, exposure, gain, filter, binning, capture time, '
+              'camera model — what calibration and plate solving need',
         ),
         const SettingsSectionHeader('Format'),
         SettingsRow(
