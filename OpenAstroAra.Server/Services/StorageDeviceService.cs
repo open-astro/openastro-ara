@@ -63,7 +63,7 @@ namespace OpenAstroAra.Server.Services {
                 return [];
             }
             var json = await RunCaptureAsync("lsblk",
-                "-J -b -o NAME,PATH,UUID,SIZE,MOUNTPOINT,LABEL,FSTYPE,TYPE,RM,TRAN,PKNAME,MODEL", ct)
+                ["-J", "-b", "-o", "NAME,PATH,UUID,SIZE,MOUNTPOINT,LABEL,FSTYPE,TYPE,RM,TRAN,PKNAME,MODEL"], ct)
                 .ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(json)) {
                 return [];
@@ -140,12 +140,12 @@ namespace OpenAstroAra.Server.Services {
         private static async Task<IReadOnlySet<string>> SystemDisksAsync(CancellationToken ct) {
             var set = new HashSet<string>(StringComparer.Ordinal);
             foreach (var target in new[] { "/", "/boot", "/boot/firmware" }) {
-                var source = (await RunCaptureAsync("findmnt", $"-no SOURCE {target}", ct).ConfigureAwait(false))?.Trim();
+                var source = (await RunCaptureAsync("findmnt", ["-no", "SOURCE", target], ct).ConfigureAwait(false))?.Trim();
                 if (string.IsNullOrEmpty(source)) {
                     continue;
                 }
                 set.Add(source);
-                var parent = (await RunCaptureAsync("lsblk", $"-no PKNAME {source}", ct).ConfigureAwait(false))?.Trim();
+                var parent = (await RunCaptureAsync("lsblk", ["-no", "PKNAME", source], ct).ConfigureAwait(false))?.Trim();
                 if (!string.IsNullOrEmpty(parent)) {
                     set.Add("/dev/" + parent);
                 }
@@ -166,11 +166,18 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "label_required",
                     "Reformatting requires the drive's current label as confirmation.", null);
             }
-            // Arguments are argv-passed (no shell), and the helper re-validates
-            // everything it is told — the API cannot talk it past its own checks.
-            var args = format
-                ? $"-n {HelperPath} --format {uuid} {expectedLabel}"
-                : $"-n {HelperPath} {uuid}";
+            // A filesystem UUID is strictly hex-and-dashes; anything else never
+            // matches a device, so reject it before it reaches a command line.
+            if (!UuidShape().IsMatch(uuid)) {
+                return new StorageConfigureResult(false, "bad_uuid",
+                    "That does not look like a filesystem UUID.", null);
+            }
+            // Arguments are argv-passed one element each (no shell, no
+            // re-splitting), and the helper re-validates everything it is
+            // told — the API cannot talk it past its own checks.
+            string[] args = format
+                ? ["-n", HelperPath, "--format", uuid, expectedLabel!]
+                : ["-n", HelperPath, uuid];
             var (exitCode, output) = await RunAsync("sudo", args, ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
@@ -203,20 +210,27 @@ namespace OpenAstroAra.Server.Services {
 
         private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 
-        private static async Task<string?> RunCaptureAsync(string file, string args, CancellationToken ct) {
+        private static async Task<string?> RunCaptureAsync(string file, string[] args, CancellationToken ct) {
             var (exitCode, output) = await RunAsync(file, args, ct).ConfigureAwait(false);
             return exitCode == 0 ? output : null;
         }
 
+        [System.Text.RegularExpressions.GeneratedRegex("^[0-9A-Fa-f-]{1,64}$")]
+        private static partial System.Text.RegularExpressions.Regex UuidShape();
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Probing external tools is best-effort: a missing/failing lsblk|findmnt|sudo must degrade to 'no devices' or a typed failure result, never crash the request. Log-and-recover boundary.")]
-        private static async Task<(int ExitCode, string Output)> RunAsync(string file, string args, CancellationToken ct) {
+        private static async Task<(int ExitCode, string Output)> RunAsync(string file, string[] args, CancellationToken ct) {
             try {
-                using var process = Process.Start(new ProcessStartInfo(file, args) {
+                var info = new ProcessStartInfo(file) {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
-                });
+                };
+                foreach (var a in args) {
+                    info.ArgumentList.Add(a);
+                }
+                using var process = Process.Start(info);
                 if (process is null) {
                     return (-1, string.Empty);
                 }
