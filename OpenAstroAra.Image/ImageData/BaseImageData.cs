@@ -19,6 +19,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.FileFormat.FITS;
+using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.FileFormat.XISF;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
@@ -555,10 +556,22 @@ namespace OpenAstroAra.Image.ImageData {
                         return await FITS.Load(new Uri(path), isBayered, imageDataFactory, ct);
 
                     default:
-                        // Non-FITS / non-XISF formats (gif/tiff/jpg/png/cr2/etc.)
-                        // pending OpenCvSharp4 + libraw integration per playbook
-                        // §line-2105 — the previous WPF BitmapDecoder + DCRaw
-                        // pipeline was deleted in the net10.0 conversion.
+                        if (LibRawDecoder.IsKnownFileExtension(Path.GetExtension(path))) {
+                            var info = new FileInfo(path);
+                            if (info.Length <= 0 || info.Length > ImageLoadLimits.Default.MaxFileBytes
+                                || info.Length > int.MaxValue) {
+                                throw new InvalidDataException(
+                                    $"RAW source size {info.Length} is outside the supported managed-buffer range.");
+                            }
+                            var rawBytes = await File.ReadAllBytesAsync(path, ct).ConfigureAwait(false);
+                            using var stream = new MemoryStream(rawBytes, writable: false);
+                            var converter = rawConverter as IRawConverter
+                                ?? new LibRawConverter(imageDataFactory);
+                            return await converter.Convert(stream, bitDepth,
+                                Path.GetExtension(path).TrimStart('.'), new ImageMetaData(), ct)
+                                .ConfigureAwait(false);
+                        }
+                        // Raster preview-only imports remain a separate source-factory slice.
                         throw new NotSupportedException($"File format {Path.GetExtension(path)} pending OpenCvSharp4 wiring.");
                 }
             }, ct);
@@ -569,7 +582,8 @@ namespace OpenAstroAra.Image.ImageData {
                 throw new FileNotFoundException();
             }
 
-            // Until OpenCvSharp4 lands, only FITS + XISF are supported headless.
+            if (LibRawDecoder.IsKnownFileExtension(Path.GetExtension(path))) return true;
+            // Until raster import lands, FITS + XISF + camera RAW are supported headless.
             var supportedExtensions = new Regex(@".*\.(xisf|fits?|fz|fts)", RegexOptions.IgnoreCase);
             return supportedExtensions.IsMatch(path);
         }
@@ -600,9 +614,6 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverter rawConverter, CancellationToken ct = default) {
-            // RawConverterFactory deleted in the net10.0 conversion; the
-            // rawConverter param is ignored until libraw replaces DCRaw per
-            // playbook §line-2105.
             return BaseImageData.FromFile(path, bitDepth, isBayered, null, this, ct);
         }
     }

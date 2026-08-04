@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
@@ -135,6 +136,10 @@ public sealed class FrameOperationsEndpointTest {
                 It.Is<FramePreviewRequestDto>(r => r.StretchPalette == "bad-request"),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ArgumentException("bad request"));
+        repo.Setup(x => x.GetPreviewAsync(It.IsAny<Guid>(),
+                It.Is<FramePreviewRequestDto>(r => r.StretchPalette == "raw-invalid"),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new RawImageDecodeException("safe native decode failure", -2));
         var http = new DefaultHttpContext();
 
         var unsupported = await ImageEndpoints.RenderFramePreviewAsync(Guid.NewGuid(),
@@ -143,12 +148,16 @@ public sealed class FrameOperationsEndpointTest {
         var invalid = await ImageEndpoints.RenderFramePreviewAsync(Guid.NewGuid(),
             Preview() with { StretchPalette = "bad-request" }, http, repo.Object,
             CancellationToken.None).ConfigureAwait(false);
+        var rawInvalid = await ImageEndpoints.RenderFramePreviewAsync(Guid.NewGuid(),
+            Preview() with { StretchPalette = "raw-invalid" }, http, repo.Object,
+            CancellationToken.None).ConfigureAwait(false);
 
         Assert.Multiple(() => {
             Assert.That(Status(unsupported), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
             Assert.That(((ProblemHttpResult)unsupported).ProblemDetails.Detail,
                 Is.EqualTo("The frame source could not be decoded."));
             Assert.That(Status(invalid), Is.EqualTo(StatusCodes.Status400BadRequest));
+            Assert.That(Status(rawInvalid), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         });
     }
 

@@ -202,6 +202,9 @@ Ara assumes you're asleep while it works:
 - **Library** organizes frames by session/target with a frame viewer (stretch presets + manual),
   auto-rating with HFR drift, bulk operations, and **Resume Target** to pick up where a previous
   night stopped.
+- Camera RAW files (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, and other formats supported by
+  LibRaw) render as linear 16-bit color. RGB/luminance/channel controls operate on LibRaw's AHD
+  output; **Download original** always returns the untouched camera file.
 - **Stats** rolls the catalog up: per-target integration, focus-vs-temperature trends, guiding
   RMS history, frame-quality scoring, best-frames sorting, calendar heatmap, CSV export.
 

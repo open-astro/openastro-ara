@@ -65,20 +65,20 @@ curl http://localhost:5555/healthz   # → "ok"
   local SDK surfaces analyzer warnings that block `dotnet run`, append
   `-p:TreatWarningsAsErrors=false` — a run-time-only relaxation that touches no files.
 
-### CFITSIO per OS
+### Native image libraries per OS
 
-The build doesn't need CFITSIO, but the capture path resolves it at runtime
-(`DllNotFoundException: 'cfitsio'` means it's missing).
+The build needs no native headers, but FITS and camera-RAW paths resolve CFITSIO
+and LibRaw at runtime.
 
-- **Linux:** `sudo apt-get install libcfitsio-dev` (Debian/Ubuntu; pulls the runtime lib).
-- **macOS (Apple Silicon):** `brew install cfitsio`. The `CopyLibCfitsioMacOS`
+- **Linux:** `sudo apt-get install libcfitsio-dev libraw-dev` (Debian/Ubuntu; pulls both runtime libraries).
+- **macOS (Apple Silicon):** `brew install cfitsio libraw`. The `CopyLibCfitsioMacOS`
   post-build target in `OpenAstroAra.Server.csproj` copies the dylib into the app's
   native runtime dir on every macOS build — needed because the .NET loader doesn't
-  search `/opt/homebrew/lib` and SIP strips `DYLD_*` vars. Just build after
-  brew-installing and it works.
+  search `/opt/homebrew/lib` and SIP strips `DYLD_*` vars. `CopyLibRawAppleSilicon`
+  copies LibRaw beside the daemon. Just build after brew-installing and it works.
 - **macOS (Intel):** the auto-copy target is Arm64-gated, so copy the dylib by hand
-  after `brew install cfitsio` (Homebrew lives at `/usr/local` on Intel, and the
-  loader probes the `osx-x64` runtime dir):
+  after `brew install cfitsio libraw` (LibRaw is copied automatically; Homebrew
+  lives at `/usr/local` on Intel, and the CFITSIO loader probes the `osx-x64` runtime dir):
 
   ```bash
   BIN=OpenAstroAra.Server/bin/Debug/net10.0/runtimes/osx-x64/native   # or bin/Release/…
@@ -90,7 +90,7 @@ The build doesn't need CFITSIO, but the capture path resolves it at runtime
 - **Windows:** untested — the deployment target is ARM64 Linux and daemon development
   happens on Linux/macOS. The client runs fine on Windows (below); if you want the
   daemon on the same machine, run it under WSL2 using the Linux steps, or put
-  `cfitsio.dll` (e.g. `vcpkg install cfitsio`) next to the built server binary and
+  `cfitsio.dll` and `libraw.dll` (e.g. `vcpkg install cfitsio libraw`) next to the built server binary and
   report how it goes.
 
 ---

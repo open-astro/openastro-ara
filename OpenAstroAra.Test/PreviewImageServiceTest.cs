@@ -91,6 +91,25 @@ public sealed class PreviewImageServiceTest {
     }
 
     [Test]
+    public async Task Decoder_identity_change_invalidates_cached_pixels() {
+        var path = WriteFits("decoder-version.fits", 12, 8, seed: 7);
+        var request = Request(path);
+        using var firstService = new PreviewImageService(_cacheRoot,
+            new IdentitySourceFactory(_sourceFactory, "decoder-a"));
+        var first = await firstService.RenderAsync(request, CancellationToken.None);
+        using var secondService = new PreviewImageService(_cacheRoot,
+            new IdentitySourceFactory(_sourceFactory, "decoder-b"));
+
+        var second = await secondService.RenderAsync(request, CancellationToken.None);
+
+        Assert.Multiple(() => {
+            Assert.That(first.CacheHit, Is.False);
+            Assert.That(second.CacheHit, Is.False);
+            Assert.That(second.Metadata.CacheKey, Is.Not.EqualTo(first.Metadata.CacheKey));
+        });
+    }
+
+    [Test]
     public async Task Every_render_control_changes_the_cache_key() {
         var path = WriteFits("controls.fits", 12, 8, "RGGB");
         using var service = Service();
@@ -371,6 +390,7 @@ public sealed class PreviewImageServiceTest {
         public CountingSourceFactory(ISourceImageDataFactory inner) => _inner = inner;
 
         public int LoadCount => Volatile.Read(ref _loadCount);
+        public string DecoderCacheIdentity => _inner.DecoderCacheIdentity;
 
         public async Task<SourceImageData> LoadAsync(string path, CancellationToken ct) {
             Interlocked.Increment(ref _loadCount);
@@ -381,5 +401,17 @@ public sealed class PreviewImageServiceTest {
         public OpenAstroAra.Image.Interfaces.IImageData CreateImageData(
                 SourceImageData source, IProfileService? profileService = null) =>
             _inner.CreateImageData(source, profileService);
+    }
+
+    private sealed class IdentitySourceFactory(
+            ISourceImageDataFactory inner, string identity) : ISourceImageDataFactory {
+        public string DecoderCacheIdentity => identity;
+
+        public Task<SourceImageData> LoadAsync(string path, CancellationToken ct) =>
+            inner.LoadAsync(path, ct);
+
+        public OpenAstroAra.Image.Interfaces.IImageData CreateImageData(
+                SourceImageData source, IProfileService? profileService = null) =>
+            inner.CreateImageData(source, profileService);
     }
 }

@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.FileFormat.XISF;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.ImageData;
@@ -29,6 +30,7 @@ namespace OpenAstroAra.Server.Services;
 public enum SourceImageFormat {
     Fits,
     Xisf,
+    Raw,
 }
 
 /// <summary>Decoded one-plane source data. Pixels are normalized to unsigned 16-bit.</summary>
@@ -40,9 +42,12 @@ public sealed record SourceImageData(
     int Height,
     int SourceBitDepth,
     string? CfaPattern,
-    ImageMetaData MetaData);
+    ImageMetaData MetaData,
+    DecodedRawImage? ColorData = null);
 
 public interface ISourceImageDataFactory {
+    string DecoderCacheIdentity { get; }
+
     Task<SourceImageData> LoadAsync(string path, CancellationToken ct);
 
     IImageData CreateImageData(SourceImageData source, IProfileService? profileService = null);
@@ -72,15 +77,20 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
     private readonly IProfileService _profileService;
     private readonly ImageLoadLimits _limits;
     private readonly ILogger<SourceImageDataFactory> _logger;
+    private readonly IRawImageDecoder _rawDecoder;
 
     public SourceImageDataFactory(IProfileService profileService,
-            ImageLoadLimits? limits = null, ILogger<SourceImageDataFactory>? logger = null) {
+            ImageLoadLimits? limits = null, ILogger<SourceImageDataFactory>? logger = null,
+            IRawImageDecoder? rawDecoder = null) {
         ArgumentNullException.ThrowIfNull(profileService);
         _profileService = profileService;
         _limits = limits ?? ImageLoadLimits.Default;
         _limits.Validate();
         _logger = logger ?? NullLogger<SourceImageDataFactory>.Instance;
+        _rawDecoder = rawDecoder ?? new LibRawDecoder();
     }
+
+    public string DecoderCacheIdentity => $"source-v3|libraw:{_rawDecoder.Version ?? "unavailable"}";
 
     public async Task<SourceImageData> LoadAsync(string path, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -94,10 +104,11 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
         }
 
         var format = await DetectFormatAsync(fullPath, ct).ConfigureAwait(false);
-        LogLoadingSource(fullPath, format.ToString(), info.Length);
+        LogLoadingSource(fullPath, format, info.Length);
         return format switch {
             SourceImageFormat.Fits => await Task.Run(() => LoadFits(fullPath, ct), ct).ConfigureAwait(false),
             SourceImageFormat.Xisf => await LoadXisfAsync(fullPath, ct).ConfigureAwait(false),
+            SourceImageFormat.Raw => await LoadRawAsync(fullPath, ct).ConfigureAwait(false),
             _ => throw new UnsupportedSourceImageFormatException("Unsupported source-image format."),
         };
     }
@@ -122,33 +133,82 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
     public async Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered,
             RawConverter rawConverter, CancellationToken ct = default) {
         var source = await LoadAsync(path, ct).ConfigureAwait(false);
-        if (isBayered && source.CfaPattern is null) {
+        if (isBayered && source.Format != SourceImageFormat.Raw && source.CfaPattern is null) {
             source = source with { CfaPattern = SensorType.RGGB.ToString() };
         }
         return CreateImageData(source);
     }
 
     private static async Task<SourceImageFormat> DetectFormatAsync(string path, CancellationToken ct) {
-        var signature = new byte[FitsSignature.Length];
+        var signature = new byte[32];
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var read = await stream.ReadAtLeastAsync(signature, FitsSignature.Length,
+        var read = await stream.ReadAtLeastAsync(signature, signature.Length,
             throwOnEndOfStream: false, ct).ConfigureAwait(false);
         if (read >= XisfSignature.Length
             && signature.AsSpan(0, XisfSignature.Length).SequenceEqual(XisfSignature)) {
             return SourceImageFormat.Xisf;
         }
-        if (read >= FitsSignature.Length && signature.AsSpan().SequenceEqual(FitsSignature)) {
+        if (read >= FitsSignature.Length
+            && signature.AsSpan(0, FitsSignature.Length).SequenceEqual(FitsSignature)) {
             return SourceImageFormat.Fits;
         }
 
         var extension = Path.GetExtension(path).ToLowerInvariant();
+        if (LooksLikeRawSignature(signature.AsSpan(0, read)) || LibRawDecoder.IsKnownFileExtension(extension)) {
+            return SourceImageFormat.Raw;
+        }
         if (extension is ".fit" or ".fits" or ".fts" or ".fz" or ".xisf") {
             throw new InvalidDataException(
                 $"Source image extension '{extension}' does not match a valid FITS or XISF signature.");
         }
         throw new UnsupportedSourceImageFormatException(
-            $"Source image format is unsupported (extension '{extension}'). Supported formats: FITS, XISF.");
+            $"Source image format is unsupported (extension '{extension}'). Supported formats: FITS, XISF, camera RAW.");
+    }
+
+    private async Task<SourceImageData> LoadRawAsync(string path, CancellationToken ct) {
+        var decoded = await _rawDecoder.DecodeFileAsync(path, _limits, ct).ConfigureAwait(false);
+        ValidateGeometry("RAW", decoded.Width, decoded.Height);
+        var red = decoded.BorrowRedPlane();
+        var green = decoded.BorrowGreenPlane();
+        var blue = decoded.BorrowBluePlane();
+        var expected = checked(decoded.Width * decoded.Height);
+        if (red.Length != expected || green.Length != expected || blue.Length != expected) {
+            throw new InvalidDataException("RAW decoded color-plane lengths do not match its dimensions.");
+        }
+        var luminance = LibRawConverter.CreateLuminance(red, green, blue, ct);
+        var metadata = new ImageMetaData {
+            GenericHeaders = [
+                new StringMetaDataHeader("RAWDECODER", $"LibRaw {decoded.DecoderVersion}"),
+                new StringMetaDataHeader("DEBAYER", decoded.DebayerMethod),
+                new IntMetaDataHeader("RAWSOURCEBITDEPTH", decoded.SourceBitDepth),
+                .. LibRawConverter.RawMetadataHeaders(decoded),
+            ],
+        };
+        var identity = string.Join(' ', new[] { decoded.CameraMake, decoded.CameraModel }
+            .Where(static value => !string.IsNullOrWhiteSpace(value)));
+        if (identity.Length > 0) metadata.Camera.Name = identity;
+        metadata.Camera.SensorType = SensorType.Color;
+        return new SourceImageData(path, SourceImageFormat.Raw, new ImageArray(luminance),
+            decoded.Width, decoded.Height, decoded.SourceBitDepth, null, metadata, decoded);
+    }
+
+    private static bool LooksLikeRawSignature(ReadOnlySpan<byte> signature) {
+        if (signature.Length >= 4
+            && ((signature[0] == (byte)'I' && signature[1] == (byte)'I'
+                 && signature[2] is 0x2a or 0x55 && signature[3] == 0)
+                || (signature[0] == (byte)'M' && signature[1] == (byte)'M'
+                    && signature[2] == 0 && signature[3] == 0x2a))) {
+            return true;
+        }
+        if (signature.StartsWith("IIRO"u8) || signature.StartsWith("MMOR"u8)
+            || signature.StartsWith("FUJIFILMCCD-RAW "u8)) {
+            return true;
+        }
+        return signature.Length >= 12
+            && signature.Slice(4, 4).SequenceEqual("ftyp"u8)
+            && (signature.Slice(8, 3).SequenceEqual("crx"u8)
+                || signature.Slice(8, 3).SequenceEqual("cr3"u8));
     }
 
     private SourceImageData LoadFits(string path, CancellationToken ct) {
@@ -320,5 +380,5 @@ public sealed partial class SourceImageDataFactory : ISourceImageDataFactory, II
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "Loading source image {Path} as {Format} ({Bytes} bytes)")]
-    private partial void LogLoadingSource(string path, string format, long bytes);
+    private partial void LogLoadingSource(string path, SourceImageFormat format, long bytes);
 }

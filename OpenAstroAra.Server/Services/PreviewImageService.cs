@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Stretch;
@@ -30,7 +31,7 @@ namespace OpenAstroAra.Server.Services;
 /// never beside source frames. Keys include source checksum/fingerprint and every render option.
 /// </summary>
 public sealed partial class PreviewImageService : IPreviewImageService, IDisposable {
-    private const int CacheSchemaVersion = 2;
+    private const int CacheSchemaVersion = 3;
     private const string JpegContentType = "image/jpeg";
 
     private readonly string _cacheRoot;
@@ -223,6 +224,7 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
         var width = source.Width;
         var height = source.Height;
         var cfaPattern = source.CfaPattern;
+        var colorData = source.ColorData;
         if (request.CropX.HasValue) {
             var cropX = request.CropX.Value;
             var cropY = request.CropY!.Value;
@@ -234,6 +236,14 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
                     nameof(request));
             }
             pixels = Crop(pixels, width, cropX, cropY, cropWidth, cropHeight);
+            if (colorData is not null) {
+                colorData = new DecodedRawImage(cropWidth, cropHeight, colorData.SourceBitDepth,
+                    Crop(colorData.BorrowRedPlane(), width, cropX, cropY, cropWidth, cropHeight),
+                    Crop(colorData.BorrowGreenPlane(), width, cropX, cropY, cropWidth, cropHeight),
+                    Crop(colorData.BorrowBluePlane(), width, cropX, cropY, cropWidth, cropHeight),
+                    colorData.DecoderVersion, colorData.DebayerMethod,
+                    colorData.CameraMake, colorData.CameraModel, colorData.OriginalCfaPattern);
+            }
             width = cropWidth;
             height = cropHeight;
             if (Debayer.TryParse(cfaPattern, out var originalPattern)) {
@@ -241,6 +251,11 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
             }
         }
 
+        if (colorData is not null) {
+            return await RenderColorAsync(colorData.BorrowRedPlane(), colorData.BorrowGreenPlane(),
+                colorData.BorrowBluePlane(), pixels, width, height, colorData.DebayerMethod,
+                request, ct).ConfigureAwait(false);
+        }
         if (request.ApplyDebayer && Debayer.TryParse(cfaPattern, out var pattern)) {
             return await RenderDebayeredAsync(pixels, width, height, pattern, request, ct)
                 .ConfigureAwait(false);
@@ -258,6 +273,42 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
         return new RenderedPreview(annotation.Bytes, outputWidth, outputHeight, detailed.AppliedParameters,
             DebayerMode: "none", ChannelMode: source.CfaPattern is null ? "luminance" : "raw_cfa",
             annotation.AnnotationCount, annotation.RejectedCount);
+    }
+
+    private async Task<RenderedPreview> RenderColorAsync(ushort[] red, ushort[] green, ushort[] blue,
+            ushort[] luminance, int width, int height, string debayerMethod,
+            PreviewRenderRequest request, CancellationToken ct) {
+        if (request.ChannelMode == PreviewChannelMode.Rgb) {
+            var applied = Stretcher.ResolveParameters(request.Algorithm, luminance, request.Parameters);
+            var redDisplay = Stretcher.ApplyResolved(request.Algorithm, red, applied);
+            var greenDisplay = Stretcher.ApplyResolved(request.Algorithm, green, applied);
+            var blueDisplay = Stretcher.ApplyResolved(request.Algorithm, blue, applied);
+            var rgb = Interleave(redDisplay, greenDisplay, blueDisplay);
+            ApplySaturation(rgb, request.Saturation);
+            if (request.Invert) Invert(rgb);
+            var annotation = await EncodeAsync(rgb, IsColor: true, luminance,
+                width, height, request, ct).ConfigureAwait(false);
+            var (Width, Height) = ScaleToFit(width, height, request.MaxDimension);
+            return new RenderedPreview(annotation.Bytes, Width, Height, applied,
+                DebayerMode: debayerMethod, ChannelMode: "rgb",
+                annotation.AnnotationCount, annotation.RejectedCount);
+        }
+
+        var plane = request.ChannelMode switch {
+            PreviewChannelMode.Red => red,
+            PreviewChannelMode.Green => green,
+            PreviewChannelMode.Blue => blue,
+            _ => luminance,
+        };
+        var detailed = Stretcher.ApplyDetailed(request.Algorithm, plane, request.Parameters);
+        if (request.Invert) Invert(detailed.Pixels);
+        var annotationResult = await EncodeAsync(detailed.Pixels, IsColor: false, luminance,
+            width, height, request, ct).ConfigureAwait(false);
+        var dimensions = ScaleToFit(width, height, request.MaxDimension);
+        return new RenderedPreview(annotationResult.Bytes, dimensions.Width, dimensions.Height,
+            detailed.AppliedParameters, DebayerMode: debayerMethod,
+            ChannelMode: request.ChannelMode.ToString().ToLowerInvariant(),
+            annotationResult.AnnotationCount, annotationResult.RejectedCount);
     }
 
     private async Task<RenderedPreview> RenderDebayeredAsync(ushort[] pixels, int width, int height,
@@ -350,10 +401,11 @@ public sealed partial class PreviewImageService : IPreviewImageService, IDisposa
         return new FileIdentity(info.Length, info.LastWriteTimeUtc.Ticks);
     }
 
-    private static string ComputeCacheKey(PreviewRenderRequest request, SourceFingerprint fingerprint) {
+    private string ComputeCacheKey(PreviewRenderRequest request, SourceFingerprint fingerprint) {
         var p = request.Parameters;
         var canonical = string.Join('|',
             CacheSchemaVersion.ToString(CultureInfo.InvariantCulture),
+            _sourceImages.DecoderCacheIdentity,
             fingerprint.ChecksumSha256,
             fingerprint.Length.ToString(CultureInfo.InvariantCulture),
             fingerprint.LastWriteUtcTicks.ToString(CultureInfo.InvariantCulture),

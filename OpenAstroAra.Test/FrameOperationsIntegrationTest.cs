@@ -70,7 +70,7 @@ public sealed class FrameOperationsIntegrationTest {
             Assert.That(metadata.PreviewChecksum, Does.Match("^[0-9a-f]{64}$"));
             Assert.That(metadata.PreviewFailureCode, Is.Null);
             Assert.That(metadata.DebayerMethod, Is.Not.Null.And.Not.Empty);
-            Assert.That(metadata.PreviewVersion, Is.EqualTo("schema-2"));
+            Assert.That(metadata.PreviewVersion, Is.EqualTo("schema-3"));
         });
         AssertEvent(WsEventCatalog.FramePreviewStarted, frameId, _sessionId);
         var ready = AssertEvent(WsEventCatalog.FramePreviewReady, frameId, _sessionId);

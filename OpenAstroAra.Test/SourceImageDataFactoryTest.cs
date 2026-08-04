@@ -17,17 +17,20 @@ using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Fits;
 using OpenAstroAra.Image.FileFormat;
+using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.FileFormat.XISF;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Stretch;
+using OpenAstroAra.Test.TestData;
 using SkiaSharp;
 using System.Text;
 
 namespace OpenAstroAra.Test;
 
-/// <summary>Rank 1 / PR 2: bounded, signature-selected FITS and XISF source loading.</summary>
+/// <summary>Rank 1: bounded, signature-selected FITS, XISF, and camera-RAW source loading.</summary>
 [TestFixture]
 public sealed class SourceImageDataFactoryTest {
     private string _root = null!;
@@ -334,6 +337,107 @@ public sealed class SourceImageDataFactoryTest {
     }
 
     [Test]
+    public async Task Camera_raw_signature_is_authoritative_and_preview_keeps_libraw_color() {
+        var path = Path.Combine(_root, "renamed-camera-source.bin");
+        await File.WriteAllBytesAsync(path, SyntheticDng.Create());
+        var factory = Factory();
+
+        var source = await factory.LoadAsync(path, CancellationToken.None);
+        var inherited = await factory.CreateFromFile(path, bitDepth: 14, isBayered: true,
+            RawConverter.DCRAW, CancellationToken.None);
+        using var service = new PreviewImageService(Path.Combine(_root, "raw-preview-cache"), factory);
+        var rgb = await service.RenderAsync(RawPreviewRequest(path, PreviewChannelMode.Rgb),
+            CancellationToken.None);
+        var red = await service.RenderAsync(RawPreviewRequest(path, PreviewChannelMode.Red),
+            CancellationToken.None);
+        var cropRequest = RawPreviewRequest(path, PreviewChannelMode.Rgb) with {
+            CropX = 7,
+            CropY = 5,
+            CropWidth = 20,
+            CropHeight = 16,
+            AnnotateStars = true,
+        };
+        var crop = await service.RenderAsync(cropRequest, CancellationToken.None);
+        using var rgbBitmap = SKBitmap.Decode(rgb.Bytes);
+        using var redBitmap = SKBitmap.Decode(red.Bytes);
+        using var cropBitmap = SKBitmap.Decode(crop.Bytes);
+
+        Assert.Multiple(() => {
+            Assert.That(source.Format, Is.EqualTo(SourceImageFormat.Raw));
+            Assert.That(source.Width, Is.EqualTo(64));
+            Assert.That(source.Height, Is.EqualTo(48));
+            Assert.That(source.CfaPattern, Is.Null);
+            Assert.That(source.ColorData, Is.Not.Null);
+            Assert.That(source.ColorData!.DebayerMethod, Is.EqualTo("libraw_ahd"));
+            Assert.That(source.ColorData.OriginalCfaPattern, Is.EqualTo("RGGB"));
+            Assert.That(source.Data.FlatArray, Has.Length.EqualTo(64 * 48));
+            Assert.That(source.MetaData.Camera.SensorType, Is.EqualTo(SensorType.Color));
+            Assert.That(source.MetaData.Camera.Name, Is.EqualTo("OpenAstro Synthetic RGGB"));
+            Assert.That(inherited.Properties.BitDepth, Is.EqualTo(16));
+            Assert.That(inherited.Properties.IsBayered, Is.False);
+            Assert.That(rgb.Metadata.DebayerMode, Is.EqualTo("libraw_ahd"));
+            Assert.That(rgb.Metadata.ChannelMode, Is.EqualTo("rgb"));
+            Assert.That(red.Metadata.ChannelMode, Is.EqualTo("red"));
+            Assert.That(rgbBitmap, Is.Not.Null);
+            Assert.That(rgbBitmap!.Width, Is.EqualTo(64));
+            Assert.That(rgbBitmap.Height, Is.EqualTo(48));
+            Assert.That(redBitmap, Is.Not.Null);
+            Assert.That(redBitmap!.Width, Is.EqualTo(64));
+            Assert.That(red.Bytes, Is.Not.EqualTo(rgb.Bytes));
+            Assert.That(cropBitmap, Is.Not.Null);
+            Assert.That(cropBitmap!.Width, Is.EqualTo(20));
+            Assert.That(cropBitmap.Height, Is.EqualTo(16));
+            Assert.That(crop.Metadata.DebayerMode, Is.EqualTo("libraw_ahd"));
+            Assert.That(crop.Metadata.Annotated, Is.True);
+        });
+    }
+
+    [Test]
+    public void Known_raw_extension_with_bad_data_has_safe_decode_error() {
+        var path = Path.Combine(_root, "broken.dng");
+        File.WriteAllText(path, "not camera raw");
+        var ex = Assert.ThrowsAsync<RawImageDecodeException>(() =>
+            Factory().LoadAsync(path, CancellationToken.None));
+        Assert.Multiple(() => {
+            Assert.That(ex!.Message, Does.StartWith("LibRaw failed to identify camera RAW data:"));
+            Assert.That(ex.Message, Does.Not.Contain(path));
+        });
+    }
+
+    [Test]
+    public async Task Repository_thumbnail_preserves_libraw_color() {
+        var path = Path.Combine(_root, "thumbnail-source.dng");
+        await File.WriteAllBytesAsync(path, SyntheticDng.Create());
+        var profile = new InMemoryProfileStore();
+        var db = new SqliteAraDatabase(_root, logger: null);
+        await db.InitializeAsync(CancellationToken.None);
+        var sessionId = Guid.NewGuid();
+        await using (var conn = db.OpenConnection()) {
+            await using var insert = conn.CreateCommand();
+            insert.CommandText = "INSERT INTO sessions (id, started_at) VALUES ($id, $started);";
+            insert.Parameters.AddWithValue("$id", sessionId.ToString("D"));
+            insert.Parameters.AddWithValue("$started", DateTimeOffset.UtcNow.ToString("O"));
+            await insert.ExecuteNonQueryAsync();
+        }
+        var repo = new SqliteFrameRepository(db, profile, sourceImages: Factory());
+        var frameId = Guid.NewGuid();
+        await repo.InsertAsync(Frame(frameId, sessionId, path), CancellationToken.None);
+
+        var thumbnail = await repo.GetThumbnailAsync(frameId, CancellationToken.None);
+        using var bitmap = SKBitmap.Decode(thumbnail!.Value.Bytes);
+        Assert.That(bitmap, Is.Not.Null);
+        var center = bitmap!.GetPixel(bitmap.Width / 2, bitmap.Height / 2);
+
+        Assert.Multiple(() => {
+            Assert.That(thumbnail.Value.ContentType, Is.EqualTo("image/jpeg"));
+            Assert.That(bitmap.Width, Is.EqualTo(64));
+            Assert.That(bitmap.Height, Is.EqualTo(48));
+            Assert.That(center.Red, Is.GreaterThan(center.Green));
+            Assert.That(center.Red, Is.GreaterThan(center.Blue));
+        });
+    }
+
+    [Test]
     public async Task Repository_preview_thumbnail_and_plate_solve_load_support_xisf() {
         var path = Path.Combine(_root, "catalog-source.xisf");
         WriteXisf(path, 8, 6, "GRBG");
@@ -398,6 +502,11 @@ public sealed class SourceImageDataFactoryTest {
 
     private SourceImageDataFactory Factory(ImageLoadLimits? limits = null) =>
         new(_profileService, limits);
+
+    private static PreviewRenderRequest RawPreviewRequest(string path, PreviewChannelMode channel) =>
+        new(Guid.NewGuid(), path, null, StretchAlgorithm.AutoStf, new StretchParams(),
+            MaxDimension: 512, ApplyDebayer: false, channel, Invert: false, Saturation: 1,
+            CropX: null, CropY: null, CropWidth: null, CropHeight: null);
 
     private static ushort[] WriteFits(string path, int width, int height, string? cfaPattern = null) {
         var pixels = Enumerable.Range(0, width * height).Select(i => (ushort)(i * 101)).ToArray();

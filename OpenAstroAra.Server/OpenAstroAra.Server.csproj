@@ -123,4 +123,20 @@
           SkipUnchangedFiles="true" ContinueOnError="true" />
   </Target>
 
+  <!-- Camera RAW uses LibRaw's stable C ABI. Homebrew libraries are outside
+       the default .NET search path, so copy the re-entrant dylib beside the
+       daemon for local macOS builds. Linux resolves the distro runtime package. -->
+  <Target Name="CopyLibRawAppleSilicon" AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64' And Exists('/opt/homebrew/lib/libraw_r.dylib')">
+    <Copy SourceFiles="/opt/homebrew/lib/libraw_r.dylib"
+          DestinationFiles="$(OutDir)libraw_r.dylib"
+          SkipUnchangedFiles="true" ContinueOnError="false" />
+  </Target>
+  <Target Name="CopyLibRawMacOSIntel" AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'X64' And Exists('/usr/local/lib/libraw_r.dylib')">
+    <Copy SourceFiles="/usr/local/lib/libraw_r.dylib"
+          DestinationFiles="$(OutDir)libraw_r.dylib"
+          SkipUnchangedFiles="true" ContinueOnError="false" />
+  </Target>
+
 </Project>

@@ -25,7 +25,7 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// §28-backed <see cref="IFrameRepository"/>. Read path queries SQLite;
 /// Mutating bulk operations update catalog rows, previews and thumbnails render
-/// bounded FITS/XISF source data, downloads stream original files, and the Rank 1 storage
+/// bounded FITS/XISF/RAW source data, downloads stream original files, and the Rank 1 storage
 /// ledger makes capture registration transactional and recoverable.
 ///
 /// Seeding: on first init, if the <c>frames</c> table is empty, three
@@ -694,7 +694,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var stretchDefaults = _profile.GetStretchDefaults();
         var algorithm = ResolveAlgorithm(null, frameType, stretchDefaults.LightDefault);
         byte[] jpeg;
-        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+        if (source.ColorData is not null) {
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(
+                StretchColor(source.ColorData.BorrowRedPlane(), source.ColorData.BorrowGreenPlane(),
+                    source.ColorData.BorrowBluePlane(), pixels, algorithm), width, height);
+        } else if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
             var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
             jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
         } else {
@@ -793,6 +797,22 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         ushort[] mosaic, int width, int height, OpenAstroAra.Stretch.BayerPattern pattern,
         OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams) =>
         OpenAstroAra.Stretch.Debayer.SuperPixelStretched(mosaic, width, height, pattern, algorithm, stretchParams);
+
+    private static byte[] StretchColor(ushort[] red, ushort[] green, ushort[] blue,
+            ushort[] luminance, OpenAstroAra.Stretch.StretchAlgorithm algorithm) {
+        var parameters = OpenAstroAra.Stretch.Stretcher.ResolveParameters(algorithm, luminance);
+        var redDisplay = OpenAstroAra.Stretch.Stretcher.ApplyResolved(algorithm, red, parameters);
+        var greenDisplay = OpenAstroAra.Stretch.Stretcher.ApplyResolved(algorithm, green, parameters);
+        var blueDisplay = OpenAstroAra.Stretch.Stretcher.ApplyResolved(algorithm, blue, parameters);
+        var rgb = new byte[checked(redDisplay.Length * 3)];
+        for (var index = 0; index < redDisplay.Length; index++) {
+            var output = index * 3;
+            rgb[output] = redDisplay[index];
+            rgb[output + 1] = greenDisplay[index];
+            rgb[output + 2] = blueDisplay[index];
+        }
+        return rgb;
+    }
 
     /// <summary>
     /// §65.2 defaults policy: frame-type auto-override beats request

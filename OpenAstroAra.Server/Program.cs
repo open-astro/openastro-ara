@@ -803,8 +803,10 @@ public partial class Program {
             new StoreBackedProfileService(
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StoreBackedProfileService>>()));
-        // Rank 1 source pipeline — one headless, bounded, signature-detected FITS/XISF
+        // Rank 1 source pipeline — one headless, bounded, signature-detected FITS/XISF/RAW
         // factory backs previews, thumbnails, and plate-solver image loading.
+        builder.Services.AddSingleton<OpenAstroAra.Image.Interfaces.IRawImageDecoder,
+            OpenAstroAra.Image.FileFormat.RAW.LibRawDecoder>();
         builder.Services.AddSingleton<SourceImageDataFactory>();
         builder.Services.AddSingleton<ISourceImageDataFactory>(sp =>
             sp.GetRequiredService<SourceImageDataFactory>());
