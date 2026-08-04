@@ -267,9 +267,7 @@ class _PanelBody extends StatelessWidget {
           panelId: panelId,
           label: findPanelInfo(panelId)?.label ?? panelId,
           note:
-              'This panel\'s form lands in a later Phase 12h sub-PR. The '
-              'settings tree navigation + Riverpod state are real today; '
-              'selecting a panel here is enough to verify the routing.',
+              'This section is not available yet.',
         ),
     };
   }

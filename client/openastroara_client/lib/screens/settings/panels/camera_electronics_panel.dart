@@ -54,7 +54,7 @@ class _CameraElectronicsPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -62,7 +62,7 @@ class _CameraElectronicsPanelState
       await ref.read(cameraElectronicsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-          const SnackBar(content: Text('Camera electronics saved to daemon.')));
+          const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = 'Save failed: $e');

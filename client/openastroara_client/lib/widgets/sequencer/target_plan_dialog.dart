@@ -187,7 +187,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
 
   String _subtitle(List<FilterPlanStep> steps) => steps
       .map((s) => '${s.filterName} ${_fmtSec(s.exposureSeconds)} × ${s.frameCount}')
-      .join('   ·   ');
+      .join(' ·   ');
 
   List<_PlanOption> _buildOptions() {
     final filters = ref.read(filterSetProvider).filters;

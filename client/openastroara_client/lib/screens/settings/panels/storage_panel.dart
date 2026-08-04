@@ -61,7 +61,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     final api = _api();
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -69,7 +69,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       await ref.read(storageSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Storage settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -175,7 +175,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           parse: n.setFilenameTemplate,
           maxLines: 2,
         ),
-        const SettingsSectionHeader('Low-disk-space warning (§29)'),
+        const SettingsSectionHeader('Warn me when space runs low'),
         EditableNumberRow(
           label: 'Warn below (GB free)',
           helpKey: 'session.storage.min_free_disk_warn_gb',
@@ -200,7 +200,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             if (gb != null) n.setMinFreeDiskCriticalGb(gb);
           },
         ),
-        const SettingsSectionHeader('Backups (§43)'),
+        const SettingsSectionHeader('Backups'),
         EditableNumberRow(
           label: 'Keep backup snapshots',
           helpKey: 'session.storage.backup_retention_count',
@@ -223,7 +223,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         // Save lives in the settings-shell header (PanelSaveRegistration) —
         // fixed chrome, always visible, no scrolling to find it.
         const SizedBox(height: 24),
-        const SettingsSectionHeader('Real-time frame backup (§44)'),
+        const SettingsSectionHeader('Copy frames to this computer as they arrive'),
         Consumer(builder: (context, ref, _) {
           final stream = ref.watch(backupStreamProvider);
           final n = ref.read(backupStreamProvider.notifier);
@@ -290,7 +290,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
             'Back up your profile configuration (settings + sequences) to a ZIP '
-            'snapshot on the daemon, download a snapshot, or restore one.',
+            'snapshot on Ara, download a snapshot, or restore one.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
         ),

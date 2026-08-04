@@ -80,7 +80,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       setState(() {
         _ok = false;
         _noServer = true;
-        _result = 'No active server — connect to a daemon first.';
+        _result = 'Connect to your rig to look for equipment.';
       });
       // Same re-gate as the failure paths below (a retry can land here after
       // an earlier success if the active server was removed meanwhile).
@@ -103,7 +103,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       if (!mounted) return;
       setState(() {
         _ok = true;
-        _result = 'AlpacaBridge reachable via the daemon — '
+        _result = 'AlpacaBridge found — '
             '${devices.length} camera(s) seen on this scan.';
       });
       _setValid(true); // §68.2 — handshake succeeded, Next unblocks
@@ -151,7 +151,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       step: 2,
       intro: 'ARA speaks ASCOM Alpaca only. INDI/INDIGO users connect through '
           'a bridge (AlpacaPi, INDIGO Sky\'s -A Alpaca server). Leave the '
-          'address blank to let the daemon auto-discover devices over UDP.',
+          'address blank to let Ara auto-discover devices over UDP.',
       children: [
         WizardTextField(
           label: 'AlpacaBridge address',
@@ -260,7 +260,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                 Text(
                   'AlpacaBridge is ARA\'s equipment hub. It should have been '
                   'installed alongside ARA Core via apt. If it wasn\'t, install '
-                  'it on the daemon host, then retry:',
+                  'it on Ara host, then retry:',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -346,7 +346,7 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
   Future<List<DiscoveredDevice>> _run() {
     final api = widget.api;
     if (api == null) {
-      return Future.error('No active server — connect to a daemon first.');
+      return Future.error('Connect to your rig to look for equipment.');
     }
     return api.discover(widget.type, forceRefresh: true);
   }
@@ -419,7 +419,7 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                       color: AraColors.textDisabled,
                       title: 'No devices found',
                       detail: 'Make sure the driver is running and reachable on '
-                          'the daemon\'s subnet, then re-scan.',
+                          'Ara\'s subnet, then re-scan.',
                       onRetry: _rescan,
                     );
                   }
@@ -435,7 +435,7 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                       return ListTile(
                         title: Text(d.name),
                         subtitle: Text(
-                          '$scheme://$host:${d.ipPort}  ·  device #${d.alpacaDeviceNumber}',
+                          '$scheme://$host:${d.ipPort} ·  device #${d.alpacaDeviceNumber}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AraColors.textSecondary,
                               ),

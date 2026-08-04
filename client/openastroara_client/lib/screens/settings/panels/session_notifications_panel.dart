@@ -53,7 +53,7 @@ class _SessionNotificationsPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -63,7 +63,7 @@ class _SessionNotificationsPanelState
           .persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Notifications saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -97,7 +97,7 @@ class _SessionNotificationsPanelState
           onChanged: n.setOsDesktop,
         ),
         SettingsSwitchRow(
-          label: 'Sound alert (§35 alarm)',
+          label: 'Play a sound for safety alerts',
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
         ),

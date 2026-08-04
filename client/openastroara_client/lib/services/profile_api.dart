@@ -155,7 +155,7 @@ class ProfileApi {
     return imagingDefaultsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's imaging-defaults section. Returns the daemon's
+  /// PUT the active profile's imaging-defaults section. Returns Ara's
   /// echo so the caller can confirm what was persisted.
   Future<ImagingDefaults> putImagingDefaults(ImagingDefaults value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -171,7 +171,7 @@ class ProfileApi {
     return opticsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's optics section. Returns the daemon's echo (it may
+  /// PUT the active profile's optics section. Returns Ara's echo (it may
   /// normalize fields — e.g. it rejects reducer_factor ≤ 0).
   Future<OpticsSettings> putOptics(OpticsSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -190,7 +190,7 @@ class ProfileApi {
     return cameraElectronicsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's camera-electronics section. Returns the daemon's
+  /// PUT the active profile's camera-electronics section. Returns Ara's
   /// echo (it validates ranges — e.g. QE peak must be in [0, 1]).
   Future<CameraElectronics> putCameraElectronics(
     CameraElectronics value,
@@ -250,7 +250,7 @@ class ProfileApi {
     return filterSetFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's planning filter set. Returns the daemon's echo
+  /// PUT the active profile's planning filter set. Returns Ara's echo
   /// (it rejects empty or duplicate case-insensitive names).
   Future<FilterSetSettings> putFilterSet(FilterSetSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -269,7 +269,7 @@ class ProfileApi {
     return _filterWheelLabelsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's filter-wheel slot labels. Returns the daemon's
+  /// PUT the active profile's filter-wheel slot labels. Returns Ara's
   /// echo (it trims each label; 400 on >32 slots or a label over 64 chars).
   Future<FilterWheelLabels> putFilterWheelLabels(
     FilterWheelLabels value,

@@ -50,7 +50,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -58,7 +58,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
       await ref.read(autofocusSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Autofocus settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -208,7 +208,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           label: 'Abort sequence if AF fails',
           value: s.abortSequenceOnAfFailure,
           onChanged: n.setAbortSequenceOnAfFailure,
-          hint: '§35 — overrideable by diagnostics-mode policy',
+          hint: 'Safety rules can override this',
         ),
         SettingsSwitchRow(
           label: 'Restore position on failure',

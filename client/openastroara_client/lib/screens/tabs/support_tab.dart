@@ -90,7 +90,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       // by chunk instead of being buffered whole in memory (§29.9 follow-up).
       final pick = widget.savePathPicker ?? pickStreamSavePath;
       final savePath =
-          await pick('Choose where to save the daemon log', 'openastroara-daemon.log');
+          await pick('Choose where to save the log', 'openastroara-server.log');
       if (!mounted || savePath == null) return;
       final name = await api.downloadLogTo(savePath);
       if (!mounted) return;
@@ -127,7 +127,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     final hasServer = ref.watch(logsApiProvider) != null;
     if (!hasServer) {
       return const Center(
-        child: Text('Connect to a server to view daemon logs.'),
+        child: Text('Connect to your rig to see its logs.'),
       );
     }
     return Column(

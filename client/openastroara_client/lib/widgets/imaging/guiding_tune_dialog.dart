@@ -110,7 +110,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   Future<void> _apply() async {
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      setState(() => _status = 'No active server — connect to a daemon first.');
+      setState(() => _status = 'Not connected — connect to your rig to save this.');
       return;
     }
     final draft = _draft;

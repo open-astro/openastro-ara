@@ -69,7 +69,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.on_unsafe',
     label: 'On unsafe weather',
-    description: 'What action to take when the §35 safety monitor reports unsafe conditions (rain, wind, clouds, humidity past dew point).',
+    description: 'What action to take when the safety monitor reports unsafe conditions (rain, wind, clouds, humidity past dew point).',
     keywords: ['unsafe', 'weather', 'pause', 'park', 'abort', 'dome', 'rain', 'wind', 'safety'],
     path: ['Settings', 'Safety', 'Policies'],
     type: SettingType.enumValue(['Pause + park', 'Park only', 'Abort + park', 'Ignore']),
@@ -178,7 +178,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.flip_safety_enabled',
-    label: 'Unattended flip safety (§58.9)',
+    label: 'Extra care on flips when you are away',
     description: 'Protects a sleeping user: a pre-flip flight check (target altitude, mount health, required equipment), an in-slew watchdog (stall + timeout abort) and a hard pier-side verification. Turn off only if this mount misreports pier side.',
     keywords: ['meridian', 'flip', 'safety', 'unattended', 'watchdog', 'flight check', 'pier side', 'overnight'],
     path: ['Settings', 'Safety', 'Policies'],
@@ -200,7 +200,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_escalation',
-    label: 'Louder alerts during dark hours (§58.10)',
+    label: 'Louder alerts overnight',
     description: 'While the site sits in astronomical darkness (sun below −18°), equipment-impacting warnings are raised one severity level (warning→error, error→critical) so the bedside alarm behaviour engages earlier for a sleeping user. Escalated messages say why; daytime severities are untouched.',
     keywords: ['unattended', 'night', 'severity', 'escalation', 'alarm', 'overnight', 'dark', 'notification', 'sleeping'],
     path: ['Settings', 'Safety', 'Policies'],
@@ -211,8 +211,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_shutdown_enabled',
-    label: 'Unattended shutdown after failure (§58.12)',
-    description: 'When a run pauses awaiting your attention (a failed meridian flip overnight) and nobody responds within the wait window, the daemon puts the rig to bed: guider stopped, mount parked, equipment disconnected, cooler warmed gently, camera disconnected last. Dismissing the alert, any command, or opening WILMA cancels the countdown. Disabling is allowed but not recommended.',
+    label: 'Put the rig to bed if nobody responds',
+    description: 'When a run pauses awaiting your attention (a failed meridian flip overnight) and nobody responds within the wait window, Ara puts the rig to bed: guider stopped, mount parked, equipment disconnected, cooler warmed gently, camera disconnected last. Dismissing the alert, any command, or opening WILMA cancels the countdown. Disabling is allowed but not recommended.',
     keywords: ['unattended', 'shutdown', 'countdown', 'overnight', 'failure', 'park', 'warm', 'cooler', 'graceful', 'sleeping', 'battery'],
     path: ['Settings', 'Safety', 'Policies'],
     type: SettingType.bool(),
@@ -233,7 +233,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.first_flip_confirmed',
-    label: 'First-flip announce (§58.8)',
+    label: 'First-flip announce',
     description: 'The very first meridian flip on a profile posts a critical alert and waits 60 seconds before proceeding — cheap insurance against a wrong pause value flipping the OTA into the tripod. Runs once; changing the optics train (or the Re-arm button here) arms it again.',
     keywords: ['meridian', 'flip', 'first', 'confirm', 'announce', 'safety', 'new profile', 're-arm', 'tripod'],
     path: ['Settings', 'Safety', 'Policies'],
@@ -245,7 +245,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.on_altitude_limit',
     label: 'On altitude limit',
-    description: 'Action when a target drops below the §37.12 minimum-altitude floor.',
+    description: 'Action when a target drops below the minimum-altitude floor.',
     keywords: ['altitude', 'limit', 'horizon', 'skip', 'pause', 'abort', 'low'],
     path: ['Settings', 'Safety', 'Policies'],
     type: SettingType.enumValue(['Skip target', 'Pause sequence', 'Abort sequence']),
@@ -275,7 +275,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.on_disk_space_critical',
     label: 'On critically-low disk',
-    description: 'Action when free space on the save volume hits the §29 critical threshold: warn only, or also abort the running sequence.',
+    description: 'Action when free space on the save volume hits the critical threshold: warn only, or also abort the running sequence.',
     keywords: ['disk', 'space', 'storage', 'full', 'critical', 'abort', 'halt', 'stop', 'sequence'],
     path: ['Settings', 'Safety', 'Policies'],
     type: SettingType.enumValue(['Warn only', 'Abort the running sequence']),
@@ -285,7 +285,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.guider_retry_timeout',
     label: 'Guider retry timeout (s)',
-    description: 'How long to keep retrying guider re-acquisition before giving up. Tied to the §54 plate-solve-failed notification trigger.',
+    description: 'How long to keep retrying guider re-acquisition before giving up. Tied to the plate-solve-failed notification trigger.',
     keywords: ['guider', 'retry', 'timeout', 'phd2', 'seconds'],
     path: ['Settings', 'Safety', 'Policies'],
     type: SettingType.intRange(min: 0, max: 600),
@@ -308,7 +308,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'diagnostics.mode',
     label: 'Diagnostics mode',
-    description: 'How Ara responds to §51 critical-severity diagnostic events (sensor temp out of range, mount drift, etc).',
+    description: 'How Ara responds to critical-severity diagnostic events (sensor temp out of range, mount drift, etc).',
     keywords: ['diagnostics', 'mode', 'severity', 'notify', 'pause', 'abort', 'critical', 'recovery'],
     path: ['Settings', 'Safety', 'Diagnostics'],
     type: SettingType.enumValue(['Notify only', 'Pause on critical', 'Abort on critical']),
@@ -544,7 +544,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.save_directory',
     label: 'Save directory',
-    description: 'Base directory where captured frames are written. The §29.1.3 ext4 wizard helps migrate from the SD card to a USB drive.',
+    description: 'Base directory where captured frames are written. The ext4 wizard helps migrate from the SD card to a USB drive.',
     keywords: ['save', 'directory', 'folder', 'path', 'storage', 'disk', 'usb', 'sd card'],
     path: ['Settings', 'Session', 'Storage'],
     type: SettingType.path(),
@@ -588,7 +588,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.min_free_disk_warn_gb',
     label: 'Low-disk warning threshold (GB)',
-    description: 'Free space on the save volume below which the daemon raises a low-disk warning. Must be above the critical threshold.',
+    description: 'Free space on the save volume below which Ara raises a low-disk warning. Must be above the critical threshold.',
     keywords: ['disk', 'space', 'storage', 'free', 'warn', 'low', 'threshold', 'gb'],
     path: ['Settings', 'Session', 'Storage'],
     type: SettingType.intRange(min: 1, max: 100000),
@@ -598,7 +598,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.min_free_disk_critical_gb',
     label: 'Critical-disk threshold (GB)',
-    description: 'Free space on the save volume below which the daemon raises a critical low-disk alert. Must be below the warning threshold.',
+    description: 'Free space on the save volume below which Ara raises a critical low-disk alert. Must be below the warning threshold.',
     keywords: ['disk', 'space', 'storage', 'free', 'critical', 'low', 'threshold', 'gb'],
     path: ['Settings', 'Session', 'Storage'],
     type: SettingType.intRange(min: 1, max: 100000),
@@ -608,7 +608,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.capture_default',
     label: 'Capture calibration after a sequence',
-    description: 'The §48 sequence-start behaviour for end-of-night calibration: ask each run (WILMA prompts), automatically capture panel flats when the run ends, generate sky flats ready for twilight, or never. The matching flats replay the night\'s own focus, gain, and offset per filter.',
+    description: 'The sequence-start behaviour for end-of-night calibration: ask each run (WILMA prompts), automatically capture panel flats when the run ends, generate sky flats ready for twilight, or never. The matching flats replay the night\'s own focus, gain, and offset per filter.',
     keywords: ['calibration', 'flats', 'auto flats', 'panel', 'sky flats', 'twilight', 'end of night', 'prompt', 'ask'],
     path: ['Settings', 'Session', 'Calibration'],
     type: SettingType.enumValue(['Ask at each sequence start', 'Panel flats at end', 'Sky flats at twilight', 'Never']),
@@ -618,7 +618,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.flat_target_adu',
     label: 'Flat target brightness (mean ADU)',
-    description: 'The mean pixel value the §48.3 auto-exposure flat probe converges to before capturing each flat set. 30000 is about 45% of 16-bit full scale — bright enough for signal, far from saturation.',
+    description: 'The mean pixel value the auto-exposure flat probe converges to before capturing each flat set. 30000 is about 45% of 16-bit full scale — bright enough for signal, far from saturation.',
     keywords: ['flats', 'adu', 'target', 'brightness', 'exposure', 'histogram', 'auto'],
     path: ['Settings', 'Session', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 65535),
@@ -658,7 +658,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.sky_flat_target_adu',
     label: 'Sky flat target brightness (mean ADU)',
-    description: 'The mean pixel value the §48.4 twilight sky-flat probe aims for. It sits between the stop-below and stop-above bounds so the daemon has room to re-probe as the sky brightens or darkens.',
+    description: 'The mean pixel value the twilight sky-flat probe aims for. It sits between the stop-below and stop-above bounds so Ara has room to re-probe as the sky brightens or darkens.',
     keywords: ['sky flats', 'twilight', 'adu', 'target', 'brightness', 'dusk', 'dawn'],
     path: ['Settings', 'Session', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 65535),
@@ -668,7 +668,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.sky_flat_frames_per_filter',
     label: 'Sky flat frames per filter',
-    description: 'Saved FLAT frames each twilight sky-flat set captures per filter. The daemon re-probes the sky before every frame because the twilight brightness drifts minute to minute.',
+    description: 'Saved FLAT frames each twilight sky-flat set captures per filter. The server re-probes the sky before every frame because the twilight brightness drifts minute to minute.',
     keywords: ['sky flats', 'twilight', 'frames', 'count', 'filter', 'per filter'],
     path: ['Settings', 'Session', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 500),
@@ -698,7 +698,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.sky_flat_stop_at_max_adu',
     label: 'Sky flat stop-above (ADU)',
-    description: 'The daemon abandons the twilight sky-flat set when the sky reads brighter than this even at the shortest exposure — dawn has grown too bright to flat against.',
+    description: 'The server abandons the twilight sky-flat set when the sky reads brighter than this even at the shortest exposure — dawn has grown too bright to flat against.',
     keywords: ['sky flats', 'twilight', 'stop', 'ceiling', 'too bright', 'adu', 'saturation'],
     path: ['Settings', 'Session', 'Calibration'],
     type: SettingType.doubleRange(min: 1, max: 65535),
@@ -708,7 +708,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.sky_flat_stop_at_min_adu',
     label: 'Sky flat stop-below (ADU)',
-    description: 'The daemon abandons the twilight sky-flat set when the sky reads darker than this even at the longest exposure — the sky has gone too dark to flat against.',
+    description: 'The server abandons the twilight sky-flat set when the sky reads darker than this even at the longest exposure — the sky has gone too dark to flat against.',
     keywords: ['sky flats', 'twilight', 'stop', 'floor', 'too dark', 'adu'],
     path: ['Settings', 'Session', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 65535),
@@ -728,7 +728,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.backup_stream',
     label: 'Stream new frames to this device',
-    description: 'Real-time backup: this desktop claims the daemon\'s backup-stream slot and mirrors every captured FITS as the night runs — verified by SHA-256 — so a mid-session imaging-drive failure costs at most the in-flight frame. One desktop at a time.',
+    description: 'Real-time backup: this desktop claims Ara\'s backup-stream slot and mirrors every captured FITS as the night runs — verified by SHA-256 — so a mid-session imaging-drive failure costs at most the in-flight frame. One desktop at a time.',
     keywords: ['backup', 'stream', 'mirror', 'real-time', 'frames', 'fits', 'sync', 'drive failure', 'usb'],
     path: ['Settings', 'Session', 'Storage'],
     type: SettingType.bool(),
@@ -755,7 +755,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.backup_retention_count',
     label: 'Keep backup snapshots',
-    description: 'How many configuration backups the daemon keeps. After each new backup, older snapshots beyond this count are deleted automatically. 0 keeps every backup forever.',
+    description: 'How many configuration backups Ara keeps. After each new backup, older snapshots beyond this count are deleted automatically. 0 keeps every backup forever.',
     keywords: ['backup', 'retention', 'prune', 'snapshots', 'keep', 'storage', 'cleanup', 'disk'],
     path: ['Settings', 'Session', 'Storage'],
     type: SettingType.intRange(min: 0, max: 1000),
@@ -789,7 +789,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.notifications.sound_alert',
     label: 'Sound alert',
-    description: 'Play the §35 alarm sound on safety/critical events. Independent of OS notification sound.',
+    description: 'Play the alarm sound on safety/critical events. Independent of OS notification sound.',
     keywords: ['sound', 'alarm', 'audio', 'alert', 'beep'],
     path: ['Settings', 'Session', 'Notifications'],
     type: SettingType.bool(),
@@ -799,7 +799,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.notifications.alarm_delay',
     label: 'Alarm delay (seconds)',
-    description: 'Seconds of silent popup before the §35.5 safety alarm tone starts looping. A user at the screen can silence it before it ever rings; default 5.',
+    description: 'Seconds of silent popup before the safety alarm tone starts looping. A user at the screen can silence it before it ever rings; default 5.',
     keywords: ['alarm', 'delay', 'safety', 'sound', 'siren', 'silent', 'popup'],
     path: ['Settings', 'Session', 'Notifications'],
     type: SettingType.intRange(min: 0, max: 300),
@@ -808,7 +808,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.notifications.alarm_tone',
     label: 'Alarm tone',
-    description: 'Which bundled tone the §35.5 safety alarm loops: two-tone siren (default), urgent beeps, or a rising chime. Device-local — each desktop picks its own.',
+    description: 'Which bundled tone the safety alarm loops: two-tone siren (default), urgent beeps, or a rising chime. Device-local — each desktop picks its own.',
     keywords: ['alarm', 'tone', 'sound', 'siren', 'beep', 'chime', 'safety'],
     path: ['Settings', 'Session', 'Notifications'],
     type: SettingType.enumValue(['Two-tone siren', 'Urgent beeps', 'Rising chime']),
@@ -880,7 +880,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.notifications.on_critical_diagnostic',
     label: 'Trigger on critical diagnostic',
-    description: 'Notify on §51 critical-severity diagnostic events (sensor temp out of range, mount drift, etc).',
+    description: 'Notify on critical-severity diagnostic events (sensor temp out of range, mount drift, etc).',
     keywords: ['diagnostic', 'critical', 'severity', 'fault', 'health', 'trigger'],
     path: ['Settings', 'Session', 'Notifications'],
     type: SettingType.bool(),
@@ -890,7 +890,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.notifications.on_safety_event',
     label: 'Trigger on safety event',
-    description: 'Notify when the §35 safety monitor reports unsafe weather, an altitude limit, or guider loss.',
+    description: 'Notify when the safety monitor reports unsafe weather, an altitude limit, or guider loss.',
     keywords: ['safety', 'weather', 'unsafe', 'park', 'alarm', 'trigger'],
     path: ['Settings', 'Session', 'Notifications'],
     type: SettingType.bool(),
@@ -910,7 +910,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.notifications.on_plate_solve_failed',
     label: 'Trigger on plate solve failed',
-    description: 'Notify when the plate solver fails N times in a row (per §35 guider-lost retry budget).',
+    description: 'Notify when the plate solver fails N times in a row (per guider-lost retry budget).',
     keywords: ['plate solve', 'failed', 'astrometry', 'astap', 'retry', 'trigger'],
     path: ['Settings', 'Session', 'Notifications'],
     type: SettingType.bool(),
@@ -962,7 +962,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.site.elevation_m',
     label: 'Elevation (m)',
-    description: 'Height above sea level. Used for atmospheric refraction corrections in §38 framing + plate-solve fitting.',
+    description: 'Height above sea level. Used for atmospheric refraction corrections in framing + plate-solve fitting.',
     keywords: ['elevation', 'altitude', 'height', 'meters', 'sea level', 'asl'],
     path: ['Settings', 'Safety', 'Site'],
     type: SettingType.doubleRange(min: -500, max: 9000, step: 1),
@@ -982,7 +982,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.site.use_custom_horizon',
     label: 'Use custom horizon polygon',
-    description: 'When on, target visibility and the planning chart use your entered azimuth/altitude skyline (§36.8) instead of the flat default-altitude floor. Enter the skyline below the toggle.',
+    description: 'When on, target visibility and the planning chart use your entered azimuth/altitude skyline instead of the flat default-altitude floor. Enter the skyline below the toggle.',
     keywords: ['horizon', 'custom', 'polygon', 'mask', 'obstruction', 'trees', 'building'],
     path: ['Settings', 'Safety', 'Site'],
     type: SettingType.bool(),
@@ -1025,7 +1025,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.site.typical_seeing_arcsec',
     label: 'Typical seeing (″)',
-    description: 'Median atmospheric seeing FWHM in arcseconds at this site. Used for §50 quality-score baselining + autofocus convergence.',
+    description: 'Median atmospheric seeing FWHM in arcseconds at this site. Used for quality-score baselining + autofocus convergence.',
     keywords: ['seeing', 'fwhm', 'atmosphere', 'turbulence', 'arcsec', 'quality'],
     path: ['Settings', 'Safety', 'Site'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
@@ -1074,8 +1074,8 @@ const List<Setting> settingsRegistry = [
     description: 'How `\$\$DATE*\$\$` tokens render: `/` produces real subdirectories per date; `_` and `-` keep dates inline in flat filenames.',
     keywords: ['date', 'separator', 'directory', 'slash', 'underscore', 'dash', 'flat', 'windows'],
     path: ['Settings', 'Session', 'Filenames'],
-    type: SettingType.enumValue(['/  (forward slash)', '_  (underscore)', '-  (dash)']),
-    defaultValue: '/  (forward slash)',
+    type: SettingType.enumValue(['/ (forward slash)', '_ (underscore)', '- (dash)']),
+    defaultValue: '/ (forward slash)',
     profilePath: 'filenames.date_separator',
   ),
   Setting(
@@ -1099,7 +1099,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.filterwheel.slot_labels',
     label: 'Filter wheel slot labels',
-    description: 'Per-slot filter names. Surface in `\$\$FILTER\$\$` filename tokens, FITS-header FILTER values, sequence per-filter exposure blocks, and §29.2 calibration-set indexing.',
+    description: 'Per-slot filter names. Surface in `\$\$FILTER\$\$` filename tokens, FITS-header FILTER values, sequence per-filter exposure blocks, and calibration-set indexing.',
     keywords: ['filter', 'slot', 'label', 'wheel', 'efw', 'name', 'l', 'r', 'g', 'b', 'ha', 'oiii', 'sii'],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.complex(),
@@ -1117,7 +1117,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.camera.auto_connect',
     label: 'Camera auto-connect on boot',
-    description: 'Connect to the camera when the daemon starts. Safe — connection only powers up the USB link, no exposure starts.',
+    description: 'Connect to the camera when Ara starts. Safe — connection only powers up the USB link, no exposure starts.',
     keywords: ['camera', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Camera'],
     type: SettingType.bool(),
@@ -1127,7 +1127,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.mount.auto_connect',
     label: 'Mount auto-connect on boot',
-    description: 'Connect to the mount when the daemon starts. Sidereal tracking comes on per §57 mount-safety policy.',
+    description: 'Connect to the mount when Ara starts. Sidereal tracking comes on per mount-safety policy.',
     keywords: ['mount', 'telescope', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Mount'],
     type: SettingType.bool(),
@@ -1137,7 +1137,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.focuser.auto_connect',
     label: 'Focuser auto-connect on boot',
-    description: 'Connect to the focuser when the daemon starts. Position is read on connect; no movement triggered.',
+    description: 'Connect to the focuser when Ara starts. Position is read on connect; no movement triggered.',
     keywords: ['focuser', 'focus', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Focuser'],
     type: SettingType.bool(),
@@ -1147,7 +1147,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.filterwheel.auto_connect',
     label: 'Filter wheel auto-connect on boot',
-    description: 'Connect to the filter wheel when the daemon starts. Moves to last-known slot on connect.',
+    description: 'Connect to the filter wheel when Ara starts. Moves to last-known slot on connect.',
     keywords: ['filter wheel', 'efw', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
@@ -1157,7 +1157,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.rotator.auto_connect',
     label: 'Rotator auto-connect on boot',
-    description: 'Connect to the rotator when the daemon starts. Position is read on connect; no movement triggered.',
+    description: 'Connect to the rotator when Ara starts. Position is read on connect; no movement triggered.',
     keywords: ['rotator', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Rotator'],
     type: SettingType.bool(),
@@ -1167,7 +1167,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.auto_connect',
     label: 'Guider auto-connect on boot',
-    description: 'Connect to the guider when the daemon starts. Starts the OpenAstro Guider client process — defaults off because some users prefer manual OpenAstro Guider launch.',
+    description: 'Connect to the guider when Ara starts. Starts the OpenAstro Guider client process — defaults off because some users prefer manual OpenAstro Guider launch.',
     keywords: ['guider', 'phd2', 'guide', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
@@ -1177,7 +1177,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.flat.auto_connect',
     label: 'Flat panel auto-connect on boot',
-    description: 'Connect to the flat-panel device (Alpaca CoverCalibrator) when the daemon starts. Connection alone doesn\'t change cover position.',
+    description: 'Connect to the flat-panel device (Alpaca CoverCalibrator) when Ara starts. Connection alone doesn\'t change cover position.',
     keywords: ['flat', 'panel', 'covercalibrator', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Flat Panel'],
     type: SettingType.bool(),
@@ -1187,7 +1187,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.dome.auto_connect',
     label: 'Dome auto-connect on boot',
-    description: 'Connect to the dome when the daemon starts. Defaults off — some dome drivers move the shutter or rotate to home on connect.',
+    description: 'Connect to the dome when Ara starts. Defaults off — some dome drivers move the shutter or rotate to home on connect.',
     keywords: ['dome', 'shutter', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
@@ -1197,7 +1197,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.weather.auto_connect',
     label: 'Weather auto-connect on boot',
-    description: 'Connect to the weather station when the daemon starts. Defaults off — keeps the polling loop quiet until you actively want safety-monitor data.',
+    description: 'Connect to the weather station when Ara starts. Defaults off — keeps the polling loop quiet until you actively want safety-monitor data.',
     keywords: ['weather', 'auto-connect', 'connect', 'boot', 'startup', 'polling'],
     path: ['Settings', 'Equipment', 'Weather'],
     type: SettingType.bool(),
@@ -1207,7 +1207,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.safety.auto_connect',
     label: 'Safety monitor auto-connect on boot',
-    description: 'Connect to the safety monitor when the daemon starts. Recommended on for unattended observatories.',
+    description: 'Connect to the safety monitor when Ara starts. Recommended on for unattended observatories.',
     keywords: ['safety', 'monitor', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Safety Monitor'],
     type: SettingType.bool(),
@@ -1230,7 +1230,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.autofocus.telescope_type',
     label: 'Telescope type',
-    description: 'Your optical design (§59.4). Smart Focus reads different defocus features per design — donut diameters on obstructed scopes, FWHM patterns on refractors — and can resolve which side of focus you are on. "Other / unknown" keeps the universal HFR-only behaviour.',
+    description: 'Your optical design. Smart Focus reads different defocus features per design — donut diameters on obstructed scopes, FWHM patterns on refractors — and can resolve which side of focus you are on. "Other / unknown" keeps the universal HFR-only behaviour.',
     keywords: ['telescope', 'scope', 'optical design', 'SCT', 'refractor', 'newtonian', 'RC', 'maksutov'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.enumValue(['Refractor', 'Schmidt-Cassegrain (SCT)', 'Maksutov-Cassegrain', 'Ritchey-Chrétien (RC)', 'Newtonian', 'Other / unknown']),
@@ -1362,8 +1362,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.path_or_endpoint',
-    label: 'Path / endpoint',
-    description: 'Local executable path for ASTAP/PlateSolve2 or HTTP endpoint for astrometry.net. Default `/usr/bin/astap` for Debian/RPi.',
+    label: 'Where to find the solver',
+    description: 'Where the solver lives: the program path for ASTAP or PlateSolve2, or the web address for astrometry.net. Installed with Ara by default.',
     keywords: ['path', 'endpoint', 'executable', 'url', 'solver'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.path(),
@@ -1468,7 +1468,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.host',
     label: 'OpenAstro Guider host',
-    description: 'Hostname or IP where OpenAstro Guider is running. Default `localhost` for same-machine setups; use the daemon\'s LAN IP for remote OpenAstro Guider.',
+    description: 'Hostname or IP where OpenAstro Guider is running. Default `localhost` for same-machine setups; use Ara\'s LAN IP for remote OpenAstro Guider.',
     keywords: ['phd2', 'host', 'hostname', 'ip', 'guider', 'remote'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1645,7 +1645,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.camera',
     label: 'Guide camera',
-    description: 'Which camera the guider daemon should use, picked from the daemon\'s own device list. Blank keeps the daemon\'s current selection.',
+    description: 'Which camera the guider server should use, picked from Ara\'s own device list. Blank keeps Ara\'s current selection.',
     keywords: ['guide', 'camera', 'guider', 'equipment', 'phd2', 'select', 'device'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1655,7 +1655,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.camera_id',
     label: 'Guide camera ID',
-    description: 'Optional device ID to disambiguate duplicate camera names in the guider daemon\'s list. Blank keeps the daemon\'s current selection.',
+    description: 'Optional device ID to disambiguate duplicate camera names in the guider server\'s list. Blank keeps Ara\'s current selection.',
     keywords: ['guide', 'camera', 'id', 'guider', 'equipment', 'phd2', 'duplicate'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1665,7 +1665,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.mount',
     label: 'Guide mount',
-    description: 'Which mount connection the guider daemon should send guide pulses through, picked from the daemon\'s own device list. Blank keeps the daemon\'s current selection.',
+    description: 'Which mount connection the guider server should send guide pulses through, picked from Ara\'s own device list. Blank keeps Ara\'s current selection.',
     keywords: ['guide', 'mount', 'guider', 'equipment', 'phd2', 'pulse', 'select'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1675,7 +1675,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.aux_mount',
     label: 'Guider aux mount',
-    description: 'Auxiliary mount connection for pointing info when the primary guide "mount" is an on-camera ST-4 link. Blank keeps the daemon\'s current selection.',
+    description: 'Auxiliary mount connection for pointing info when the primary guide "mount" is an on-camera ST-4 link. Blank keeps Ara\'s current selection.',
     keywords: ['aux', 'mount', 'auxiliary', 'guider', 'equipment', 'phd2', 'st4', 'pointing'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1685,7 +1685,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.rotator',
     label: 'Guider rotator',
-    description: 'Rotator the guider daemon should track for calibration-angle compensation, picked from the daemon\'s own device list. Blank keeps the daemon\'s current selection.',
+    description: 'Rotator the guider server should track for calibration-angle compensation, picked from Ara\'s own device list. Blank keeps Ara\'s current selection.',
     keywords: ['rotator', 'guider', 'equipment', 'phd2', 'angle', 'select'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1695,7 +1695,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.alpaca_host',
     label: 'Guider Alpaca host',
-    description: 'Alpaca server host the guider daemon\'s Alpaca devices connect through. Use "Discover Alpaca" to sweep the guider\'s network. Blank keeps the daemon\'s current setting.',
+    description: 'Alpaca server host the guider server\'s Alpaca devices connect through. Use "Discover Alpaca" to sweep the guider\'s network. Blank keeps Ara\'s current setting.',
     keywords: ['alpaca', 'host', 'guider', 'equipment', 'phd2', 'discover', 'server'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1705,7 +1705,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.alpaca_port',
     label: 'Guider Alpaca port',
-    description: 'Alpaca server port for the guider daemon\'s Alpaca devices. 0 keeps the daemon\'s current setting; 11111 is the common Alpaca default.',
+    description: 'Alpaca server port for the guider server\'s Alpaca devices. 0 keeps Ara\'s current setting; 11111 is the common Alpaca default.',
     keywords: ['alpaca', 'port', 'guider', 'equipment', 'phd2', 'network'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 65535),

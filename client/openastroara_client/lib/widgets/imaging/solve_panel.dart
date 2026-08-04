@@ -89,9 +89,9 @@ class SolvePanel extends ConsumerWidget {
           );
         }
         return Text(
-          'RA ${r.ra == null ? '—' : formatRaHms(r.ra!)}   '
-          'Dec ${r.dec == null ? '—' : formatDecDms(r.dec!)}   '
-          'Rot ${_deg(r.orientation)}   Scale ${_scale(r.pixelScale)}',
+          'RA ${r.ra == null ? '—' : formatRaHms(r.ra!)} '
+          'Dec ${r.dec == null ? '—' : formatDecDms(r.dec!)} '
+          'Rot ${_deg(r.orientation)} Scale ${_scale(r.pixelScale)}',
           style: mono,
         );
       },

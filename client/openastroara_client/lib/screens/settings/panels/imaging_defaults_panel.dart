@@ -51,7 +51,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -59,7 +59,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       await ref.read(imagingDefaultsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Imaging defaults saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;

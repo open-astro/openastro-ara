@@ -52,7 +52,7 @@ class _SessionCalibrationPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -60,7 +60,7 @@ class _SessionCalibrationPanelState
       await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Calibration preference saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -82,7 +82,7 @@ class _SessionCalibrationPanelState
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const SettingsSectionHeader('End-of-night calibration (§48)'),
+        const SettingsSectionHeader('End-of-night calibration frames'),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(

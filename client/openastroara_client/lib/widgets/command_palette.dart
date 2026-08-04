@@ -305,7 +305,7 @@ class _EmptyHint extends StatelessWidget {
                     ? 'Try another word — sensor, cooling, dither, park, '
                         'autofocus, plate-solve, file naming, safety, sky '
                         'data, profiles…'
-                    : '↑ ↓ to navigate  ·  Enter to open  ·  Esc to close  ·  '
+                    : '↑ ↓ to navigate ·  Enter to open  ·  Esc to close  ·  '
                         '⌘K from anywhere',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall

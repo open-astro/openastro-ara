@@ -45,7 +45,7 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
     final api = ref.watch(profileApiProvider);
     if (api == null) {
       _api = null; // don't leave a stale api from a previously-connected server
-      throw StateError('No active server — connect to a daemon to manage profiles.');
+      throw StateError('Connect to your rig to manage profiles.');
     }
     _api = api;
     final list = await api.listProfiles();

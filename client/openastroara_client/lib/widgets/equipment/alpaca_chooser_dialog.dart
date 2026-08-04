@@ -62,7 +62,7 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
   Future<List<DiscoveredDevice>> _runDiscovery({required bool forceRefresh}) {
     final server = ref.read(activeServerProvider);
     if (server == null) {
-      return Future.error('No active server — connect to a daemon first.');
+      return Future.error('Not connected — connect to your rig to save this.');
     }
     // Built through the shared factory seam so tests can fake discovery.
     final api = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
@@ -152,7 +152,7 @@ class _DeviceTile extends StatelessWidget {
       title: Text(device.name),
       subtitle: Text(
         '$scheme://${device.hostName.isNotEmpty ? device.hostName : device.ipAddress}:${device.ipPort}'
-        '  ·  device #${device.alpacaDeviceNumber}',
+        ' ·  device #${device.alpacaDeviceNumber}',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AraColors.textSecondary,
             ),
@@ -184,9 +184,9 @@ class _EmptyState extends StatelessWidget {
             Text('No devices found', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'No Alpaca responder answered on the daemon\'s subnet — most '
+              'No Alpaca responder answered on Ara\'s subnet — most '
               'often AlpacaBridge (ARA\'s equipment hub) is not installed or '
-              'its service is stopped. On the daemon host, check:',
+              'its service is stopped. On Ara host, check:',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                     color: AraColors.textSecondary,
@@ -208,7 +208,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'A driver on another host must be reachable from the daemon\'s '
+              'A driver on another host must be reachable from Ara\'s '
               'subnet (UDP 32227).',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(

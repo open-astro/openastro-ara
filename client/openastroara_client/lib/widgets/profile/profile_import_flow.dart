@@ -23,7 +23,7 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   final api = ref.read(profileApiProvider);
   if (api == null) {
     messenger.showSnackBar(const SnackBar(
-        content: Text('Connect to a daemon first to import a profile.')));
+        content: Text('Connect to your rig first to import a profile.')));
     return;
   }
 

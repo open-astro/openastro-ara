@@ -42,7 +42,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       messenger.showSnackBar(const SnackBar(
-        content: Text('No active server — selection is local-only.'),
+        content: Text('Not connected — this choice is saved on this computer for now.'),
       ));
       return;
     }
@@ -81,7 +81,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
           description:
               'Critical-severity diagnostic events (sensor temp out of '
               'range, mount drift, etc) auto-pause the current sequence '
-              'and ring the §35 alarm.',
+              'and ring the alarm.',
           selected: selected == DiagnosticsMode.pauseOnCritical,
           onTap: () => _selectAndSave(DiagnosticsMode.pauseOnCritical),
         ),
@@ -89,7 +89,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
           mode: DiagnosticsMode.abortOnCritical,
           label: 'Abort on critical',
           description:
-              'Critical-severity events trigger §35 Abort + Park instead '
+              'Critical-severity events trigger Abort + Park instead'
               'of pause. Use for unattended observatory automation where '
               'you trust the safety policies to recover.',
           selected: selected == DiagnosticsMode.abortOnCritical,

@@ -256,13 +256,13 @@ Future<void> _showImportWarnings(
               if (result.droppedInstructionTypes.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('Dropped instruction types:'),
-                ...result.droppedInstructionTypes.map((t) => Text('  • $t',
+                ...result.droppedInstructionTypes.map((t) => Text(' • $t',
                     style: const TextStyle(color: AraColors.textSecondary))),
               ],
               if (result.warnings.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('Warnings:'),
-                ...result.warnings.map((w) => Text('  • $w',
+                ...result.warnings.map((w) => Text(' • $w',
                     style: const TextStyle(color: AraColors.textSecondary))),
               ],
             ],

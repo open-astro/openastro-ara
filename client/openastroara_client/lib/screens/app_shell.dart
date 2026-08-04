@@ -357,7 +357,7 @@ class _BottomStatusBar extends StatelessWidget {
           // Bug-report entry (§54) — wired in a Phase 12a follow-up.
           IconButton(
             icon: const Icon(Icons.help_outline, size: 18),
-            tooltip: 'Help / Report a bug (§54)',
+            tooltip: 'Help & report a bug',
             onPressed: () => showHelpDialog(context),
           ),
           const SizedBox(width: 4),

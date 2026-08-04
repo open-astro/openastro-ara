@@ -36,10 +36,10 @@ const Map<String, Help> helpRegistry = {
   'session.notifications.alarm_delay': Help(
     key: 'session.notifications.alarm_delay',
     title: 'Safety alarm delay',
-    body: 'When the daemon reports UNSAFE (safety monitor, weather threshold, or an '
+    body: 'When Ara reports UNSAFE (safety monitor, weather threshold, or an '
         'emergency stop), WILMA pops the safety modal immediately but waits this many '
         'seconds before the tone starts looping at full volume — if you are at the screen '
-        'you can silence it before it ever rings; if you are asleep, it rings. The daemon '
+        'you can silence it before it ever rings; if you are asleep, it rings. The server '
         'fires the event BEFORE its reaction runs, so the alarm and the park happen in '
         'parallel. Conditions clearing (safety.safe) auto-silences.',
     relatedSettings: ['session.notifications.alarm_tone'],
@@ -118,7 +118,7 @@ const Map<String, Help> helpRegistry = {
     body: 'Twilight sky flats expose against the blank sky instead of a panel. Each set aims '
         'for this mean ADU, re-probing the exposure before every frame because the twilight '
         'sky brightens (or darkens) minute to minute. Keep the target comfortably between the '
-        'stop-below and stop-above bounds so the daemon has room to chase the changing sky.',
+        'stop-below and stop-above bounds so Ara has room to chase the changing sky.',
     relatedSettings: ['session.calibration.sky_flat_stop_at_max_adu', 'session.calibration.sky_flat_stop_at_min_adu'],
     keywords: ['sky flats', 'twilight', 'adu', 'target', 'brightness'],
   ),
@@ -127,7 +127,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Sky flat frames per filter',
     body: 'How many FLAT frames each twilight set captures per filter. Because the usable '
         'twilight window is short, keep this modest (15-25) so the whole filter set finishes '
-        'before the sky leaves the brightness window — the daemon stops early and honestly if '
+        'before the sky leaves the brightness window — Ara stops early and honestly if '
         'it does.',
     relatedSettings: ['session.calibration.sky_flat_target_adu'],
     keywords: ['sky flats', 'twilight', 'frames', 'count'],
@@ -155,7 +155,7 @@ const Map<String, Help> helpRegistry = {
     key: 'session.calibration.sky_flat_stop_at_max_adu',
     title: 'Sky flat stop-above',
     body: 'The upper brightness guard. When the sky reads brighter than this even at the '
-        'shortest exposure, dawn has grown too bright to flat against — the daemon stops the '
+        'shortest exposure, dawn has grown too bright to flat against — Ara stops the '
         'set rather than saving blown frames. Keep it above the target with room to spare.',
     relatedSettings: ['session.calibration.sky_flat_stop_at_min_adu', 'session.calibration.sky_flat_target_adu'],
     keywords: ['sky flats', 'twilight', 'stop', 'too bright', 'ceiling'],
@@ -164,7 +164,7 @@ const Map<String, Help> helpRegistry = {
     key: 'session.calibration.sky_flat_stop_at_min_adu',
     title: 'Sky flat stop-below',
     body: 'The lower brightness guard. When the sky reads darker than this even at the longest '
-        'exposure, the sky has gone too dark to flat against — the daemon stops the set. Keep '
+        'exposure, the sky has gone too dark to flat against — Ara stops the set. Keep '
         'it below the target with room to spare.',
     relatedSettings: ['session.calibration.sky_flat_stop_at_max_adu', 'session.calibration.sky_flat_target_adu'],
     keywords: ['sky flats', 'twilight', 'stop', 'too dark', 'floor'],
@@ -183,14 +183,14 @@ const Map<String, Help> helpRegistry = {
   'session.storage.backup_stream': Help(
     key: 'session.storage.backup_stream',
     title: 'Real-time frame backup',
-    body: 'When enabled, this desktop pulls every newly-captured FITS from the daemon as the '
+    body: 'When enabled, this desktop pulls every newly-captured FITS from Ara as the '
         'night runs: it claims the single backup-stream slot, downloads each frame, verifies '
         'its SHA-256 checksum, stores it under your backup folder, and confirms back to the '
-        'daemon. If your imaging drive dies overnight, everything already streamed is safe '
+        'server. If your imaging drive dies overnight, everything already streamed is safe '
         'here — the worst case is losing the one frame being captured at the moment of '
-        'failure. Only one desktop can stream from a daemon at a time; enabling it here '
+        'failure. Only one desktop can stream from a server at a time; enabling it here '
         'while another desktop holds the slot shows who has it. Transfers pause while an '
-        'exposure is downloading from the camera so they never compete for the daemon\'s '
+        'exposure is downloading from the camera so they never compete for Ara\'s '
         'bandwidth at the wrong moment.',
     relatedSettings: ['session.storage.backup_stream_folder', 'session.storage.backup_retention_count'],
     keywords: ['backup', 'stream', 'mirror', 'sync', 'drive', 'failure', 'fits', 'sha256'],
@@ -201,7 +201,7 @@ const Map<String, Help> helpRegistry = {
     body: 'Streamed frames land here, organized by server and imaging session: '
         '<folder>/<server>/<session-id>/<frame-id>.fits. Pick a drive with room for a full '
         'night of frames; if it fills, the stream surfaces the problem and stops pulling '
-        '(the daemon keeps the queue, so re-enabling resumes where it left off).',
+        '(Ara keeps the queue, so re-enabling resumes where it left off).',
     relatedSettings: ['session.storage.backup_stream'],
     keywords: ['backup', 'folder', 'path', 'destination', 'storage'],
   ),
@@ -317,7 +317,7 @@ const Map<String, Help> helpRegistry = {
     key: 'safety.policies.meridian_flip_auto',
     title: 'Auto meridian flip',
     body: 'A meridian flip is when a German Equatorial Mount (GEM) swaps sides of the pier to keep tracking a target that crossed the meridian (south line at culmination).\n\n'
-        '* **On** (recommended): the mount flips automatically when the target reaches the configured meridian-limit (set per-mount by the §57 mount-safety policy). Exposure pauses, mount flips, plate-solve re-centers, guider re-calibrates, exposure resumes.\n'
+        '* **On** (recommended): the mount flips automatically when the target reaches the configured meridian-limit (set per-mount by the mount-safety policy). Exposure pauses, mount flips, plate-solve re-centers, guider re-calibrates, exposure resumes.\n'
         '* **Off**: the sequence pauses at the meridian-limit and waits for you to manually flip + resume.\n\n'
         'Fork-mounted scopes (CGEM-DX, alt-az without wedge) don\'t need a meridian flip — turn this off and the meridian-limit policy is ignored.',
     relatedSettings: ['safety.policies.meridian_pause_min', 'safety.policies.meridian_recenter', 'safety.policies.meridian_recal_guider'],
@@ -332,7 +332,7 @@ const Map<String, Help> helpRegistry = {
   'safety.policies.on_altitude_limit': Help(
     key: 'safety.policies.on_altitude_limit',
     title: 'On altitude limit',
-    body: 'What happens when a target drops below the minimum-altitude floor (set in §37.12 Site Preferences, default 20°).\n\n'
+    body: 'What happens when a target drops below the minimum-altitude floor (set in Site Preferences, default 20°).\n\n'
         '* **Skip target**: move to the next target in the sequence and continue. Recommended for multi-target sessions.\n'
         '* **Pause sequence**: pause and wait for the target to rise again (only useful for circumpolar targets).\n'
         '* **Abort sequence**: stop the whole session. Strict but predictable.',
@@ -350,7 +350,7 @@ const Map<String, Help> helpRegistry = {
   'safety.policies.on_disk_space_critical': Help(
     key: 'safety.policies.on_disk_space_critical',
     title: 'On critically-low disk',
-    body: 'What the §29 disk-space monitor does when free space on your image save volume **drops to** the **critical** threshold (set under Settings → Session → Storage).\n\n'
+    body: 'What the disk-space monitor does when free space on your image save volume **drops to** the **critical** threshold (set under Settings → Session → Storage).\n\n'
         '* **Warn only** (default): raise a red diagnostic and, if enabled, a *Low disk space* notification — but keep capturing. You decide what to do.\n'
         '* **Abort the running sequence**: also halt any in-progress sequence, so you don\'t keep filling the disk with frames that may not even save. A critical notification records that it stopped the run.\n\n'
         'This fires on the *transition* into critical (when free space crosses the threshold going down), so it halts a sequence that\'s already running. Starting a brand-new sequence while the disk is already critical isn\'t blocked yet — a pre-capture check is a planned follow-up. Either way the monitor never deletes anything.',
@@ -362,17 +362,17 @@ const Map<String, Help> helpRegistry = {
   'safety.policies.guider_retry_timeout': Help(
     key: 'safety.policies.guider_retry_timeout',
     title: 'Guider retry timeout',
-    body: 'How long to keep retrying guider re-acquisition before giving up. When the timeout expires, the §54 plate-solve-failed notification fires and the §35 `Skip target if recovery fails` policy decides next.\n\n'
+    body: 'How long to keep retrying guider re-acquisition before giving up. When the timeout expires, the plate-solve-failed notification fires and the `Skip target if recovery fails` policy decides next.\n\n'
         '60s is a good default — long enough to ride out a passing cloud but short enough to skip a target if guiding is genuinely broken.',
     relatedSettings: ['safety.policies.on_guider_lost', 'session.notifications.on_plate_solve_failed'],
   ),
   'diagnostics.mode': Help(
     key: 'diagnostics.mode',
     title: 'Diagnostics mode',
-    body: 'Controls how Ara responds to §51 critical-severity diagnostic events (sensor temp out of range, mount drift > 30″, guider RMS triple, autofocus position lost, etc).\n\n'
-        '* **Notify only** (default): events surface in the Diagnostic Panel + as §54 WS notifications, but sequence execution is never auto-paused by diagnostics alone.\n'
-        '* **Pause on critical**: critical-severity events auto-pause the running sequence and ring the §35 alarm. You decide whether to resume.\n'
-        '* **Abort on critical**: critical-severity events trigger §35 Abort + Park instead of pause. Use only for unattended observatory automation where you trust the safety policies to recover safely.\n\n'
+    body: 'Controls how Ara responds to critical-severity diagnostic events (sensor temp out of range, mount drift > 30″, guider RMS triple, autofocus position lost, etc).\n\n'
+        '* **Notify only** (default): events surface in the Diagnostic Panel + as notifications, but sequence execution is never auto-paused by diagnostics alone.\n'
+        '* **Pause on critical**: critical-severity events auto-pause the running sequence and ring the alarm. You decide whether to resume.\n'
+        '* **Abort on critical**: critical-severity events trigger Abort + Park instead of pause. Use only for unattended observatory automation where you trust the safety policies to recover safely.\n\n'
         'Lower-severity diagnostic events (warnings, infos) never trigger automated action regardless of this setting.',
     relatedSettings: ['session.notifications.on_critical_diagnostic'],
   ),
@@ -422,7 +422,7 @@ const Map<String, Help> helpRegistry = {
     key: 'session.storage.save_directory',
     title: 'Save directory',
     body: 'Base path where captured frames are written. Must be a mounted writable directory. '
-        'Default `/media/openastroara` assumes the §29.1.3 ext4 wizard set up a USB drive there. '
+        'By default this is the external drive you chose in Settings → Session → Storage.'
         'Capturing to the SD card is fine for testing but will wear the card out over a single all-night session — use external storage for real sessions.',
     relatedSettings: ['session.storage.save_directory'],
   ),
@@ -461,7 +461,7 @@ const Map<String, Help> helpRegistry = {
   'session.storage.backup_retention_count': Help(
     key: 'session.storage.backup_retention_count',
     title: 'Backup snapshot retention',
-    body: 'How many configuration backups (profile + sequences) the daemon keeps under its backups folder. After every new backup, the oldest snapshots beyond this count are deleted automatically — so routine backups can\u2019t slowly fill the disk.\n\n'
+    body: 'How many configuration backups (profile + sequences) Ara keeps under its backups folder. After every new backup, the oldest snapshots beyond this count are deleted automatically — so routine backups can\u2019t slowly fill the disk.\n\n'
         'Backups are small (kilobytes), so the default of 20 costs almost nothing while keeping weeks of history. Set **0** to keep every backup forever and manage the folder yourself.',
     relatedSettings: [
       'session.storage.backup_retention_count',
@@ -471,7 +471,7 @@ const Map<String, Help> helpRegistry = {
   'session.storage.min_free_disk_warn_gb': Help(
     key: 'session.storage.min_free_disk_warn_gb',
     title: 'Low-disk warning threshold',
-    body: 'When free space on your image save volume drops below this many GB, the daemon raises a **warning** (a yellow diagnostic and, if enabled, a *Low disk space* notification) so you can free space before a session stalls.\n\n'
+    body: 'When free space on your image save volume drops below this many GB, Ara raises a **warning** (a yellow diagnostic and, if enabled, a *Low disk space* notification) so you can free space before a session stalls.\n\n'
         'It only warns — captures are never blocked and nothing is deleted — and the warning clears itself once space frees up. '
         'Set this comfortably above one night of frames (large OSC/mono subs add up fast). Must be above the critical threshold.',
     relatedSettings: [
@@ -482,9 +482,9 @@ const Map<String, Help> helpRegistry = {
   'session.storage.min_free_disk_critical_gb': Help(
     key: 'session.storage.min_free_disk_critical_gb',
     title: 'Critical-disk threshold',
-    body: 'When free space drops below this many GB, the daemon escalates to a **critical** alert (a red diagnostic and, if enabled, a critical notification) — the disk is nearly full and the next frames may not fit.\n\n'
+    body: 'When free space drops below this many GB, Ara escalates to a **critical** alert (a red diagnostic and, if enabled, a critical notification) — the disk is nearly full and the next frames may not fit.\n\n'
         'Like the warning, this is advisory: ARA never blocks a capture or deletes data. Must be below the warning threshold. '
-        'If the warn/critical pair is left non-positive or inverted, the daemon falls back to its built-in 10 GB / 2 GB defaults.',
+        'If the warn/critical pair is left non-positive or inverted, Ara falls back to its built-in 10 GB / 2 GB defaults.',
     relatedSettings: [
       'session.storage.min_free_disk_critical_gb',
       'session.storage.min_free_disk_warn_gb',
@@ -515,33 +515,33 @@ const Map<String, Help> helpRegistry = {
   'session.notifications.on_critical_diagnostic': Help(
     key: 'session.notifications.on_critical_diagnostic',
     title: 'Critical diagnostic events',
-    body: '"Critical" is §51\'s top severity level — events that indicate something is actively wrong inside Ara and may require intervention. '
+    body: '"Critical" is the most serious level — events that indicate something is actively wrong inside Ara and may require intervention.'
         'Examples: sensor cooler runaway, mount tracking deviation > 30″, guider RMS suddenly tripled, autofocus position drifted past the backlash budget.\n\n'
-        'Distinct from "Safety event" — safety events are §35 environmental conditions (weather, altitude limits, guider loss) that already trigger automated park/pause actions. '
+        'Distinct from "Safety event" — safety events are environmental conditions (weather, altitude limits, guider loss) that already trigger automated park/pause actions.'
         'Critical diagnostics surface in-app problems that don\'t themselves trigger safety actions.',
     relatedSettings: ['session.notifications.on_safety_event', 'diagnostics.mode'],
   ),
   'session.notifications.on_safety_event': Help(
     key: 'session.notifications.on_safety_event',
     title: 'Safety event',
-    body: 'Fires when the §35 safety monitor reports a condition that triggers a safety action. Three classes of events qualify:\n\n'
+    body: 'Fires when the safety monitor reports a condition that triggers a safety action. Three classes of events qualify:\n\n'
         '* **Unsafe weather** — rain, clouds, high wind, humidity past dew point\n'
         '* **Altitude limit** — target is below the minimum-altitude policy\n'
         '* **Guider lost** — guider stops reporting valid frames\n\n'
-        'These events trigger pause/park/abort actions configured per the §35 safety policies. This toggle controls only whether you also get a notification when one fires; the underlying action runs regardless.',
+        'These events trigger pause/park/abort actions configured per the safety policies. This toggle controls only whether you also get a notification when one fires; the underlying action runs regardless.',
     relatedSettings: ['session.notifications.on_critical_diagnostic', 'safety.policies.on_unsafe'],
   ),
   'session.notifications.on_plate_solve_failed': Help(
     key: 'session.notifications.on_plate_solve_failed',
     title: 'Plate solve failed (×N)',
     body: 'Fires after N consecutive plate-solve failures — single-try failures are common (clouds, blooming, framing issue) and not worth alerting on. '
-        'The retry count N is set by the guider-retry-timeout in §35 Safety Policies; the default is 3 tries before giving up.',
+        'The retry count N is set by the guider-retry-timeout in Safety Policies; the default is 3 tries before giving up.',
     relatedSettings: ['session.notifications.on_plate_solve_failed', 'safety.policies.guider_retry_timeout'],
   ),
   'session.notifications.on_disk_space_low': Help(
     key: 'session.notifications.on_disk_space_low',
     title: 'Disk space low',
-    body: 'Fires when free space on the §29 save directory drops below ~10 GB — about one hour of LRGB capture at 4096x4096 16-bit FITS. '
+    body: 'Fires when free space on the save directory drops below ~10 GB — about one hour of LRGB capture at 4096x4096 16-bit FITS.'
         'Threshold is fixed in v0.0.1; making it configurable is a v0.1.0 enhancement.',
     relatedSettings: ['session.storage.save_directory'],
   ),
@@ -553,7 +553,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Custom horizon polygon',
     body: 'A measured azimuth/altitude polygon describing actual obstructions at your site (trees, roof line, neighbor\'s house). '
         'When on, target visibility checks use this polygon instead of the flat default-altitude floor — much more accurate for low-altitude targets.\n\n'
-        'The polygon import + measurement workflow lives in §36.8 Sky Atlas → "Capture horizon mask". '
+        'The polygon import + measurement workflow lives in Sky Atlas → "Capture horizon mask".'
         'Until you\'ve imported one, leave this off and the flat horizon will be used.',
     relatedSettings: ['safety.site.use_custom_horizon', 'safety.site.default_horizon_altitude_deg'],
   ),
@@ -561,7 +561,7 @@ const Map<String, Help> helpRegistry = {
     key: 'safety.site.default_horizon_altitude_deg',
     title: 'Default horizon altitude',
     body: 'Flat altitude floor used for visibility checks when no custom horizon polygon is loaded. '
-        'Targets transiting below this altitude are flagged as below-horizon by the §38 framing assistant and skipped by the §35 altitude-limit safety policy.\n\n'
+        'Targets transiting below this altitude are flagged as below-horizon by the framing assistant and skipped by the altitude-limit safety policy.\n\n'
         '20° is a sensible default for backyard sites (covers most trees + suburban roof lines); 0° turns the floor off; 30° is conservative for low-precision tracking.',
     relatedSettings: ['safety.site.use_custom_horizon'],
   ),
@@ -574,7 +574,7 @@ const Map<String, Help> helpRegistry = {
         '* **5-6**: Suburban / bright suburban (most backyard astrophotographers)\n'
         '* **7-8**: Suburban-urban transition / urban\n'
         '* **9**: Inner city — narrowband filters required\n\n'
-        'Used by §50 quality-score estimation + suggested exposure ranges in §38. Don\'t know your class? lightpollutionmap.info or darkskies.org.',
+        'Used by quality-score estimation + suggested exposure ranges in Don\'t know your class? lightpollutionmap.info or darkskies.org.',
     learnMoreUrl: 'https://en.wikipedia.org/wiki/Bortle_scale',
     relatedSettings: ['safety.site.typical_seeing_arcsec'],
   ),
@@ -605,7 +605,7 @@ const Map<String, Help> helpRegistry = {
         '* **2.0-3.0″**: Typical backyard\n'
         '* **3.0-4.0″**: Poor / windy / heat-cell turbulence\n'
         '* **>4.0″**: Severe — usually rules out planetary or short-FL imaging\n\n'
-        'Used as the baseline for §50 quality scoring (frames worse than 2x typical seeing get auto-rated down) and for autofocus convergence thresholds.',
+        'Used as the baseline for quality scoring (frames worse than 2x typical seeing get auto-rated down) and for autofocus convergence thresholds.',
     relatedSettings: ['safety.site.bortle_class'],
   ),
   'safety.site.twilight_definition': Help(
@@ -651,7 +651,7 @@ const Map<String, Help> helpRegistry = {
     key: 'session.filenames.compress_darks_and_bias',
     title: 'Compress bias + dark frames',
     body: 'Bias and dark frames are dominated by sensor noise (mostly zero in bias, slowly-varying in darks) and compress losslessly very well — typically 8-15x with RICE. '
-        'When on, calibration frames get RICE compression regardless of the global compression setting in §29 Storage. '
+        'When on, calibration frames get RICE compression regardless of the global compression setting in Storage.'
         'When off, calibration frames respect the global compression setting.\n\n'
         'Recommended on — calibration frames are bulky (one library can take 5+ GB) and benefit far more from compression than light frames.',
     relatedSettings: ['session.storage.compression'],
@@ -662,11 +662,11 @@ const Map<String, Help> helpRegistry = {
   'eq.auto_connect_on_boot': Help(
     key: 'eq.auto_connect_on_boot',
     title: 'Auto-connect on boot',
-    body: 'Whether to automatically open the Alpaca connection to this device when the daemon starts.\n\n'
+    body: 'Whether to automatically open the Alpaca connection to this device when Ara starts.\n\n'
         '**Defaults split by side-effect risk:**\n\n'
         '*Connect-by-default* (minor or no actuation):\n'
         '* Camera — USB link power-up only\n'
-        '* Mount — sidereal tracking comes on per §57\n'
+        '* Mount — sidereal tracking comes on\n'
         '* Focuser, rotator — position read on connect, no movement\n'
         '* Filter wheel — most drivers reposition to last-known slot on connect (driver-dependent). If it matters which filter is in beam at startup, leave this off and connect manually.\n'
         '* Flat panel (CoverCalibrator) — does not change cover position\n'
@@ -690,7 +690,7 @@ const Map<String, Help> helpRegistry = {
   'img.autofocus.telescope_type': Help(
     key: 'img.autofocus.telescope_type',
     title: 'Telescope type',
-    body: 'Out-of-focus stars look different per optical design, and Smart Focus exploits that (§59.4):\n'
+    body: 'Out-of-focus stars look different per optical design, and Smart Focus exploits that:\n'
         '* **Refractor** — no central obstruction; defocus broadens the star (FWHM, peak brightness).\n'
         '* **SCT / Maksutov / RC** — defocus makes donuts: a bright ring around the secondary-mirror shadow. The donut\'s diameter grows linearly with defocus — a very direct distance ruler.\n'
         '* **Newtonian** — donuts too (plus spider-vane spikes).\n'
@@ -739,8 +739,8 @@ const Map<String, Help> helpRegistry = {
   'img.platesolve.engine': Help(
     key: 'img.platesolve.engine',
     title: 'Plate-solving engine',
-    body: '* **ASTAP** — the only supported engine: fast, accurate, local, bundled with the §13 Debian package (`/usr/bin/astap`) plus a star index.\n'
-        '* A profile still carrying **astrometry.net** or **PlateSolve 2** (e.g. imported from NINA) solves with ASTAP — the daemon ships local solvers only and logs the substitution once per run. Switch the setting to ASTAP to clear the notice.',
+    body: '* **ASTAP** — the only supported engine: fast, accurate, local, installed alongside Ara plus a star index.\n'
+        '* A profile still carrying **astrometry.net** or **PlateSolve 2** (e.g. imported from NINA) solves with ASTAP — Ara ships local solvers only and logs the substitution once per run. Switch the setting to ASTAP to clear the notice.',
     relatedSettings: ['img.platesolve.path_or_endpoint', 'img.platesolve.search_radius_deg'],
   ),
   'img.platesolve.search_radius_deg': Help(
@@ -777,7 +777,7 @@ const Map<String, Help> helpRegistry = {
   'img.platesolve.convergence_tolerance_arcsec': Help(
     key: 'img.platesolve.convergence_tolerance_arcsec',
     title: 'Convergence tolerance',
-    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §63 OpenAstro Guider sub-frame guiding can correct, looser than the human eye can notice.\n\n'
+    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the guider can correct, looser than the human eye can notice.\n\n'
         'Tighten to 30″ for narrowband mosaics where panel alignment matters; loosen to 120″ for wide-field RGB where 2′ is well within frame.',
     relatedSettings: ['img.platesolve.max_iterations'],
   ),
@@ -805,7 +805,7 @@ const Map<String, Help> helpRegistry = {
   'eq.guider.settle_timeout_sec': Help(
     key: 'eq.guider.settle_timeout_sec',
     title: 'Settle timeout',
-    body: 'Hard maximum on settle wait. If the threshold isn\'t met by this point, exposure resumes anyway. The §54 plate-solve-failed notification (and §35 guider-lost retry budget) take over from here if guide quality stays bad.\n\n'
+    body: 'Hard maximum on settle wait. If the threshold isn\'t met by this point, exposure resumes anyway. The plate-solve-failed notification (and guider-lost retry budget) take over from here if guide quality stays bad.\n\n'
         '60s is the default. Bump to 120-180s on slow mounts; drop to 30s if you\'d rather skip frames than burn time on a stuck guider.',
     relatedSettings: ['eq.guider.settle_pixels', 'safety.policies.guider_retry_timeout'],
   ),
@@ -869,7 +869,7 @@ const Map<String, Help> helpRegistry = {
         '* **`\$\$FILTER\$\$` filename token** — e.g. `M31_L_60s.fits` uses the active slot\'s label.\n'
         '* **FITS-header `FILTER` keyword** — read by downstream stacking tools (DSS, Siril, PixInsight) to group frames per filter.\n'
         '* **Sequence per-filter exposure blocks** — sequences reference filters by label, so labels here must match the labels used in your sequence templates.\n'
-        '* **§29.2 calibration-set indexing** — matching darks/flats are looked up per filter label.\n\n'
+        '* **calibration-set indexing** — matching darks and flats are found by filter.\n\n'
         '**Conventions** (not enforced — use whatever you like):\n'
         '* Mono LRGB: `L`, `R`, `G`, `B`\n'
         '* Narrowband: `Hα` (or `Ha`), `OIII`, `SII`\n'

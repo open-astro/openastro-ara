@@ -94,7 +94,7 @@ class DiscoveredDevice {
     // Fallback so a stray daemon value doesn't crash the chooser, but
     // assert in debug builds so future daemon-added types surface
     // immediately rather than silently misclassifying as camera.
-    assert(false, 'Unknown device type from daemon: $raw');
+    assert(false, 'Unknown device type from server: $raw');
     return EquipmentDeviceType.camera;
   }
 

@@ -170,7 +170,7 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
     if (_downloading) return;
     final api = ref.read(backupApiProvider);
     if (api == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No server connected.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your rig to restore a backup.')));
       return;
     }
     setState(() => _downloading = true);
@@ -210,7 +210,7 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
       return;
     }
     if (ref.read(backupApiProvider) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No server connected.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your rig to restore a backup.')));
       return;
     }
     final choice = await showDialog<_RestoreChoice>(

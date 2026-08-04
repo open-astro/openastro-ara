@@ -53,7 +53,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -61,7 +61,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       await ref.read(filenamesSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('File naming options saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -124,7 +124,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
         const SettingsSectionHeader('Available tokens'),
         const SettingsRow(
           label: 'Date',
-          value: r'$$DATE$$  $$TIME$$  $$DATETIME$$  $$DATEMINUS12$$',
+          value: r'$$DATE$$ $$TIME$$  $$DATETIME$$  $$DATEMINUS12$$',
         ),
         const SettingsRow(
           label: 'Target',
@@ -132,12 +132,12 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
         ),
         const SettingsRow(
           label: 'Frame',
-          value: r'$$IMAGETYPE$$  $$FILTER$$  $$EXPOSURETIME$$  '
-              r'$$GAIN$$  $$OFFSET$$  $$BINNING$$  $$FRAMENR$$',
+          value: r'$$IMAGETYPE$$ $$FILTER$$  $$EXPOSURETIME$$  '
+              r'$$GAIN$$ $$OFFSET$$  $$BINNING$$  $$FRAMENR$$',
         ),
         const SettingsRow(
           label: 'Sensor',
-          value: r'$$CAMERA$$  $$SENSORTEMP$$  $$FOCUSPOSITION$$',
+          value: r'$$CAMERA$$ $$SENSORTEMP$$  $$FOCUSPOSITION$$',
         ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[

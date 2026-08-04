@@ -231,7 +231,7 @@ class WsEventStream {
       try {
         sessionId = await claim();
       } catch (e) {
-        debugPrint('[ws] §27 session claim failed (connecting unbound): $e');
+        debugPrint('[ws] session claim failed (connecting unbound): $e');
       }
       // The await above is a suspension point: dispose() or a concurrent path
       // may have run. Re-check before touching the socket slot.

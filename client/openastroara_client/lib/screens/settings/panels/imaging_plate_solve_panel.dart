@@ -50,7 +50,7 @@ class _ImagingPlateSolvePanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -58,7 +58,7 @@ class _ImagingPlateSolvePanelState
       await ref.read(plateSolveSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Plate Solve settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -101,7 +101,7 @@ class _ImagingPlateSolvePanelState
           },
         ),
         EditableTextRow(
-          label: 'Path / endpoint',
+          label: 'Where to find the solver',
           currentValue: s.pathOrEndpoint,
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).pathOrEndpoint,

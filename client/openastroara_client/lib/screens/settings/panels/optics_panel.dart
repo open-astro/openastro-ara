@@ -59,7 +59,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     if (api == null) {
       setState(() {
         _saving = false;
-        _lastError = 'No active server — connect to a daemon first.';
+        _lastError = 'Not connected — connect to your rig to save this.';
       });
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
@@ -67,7 +67,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     try {
       await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Optics saved to daemon.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = 'Save failed: $e');
@@ -83,7 +83,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     final server = ref.read(activeServerProvider);
     final messenger = ScaffoldMessenger.of(context);
     if (server == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('No active server — connect to a daemon first.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Not connected — connect to your rig to save this.')));
       return;
     }
     setState(() {

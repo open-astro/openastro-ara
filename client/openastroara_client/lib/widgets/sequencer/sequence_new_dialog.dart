@@ -96,7 +96,7 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
           },
           data: (templates) {
             if (templates == null) {
-              return const _Message('Connect to a daemon to start a new sequence.');
+              return const _Message('Connect to your rig to start a new sequence.');
             }
             if (templates.isEmpty) {
               return const _Message('No sequence templates available.');

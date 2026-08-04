@@ -78,7 +78,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Discovered servers (_openastroara._tcp.local):',
+            Text('Rigs found on your network',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Expanded(
@@ -208,7 +208,7 @@ class _HandshakePanel extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium),
                   Text('Server version: ${info.version}'),
                   Text('API version: ${info.apiVersion}'),
-                  Text('Endpoint: ${server.baseUrl}'),
+                  Text('Address: ${server.baseUrl}'),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: onConfirm,

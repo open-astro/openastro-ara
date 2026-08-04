@@ -65,7 +65,7 @@ class AboutPanel extends ConsumerWidget {
         const SizedBox(height: 12),
         Text(
           'Forked from N.I.N.A. — Nighttime Imaging \'N\' Astronomy. '
-          'The client is licensed under the AGPL-3.0; the daemon under the MPL-2.0. '
+          'Ara\'s app is licensed under the AGPL-3.0; the server under the MPL-2.0. '
           'Source, issues and discussions live on GitHub.',
           style: dim,
         ),
@@ -101,7 +101,7 @@ class AboutPanel extends ConsumerWidget {
       applicationName: 'OpenAstro Ara (WILMA)',
       applicationVersion: version,
       applicationLegalese:
-          'Client: AGPL-3.0 · Daemon: MPL-2.0\nForked from N.I.N.A. (MPL-2.0)',
+          'Client: AGPL-3.0 · Ara: MPL-2.0\nForked from N.I.N.A. (MPL-2.0)',
     );
   }
 

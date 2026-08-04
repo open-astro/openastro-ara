@@ -55,7 +55,7 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -63,7 +63,7 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
       await ref.read(filterSetProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-          const SnackBar(content: Text('Filter set saved to daemon.')));
+          const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = 'Save failed: $e');

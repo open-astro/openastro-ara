@@ -55,7 +55,7 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
         title: const Text('Restart the server now?'),
         content: const Text(
           'Any running sequence, capture or guiding session stops immediately. '
-          'The client reconnects on its own once the daemon is back (usually a '
+          'Ara reconnects on its own once the server is back (usually a '
           'few seconds).',
         ),
         actions: [
