@@ -242,6 +242,7 @@ namespace OpenAstroAra.Server.Services {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                 };
                 foreach (var a in args) {
                     info.ArgumentList.Add(a);
@@ -250,10 +251,22 @@ namespace OpenAstroAra.Server.Services {
                 if (process is null) {
                     return (-1, string.Empty);
                 }
-                // Read before waiting: a full pipe would otherwise deadlock the wait.
-                var stdout = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
+                // Read both pipes before waiting (and concurrently with each
+                // other): a full pipe would otherwise deadlock the wait.
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+                var stderrTask = process.StandardError.ReadToEndAsync(ct);
+                var stdout = await stdoutTask.ConfigureAwait(false);
+                var stderr = await stderrTask.ConfigureAwait(false);
                 await process.WaitForExitAsync(ct).ConfigureAwait(false);
-                return (process.ExitCode, stdout);
+                // The helper reports its own failures on stdout ("ERROR: …").
+                // Anything failing BEFORE that handling (missing binary,
+                // sudoers misconfiguration) speaks only on stderr — surface
+                // it rather than collapsing to a bare helper_failed.
+                var output = stdout;
+                if (process.ExitCode != 0 && string.IsNullOrWhiteSpace(stdout)) {
+                    output = stderr;
+                }
+                return (process.ExitCode, output);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception) {

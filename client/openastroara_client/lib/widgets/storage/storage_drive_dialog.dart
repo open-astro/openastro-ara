@@ -49,13 +49,15 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
   bool get _needsErase => _selected != null && !_selected!.isExt4;
 
   /// A labelled disk asks the user to type its name — the standard guard
-  /// against erasing the wrong one. An unlabelled disk has no name to type.
+  /// against erasing the wrong one. An unlabelled disk still holds someone's
+  /// data (stock USB sticks ship label-less), so it demands typing ERASE:
+  /// a destructive click is never one static warning away.
   bool get _confirmSatisfied {
     if (!_needsErase) {
       return true;
     }
     final label = _selected!.label ?? '';
-    return label.isEmpty || _confirm.text == label;
+    return label.isEmpty ? _confirm.text == 'ERASE' : _confirm.text == label;
   }
 
   Future<void> _useDisk() async {
@@ -77,8 +79,11 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
         format: _needsErase,
         // What the user actually typed — the server re-checks it against the
         // drive's real label, so a stale client record can't erase the wrong
-        // disk.
-        confirmLabel: _needsErase ? _confirm.text : null,
+        // disk. An unlabelled drive's typed ERASE is a client-side bar only;
+        // the server must see the empty label the drive actually has.
+        confirmLabel: _needsErase
+            ? ((device.label ?? '').isEmpty ? '' : _confirm.text)
+            : null,
       );
       if (!mounted) {
         return;
@@ -208,19 +213,20 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                     'has to be erased first. Everything on it will be lost.',
                     style: theme.textTheme.bodySmall,
                   ),
-                  if ((_selected!.label ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text('Type “${_selected!.label}” to confirm:',
-                        style: theme.textTheme.bodySmall),
-                    const SizedBox(height: 4),
-                    TextField(
-                      controller: _confirm,
-                      autofocus: true,
-                      enabled: !_busy,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(isDense: true),
-                    ),
-                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                      (_selected!.label ?? '').isNotEmpty
+                          ? 'Type “${_selected!.label}” to confirm:'
+                          : 'This disk has no label — type ERASE to confirm:',
+                      style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _confirm,
+                    autofocus: true,
+                    enabled: !_busy,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(isDense: true),
+                  ),
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
