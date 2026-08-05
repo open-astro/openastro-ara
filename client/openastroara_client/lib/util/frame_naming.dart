@@ -155,8 +155,11 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
       .replaceAll('{date}', date(t))
       .replaceAll('{time}', '${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
       .replaceAll('{type}', 'Light')
-      .replaceAll('{target}', ctx.target)
-      .replaceAll('{filter}', ctx.filter)
+      // A '/' inside a token VALUE is data, not a folder boundary — the
+      // server sanitizes it to '-' within the segment; splicing it raw here
+      // would make the preview grow a folder the server never creates.
+      .replaceAll('{target}', ctx.target.replaceAll('/', '-'))
+      .replaceAll('{filter}', ctx.filter.replaceAll('/', '-'))
       .replaceAll(
           '{exposure}',
           ctx.exposureSec == ctx.exposureSec.roundToDouble()
@@ -183,6 +186,23 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
         while (v.contains('__')) {
           v = v.replaceAll('__', '_');
         }
+        while (v.contains('-_')) {
+          v = v.replaceAll('-_', '_');
+        }
+        // Internal scar-dashes too, exactly like the server: a '-' after a
+        // separator is a scar unless it starts a number ("180s_-10C" keeps
+        // its minus sign, "M31_-L" loses the dash).
+        final scar = StringBuffer();
+        for (var i = 0; i < v.length; i++) {
+          final isScarDash = v[i] == '-' &&
+              i > 0 &&
+              (v[i - 1] == '_' || v[i - 1] == '-') &&
+              (i + 1 >= v.length || !RegExp(r'[0-9]').hasMatch(v[i + 1]));
+          if (!isScarDash) {
+            scar.write(v[i]);
+          }
+        }
+        v = scar.toString();
         // Mirror the server's FrameNaming.SanitizeSegment edge-trim: a
         // leading '-' that starts a number is a minus sign ("-10C"), not a
         // separator scar, and must survive so the preview matches the file.
