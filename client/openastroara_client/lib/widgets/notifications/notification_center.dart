@@ -285,10 +285,13 @@ class _Body extends ConsumerWidget {
         ),
       ));
     }
-    return ListView(
+    // builder, not children: the backlog can reach ~500 rows and a plain
+    // ListView would materialize all of them on open.
+    return ListView.builder(
       shrinkWrap: true,
       padding: const EdgeInsets.only(bottom: 6),
-      children: rows,
+      itemCount: rows.length,
+      itemBuilder: (_, i) => rows[i],
     );
   }
 }

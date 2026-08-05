@@ -36,18 +36,28 @@ value_for() { # $1=device $2=tag (TYPE|LABEL|UUID)
 
 # Refuse anything that carries the running system: the disk holding / or
 # /boot/firmware, and any of its partitions. Formatting those bricks the box.
-# Assumes a plainly partitioned root (the Pi image default) — one PKNAME hop.
-# Root on LVM/dm-crypt would need the whole parent chain walked; keep this in
-# lock-step with StorageDeviceService.SystemDisksAsync if that ever changes.
+# Walks the WHOLE parent chain (partition → md/LVM/dm-crypt → physical disk),
+# not one hop, so a stacked root still resolves to its physical holder.
+# Keep in lock-step with StorageDeviceService.SystemDisksAsync.
+base_disk() { # deepest ancestor of a device node
+    d=$1
+    i=0
+    while [ "$i" -lt 8 ]; do
+        p=$(lsblk -no PKNAME "$d" 2>/dev/null | head -n1 || true)
+        [ -z "$p" ] && break
+        d="/dev/$p"
+        i=$((i + 1))
+    done
+    echo "$d"
+}
+
 refuse_if_system_disk() {
     dev=$1
-    base=$(lsblk -no PKNAME "$dev" 2>/dev/null || true)
-    [ -n "$base" ] && base="/dev/$base" || base="$dev"
+    base=$(base_disk "$dev")
     for critical in / /boot /boot/firmware; do
         holder=$(findmnt -no SOURCE "$critical" 2>/dev/null || true)
         [ -z "$holder" ] && continue
-        holder_base=$(lsblk -no PKNAME "$holder" 2>/dev/null || true)
-        [ -n "$holder_base" ] && holder_base="/dev/$holder_base" || holder_base="$holder"
+        holder_base=$(base_disk "$holder")
         if [ "$dev" = "$holder" ] || [ "$base" = "$holder_base" ]; then
             echo "ERROR: refused system_disk"
             exit 6
@@ -63,7 +73,16 @@ ensure_fstab_entry() { # $1=uuid
     # into place: this runs as root on a box without a guaranteed clean
     # shutdown, and a truncate-then-write torn by power loss could leave
     # /etc/fstab half-written — including the root and boot entries.
-    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "${FSTAB}.ara-tmp" || true
+    # grep exit 1 just means "no previous ARA line" (fine); exit >1 means the
+    # read itself failed — committing that would drop every existing entry
+    # and brick the next boot, so bail instead.
+    rc=0
+    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "${FSTAB}.ara-tmp" || rc=$?
+    if [ "$rc" -gt 1 ]; then
+        rm -f "${FSTAB}.ara-tmp"
+        echo "ERROR: fstab_unreadable"
+        exit 8
+    fi
     printf 'UUID=%s  %s  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2\n' \
         "$uuid" "$MOUNT_POINT" >> "${FSTAB}.ara-tmp"
     chmod 644 "${FSTAB}.ara-tmp"
@@ -116,6 +135,10 @@ fi
 refuse_if_system_disk "$DEVICE"
 
 if [ "$FORMAT" -eq 1 ]; then
+    # TOCTOU note: $DEVICE was validated above; an unplug/replug between the
+    # check and mkfs could in principle hand the node to a different disk.
+    # That needs physical access mid-operation and the label re-check below
+    # narrows it further — accepted residual risk for a headless rig.
     # Empty expected label only matches a disk that truly has none — the
     # retype-to-confirm gate stays real for every labeled drive.
     ACTUAL_LABEL=$(value_for "$DEVICE" LABEL)

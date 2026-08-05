@@ -80,6 +80,21 @@ public sealed partial class CaptureScanService : IDisposable {
     // Singleton — the DI container disposes it at host shutdown.
     public void Dispose() => _scanLock.Dispose();
 
+    /// <summary>
+    /// Runs <paramref name="work"/> holding the scan lock — for storage
+    /// maintenance (mount/reformat) that must not interleave with a scan
+    /// walking the very tree being unmounted, nor with a sibling configure.
+    /// </summary>
+    public async Task<T> RunExclusiveAsync<T>(Func<Task<T>> work, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(work);
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await work().ConfigureAwait(false);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
     public async Task<CaptureScanResult> RunAsync(CancellationToken ct) {
         await _scanLock.WaitAsync(ct).ConfigureAwait(false);
         try {

@@ -148,7 +148,17 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
   String date(DateTime t) => '${t.year}-${two(t.month)}-${two(t.day)}';
   final t = ctx.captured;
   final night = t.subtract(const Duration(hours: 12));
+  // The server trims/lowercases every token and accepts {n}/{number}/{frame}
+  // as aliases — normalize the same way first, or a hand-typed "{Filter}"
+  // would preview as a literal while the real file expands it fine.
   var expanded = FrameNamingModel.canonicalize(template)
+      .replaceAllMapped(RegExp(r'\{([^{}]*)\}'), (m) {
+        var tok = m[1]!.trim().toLowerCase();
+        if (tok == 'number' || tok == 'frame') {
+          tok = 'n';
+        }
+        return '{$tok}';
+      })
       .replaceAll('{night}', date(night))
       .replaceAll('{datetime}',
           '${date(t)}_${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
@@ -177,7 +187,7 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
       .replaceAll('{camera}', 'ASI2600MM')
       .replaceAll('{n}', ctx.frameNumber.toString().padLeft(4, '0'));
   // Any token we didn't recognize vanishes, same as the server.
-  expanded = expanded.replaceAll(RegExp(r'\{[a-z0-9]*\}'), '');
+  expanded = expanded.replaceAll(RegExp(r'\{[^{}]*\}'), '');
   final segments = expanded
       .split('/')
       .map((s) {

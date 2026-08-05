@@ -269,17 +269,30 @@ public static class SystemEndpoints {
                 IStorageDeviceService svc,
                 IProfileStore profiles,
                 ActiveRunSessionRegistry runs,
+                ICameraService camera,
+                CaptureScanService scan,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
                 }
-                // Never re-point (or reformat!) storage out from under a run.
+                // Never re-point (or reformat!) storage out from under a run —
+                // nor from under a one-off REST capture, which the run
+                // registry doesn't track but which is writing a frame all the
+                // same.
                 if (runs.HasAny) {
                     return Results.Problem(
                         "a sequence run is active — stop it before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                var result = await svc.ConfigureAsync(request.Uuid, request.Format, request.ConfirmLabel, ct)
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before changing the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                // Exclusive with any capture scan: a reformat mid-scan would
+                // unmount the tree the scan is walking.
+                var result = await scan.RunExclusiveAsync(
+                    () => svc.ConfigureAsync(request.Uuid, request.Format, request.ConfirmLabel, ct), ct)
                     .ConfigureAwait(false);
                 if (!result.Success) {
                     // 422 carries the helper's code so the client can offer the
@@ -293,6 +306,10 @@ public static class SystemEndpoints {
                 var storageSettings = profiles.GetStorageSettings();
                 var saveDirectory = result.MountPoint ?? storageSettings.SaveDirectory;
                 profiles.PutStorageSettings(storageSettings with { SaveDirectory = saveDirectory });
+                // A drive that already carries frames should show them now,
+                // not after a manual rescan — that's this endpoint's whole
+                // "no restart needed" promise. Bounded work (§28.8: ~2s).
+                await scan.RunAsync(ct).ConfigureAwait(false);
                 return Results.Ok(new StorageConfigureResultDto(
                     true, result.Code, result.Detail, result.MountPoint, saveDirectory));
             })

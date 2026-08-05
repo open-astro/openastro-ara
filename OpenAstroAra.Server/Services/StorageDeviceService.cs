@@ -140,9 +140,10 @@ namespace OpenAstroAra.Server.Services {
         /// Devices carrying / or /boot* — never offered as candidates.
         /// Assumes a plainly partitioned root (the Pi image default): one
         /// PKNAME hop from findmnt's source. Root on LVM/dm-crypt would need
-        /// the full parent chain walked — if the image ever grows such a
-        /// layout, this and the helper's refuse_if_system_disk must both
-        /// learn it, because a miss here offers the system disk for format.
+        /// the full parent chain walked — every ancestor lands in the set, so
+        /// root on md/LVM/dm-crypt still resolves to its physical holder.
+        /// Keep in lock-step with the helper's refuse_if_system_disk: a miss
+        /// here offers the system disk for format.
         /// </summary>
         private static async Task<IReadOnlySet<string>> SystemDisksAsync(CancellationToken ct) {
             var set = new HashSet<string>(StringComparer.Ordinal);
@@ -152,9 +153,19 @@ namespace OpenAstroAra.Server.Services {
                     continue;
                 }
                 set.Add(source);
-                var parent = (await RunCaptureAsync("lsblk", ["-no", "PKNAME", source], ct).ConfigureAwait(false))?.Trim();
-                if (!string.IsNullOrEmpty(parent)) {
-                    set.Add("/dev/" + parent);
+                // Walk partition → md/LVM/dm-crypt → disk; bounded in case a
+                // cyclic PKNAME answer ever appears.
+                var node = source;
+                for (var hop = 0; hop < 8; hop++) {
+                    var parent = (await RunCaptureAsync("lsblk", ["-no", "PKNAME", node], ct).ConfigureAwait(false))
+                        ?.Trim().Split('\n')[0].Trim();
+                    if (string.IsNullOrEmpty(parent)) {
+                        break;
+                    }
+                    node = "/dev/" + parent;
+                    if (!set.Add(node)) {
+                        break;
+                    }
                 }
             }
             return set;

@@ -173,7 +173,9 @@ class _ReferenceDialog extends ConsumerWidget {
         'Sensor temperature' => fs.headerTemperature,
         'Sky & weather' => fs.headerWeather,
         'Sun & moon' => fs.headerEphemeris,
-        _ => true,
+        // A group this hand-maintained map doesn't know renders as OFF —
+        // a visibly-dimmed group gets fixed; a silently-"on" one would lie.
+        _ => false,
       };
 
   @override

@@ -35,6 +35,10 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     with PanelSaveRegistration {
   String? _lastError;
 
+  /// Save persists four providers; until every one has been hydrated, saving
+  /// would push defaults over server values a failed hydrate never loaded.
+  bool _hydrated = false;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +57,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+      _hydrated = true;
     } catch (e) {
       if (mounted) {
         setState(() =>
@@ -73,6 +78,19 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
+    }
+    if (!_hydrated) {
+      // Retry the load rather than save blind: persisting unhydrated
+      // providers would overwrite real profile values with defaults.
+      await _hydrate();
+      if (!_hydrated) {
+        if (!mounted) return;
+        setState(() => _lastError =
+            'Couldn\'t load your saved settings — not saving over them. '
+            'Check the connection and try again.');
+        messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+        return;
+      }
     }
     try {
       // The template rides with storage settings; the separator + compression
