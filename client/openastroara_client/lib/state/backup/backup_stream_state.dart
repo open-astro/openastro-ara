@@ -504,10 +504,25 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       }
       final server = ref.read(activeServerProvider);
       final hostDir = _sanitize(server?.hostname ?? 'server');
-      final dir = Directory(
-          '${state.localRoot}${Platform.pathSeparator}$hostDir${Platform.pathSeparator}${_sanitize(entry.sessionId)}');
+      // Mirror the rig's own §29-templated layout when the server tells us
+      // the frame's store-relative path — a backup should read like the
+      // original, not like a catalog dump. Older servers (or frames outside
+      // the current store) send none; those keep the id-based layout.
+      final mirrored = mirrorRelativeSegments(entry.relativePath);
+      final Directory dir;
+      final File file;
+      if (mirrored != null) {
+        final parts = [hostDir, ...mirrored];
+        final filename = parts.removeLast();
+        dir = Directory(
+            '${state.localRoot}${Platform.pathSeparator}${parts.join(Platform.pathSeparator)}');
+        file = File('${dir.path}${Platform.pathSeparator}$filename');
+      } else {
+        dir = Directory(
+            '${state.localRoot}${Platform.pathSeparator}$hostDir${Platform.pathSeparator}${_sanitize(entry.sessionId)}');
+        file = File('${dir.path}${Platform.pathSeparator}${_sanitize(entry.id)}.fits');
+      }
       await dir.create(recursive: true);
-      final file = File('${dir.path}${Platform.pathSeparator}${_sanitize(entry.id)}.fits');
       // Temp + rename so a crash mid-write never leaves a plausible-looking
       // partial FITS that later reads as a corrupt backup.
       final tmp = File('${file.path}.tmp');
@@ -529,6 +544,26 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   /// segment blindly — strip separators + parent-dir tokens.
   static String _sanitize(String segment) =>
       segment.replaceAll(RegExp(r'[/\\]'), '_').replaceAll('..', '_');
+
+  /// Server-provided store-relative path → safe local segments, or null when
+  /// unusable. Every segment is sanitized independently; dot-only segments
+  /// and absolute/empty paths are rejected outright — a compromised server
+  /// must not be able to write outside the mirror root. Visible for tests.
+  static List<String>? mirrorRelativeSegments(String? relativePath) {
+    if (relativePath == null || relativePath.isEmpty) return null;
+    if (relativePath.startsWith('/') || relativePath.contains(':')) return null;
+    final segments = relativePath
+        .split(RegExp(r'[/\\]'))
+        .where((s) => s.isNotEmpty && !RegExp(r'^\.+$').hasMatch(s))
+        .map(_sanitize)
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.isEmpty) return null;
+    // A path whose filename lost its extension (fits/xisf/compressed
+    // variants all carry one) falls back to id-based naming instead.
+    if (!RegExp(r'\.[A-Za-z0-9]{1,8}$').hasMatch(segments.last)) return null;
+    return segments;
+  }
 
   /// §44.4 — the minimum wall-clock a [bytes]-sized pull may occupy under a
   /// [mbps] average-rate cap. Zero cap (or degenerate sizes) = no floor.

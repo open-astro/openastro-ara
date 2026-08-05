@@ -53,9 +53,36 @@ public sealed partial class BackupStreamService : IBackupStreamService {
     /// backfill must not pin one request hashing hundreds of large files).</summary>
     internal int MaxHashesPerPage { get; set; } = 25;
 
-    public BackupStreamService(IAraDatabase db, ILogger<BackupStreamService>? logger = null) {
+    public BackupStreamService(IAraDatabase db, IProfileStore? profile = null, ILogger<BackupStreamService>? logger = null) {
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _profile = profile;
         _logger = logger ?? NullLogger<BackupStreamService>.Instance;
+    }
+
+    // Optional: without it (some tests) queue entries simply carry no
+    // relative path and the client keeps its id-based layout.
+    private readonly IProfileStore? _profile;
+
+    /// <summary>
+    /// The frame's path relative to the store root, forward-slashed — the
+    /// name the §29 template gave it. Null when the frame predates the
+    /// current save directory (e.g. the drive was swapped): the absolute
+    /// path must never leak to the client, and ".." must never appear.
+    /// </summary>
+    private string? StoreRelativePath(string filePath) {
+        if (string.IsNullOrEmpty(filePath) || _profile is null) {
+            return null;
+        }
+        var root = _profile.GetStorageSettings().SaveDirectory;
+        if (string.IsNullOrEmpty(root)) {
+            return null;
+        }
+        var rel = Path.GetRelativePath(root, filePath);
+        if (rel.Length == 0 || rel == "." || Path.IsPathRooted(rel)
+            || rel == ".." || rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)) {
+            return null;
+        }
+        return rel.Replace(Path.DirectorySeparatorChar, '/');
     }
 
     public async Task<BackupStreamStatusDto> GetStatusAsync(CancellationToken ct) {
@@ -170,7 +197,8 @@ public sealed partial class BackupStreamService : IBackupStreamService {
                 Sha256: sha,
                 SizeBytes: e.Size,
                 CapturedAt: DateTimeOffset.Parse(e.Captured, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                SessionId: e.Session));
+                SessionId: e.Session,
+                RelativePath: StoreRelativePath(e.Path)));
         }
         // Hashing can take real time; re-stamp so a slow page never counts as
         // holder silence toward the stale-takeover window.

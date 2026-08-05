@@ -39,12 +39,19 @@ class BackupStreamQueueEntry {
   final DateTime? capturedAt;
   final String sessionId;
 
+  /// The frame's §29-templated path relative to the rig's store root
+  /// (forward slashes) — the mirror reproduces it so backups read like the
+  /// originals. Null from older servers or for frames outside the current
+  /// store; the mirror then falls back to id-based names.
+  final String? relativePath;
+
   const BackupStreamQueueEntry({
     required this.id,
     required this.sha256,
     required this.sizeBytes,
     required this.capturedAt,
     required this.sessionId,
+    this.relativePath,
   });
 
   factory BackupStreamQueueEntry.fromJson(Map<String, dynamic> json) => BackupStreamQueueEntry(
@@ -53,5 +60,6 @@ class BackupStreamQueueEntry {
         sizeBytes: json['size_bytes'] is int ? json['size_bytes'] as int : 0,
         capturedAt: DateTime.tryParse(json['captured_at'] as String? ?? '')?.toUtc(),
         sessionId: json['session_id'] as String? ?? '',
+        relativePath: json['relative_path'] as String?,
       );
 }

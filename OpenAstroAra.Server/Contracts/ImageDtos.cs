@@ -203,13 +203,17 @@ public sealed record BackupStreamClaimRequestDto(string Hostname);
 public sealed record BackupStreamClaimResultDto(
     string ActiveTarget);
 
-/// <summary>One pending frame in the §44.5 queue (oldest first). Sha256 is computed lazily and cached on first serve.</summary>
+/// <summary>One pending frame in the §44.5 queue (oldest first). Sha256 is computed lazily and cached on first serve.
+/// RelativePath is the frame's §29-templated path relative to the store root (forward slashes), so the
+/// desktop mirror can reproduce the same human-readable layout; null when the frame lives outside the
+/// current save directory (drive since swapped) — the client then falls back to id-based names.</summary>
 public sealed record BackupStreamQueueEntryDto(
     Guid Id,
     string? Sha256,
     long SizeBytes,
     DateTimeOffset CapturedAt,
-    Guid SessionId);
+    Guid SessionId,
+    string? RelativePath);
 
 /// <summary>POST /backup-stream/ack body — §44.5: WILMA confirms it stored + sha-verified the frame.</summary>
 public sealed record BackupStreamAckRequestDto(
