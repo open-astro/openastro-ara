@@ -98,7 +98,7 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
       cursor = result.nextCursor;
     }
     debugPrint('[sequencer] stopped after $maxPages pages of sequences '
-        '(${all.length} loaded) — the daemon kept returning a cursor.');
+        '(${all.length} loaded) — Ara kept returning a cursor.');
     return all;
   }
 }

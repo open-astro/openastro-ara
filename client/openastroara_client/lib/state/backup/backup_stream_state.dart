@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../util/friendly_error.dart';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -335,7 +336,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       if (target != null && ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
         return;
       }
-      state = state.copyWith(active: false, problem: 'Could not start the backup stream: $e');
+      state = state.copyWith(active: false, problem: friendlyError(e, action: 'start copying frames'));
     } finally {
       _claiming = false;
     }

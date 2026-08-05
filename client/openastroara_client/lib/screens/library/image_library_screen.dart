@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../util/friendly_error.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,7 +45,7 @@ class ImageLibraryScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Could not load the library: $e',
+              Text(friendlyError(e, action: 'load your library'),
                   textAlign: TextAlign.center),
               const SizedBox(height: 8),
               OutlinedButton(

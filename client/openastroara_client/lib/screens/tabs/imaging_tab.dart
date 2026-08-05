@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/camera_exposure_api.dart';
@@ -148,7 +149,7 @@ class ImagingTab extends ConsumerWidget {
         if (context.mounted) {
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
-            SnackBar(content: Text('Exposure failed: $e')),
+            SnackBar(content: Text(friendlyError(e, action: 'take that exposure'))),
           );
         }
         return;
@@ -177,7 +178,7 @@ class ImagingTab extends ConsumerWidget {
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
             SnackBar(content: Text(
-                'Exposure accepted but confirming the frame failed: $e')),
+                friendlyError(e, action: 'confirm the frame arrived'))),
           );
         }
         return;

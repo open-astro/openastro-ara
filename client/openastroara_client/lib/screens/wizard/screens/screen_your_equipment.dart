@@ -142,7 +142,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
     if (!mounted) return;
     if (server == null) {
       setState(() =>
-          _prepareError = 'No active server — connect to a daemon first.');
+          _prepareError = 'Not connected — connect to your rig to save this.');
       return;
     }
     setState(() {

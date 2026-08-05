@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/notifications/notification_center.dart';
 import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/backup_stream_chip.dart';
 import '../widgets/command_palette.dart';
@@ -354,10 +355,12 @@ class _BottomStatusBar extends StatelessWidget {
               textStyle: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+          // Everything Ara decided while you weren't looking (§46).
+          const NotificationBell(),
           // Bug-report entry (§54) — wired in a Phase 12a follow-up.
           IconButton(
             icon: const Icon(Icons.help_outline, size: 18),
-            tooltip: 'Help / Report a bug (§54)',
+            tooltip: 'Help & report a bug',
             onPressed: () => showHelpDialog(context),
           ),
           const SizedBox(width: 4),

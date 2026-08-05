@@ -29,7 +29,7 @@ import 'tonight_sky_panel.dart';
 /// Dart→page JS bridge — Flutter↔page traffic goes over the loopback server.
 ///
 /// Two pieces of Flutter chrome wrap the renderer: a top search bar, and the
-/// docked **Tonight's Sky** panel (§36.8). The "Tonight's Sky" button toggles
+/// docked **Tonight's Sky** panel. The "Tonight's Sky" button toggles
 /// `skyAtlasModeProvider`; in `tonightsSky` mode the [TonightSkyPanel] docks on
 /// the right while the planetarium stays in an `Expanded` (its rect shrinks and
 /// the native-overlay bounds recompute through the existing bounds logic). The

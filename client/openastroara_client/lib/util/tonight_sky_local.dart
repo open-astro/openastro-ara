@@ -431,7 +431,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         );
         budgetFullHours = budget.full.practical ? budget.full.hours : null;
         integrationBudgetLine = budget.moonBrighteningMag >= 0.3
-            ? '${budget.display}  (tonight\'s moon costs '
+            ? '${budget.display} (tonight\'s moon costs '
                 '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
             : budget.display;
       }

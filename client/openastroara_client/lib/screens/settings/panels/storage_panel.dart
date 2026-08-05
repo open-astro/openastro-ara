@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -7,7 +8,9 @@ import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../services/storage_space_api.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../services/storage_devices_api.dart';
 import '../../../widgets/storage/server_folder_picker.dart';
+import '../../../widgets/storage/storage_drive_dialog.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -39,7 +42,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     try {
       await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -59,7 +62,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     final api = _api();
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -67,11 +70,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       await ref.read(storageSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Storage settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -88,60 +91,55 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AraColors.accentBusy.withValues(alpha: 0.12),
-            border: Border.all(color: AraColors.accentBusy),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(children: const [
-            Icon(Icons.warning_amber, size: 18, color: AraColors.accentBusy),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Storage is currently on the SD card. Capture > 1 night will '
-                'wear the SD card out — connect a USB drive and click '
-                '"Reformat as ext4" to migrate. (§29 + §29.1.3 wizard)',
+        // One destination, stated plainly, with the capacity you'd actually
+        // ask about — the Time Machine "backup disk" model. Paths, mount
+        // points and filesystems are plumbing; they live behind Advanced.
+        const _DestinationCard(),
+        ExpansionTile(
+          title: Text('Advanced',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AraColors.textSecondary,
+                  )),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 8),
+          children: [
+            EditableTextRow(
+              label: 'Save folder',
+              helpKey: 'session.storage.save_directory',
+              currentValue: s.saveDirectory,
+              getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
+              parse: n.setSaveDirectory,
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 280, top: 4),
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final server = ref.read(activeServerProvider);
+                    if (server == null) {
+                      return;
+                    }
+                    final picked = await showServerFolderPicker(
+                      context,
+                      ref,
+                      server: server,
+                      startPath:
+                          s.saveDirectory.isEmpty ? null : s.saveDirectory,
+                    );
+                    if (picked != null) {
+                      n.setSaveDirectory(picked);
+                      ref.invalidate(storageSpaceProvider);
+                    }
+                  },
+                  icon: const Icon(Icons.folder_open, size: 16),
+                  label: const Text('Choose a folder…'),
+                ),
               ),
             ),
-          ]),
+          ],
         ),
-        const SizedBox(height: 16),
-        EditableTextRow(
-          label: 'Save directory',
-          helpKey: 'session.storage.save_directory',
-          currentValue: s.saveDirectory,
-          getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
-          parse: n.setSaveDirectory,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 280, bottom: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final server = ref.read(activeServerProvider);
-                if (server == null) {
-                  return;
-                }
-                final picked = await showServerFolderPicker(
-                  context,
-                  ref,
-                  server: server,
-                  startPath: s.saveDirectory.isEmpty ? null : s.saveDirectory,
-                );
-                if (picked != null) {
-                  n.setSaveDirectory(picked);
-                  ref.invalidate(storageSpaceProvider);
-                }
-              },
-              icon: const Icon(Icons.folder_open, size: 16),
-              label: const Text('Browse the server…'),
-            ),
-          ),
-        ),
-        const _FreeSpaceRow(),
+        const SizedBox(height: 8),
         SettingsDropdownRow<StorageFileFormat>(
           label: 'File format',
           helpKey: 'session.storage.file_format',
@@ -169,16 +167,12 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             if (v != null) n.setCompression(v);
           },
         ),
-        EditableTextRow(
-          label: 'Filename template',
-          helpKey: 'session.storage.filename_template',
-          currentValue: s.filenameTemplate,
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).filenameTemplate,
-          parse: n.setFilenameTemplate,
-          maxLines: 2,
+        const SettingsRow(
+          label: 'File naming',
+          value: 'Folders and filenames',
+          hint: 'Edit in Your night → File naming',
         ),
-        const SettingsSectionHeader('Low-disk-space warning (§29)'),
+        const SettingsSectionHeader('Warn me when space runs low'),
         EditableNumberRow(
           label: 'Warn below (GB free)',
           helpKey: 'session.storage.min_free_disk_warn_gb',
@@ -203,7 +197,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             if (gb != null) n.setMinFreeDiskCriticalGb(gb);
           },
         ),
-        const SettingsSectionHeader('Backups (§43)'),
+        const SettingsSectionHeader('Backups'),
         EditableNumberRow(
           label: 'Keep backup snapshots',
           helpKey: 'session.storage.backup_retention_count',
@@ -226,7 +220,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         // Save lives in the settings-shell header (PanelSaveRegistration) —
         // fixed chrome, always visible, no scrolling to find it.
         const SizedBox(height: 24),
-        const SettingsSectionHeader('Real-time frame backup (§44)'),
+        const SettingsSectionHeader('Copy frames to this computer as they arrive'),
         Consumer(builder: (context, ref, _) {
           final stream = ref.watch(backupStreamProvider);
           final n = ref.read(backupStreamProvider.notifier);
@@ -293,7 +287,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
             'Back up your profile configuration (settings + sequences) to a ZIP '
-            'snapshot on the daemon, download a snapshot, or restore one.',
+            'snapshot on Ara, download a snapshot, or restore one.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
         ),
@@ -314,53 +308,183 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
 }
 
 
-/// §29 — the real volume behind the save directory. Renders "unavailable" (not
-/// a number) when the daemon can't read it, e.g. an unmounted USB store.
-class _FreeSpaceRow extends ConsumerWidget {
-  const _FreeSpaceRow();
+/// §29 — where frames go, said the way a person would ask it: the drive's
+/// name, how much room is left, and one way to change it. Everything else
+/// (device paths, mount points, filesystems) lives behind Advanced or inside
+/// the chooser, because it is plumbing.
+class _DestinationCard extends ConsumerWidget {
+  const _DestinationCard();
 
-  static String _gb(int bytes) => (bytes / (1000 * 1000 * 1000)).toStringAsFixed(1);
+  static String _size(int bytes) {
+    final gb = bytes / (1000 * 1000 * 1000);
+    return gb >= 1000
+        ? '${(gb / 1000).toStringAsFixed(2)} TB'
+        : '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)} GB';
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(storageSpaceProvider);
-    final text = async.when(
+    final space = ref.watch(storageSpaceProvider);
+    final devices = ref.watch(storageDevicesProvider);
+    final theme = Theme.of(context);
+
+    final current = devices.asData?.value
+        .where((d) => d.isAraStore)
+        .cast<StorageDevice?>()
+        .firstWhere((_) => true, orElse: () => null);
+    final onSystemDisk = devices.asData?.value.any((d) => d.isSystemDisk && d.isAraStore) ?? false;
+
+    final free = space.asData?.value?.freeBytes;
+    final total = space.asData?.value?.totalBytes;
+    final usedFraction =
+        (free != null && total != null && total > 0) ? 1 - (free / total) : null;
+
+    // Name it the way the user labelled it, not /dev/sdb1. friendlyName owns
+    // the label→model→path fallback (including empty strings) — one place.
+    final title = current?.friendlyName ?? (onSystemDisk
+        ? 'Internal storage'
+        : (space.asData?.value?.isFallback ?? false)
+            ? 'Server default folder'
+            : 'Internal storage');
+
+    final subtitle = space.when(
       loading: () => 'Reading…',
-      error: (_, _) => 'Unavailable (the daemon could not read the volume)',
-      data: (space) {
-        if (space == null) {
+      error: (_, _) => 'Could not read the server\'s storage',
+      data: (v) {
+        if (v == null) {
           return 'Not connected to a server';
         }
-        final free = space.freeBytes;
-        final total = space.totalBytes;
         if (free == null || total == null) {
-          return 'Unavailable — is ${space.saveDirectory} mounted?';
+          return 'Unavailable — is the drive plugged in?';
         }
-        final pct = total > 0 ? (100 * free / total).round() : 0;
-        final where = space.isFallback ? ' (daemon fallback directory)' : '';
-        return '${_gb(free)} GB free of ${_gb(total)} GB ($pct%)$where';
+        return '${_size(free)} available of ${_size(total)}';
       },
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: AraColors.textSecondary.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 280,
-            child: Text('Free space',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    )),
+          Row(
+            children: [
+              Icon(current != null ? Icons.usb : Icons.sd_card,
+                  size: 32, color: AraColors.textSecondary),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Frames are saved to', style: theme.textTheme.bodySmall
+                        ?.copyWith(color: AraColors.textSecondary)),
+                    const SizedBox(height: 2),
+                    Text(title,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: theme.textTheme.bodySmall
+                        ?.copyWith(color: AraColors.textSecondary)),
+                  ],
+                ),
+              ),
+              // "Look again at what's on this disk" — for the user who
+              // plugs in a drive that already holds a season of frames.
+              _RescanButton(),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () => showStorageDriveDialog(context, ref),
+                child: const Text('Change…'),
+              ),
+            ],
           ),
-          Expanded(child: Text(text)),
-          IconButton(
-            tooltip: 'Re-check',
-            iconSize: 18,
-            onPressed: () => ref.invalidate(storageSpaceProvider),
-            icon: const Icon(Icons.refresh),
-          ),
+          if (usedFraction != null) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: usedFraction.clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: AraColors.textSecondary.withValues(alpha: 0.2),
+              ),
+            ),
+          ],
+          if (current == null && !(space.asData?.value == null)) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, size: 16, color: AraColors.accentBusy),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Frames are going to the server\'s internal storage. '
+                    'Sustained imaging wears out SD cards — choose an external '
+                    'drive and it will be reconnected automatically after every '
+                    'restart.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: AraColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+
+/// Runs the server-side §28.8 scan on demand and reports what it found in a
+/// snackbar. Spins in place while the walk runs — a big library takes a
+/// couple of seconds on a Pi.
+class _RescanButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_RescanButton> createState() => _RescanButtonState();
+}
+
+class _RescanButtonState extends ConsumerState<_RescanButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final server = ref.read(activeServerProvider);
+    if (server == null) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final api = StorageDevicesApi(server);
+    try {
+      final outcome = await api.rescan();
+      if (!mounted) return;
+      if (outcome.ran && outcome.framesRecovered > 0) {
+        // The library just changed — anything watching space/devices should
+        // reflect the recovered frames.
+        ref.invalidate(storageSpaceProvider);
+      }
+      messenger.showSnackBar(SnackBar(content: Text(outcome.message)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(friendlyError(e, action: 'check the disk for frames'))));
+    } finally {
+      api.close();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: _busy ? null : _run,
+      child: _busy
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          : const Text('Find frames on disk'),
     );
   }
 }

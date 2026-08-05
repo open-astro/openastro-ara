@@ -75,11 +75,11 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             children: [
             const Text('The bundle contains:'),
             const SizedBox(height: 8),
-            const Text('• the daemon\'s recent log files'),
+            const Text('• Ara\'s recent log files'),
             const Text(
                 '• your full profile — which may include equipment credentials, '
                 'API / notification tokens, precise observatory coordinates, and '
-                'network endpoints'),
+                'network addresses'),
             const Text('• system info, including this device\'s filesystem path'),
             const SizedBox(height: 12),
             Text('Approximate size: ${_humanSize(prep.estimatedSizeBytes)}.'),
@@ -128,7 +128,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       style: theme.textTheme.titleSmall),
                   const SizedBox(height: 2),
                   Text(
-                    'Bundles the daemon logs + your profile + system info into a '
+                    'Bundles Ara logs + your profile + system info into a '
                     'ZIP you can attach to a report.',
                     style: theme.textTheme.bodySmall,
                   ),
@@ -160,12 +160,12 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.sendTimeout ||
         DioExceptionType.receiveTimeout =>
-          'the daemon took too long to respond.',
+          'Ara took too long to respond.',
         DioExceptionType.connectionError =>
-          'could not reach the daemon.',
+          'could not reach Ara.',
         DioExceptionType.badResponse =>
-          'the daemon returned an error (${e.response?.statusCode}).',
-        _ => 'something went wrong talking to the daemon.',
+          'Ara returned an error (${e.response?.statusCode}).',
+        _ => 'something went wrong talking to Ara.',
       };
     }
     return 'an unexpected error occurred.';

@@ -57,3 +57,47 @@ public sealed record StorageSpaceDto(
     bool IsFallback,
     long? FreeBytes,
     long? TotalBytes);
+
+/// <summary>§29.1.1 — a block device the daemon could use for ARA data.
+/// System disks are listed but flagged so the UI can grey them out.</summary>
+public sealed record StorageDeviceDto(
+    string Path,
+    string? Uuid,
+    string? Label,
+    string? Model,
+    string? FileSystem,
+    long? SizeBytes,
+    string? MountPoint,
+    bool Removable,
+    string? Transport,
+    bool IsSystemDisk,
+    bool IsAraStore);
+
+/// <summary>§29.1.1/§29.1.3 — mount a drive as the ARA store, optionally
+/// reformatting it as ext4 first (destructive; the caller must echo the
+/// drive's current label as confirmation).</summary>
+public sealed record StorageConfigureRequestDto(
+    string Uuid,
+    bool Format = false,
+    string? ConfirmLabel = null);
+
+/// <summary>Result of a storage configure attempt. <c>code</c> is the helper's
+/// machine-readable outcome (ok, not_ext4, label_mismatch, device_busy,
+/// refused/system_disk, uuid_not_found, …) so the client can branch.</summary>
+public sealed record StorageConfigureResultDto(
+    bool Success,
+    string Code,
+    string? Detail,
+    string? MountPoint,
+    string? SaveDirectory);
+
+/// <summary>Result of POST /api/v1/storage/rescan (§28.8 on demand).
+/// <c>ran</c> is false when the save directory was missing or unwritable —
+/// <c>skip_reason</c> then says which, so the client can explain rather than
+/// report "0 frames found".</summary>
+public sealed record StorageRescanResultDto(
+    bool Ran,
+    string? SkipReason,
+    string SavePath,
+    int TempFilesSwept,
+    int FramesRecovered);

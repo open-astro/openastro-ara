@@ -1,0 +1,242 @@
+/// §29.2 — the structured face of the filename template.
+///
+/// Ara's template language is `{night}/{type}/{datetime}_{filter}` — plain
+/// words in braces, slash for folders. The server also reads the inherited
+/// NINA `$$TOKEN$$` dialect forever, but Ara only ever writes this one.
+/// Nobody should have to write either by hand, so the UI edits this model:
+/// a folder scheme plus a set of name parts.
+/// The model compiles to a template string for the server, and recognizes its
+/// own output when it reads one back. A template it can't recognize — a
+/// hand-written NINA import, say — flips the panel into custom mode where the
+/// raw string is edited directly. Nothing is ever lost in translation:
+/// unrecognized means untouched.
+library;
+
+/// How frames are grouped into folders on the disk.
+enum FolderScheme {
+  /// `2026-08-03 / Light / …` — the default: one folder per night, split by
+  /// frame type so calibration never mixes into the lights.
+  nightAndType,
+
+  /// `2026-08-03 / M 31 / Light / …` — nights first, then what you shot.
+  nightTargetType,
+
+  /// `M 31 / 2026-08-03 / Light / …` — a folder per project, nights inside.
+  targetNightType,
+
+  /// Everything flat in the save folder.
+  none,
+}
+
+/// One optional ingredient of the filename. Order here is the order in the
+/// name — fixed on purpose: fewer decisions, and every Ara library reads the
+/// same way.
+enum NamePart { target, filter, exposure, sensorTemp, gain, frameNumber }
+
+/// The structured template. Date & time is not modeled — every name starts
+/// with `{datetime}`; it is what makes names unique and sortable, so it is
+/// not optional.
+class FrameNamingModel {
+  const FrameNamingModel({
+    this.folders = FolderScheme.nightAndType,
+    this.parts = const {NamePart.filter, NamePart.exposure},
+  });
+
+  final FolderScheme folders;
+  final Set<NamePart> parts;
+
+  FrameNamingModel copyWith({FolderScheme? folders, Set<NamePart>? parts}) =>
+      FrameNamingModel(
+          folders: folders ?? this.folders, parts: parts ?? this.parts);
+
+  FrameNamingModel toggle(NamePart part, bool on) {
+    final next = Set<NamePart>.from(parts);
+    on ? next.add(part) : next.remove(part);
+    return copyWith(parts: next);
+  }
+
+  /// The exact string the server stores and expands.
+  String compile() {
+    final folderTokens = switch (folders) {
+      FolderScheme.nightAndType => ['{night}', '{type}'],
+      FolderScheme.nightTargetType => ['{night}', '{target}', '{type}'],
+      FolderScheme.targetNightType => ['{target}', '{night}', '{type}'],
+      FolderScheme.none => <String>[],
+    };
+    final nameTokens = [
+      '{datetime}',
+      for (final part in NamePart.values)
+        if (parts.contains(part))
+          switch (part) {
+            NamePart.target => '{target}',
+            NamePart.filter => '{filter}',
+            NamePart.exposure => '{exposure}s',
+            NamePart.sensorTemp => '{temp}',
+            NamePart.gain => 'g{gain}',
+            NamePart.frameNumber => '{n}',
+          },
+    ];
+    return [...folderTokens, nameTokens.join('_')].join('/');
+  }
+
+  /// Rewrite the inherited `$$TOKEN$$` dialect into `{token}` form —
+  /// mirrors the server's Canonicalize so both sides recognize the same
+  /// templates.
+  static String canonicalize(String template) => template
+      .replaceAllMapped(RegExp(r'\$\$([A-Za-z0-9]+)\$\$'), (m) {
+        final legacy = m.group(1)!.toUpperCase();
+        const map = {
+          'DATEMINUS12': 'night',
+          'IMAGETYPE': 'type',
+          'SENSORTEMP': 'temp',
+          'EXPOSURETIME': 'exposure',
+          'FRAMENR': 'n',
+          'TARGETNAME': 'target',
+        };
+        return '{${map[legacy] ?? legacy.toLowerCase()}}';
+      })
+      // NINA writes '\\' between folders; collapse any run of separators to
+      // one so both dialects compare equal.
+      .replaceAll(r'\', '/')
+      .replaceAll(RegExp('/+'), '/')
+      .trim();
+
+  /// Recognize a template this model could have written — in either dialect.
+  /// Null = custom, edit raw.
+  static FrameNamingModel? tryParse(String template) {
+    final canonical = canonicalize(template);
+    for (final folders in FolderScheme.values) {
+      // parts is small: try every subset via bitmask (2^6).
+      for (var mask = 0; mask < (1 << NamePart.values.length); mask++) {
+        final parts = <NamePart>{
+          for (var i = 0; i < NamePart.values.length; i++)
+            if (mask & (1 << i) != 0) NamePart.values[i],
+        };
+        final candidate = FrameNamingModel(folders: folders, parts: parts);
+        if (candidate.compile() == canonical) return candidate;
+      }
+    }
+    return null;
+  }
+}
+
+/// Example values for the live preview — one plausible frame from tonight.
+class NamingPreviewContext {
+  const NamingPreviewContext({
+    required this.captured,
+    this.target = 'M 31',
+    this.filter = 'L',
+    this.exposureSec = 180,
+    this.sensorTemp = -10,
+    this.gain = 100,
+    this.frameNumber = 42,
+  });
+
+  final DateTime captured;
+  final String target;
+  final String filter;
+  final double exposureSec;
+  final int sensorTemp;
+  final int gain;
+  final int frameNumber;
+}
+
+/// Mirror of the server's expander, for the preview only — the server's
+/// expansion is the one that names real files.
+List<String> previewSegments(String template, NamingPreviewContext ctx) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  String date(DateTime t) => '${t.year}-${two(t.month)}-${two(t.day)}';
+  final t = ctx.captured;
+  final night = t.subtract(const Duration(hours: 12));
+  // The server trims/lowercases every token and accepts {n}/{number}/{frame}
+  // as aliases — normalize the same way first, or a hand-typed "{Filter}"
+  // would preview as a literal while the real file expands it fine.
+  var expanded = FrameNamingModel.canonicalize(template)
+      .replaceAllMapped(RegExp(r'\{([^{}]*)\}'), (m) {
+        var tok = m[1]!.trim().toLowerCase();
+        if (tok == 'number' || tok == 'frame') {
+          tok = 'n';
+        }
+        return '{$tok}';
+      })
+      .replaceAll('{night}', date(night))
+      .replaceAll('{datetime}',
+          '${date(t)}_${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
+      .replaceAll('{date}', date(t))
+      .replaceAll('{time}', '${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
+      .replaceAll('{dateutc}', date(t.toUtc()))
+      .replaceAll(
+          '{timeutc}',
+          '${two(t.toUtc().hour)}-${two(t.toUtc().minute)}-'
+              '${two(t.toUtc().second)}')
+      .replaceAll('{type}', 'Light')
+      // A '/' inside a token VALUE is data, not a folder boundary — the
+      // server sanitizes it to '-' within the segment; splicing it raw here
+      // would make the preview grow a folder the server never creates.
+      .replaceAll('{target}', ctx.target.replaceAll('/', '-'))
+      .replaceAll('{filter}', ctx.filter.replaceAll('/', '-'))
+      .replaceAll(
+          '{exposure}',
+          ctx.exposureSec == ctx.exposureSec.roundToDouble()
+              ? ctx.exposureSec.round().toString()
+              : ctx.exposureSec.toString())
+      .replaceAll('{temp}', '${ctx.sensorTemp}C')
+      .replaceAll('{gain}', '${ctx.gain}')
+      .replaceAll('{offset}', '30')
+      .replaceAll('{binning}', '1x1')
+      .replaceAll('{camera}', 'ASI2600MM')
+      .replaceAll('{n}', ctx.frameNumber.toString().padLeft(4, '0'));
+  // Any token we didn't recognize vanishes, same as the server.
+  expanded = expanded.replaceAll(RegExp(r'\{[^{}]*\}'), '');
+  final segments = expanded
+      .split('/')
+      .map((s) {
+        // Mirror the server's FrameNaming.SanitizeSegment: filesystem-hostile
+        // characters become '-', and a segment that is nothing but dots
+        // (".", "..") vanishes rather than escaping the storage root.
+        var v = s.replaceAll(RegExp(r'[\\:*?"<>|\x00]'), '-');
+        if (RegExp(r'^\.+$').hasMatch(v)) {
+          return '';
+        }
+        while (v.contains('__')) {
+          v = v.replaceAll('__', '_');
+        }
+        while (v.contains('-_')) {
+          v = v.replaceAll('-_', '_');
+        }
+        // Internal scar-dashes too, exactly like the server: a '-' after a
+        // separator is a scar unless it starts a number ("180s_-10C" keeps
+        // its minus sign, "M31_-L" loses the dash).
+        final scar = StringBuffer();
+        for (var i = 0; i < v.length; i++) {
+          final isScarDash = v[i] == '-' &&
+              i > 0 &&
+              (v[i - 1] == '_' || v[i - 1] == '-') &&
+              (i + 1 >= v.length || !RegExp(r'[0-9]').hasMatch(v[i + 1]));
+          if (!isScarDash) {
+            scar.write(v[i]);
+          }
+        }
+        v = scar.toString();
+        // Mirror the server's FrameNaming.SanitizeSegment edge-trim: a
+        // leading '-' that starts a number is a minus sign ("-10C"), not a
+        // separator scar, and must survive so the preview matches the file.
+        v = v.replaceAll(RegExp(r'[_\-. ]+$'), '');
+        while (v.isNotEmpty &&
+            (v.startsWith('_') ||
+                v.startsWith('.') ||
+                v.startsWith(' ') ||
+                (v.startsWith('-') &&
+                    (v.length == 1 ||
+                        !RegExp(r'[0-9]').hasMatch(v[1]))))) {
+          v = v.substring(1);
+        }
+        return v;
+      })
+      .where((s) => s.isNotEmpty)
+      .toList();
+  if (segments.isNotEmpty) {
+    segments[segments.length - 1] = '${segments.last}.fits';
+  }
+  return segments;
+}

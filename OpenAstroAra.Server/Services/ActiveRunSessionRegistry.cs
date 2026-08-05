@@ -46,6 +46,17 @@ public sealed class ActiveRunSessionRegistry {
     /// none is — and also null when SEVERAL are. A watch/timer fault can't tell which
     /// concurrent run it belongs to, and a plausible-but-wrong session_id is worse
     /// than an unattributed one for the §42.6 consumers (review finding on #795).</summary>
+    /// <summary>Whether ANY run is in flight — unlike <see cref="Current"/>, which
+    /// is deliberately null when SEVERAL are. Used by operations that must not
+    /// disturb a live run (e.g. re-pointing or reformatting the storage drive).</summary>
+    public bool HasAny {
+        get {
+            lock (_gate) {
+                return _active.Count > 0;
+            }
+        }
+    }
+
     public Guid? Current {
         get {
             lock (_gate) {

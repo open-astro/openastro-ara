@@ -25,7 +25,7 @@ class LaunchProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
-  /// The dropdown's local pick. Null means "follow the daemon's active id" —
+  /// The dropdown's local pick. Null means "follow Ara's active id" —
   /// it only becomes non-null when the user picks a different entry, so a
   /// background list refresh can't clobber an explicit choice.
   String? _pickedId;

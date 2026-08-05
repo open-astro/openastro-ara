@@ -73,7 +73,7 @@ class SequenceLoadDialog extends ConsumerWidget {
           },
           data: (list) {
             if (list == null) {
-              return const _Message('Connect to a daemon to load saved sequences.');
+              return const _Message('Connect to your rig to load saved sequences.');
             }
             if (list.isEmpty) {
               return const _Message('No saved sequences yet.');
@@ -347,7 +347,7 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       messenger.showSnackBar(const SnackBar(
-          content: Text('Connect to a daemon to export sequences.'),
+          content: Text('Connect to your rig to export sequences.'),
           backgroundColor: AraColors.accentError));
       return;
     }

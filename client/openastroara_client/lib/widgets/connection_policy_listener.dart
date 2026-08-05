@@ -91,7 +91,7 @@ class _ConnectionPolicyListenerState
           content: const Text(
             'Another WILMA client took control of the observatory, so this '
             'client was disconnected. The running sequence is unaffected — it '
-            'continues on the daemon.',
+            'continues on Ara.',
           ),
           actions: [
             TextButton(
