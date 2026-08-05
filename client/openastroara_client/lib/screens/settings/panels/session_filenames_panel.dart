@@ -259,7 +259,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           value: fs.headerEphemeris,
           onChanged: fn.setHeaderEphemeris,
           hint: 'Altitude of both, moon phase and illumination — computed '
-              'for your site at the moment of capture',
+              'for your site at the moment of capture. Even with Your site '
+              'off, these can roughly reveal your latitude',
         ),
         const SettingsRow(
           label: 'Always written',

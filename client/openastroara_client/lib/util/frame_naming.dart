@@ -154,6 +154,11 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
           '${date(t)}_${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
       .replaceAll('{date}', date(t))
       .replaceAll('{time}', '${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
+      .replaceAll('{dateutc}', date(t.toUtc()))
+      .replaceAll(
+          '{timeutc}',
+          '${two(t.toUtc().hour)}-${two(t.toUtc().minute)}-'
+              '${two(t.toUtc().second)}')
       .replaceAll('{type}', 'Light')
       // A '/' inside a token VALUE is data, not a folder boundary — the
       // server sanitizes it to '-' within the segment; splicing it raw here

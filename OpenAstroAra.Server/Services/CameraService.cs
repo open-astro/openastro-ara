@@ -904,6 +904,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // write yourself. Computed from the site, so the Site coordinates
             // must exist; guarded by its own switch because celestial
             // geometry at a timestamp narrows down where a frame was taken.
+            // Deliberately independent of HeaderSite: the switches map 1:1 to
+            // the panel's groups, and the panel's Sun & moon hint spells out
+            // that celestial geometry at a timestamp still narrows down where
+            // a frame was taken — the user makes that call per group, not us.
             // (0,0) as "not configured" is the product-wide convention (the
             // client's site panel says "Coordinates not set" for exactly this
             // pair). The one boat at that null-island point loses these

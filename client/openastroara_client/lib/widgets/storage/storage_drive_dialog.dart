@@ -20,6 +20,9 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
     context: context,
     builder: (_) => const _DiskChooser(),
   );
+  // The caller's element can be gone by the time the dialog closes —
+  // touching its ref then throws (the classic Riverpod after-await footgun).
+  if (!context.mounted) return;
   ref.invalidate(storageSpaceProvider);
   ref.invalidate(storageDevicesProvider);
 }

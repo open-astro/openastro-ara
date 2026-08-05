@@ -339,8 +339,9 @@ class _DestinationCard extends ConsumerWidget {
     final usedFraction =
         (free != null && total != null && total > 0) ? 1 - (free / total) : null;
 
-    // Name it the way the user labelled it, not /dev/sdb1.
-    final title = current?.label ?? current?.model ?? (onSystemDisk
+    // Name it the way the user labelled it, not /dev/sdb1. friendlyName owns
+    // the label→model→path fallback (including empty strings) — one place.
+    final title = current?.friendlyName ?? (onSystemDisk
         ? 'Internal storage'
         : (space.asData?.value?.isFallback ?? false)
             ? 'Server default folder'
@@ -458,6 +459,7 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
     final api = StorageDevicesApi(server);
     try {
       final outcome = await api.rescan();
+      if (!mounted) return;
       if (outcome.ran && outcome.framesRecovered > 0) {
         // The library just changed — anything watching space/devices should
         // reflect the recovered frames.
