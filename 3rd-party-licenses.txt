@@ -610,7 +610,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.16.16
+Package:        Scalar.AspNetCore 2.16.17
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
@@ -697,7 +697,7 @@ License source: https://github.com/ssg/SimpleBase (README: Apache-2.0)
 Project:        https://github.com/ssg/SimpleBase
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp 4.150.1
+Package:        SkiaSharp 4.151.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -705,7 +705,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Linux 4.150.1
+Package:        SkiaSharp.NativeAssets.Linux 4.151.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -713,7 +713,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.macOS 4.150.1
+Package:        SkiaSharp.NativeAssets.macOS 4.151.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -721,7 +721,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Win32 4.150.1
+Package:        SkiaSharp.NativeAssets.Win32 4.151.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
