@@ -243,6 +243,40 @@ if [ "$FORMAT" -eq 1 ]; then
             exit 5
         fi
     fi
+    # Old filesystem/partition signatures must ALL go — a leftover backup
+    # GPT at the end of the disk makes macOS/Windows call the drive
+    # unreadable even though the new filesystem at sector 0 is fine.
+    wipefs -a "$DEVICE" >/dev/null 2>&1 || true
+    # A whole disk gets the layout every retail USB drive ships with:
+    # an MBR and ONE partition, then the filesystem inside it — the shape
+    # Windows and macOS expect. (Formatting the raw device — "superfloppy"
+    # — is what made the take-home drive unreadable off-rig.)
+    KIND=$(lsblk -no TYPE "$DEVICE" 2>/dev/null | head -n1)
+    if [ "$KIND" = "disk" ]; then
+        PTYPE=83
+        [ "$NEW_FS" = "exfat" ] && PTYPE=07
+        if ! echo "type=$PTYPE" | sfdisk --quiet --wipe always "$DEVICE" >/dev/null 2>&1; then
+            echo "ERROR: mkfs_failed partition_table"
+            exit 7
+        fi
+        udevadm settle 2>/dev/null || sleep 2
+        case "$DEVICE" in
+            *[0-9]) PART="${DEVICE}p1" ;;
+            *) PART="${DEVICE}1" ;;
+        esac
+        # udev can lag creating the node on slow hubs — give it a moment.
+        i=0
+        while [ ! -b "$PART" ] && [ "$i" -lt 10 ]; do
+            sleep 1
+            i=$((i + 1))
+        done
+        if [ ! -b "$PART" ]; then
+            echo "ERROR: mkfs_failed partition_node_missing"
+            exit 7
+        fi
+        DEVICE=$PART
+        wipefs -a "$DEVICE" >/dev/null 2>&1 || true
+    fi
     if [ "$NEW_FS" = "exfat" ]; then
         mkfs.exfat -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
     else
