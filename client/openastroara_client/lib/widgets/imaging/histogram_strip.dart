@@ -88,12 +88,23 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
 
   FrameHistogram get histogram => widget.histogram;
 
+  /// Slider position → ADU value (both normalized 0..1), cube-law: astro
+  /// data lives in the bottom few percent of the range, and a linear slider
+  /// jumps over the whole signal in one pixel. p=0.25 → 1.6% — the sky
+  /// background sits mid-track instead of against the left stop.
+  static double posToValue(double p) => p * p * p;
+
+  static double valueToPos(double v) =>
+      math.pow(v.clamp(0.0, 1.0), 1 / 3).toDouble();
+
   void _commit() {
     final current = ref.read(stretchOverrideProvider);
     ref.read(stretchOverrideProvider.notifier).set(StretchOverride(
-          black: _dragBlack ?? current?.black ?? 0,
+          black: posToValue(
+              _dragBlack ?? valueToPos(current?.black ?? 0)),
           mid: _dragMid ?? current?.mid ?? 0.5,
-          white: _dragWhite ?? current?.white ?? 1,
+          white: posToValue(
+              _dragWhite ?? valueToPos(current?.white ?? 1)),
         ));
     setState(() {
       _dragBlack = null;
@@ -109,9 +120,13 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
     final highClip = histogram.highClipFraction >= _clipWarnFraction;
     String pct(double f) => '${(f * 100).toStringAsFixed(1)}%';
     final override = ref.watch(stretchOverrideProvider);
-    final black = _dragBlack ?? override?.black ?? 0;
+    // Slider space (cube-root of value space) for the thumbs; value space
+    // for the cursor lines on the plot.
+    final black = _dragBlack ?? valueToPos(override?.black ?? 0);
     final mid = _dragMid ?? override?.mid ?? 0.5;
-    final white = _dragWhite ?? override?.white ?? 1;
+    final white = _dragWhite ?? valueToPos(override?.white ?? 1);
+    final blackValue = posToValue(black);
+    final whiteValue = posToValue(white);
     // Quiet, edge-to-edge markers that align with the plot axis above —
     // the default Material treatment (thick blue, thumb-inset track) reads
     // as a form control, not as histogram cursors.
@@ -142,6 +157,12 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
               bins: histogram.bins,
               lowClip: lowClip,
               highClip: highClip,
+              // Cursor lines only while a manual stretch is in play.
+              blackCursor: override != null || _dragBlack != null ? blackValue : null,
+              midCursor: override != null || _dragMid != null
+                  ? blackValue + mid * (whiteValue - blackValue)
+                  : null,
+              whiteCursor: override != null || _dragWhite != null ? whiteValue : null,
             ),
           ),
         ),
@@ -260,7 +281,21 @@ class _BinsPainter extends CustomPainter {
   final List<int> bins;
   final bool lowClip;
   final bool highClip;
-  _BinsPainter({required this.bins, required this.lowClip, required this.highClip});
+
+  /// Manual-stretch cursor positions in value space (0..1), or null when the
+  /// stretch is on auto.
+  final double? blackCursor;
+  final double? midCursor;
+  final double? whiteCursor;
+
+  _BinsPainter({
+    required this.bins,
+    required this.lowClip,
+    required this.highClip,
+    this.blackCursor,
+    this.midCursor,
+    this.whiteCursor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -281,9 +316,34 @@ class _BinsPainter extends CustomPainter {
         isClipBar ? clip : fill,
       );
     }
+    // Stretch cursors: black and white bracket the kept range, mid dashed
+    // between them — the feedback that says what the sliders actually did.
+    void line(double? v, Color color, {bool dashed = false}) {
+      if (v == null) return;
+      final x = (v.clamp(0.0, 1.0)) * size.width;
+      final paint = Paint()
+        ..color = color
+        ..strokeWidth = 1;
+      if (!dashed) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+        return;
+      }
+      for (var y = 0.0; y < size.height; y += 6) {
+        canvas.drawLine(Offset(x, y), Offset(x, math.min(y + 3, size.height)), paint);
+      }
+    }
+
+    line(blackCursor, AraColors.textDisabled);
+    line(midCursor, AraColors.textDisabled, dashed: true);
+    line(whiteCursor, Colors.white70);
   }
 
   @override
   bool shouldRepaint(covariant _BinsPainter old) =>
-      !identical(old.bins, bins) || old.lowClip != lowClip || old.highClip != highClip;
+      !identical(old.bins, bins) ||
+      old.lowClip != lowClip ||
+      old.highClip != highClip ||
+      old.blackCursor != blackCursor ||
+      old.midCursor != midCursor ||
+      old.whiteCursor != whiteCursor;
 }
