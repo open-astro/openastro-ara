@@ -374,7 +374,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+        var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
+        var settingsMs = timing.ElapsedMilliseconds;
         // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
         // exposure start, not the request-accepted time the §60.5 response reported.
@@ -410,6 +412,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // finished image, nothing to stop. REST passes CancellationToken.None, so this is inert there.
         ct.ThrowIfCancellationRequested();
 
+        var exposeMs = timing.ElapsedMilliseconds - settingsMs;
+
         // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
         object? imageArray;
         Interlocked.Exchange(ref _downloading, 1);
@@ -418,10 +422,21 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         } finally {
             Interlocked.Exchange(ref _downloading, 0);
         }
+        var downloadMs = timing.ElapsedMilliseconds - settingsMs - exposeMs;
         var (pixels, width, height) = ConvertImageArray(imageArray);
+        var convertMs = timing.ElapsedMilliseconds - settingsMs - exposeMs - downloadMs;
+        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs, convertMs);
         RefreshCacheOnce();
         return (pixels, width, height, capturedAt);
     }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} device timing: settings {SettingsMs}ms, expose+ready {ExposeMs}ms, download {DownloadMs}ms, convert {ConvertMs}ms.")]
+    private partial void LogCaptureDeviceTiming(Guid frameId, long settingsMs, long exposeMs, long downloadMs, long convertMs);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} store timing: fits-write {WriteMs}ms, register {RegisterMs}ms.")]
+    private partial void LogCaptureStoreTiming(Guid frameId, long writeMs, long registerMs);
 
     /// <summary>
     /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
@@ -456,8 +471,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
+        var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
             targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions);
+        var writeMs = storeTiming.ElapsedMilliseconds;
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -467,6 +484,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return false;
         }
         LogCaptureComplete(frameId, width, height, filePath);
+        LogCaptureStoreTiming(frameId, writeMs, storeTiming.ElapsedMilliseconds - writeMs);
         PrewarmPreview(frameId);
         if (frameType == FrameType.Light) {
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
