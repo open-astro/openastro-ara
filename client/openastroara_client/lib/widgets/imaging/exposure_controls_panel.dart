@@ -27,14 +27,17 @@ class ExposureControlsPanel extends ConsumerWidget {
     final params = ref.watch(exposureControllerProvider);
     final ctrl = ref.read(exposureControllerProvider.notifier);
 
+    // Width comes from the imaging tab's rail; the rail owns scrolling, so
+    // this is a plain column rather than its own ListView.
     return Container(
-      width: 280,
       padding: const EdgeInsets.all(12),
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
         border: Border(left: BorderSide(color: AraColors.border)),
       ),
-      child: ListView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Exposure', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),

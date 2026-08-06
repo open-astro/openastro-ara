@@ -37,39 +37,40 @@ class ImagingTab extends ConsumerWidget {
         Expanded(
           child: Row(
             children: [
-              Expanded(
-                // The panel stack scrolls inside a bounded box (≤60% of the column) instead of
-                // overflowing: any expanded tall panel (Guiding, …) previously blew
-                // the RenderFlex at non-fullscreen window sizes. The frame viewer keeps the rest.
-                child: LayoutBuilder(
-                  builder: (context, box) => Column(
+              // The frame owns the whole canvas — every sensor aspect fits
+              // with the least possible letterboxing when the viewer is as
+              // tall as the window allows. Everything else lives in the rail.
+              const Expanded(
+                child: Column(
+                  children: [
+                    Expanded(child: FrameViewer()),
+                    HistogramStrip(),
+                  ],
+                ),
+              ),
+              // Right rail: capture controls first, then solve + health —
+              // the panels that used to squeeze the viewer from below. One
+              // scroll view so an expanded panel never overflows the window.
+              SizedBox(
+                width: 340,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Expanded(child: FrameViewer()),
-                      const HistogramStrip(),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: box.maxHeight * 0.6),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              SolvePanel(),
-                              DiagnosticPanel(),
-                              GuidingPanel(),
-                              FaultPanel(),
-                            ],
-                          ),
-                        ),
+                      ExposureControlsPanel(
+                        liveViewOn: liveViewOn,
+                        onTakeOne: exposing ? null : () => _takeOne(context, ref),
+                        onLiveViewToggle: (v) {
+                          _toggleLiveView(context, ref, v);
+                        },
                       ),
+                      const SolvePanel(),
+                      const DiagnosticPanel(),
+                      const GuidingPanel(),
+                      const FaultPanel(),
                     ],
                   ),
                 ),
-              ),
-              ExposureControlsPanel(
-                liveViewOn: liveViewOn,
-                onTakeOne: exposing ? null : () => _takeOne(context, ref),
-                onLiveViewToggle: (v) {
-                  _toggleLiveView(context, ref, v);
-                },
               ),
             ],
           ),
