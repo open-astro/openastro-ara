@@ -467,6 +467,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return false;
         }
         LogCaptureComplete(frameId, width, height, filePath);
+        PrewarmPreview(frameId);
         if (frameType == FrameType.Light) {
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
             // time, and delaying frame.complete (or the next exposure) for a statistic is the
@@ -555,6 +556,36 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogFrameAnalysisFailed(ex, frameId);
         }
     }
+
+    /// <summary>
+    /// §65 — render the default-stretch preview variant into the cache the
+    /// moment the frame registers, instead of waiting for the client to ask.
+    /// The client's fetch then either hits the cache or joins this render
+    /// (single-flight in the repository), so the picture appears seconds
+    /// after readout — the full FITS keeps trickling to the desktop later.
+    /// Fire-and-forget: a preview failure must never affect the capture.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort cache warm on a background task: any render fault is logged and dropped — the client's own preview request still works (and reports its own errors). Log-and-recover boundary.")]
+    private void PrewarmPreview(Guid frameId) {
+        if (_frames is null) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                // Null palette → the profile's default stretch for the frame
+                // type — exactly what the client's parameterless fetch asks for.
+                await _frames.GetPreviewAsync(frameId,
+                    new FramePreviewRequestDto(null!, null, null, null, null, ApplyDebayer: true),
+                    CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogPreviewPrewarmFailed(ex, frameId);
+            }
+        });
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Preview pre-warm for frame {FrameId} failed (client fetch will render instead).")]
+    private partial void LogPreviewPrewarmFailed(Exception ex, Guid frameId);
 
     // §59 — the one detector posture the HFR trend and the live-view overlay must share. Both feed the same
     // instrument's picture of the frame, so a sensitivity retune here must reach both; a copy-pasted literal

@@ -514,18 +514,39 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return (cached, "image/jpeg");
         }
 
+        // Single-flight per variant: the capture-time pre-warm and the
+        // client's own fetch land within the same second — one render, both
+        // callers get its bytes. (Also collapses rapid stretch-slider drags.)
+        var render = _renders.GetOrAdd(cachePath,
+            _ => new Lazy<Task<byte[]>>(() => Task.Run(() => RenderPreview(filePath, algorithm, stretchParams, cachePath))));
+        try {
+            return (await render.Value.ConfigureAwait(false), "image/jpeg");
+        } finally {
+            _renders.TryRemove(cachePath, out _);
+        }
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<byte[]>>> _renders = new(StringComparer.Ordinal);
+
+    private byte[] RenderPreview(string filePath, OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams, string cachePath) {
         var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
         byte[] jpeg;
         if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+            // Superpixel debayer already halves the resolution before stretch.
             var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
             jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
         } else {
-            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height, maxDim: PreviewMaxDim);
+            // Mono: box-average down to the preview size BEFORE the stretch —
+            // stretching 26 MP only for the encoder to discard most of it is
+            // where a Pi spends its preview minute.
+            var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
+            var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
+            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
         }
         TryWriteCache(cachePath, jpeg);
         EvictVariantsIfNeeded(filePath);
-        return (jpeg, "image/jpeg");
+        return jpeg;
     }
 
     public async Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) {
