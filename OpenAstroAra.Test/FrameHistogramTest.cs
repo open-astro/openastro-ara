@@ -23,6 +23,17 @@ namespace OpenAstroAra.Test {
     public class FrameHistogramTest {
 
         [Test]
+        public void Bias_level_darks_are_not_black_clipped() {
+            // Every pixel near a ~100 ADU bias floor: all land in bin 0, but
+            // none are truly clipped — the warning must stay quiet.
+            ushort[] pixels = [98, 100, 102, 104];
+            var h = SqliteFrameRepository.ComputeHistogram(pixels);
+            Assert.That(h.Bins[0], Is.EqualTo(4));
+            Assert.That(h.LowClipFraction, Is.Zero, "bias level is not clipping");
+            Assert.That(h.HighClipFraction, Is.Zero);
+        }
+
+        [Test]
         public void Bins_stats_and_clip_fractions() {
             // 2 black (bin 0), 1 mid (32768 → bin 64), 1 saturated (bin 127).
             ushort[] pixels = [0, 0, 32768, 65535];

@@ -51,8 +51,14 @@ class ImagingTab extends ConsumerWidget {
               // Right rail: capture controls first, then solve + health —
               // the panels that used to squeeze the viewer from below. One
               // scroll view so an expanded panel never overflows the window.
-              SizedBox(
-                width: 340,
+              // The Container (not the Row's default centering) owns the
+              // full-height background so short content pins to the top.
+              Container(
+                width: 320,
+                decoration: const BoxDecoration(
+                  color: AraColors.bgPanel,
+                  border: Border(left: BorderSide(color: AraColors.border)),
+                ),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

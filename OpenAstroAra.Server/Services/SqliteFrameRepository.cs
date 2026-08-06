@@ -1060,16 +1060,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     }
 
     /// <summary>128 bins over the 16-bit range (bin = ADU >> 9), plus exact
-    /// min/max/mean. Internal for tests.</summary>
+    /// min/max/mean. Clip fractions count TRUE rail values (0 and 65535) —
+    /// the whole bottom bin is 512 ADU wide and would flag every normal
+    /// bias-level dark as "clipped". Internal for tests.</summary>
     internal static FrameHistogramDto ComputeHistogram(ushort[] pixels) {
         var bins = new long[128];
         var min = int.MaxValue;
         var max = 0;
         long sum = 0;
+        long zeros = 0, saturated = 0;
         foreach (var p in pixels) {
             bins[p >> 9]++;
             if (p < min) min = p;
             if (p > max) max = p;
+            if (p == 0) zeros++;
+            else if (p == ushort.MaxValue) saturated++;
             sum += p;
         }
         var total = (double)pixels.Length;
@@ -1078,8 +1083,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             MinAdu: pixels.Length == 0 ? 0 : min,
             MaxAdu: max,
             MeanAdu: pixels.Length == 0 ? 0 : sum / total,
-            LowClipFraction: pixels.Length == 0 ? 0 : bins[0] / total,
-            HighClipFraction: pixels.Length == 0 ? 0 : bins[127] / total);
+            LowClipFraction: pixels.Length == 0 ? 0 : zeros / total,
+            HighClipFraction: pixels.Length == 0 ? 0 : saturated / total);
     }
 
     private static byte[]? TryServeFromCache(string cachePath) {
