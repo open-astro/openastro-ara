@@ -46,7 +46,11 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
     super.dispose();
   }
 
-  bool get _needsErase => _selected != null && !_selected!.isMountable;
+  /// An unsupported filesystem forces the erase; a mountable drive can also
+  /// be erased DELIBERATELY (the ext4 → exFAT migration path).
+  bool get _mustErase => _selected != null && !_selected!.isMountable;
+  bool _eraseAnyway = false;
+  bool get _needsErase => _mustErase || (_selected != null && _eraseAnyway);
 
   /// Format choice for the erase path. exFAT is the default — the drive
   /// plugs straight into Windows/macOS at home (the §29 field workflow);
@@ -203,22 +207,48 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                                   _selected = d;
                                   _confirm.clear();
                                   _error = null;
+                                  _eraseAnyway = false;
                                 }),
                       );
                     },
                   ),
                 ),
-                if (_needsErase) ...[
+                // A mountable drive offers the deliberate reformat path —
+                // how an existing ext4 store becomes a take-home exFAT one.
+                if (_selected != null && !_mustErase) ...[
                   const Divider(height: 24),
-                  Text('This disk must be erased',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(color: AraColors.accentBusy)),
-                  const SizedBox(height: 6),
-                  Text(
-                    'ARA saves frames in a format this disk doesn\'t use, so it '
-                    'has to be erased first. Everything on it will be lost.',
-                    style: theme.textTheme.bodySmall,
+                  SwitchListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Erase and change format'),
+                    subtitle: Text(
+                        'This disk already works as a store '
+                        '(${_selected!.fileSystem}). Turn this on only to '
+                        'reformat it — everything on it will be lost.',
+                        style: theme.textTheme.bodySmall),
+                    value: _eraseAnyway,
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() {
+                              _eraseAnyway = v;
+                              _confirm.clear();
+                            }),
                   ),
+                ],
+                if (_needsErase) ...[
+                  if (_mustErase) ...[
+                    const Divider(height: 24),
+                    Text('This disk must be erased',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(color: AraColors.accentBusy)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'ARA saves frames in a format this disk doesn\'t use, so '
+                      'it has to be erased first. Everything on it will be '
+                      'lost.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   RadioGroup<String>(
                     groupValue: _newFilesystem,
