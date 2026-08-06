@@ -31,54 +31,49 @@ class ImagingTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final liveViewOn = ref.watch(liveViewControllerProvider);
     final exposing = ref.watch(captureInProgressProvider);
-    return Column(
+    return Row(
       children: [
-        const _ImagingHeader(),
-        Expanded(
-          child: Row(
+        // The frame owns the whole canvas — every sensor aspect fits with
+        // the least possible letterboxing when the viewer is as tall as the
+        // window allows. The header tops only this column so the rail can
+        // run flush to the top edge.
+        const Expanded(
+          child: Column(
             children: [
-              // The frame owns the whole canvas — every sensor aspect fits
-              // with the least possible letterboxing when the viewer is as
-              // tall as the window allows. Everything else lives in the rail.
-              const Expanded(
-                child: Column(
-                  children: [
-                    Expanded(child: FrameViewer()),
-                    HistogramStrip(),
-                  ],
-                ),
-              ),
-              // Right rail: capture controls first, then solve + health —
-              // the panels that used to squeeze the viewer from below. One
-              // scroll view so an expanded panel never overflows the window.
-              // The Container (not the Row's default centering) owns the
-              // full-height background so short content pins to the top.
-              Container(
-                width: 320,
-                decoration: const BoxDecoration(
-                  color: AraColors.bgPanel,
-                  border: Border(left: BorderSide(color: AraColors.border)),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ExposureControlsPanel(
-                        liveViewOn: liveViewOn,
-                        onTakeOne: exposing ? null : () => _takeOne(context, ref),
-                        onLiveViewToggle: (v) {
-                          _toggleLiveView(context, ref, v);
-                        },
-                      ),
-                      const SolvePanel(),
-                      const DiagnosticPanel(),
-                      const GuidingPanel(),
-                      const FaultPanel(),
-                    ],
-                  ),
-                ),
-              ),
+              _ImagingHeader(),
+              Expanded(child: FrameViewer()),
+              HistogramStrip(),
             ],
+          ),
+        ),
+        // Right rail: capture controls first, then solve + health —
+        // the panels that used to squeeze the viewer from below. One
+        // scroll view so an expanded panel never overflows the window.
+        // The Container (not the Row's default centering) owns the
+        // full-height background so short content pins to the top.
+        Container(
+          width: 320,
+          decoration: const BoxDecoration(
+            color: AraColors.bgPanel,
+            border: Border(left: BorderSide(color: AraColors.border)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ExposureControlsPanel(
+                  liveViewOn: liveViewOn,
+                  onTakeOne: exposing ? null : () => _takeOne(context, ref),
+                  onLiveViewToggle: (v) {
+                    _toggleLiveView(context, ref, v);
+                  },
+                ),
+                const SolvePanel(),
+                const DiagnosticPanel(),
+                const GuidingPanel(),
+                const FaultPanel(),
+              ],
+            ),
           ),
         ),
       ],
@@ -90,7 +85,10 @@ class ImagingTab extends ConsumerWidget {
   /// mirror); the frame notifier owns the start/poll/stop against the daemon,
   /// seeded with the current Imaging-tab exposure/gain/binning.
   Future<void> _toggleLiveView(
-      BuildContext context, WidgetRef ref, bool on) async {
+    BuildContext context,
+    WidgetRef ref,
+    bool on,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final controller = ref.read(liveViewControllerProvider.notifier);
     controller.set(on); // optimistic — reflect the tap immediately
@@ -114,9 +112,9 @@ class ImagingTab extends ConsumerWidget {
       // idle), which must not raise a spurious "couldn't start" snackbar.
       if (!lvState.active && lvState.error != null) {
         controller.set(false);
-        messenger.showSnackBar(SnackBar(
-          content: Text("Couldn't start Live View: ${lvState.error}"),
-        ));
+        messenger.showSnackBar(
+          SnackBar(content: Text("Couldn't start Live View: ${lvState.error}")),
+        );
       }
     } else {
       await lv.stop();
@@ -148,8 +146,9 @@ class ImagingTab extends ConsumerWidget {
     final solve = ref.read(solveResultProvider.notifier);
     progress.set(true);
     messenger.showSnackBar(
-      SnackBar(content: Text(
-          'Exposing ${params.exposure.inMilliseconds / 1000.0}s…')),
+      SnackBar(
+        content: Text('Exposing ${params.exposure.inMilliseconds / 1000.0}s…'),
+      ),
     );
     try {
       // Phase 1 — the exposure POST. A failure here means the shot never
@@ -161,7 +160,9 @@ class ImagingTab extends ConsumerWidget {
         if (context.mounted) {
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
-            SnackBar(content: Text(friendlyError(e, action: 'take that exposure'))),
+            SnackBar(
+              content: Text(friendlyError(e, action: 'take that exposure')),
+            ),
           );
         }
         return;
@@ -171,8 +172,9 @@ class ImagingTab extends ConsumerWidget {
       // A failure here means the exposure was accepted but we couldn't confirm
       // it landed — distinct remedy (retry the preview, don't re-shoot).
       final api = FramesApi(server);
-      final deadline = DateTime.now()
-          .add(params.exposure + const Duration(seconds: 20));
+      final deadline = DateTime.now().add(
+        params.exposure + const Duration(seconds: 20),
+      );
       var landed = false;
       try {
         while (DateTime.now().isBefore(deadline)) {
@@ -189,8 +191,11 @@ class ImagingTab extends ConsumerWidget {
         if (context.mounted) {
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
-            SnackBar(content: Text(
-                friendlyError(e, action: 'confirm the frame arrived'))),
+            SnackBar(
+              content: Text(
+                friendlyError(e, action: 'confirm the frame arrived'),
+              ),
+            ),
           );
         }
         return;
@@ -243,25 +248,27 @@ class _ImagingHeader extends ConsumerWidget {
           // "always-visible" requirement. Sourced from
           // diagnosticsStateProvider, rolled up from the live `diagnostics.*`
           // WS event stream (WS slice 5).
-          Consumer(builder: (context, ref, _) {
-            final diag = ref.watch(diagnosticsStateProvider);
-            return StatusIndicator(
-              level: diag.level,
-              label: diag.label,
-              // §51 — the health chip is the summary; tapping opens the same
-              // diagnostics panel that lives in the right-hand column, so the
-              // "why is it amber?" answer is one tap away from any scroll
-              // position.
-              onTap: () => showModalBottomSheet<void>(
-                context: context,
-                showDragHandle: true,
-                builder: (_) => const SingleChildScrollView(
-                  padding: EdgeInsets.only(bottom: 24),
-                  child: DiagnosticPanel(),
+          Consumer(
+            builder: (context, ref, _) {
+              final diag = ref.watch(diagnosticsStateProvider);
+              return StatusIndicator(
+                level: diag.level,
+                label: diag.label,
+                // §51 — the health chip is the summary; tapping opens the same
+                // diagnostics panel that lives in the right-hand column, so the
+                // "why is it amber?" answer is one tap away from any scroll
+                // position.
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => const SingleChildScrollView(
+                    padding: EdgeInsets.only(bottom: 24),
+                    child: DiagnosticPanel(),
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            },
+          ),
         ],
       ),
     );
