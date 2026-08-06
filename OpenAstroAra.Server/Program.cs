@@ -702,6 +702,7 @@ public partial class Program {
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
+        builder.Services.AddHostedService<StorageDeviceWatcher>();
 
         // §32.4 — advertise the daemon over mDNS (_openastroara._tcp) on the bound
         // port so WILMA's first-run scan discovers it. Best-effort: the service

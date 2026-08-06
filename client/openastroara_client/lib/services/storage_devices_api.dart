@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../state/saved_server_state.dart';
+import '../state/ws/ws_providers.dart';
 
 /// §29.1.1 — a block device on the server that could hold ARA data.
 class StorageDevice {
@@ -263,6 +264,14 @@ final storageDevicesProvider =
   if (server == null) {
     return const [];
   }
+  // §29 — the daemon watches /sys/block and broadcasts when a drive is
+  // plugged or pulled; re-fetch so an unplugged store shows as gone within
+  // seconds instead of whenever something else refreshes.
+  ref.listen(wsEventsProvider, (prev, next) {
+    if (next.asData?.value.type == 'storage.devices_changed') {
+      ref.invalidateSelf();
+    }
+  });
   final api = StorageDevicesApi(server);
   ref.onDispose(api.close);
   return api.list();
