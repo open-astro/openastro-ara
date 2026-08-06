@@ -980,7 +980,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // cap its longest edge — a 60 MP OSC frame would otherwise debayer to a ~15 MP JPEG. 2048 px
     // keeps it crisp on any display while bounding payload/encode time; the FITS + the eventual
     // full-res export are unaffected. (Settings → Image Processing could expose this later.)
-    private const int PreviewMaxDim = 2048;
+    // 4096 admits the ASI2600-class superpixel output (6248/2 = 3124) whole —
+    // the honest detail ceiling for a color sensor's preview. Mono decimates
+    // to a 2× stride at this cap (3124px) instead of 4×. Costs more stretch +
+    // encode time and a bigger JPEG than the old 2048; the capture-time
+    // pre-warm hides the render, the transfer rides a LAN.
+    private const int PreviewMaxDim = 4096;
 
     // §29 storage-pressure threshold. When the captures volume free space
     // drops below this, the §65.4 variant-eviction path nukes all alt-
