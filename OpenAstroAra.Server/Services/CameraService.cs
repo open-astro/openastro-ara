@@ -69,6 +69,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly IProfileStore? _profileStore;
     private readonly string? _fallbackFramesDir;
     private AlpacaCamera? _client;
+    // The connected device's HTTP endpoint, for the direct ImageBytes
+    // download (skips the client library's int[,] inflation). Set alongside
+    // _client under _gate; null means "use the library path".
+    private Uri? _deviceBaseAddress;
+    private int _deviceNumber;
+    private static readonly HttpClient ImageBytesHttp = new() { Timeout = TimeSpan.FromSeconds(120) };
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
@@ -175,6 +181,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _connectGeneration++;
             client = _client;
             _client = null;
+            _deviceBaseAddress = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -414,21 +421,42 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
         var exposeMs = timing.ElapsedMilliseconds - settingsMs;
 
-        // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
-        object? imageArray;
+        // The blocking download; runs on this worker. Preferred path: raw
+        // ImageBytes straight into the raster buffer (the client library's
+        // ImageArray receives the identical wire payload but inflates it to a
+        // 104 MB int[,] we'd immediately convert back down). Any failure falls
+        // back to the library path — correctness beats the saved second.
+        ushort[] pixels;
+        int width, height;
         Interlocked.Exchange(ref _downloading, 1);
         try {
-            imageArray = client.ImageArray;
+            (Uri? baseAddress, int deviceNumber) = (_deviceBaseAddress, _deviceNumber);
+            (ushort[], int, int)? direct = null;
+            if (baseAddress is not null) {
+                try {
+                    direct = await AlpacaImageBytes.DownloadAsync(ImageBytesHttp, baseAddress, deviceNumber, ct)
+                        .ConfigureAwait(false);
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    LogImageBytesFallback(ex, frameId);
+                }
+            }
+            if (direct is { } d) {
+                (pixels, width, height) = d;
+            } else {
+                (pixels, width, height) = ConvertImageArray(client.ImageArray);
+            }
         } finally {
             Interlocked.Exchange(ref _downloading, 0);
         }
         var downloadMs = timing.ElapsedMilliseconds - settingsMs - exposeMs;
-        var (pixels, width, height) = ConvertImageArray(imageArray);
-        var convertMs = timing.ElapsedMilliseconds - settingsMs - exposeMs - downloadMs;
-        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs, convertMs);
+        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs, 0);
         RefreshCacheOnce();
         return (pixels, width, height, capturedAt);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Direct ImageBytes download failed for {FrameId} — falling back to the client library's ImageArray.")]
+    private partial void LogImageBytesFallback(Exception ex, Guid frameId);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Capture {FrameId} device timing: settings {SettingsMs}ms, expose+ready {ExposeMs}ms, download {DownloadMs}ms, convert {ConvertMs}ms.")]
@@ -1554,6 +1582,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
+                    _deviceBaseAddress = new Uri(
+                        $"{(device.UseHttps ? "https" : "http")}://{host}:{device.IpPort}/");
+                    _deviceNumber = device.AlpacaDeviceNumber;
                     _capabilities = null;   // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
@@ -1624,6 +1655,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private void DisposeClientLocked() {
         var c = _client;
         _client = null;
+        _deviceBaseAddress = null;
         if (c is not null) {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
@@ -1731,6 +1763,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _disposed = true;
             client = _client;
             _client = null;
+            _deviceBaseAddress = null;
         }
         _refreshTimer.Dispose();
         // Stop accepting analysis jobs and let the worker drain what it holds; analysis
