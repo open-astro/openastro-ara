@@ -33,9 +33,8 @@ class HistogramStrip extends ConsumerWidget {
     final histogram =
         id == null ? null : ref.watch(frameHistogramProvider(id));
     return Container(
-      height: 72,
+      height: 84,
       decoration: const BoxDecoration(
-        color: AraColors.bgPanel,
         border: Border(top: BorderSide(color: AraColors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -81,7 +80,9 @@ class _HistogramPlot extends StatelessWidget {
     final lowClip = histogram.lowClipFraction >= _clipWarnFraction;
     final highClip = histogram.highClipFraction >= _clipWarnFraction;
     String pct(double f) => '${(f * 100).toStringAsFixed(1)}%';
-    return Row(
+    // Rail-width layout: bars get the full width, the numbers one line below.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: CustomPaint(
@@ -93,23 +94,22 @@ class _HistogramPlot extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(height: 4),
         DefaultTextStyle(
           style: theme.textTheme.labelSmall!.copyWith(
               color: AraColors.textSecondary,
               fontFamily: 'monospace',
               fontSize: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('mean ${histogram.meanAdu.round()}'),
-              Text('min ${histogram.minAdu}  max ${histogram.maxAdu}'),
+              Text('mean ${histogram.meanAdu.round()} · '
+                  '${histogram.minAdu}–${histogram.maxAdu}'),
               if (lowClip)
-                Text('▼ ${pct(histogram.lowClipFraction)} black-clipped',
+                Text('▼ ${pct(histogram.lowClipFraction)}',
                     style: const TextStyle(color: AraColors.accentBusy)),
               if (highClip)
-                Text('▲ ${pct(histogram.highClipFraction)} saturated',
+                Text('▲ ${pct(histogram.highClipFraction)}',
                     style: const TextStyle(color: AraColors.accentBusy)),
             ],
           ),

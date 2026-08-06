@@ -45,7 +45,6 @@ class ImagingTab extends ConsumerWidget {
             children: [
               _ImagingHeader(),
               Expanded(child: FrameViewer()),
-              HistogramStrip(),
             ],
           ),
         ),
@@ -75,6 +74,7 @@ class ImagingTab extends ConsumerWidget {
                 const DiagnosticPanel(),
                 const GuidingPanel(),
                 const FaultPanel(),
+                const HistogramStrip(),
               ],
             ),
           ),
