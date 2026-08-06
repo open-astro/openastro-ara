@@ -55,5 +55,19 @@ namespace OpenAstroAra.Test {
             Assert.That(h.Bins.Sum(), Is.Zero);
             Assert.That((h.MinAdu, h.MaxAdu, h.MeanAdu), Is.EqualTo((0, 0, 0.0)));
         }
+
+        [Test]
+        public void Median_mad_sd_and_rail_counts_are_exact() {
+            // 100..104 once each → median 102 (3rd of 5), deviations
+            // {2,1,0,1,2} → MAD 1; plus a repeated min for the count.
+            ushort[] pixels = [100, 100, 101, 102, 103, 104];
+            var h = SqliteFrameRepository.ComputeHistogram(pixels);
+            Assert.That(h.Median, Is.EqualTo(101), "lower median of n=6 (3rd ordered value)");
+            Assert.That(h.Mad, Is.EqualTo(1), "deviations {1,1,0,1,2,3} → 3rd ordered is 1");
+            Assert.That(h.MeanAdu, Is.EqualTo(610 / 6.0).Within(1e-9));
+            Assert.That(h.StdDev, Is.EqualTo(1.4907).Within(0.001));
+            Assert.That((h.MinAdu, h.MinCount), Is.EqualTo((100, 2L)));
+            Assert.That((h.MaxAdu, h.MaxCount), Is.EqualTo((104, 1L)));
+        }
     }
 }

@@ -95,18 +95,32 @@ public sealed record FrameListItemDto(
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
 /// <summary>
-/// §12c.2 — the frame's RAW 16-bit luminance histogram (pre-stretch: the
-/// preview's screen stretch hides clipping, this shows it). 128 bins over the
-/// full ADU range; Low/HighClipFraction are the shares of pixels in the
-/// bottom/top bin, the at-a-glance "you're clipping" numbers.
+/// §12c.2 — the frame's RAW 16-bit statistics (pre-stretch: the preview's
+/// screen stretch hides everything these numbers show). 128 bins over the
+/// full ADU range for the plot; exact mean/SD/median/MAD plus min/max with
+/// their pixel counts — a NINA-style Statistics readout. Stars/Hfr ride
+/// along from the catalog's analysis columns (null until analysis lands);
+/// Gain/Offset/BitDepth from the capture record.
 /// </summary>
 public sealed record FrameHistogramDto(
     IReadOnlyList<long> Bins,
     int MinAdu,
+    long MinCount,
     int MaxAdu,
+    long MaxCount,
     double MeanAdu,
+    double StdDev,
+    double Median,
+    double Mad,
     double LowClipFraction,
-    double HighClipFraction);
+    double HighClipFraction,
+    int Width = 0,
+    int Height = 0,
+    int BitDepth = 0,
+    int? Stars = null,
+    double? Hfr = null,
+    int? Gain = null,
+    int? Offset = null);
 
 public sealed record FramePreviewRequestDto(
     string StretchPalette,

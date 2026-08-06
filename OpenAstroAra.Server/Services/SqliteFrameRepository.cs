@@ -1028,26 +1028,52 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return null;
         }
+        FrameHistogramDto? histogram = null;
         var cachePath = HistogramCachePath(filePath);
         if (TryServeFromCache(cachePath) is byte[] cached) {
             try {
-                return System.Text.Json.JsonSerializer.Deserialize(cached,
+                histogram = System.Text.Json.JsonSerializer.Deserialize(cached,
                     AraJsonSerializerContext.Default.FrameHistogramDto);
             } catch (System.Text.Json.JsonException) {
                 // Corrupt cache entry — fall through and recompute.
             }
         }
-        var (pixels, _, _, _) = LoadFitsPixels(filePath);
-        var histogram = ComputeHistogram(pixels);
-        TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
-            histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
+        if (histogram is null) {
+            var (pixels, _, _, _) = LoadFitsPixels(filePath);
+            histogram = ComputeHistogram(pixels);
+            TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+                histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
+        }
+        // Catalog columns merge fresh at serve time (never cached): analysis
+        // lands asynchronously, so Stars/Hfr can appear after the pixel
+        // stats were computed.
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT width, height, bit_depth, star_count, hfr, gain, "offset"
+            FROM frames WHERE id = $id LIMIT 1;
+            """;
+        cmd.Parameters.AddWithValue("$id", id.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (await reader.ReadAsync(ct)) {
+            histogram = histogram with {
+                Width = reader.GetInt32(0),
+                Height = reader.GetInt32(1),
+                BitDepth = reader.GetInt32(2),
+                Stars = await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
+                Hfr = await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
+                Gain = await reader.IsDBNullAsync(5, ct) ? null : reader.GetInt32(5),
+                Offset = await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
+            };
+        }
         return histogram;
     }
 
     private static string HistogramCachePath(string fitsPath) {
         var dir = Path.GetDirectoryName(fitsPath) ?? "";
         var stem = Path.GetFileNameWithoutExtension(fitsPath);
-        return Path.Combine(dir, $"{stem}.hist.v1.json");
+        // v2: exact SD/median/MAD + min/max counts joined the payload.
+        return Path.Combine(dir, $"{stem}.hist.v2.json");
     }
 
     private static void WarmHistogramCache(string fitsPath, ushort[] pixels) {
@@ -1059,32 +1085,84 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             ComputeHistogram(pixels), AraJsonSerializerContext.Default.FrameHistogramDto));
     }
 
-    /// <summary>128 bins over the 16-bit range (bin = ADU >> 9), plus exact
-    /// min/max/mean. Clip fractions count TRUE rail values (0 and 65535) —
-    /// the whole bottom bin is 512 ADU wide and would flag every normal
-    /// bias-level dark as "clipped". Internal for tests.</summary>
+    /// <summary>128 bins over the 16-bit range (bin = ADU >> 9) for the plot,
+    /// plus NINA-grade statistics computed exactly from a full-resolution
+    /// count array (256 KB, one pass): mean/SD, true median and MAD, min/max
+    /// with their pixel counts. Clip fractions count TRUE rail values (0 and
+    /// 65535) — the whole bottom bin is 512 ADU wide and would flag every
+    /// normal bias-level dark as "clipped". Internal for tests.</summary>
     internal static FrameHistogramDto ComputeHistogram(ushort[] pixels) {
         var bins = new long[128];
+        if (pixels.Length == 0) {
+            return new FrameHistogramDto(bins, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
+        var counts = new long[65536];
         var min = int.MaxValue;
         var max = 0;
         long sum = 0;
-        long zeros = 0, saturated = 0;
+        double sumSq = 0;
         foreach (var p in pixels) {
-            bins[p >> 9]++;
+            counts[p]++;
             if (p < min) min = p;
             if (p > max) max = p;
-            if (p == 0) zeros++;
-            else if (p == ushort.MaxValue) saturated++;
             sum += p;
+            sumSq += (double)p * p;
         }
-        var total = (double)pixels.Length;
+        for (var v = 0; v < 65536; v++) {
+            bins[v >> 9] += counts[v];
+        }
+        var n = (long)pixels.Length;
+        var mean = sum / (double)n;
+        var variance = Math.Max(0, sumSq / n - mean * mean);
+        var median = QuantileFromCounts(counts, n, (n + 1) / 2);
+        // MAD: median of |x - median| — walk outward from the median value,
+        // accumulating counts symmetrically until half the pixels are inside.
+        var mad = MadFromCounts(counts, n, (int)median);
+        var total = (double)n;
         return new FrameHistogramDto(
             Bins: bins,
-            MinAdu: pixels.Length == 0 ? 0 : min,
+            MinAdu: min,
+            MinCount: counts[min],
             MaxAdu: max,
-            MeanAdu: pixels.Length == 0 ? 0 : sum / total,
-            LowClipFraction: pixels.Length == 0 ? 0 : zeros / total,
-            HighClipFraction: pixels.Length == 0 ? 0 : saturated / total);
+            MaxCount: counts[max],
+            MeanAdu: mean,
+            StdDev: Math.Sqrt(variance),
+            Median: median,
+            Mad: mad,
+            LowClipFraction: counts[0] / total,
+            HighClipFraction: max == ushort.MaxValue ? counts[ushort.MaxValue] / total : 0);
+    }
+
+    private static double QuantileFromCounts(long[] counts, long n, long target) {
+        long seen = 0;
+        for (var v = 0; v < counts.Length; v++) {
+            seen += counts[v];
+            if (seen >= target) {
+                return v;
+            }
+        }
+        return 0;
+    }
+
+    private static double MadFromCounts(long[] counts, long n, int median) {
+        var target = (n + 1) / 2;
+        long inside = counts[median];
+        if (inside >= target) {
+            return 0;
+        }
+        for (var d = 1; d < counts.Length; d++) {
+            var lo = median - d;
+            var hi = median + d;
+            if (lo >= 0) inside += counts[lo];
+            if (hi < counts.Length) inside += counts[hi];
+            if (inside >= target) {
+                return d;
+            }
+            if (lo < 0 && hi >= counts.Length) {
+                break;
+            }
+        }
+        return 0;
     }
 
     private static byte[]? TryServeFromCache(string cachePath) {
