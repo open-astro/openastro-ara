@@ -530,6 +530,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     private byte[] RenderPreview(string filePath, OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams, string cachePath) {
         var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+        // Free ride: the raw pixels are in hand, so the histogram cache warms
+        // with the first (capture-time pre-warmed) preview render.
+        WarmHistogramCache(filePath, pixels);
         byte[] jpeg;
         if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
             // Superpixel debayer already halves the resolution before stretch.
@@ -1018,6 +1021,65 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return Path.Combine(dir, $"{stem}.preview.{stretchId}.{hash}.jpg");
         }
         return Path.Combine(dir, $"{stem}.preview.{stretchId}.jpg");
+    }
+
+    public async Task<FrameHistogramDto?> GetHistogramAsync(Guid id, CancellationToken ct) {
+        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            return null;
+        }
+        var cachePath = HistogramCachePath(filePath);
+        if (TryServeFromCache(cachePath) is byte[] cached) {
+            try {
+                return System.Text.Json.JsonSerializer.Deserialize(cached,
+                    AraJsonSerializerContext.Default.FrameHistogramDto);
+            } catch (System.Text.Json.JsonException) {
+                // Corrupt cache entry — fall through and recompute.
+            }
+        }
+        var (pixels, _, _, _) = LoadFitsPixels(filePath);
+        var histogram = ComputeHistogram(pixels);
+        TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
+        return histogram;
+    }
+
+    private static string HistogramCachePath(string fitsPath) {
+        var dir = Path.GetDirectoryName(fitsPath) ?? "";
+        var stem = Path.GetFileNameWithoutExtension(fitsPath);
+        return Path.Combine(dir, $"{stem}.hist.v1.json");
+    }
+
+    private static void WarmHistogramCache(string fitsPath, ushort[] pixels) {
+        var cachePath = HistogramCachePath(fitsPath);
+        if (File.Exists(cachePath)) {
+            return;
+        }
+        TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            ComputeHistogram(pixels), AraJsonSerializerContext.Default.FrameHistogramDto));
+    }
+
+    /// <summary>128 bins over the 16-bit range (bin = ADU >> 9), plus exact
+    /// min/max/mean. Internal for tests.</summary>
+    internal static FrameHistogramDto ComputeHistogram(ushort[] pixels) {
+        var bins = new long[128];
+        var min = int.MaxValue;
+        var max = 0;
+        long sum = 0;
+        foreach (var p in pixels) {
+            bins[p >> 9]++;
+            if (p < min) min = p;
+            if (p > max) max = p;
+            sum += p;
+        }
+        var total = (double)pixels.Length;
+        return new FrameHistogramDto(
+            Bins: bins,
+            MinAdu: pixels.Length == 0 ? 0 : min,
+            MaxAdu: max,
+            MeanAdu: pixels.Length == 0 ? 0 : sum / total,
+            LowClipFraction: pixels.Length == 0 ? 0 : bins[0] / total,
+            HighClipFraction: pixels.Length == 0 ? 0 : bins[127] / total);
     }
 
     private static byte[]? TryServeFromCache(string cachePath) {

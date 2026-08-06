@@ -94,6 +94,20 @@ public sealed record FrameListItemDto(
     string? SyncTarget = null);
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
+/// <summary>
+/// §12c.2 — the frame's RAW 16-bit luminance histogram (pre-stretch: the
+/// preview's screen stretch hides clipping, this shows it). 128 bins over the
+/// full ADU range; Low/HighClipFraction are the shares of pixels in the
+/// bottom/top bin, the at-a-glance "you're clipping" numbers.
+/// </summary>
+public sealed record FrameHistogramDto(
+    IReadOnlyList<long> Bins,
+    int MinAdu,
+    int MaxAdu,
+    double MeanAdu,
+    double LowClipFraction,
+    double HighClipFraction);
+
 public sealed record FramePreviewRequestDto(
     string StretchPalette,
     double? BlackPoint,
