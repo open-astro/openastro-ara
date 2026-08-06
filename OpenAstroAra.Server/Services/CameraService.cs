@@ -430,7 +430,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         int width, height;
         Interlocked.Exchange(ref _downloading, 1);
         try {
-            (Uri? baseAddress, int deviceNumber) = (_deviceBaseAddress, _deviceNumber);
+            // Read the endpoint under the gate WITH the staleness check the
+            // rest of the class uses: if a reconnect swapped _client between
+            // the ImageReady poll and here, the direct path could silently
+            // pull bytes from the NEW device's endpoint and save them under
+            // the old exposure's frame id. Stale → library path on the
+            // original client (which fails honestly if it's gone).
+            Uri? baseAddress = null;
+            var deviceNumber = 0;
+            lock (_gate) {
+                if (ReferenceEquals(_client, client)) {
+                    baseAddress = _deviceBaseAddress;
+                    deviceNumber = _deviceNumber;
+                }
+            }
             (ushort[], int, int)? direct = null;
             if (baseAddress is not null) {
                 try {

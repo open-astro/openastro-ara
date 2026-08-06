@@ -5,6 +5,7 @@ import '../../models/frame_histogram.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 
 /// §12c.2 — the RAW 16-bit histogram + NINA-style Statistics for the
@@ -19,6 +20,16 @@ final frameHistogramProvider =
   if (server == null) {
     throw StateError('Not connected to a server.');
   }
+  // Star analysis runs AFTER capture (§59.5) — when its frame.analyzed
+  // event lands for this frame, re-fetch so #Stars/HFR fill in instead of
+  // showing "—" for the rest of the session.
+  ref.listen(wsEventsProvider, (prev, next) {
+    final event = next.asData?.value;
+    if (event == null || event.type != 'frame.analyzed') return;
+    if (event.payload['frame_id'] == id) {
+      ref.invalidateSelf();
+    }
+  });
   return FramesApi(server).histogram(id);
 });
 
