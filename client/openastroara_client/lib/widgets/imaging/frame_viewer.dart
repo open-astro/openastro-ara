@@ -125,11 +125,20 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
     return LayoutBuilder(builder: (context, constraints) {
       final viewport = Size(constraints.maxWidth, constraints.maxHeight);
       final image = _imageSize;
-      // First layout with known dimensions (or a viewport resize while at
-      // fit): open at fit-to-window rather than a 1:1 corner crop.
       if (image != null && _fittedFor != viewport) {
+        // First layout with known dimensions: open at fit-to-window rather
+        // than a 1:1 corner crop. On a plain window RESIZE, only re-fit when
+        // the user was still at fit — a zoomed/panned view they set up
+        // deliberately must survive the resize.
+        final wasAtFit = _fittedFor == null ||
+            (_transform.value.getMaxScaleOnAxis() -
+                        _fitScale(_fittedFor!, image))
+                    .abs() <
+                0.01;
         _fittedFor = viewport;
-        _transform.value = _fitMatrix(viewport, image);
+        if (wasAtFit) {
+          _transform.value = _fitMatrix(viewport, image);
+        }
       }
       return GestureDetector(
         onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,

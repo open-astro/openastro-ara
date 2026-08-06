@@ -1013,14 +1013,16 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var stem = Path.GetFileNameWithoutExtension(fitsPath);
         // Manual stretch params hash so slider drags coalesce in the cache
         // (§65.4 rounds to 3 decimal places to bound entry count).
+        // PreviewMaxDim is part of the key: bumping the render cap (2048→4096)
+        // must re-render, not serve stale lower-resolution variants forever.
         if (algorithm == OpenAstroAra.Stretch.StretchAlgorithm.Manual) {
             var bp = Math.Round(parameters.Blackpoint, 3);
             var mp = Math.Round(parameters.Midpoint, 3);
             var wp = Math.Round(parameters.Whitepoint, 3);
             var hash = $"{bp:F3}_{mp:F3}_{wp:F3}".Replace('.', 'p');
-            return Path.Combine(dir, $"{stem}.preview.{stretchId}.{hash}.jpg");
+            return Path.Combine(dir, $"{stem}.preview.{stretchId}.{PreviewMaxDim}.{hash}.jpg");
         }
-        return Path.Combine(dir, $"{stem}.preview.{stretchId}.jpg");
+        return Path.Combine(dir, $"{stem}.preview.{stretchId}.{PreviewMaxDim}.jpg");
     }
 
     public async Task<FrameHistogramDto?> GetHistogramAsync(Guid id, CancellationToken ct) {

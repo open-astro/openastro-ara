@@ -462,7 +462,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             Interlocked.Exchange(ref _downloading, 0);
         }
         var downloadMs = timing.ElapsedMilliseconds - settingsMs - exposeMs;
-        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs, 0);
+        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs);
         RefreshCacheOnce();
         return (pixels, width, height, capturedAt);
     }
@@ -471,9 +471,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         Message = "Direct ImageBytes download failed for {FrameId} — falling back to the client library's ImageArray.")]
     private partial void LogImageBytesFallback(Exception ex, Guid frameId);
 
+    // Decode/convert runs fused inside the download window (the direct
+    // ImageBytes path transposes as it decodes) — one honest number.
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "Capture {FrameId} device timing: settings {SettingsMs}ms, expose+ready {ExposeMs}ms, download {DownloadMs}ms, convert {ConvertMs}ms.")]
-    private partial void LogCaptureDeviceTiming(Guid frameId, long settingsMs, long exposeMs, long downloadMs, long convertMs);
+        Message = "Capture {FrameId} device timing: settings {SettingsMs}ms, expose+ready {ExposeMs}ms, download+convert {DownloadMs}ms.")]
+    private partial void LogCaptureDeviceTiming(Guid frameId, long settingsMs, long exposeMs, long downloadMs);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Capture {FrameId} store timing: fits-write {WriteMs}ms, register {RegisterMs}ms.")]
