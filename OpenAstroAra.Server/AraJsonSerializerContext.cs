@@ -129,6 +129,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FocusTempPointDto))]
 [JsonSerializable(typeof(FrameDto))]
 [JsonSerializable(typeof(FrameListItemDto))]
+[JsonSerializable(typeof(FrameHistogramDto))]
 [JsonSerializable(typeof(FramePreviewRequestDto))]
 [JsonSerializable(typeof(FrameQualityBucketDto))]
 [JsonSerializable(typeof(GeneratedFlatSequenceDto))]

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../models/frame_histogram.dart';
 import '../models/server.dart';
 
 /// Client-side wrapper around the §65 frame endpoints. The preview is a POST
@@ -32,6 +33,14 @@ class FramesApi {
       if (e.response?.statusCode == 404) return false;
       rethrow;
     }
+  }
+
+  /// The frame's RAW 16-bit histogram — pre-stretch, so clipping shows even
+  /// when the screen stretch hides it.
+  Future<FrameHistogram> histogram(String id) async {
+    final res =
+        await _dio.get<Map<String, dynamic>>('/api/v1/frames/$id/histogram');
+    return FrameHistogram.fromJson(res.data ?? const {});
   }
 
   /// Fetch the stretched preview JPEG bytes for a frame.

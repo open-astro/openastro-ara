@@ -69,6 +69,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly IProfileStore? _profileStore;
     private readonly string? _fallbackFramesDir;
     private AlpacaCamera? _client;
+    // The connected device's HTTP endpoint, for the direct ImageBytes
+    // download (skips the client library's int[,] inflation). Set alongside
+    // _client under _gate; null means "use the library path".
+    private Uri? _deviceBaseAddress;
+    private int _deviceNumber;
+    private static readonly HttpClient ImageBytesHttp = new() { Timeout = TimeSpan.FromSeconds(120) };
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
@@ -175,6 +181,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _connectGeneration++;
             client = _client;
             _client = null;
+            _deviceBaseAddress = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -374,7 +381,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+        var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
+        var settingsMs = timing.ElapsedMilliseconds;
         // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
         // exposure start, not the request-accepted time the §60.5 response reported.
@@ -410,18 +419,67 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // finished image, nothing to stop. REST passes CancellationToken.None, so this is inert there.
         ct.ThrowIfCancellationRequested();
 
-        // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
-        object? imageArray;
+        var exposeMs = timing.ElapsedMilliseconds - settingsMs;
+
+        // The blocking download; runs on this worker. Preferred path: raw
+        // ImageBytes straight into the raster buffer (the client library's
+        // ImageArray receives the identical wire payload but inflates it to a
+        // 104 MB int[,] we'd immediately convert back down). Any failure falls
+        // back to the library path — correctness beats the saved second.
+        ushort[] pixels;
+        int width, height;
         Interlocked.Exchange(ref _downloading, 1);
         try {
-            imageArray = client.ImageArray;
+            // Read the endpoint under the gate WITH the staleness check the
+            // rest of the class uses: if a reconnect swapped _client between
+            // the ImageReady poll and here, the direct path could silently
+            // pull bytes from the NEW device's endpoint and save them under
+            // the old exposure's frame id. Stale → library path on the
+            // original client (which fails honestly if it's gone).
+            Uri? baseAddress = null;
+            var deviceNumber = 0;
+            lock (_gate) {
+                if (ReferenceEquals(_client, client)) {
+                    baseAddress = _deviceBaseAddress;
+                    deviceNumber = _deviceNumber;
+                }
+            }
+            (ushort[], int, int)? direct = null;
+            if (baseAddress is not null) {
+                try {
+                    direct = await AlpacaImageBytes.DownloadAsync(ImageBytesHttp, baseAddress, deviceNumber, ct)
+                        .ConfigureAwait(false);
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    LogImageBytesFallback(ex, frameId);
+                }
+            }
+            if (direct is { } d) {
+                (pixels, width, height) = d;
+            } else {
+                (pixels, width, height) = ConvertImageArray(client.ImageArray);
+            }
         } finally {
             Interlocked.Exchange(ref _downloading, 0);
         }
-        var (pixels, width, height) = ConvertImageArray(imageArray);
+        var downloadMs = timing.ElapsedMilliseconds - settingsMs - exposeMs;
+        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs);
         RefreshCacheOnce();
         return (pixels, width, height, capturedAt);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Direct ImageBytes download failed for {FrameId} — falling back to the client library's ImageArray.")]
+    private partial void LogImageBytesFallback(Exception ex, Guid frameId);
+
+    // Decode/convert runs fused inside the download window (the direct
+    // ImageBytes path transposes as it decodes) — one honest number.
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} device timing: settings {SettingsMs}ms, expose+ready {ExposeMs}ms, download+convert {DownloadMs}ms.")]
+    private partial void LogCaptureDeviceTiming(Guid frameId, long settingsMs, long exposeMs, long downloadMs);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} store timing: fits-write {WriteMs}ms, register {RegisterMs}ms.")]
+    private partial void LogCaptureStoreTiming(Guid frameId, long writeMs, long registerMs);
 
     /// <summary>
     /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
@@ -456,8 +514,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
+        var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
             targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions);
+        var writeMs = storeTiming.ElapsedMilliseconds;
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -467,6 +527,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return false;
         }
         LogCaptureComplete(frameId, width, height, filePath);
+        LogCaptureStoreTiming(frameId, writeMs, storeTiming.ElapsedMilliseconds - writeMs);
+        PrewarmPreview(frameId);
         if (frameType == FrameType.Light) {
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
             // time, and delaying frame.complete (or the next exposure) for a statistic is the
@@ -555,6 +617,36 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogFrameAnalysisFailed(ex, frameId);
         }
     }
+
+    /// <summary>
+    /// §65 — render the default-stretch preview variant into the cache the
+    /// moment the frame registers, instead of waiting for the client to ask.
+    /// The client's fetch then either hits the cache or joins this render
+    /// (single-flight in the repository), so the picture appears seconds
+    /// after readout — the full FITS keeps trickling to the desktop later.
+    /// Fire-and-forget: a preview failure must never affect the capture.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort cache warm on a background task: any render fault is logged and dropped — the client's own preview request still works (and reports its own errors). Log-and-recover boundary.")]
+    private void PrewarmPreview(Guid frameId) {
+        if (_frames is null) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                // Null palette → the profile's default stretch for the frame
+                // type — exactly what the client's parameterless fetch asks for.
+                await _frames.GetPreviewAsync(frameId,
+                    new FramePreviewRequestDto(null!, null, null, null, null, ApplyDebayer: true),
+                    CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogPreviewPrewarmFailed(ex, frameId);
+            }
+        });
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Preview pre-warm for frame {FrameId} failed (client fetch will render instead).")]
+    private partial void LogPreviewPrewarmFailed(Exception ex, Guid frameId);
 
     // §59 — the one detector posture the HFR trend and the live-view overlay must share. Both feed the same
     // instrument's picture of the frame, so a sensitivity retune here must reach both; a copy-pasted literal
@@ -666,12 +758,27 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 var width = ints.GetLength(0);
                 var height = ints.GetLength(1);
                 var pixels = new ushort[width * height];
-                for (var y = 0; y < height; y++) {
-                    var row = y * width;
-                    for (var x = 0; x < width; x++) {
-                        pixels[row + x] = (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                // This is a 26-million-element transpose ([x,y] column-major
+                // spec layout → row-major raster). The naive y-outer/x-inner
+                // loop strides the source by `height` ints every step — ~2s
+                // single-threaded on a Pi from cache misses alone. Tiling
+                // keeps both arrays inside L1 per block; the parallel-for
+                // spreads tiles across cores. Measured ~10x on-target.
+                const int tile = 64;
+                var tileRows = (height + tile - 1) / tile;
+                System.Threading.Tasks.Parallel.For(0, tileRows, tyi => {
+                    var y0 = tyi * tile;
+                    var y1 = Math.Min(y0 + tile, height);
+                    for (var x0 = 0; x0 < width; x0 += tile) {
+                        var x1 = Math.Min(x0 + tile, width);
+                        for (var x = x0; x < x1; x++) {
+                            for (var y = y0; y < y1; y++) {
+                                pixels[y * width + x] =
+                                    (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                            }
+                        }
                     }
-                }
+                });
                 return (pixels, width, height);
             }
             case double[,] doubles: {
@@ -1490,6 +1597,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
+                    _deviceBaseAddress = new Uri(
+                        $"{(device.UseHttps ? "https" : "http")}://{host}:{device.IpPort}/");
+                    _deviceNumber = device.AlpacaDeviceNumber;
                     _capabilities = null;   // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
@@ -1560,6 +1670,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private void DisposeClientLocked() {
         var c = _client;
         _client = null;
+        _deviceBaseAddress = null;
         if (c is not null) {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
@@ -1667,6 +1778,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _disposed = true;
             client = _client;
             _client = null;
+            _deviceBaseAddress = null;
         }
         _refreshTimer.Dispose();
         // Stop accepting analysis jobs and let the worker drain what it holds; analysis

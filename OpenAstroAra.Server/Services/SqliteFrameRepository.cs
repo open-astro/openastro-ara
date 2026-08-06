@@ -514,18 +514,42 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return (cached, "image/jpeg");
         }
 
+        // Single-flight per variant: the capture-time pre-warm and the
+        // client's own fetch land within the same second — one render, both
+        // callers get its bytes. (Also collapses rapid stretch-slider drags.)
+        var render = _renders.GetOrAdd(cachePath,
+            _ => new Lazy<Task<byte[]>>(() => Task.Run(() => RenderPreview(filePath, algorithm, stretchParams, cachePath))));
+        try {
+            return (await render.Value.ConfigureAwait(false), "image/jpeg");
+        } finally {
+            _renders.TryRemove(cachePath, out _);
+        }
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<byte[]>>> _renders = new(StringComparer.Ordinal);
+
+    private byte[] RenderPreview(string filePath, OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams, string cachePath) {
         var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+        // Free ride: the raw pixels are in hand, so the histogram cache warms
+        // with the first (capture-time pre-warmed) preview render.
+        WarmHistogramCache(filePath, pixels);
         byte[] jpeg;
         if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+            // Superpixel debayer already halves the resolution before stretch.
             var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
             jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
         } else {
-            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height, maxDim: PreviewMaxDim);
+            // Mono: box-average down to the preview size BEFORE the stretch —
+            // stretching 26 MP only for the encoder to discard most of it is
+            // where a Pi spends its preview minute.
+            var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
+            var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
+            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
         }
         TryWriteCache(cachePath, jpeg);
         EvictVariantsIfNeeded(filePath);
-        return (jpeg, "image/jpeg");
+        return jpeg;
     }
 
     public async Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) {
@@ -959,7 +983,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // cap its longest edge — a 60 MP OSC frame would otherwise debayer to a ~15 MP JPEG. 2048 px
     // keeps it crisp on any display while bounding payload/encode time; the FITS + the eventual
     // full-res export are unaffected. (Settings → Image Processing could expose this later.)
-    private const int PreviewMaxDim = 2048;
+    // 4096 admits the ASI2600-class superpixel output (6248/2 = 3124) whole —
+    // the honest detail ceiling for a color sensor's preview. Mono decimates
+    // to a 2× stride at this cap (3124px) instead of 4×. Costs more stretch +
+    // encode time and a bigger JPEG than the old 2048; the capture-time
+    // pre-warm hides the render, the transfer rides a LAN.
+    private const int PreviewMaxDim = 4096;
 
     // §29 storage-pressure threshold. When the captures volume free space
     // drops below this, the §65.4 variant-eviction path nukes all alt-
@@ -984,14 +1013,158 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var stem = Path.GetFileNameWithoutExtension(fitsPath);
         // Manual stretch params hash so slider drags coalesce in the cache
         // (§65.4 rounds to 3 decimal places to bound entry count).
+        // PreviewMaxDim is part of the key: bumping the render cap (2048→4096)
+        // must re-render, not serve stale lower-resolution variants forever.
         if (algorithm == OpenAstroAra.Stretch.StretchAlgorithm.Manual) {
             var bp = Math.Round(parameters.Blackpoint, 3);
             var mp = Math.Round(parameters.Midpoint, 3);
             var wp = Math.Round(parameters.Whitepoint, 3);
             var hash = $"{bp:F3}_{mp:F3}_{wp:F3}".Replace('.', 'p');
-            return Path.Combine(dir, $"{stem}.preview.{stretchId}.{hash}.jpg");
+            return Path.Combine(dir, $"{stem}.preview.{stretchId}.{PreviewMaxDim}.{hash}.jpg");
         }
-        return Path.Combine(dir, $"{stem}.preview.{stretchId}.jpg");
+        return Path.Combine(dir, $"{stem}.preview.{stretchId}.{PreviewMaxDim}.jpg");
+    }
+
+    public async Task<FrameHistogramDto?> GetHistogramAsync(Guid id, CancellationToken ct) {
+        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            return null;
+        }
+        FrameHistogramDto? histogram = null;
+        var cachePath = HistogramCachePath(filePath);
+        if (TryServeFromCache(cachePath) is byte[] cached) {
+            try {
+                histogram = System.Text.Json.JsonSerializer.Deserialize(cached,
+                    AraJsonSerializerContext.Default.FrameHistogramDto);
+            } catch (System.Text.Json.JsonException) {
+                // Corrupt cache entry — fall through and recompute.
+            }
+        }
+        if (histogram is null) {
+            var (pixels, _, _, _) = LoadFitsPixels(filePath);
+            histogram = ComputeHistogram(pixels);
+            TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+                histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
+        }
+        // Catalog columns merge fresh at serve time (never cached): analysis
+        // lands asynchronously, so Stars/Hfr can appear after the pixel
+        // stats were computed.
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT width, height, bit_depth, star_count, hfr, gain, "offset"
+            FROM frames WHERE id = $id LIMIT 1;
+            """;
+        cmd.Parameters.AddWithValue("$id", id.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (await reader.ReadAsync(ct)) {
+            histogram = histogram with {
+                Width = reader.GetInt32(0),
+                Height = reader.GetInt32(1),
+                BitDepth = reader.GetInt32(2),
+                Stars = await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
+                Hfr = await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
+                Gain = await reader.IsDBNullAsync(5, ct) ? null : reader.GetInt32(5),
+                Offset = await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
+            };
+        }
+        return histogram;
+    }
+
+    private static string HistogramCachePath(string fitsPath) {
+        var dir = Path.GetDirectoryName(fitsPath) ?? "";
+        var stem = Path.GetFileNameWithoutExtension(fitsPath);
+        // v2: exact SD/median/MAD + min/max counts joined the payload.
+        return Path.Combine(dir, $"{stem}.hist.v2.json");
+    }
+
+    private static void WarmHistogramCache(string fitsPath, ushort[] pixels) {
+        var cachePath = HistogramCachePath(fitsPath);
+        if (File.Exists(cachePath)) {
+            return;
+        }
+        TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            ComputeHistogram(pixels), AraJsonSerializerContext.Default.FrameHistogramDto));
+    }
+
+    /// <summary>128 bins over the 16-bit range (bin = ADU >> 9) for the plot,
+    /// plus NINA-grade statistics computed exactly from a full-resolution
+    /// count array (256 KB, one pass): mean/SD, true median and MAD, min/max
+    /// with their pixel counts. Clip fractions count TRUE rail values (0 and
+    /// 65535) — the whole bottom bin is 512 ADU wide and would flag every
+    /// normal bias-level dark as "clipped". Internal for tests.</summary>
+    internal static FrameHistogramDto ComputeHistogram(ushort[] pixels) {
+        var bins = new long[128];
+        if (pixels.Length == 0) {
+            return new FrameHistogramDto(bins, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
+        var counts = new long[65536];
+        var min = int.MaxValue;
+        var max = 0;
+        long sum = 0;
+        double sumSq = 0;
+        foreach (var p in pixels) {
+            counts[p]++;
+            if (p < min) min = p;
+            if (p > max) max = p;
+            sum += p;
+            sumSq += (double)p * p;
+        }
+        for (var v = 0; v < 65536; v++) {
+            bins[v >> 9] += counts[v];
+        }
+        var n = (long)pixels.Length;
+        var mean = sum / (double)n;
+        var variance = Math.Max(0, sumSq / n - mean * mean);
+        var median = QuantileFromCounts(counts, n, (n + 1) / 2);
+        // MAD: median of |x - median| — walk outward from the median value,
+        // accumulating counts symmetrically until half the pixels are inside.
+        var mad = MadFromCounts(counts, n, (int)median);
+        var total = (double)n;
+        return new FrameHistogramDto(
+            Bins: bins,
+            MinAdu: min,
+            MinCount: counts[min],
+            MaxAdu: max,
+            MaxCount: counts[max],
+            MeanAdu: mean,
+            StdDev: Math.Sqrt(variance),
+            Median: median,
+            Mad: mad,
+            LowClipFraction: counts[0] / total,
+            HighClipFraction: max == ushort.MaxValue ? counts[ushort.MaxValue] / total : 0);
+    }
+
+    private static double QuantileFromCounts(long[] counts, long n, long target) {
+        long seen = 0;
+        for (var v = 0; v < counts.Length; v++) {
+            seen += counts[v];
+            if (seen >= target) {
+                return v;
+            }
+        }
+        return 0;
+    }
+
+    private static double MadFromCounts(long[] counts, long n, int median) {
+        var target = (n + 1) / 2;
+        long inside = counts[median];
+        if (inside >= target) {
+            return 0;
+        }
+        for (var d = 1; d < counts.Length; d++) {
+            var lo = median - d;
+            var hi = median + d;
+            if (lo >= 0) inside += counts[lo];
+            if (hi < counts.Length) inside += counts[hi];
+            if (inside >= target) {
+                return d;
+            }
+            if (lo < 0 && hi >= counts.Length) {
+                break;
+            }
+        }
+        return 0;
     }
 
     private static byte[]? TryServeFromCache(string cachePath) {

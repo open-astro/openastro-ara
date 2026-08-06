@@ -162,7 +162,13 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     ),
                                 ],
                               ),
-                              const VerticalDivider(width: 1, thickness: 1),
+                              // Ara's own border tone, not the theme default —
+                              // which renders as a bright line against the
+                              // near-black nav rail.
+                              const VerticalDivider(
+                                  width: 1,
+                                  thickness: 1,
+                                  color: AraColors.border),
                               // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
                               // once built, is KEPT ALIVE and merely hidden when another is
                               // selected. Critical for the Planning/Sky Atlas tab: its native

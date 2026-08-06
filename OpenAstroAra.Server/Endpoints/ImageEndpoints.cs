@@ -88,6 +88,16 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetFrameThumbnail");
 
+        // §12c.2 — the raw 16-bit histogram behind the preview: the screen
+        // stretch hides clipping; this is where it shows.
+        frames.MapGet("/{id:guid}/histogram", async (Guid id, IFrameRepository repo, CancellationToken ct) => {
+            var result = await repo.GetHistogramAsync(id, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        })
+            .Produces<FrameHistogramDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetFrameHistogram");
+
         // §72 FITS download — serves the captured file from the catalog's
         // file_path column. 404 when the frame isn't in the catalog OR
         // the FITS file is missing on disk (deleted out-of-band, drive
