@@ -32,6 +32,9 @@ class ImagingTab extends ConsumerWidget {
     final liveViewOn = ref.watch(liveViewControllerProvider);
     final exposing = ref.watch(captureInProgressProvider);
     return Row(
+      // Stretch, not the default center: the rail Container shrink-wraps its
+      // content and would otherwise float vertically centered in the row.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // The frame owns the whole canvas — every sensor aspect fits with
         // the least possible letterboxing when the viewer is as tall as the
