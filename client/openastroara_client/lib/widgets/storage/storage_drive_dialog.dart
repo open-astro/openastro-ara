@@ -272,9 +272,10 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                           contentPadding: EdgeInsets.zero,
                           title: const Text('ext4 — drive lives on the rig'),
                           subtitle: Text(
-                              'Journaled (self-healing after power cuts); '
-                              'computers can\'t read it directly — frames '
-                              'arrive via the backup mirror.',
+                              'Journaled (self-healing after power cuts). '
+                              'Readable on Linux computers; Windows and Mac '
+                              'can\'t read it — frames arrive there via the '
+                              'backup mirror.',
                               style: theme.textTheme.bodySmall),
                         ),
                       ],
