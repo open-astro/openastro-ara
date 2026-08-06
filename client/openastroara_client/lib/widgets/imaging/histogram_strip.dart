@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/frame_histogram.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/last_frame_state.dart';
+import '../../state/imaging/stretch_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -33,17 +34,16 @@ class HistogramStrip extends ConsumerWidget {
     final histogram =
         id == null ? null : ref.watch(frameHistogramProvider(id));
     return Container(
-      height: 84,
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AraColors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: histogram == null
-          ? const _EmptyBins()
+          ? const SizedBox(height: 68, child: _EmptyBins())
           : histogram.when(
               data: (h) => _HistogramPlot(histogram: h),
-              loading: () => const _EmptyBins(),
-              error: (_, _) => const _EmptyBins(),
+              loading: () => const SizedBox(height: 68, child: _EmptyBins()),
+              error: (_, _) => const SizedBox(height: 68, child: _EmptyBins()),
             ),
     );
   }
@@ -66,13 +66,41 @@ class _EmptyBins extends StatelessWidget {
   }
 }
 
-class _HistogramPlot extends StatelessWidget {
+class _HistogramPlot extends ConsumerStatefulWidget {
   final FrameHistogram histogram;
   const _HistogramPlot({required this.histogram});
 
+  @override
+  ConsumerState<_HistogramPlot> createState() => _HistogramPlotState();
+}
+
+class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
   /// Clipping worth flagging: 0.1% of the sensor is ~26k pixels on an
   /// ASI2600 — real stars saturate a few hundred; a blown sky is millions.
   static const _clipWarnFraction = 0.001;
+
+  // Slider positions while dragging — the provider (and the ~1s server
+  // re-render it triggers) is only updated on drag END, so scrubbing stays
+  // fluid and each release renders exactly one variant.
+  double? _dragBlack;
+  double? _dragMid;
+  double? _dragWhite;
+
+  FrameHistogram get histogram => widget.histogram;
+
+  void _commit() {
+    final current = ref.read(stretchOverrideProvider);
+    ref.read(stretchOverrideProvider.notifier).set(StretchOverride(
+          black: _dragBlack ?? current?.black ?? 0,
+          mid: _dragMid ?? current?.mid ?? 0.5,
+          white: _dragWhite ?? current?.white ?? 1,
+        ));
+    setState(() {
+      _dragBlack = null;
+      _dragMid = null;
+      _dragWhite = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,11 +108,25 @@ class _HistogramPlot extends StatelessWidget {
     final lowClip = histogram.lowClipFraction >= _clipWarnFraction;
     final highClip = histogram.highClipFraction >= _clipWarnFraction;
     String pct(double f) => '${(f * 100).toStringAsFixed(1)}%';
-    // Rail-width layout: bars get the full width, the numbers one line below.
+    final override = ref.watch(stretchOverrideProvider);
+    final black = _dragBlack ?? override?.black ?? 0;
+    final mid = _dragMid ?? override?.mid ?? 0.5;
+    final white = _dragWhite ?? override?.white ?? 1;
+    final sliderTheme = SliderTheme.of(context).copyWith(
+      trackHeight: 2,
+      rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 5),
+      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+      overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+    );
+    // Rail-width layout: bars get the full width; under them the
+    // PixInsight-style stretch controls — black/white as a range on the same
+    // axis as the plot, midtone below, Auto snaps back to the default STF.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
+        SizedBox(
+          height: 44,
           child: CustomPaint(
             size: const Size(double.infinity, double.infinity),
             painter: _BinsPainter(
@@ -94,7 +136,49 @@ class _HistogramPlot extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 4),
+        SliderTheme(
+          data: sliderTheme,
+          child: RangeSlider(
+            values: RangeValues(black, white.clamp(black + 0.001, 1.0)),
+            onChanged: (v) => setState(() {
+              _dragBlack = v.start;
+              _dragWhite = v.end;
+            }),
+            onChangeEnd: (_) => _commit(),
+          ),
+        ),
+        Row(
+          children: [
+            Text('mid',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: AraColors.textSecondary, fontSize: 10)),
+            Expanded(
+              child: SliderTheme(
+                data: sliderTheme,
+                child: Slider(
+                  value: mid,
+                  onChanged: (v) => setState(() => _dragMid = v),
+                  onChangeEnd: (_) => _commit(),
+                ),
+              ),
+            ),
+            if (override != null || _dragBlack != null)
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _dragBlack = null;
+                    _dragMid = null;
+                    _dragWhite = null;
+                  });
+                  ref.read(stretchOverrideProvider.notifier).resetToAuto();
+                },
+                style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 28)),
+                child: const Text('Auto', style: TextStyle(fontSize: 11)),
+              ),
+          ],
+        ),
         DefaultTextStyle(
           style: theme.textTheme.labelSmall!.copyWith(
               color: AraColors.textSecondary,

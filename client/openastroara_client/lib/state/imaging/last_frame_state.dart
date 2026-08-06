@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/frames_api.dart';
 import '../saved_server_state.dart';
+import 'stretch_state.dart';
 
 /// The id of the most-recently-captured frame, set by the Imaging tab's
 /// "Take One" once the daemon has finished writing it. The [FrameViewer]
@@ -41,5 +42,10 @@ final framePreviewProvider =
   if (server == null) {
     throw StateError('Not connected to a server.');
   }
-  return FramesApi(server).preview(id);
+  // Watched: moving the stretch sliders re-renders the displayed frame.
+  final stretch = ref.watch(stretchOverrideProvider);
+  return FramesApi(server).preview(id,
+      blackPoint: stretch?.black,
+      midtonePoint: stretch?.mid,
+      whitePoint: stretch?.white);
 });

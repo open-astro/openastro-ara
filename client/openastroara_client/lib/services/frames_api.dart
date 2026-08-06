@@ -43,11 +43,22 @@ class FramesApi {
     return FrameHistogram.fromJson(res.data ?? const {});
   }
 
-  /// Fetch the stretched preview JPEG bytes for a frame.
-  Future<Uint8List> preview(String id) async {
+  /// Fetch the stretched preview JPEG bytes for a frame. With no arguments
+  /// the server applies the profile's default stretch; the manual triplet
+  /// (normalized 0..1) selects the §65 manual stretch instead.
+  Future<Uint8List> preview(String id,
+      {double? blackPoint, double? midtonePoint, double? whitePoint}) async {
+    final manual = blackPoint != null || midtonePoint != null || whitePoint != null;
     final res = await _dio.post<List<int>>(
       '/api/v1/frames/$id/preview',
-      data: const <String, dynamic>{},
+      data: manual
+          ? <String, dynamic>{
+              'stretch_palette': 'manual',
+              'black_point': blackPoint,
+              'midtone_point': midtonePoint,
+              'white_point': whitePoint,
+            }
+          : const <String, dynamic>{},
       options: Options(responseType: ResponseType.bytes),
     );
     final bytes = Uint8List.fromList(res.data ?? const <int>[]);
