@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,11 +36,11 @@ class HistogramStrip extends ConsumerWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: histogram == null
-          ? const SizedBox(height: 44, child: _EmptyBins())
+          ? const SizedBox(height: 20, child: _EmptyBins())
           : histogram.when(
               data: (h) => _StatisticsPanel(histogram: h),
-              loading: () => const SizedBox(height: 44, child: _EmptyBins()),
-              error: (_, _) => const SizedBox(height: 44, child: _EmptyBins()),
+              loading: () => const SizedBox(height: 20, child: _EmptyBins()),
+              error: (_, _) => const SizedBox(height: 20, child: _EmptyBins()),
             ),
     );
   }
@@ -111,18 +109,6 @@ class _StatisticsPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: 44,
-          child: CustomPaint(
-            size: const Size(double.infinity, double.infinity),
-            painter: _BinsPainter(
-              bins: h.bins,
-              lowClip: lowClip,
-              highClip: highClip,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
         pair(stat('Width', '${h.width}'), stat('Height', '${h.height}')),
         pair(stat('Mean', fmt(h.meanAdu)), stat('SD', fmt(h.stdDev))),
         pair(stat('Median', fmt(h.median)), stat('MAD', fmt(h.mad))),
@@ -142,40 +128,4 @@ class _StatisticsPanel extends StatelessWidget {
       ],
     );
   }
-}
-
-class _BinsPainter extends CustomPainter {
-  final List<int> bins;
-  final bool lowClip;
-  final bool highClip;
-  _BinsPainter(
-      {required this.bins, required this.lowClip, required this.highClip});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (bins.isEmpty) return;
-    final peak = bins.reduce(math.max);
-    if (peak <= 0) return;
-    final barWidth = size.width / bins.length;
-    final fill = Paint()..color = AraColors.textSecondary;
-    final clip = Paint()..color = AraColors.accentBusy;
-    final peakSqrt = math.sqrt(peak.toDouble());
-    for (var i = 0; i < bins.length; i++) {
-      if (bins[i] == 0) continue;
-      final h = size.height * math.sqrt(bins[i].toDouble()) / peakSqrt;
-      final isClipBar =
-          (i == 0 && lowClip) || (i == bins.length - 1 && highClip);
-      canvas.drawRect(
-        Rect.fromLTWH(
-            i * barWidth, size.height - h, math.max(barWidth - 0.5, 0.5), h),
-        isClipBar ? clip : fill,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BinsPainter old) =>
-      !identical(old.bins, bins) ||
-      old.lowClip != lowClip ||
-      old.highClip != highClip;
 }
