@@ -27,6 +27,11 @@ set -eu
 MOUNT_POINT=/media/openastroara
 FSTAB=/etc/fstab
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
+# Dev rigs run the daemon as a regular user without the .deb's service
+# account — fall back to whoever invoked sudo so mounts still own correctly.
+if ! id -u "$OWNER" >/dev/null 2>&1; then
+    OWNER=${SUDO_USER:-root}
+fi
 
 usage() {
     echo "usage: $0 [--format] [--fs exfat|ext4] [--check] <uuid> [<expected-label>]" >&2
