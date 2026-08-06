@@ -10,7 +10,8 @@
 #
 # A /dev/ path identifies a brand-new blank disk (no filesystem, hence no
 # UUID yet). An empty expected label is legal only when the disk truly has
-# no label to retype (blank or unlabeled); mkfs then labels it ARA-STORE.
+# no label to retype (blank or unlabeled). Every fresh format is labeled
+# ARA-DISK — the drive announces itself on any computer it lands on.
 #
 # Filesystems: exFAT is the take-the-drive-home choice (reads natively on
 # Windows/macOS; §29 field workflow) and the format default; ext4 is the
@@ -224,9 +225,9 @@ if [ "$FORMAT" -eq 1 ]; then
         fi
     fi
     if [ "$NEW_FS" = "exfat" ]; then
-        mkfs.exfat -L "${EXPECTED_LABEL:-ARA-STORE}" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
+        mkfs.exfat -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
     else
-        mkfs.ext4 -F -L "${EXPECTED_LABEL:-ARA-STORE}" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
+        mkfs.ext4 -F -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
     fi
     # mkfs assigns a NEW uuid — fstab must pin that one, not the old one.
     UUID=$(value_for "$DEVICE" UUID)
