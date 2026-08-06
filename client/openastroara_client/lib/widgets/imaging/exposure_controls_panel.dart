@@ -130,22 +130,41 @@ class _DurationSecondsField extends StatefulWidget {
 
 class _DurationSecondsFieldState extends State<_DurationSecondsField> {
   late final TextEditingController _ctrl;
+  final FocusNode _focus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.value.inSeconds.toString());
+    // Commit on focus loss too — "type 1, click Take One" must shoot 1s, not
+    // silently revert to the last submitted value (Enter alone was the only
+    // commit path, so an un-submitted edit snapped back on the next rebuild).
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit(_ctrl.text);
+    });
+  }
+
+  void _commit(String s) {
+    final parsed = int.tryParse(s.trim());
+    if (parsed != null && parsed >= 0) {
+      widget.onChanged(Duration(seconds: parsed));
+    } else {
+      _ctrl.text = widget.value.inSeconds.toString();
+    }
   }
 
   @override
   void didUpdateWidget(covariant _DurationSecondsField old) {
     super.didUpdateWidget(old);
+    // Never fight the user's in-progress edit.
+    if (_focus.hasFocus) return;
     final expected = widget.value.inSeconds.toString();
     if (_ctrl.text != expected) _ctrl.text = expected;
   }
 
   @override
   void dispose() {
+    _focus.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -154,14 +173,10 @@ class _DurationSecondsFieldState extends State<_DurationSecondsField> {
   Widget build(BuildContext context) {
     return TextField(
       controller: _ctrl,
+      focusNode: _focus,
       decoration: InputDecoration(labelText: widget.label),
       keyboardType: TextInputType.number,
-      onSubmitted: (s) {
-        final parsed = int.tryParse(s.trim());
-        if (parsed != null && parsed >= 0) {
-          widget.onChanged(Duration(seconds: parsed));
-        }
-      },
+      onSubmitted: _commit,
     );
   }
 }
@@ -186,22 +201,39 @@ class _IntField extends StatefulWidget {
 
 class _IntFieldState extends State<_IntField> {
   late final TextEditingController _ctrl;
+  final FocusNode _focus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.value.toString());
+    // Same commit-on-focus-loss stance as the exposure field: an edit the
+    // user walks away from is an edit they meant.
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit(_ctrl.text);
+    });
+  }
+
+  void _commit(String s) {
+    final parsed = int.tryParse(s.trim());
+    if (parsed != null && parsed >= widget.min && parsed <= widget.max) {
+      widget.onChanged(parsed);
+    } else {
+      _ctrl.text = widget.value.toString();
+    }
   }
 
   @override
   void didUpdateWidget(covariant _IntField old) {
     super.didUpdateWidget(old);
+    if (_focus.hasFocus) return;
     final expected = widget.value.toString();
     if (_ctrl.text != expected) _ctrl.text = expected;
   }
 
   @override
   void dispose() {
+    _focus.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -210,14 +242,10 @@ class _IntFieldState extends State<_IntField> {
   Widget build(BuildContext context) {
     return TextField(
       controller: _ctrl,
+      focusNode: _focus,
       decoration: InputDecoration(labelText: widget.label),
       keyboardType: TextInputType.number,
-      onSubmitted: (s) {
-        final parsed = int.tryParse(s.trim());
-        if (parsed != null && parsed >= widget.min && parsed <= widget.max) {
-          widget.onChanged(parsed);
-        }
-      },
+      onSubmitted: _commit,
     );
   }
 }

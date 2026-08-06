@@ -121,6 +121,11 @@ class ImagingTab extends ConsumerWidget {
   /// just surface accepted/failed to the user.
   Future<void> _takeOne(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Commit any half-typed control edit (the fields commit on focus loss)
+    // before reading the exposure params this shot will use. The zero delay
+    // lets the focus system deliver the change listeners.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(Duration.zero);
     final server = ref.read(activeServerProvider);
     if (server == null) {
       messenger.showSnackBar(
