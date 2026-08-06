@@ -112,11 +112,20 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
     final black = _dragBlack ?? override?.black ?? 0;
     final mid = _dragMid ?? override?.mid ?? 0.5;
     final white = _dragWhite ?? override?.white ?? 1;
+    // Quiet, edge-to-edge markers that align with the plot axis above —
+    // the default Material treatment (thick blue, thumb-inset track) reads
+    // as a form control, not as histogram cursors.
     final sliderTheme = SliderTheme.of(context).copyWith(
-      trackHeight: 2,
-      rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 5),
-      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-      overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+      trackHeight: 1,
+      activeTrackColor: AraColors.textDisabled,
+      inactiveTrackColor: AraColors.border,
+      thumbColor: AraColors.textSecondary,
+      overlayColor: AraColors.textSecondary.withValues(alpha: 0.08),
+      rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 4),
+      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+      overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+      trackShape: const _EdgeToEdgeTrackShape(),
+      rangeTrackShape: const _EdgeToEdgeRangeTrackShape(),
     );
     // Rail-width layout: bars get the full width; under them the
     // PixInsight-style stretch controls — black/white as a range on the same
@@ -136,15 +145,18 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
             ),
           ),
         ),
-        SliderTheme(
-          data: sliderTheme,
-          child: RangeSlider(
-            values: RangeValues(black, white.clamp(black + 0.001, 1.0)),
-            onChanged: (v) => setState(() {
-              _dragBlack = v.start;
-              _dragWhite = v.end;
-            }),
-            onChangeEnd: (_) => _commit(),
+        SizedBox(
+          height: 20,
+          child: SliderTheme(
+            data: sliderTheme,
+            child: RangeSlider(
+              values: RangeValues(black, white.clamp(black + 0.001, 1.0)),
+              onChanged: (v) => setState(() {
+                _dragBlack = v.start;
+                _dragWhite = v.end;
+              }),
+              onChangeEnd: (_) => _commit(),
+            ),
           ),
         ),
         Row(
@@ -153,12 +165,15 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
                 style: theme.textTheme.labelSmall?.copyWith(
                     color: AraColors.textSecondary, fontSize: 10)),
             Expanded(
-              child: SliderTheme(
-                data: sliderTheme,
-                child: Slider(
-                  value: mid,
-                  onChanged: (v) => setState(() => _dragMid = v),
-                  onChangeEnd: (_) => _commit(),
+              child: SizedBox(
+                height: 20,
+                child: SliderTheme(
+                  data: sliderTheme,
+                  child: Slider(
+                    value: mid,
+                    onChanged: (v) => setState(() => _dragMid = v),
+                    onChangeEnd: (_) => _commit(),
+                  ),
                 ),
               ),
             ),
@@ -200,6 +215,44 @@ class _HistogramPlotState extends ConsumerState<_HistogramPlot> {
         ),
       ],
     );
+  }
+}
+
+/// Track that spans the full widget width (no thumb-radius inset), so the
+/// slider's 0 and 1 line up with the histogram's first and last bin.
+class _EdgeToEdgeTrackShape extends RoundedRectSliderTrackShape {
+  const _EdgeToEdgeTrackShape();
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final height = sliderTheme.trackHeight ?? 2;
+    return Rect.fromLTWH(offset.dx,
+        offset.dy + (parentBox.size.height - height) / 2,
+        parentBox.size.width, height);
+  }
+}
+
+class _EdgeToEdgeRangeTrackShape extends RoundedRectRangeSliderTrackShape {
+  const _EdgeToEdgeRangeTrackShape();
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final height = sliderTheme.trackHeight ?? 2;
+    return Rect.fromLTWH(offset.dx,
+        offset.dy + (parentBox.size.height - height) / 2,
+        parentBox.size.width, height);
   }
 }
 
