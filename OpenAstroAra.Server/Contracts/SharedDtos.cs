@@ -79,7 +79,15 @@ public sealed record StorageDeviceDto(
 public sealed record StorageConfigureRequestDto(
     string Uuid,
     bool Format = false,
-    string? ConfirmLabel = null);
+    string? ConfirmLabel = null,
+    // "exfat" (default — reads natively on Windows/macOS for the take-the-
+    // drive-home field workflow) or "ext4" (rig-resident, journaled).
+    string? Filesystem = null);
+
+/// <summary>POST /storage/check body — §29 user-triggered disk check
+/// (unmount → fsck → remount). exFAT has no journal; this is its recovery
+/// story after an unclean power cut.</summary>
+public sealed record StorageCheckRequestDto(string Uuid);
 
 /// <summary>Result of a storage configure attempt. <c>code</c> is the helper's
 /// machine-readable outcome (ok, not_ext4, label_mismatch, device_busy,

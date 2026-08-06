@@ -32,8 +32,9 @@ class StorageDevice {
   final bool isSystemDisk;
   final bool isAraStore;
 
-  /// Only ext4 mounts cleanly; anything else needs the §29.1.3 reformat path.
-  bool get isExt4 => fileSystem == 'ext4';
+  /// exFAT (take-the-drive-home) and ext4 (rig-resident) both mount as the
+  /// store; anything else needs the §29.1.3 reformat path.
+  bool get isMountable => fileSystem == 'ext4' || fileSystem == 'exfat';
 
   /// A drive with no filesystem at all can be formatted without a label echo.
   bool get isBlank => (fileSystem ?? '').isEmpty;
@@ -54,7 +55,7 @@ class StorageDevice {
     final bits = <String>[
       if (sizeText.isNotEmpty) sizeText,
       if ((model ?? '').isNotEmpty && (label ?? '').isNotEmpty) model!,
-      if (isBlank) 'not formatted' else if (!isExt4) 'needs erasing ($fileSystem)',
+      if (isBlank) 'not formatted' else if (!isMountable) 'needs erasing ($fileSystem)',
       if (mountPoint != null && !isAraStore) 'in use at $mountPoint',
     ];
     return bits.join(' · ');
@@ -169,12 +170,14 @@ class StorageDevicesApi {
   }
 
   /// Mount [uuid] as the ARA store. With [format] true the drive is
-  /// **erased** and re-made as ext4; [confirmLabel] must equal its current
-  /// label (the server refuses otherwise).
+  /// **erased** and re-made as [filesystem] ('exfat' default, 'ext4' on
+  /// request); [confirmLabel] must equal its current label (the server
+  /// refuses otherwise).
   Future<StorageConfigureOutcome> configure({
     required String uuid,
     bool format = false,
     String? confirmLabel,
+    String? filesystem,
   }) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -183,6 +186,7 @@ class StorageDevicesApi {
           'uuid': uuid,
           'format': format,
           'confirm_label': ?confirmLabel,
+          'filesystem': ?filesystem,
         },
       );
       final data = res.data ?? const <String, dynamic>{};
@@ -194,6 +198,38 @@ class StorageDevicesApi {
       );
     } on DioException catch (e) {
       // 422 carries the helper's code in `title`, its detail in `detail`.
+      final body = e.response?.data;
+      if (body is Map) {
+        return StorageConfigureOutcome(
+          success: false,
+          code: body['title'] as String? ?? 'request_failed',
+          detail: body['detail'] as String?,
+        );
+      }
+      return StorageConfigureOutcome(
+        success: false,
+        code: 'request_failed',
+        detail: e.message,
+      );
+    }
+  }
+
+  /// User-triggered filesystem check (unmount → fsck → remount). The result
+  /// code is 'clean' or 'repaired' on success; exFAT has no journal, so this
+  /// is its recovery story after an unclean power cut.
+  Future<StorageConfigureOutcome> check({required String uuid}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/storage/check',
+        data: {'uuid': uuid},
+      );
+      final data = res.data ?? const <String, dynamic>{};
+      return StorageConfigureOutcome(
+        success: data['success'] as bool? ?? true,
+        code: data['code'] as String? ?? 'clean',
+        detail: data['detail'] as String?,
+      );
+    } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map) {
         return StorageConfigureOutcome(

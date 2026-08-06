@@ -35,9 +35,15 @@ namespace OpenAstroAra.Server.Services {
         /// with the running system's own disk excluded.</summary>
         Task<IReadOnlyList<StorageDeviceDto>> ListAsync(CancellationToken ct);
 
-        /// <summary>Mount (and optionally reformat as ext4) the device with this
-        /// UUID at /media/openastroara via the sudoers-scoped helper.</summary>
-        Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, CancellationToken ct);
+        /// <summary>Mount (and optionally reformat — exFAT by default, ext4 on
+        /// request) the device with this UUID at /media/openastroara via the
+        /// sudoers-scoped helper.</summary>
+        Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, string? filesystem, CancellationToken ct);
+
+        /// <summary>§29 user-triggered disk check: unmount → matching fsck
+        /// (fsck.exfat / e2fsck) → remount. exFAT has no journal, so this is
+        /// its recovery story after an unclean power cut.</summary>
+        Task<StorageConfigureResult> CheckAsync(string uuid, CancellationToken ct);
     }
 
     /// <summary>
@@ -171,7 +177,7 @@ namespace OpenAstroAra.Server.Services {
             return set;
         }
 
-        public async Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, CancellationToken ct) {
+        public async Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, string? filesystem, CancellationToken ct) {
             ArgumentException.ThrowIfNullOrWhiteSpace(uuid);
             if (!OperatingSystem.IsLinux()) {
                 return new StorageConfigureResult(false, "unsupported_platform", "Storage configuration is Linux-only.", null);
@@ -179,6 +185,13 @@ namespace OpenAstroAra.Server.Services {
             if (!File.Exists(HelperPath)) {
                 return new StorageConfigureResult(false, "helper_missing",
                     $"{HelperPath} is not installed — reinstall the openastroara-server package.", null);
+            }
+            // exFAT is the take-the-drive-home default; ext4 the rig-resident
+            // option. Anything else never reaches a command line.
+            var fs = filesystem ?? "exfat";
+            if (fs is not ("exfat" or "ext4")) {
+                return new StorageConfigureResult(false, "bad_filesystem",
+                    "Filesystem must be exfat or ext4.", null);
             }
             // An empty confirm label is legal only for the format path of a
             // drive with no label to retype — the helper still refuses unless
@@ -200,7 +213,7 @@ namespace OpenAstroAra.Server.Services {
             // re-splitting), and the helper re-validates everything it is
             // told — the API cannot talk it past its own checks.
             string[] args = format
-                ? ["-n", HelperPath, "--format", uuid, expectedLabel!]
+                ? ["-n", HelperPath, "--format", "--fs", fs, uuid, expectedLabel!]
                 : ["-n", HelperPath, uuid];
             var (exitCode, output) = await RunAsync("sudo", args, ct).ConfigureAwait(false);
             var text = output.Trim();
@@ -218,6 +231,41 @@ namespace OpenAstroAra.Server.Services {
             LogConfigureFailed(logger, uuid, code, detail ?? string.Empty);
             return new StorageConfigureResult(false, code, detail, null);
         }
+
+        public async Task<StorageConfigureResult> CheckAsync(string uuid, CancellationToken ct) {
+            ArgumentException.ThrowIfNullOrWhiteSpace(uuid);
+            if (!OperatingSystem.IsLinux()) {
+                return new StorageConfigureResult(false, "unsupported_platform", "Storage checks are Linux-only.", null);
+            }
+            if (!File.Exists(HelperPath)) {
+                return new StorageConfigureResult(false, "helper_missing",
+                    $"{HelperPath} is not installed — reinstall the openastroara-server package.", null);
+            }
+            if (!UuidShape().IsMatch(uuid)) {
+                return new StorageConfigureResult(false, "bad_uuid",
+                    "That does not look like a filesystem UUID.", null);
+            }
+            var (exitCode, output) = await RunAsync("sudo", ["-n", HelperPath, "--check", uuid], ct).ConfigureAwait(false);
+            var text = output.Trim();
+            if (exitCode == 0) {
+                LogChecked(logger, uuid, text);
+                // "OK <mount> checked clean|repaired" — the last word tells the
+                // client whether fsck fixed anything.
+                var repaired = text.EndsWith("repaired", StringComparison.Ordinal);
+                return new StorageConfigureResult(true, repaired ? "repaired" : "clean", text, MountPoint);
+            }
+            var parts = text.StartsWith("ERROR:", StringComparison.Ordinal)
+                ? text["ERROR:".Length..].Trim().Split(' ', 2)
+                : [exitCode == 9 ? "usage" : "helper_failed", text];
+            LogCheckFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
+            return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
+        }
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Storage check for UUID {Uuid}: {Outcome}.")]
+        private static partial void LogChecked(ILogger logger, string uuid, string outcome);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Storage check for UUID {Uuid} failed: {Code} {Detail}.")]
+        private static partial void LogCheckFailed(ILogger logger, string uuid, string code, string detail);
 
         private static string Text(JsonElement node, string property) =>
             node.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.String

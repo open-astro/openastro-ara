@@ -46,7 +46,12 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
     super.dispose();
   }
 
-  bool get _needsErase => _selected != null && !_selected!.isExt4;
+  bool get _needsErase => _selected != null && !_selected!.isMountable;
+
+  /// Format choice for the erase path. exFAT is the default — the drive
+  /// plugs straight into Windows/macOS at home (the §29 field workflow);
+  /// ext4 is the rig-resident choice.
+  String _newFilesystem = 'exfat';
 
   /// A labelled disk asks the user to type its name — the standard guard
   /// against erasing the wrong one. An unlabelled disk still holds someone's
@@ -84,6 +89,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
         confirmLabel: _needsErase
             ? ((device.label ?? '').isEmpty ? '' : _confirm.text)
             : null,
+        filesystem: _needsErase ? _newFilesystem : null,
       );
       if (!mounted) {
         return;
@@ -212,6 +218,37 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                     'ARA saves frames in a format this disk doesn\'t use, so it '
                     'has to be erased first. Everything on it will be lost.',
                     style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  RadioGroup<String>(
+                    groupValue: _newFilesystem,
+                    onChanged: (v) =>
+                        setState(() => _newFilesystem = v ?? 'exfat'),
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          value: 'exfat',
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('exFAT — take the drive with you'),
+                          subtitle: Text(
+                              'Plugs straight into Windows and Mac at home. '
+                              'After a power cut, run Check disk.',
+                              style: theme.textTheme.bodySmall),
+                        ),
+                        RadioListTile<String>(
+                          value: 'ext4',
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('ext4 — drive lives on the rig'),
+                          subtitle: Text(
+                              'Journaled (self-healing after power cuts); '
+                              'computers can\'t read it directly — frames '
+                              'arrive via the backup mirror.',
+                              style: theme.textTheme.bodySmall),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Text(

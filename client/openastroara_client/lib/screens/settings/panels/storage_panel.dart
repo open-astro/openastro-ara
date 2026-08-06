@@ -396,6 +396,8 @@ class _DestinationCard extends ConsumerWidget {
               // plugs in a drive that already holds a season of frames.
               _RescanButton(),
               const SizedBox(width: 8),
+              _CheckDiskButton(),
+              const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => showStorageDriveDialog(context, ref),
                 child: const Text('Change…'),
@@ -443,6 +445,83 @@ class _DestinationCard extends ConsumerWidget {
 /// Runs the server-side §28.8 scan on demand and reports what it found in a
 /// snackbar. Spins in place while the walk runs — a big library takes a
 /// couple of seconds on a Pi.
+/// §29 user-triggered filesystem check. exFAT (the take-home format) has no
+/// journal, so after a field power cut this is how the drive gets healthy —
+/// deliberately a button, never an automatic scan.
+class _CheckDiskButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_CheckDiskButton> createState() => _CheckDiskButtonState();
+}
+
+class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final server = ref.read(activeServerProvider);
+    if (server == null) return;
+    final devices = ref.read(storageDevicesProvider).asData?.value;
+    final store = devices?.where((d) => d.isAraStore && d.uuid != null).toList();
+    final messenger = ScaffoldMessenger.of(context);
+    if (store == null || store.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('No store drive to check — connect one first.')));
+      return;
+    }
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Check the store drive?'),
+        content: const Text(
+            'The drive is briefly taken offline while its filesystem is '
+            'verified and repaired if needed. Takes seconds to a couple of '
+            'minutes; capture must be idle.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Check disk')),
+        ],
+      ),
+    );
+    if (proceed != true || !mounted) return;
+    setState(() => _busy = true);
+    final api = StorageDevicesApi(server);
+    try {
+      final outcome = await api.check(uuid: store.first.uuid!);
+      if (!mounted) return;
+      ref.invalidate(storageSpaceProvider);
+      messenger.showSnackBar(SnackBar(
+          content: Text(outcome.success
+              ? (outcome.code == 'repaired'
+                  ? 'Disk checked — repairs were made. Worth re-running '
+                      '"Find frames on disk".'
+                  : 'Disk checked — clean.')
+              : 'Check failed: ${outcome.detail ?? outcome.code}')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(friendlyError(e, action: 'check the disk'))));
+    } finally {
+      api.close();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: _busy ? null : _run,
+      child: _busy
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          : const Text('Check disk'),
+    );
+  }
+}
+
 class _RescanButton extends ConsumerStatefulWidget {
   @override
   ConsumerState<_RescanButton> createState() => _RescanButtonState();

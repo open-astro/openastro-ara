@@ -5,15 +5,23 @@
 # rights, so this script's validation cannot be bypassed).
 #
 #   sudo configure-storage.sh <uuid-or-/dev/path>
-#   sudo configure-storage.sh --format <uuid-or-/dev/path> [<expected-label>]
+#   sudo configure-storage.sh --format [--fs exfat|ext4] <uuid-or-/dev/path> [<expected-label>]
+#   sudo configure-storage.sh --check <uuid>
 #
 # A /dev/ path identifies a brand-new blank disk (no filesystem, hence no
 # UUID yet). An empty expected label is legal only when the disk truly has
 # no label to retype (blank or unlabeled); mkfs then labels it ARA-STORE.
 #
-# Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 · 4 label_mismatch
-#             5 device_busy · 6 refused (root/boot disk) · 7 mkfs_failed
-#             8 mount_failed · 9 usage · 10 chown_failed
+# Filesystems: exFAT is the take-the-drive-home choice (reads natively on
+# Windows/macOS; §29 field workflow) and the format default; ext4 is the
+# rig-resident choice (journaled, best on-Pi repair tooling). --check runs
+# the matching fsck (drive briefly unmounted) — exFAT has no journal, so
+# the user-triggered check is its recovery story.
+#
+# Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 (unsupported fs) ·
+#             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk) ·
+#             7 mkfs_failed · 8 mount_failed · 9 usage · 10 chown_failed ·
+#             11 fsck_failed
 set -eu
 
 MOUNT_POINT=/media/openastroara
@@ -21,7 +29,7 @@ FSTAB=/etc/fstab
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
 
 usage() {
-    echo "usage: $0 [--format] <uuid> [<expected-label>]" >&2
+    echo "usage: $0 [--format] [--fs exfat|ext4] [--check] <uuid> [<expected-label>]" >&2
     exit 9
 }
 
@@ -65,8 +73,9 @@ refuse_if_system_disk() {
     done
 }
 
-ensure_fstab_entry() { # $1=uuid
+ensure_fstab_entry() { # $1=uuid $2=fstype
     uuid=$1
+    fstype=$2
     # Drop any stale line for this mount point (a previous drive) so the mount
     # point never has two owners, then add ours.
     # Build the whole new fstab in a temp file, then atomically rename it
@@ -83,24 +92,39 @@ ensure_fstab_entry() { # $1=uuid
         echo "ERROR: fstab_unreadable"
         exit 8
     fi
-    printf 'UUID=%s  %s  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2\n' \
-        "$uuid" "$MOUNT_POINT" >> "${FSTAB}.ara-tmp"
+    if [ "$fstype" = "exfat" ]; then
+        # exFAT carries no Unix ownership — the mount options ARE the
+        # ownership, so the daemon owns every file without any chown.
+        uid=$(id -u "$OWNER")
+        gid=$(id -g "$OWNER")
+        printf 'UUID=%s  %s  exfat  defaults,noatime,uid=%s,gid=%s,fmask=0113,dmask=0002,nofail,x-systemd.device-timeout=10  0  0\n' \
+            "$uuid" "$MOUNT_POINT" "$uid" "$gid" >> "${FSTAB}.ara-tmp"
+    else
+        printf 'UUID=%s  %s  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2\n' \
+            "$uuid" "$MOUNT_POINT" >> "${FSTAB}.ara-tmp"
+    fi
     chmod 644 "${FSTAB}.ara-tmp"
     sync
     mv "${FSTAB}.ara-tmp" "$FSTAB"
     systemctl daemon-reload 2>/dev/null || true
 }
 
-mount_and_own() { # $1=uuid $2=deep-chown (1 after mkfs, else top-level only)
+mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-level only)
     uuid=$1
-    deep=${2:-0}
+    fstype=$2
+    deep=${3:-0}
     mkdir -p "$MOUNT_POINT"
-    ensure_fstab_entry "$uuid"
+    ensure_fstab_entry "$uuid" "$fstype"
     if ! findmnt -no SOURCE "$MOUNT_POINT" >/dev/null 2>&1; then
         if ! mount "$MOUNT_POINT" 2>/dev/null; then
             echo "ERROR: mount_failed"
             exit 8
         fi
+    fi
+    # exFAT ownership comes from the mount options above; chown is not a
+    # thing there (it would fail with EPERM on every file).
+    if [ "$fstype" = "exfat" ]; then
+        return 0
     fi
     # Recursive chown only right after a format (empty tree). Re-walking a
     # drive already full of frames on every reconnect is pure wasted I/O —
@@ -116,10 +140,21 @@ mount_and_own() { # $1=uuid $2=deep-chown (1 after mkfs, else top-level only)
 }
 
 FORMAT=0
-if [ "${1:-}" = "--format" ]; then
-    FORMAT=1
-    shift
-fi
+CHECK=0
+NEW_FS=exfat
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --format) FORMAT=1; shift ;;
+        --check) CHECK=1; shift ;;
+        --fs)
+            NEW_FS=${2:-}
+            case "$NEW_FS" in exfat|ext4) ;; *) usage ;; esac
+            shift 2 ;;
+        --*) usage ;;
+        *) break ;;
+    esac
+done
+[ "$FORMAT" -eq 1 ] && [ "$CHECK" -eq 1 ] && usage
 UUID=${1:-}
 EXPECTED_LABEL=${2:-}
 [ -n "$UUID" ] || usage
@@ -133,6 +168,37 @@ if [ -z "$DEVICE" ] || [ ! -b "$DEVICE" ]; then
     exit 2
 fi
 refuse_if_system_disk "$DEVICE"
+
+if [ "$CHECK" -eq 1 ]; then
+    FS=$(value_for "$DEVICE" TYPE)
+    case "$FS" in exfat|ext4) ;; *) echo "ERROR: not_ext4 ${FS:-unknown}"; exit 3 ;; esac
+    # fsck needs the filesystem quiet — unmount, check, remount. A busy
+    # mount (something holding files open) refuses rather than forcing.
+    if findmnt -no TARGET "$DEVICE" >/dev/null 2>&1; then
+        if ! umount "$DEVICE" 2>/dev/null; then
+            echo "ERROR: device_busy"
+            exit 5
+        fi
+    fi
+    rc=0
+    if [ "$FS" = "exfat" ]; then
+        fsck.exfat -y "$DEVICE" >/dev/null 2>&1 || rc=$?
+    else
+        e2fsck -f -y "$DEVICE" >/dev/null 2>&1 || rc=$?
+    fi
+    # fsck exit 1 = errors found AND fixed — that's a successful check.
+    if [ "$rc" -gt 1 ]; then
+        echo "ERROR: fsck_failed exit=$rc"
+        exit 11
+    fi
+    mount_and_own "$UUID" "$FS" 0
+    if [ "$rc" -eq 1 ]; then
+        echo "OK $MOUNT_POINT checked repaired"
+    else
+        echo "OK $MOUNT_POINT checked clean"
+    fi
+    exit 0
+fi
 
 if [ "$FORMAT" -eq 1 ]; then
     # TOCTOU note: $DEVICE was validated above; an unplug/replug between the
@@ -152,9 +218,10 @@ if [ "$FORMAT" -eq 1 ]; then
             exit 5
         fi
     fi
-    if ! mkfs.ext4 -F -L "${EXPECTED_LABEL:-ARA-STORE}" "$DEVICE" >/dev/null 2>&1; then
-        echo "ERROR: mkfs_failed"
-        exit 7
+    if [ "$NEW_FS" = "exfat" ]; then
+        mkfs.exfat -L "${EXPECTED_LABEL:-ARA-STORE}" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
+    else
+        mkfs.ext4 -F -L "${EXPECTED_LABEL:-ARA-STORE}" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
     fi
     # mkfs assigns a NEW uuid — fstab must pin that one, not the old one.
     UUID=$(value_for "$DEVICE" UUID)
@@ -162,16 +229,20 @@ if [ "$FORMAT" -eq 1 ]; then
         echo "ERROR: uuid_not_found"
         exit 2
     fi
-    mount_and_own "$UUID" 1
+    mount_and_own "$UUID" "$NEW_FS" 1
     echo "OK $MOUNT_POINT $UUID"
     exit 0
 fi
 
 FS=$(value_for "$DEVICE" TYPE)
-if [ "$FS" != "ext4" ]; then
-    echo "ERROR: not_ext4 ${FS:-unknown}"
-    exit 3
-fi
+case "$FS" in
+    exfat|ext4) ;;
+    *)
+        # Error code name kept for wire compatibility — semantically
+        # "not a filesystem ARA can use as its store".
+        echo "ERROR: not_ext4 ${FS:-unknown}"
+        exit 3 ;;
+esac
 # The caller may have identified the disk by /dev/ path — fstab pins the
 # filesystem UUID, never a device path (paths reshuffle across boots).
 case "$UUID" in
@@ -181,6 +252,6 @@ if [ -z "$UUID" ]; then
     echo "ERROR: uuid_not_found"
     exit 2
 fi
-mount_and_own "$UUID"
+mount_and_own "$UUID" "$FS" 0
 echo "OK $MOUNT_POINT"
 exit 0
