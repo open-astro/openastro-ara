@@ -398,6 +398,8 @@ class _DestinationCard extends ConsumerWidget {
               const SizedBox(width: 8),
               _CheckDiskButton(),
               const SizedBox(width: 8),
+              _EjectButton(),
+              const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => showStorageDriveDialog(context, ref),
                 child: const Text('Change…'),
@@ -445,6 +447,66 @@ class _DestinationCard extends ConsumerWidget {
 /// Runs the server-side §28.8 scan on demand and reports what it found in a
 /// snackbar. Spins in place while the walk runs — a big library takes a
 /// couple of seconds on a Pi.
+/// §29 safe removal — flush + unmount before pulling the take-home drive.
+/// Linux caches writes; yanking a mounted drive can lose the last seconds
+/// of the night and leaves the exFAT dirty bit set.
+class _EjectButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_EjectButton> createState() => _EjectButtonState();
+}
+
+class _EjectButtonState extends ConsumerState<_EjectButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final server = ref.read(activeServerProvider);
+    if (server == null) return;
+    final devices = ref.read(storageDevicesProvider).asData?.value;
+    final store =
+        devices?.where((d) => d.isAraStore && d.uuid != null).toList();
+    final messenger = ScaffoldMessenger.of(context);
+    if (store == null || store.isEmpty) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('No store drive to eject.')));
+      return;
+    }
+    setState(() => _busy = true);
+    final api = StorageDevicesApi(server);
+    try {
+      final outcome = await api.eject(uuid: store.first.uuid!);
+      if (!mounted) return;
+      ref.invalidate(storageSpaceProvider);
+      ref.invalidate(storageDevicesProvider);
+      messenger.showSnackBar(SnackBar(
+          content: Text(outcome.success
+              ? 'Ejected — safe to unplug the drive.'
+              : outcome.code == 'device_busy'
+                  ? 'The drive is busy — wait for writes to finish and try again.'
+                  : 'Eject failed: ${outcome.detail ?? outcome.code}')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(friendlyError(e, action: 'eject the drive'))));
+    } finally {
+      api.close();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: _busy ? null : _run,
+      icon: _busy
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.eject, size: 16),
+      label: const Text('Eject'),
+    );
+  }
+}
+
 /// §29 user-triggered filesystem check. exFAT (the take-home format) has no
 /// journal, so after a field power cut this is how the drive gets healthy —
 /// deliberately a button, never an automatic scan.

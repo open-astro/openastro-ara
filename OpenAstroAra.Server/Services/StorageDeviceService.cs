@@ -44,6 +44,11 @@ namespace OpenAstroAra.Server.Services {
         /// (fsck.exfat / e2fsck) → remount. exFAT has no journal, so this is
         /// its recovery story after an unclean power cut.</summary>
         Task<StorageConfigureResult> CheckAsync(string uuid, CancellationToken ct);
+
+        /// <summary>§29 safe removal: flush + unmount so the drive can be
+        /// pulled without losing cached writes. The fstab entry stays — a
+        /// replug automounts.</summary>
+        Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct);
     }
 
     /// <summary>
@@ -260,6 +265,35 @@ namespace OpenAstroAra.Server.Services {
             LogCheckFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
             return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
         }
+
+        public async Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct) {
+            ArgumentException.ThrowIfNullOrWhiteSpace(uuid);
+            if (!OperatingSystem.IsLinux()) {
+                return new StorageConfigureResult(false, "unsupported_platform", "Storage eject is Linux-only.", null);
+            }
+            if (!File.Exists(HelperPath)) {
+                return new StorageConfigureResult(false, "helper_missing",
+                    $"{HelperPath} is not installed — reinstall the openastroara-server package.", null);
+            }
+            if (!UuidShape().IsMatch(uuid)) {
+                return new StorageConfigureResult(false, "bad_uuid",
+                    "That does not look like a filesystem UUID.", null);
+            }
+            var (exitCode, output) = await RunAsync("sudo", ["-n", HelperPath, "--eject", uuid], ct).ConfigureAwait(false);
+            var text = output.Trim();
+            if (exitCode == 0) {
+                LogEjected(logger, uuid);
+                return new StorageConfigureResult(true, "ejected", text, null);
+            }
+            var parts = text.StartsWith("ERROR:", StringComparison.Ordinal)
+                ? text["ERROR:".Length..].Trim().Split(' ', 2)
+                : [exitCode == 9 ? "usage" : "helper_failed", text];
+            LogCheckFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
+            return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
+        }
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Storage drive {Uuid} ejected (safe to remove).")]
+        private static partial void LogEjected(ILogger logger, string uuid);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Storage check for UUID {Uuid}: {Outcome}.")]
         private static partial void LogChecked(ILogger logger, string uuid, string outcome);

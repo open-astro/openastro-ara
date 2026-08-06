@@ -7,6 +7,7 @@
 #   sudo configure-storage.sh <uuid-or-/dev/path>
 #   sudo configure-storage.sh --format [--fs exfat|ext4] <uuid-or-/dev/path> [<expected-label>]
 #   sudo configure-storage.sh --check <uuid>
+#   sudo configure-storage.sh --eject <uuid>
 #
 # A /dev/ path identifies a brand-new blank disk (no filesystem, hence no
 # UUID yet). An empty expected label is legal only when the disk truly has
@@ -17,7 +18,8 @@
 # Windows/macOS; §29 field workflow) and the format default; ext4 is the
 # rig-resident choice (journaled, best on-Pi repair tooling). --check runs
 # the matching fsck (drive briefly unmounted) — exFAT has no journal, so
-# the user-triggered check is its recovery story.
+# the user-triggered check is its recovery story. --eject flushes and
+# unmounts for safe removal (fstab entry stays — a replug automounts).
 #
 # Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 (unsupported fs) ·
 #             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk) ·
@@ -35,7 +37,7 @@ if ! id -u "$OWNER" >/dev/null 2>&1; then
 fi
 
 usage() {
-    echo "usage: $0 [--format] [--fs exfat|ext4] [--check] <uuid> [<expected-label>]" >&2
+    echo "usage: $0 [--format] [--fs exfat|ext4] [--check] [--eject] <uuid> [<expected-label>]" >&2
     exit 9
 }
 
@@ -147,11 +149,13 @@ mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-leve
 
 FORMAT=0
 CHECK=0
+EJECT=0
 NEW_FS=exfat
 while [ $# -gt 0 ]; do
     case "$1" in
         --format) FORMAT=1; shift ;;
         --check) CHECK=1; shift ;;
+        --eject) EJECT=1; shift ;;
         --fs)
             NEW_FS=${2:-}
             case "$NEW_FS" in exfat|ext4) ;; *) usage ;; esac
@@ -160,7 +164,7 @@ while [ $# -gt 0 ]; do
         *) break ;;
     esac
 done
-[ "$FORMAT" -eq 1 ] && [ "$CHECK" -eq 1 ] && usage
+[ $((FORMAT + CHECK + EJECT)) -gt 1 ] && usage
 UUID=${1:-}
 EXPECTED_LABEL=${2:-}
 [ -n "$UUID" ] || usage
@@ -174,6 +178,21 @@ if [ -z "$DEVICE" ] || [ ! -b "$DEVICE" ]; then
     exit 2
 fi
 refuse_if_system_disk "$DEVICE"
+
+if [ "$EJECT" -eq 1 ]; then
+    # Safe removal: flush everything, then unmount. The fstab entry stays
+    # (nofail), so plugging the drive back in automounts it. A busy mount
+    # (open files) refuses rather than forcing.
+    if findmnt -no TARGET "$DEVICE" >/dev/null 2>&1; then
+        sync
+        if ! umount "$DEVICE" 2>/dev/null; then
+            echo "ERROR: device_busy"
+            exit 5
+        fi
+    fi
+    echo "OK ejected"
+    exit 0
+fi
 
 if [ "$CHECK" -eq 1 ]; then
     FS=$(value_for "$DEVICE" TYPE)

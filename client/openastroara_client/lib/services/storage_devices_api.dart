@@ -247,6 +247,37 @@ class StorageDevicesApi {
     }
   }
 
+  /// Safe removal: flush + unmount so the drive can be pulled without
+  /// losing cached writes. The rig's fstab entry stays — replug automounts.
+  Future<StorageConfigureOutcome> eject({required String uuid}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/storage/eject',
+        data: {'uuid': uuid},
+      );
+      final data = res.data ?? const <String, dynamic>{};
+      return StorageConfigureOutcome(
+        success: data['success'] as bool? ?? true,
+        code: data['code'] as String? ?? 'ejected',
+        detail: data['detail'] as String?,
+      );
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      if (body is Map) {
+        return StorageConfigureOutcome(
+          success: false,
+          code: body['title'] as String? ?? 'request_failed',
+          detail: body['detail'] as String?,
+        );
+      }
+      return StorageConfigureOutcome(
+        success: false,
+        code: 'request_failed',
+        detail: e.message,
+      );
+    }
+  }
+
   /// Ask the server to look at the save directory and catalog any frames
   /// sitting there that it doesn't know about — the case where a user brings
   /// a disk that already has a season of imaging on it.
