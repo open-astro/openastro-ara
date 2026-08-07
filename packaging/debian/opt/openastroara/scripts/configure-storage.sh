@@ -237,20 +237,30 @@ if [ "$FORMAT" -eq 1 ]; then
         echo "ERROR: label_mismatch ${ACTUAL_LABEL:-<none>}"
         exit 4
     fi
-    if findmnt -no TARGET "$DEVICE" >/dev/null 2>&1; then
-        if ! umount "$DEVICE" 2>/dev/null; then
-            echo "ERROR: device_busy"
-            exit 5
-        fi
+    # Erasing means the WHOLE DISK: a UUID that resolved to a partition
+    # (the normal case — the store lives in one) promotes to its parent so
+    # the partition table itself is rebuilt, not just the filesystem inside
+    # the old one. The system-disk refusal already ran against this base.
+    if [ "$(lsblk -no TYPE "$DEVICE" 2>/dev/null | head -n1)" = "part" ]; then
+        DEVICE=$(base_disk "$DEVICE")
     fi
+    # Unmount every mounted piece of the disk before touching it.
+    for m in $(lsblk -lno PATH "$DEVICE" 2>/dev/null); do
+        if findmnt -no TARGET "$m" >/dev/null 2>&1; then
+            if ! umount "$m" 2>/dev/null; then
+                echo "ERROR: device_busy"
+                exit 5
+            fi
+        fi
+    done
     # Old filesystem/partition signatures must ALL go — a leftover backup
     # GPT at the end of the disk makes macOS/Windows call the drive
     # unreadable even though the new filesystem at sector 0 is fine.
     wipefs -a "$DEVICE" >/dev/null 2>&1 || true
     # A whole disk gets the layout every retail USB drive ships with:
-    # an MBR and ONE partition, then the filesystem inside it — the shape
-    # Windows and macOS expect. (Formatting the raw device — "superfloppy"
-    # — is what made the take-home drive unreadable off-rig.)
+    # a partition table and ONE partition, then the filesystem inside it —
+    # the shape Windows and macOS expect. (Formatting the raw device —
+    # "superfloppy" — is what made the take-home drive unreadable off-rig.)
     KIND=$(lsblk -no TYPE "$DEVICE" 2>/dev/null | head -n1)
     if [ "$KIND" = "disk" ]; then
         # Explicit GPT (no 2 TiB MBR ceiling) with the partition-type GUID
