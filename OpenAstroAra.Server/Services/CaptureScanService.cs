@@ -256,9 +256,13 @@ public sealed partial class CaptureScanService : IDisposable {
 
         var capturedUtc = ParseDateObs(headers) ?? File.GetLastWriteTimeUtc(fitsPath);
         var exposureSec = ParseExposure(headers) ?? 0.0;
-        var target = LookupHeader(headers, "OBJECT") ?? "Unknown Target";
         var imageType = LookupHeader(headers, "IMAGETYP") ?? "LIGHT";
         var frameType = MapImageTypeToFrameType(imageType);
+        // Calibration frames have no target by nature — label them as what
+        // they are instead of "Unknown Target" masquerading as an object in
+        // the stats/target lists (Joey's call, from the NGC6188 archive).
+        var target = LookupHeader(headers, "OBJECT")
+            ?? (frameType == FrameType.Light ? "Unknown Target" : "Calibration");
         var filter = LookupHeader(headers, "FILTER");
         // §28: a FITS without a GAIN header records null (unknown), not a fake 0.
         var gain = ParseInt(LookupHeader(headers, "GAIN"));
