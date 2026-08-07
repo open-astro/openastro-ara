@@ -101,6 +101,10 @@ public sealed partial class CaptureScanService : IDisposable {
                     sessionsCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                 }
             }
+            // The synthetic recovery session was just deleted with the rest —
+            // drop the in-memory cache or every re-insert fails its session FK
+            // (found live: 339 frames re-scanned as 0 on the rig).
+            _recoverySessionId = null;
             LogCatalogReset(framesCleared, sessionsCleared);
             var scan = await RunLockedAsync(ct).ConfigureAwait(false);
             return (framesCleared, sessionsCleared, scan);
