@@ -1,0 +1,10 @@
+# §36 seed bundle manifest: <package-id> <TAB> <pinned-url> <TAB> <sha256>.
+# Must stay in lockstep with DataManagerService.Catalog — DataManagerSeedManifestTest enforces it.
+hyg-stars	https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/hygdata_v40.csv.gz	8e3ff9e67445e558a759b117910850cff1b1d4d492f45f715c2ee2db3d869bac
+openngc-dso	https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/NGC.csv	840fe0c9ee1332e551b2e722a0e92726cd7b157914a3d2177602832aadd3aa9e
+sharpless-hii	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/sh2.csv	cb090575c57699eb9d57de6acc9c8ae2b5b8165e52cec9dbbb47732ec203a148
+ldn-dark	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/ldn.csv	88b32186b1058fdf3cdf7f3c1d02930441cd57d13fa9b374fc159e937882312c
+barnard-dark	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/barnard.csv	67db5d2ed5928bf93f94fbce8575184aba81b5731743b4982dd25cda1f290ed2
+vdb-reflection	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/vdb.csv	9b0024925ec9f5ef50e84a4efb6f7cf8535994aa0e2018b354ffce2f99b977f5
+abell-pn	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/abell-pn.csv	aea2591ad1e1f0245205fca946a363cef8820e05a6e5e422ce1e4ed16f26e200
+arp-peculiar	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/arp.csv	afe3aed0bbcfc5bd807e88a4b1f4ae15a493d9170d1bdff8a528a7a80e04f853

@@ -20,6 +20,26 @@ class DataManagerModal extends ConsumerStatefulWidget {
 
 class _DataManagerModalState extends ConsumerState<DataManagerModal> {
   @override
+  Widget build(BuildContext context) {
+    return const Dialog.fullscreen(
+      child: Scaffold(body: DataManagerView(showCloseChrome: true)),
+    );
+  }
+}
+
+/// The Data Manager itself — package list + install state + live progress —
+/// embeddable anywhere (the Sky Data settings panel embeds it directly; the
+/// legacy modal wraps it fullscreen).
+class DataManagerView extends ConsumerStatefulWidget {
+  final bool showCloseChrome;
+  const DataManagerView({super.key, this.showCloseChrome = false});
+
+  @override
+  ConsumerState<DataManagerView> createState() => _DataManagerViewState();
+}
+
+class _DataManagerViewState extends ConsumerState<DataManagerView> {
+  @override
   void initState() {
     super.initState();
     // Re-read the catalog on open so a package installed/removed elsewhere shows fresh.
@@ -38,31 +58,36 @@ class _DataManagerModalState extends ConsumerState<DataManagerModal> {
         .where((p) => p.isInstalled)
         .fold<int>(0, (sum, p) => sum + p.sizeBytes);
 
-    return Dialog.fullscreen(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Data Manager'),
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          actions: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (widget.showCloseChrome)
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            const SizedBox(width: 4),
+            Text(
+              'Data Manager',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const Spacer(),
             if (packages != null)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    '${formatBytes(usedBytes)} installed',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '${formatBytes(usedBytes)} installed',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
                   ),
                 ),
               ),
           ],
         ),
-        body: _body(context, async, packages),
-      ),
+        Expanded(child: _body(context, async, packages)),
+      ],
     );
   }
 

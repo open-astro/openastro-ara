@@ -58,7 +58,22 @@ namespace OpenAstroAra.Server.Services {
             _skyDataRoot = skyDataRoot ?? throw new ArgumentNullException(nameof(skyDataRoot));
         }
 
+        /// <summary>Every installed package whose catalog.csv uses the OpenNGC column
+        /// layout — parsed and merged into one DSO set. OpenNGC first so its rows win
+        /// any (unlikely) primary-name collision by arriving first.</summary>
+        internal static readonly string[] DsoPackages = {
+            "openngc-dso", "sharpless-hii", "ldn-dark", "barnard-dark",
+            "vdb-reflection", "abell-pn", "arp-peculiar",
+        };
+
         private string DsoCsvPath => Path.Combine(_skyDataRoot, "openngc-dso", "catalog.csv");
+
+        private IEnumerable<string> InstalledDsoCsvPaths() {
+            foreach (var id in DsoPackages) {
+                var path = Path.Combine(_skyDataRoot, id, "catalog.csv");
+                if (File.Exists(path)) yield return path;
+            }
+        }
 
         private sealed record DsoRow(
             string Name, double RaDeg, double DecDeg, double? Mag, string Type,
@@ -84,6 +99,18 @@ namespace OpenAstroAra.Server.Services {
                 r => r.Name.StartsWith("NGC", StringComparison.Ordinal)),
             new CatalogDef("ic", "IC", "Catalogs",
                 r => r.Name.StartsWith("IC", StringComparison.Ordinal)),
+            new CatalogDef("sharpless", "Sharpless (Sh2)", "Catalogs",
+                r => r.Name.StartsWith("Sh2-", StringComparison.Ordinal)),
+            new CatalogDef("barnard", "Barnard dark nebulae", "Catalogs",
+                r => r.Name.Length > 1 && r.Name[0] == 'B' && char.IsAsciiDigit(r.Name[1])),
+            new CatalogDef("ldn", "Lynds dark nebulae (LDN)", "Catalogs",
+                r => r.Name.StartsWith("LDN ", StringComparison.Ordinal)),
+            new CatalogDef("vdb", "van den Bergh (vdB)", "Catalogs",
+                r => r.Name.StartsWith("vdB ", StringComparison.Ordinal)),
+            new CatalogDef("abell-pn", "Abell planetary nebulae", "Catalogs",
+                r => r.Name.StartsWith("Abell ", StringComparison.Ordinal)),
+            new CatalogDef("arp", "Arp peculiar galaxies", "Catalogs",
+                r => r.Name.StartsWith("Arp ", StringComparison.Ordinal)),
             new CatalogDef("galaxies", "Galaxies", "Types",
                 r => r.Type is "G" or "GPair" or "GTrpl" or "GGroup"),
             new CatalogDef("open-clusters", "Open clusters", "Types", r => r.Type is "OCl"),
@@ -96,7 +123,7 @@ namespace OpenAstroAra.Server.Services {
         };
 
         public IReadOnlyList<CatalogInfoDto> List() {
-            if (!File.Exists(DsoCsvPath)) {
+            if (!InstalledDsoCsvPaths().Any()) {
                 return Array.Empty<CatalogInfoDto>();
             }
             return Defs.Select(d => new CatalogInfoDto(d.Id, d.Name, d.Group)).ToList();
@@ -176,17 +203,25 @@ namespace OpenAstroAra.Server.Services {
 
         private List<DsoRow>? LoadDsos(CancellationToken ct) {
             // Fast path: the catalog is parsed once and cached for the process lifetime.
-            var cached = Volatile.Read(ref _dsos);
-            if (cached is not null) {
-                return cached;
-            }
-            if (!File.Exists(DsoCsvPath)) {
+            // Cache keyed on the SET of installed catalog files + their write times, so
+            // installing (or updating) a package invalidates without a daemon restart.
+            var paths = InstalledDsoCsvPaths().ToList();
+            if (paths.Count == 0) {
                 return null;
             }
+            long signature = 17;
+            foreach (var path in paths) {
+                signature = unchecked(signature * 31 + path.GetHashCode(StringComparison.Ordinal));
+                signature = unchecked(signature * 31 + File.GetLastWriteTimeUtc(path).Ticks);
+            }
+            var cached = Volatile.Read(ref _dsos);
+            if (cached is not null && Interlocked.Read(ref _dsoSignature) == signature) {
+                return cached;
+            }
             // A prior parse failed on a corrupt/unreadable CSV — skip the re-read rather than re-parsing
-            // the bad file every request, UNLESS the file has since changed on disk (the user replaced a
+            // the bad file every request, UNLESS a file has since changed on disk (the user replaced a
             // corrupt catalog with a good one), in which case retry so it recovers without a restart.
-            var writeTicks = File.GetLastWriteTimeUtc(DsoCsvPath).Ticks;
+            var writeTicks = signature;
             // Interlocked (not Volatile) for the 64-bit field: a torn read of a long is possible on a
             // 32-bit CLR; Interlocked.Read is atomic on every platform and carries the same ordering.
             if (Interlocked.Read(ref _loadFailedWriteTicks) == writeTicks) {
@@ -201,7 +236,10 @@ namespace OpenAstroAra.Server.Services {
             // finish and everyone shares that one instance.
             List<DsoRow> parsed;
             try {
-                parsed = ParseDsoCsv(ct);
+                parsed = new List<DsoRow>();
+                foreach (var path in paths) {
+                    ParseDsoCsvFile(path, parsed, ct);
+                }
             } catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException) {
                 // Corrupt or unreadable catalog: remember THIS file version as bad so we don't retry the
                 // full read per request, but a later replacement (different write-time) re-parses.
@@ -209,15 +247,21 @@ namespace OpenAstroAra.Server.Services {
                 Interlocked.Exchange(ref _loadFailedWriteTicks, writeTicks);
                 return null;
             }
-            return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
+            // Publish list + signature together (last-writer-wins is fine: both are
+            // derived from the same directory state; a racing pair produces equal data).
+            Interlocked.Exchange(ref _dsoSignature, signature);
+            Volatile.Write(ref _dsoEntries, null); // GetAllDsos re-projects from the fresh rows
+            Interlocked.Exchange(ref _dsos, parsed);
+            return parsed;
         }
 
-        private List<DsoRow> ParseDsoCsv(CancellationToken ct) {
-            var list = new List<DsoRow>();
-            using var reader = new StreamReader(DsoCsvPath);
+        private long _dsoSignature;
+
+        private static void ParseDsoCsvFile(string csvPath, List<DsoRow> list, CancellationToken ct) {
+            using var reader = new StreamReader(csvPath);
             var header = reader.ReadLine();
             if (header is null) {
-                return list;
+                return;
             }
             var cols = header.Split(';');     // OpenNGC is semicolon-separated
             int Idx(string n) => Array.IndexOf(cols, n);
@@ -227,7 +271,7 @@ namespace OpenAstroAra.Server.Services {
                 iMaj = Idx("MajAx"), iMin = Idx("MinAx"), iPa = Idx("PosAng"), iSb = Idx("SurfBr"),
                 iCommon = Idx("Common names");
             if (iName < 0 || iRa < 0 || iDec < 0) {
-                return list;          // unexpected layout — nothing to place
+                return;               // unexpected layout — nothing to place
             }
             string? line;
             while ((line = reader.ReadLine()) is not null) {
@@ -272,7 +316,6 @@ namespace OpenAstroAra.Server.Services {
                 list.Add(new DsoRow(f[iName], ra, dec, mag, type, messier, caldwell,
                     Num(iMaj), Num(iMin), Num(iPa), Num(iSb), common));
             }
-            return list;
         }
 
         private static bool TryNum(string s, out double v) =>

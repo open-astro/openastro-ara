@@ -41,7 +41,14 @@ namespace OpenAstroAra.Server.Services {
         public const int MaxObjects = 50_000;
 
         /// <summary>Whether a parser exists for this package id (only catalog packages with a known column layout).</summary>
-        public static bool HasParser(string packageId) => packageId is "hyg-stars" or "openngc-dso";
+        public static bool HasParser(string packageId) => packageId is "hyg-stars" || OpenNgcLayoutPackages.Contains(packageId);
+
+        /// <summary>Packages whose catalog.csv uses the OpenNGC column layout (the six §36 add-on
+        /// catalogs are normalized to it at build time in open-astro/sky-data).</summary>
+        internal static readonly string[] OpenNgcLayoutPackages = {
+            "openngc-dso", "sharpless-hii", "ldn-dark", "barnard-dark",
+            "vdb-reflection", "abell-pn", "arp-peculiar",
+        };
 
         public static IReadOnlyList<CatalogObjectDto> Read(string packageId, Stream csv, double? maxMag, int? limit,
                 CancellationToken ct) {
@@ -55,7 +62,7 @@ namespace OpenAstroAra.Server.Services {
                 bufferSize: -1, leaveOpen: true);
             return packageId switch {
                 "hyg-stars" => ParseHyg(reader, maxMag, effectiveLimit, ct),
-                "openngc-dso" => ParseOpenNgc(reader, maxMag, effectiveLimit, ct),
+                _ when OpenNgcLayoutPackages.Contains(packageId) => ParseOpenNgc(reader, maxMag, effectiveLimit, ct),
                 _ => throw new InvalidOperationException($"No sky-catalog parser for package '{packageId}'."),
             };
         }
