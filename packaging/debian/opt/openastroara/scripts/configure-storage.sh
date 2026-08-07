@@ -32,8 +32,14 @@ FSTAB=/etc/fstab
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
 # Dev rigs run the daemon as a regular user without the .deb's service
 # account — fall back to whoever invoked sudo so mounts still own correctly.
+# A silent fall-through to root would leave the (non-root) daemon unable to
+# write the newly mounted exFAT volume — fail loudly instead.
 if ! id -u "$OWNER" >/dev/null 2>&1; then
-    OWNER=${SUDO_USER:-root}
+    OWNER=${SUDO_USER:-}
+    if [ -z "$OWNER" ] || ! id -u "$OWNER" >/dev/null 2>&1; then
+        echo "ERROR: chown_failed no_resolvable_owner"
+        exit 10
+    fi
 fi
 
 usage() {
