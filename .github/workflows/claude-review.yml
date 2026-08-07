@@ -120,7 +120,7 @@ jobs:
             Do not submit the review text as a chat message.
           claude_args: |
             --model sonnet
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*)"
 
       # Per #862/#863 (and round-tripped back from AlpacaBridge's port, which
       # added the label-gated pull_request_target fork flow above): the action
