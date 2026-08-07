@@ -146,3 +146,20 @@ class DsoCatalogService {
     }
   }
 }
+
+/// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
+/// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
+/// Exact normalized id/name match wins; otherwise the first object whose
+/// common name contains the query. Null when nothing matches.
+PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
+  String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[\s\-_]'), '');
+  final q = norm(query);
+  if (q.isEmpty) return null;
+  for (final o in catalog) {
+    if (norm(o.id) == q || norm(o.name) == q) return o;
+  }
+  for (final o in catalog) {
+    if (norm(o.name).contains(q)) return o;
+  }
+  return null;
+}

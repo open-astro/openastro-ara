@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
+import '../../services/dso_catalog_service.dart';
+import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
 import '../../state/saved_server_state.dart';
@@ -195,9 +197,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final mosaicPanels = <({double raDeg, double decDeg})>[
       if (event['panels'] case final List<Object?> rawPanels)
         for (final p in rawPanels)
-          if (p is Map &&
-              p['raDeg'] is num &&
-              p['decDeg'] is num)
+          if (p is Map && p['raDeg'] is num && p['decDeg'] is num)
             (
               raDeg: (p['raDeg'] as num).toDouble(),
               decDeg: (p['decDeg'] as num).toDouble(),
@@ -211,8 +211,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final positionAngleDeg = isMosaic
         ? (rotationDeg ?? 0)
         : (rotationDeg != null && rotationDeg != 0)
-            ? rotationDeg
-            : null;
+        ? rotationDeg
+        : null;
 
     final messenger = ScaffoldMessenger.of(context);
     ImagingRunResult? result;
@@ -248,6 +248,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   void _submitSearch() {
     final q = _searchCtrl.text.trim();
     if (q.isEmpty) return;
+    // Our planning catalogs first: the Stellarium engine only knows its own
+    // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations (and
+    // OpenNGC common names) must resolve against the local mirror — a hit
+    // centres by coordinates, the same channel as Tonight's Sky recentre.
+    final catalog = ref.read(dsoCatalogProvider).value;
+    final hit = catalog == null ? null : findCatalogObject(catalog, q);
+    if (hit != null) {
+      _pushCmd({'type': 'goto', 'ra': hit.raDeg, 'dec': hit.decDeg});
+      return;
+    }
     _pushCmd({'type': 'search', 'q': q});
   }
 
