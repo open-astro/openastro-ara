@@ -51,8 +51,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - id: review-agent
-        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b  # v1
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b  # v1
         env:
           # allowed_non_write_users (below) auto-enables subprocess secret
           # scrubbing, which strips the GitHub token from the agent's
@@ -119,48 +118,9 @@ jobs:
             — the permission rules reject any command containing substitution, and
             the review will silently fail to post.
             Do not submit the review text as a chat message.
-          # Read-only paging tools (sed -n/grep/head/tail/wc/cat/ls) are in the
-          # allowlist because on LARGE diffs the agent dumps `gh pr diff` to a
-          # file and pages through it — without them every page is a permission
-          # denial and the agent burns out before posting (root cause of #932's
-          # failed reviews; 900+ small-diff PRs never needed to page).
           claude_args: |
             --model sonnet
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*)"
-
-      # Fallback poster (PR #932's failure mode): on large diffs the agent has
-      # repeatedly produced its review but burned every attempt to run
-      # `gh pr comment` against the permission rules (denial counts 8/21 across
-      # two runs), finishing with the review only in its final chat message.
-      # The execution file has that message — post it ourselves when no fresh
-      # bot comment exists, with a provenance note. The assert below still
-      # owns the pass/fail decision: a fallback-posted body without the
-      # sign-off phrase still fails the check.
-      - name: Post the review if the agent could not
-        if: steps.review-agent.outputs.execution_file != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXECUTION_FILE: ${{ steps.review-agent.outputs.execution_file }}
-        run: |
-          started="$(gh run view "$GITHUB_RUN_ID" --repo "${{ github.repository }}" --json createdAt --jq .createdAt)"
-          if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
-              --paginate \
-              | jq -e -r --arg since "$started" \
-              '.[] | select(.user.login | test("^(claude|github-actions)(\\[bot\\])?$")) | select(.updated_at >= $since)' \
-              > /dev/null; then
-            echo "Agent posted its own comment — no fallback needed."
-            exit 0
-          fi
-          # Last assistant text block in the stream-json execution file.
-          jq -r 'map(select(.type == "assistant")) | last | .message.content | map(select(.type == "text") | .text) | join("\n")' \
-              "$EXECUTION_FILE" > /tmp/fallback-review.md || true
-          if [ ! -s /tmp/fallback-review.md ]; then
-            echo "::warning::No assistant text found in the execution file — nothing to post."
-            exit 0
-          fi
-          printf '\n\n---\n_Posted by the workflow fallback: the review agent produced this but could not post it itself._\n' >> /tmp/fallback-review.md
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" --body-file /tmp/fallback-review.md
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
 
       # Per #862/#863 (and round-tripped back from AlpacaBridge's port, which
       # added the label-gated pull_request_target fork flow above): the action
