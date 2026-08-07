@@ -75,6 +75,7 @@ public sealed partial class CaptureScanService {
 
         var tmpSwept = SweepStaleTempFiles(savePath);
         var orphansRecovered = await RecoverOrphanFitsAsync(savePath, ct);
+        await FinalizeRecoverySessionsAsync(ct);
 
         if (tmpSwept > 0 || orphansRecovered > 0) {
             LogScanComplete(tmpSwept, orphansRecovered);
@@ -181,10 +182,14 @@ public sealed partial class CaptureScanService {
         var focuserPos = ParseInt(LookupHeader(headers, "FOCUSPOS"))
             ?? ParseInt(LookupHeader(headers, "FOCPOS"));
 
-        // Synthetic recovered session — one bucket for all orphans recovered
-        // in this scan. Real session tracking lands when §38 orchestrator
-        // writes the session_id into the FITS header on capture.
-        var sessionId = await EnsureRecoverySessionAsync(ct);
+        // Synthetic recovered session per (target, night) — a single global
+        // bucket lumps a whole archive into one "session" whose display name
+        // is whatever frame type is most numerous (a lights + darks import
+        // showed up as one giant "Calibration"). Night = local date shifted
+        // -12 h so an imaging run spanning midnight stays one session. Real
+        // session tracking lands when §38 orchestrator writes the session_id
+        // into the FITS header on capture.
+        var sessionId = await EnsureRecoverySessionAsync(target, capturedUtc, ct);
         var frameId = Guid.NewGuid();
 
         await using var conn = _db.OpenConnection();
@@ -227,25 +232,51 @@ public sealed partial class CaptureScanService {
         return true;
     }
 
-    private Guid? _recoverySessionId;
-    private async Task<Guid> EnsureRecoverySessionAsync(CancellationToken ct) {
-        if (_recoverySessionId.HasValue) return _recoverySessionId.Value;
+    private readonly Dictionary<string, Guid> _recoverySessions = new(StringComparer.OrdinalIgnoreCase);
+
+    private async Task<Guid> EnsureRecoverySessionAsync(string target, DateTimeOffset capturedUtc, CancellationToken ct) {
+        var night = capturedUtc.ToLocalTime().AddHours(-12).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var key = $"{night}|{target}";
+        if (_recoverySessions.TryGetValue(key, out var existing)) return existing;
         var sid = Guid.NewGuid();
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
+        // started_at/ended_at seed from the first recovered frame's capture
+        // time (NOT scan time — the archive's real chronology is what the
+        // library sorts by) and widen in FinalizeRecoverySessionsAsync.
         cmd.CommandText = """
             INSERT INTO sessions
                 (id, profile_id, sequence_json, started_at, ended_at,
                  recovery_needed, last_completed_instruction_id,
                  current_target_id, frame_count)
             VALUES
-                ($id, NULL, NULL, $now, $now, 0, NULL, NULL, 0);
+                ($id, NULL, NULL, $captured, $captured, 0, NULL, NULL, 0);
             """;
         cmd.Parameters.AddWithValue("$id", sid.ToString());
-        cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("$captured", capturedUtc.ToString("O"));
         await cmd.ExecuteNonQueryAsync(ct);
-        _recoverySessionId = sid;
+        _recoverySessions[key] = sid;
         return sid;
+    }
+
+    // After the scan, stamp each recovery session with its frames' true
+    // MIN/MAX capture window + count, so the library shows the archive's
+    // chronology rather than one row per scan run dated "today".
+    private async Task FinalizeRecoverySessionsAsync(CancellationToken ct) {
+        if (_recoverySessions.Count == 0) return;
+        await using var conn = _db.OpenConnection();
+        foreach (var sid in _recoverySessions.Values) {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                UPDATE sessions SET
+                    started_at = (SELECT MIN(captured_utc) FROM frames WHERE session_id = $id),
+                    ended_at   = (SELECT MAX(captured_utc) FROM frames WHERE session_id = $id),
+                    frame_count = (SELECT COUNT(*) FROM frames WHERE session_id = $id)
+                WHERE id = $id;
+                """;
+            cmd.Parameters.AddWithValue("$id", sid.ToString());
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
     }
 
     private static IEnumerable<string> EnumerateFilesSafe(string root, string pattern) {

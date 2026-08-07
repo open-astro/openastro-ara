@@ -203,6 +203,20 @@ public static class Stretcher {
     /// </summary>
     public static byte[] Stf(ReadOnlySpan<ushort> input, double targetBackground, double shadowSigma) {
         if (input.Length == 0) return Array.Empty<byte>();
+        return Manual(input, DeriveStfParams(input, targetBackground, shadowSigma));
+    }
+
+    /// <summary>
+    /// The STF parameter derivation alone: the bp/mp/wp (0–1 fractions) that
+    /// <see cref="Stf"/> would stretch with. Exposed so a "manual" stretch
+    /// with no user-supplied knobs can seed its sliders from the image's own
+    /// statistics — absolute-range defaults (e.g. bp 0.02) clip linear astro
+    /// data, whose signal lives almost entirely below 2% of full scale, to
+    /// black.
+    /// </summary>
+    public static StretchParams DeriveStfParams(ReadOnlySpan<ushort> input,
+            double targetBackground = 0.25, double shadowSigma = 2.8) {
+        if (input.Length == 0) return new StretchParams();
         // Guard the public knobs: targetBackground is a log base → strict 0..1; a negative shadowSigma
         // would push bp above the median, making medianFraction negative and Math.Pow(neg, frac) NaN.
         targetBackground = Math.Clamp(targetBackground, 0.001, 0.999);
@@ -239,10 +253,10 @@ public static class Stretcher {
         var medianFraction = (median - bp) / (wp - bp);
         var mpFraction = Math.Pow(medianFraction, Math.Log(0.5) / Math.Log(targetBackground));
         var mp = bp + mpFraction * (wp - bp);
-        return Manual(input, new StretchParams(
+        return new StretchParams(
             Blackpoint: bp / MaxValue,
             Midpoint: mp / MaxValue,
-            Whitepoint: wp / MaxValue));
+            Whitepoint: wp / MaxValue);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

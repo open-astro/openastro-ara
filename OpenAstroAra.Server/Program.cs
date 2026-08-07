@@ -706,6 +706,11 @@ public partial class Program {
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
 
+        // §65.4 — background thumbnail warmer: renders any missing
+        // .thumb.jpg sidecars after boot so a freshly imported archive
+        // browses instantly instead of paying a full FITS decode per tile.
+        builder.Services.AddHostedService<ThumbnailWarmerService>();
+
         // §32.4 — advertise the daemon over mDNS (_openastroara._tcp) on the bound
         // port so WILMA's first-run scan discovers it. Best-effort: the service
         // swallows responder failures so it can never block startup.

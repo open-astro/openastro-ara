@@ -13,13 +13,13 @@ import '../ws/ws_providers.dart';
 /// now only feeds the Stats dashboard (until §50 live-wiring).
 
 /// Builds a [LibraryClient] for a server. Overridable in tests.
-final libraryApiFactoryProvider =
-    Provider<LibraryClient Function(AraServer)>((ref) => LibraryApi.new);
+final libraryApiFactoryProvider = Provider<LibraryClient Function(AraServer)>(
+  (ref) => LibraryApi.new,
+);
 
 /// [LibraryClient] bound to the active server, or null when none is saved.
 final libraryApiProvider = Provider.autoDispose<LibraryClient?>((ref) {
-  final server =
-      ref.watch(activeServerProvider);
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(libraryApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -29,8 +29,7 @@ final libraryApiProvider = Provider.autoDispose<LibraryClient?>((ref) {
 /// The catalog's sessions, newest-first. Null data = no server bound; empty =
 /// a server whose catalog has no sessions yet. autoDispose so reopening the
 /// Image Library always refetches.
-class LiveLibrarySessionsNotifier
-    extends AsyncNotifier<List<LibrarySession>?> {
+class LiveLibrarySessionsNotifier extends AsyncNotifier<List<LibrarySession>?> {
   // Last-issued-wins refresh guard (same shape as SequenceListNotifier).
   int _refreshGen = 0;
   String? _nextCursor;
@@ -71,7 +70,6 @@ class LiveLibrarySessionsNotifier
   /// True when the most recent [loadMore] failed; the UI surfaces a retry.
   bool get loadMoreFailed => _loadMoreFailed;
 
-
   @override
   Future<List<LibrarySession>?> build() async {
     final gen = ++_refreshGen;
@@ -100,7 +98,7 @@ class LiveLibrarySessionsNotifier
       if (gen == _refreshGen) {
         _nextCursor = page.nextCursor;
         // A has_more without a cursor would render a dead button — treat as end.
-      _hasMore = page.hasMore && page.nextCursor != null;
+        _hasMore = page.hasMore && page.nextCursor != null;
       }
       return page.items;
     });
@@ -135,7 +133,9 @@ class LiveLibrarySessionsNotifier
     try {
       final page = await api.listSessions(cursor: cursor);
       // Also drop the write if disposed mid-await (autoDispose teardown).
-      if (!ref.mounted || gen != _refreshGen) return; // refresh/switch won the race
+      if (!ref.mounted || gen != _refreshGen) {
+        return; // refresh/switch won the race
+      }
       _nextCursor = page.nextCursor;
       // A has_more without a cursor would render a dead button — treat as end.
       _hasMore = page.hasMore && page.nextCursor != null;
@@ -152,18 +152,20 @@ class LiveLibrarySessionsNotifier
   }
 }
 
-final liveLibrarySessionsProvider = AsyncNotifierProvider.autoDispose<
-    LiveLibrarySessionsNotifier,
-    List<LibrarySession>?>(LiveLibrarySessionsNotifier.new);
+final liveLibrarySessionsProvider =
+    AsyncNotifierProvider.autoDispose<
+      LiveLibrarySessionsNotifier,
+      List<LibrarySession>?
+    >(LiveLibrarySessionsNotifier.new);
 
 /// Per-session frame strip, loaded lazily as each card builds. Family-keyed by
 /// session id; autoDispose so strips are released with the screen.
 final sessionFramesProvider = FutureProvider.autoDispose
     .family<List<LibraryFrameItem>, String>((ref, sessionId) async {
-  final api = ref.watch(libraryApiProvider);
-  if (api == null) return const [];
-  return api.sessionFrames(sessionId);
-});
+      final api = ref.watch(libraryApiProvider);
+      if (api == null) return const [];
+      return api.sessionFrames(sessionId);
+    });
 
 /// §40 header-bar filters (12f.3): narrow the library by filter name, minimum
 /// rating, and a target-name search. Sessions hide when the search misses
@@ -181,16 +183,14 @@ class LibraryFilter {
     String? Function()? filterName,
     int? minRating,
     String? query,
-  }) =>
-      LibraryFilter(
-        filterName: filterName != null ? filterName() : this.filterName,
-        minRating: minRating ?? this.minRating,
-        query: query ?? this.query,
-      );
+  }) => LibraryFilter(
+    filterName: filterName != null ? filterName() : this.filterName,
+    minRating: minRating ?? this.minRating,
+    query: query ?? this.query,
+  );
 
   bool matchesSession(LibrarySession s) =>
-      query.isEmpty ||
-      s.targetName.toLowerCase().contains(query.toLowerCase());
+      query.isEmpty || s.targetName.toLowerCase().contains(query.toLowerCase());
 
   bool matchesFrame(LibraryFrameItem f) =>
       (filterName == null || f.filterName == filterName) &&
@@ -210,4 +210,27 @@ class LibraryFilterNotifier extends Notifier<LibraryFilter> {
 
 final libraryFilterProvider =
     NotifierProvider<LibraryFilterNotifier, LibraryFilter>(
-        LibraryFilterNotifier.new);
+      LibraryFilterNotifier.new,
+    );
+
+/// Viewer stretch memory — the palette the user last rendered with, so
+/// opening the next frame picks up where they left off instead of resetting
+/// to the default. Session-scoped by design (not persisted): stretch taste
+/// tracks tonight's data, not forever.
+class ViewerStretchMemory {
+  final String palette;
+  const ViewerStretchMemory({required this.palette});
+}
+
+class ViewerStretchMemoryNotifier extends Notifier<ViewerStretchMemory?> {
+  @override
+  ViewerStretchMemory? build() => null;
+
+  void remember(String palette) =>
+      state = ViewerStretchMemory(palette: palette);
+}
+
+final viewerStretchMemoryProvider =
+    NotifierProvider<ViewerStretchMemoryNotifier, ViewerStretchMemory?>(
+      ViewerStretchMemoryNotifier.new,
+    );

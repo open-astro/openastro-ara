@@ -9,6 +9,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../services/storage_browse_api.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// Storage panel per §29 — save directory + format + compression + filename
@@ -37,7 +38,9 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     try {
       await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) {
+        setState(() => _lastError = 'Could not load saved values: $e');
+      }
     }
   }
 
@@ -48,8 +51,10 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     final messenger = ScaffoldMessenger.of(context);
     // §29 — block an inverted disk-space pair before it reaches the daemon (the server also rejects it 400).
     if (!ref.read(storageSettingsProvider.notifier).thresholdsValid) {
-      setState(() => _lastError =
-          'Critical disk threshold must be below the warning threshold.');
+      setState(
+        () => _lastError =
+            'Critical disk threshold must be below the warning threshold.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -57,7 +62,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     final api = _api();
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+        () => _lastError = 'No active server — connect to a daemon first.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -83,29 +89,40 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
   Widget build(BuildContext context) {
     final s = ref.watch(storageSettingsProvider);
     final n = ref.read(storageSettingsProvider.notifier);
+    final status = ref.watch(storageStatusProvider);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AraColors.accentBusy.withValues(alpha: 0.12),
-            border: Border.all(color: AraColors.accentBusy),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(children: const [
-            Icon(Icons.warning_amber, size: 18, color: AraColors.accentBusy),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Storage is currently on the SD card. Capture > 1 night will '
-                'wear the SD card out — connect a USB drive and click '
-                '"Reformat as ext4" to migrate. (§29 + §29.1.3 wizard)',
-              ),
+        // §29.1 SD-card banner — only when the save directory REALLY lives on
+        // the OS root disk. Silent while the probe is loading/unavailable.
+        if (status.asData?.value case final st? when st.onRootDevice) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AraColors.accentBusy.withValues(alpha: 0.12),
+              border: Border.all(color: AraColors.accentBusy),
+              borderRadius: BorderRadius.circular(4),
             ),
-          ]),
-        ),
-        const SizedBox(height: 16),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.warning_amber,
+                  size: 18,
+                  color: AraColors.accentBusy,
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Storage is currently on the SD card. Capture > 1 night '
+                    'will wear the SD card out — pick a USB drive below '
+                    'instead. (§29)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         EditableTextRow(
           label: 'Save directory',
           helpKey: 'session.storage.save_directory',
@@ -113,23 +130,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
           parse: n.setSaveDirectory,
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('Free space',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              const Expanded(
-                child: Text('12.3 GB / 32 GB  (real probe in 12h.2b)'),
-              ),
-            ],
-          ),
-        ),
+        _StorageStatusRows(status: status),
         SettingsDropdownRow<StorageFileFormat>(
           label: 'File format',
           helpKey: 'session.storage.file_format',
@@ -215,66 +216,70 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         // fixed chrome, always visible, no scrolling to find it.
         const SizedBox(height: 24),
         const SettingsSectionHeader('Real-time frame backup (§44)'),
-        Consumer(builder: (context, ref, _) {
-          final stream = ref.watch(backupStreamProvider);
-          final n = ref.read(backupStreamProvider.notifier);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SettingsSwitchRow(
-                label: 'Stream new frames to this device',
-                helpKey: 'session.storage.backup_stream',
-                value: stream.enabled,
-                hint: 'Mirror every captured FITS to this desktop as the night '
-                    'runs — a dead imaging drive then costs at most the frame '
-                    'being captured when it failed.',
-                onChanged: (v) => n.setEnabled(v),
-              ),
-              if (stream.enabled) ...[
-                EditableTextRow(
-                  label: 'Backup folder',
-                  helpKey: 'session.storage.backup_stream_folder',
-                  currentValue: stream.localRoot,
-                  getCanonical: () => ref.read(backupStreamProvider).localRoot,
-                  parse: n.setLocalRoot,
+        Consumer(
+          builder: (context, ref, _) {
+            final stream = ref.watch(backupStreamProvider);
+            final n = ref.read(backupStreamProvider.notifier);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SettingsSwitchRow(
+                  label: 'Stream new frames to this device',
+                  helpKey: 'session.storage.backup_stream',
+                  value: stream.enabled,
+                  hint:
+                      'Mirror every captured FITS to this desktop as the night '
+                      'runs — a dead imaging drive then costs at most the frame '
+                      'being captured when it failed.',
+                  onChanged: (v) => n.setEnabled(v),
                 ),
-                EditableTextRow(
-                  label: 'Bandwidth cap (Mbps, 0 = unlimited)',
-                  helpKey: 'session.storage.backup_stream_mbps',
-                  currentValue: stream.maxMbps.toString(),
-                  getCanonical: () =>
-                      ref.read(backupStreamProvider).maxMbps.toString(),
-                  parse: (str) {
-                    final v = int.tryParse(str);
-                    if (v != null) n.setMaxMbps(v);
-                  },
-                ),
-              ],
-              // The problem line renders even when disabled — an auto-disable
-              // (another desktop took the slot) must explain itself, not just
-              // silently flip the toggle off.
-              if (stream.enabled || stream.problem != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    stream.problem ??
-                        (stream.active
-                            ? 'Streaming — ${stream.pendingCount} pending, '
-                                '${stream.syncedThisSession} synced this session '
-                                '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB)'
-                                '${stream.measuredMbps != null ? ', link ≈ ${stream.measuredMbps!.toStringAsFixed(0)} Mbps' : ''}.'
-                            : 'Starting…'),
-                    style: TextStyle(
-                      color: stream.problem != null
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).textTheme.bodySmall?.color,
-                      fontSize: 12,
+                if (stream.enabled) ...[
+                  EditableTextRow(
+                    label: 'Backup folder',
+                    helpKey: 'session.storage.backup_stream_folder',
+                    currentValue: stream.localRoot,
+                    getCanonical: () =>
+                        ref.read(backupStreamProvider).localRoot,
+                    parse: n.setLocalRoot,
+                  ),
+                  EditableTextRow(
+                    label: 'Bandwidth cap (Mbps, 0 = unlimited)',
+                    helpKey: 'session.storage.backup_stream_mbps',
+                    currentValue: stream.maxMbps.toString(),
+                    getCanonical: () =>
+                        ref.read(backupStreamProvider).maxMbps.toString(),
+                    parse: (str) {
+                      final v = int.tryParse(str);
+                      if (v != null) n.setMaxMbps(v);
+                    },
+                  ),
+                ],
+                // The problem line renders even when disabled — an auto-disable
+                // (another desktop took the slot) must explain itself, not just
+                // silently flip the toggle off.
+                if (stream.enabled || stream.problem != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      stream.problem ??
+                          (stream.active
+                              ? 'Streaming — ${stream.pendingCount} pending, '
+                                    '${stream.syncedThisSession} synced this session '
+                                    '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB)'
+                                    '${stream.measuredMbps != null ? ', link ≈ ${stream.measuredMbps!.toStringAsFixed(0)} Mbps' : ''}.'
+                              : 'Starting…'),
+                      style: TextStyle(
+                        color: stream.problem != null
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).textTheme.bodySmall?.color,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          );
-        }),
+              ],
+            );
+          },
+        ),
         const SizedBox(height: 24),
         const SettingsSectionHeader('Backup & Restore'),
         Padding(
@@ -282,7 +287,9 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           child: Text(
             'Back up your profile configuration (settings + sequences) to a ZIP '
             'snapshot on the daemon, download a snapshot, or restore one.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         Align(
@@ -296,6 +303,117 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             label: const Text('Open Backup & Restore'),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// §29.1 real storage probe — refetches whenever the active server changes.
+final storageStatusProvider = FutureProvider.autoDispose<StorageStatus?>((
+  ref,
+) async {
+  final server = ref.watch(activeServerProvider);
+  if (server == null) return null;
+  final api = StorageBrowseApi(server);
+  ref.onDispose(api.close);
+  return api.fetchStatus();
+});
+
+String _gb(int bytes) => '${(bytes / 1e9).toStringAsFixed(1)} GB';
+
+/// Free-space row + candidate-drive list, fed by the §29.1 status probe.
+class _StorageStatusRows extends ConsumerWidget {
+  final AsyncValue<StorageStatus?> status;
+  const _StorageStatusRows({required this.status});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labelStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary);
+    final st = status.asData?.value;
+    final String freeText;
+    if (status.isLoading) {
+      freeText = 'Probing…';
+    } else if (st == null) {
+      freeText = status.hasError
+          ? 'Unavailable (${status.error})'
+          : 'Connect to a server to probe storage.';
+    } else if (!st.saveDirectoryExists) {
+      freeText = 'Save directory does not exist on the server yet.';
+    } else {
+      freeText =
+          '${_gb(st.freeBytes)} free of ${_gb(st.totalBytes)} — ${st.filesystem ?? '?'} on ${st.device ?? st.mountPoint ?? '?'}';
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 280,
+                child: Text('Free space', style: labelStyle),
+              ),
+              Expanded(child: Text(freeText)),
+              IconButton(
+                tooltip: 'Re-probe',
+                icon: const Icon(Icons.refresh, size: 16),
+                color: AraColors.textSecondary,
+                onPressed: () => ref.invalidate(storageStatusProvider),
+              ),
+            ],
+          ),
+        ),
+        if (st != null && st.drives.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text('Drives on the server', style: labelStyle),
+          ),
+          for (final d in st.drives)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(
+                    d.isRootDevice ? Icons.sd_card : Icons.usb,
+                    size: 16,
+                    color: AraColors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${d.mountPoint}  ·  ${d.filesystem}  ·  '
+                      '${_gb(d.freeBytes)} free of ${_gb(d.totalBytes)}'
+                      '${d.isRootDevice ? '  ·  OS disk (SD card)' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (d.isSaveTarget)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        'Current',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AraColors.accentConnected,
+                        ),
+                      ),
+                    )
+                  else
+                    TextButton(
+                      // Point the save directory at this mount — Save still
+                      // has to be pressed, same as any other edit.
+                      onPressed: () => ref
+                          .read(storageSettingsProvider.notifier)
+                          .setSaveDirectory(d.mountPoint),
+                      child: const Text('Use'),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ],
     );
   }

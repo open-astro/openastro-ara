@@ -276,6 +276,23 @@ public static class SystemEndpoints {
             .WithSummary("One directory level of the server's filesystem (no path = curated roots) " +
                 "for the save-directory picker. Directories only.");
 
+        // §29.1 — real storage probe: which drive the save directory lives
+        // on, true free space, and every candidate mount. Replaces the
+        // Storage panel's placeholder free-space + SD-card banner.
+        storage.MapGet("/status", (IProfileStore store) => {
+                try {
+                    return Results.Ok(StorageStatusService.Get(store.GetStorageSettings().SaveDirectory));
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    return Results.Problem(title: "Storage probe failed",
+                        detail: ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+            })
+            .Produces<StorageStatusDto>()
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+            .WithName("GetStorageStatus")
+            .WithSummary("Real save-directory storage status: mount, device, filesystem, " +
+                "free space, and all candidate drives (§29.1).");
+
         storage.MapPost("/mkdir", (StorageCreateFolderRequestDto request, IStorageBrowseService svc) => {
                 try {
                     return Results.Ok(svc.CreateFolder(request.Path, request.Name));

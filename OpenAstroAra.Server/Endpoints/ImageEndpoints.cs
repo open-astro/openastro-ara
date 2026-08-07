@@ -53,11 +53,18 @@ public static class ImageEndpoints {
         // Wired to IFrameRepository. SqliteFrameRepository returns a 1×1
         // JPEG placeholder for now; §65 stretch pipeline replaces it with
         // a real OpenCvSharp4 render from the captured FITS.
-        frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request, IFrameRepository repo, CancellationToken ct) => {
+        frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request, HttpResponse response, IFrameRepository repo, CancellationToken ct) => {
             var result = await repo.GetPreviewAsync(id, request, ct);
-            return result is null
-                ? Results.NotFound()
-                : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
+            if (result is null) return Results.NotFound();
+            // §65.9 slider sync: echo the manual knobs the render actually
+            // used (STF-derived when the request sent none) so the client's
+            // sliders can match the pixels.
+            if (result.Value.AppliedManual is { } applied) {
+                response.Headers["X-Ara-Stretch-Black"] = applied.Blackpoint.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+                response.Headers["X-Ara-Stretch-Midtone"] = applied.Midpoint.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+                response.Headers["X-Ara-Stretch-White"] = applied.Whitepoint.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            return Results.Bytes(result.Value.Bytes, result.Value.ContentType);
         })
             .Accepts<FramePreviewRequestDto>("application/json")
             .Produces<byte[]>(StatusCodes.Status200OK, "image/jpeg")

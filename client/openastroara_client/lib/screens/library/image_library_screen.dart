@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,10 +18,31 @@ import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
 import 'live_frame_viewer_screen.dart';
 
+const _monthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+String _friendlyDate(DateTime utc) {
+  final d = utc.toLocal();
+  return '${_monthNames[d.month - 1]} ${d.day}, ${d.year}';
+}
+
 /// Image Library per playbook §40 — 12f.2: live over `/api/v1/sessions` +
-/// `/api/v1/frames` (sessions, frame strips, capture-time thumbnails), with
-/// the §39.5 [Capture Matching Flats] flow wired on every session card.
-/// Bulk operations (12f.3b) and Resume Target remain stubbed.
+/// `/api/v1/frames` (sessions, frame grids, capture-time thumbnails), with
+/// the §39.5 [Capture Matching Flats] flow on every session's overflow menu.
+/// Photos-style layout: session sections with a lazy thumbnail grid, so
+/// off-screen tiles never fetch their thumbnails.
 class ImageLibraryScreen extends ConsumerWidget {
   const ImageLibraryScreen({super.key});
 
@@ -33,55 +55,45 @@ class ImageLibraryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Image Library'),
         bottom: const PreferredSize(
-          // 64 = dropdown's 48px intrinsic + 16px vertical padding.
-          preferredSize: Size.fromHeight(64),
-          child: _LibraryHeaderBar(),
+          preferredSize: Size.fromHeight(52),
+          child: _LibraryToolbar(),
         ),
       ),
       body: sessions.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Could not load the library: $e',
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () =>
-                    ref.read(liveLibrarySessionsProvider.notifier).refresh(),
-                child: const Text('Retry'),
-              ),
-            ],
+        error: (e, _) => _CenteredNotice(
+          message: 'Could not load the library: $e',
+          action: OutlinedButton(
+            onPressed: () =>
+                ref.read(liveLibrarySessionsProvider.notifier).refresh(),
+            child: const Text('Retry'),
           ),
         ),
         data: (list) {
           if (list == null) {
-            return const Center(
-                child: Text('Connect to a server to browse its library.'));
+            return const _CenteredNotice(
+              message: 'Connect to a server to browse its library.',
+            );
           }
           if (list.isEmpty) {
-            return const Center(
-                child: Text('No sessions yet — captured frames will appear here.'));
+            return const _CenteredNotice(
+              message: 'No sessions yet — captured frames will appear here.',
+            );
           }
           final filter = ref.watch(libraryFilterProvider);
           final visible = list.where(filter.matchesSession).toList();
+          final hasMorePages = ref
+              .read(liveLibrarySessionsProvider.notifier)
+              .hasMore;
           if (visible.isEmpty) {
-            final hasMore =
-                ref.read(liveLibrarySessionsProvider.notifier).hasMore;
-            return Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text('No sessions match "${filter.query}".'),
-                if (hasMore) ...[
-                  const SizedBox(height: 4),
-                  Text('More sessions exist on the server — load them to widen the search.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: AraColors.textSecondary)),
-                ],
-                const SizedBox(height: 8),
-                Row(mainAxisSize: MainAxisSize.min, children: [
+            return _CenteredNotice(
+              message: 'No sessions match "${filter.query}".',
+              detail: hasMorePages
+                  ? 'More sessions exist on the server — load them to widen the search.'
+                  : null,
+              action: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   OutlinedButton(
                     onPressed: () =>
                         ref.read(libraryFilterProvider.notifier).clear(),
@@ -89,63 +101,54 @@ class ImageLibraryScreen extends ConsumerWidget {
                   ),
                   // A match may live in an unfetched page (r1) — keep paging
                   // reachable without forcing the user to drop their filter.
-                  if (hasMore) ...[
+                  if (hasMorePages) ...[
                     const SizedBox(width: 8),
-                    LoadMoreButton(onLoadMore: () => ref
-                        .read(liveLibrarySessionsProvider.notifier)
-                        .loadMore()),
+                    LoadMoreButton(
+                      onLoadMore: () => ref
+                          .read(liveLibrarySessionsProvider.notifier)
+                          .loadMore(),
+                    ),
                   ],
-                ]),
-              ]),
+                ],
+              ),
             );
           }
           final groups = _groupSessions(visible, grouping);
-          // Flatten the grouped view into row descriptors so ListView.builder
-          // constructs cards lazily — paged catalogs grow past 200 rows (r3).
-          final rows = <_LibraryRow>[
-            for (final g in groups) ...[
-              _LibraryRow.header(g.label),
-              for (final s in g.sessions) _LibraryRow.session(s),
-            ],
-          ];
-          final hasMorePages =
-              ref.read(liveLibrarySessionsProvider.notifier).hasMore;
           return Column(
             children: [
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () =>
                       ref.read(liveLibrarySessionsProvider.notifier).refresh(),
-                  child: ListView.builder(
-                    itemCount: rows.length + (hasMorePages ? 1 : 0),
-                    itemBuilder: (context, i) {
-                      if (i == rows.length) {
-                        // Cursor paging: append the next server page on demand.
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: LoadMoreButton(onLoadMore: () => ref
-                                .read(liveLibrarySessionsProvider.notifier)
-                                .loadMore()),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                      for (final g in groups) ...[
+                        // A lone "All sessions" banner is noise — group
+                        // labels only earn their row when grouping is on.
+                        if (grouping != LibraryGrouping.bySession)
+                          SliverToBoxAdapter(child: _GroupLabel(g.label)),
+                        for (final s in g.sessions) ...[
+                          SliverToBoxAdapter(child: _SessionHeader(session: s)),
+                          _SessionFramesGrid(sessionId: s.id),
+                          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                        ],
+                      ],
+                      if (hasMorePages)
+                        SliverToBoxAdapter(
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: LoadMoreButton(
+                                onLoadMore: () => ref
+                                    .read(liveLibrarySessionsProvider.notifier)
+                                    .loadMore(),
+                              ),
+                            ),
                           ),
-                        );
-                      }
-                      final row = rows[i];
-                      final session = row.session;
-                      if (session != null) {
-                        return _SessionCard(session: session);
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                        child: Text(
-                          row.label!,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(color: AraColors.textSecondary),
                         ),
-                      );
-                    },
+                    ],
                   ),
                 ),
               ),
@@ -181,8 +184,9 @@ class ImageLibraryScreen extends ConsumerWidget {
         final byMonth = <String, List<LibrarySession>>{};
         for (final s in sorted) {
           final d = s.sessionStartUtc.toLocal();
-          final key = '${d.year}-${d.month.toString().padLeft(2, '0')}';
-          byMonth.putIfAbsent(key, () => []).add(s);
+          byMonth
+              .putIfAbsent('${_monthNames[d.month - 1]} ${d.year}', () => [])
+              .add(s);
         }
         return byMonth.entries
             .map((e) => _SessionGroup(label: e.key, sessions: e.value))
@@ -197,57 +201,119 @@ class _SessionGroup {
   const _SessionGroup({required this.label, required this.sessions});
 }
 
-/// One lazy list row: either a group header or a session card.
-class _LibraryRow {
-  final String? label;
-  final LibrarySession? session;
-  const _LibraryRow.header(String this.label) : session = null;
-  const _LibraryRow.session(LibrarySession this.session) : label = null;
+class _CenteredNotice extends StatelessWidget {
+  final String message;
+  final String? detail;
+  final Widget? action;
+  const _CenteredNotice({required this.message, this.detail, this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          if (detail != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              detail!,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            ),
+          ],
+          if (action != null) ...[const SizedBox(height: 12), action!],
+        ],
+      ),
+    );
+  }
 }
 
-class _LibraryHeaderBar extends ConsumerWidget {
-  const _LibraryHeaderBar();
+class _GroupLabel extends StatelessWidget {
+  final String label;
+  const _GroupLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Text(
+        label,
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(color: AraColors.textSecondary),
+      ),
+    );
+  }
+}
+
+/// Quiet toolbar under the app bar: grouping popup, filter/rating pills, and
+/// an inline search field — no dialogs for typing a search.
+class _LibraryToolbar extends ConsumerWidget {
+  const _LibraryToolbar();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final grouping = ref.watch(libraryGroupingProvider);
+    final filter = ref.watch(libraryFilterProvider);
+    final sessions = ref.watch(liveLibrarySessionsProvider).value ?? const [];
+    final filterNames = {for (final s in sessions) ...s.filtersUsed}.toList()
+      ..sort();
+    const groupingLabels = {
+      LibraryGrouping.bySession: 'All Sessions',
+      LibraryGrouping.byTarget: 'By Target',
+      LibraryGrouping.byDate: 'By Month',
+    };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: const BoxDecoration(
-        color: AraColors.bgPanel,
-        border: Border(bottom: BorderSide(color: AraColors.border)),
-      ),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
       child: Row(
         children: [
-          DropdownButton<LibraryGrouping>(
-            value: grouping,
-            onChanged: (g) {
-              if (g != null) ref.read(libraryGroupingProvider.notifier).set(g);
-            },
-            items: const [
-              DropdownMenuItem(
-                  value: LibraryGrouping.bySession, child: Text('By Session')),
-              DropdownMenuItem(
-                  value: LibraryGrouping.byTarget, child: Text('By Target')),
-              DropdownMenuItem(
-                  value: LibraryGrouping.byDate, child: Text('By Date')),
-            ],
-          ),
-          const SizedBox(width: 16),
-          // 12f.3 filter/rating/search pills. Wrapped in a
-          // SingleChildScrollView so the header stays usable on narrow widths.
+          // The pill cluster scrolls when the window narrows; search and
+          // refresh keep their footing on the right.
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Consumer(builder: (context, ref, _) {
-                final filter = ref.watch(libraryFilterProvider);
-                final sessions =
-                    ref.watch(liveLibrarySessionsProvider).value ?? const [];
-                final filterNames = {
-                  for (final s in sessions) ...s.filtersUsed
-                }.toList()
-                  ..sort();
-                return Row(children: [
+              child: Row(
+                children: [
+                  PopupMenuButton<LibraryGrouping>(
+                    tooltip: 'Group sessions',
+                    onSelected: (g) =>
+                        ref.read(libraryGroupingProvider.notifier).set(g),
+                    itemBuilder: (context) => [
+                      for (final e in groupingLabels.entries)
+                        CheckedPopupMenuItem(
+                          value: e.key,
+                          checked: grouping == e.key,
+                          child: Text(e.value),
+                        ),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            groupingLabels[grouping]!,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const Icon(
+                            Icons.expand_more,
+                            size: 18,
+                            color: AraColors.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   _FilterPill(
                     icon: Icons.filter_list,
                     label: filter.filterName ?? 'All filters',
@@ -259,8 +325,11 @@ class _LibraryHeaderBar extends ConsumerWidget {
                       ]);
                       if (choice == null) return;
                       if (!context.mounted) return;
-                      ref.read(libraryFilterProvider.notifier).setFilterName(
-                          choice == 'All filters' ? null : choice);
+                      ref
+                          .read(libraryFilterProvider.notifier)
+                          .setFilterName(
+                            choice == 'All filters' ? null : choice,
+                          );
                     },
                   ),
                   const SizedBox(width: 8),
@@ -277,25 +346,13 @@ class _LibraryHeaderBar extends ConsumerWidget {
                       ]);
                       if (choice == null) return;
                       if (!context.mounted) return;
-                      ref.read(libraryFilterProvider.notifier).setMinRating(
-                          choice == 'Any rating'
-                              ? 0
-                              : int.parse(choice.substring(0, 1)));
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    icon: Icons.search,
-                    label: filter.query.isEmpty ? 'Search' : '"${filter.query}"',
-                    active: filter.query.isNotEmpty,
-                    onTap: () async {
-                      final query = await showDialog<String>(
-                        context: context,
-                        builder: (_) => _SearchDialog(initial: filter.query),
-                      );
-                      if (query == null) return;
-                      if (!context.mounted) return;
-                      ref.read(libraryFilterProvider.notifier).setQuery(query);
+                      ref
+                          .read(libraryFilterProvider.notifier)
+                          .setMinRating(
+                            choice == 'Any rating'
+                                ? 0
+                                : int.parse(choice.substring(0, 1)),
+                          );
                     },
                   ),
                   if (filter.isActive) ...[
@@ -308,11 +365,87 @@ class _LibraryHeaderBar extends ConsumerWidget {
                           ref.read(libraryFilterProvider.notifier).clear(),
                     ),
                   ],
-                ]);
-              }),
+                ],
+              ),
             ),
           ),
+          const SizedBox(width: 12),
+          const _SearchField(),
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh, size: 20),
+            color: AraColors.textSecondary,
+            onPressed: () =>
+                ref.read(liveLibrarySessionsProvider.notifier).refresh(),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Inline debounced search over target names.
+class _SearchField extends ConsumerStatefulWidget {
+  const _SearchField();
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        ref.read(libraryFilterProvider.notifier).setQuery(v.trim());
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // An external clear (the Clear pill) must empty the visible field too.
+    ref.listen(libraryFilterProvider, (_, next) {
+      if (next.query.isEmpty && _controller.text.isNotEmpty) {
+        _controller.clear();
+      }
+    });
+    return SizedBox(
+      width: 220,
+      height: 32,
+      child: TextField(
+        controller: _controller,
+        onChanged: _onChanged,
+        style: Theme.of(context).textTheme.bodySmall,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+          hintText: 'Search targets',
+          hintStyle: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textDisabled),
+          prefixIcon: const Icon(
+            Icons.search,
+            size: 16,
+            color: AraColors.textSecondary,
+          ),
+          filled: true,
+          fillColor: AraColors.bgInput,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
     );
   }
@@ -334,48 +467,6 @@ Future<String?> _pickFromMenu(BuildContext context, List<String> options) {
   );
 }
 
-class _SearchDialog extends StatefulWidget {
-  final String initial;
-  const _SearchDialog({required this.initial});
-
-  @override
-  State<_SearchDialog> createState() => _SearchDialogState();
-}
-
-class _SearchDialogState extends State<_SearchDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Search targets'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Target name contains…'),
-        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-          child: const Text('Search'),
-        ),
-      ],
-    );
-  }
-}
-
 class _FilterPill extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -390,15 +481,14 @@ class _FilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? AraColors.selectionBg : AraColors.textSecondary;
+    final color = active ? AraColors.selectionFg : AraColors.textSecondary;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AraColors.bgInput,
-          border: Border.all(color: active ? AraColors.selectionBg : AraColors.border),
+          color: active ? AraColors.selectionBg : AraColors.bgInput,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -406,8 +496,12 @@ class _FilterPill extends StatelessWidget {
           children: [
             Icon(icon, size: 14, color: color),
             const SizedBox(width: 6),
-            Text(label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color)),
+            Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: color),
+            ),
           ],
         ),
       ),
@@ -415,109 +509,145 @@ class _FilterPill extends StatelessWidget {
   }
 }
 
-class _SessionCard extends ConsumerWidget {
+/// Section header for one session: title + metadata line on the left, faults
+/// badge and an overflow menu (Capture Matching Flats / Resume Target) on the
+/// right — actions live behind "⋯" instead of a row of link buttons.
+class _SessionHeader extends ConsumerWidget {
   final LibrarySession session;
-  const _SessionCard({required this.session});
-
-  String _dateLabel() {
-    final d = session.sessionStartUtc.toLocal();
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
+  const _SessionHeader({required this.session});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final filters = session.filtersUsed.join(' · ');
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${_dateLabel()} — ${session.targetName}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              [
-                '${session.lightFrames} lights',
-                if (session.calibrationFrames > 0)
-                  '${session.calibrationFrames} calibration',
-                if (filters.isNotEmpty) filters,
-              ].join(' · '),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            Row(
+    final api = ref.watch(libraryApiProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextButton.icon(
-                  // §39.5 — live since 12f.2: cards carry real session ids.
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (_) => MatchingFlatsDialog(
-                      sessionId: session.id,
-                      targetName: session.targetName,
-                      filterNames: session.filtersUsed,
-                    ),
-                  ),
-                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-                  label: const Text('Capture Matching Flats'),
+                Text(
+                  session.targetName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
-                Consumer(builder: (context, ref, _) {
-                  final api = ref.watch(libraryApiProvider);
-                  return TextButton.icon(
-                    // §40.6 — the server resumes the session's recorded
-                    // sequence (or synthesizes a per-filter plan from its
-                    // lights) and we land on it in the Run tab.
-                    onPressed: api == null
-                        ? null
-                        : () async {
-                            try {
-                              final id = await api.resumeTarget(session.id);
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Resume sequence saved — review the slew/center steps before running.')));
-                              openGeneratedSequence(context, ref, id);
-                            } on Exception catch (e) {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Resume failed: $e')));
-                            }
-                          },
-                    icon: const Icon(Icons.replay, size: 16),
-                    label: const Text('Resume Target'),
-                  );
-                }),
-                _SessionFaultsBadge(
-                    sessionId: session.id, targetName: session.targetName),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    _friendlyDate(session.sessionStartUtc),
+                    '${session.lightFrames} lights',
+                    if (session.calibrationFrames > 0)
+                      '${session.calibrationFrames} calibration',
+                    if (filters.isNotEmpty) filters,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 8),
-            _FrameStrip(sessionId: session.id),
-          ],
-        ),
+          ),
+          _SessionFaultsBadge(
+            sessionId: session.id,
+            targetName: session.targetName,
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Session actions',
+            icon: const Icon(
+              Icons.more_horiz,
+              size: 20,
+              color: AraColors.textSecondary,
+            ),
+            onSelected: (action) => _runAction(context, ref, action),
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'flats',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.add_photo_alternate_outlined, size: 18),
+                  title: Text('Capture Matching Flats'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'resume',
+                enabled: api != null,
+                child: const ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.replay, size: 18),
+                  title: Text('Resume Target'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _runAction(
+    BuildContext context,
+    WidgetRef ref,
+    String action,
+  ) async {
+    switch (action) {
+      case 'flats':
+        // §39.5 — live since 12f.2: cards carry real session ids.
+        await showDialog<void>(
+          context: context,
+          builder: (_) => MatchingFlatsDialog(
+            sessionId: session.id,
+            targetName: session.targetName,
+            filterNames: session.filtersUsed,
+          ),
+        );
+      case 'resume':
+        // §40.6 — the server resumes the session's recorded sequence (or
+        // synthesizes a per-filter plan from its lights) and we land on it
+        // in the Run tab.
+        final api = ref.read(libraryApiProvider);
+        if (api == null) return;
+        try {
+          final id = await api.resumeTarget(session.id);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Resume sequence saved — review the slew/center steps before running.',
+              ),
+            ),
+          );
+          openGeneratedSequence(context, ref, id);
+        } on Exception catch (e) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Resume failed: $e')));
+        }
+    }
   }
 }
 
 /// §42.6 per-session fault badge — hidden while the session has no recorded
 /// faults; otherwise an amber count that opens the session's fault timeline.
-/// Lazily fetched per card (like the frame strip): the sessions endpoint
+/// Lazily fetched per card (like the frame grid): the sessions endpoint
 /// carries no fault count, so each visible card asks the §42.5 log directly.
 class _SessionFaultsBadge extends ConsumerWidget {
   final String sessionId;
   final String targetName;
-  const _SessionFaultsBadge({required this.sessionId, required this.targetName});
+  const _SessionFaultsBadge({
+    required this.sessionId,
+    required this.targetName,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -554,90 +684,125 @@ class _SessionFaultsBadge extends ConsumerWidget {
   }
 }
 
-/// Lazily-loaded frame strip — in selection mode, tap toggles selection; out
-/// of selection mode, tap opens the §40.5 frame viewer. Long-press always
-/// enters selection mode (add-only).
-class _FrameStrip extends ConsumerWidget {
+/// Lazily-loaded Photos-style thumbnail grid for one session. Rendered as a
+/// sliver so off-screen tiles are never built — with hundreds of frames per
+/// session, eagerly building every tile fires hundreds of concurrent
+/// thumbnail fetches at the rig and none of them finish. In selection mode,
+/// tap toggles selection; out of selection mode, tap opens the §40.5 frame
+/// viewer. Long-press (or the hover circle) always enters selection mode.
+class _SessionFramesGrid extends ConsumerWidget {
   final String sessionId;
-  const _FrameStrip({required this.sessionId});
+  const _SessionFramesGrid({required this.sessionId});
+
+  static const _padding = EdgeInsets.symmetric(horizontal: 20);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final frames = ref.watch(sessionFramesProvider(sessionId));
     final api = ref.watch(libraryApiProvider);
     return frames.when(
-      loading: () => const SizedBox(
-        height: 72,
-        child: Center(
+      loading: () => const SliverToBoxAdapter(
+        child: SizedBox(
+          height: 72,
+          child: Center(
             child: SizedBox(
-                width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
       ),
-      error: (e, _) => SizedBox(
-        height: 40,
-        child: Text('Frames unavailable: $e',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AraColors.textSecondary)),
+      error: (e, _) => SliverToBoxAdapter(
+        child: Padding(
+          padding: _padding,
+          child: Text(
+            'Frames unavailable: $e',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+          ),
+        ),
       ),
       data: (all) {
         if (all.isEmpty) {
-          return Text('No frames recorded for this session.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary));
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding: _padding,
+              child: Text(
+                'No frames recorded for this session.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              ),
+            ),
+          );
         }
         final filter = ref.watch(libraryFilterProvider);
         final list = all.where(filter.matchesFrame).toList();
         if (list.isEmpty) {
-          return Text('No frames match the active filters.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary));
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding: _padding,
+              child: Text(
+                'No frames match the active filters.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              ),
+            ),
+          );
         }
         final selection = ref.watch(librarySelectionProvider);
         final inSelectionMode = selection.isNotEmpty;
         final backupConfigured = ref.watch(
-            backupStreamProvider.select((s) => s.enabled));
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final f in list)
-                FrameThumbnail(
-                  filter: f.filterName ?? f.frameType.toUpperCase(),
-                  hfr: f.hfr,
-                  rating: f.rating,
-                  imageUrl: api?.thumbnailUrl(f.id),
-                  selected: selection.contains(f.id),
-                  selectionMode: inSelectionMode,
-                  // §44 badge only when a backup stream is configured, and
-                  // "protected" only when mirrored to THIS desktop — sync is
-                  // per-target, another machine's mirror doesn't cover us.
-                  synced: frameSyncedForThisDesktop(f,
-                      backupConfigured: backupConfigured,
-                      hostname: Platform.localHostname),
-                  onTap: () {
-                    if (inSelectionMode) {
-                      ref.read(librarySelectionProvider.notifier).toggle(f.id);
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => LiveFrameViewerScreen(frame: f),
-                        ),
-                      );
-                    }
-                  },
-                  onLongPress: () {
-                    // Long-press is add-only — never deselects.
-                    if (!selection.contains(f.id)) {
-                      ref.read(librarySelectionProvider.notifier).toggle(f.id);
-                    }
-                  },
+          backupStreamProvider.select((s) => s.enabled),
+        );
+        return SliverPadding(
+          padding: _padding,
+          sliver: SliverGrid.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 132,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
+            itemCount: list.length,
+            itemBuilder: (context, i) {
+              final f = list[i];
+              return FrameThumbnail(
+                filter: f.filterName ?? f.frameType.toUpperCase(),
+                hfr: f.hfr,
+                rating: f.rating,
+                imageUrl: api?.thumbnailUrl(f.id),
+                selected: selection.contains(f.id),
+                selectionMode: inSelectionMode,
+                // §44 badge only when a backup stream is configured, and
+                // "protected" only when mirrored to THIS desktop — sync is
+                // per-target, another machine's mirror doesn't cover us.
+                synced: frameSyncedForThisDesktop(
+                  f,
+                  backupConfigured: backupConfigured,
+                  hostname: Platform.localHostname,
                 ),
-            ],
+                onTap: () {
+                  if (inSelectionMode) {
+                    ref.read(librarySelectionProvider.notifier).toggle(f.id);
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => LiveFrameViewerScreen(frame: f),
+                      ),
+                    );
+                  }
+                },
+                onLongPress: () {
+                  // Long-press is add-only — never deselects.
+                  if (!selection.contains(f.id)) {
+                    ref.read(librarySelectionProvider.notifier).toggle(f.id);
+                  }
+                },
+              );
+            },
           ),
         );
       },

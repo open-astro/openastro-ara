@@ -10,11 +10,15 @@ import '../models/server.dart';
 abstract interface class LibraryClient {
   /// One page at the server's cap; pass [cursor] from the previous page's
   /// [CursorPage.nextCursor] to continue.
-  Future<CursorPage<LibrarySession>> listSessions(
-      {int limit = 200, String? cursor});
+  Future<CursorPage<LibrarySession>> listSessions({
+    int limit = 200,
+    String? cursor,
+  });
 
-  Future<List<LibraryFrameItem>> sessionFrames(String sessionId,
-      {int limit = 200});
+  Future<List<LibraryFrameItem>> sessionFrames(
+    String sessionId, {
+    int limit = 200,
+  });
 
   /// GET url serving the frame's capture-time thumbnail JPEG (§40.4).
   String thumbnailUrl(String frameId);
@@ -23,11 +27,13 @@ abstract interface class LibraryClient {
   /// background; callers refresh after.
   Future<void> bulkRate(List<String> frameIds, int rating);
 
-  Future<void> bulkTag(List<String> frameIds,
-      {List<String> addTags = const [], List<String> removeTags = const []});
+  Future<void> bulkTag(
+    List<String> frameIds, {
+    List<String> addTags = const [],
+    List<String> removeTags = const [],
+  });
 
-  Future<void> bulkDelete(List<String> frameIds,
-      {bool deleteFromDisk = false});
+  Future<void> bulkDelete(List<String> frameIds, {bool deleteFromDisk = false});
 
   /// §40.8 move: reassign frames to another session (422 if it doesn't exist).
   Future<void> bulkMove(List<String> frameIds, String targetSessionId);
@@ -37,7 +43,8 @@ abstract interface class LibraryClient {
   /// is how many frames actually made it into the tar — export is
   /// partial-success by design.
   Future<(List<int> bytes, String fileName, int exportedCount)> exportFrames(
-      List<String> frameIds);
+    List<String> frameIds,
+  );
 
   /// §40.6 resume-target: the server persists (or echoes) a runnable §38
   /// sequence seeded from the session and returns its id.
@@ -50,14 +57,19 @@ abstract interface class LibraryClient {
   /// §65 stretched preview JPEG bytes for the frame viewer. [stretch] is one
   /// of the §65 palette ids (auto_stf, linear, log, asinh, sqrt, equalized,
   /// manual). The 0–1 normalized [blackPoint]/[midtonePoint]/[whitePoint]
-  /// apply to the manual palette (§65.9); null falls back to the profile's
-  /// manual-stretch seeds server-side.
-  Future<List<int>> fetchPreview(String frameId,
-      {required String stretch,
-      int maxDimensionPx = 2048,
-      double? blackPoint,
-      double? midtonePoint,
-      double? whitePoint});
+  /// apply to the manual palette (§65.9); all-null asks the server to derive
+  /// them from the image's own STF statistics. [appliedKnobs] echoes the
+  /// bp/mp/wp the server actually rendered with (manual palette only) so the
+  /// sliders can sync to the pixels.
+  Future<(List<int> bytes, (double, double, double)? appliedKnobs)>
+  fetchPreview(
+    String frameId, {
+    required String stretch,
+    int maxDimensionPx = 2048,
+    double? blackPoint,
+    double? midtonePoint,
+    double? whitePoint,
+  });
 
   void close();
 }
@@ -68,29 +80,37 @@ class LibraryApi implements LibraryClient {
   final String _baseUrl;
 
   LibraryApi(AraServer server, {Dio? dio})
-      : _baseUrl = server.baseUrl,
-        _dio = dio ??
-            Dio(BaseOptions(
+    : _baseUrl = server.baseUrl,
+      _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 12),
-            ));
+            ),
+          );
 
   @override
-  Future<CursorPage<LibrarySession>> listSessions(
-      {int limit = 200, String? cursor}) async {
+  Future<CursorPage<LibrarySession>> listSessions({
+    int limit = 200,
+    String? cursor,
+  }) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/sessions',
-      queryParameters: <String, dynamic>{
-        'limit': limit,
-        'cursor': ?cursor,
-      },
+      queryParameters: <String, dynamic>{'limit': limit, 'cursor': ?cursor},
     );
     // logTruncation false: a full page with has_more is the NORMAL paged case
     // here — the Load-more affordance handles it, no warning warranted (r4).
-    final items = _parsePage(res.data, 'sessions', LibrarySession.fromJson,
-        (s) => s.id.isNotEmpty, limit, logTruncation: false);
+    final items = _parsePage(
+      res.data,
+      'sessions',
+      LibrarySession.fromJson,
+      (s) => s.id.isNotEmpty,
+      limit,
+      logTruncation: false,
+    );
     final data = res.data as Map<String, dynamic>;
     final next = data['next_cursor'];
     return CursorPage(
@@ -101,14 +121,21 @@ class LibraryApi implements LibraryClient {
   }
 
   @override
-  Future<List<LibraryFrameItem>> sessionFrames(String sessionId,
-      {int limit = 200}) async {
+  Future<List<LibraryFrameItem>> sessionFrames(
+    String sessionId, {
+    int limit = 200,
+  }) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/sessions/$sessionId/frames',
       queryParameters: <String, dynamic>{'limit': limit},
     );
-    return _parsePage(res.data, 'session frames', LibraryFrameItem.fromJson,
-        (f) => f.id.isNotEmpty, limit);
+    return _parsePage(
+      res.data,
+      'session frames',
+      LibraryFrameItem.fromJson,
+      (f) => f.id.isNotEmpty,
+      limit,
+    );
   }
 
   @override
@@ -117,30 +144,40 @@ class LibraryApi implements LibraryClient {
 
   @override
   Future<void> bulkRate(List<String> frameIds, int rating) async {
-    await _dio.post<dynamic>('/api/v1/frames/bulk/rate', data: <String, dynamic>{
-      'frame_ids': frameIds,
-      'rating': rating,
-    });
+    await _dio.post<dynamic>(
+      '/api/v1/frames/bulk/rate',
+      data: <String, dynamic>{'frame_ids': frameIds, 'rating': rating},
+    );
   }
 
   @override
-  Future<void> bulkTag(List<String> frameIds,
-      {List<String> addTags = const [],
-      List<String> removeTags = const []}) async {
-    await _dio.post<dynamic>('/api/v1/frames/bulk/tag', data: <String, dynamic>{
-      'frame_ids': frameIds,
-      'add_tags': addTags,
-      'remove_tags': removeTags,
-    });
+  Future<void> bulkTag(
+    List<String> frameIds, {
+    List<String> addTags = const [],
+    List<String> removeTags = const [],
+  }) async {
+    await _dio.post<dynamic>(
+      '/api/v1/frames/bulk/tag',
+      data: <String, dynamic>{
+        'frame_ids': frameIds,
+        'add_tags': addTags,
+        'remove_tags': removeTags,
+      },
+    );
   }
 
   @override
-  Future<void> bulkDelete(List<String> frameIds,
-      {bool deleteFromDisk = false}) async {
-    await _dio.post<dynamic>('/api/v1/frames/bulk/delete', data: <String, dynamic>{
-      'frame_ids': frameIds,
-      'delete_from_disk': deleteFromDisk,
-    });
+  Future<void> bulkDelete(
+    List<String> frameIds, {
+    bool deleteFromDisk = false,
+  }) async {
+    await _dio.post<dynamic>(
+      '/api/v1/frames/bulk/delete',
+      data: <String, dynamic>{
+        'frame_ids': frameIds,
+        'delete_from_disk': deleteFromDisk,
+      },
+    );
   }
 
   @override
@@ -149,18 +186,21 @@ class LibraryApi implements LibraryClient {
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-          'frame detail returned an unexpected body (${data.runtimeType})');
+        'frame detail returned an unexpected body (${data.runtimeType})',
+      );
     }
     return LibraryFrameDetail.fromJson(data);
   }
 
   @override
-  Future<List<int>> fetchPreview(String frameId,
-      {required String stretch,
-      int maxDimensionPx = 2048,
-      double? blackPoint,
-      double? midtonePoint,
-      double? whitePoint}) async {
+  Future<(List<int>, (double, double, double)?)> fetchPreview(
+    String frameId, {
+    required String stretch,
+    int maxDimensionPx = 2048,
+    double? blackPoint,
+    double? midtonePoint,
+    double? whitePoint,
+  }) async {
     final res = await _dio.post<List<int>>(
       '/api/v1/frames/$frameId/preview',
       data: <String, dynamic>{
@@ -171,21 +211,39 @@ class LibraryApi implements LibraryClient {
         'max_dimension_px': maxDimensionPx,
         'apply_debayer': false,
       },
-      options: Options(responseType: ResponseType.bytes),
+      // Rendering reads the full FITS off the Pi's disk, stretches, and
+      // JPEG-encodes before the first byte arrives — the client-wide 12 s
+      // budget is routinely too short for long-exposure frames.
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(seconds: 60),
+      ),
     );
     final data = res.data;
     if (data == null || data.isEmpty) {
       throw const FormatException('frame preview returned an empty body');
     }
-    return data;
+    return (data, _parseAppliedKnobs(res.headers));
+  }
+
+  /// §65.9 X-Ara-Stretch-* echo headers → the knobs the server rendered with.
+  static (double, double, double)? _parseAppliedKnobs(Headers headers) {
+    final b = double.tryParse(headers.value('x-ara-stretch-black') ?? '');
+    final m = double.tryParse(headers.value('x-ara-stretch-midtone') ?? '');
+    final w = double.tryParse(headers.value('x-ara-stretch-white') ?? '');
+    if (b == null || m == null || w == null) return null;
+    return (b, m, w);
   }
 
   @override
   Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {
-    await _dio.post<dynamic>('/api/v1/frames/bulk/move', data: <String, dynamic>{
-      'frame_ids': frameIds,
-      'target_session_id': targetSessionId,
-    });
+    await _dio.post<dynamic>(
+      '/api/v1/frames/bulk/move',
+      data: <String, dynamic>{
+        'frame_ids': frameIds,
+        'target_session_id': targetSessionId,
+      },
+    );
   }
 
   @override
@@ -193,7 +251,11 @@ class LibraryApi implements LibraryClient {
     final res = await _dio.post<List<int>>(
       '/api/v1/frames/bulk/export',
       data: <String, dynamic>{'frame_ids': frameIds},
-      options: Options(responseType: ResponseType.bytes),
+      // Tarring many full FITS files needs far more than the 12 s default.
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(minutes: 5),
+      ),
     );
     final data = res.data;
     if (data == null || data.isEmpty) {
@@ -204,7 +266,7 @@ class LibraryApi implements LibraryClient {
     final match = RegExp('filename="?([^";]+)"?').firstMatch(disposition);
     final count =
         int.tryParse(res.headers.value('x-ara-exported-count') ?? '') ??
-            frameIds.length;
+        frameIds.length;
     return (data, match?.group(1) ?? 'openastroara-frames.tar', count);
   }
 
@@ -221,7 +283,8 @@ class LibraryApi implements LibraryClient {
     final id = data is Map<String, dynamic> ? data['sequence_id'] : null;
     if (id is! String || id.isEmpty) {
       throw FormatException(
-          'resume-target returned an unexpected body (${data.runtimeType})');
+        'resume-target returned an unexpected body (${data.runtimeType})',
+      );
     }
     return id;
   }
@@ -238,7 +301,8 @@ class LibraryApi implements LibraryClient {
   }) {
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
-          '$what returned an unexpected body (${data.runtimeType})');
+        '$what returned an unexpected body (${data.runtimeType})',
+      );
     }
     if (logTruncation && data['has_more'] == true) {
       // Frame strips stay first-page-only by design (a 200-frame strip is

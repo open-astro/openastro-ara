@@ -55,7 +55,7 @@ class _PagedFake implements LibraryClient {
       throw UnimplementedError();
 
   @override
-  Future<List<int>> fetchPreview(String frameId,
+  Future<(List<int>, (double, double, double)?)> fetchPreview(String frameId,
           {required String stretch,
           int maxDimensionPx = 2048,
           double? blackPoint,
