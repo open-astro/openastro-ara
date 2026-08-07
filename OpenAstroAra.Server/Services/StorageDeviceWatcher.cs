@@ -48,6 +48,8 @@ public sealed partial class StorageDeviceWatcher : BackgroundService {
         _interval = interval ?? DefaultInterval;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Watch-loop boundary: any escaping exception ends the BackgroundService for the process lifetime, silently killing live device watch. Every tick failure (incl. WS publish) is logged and the next tick retries. CA1031's log-and-recover boundary applies.")]
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         if (!OperatingSystem.IsLinux() || _ws is null) {
             return; // nothing to watch on dev machines; nothing to tell without a bus
@@ -72,7 +74,11 @@ public sealed partial class StorageDeviceWatcher : BackgroundService {
                 }
             } catch (OperationCanceledException) {
                 break;
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            } catch (Exception ex) {
+                // Log-and-continue boundary: ANY escape here would end the
+                // BackgroundService for the rest of the process — silently
+                // killing live device watch. A failed tick (WS publish
+                // included) is worth a log line, never the watcher.
                 LogSnapshotFailed(ex);
             }
         }
@@ -97,6 +103,6 @@ public sealed partial class StorageDeviceWatcher : BackgroundService {
     [LoggerMessage(Level = LogLevel.Information, Message = "Storage devices changed: {Before} -> {After}.")]
     private partial void LogDevicesChanged(string before, string after);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Storage device snapshot failed; will retry next tick.")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Storage device watch tick failed; will retry next tick.")]
     private partial void LogSnapshotFailed(Exception ex);
 }

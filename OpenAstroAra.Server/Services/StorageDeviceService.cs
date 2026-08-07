@@ -288,12 +288,15 @@ namespace OpenAstroAra.Server.Services {
             var parts = text.StartsWith("ERROR:", StringComparison.Ordinal)
                 ? text["ERROR:".Length..].Trim().Split(' ', 2)
                 : [exitCode == 9 ? "usage" : "helper_failed", text];
-            LogCheckFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
+            LogEjectFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
             return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
         }
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Storage drive {Uuid} ejected (safe to remove).")]
         private static partial void LogEjected(ILogger logger, string uuid);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Storage eject for UUID {Uuid} failed: {Code} {Detail}.")]
+        private static partial void LogEjectFailed(ILogger logger, string uuid, string code, string detail);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Storage check for UUID {Uuid}: {Outcome}.")]
         private static partial void LogChecked(ILogger logger, string uuid, string outcome);
