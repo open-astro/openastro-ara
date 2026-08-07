@@ -1122,6 +1122,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort pre-capture probe: a profile read or DriveInfo query can throw arbitrary IO/driver exceptions, and a probe fault must degrade to 'capture proceeds' rather than blocking or faulting the capture path. CA1031's log-and-recover boundary applies.")]
     internal bool PreCaptureDiskBlocked(out long freeBytes) {
         freeBytes = 0;
         try {
