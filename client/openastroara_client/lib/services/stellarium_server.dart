@@ -245,6 +245,10 @@ class StellariumServer {
       final bytes =
           data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       response.headers.contentType = _contentTypeFor(path);
+      // Everything here is read from the local asset bundle over loopback, so a
+      // webview cache buys nothing — and WKWebView/WebKitGTK caching a stale
+      // index.html/JS across app updates breaks the page. Forbid caching.
+      response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       // The engine fetches gzipped data (e.g. the satellite TLEs) and inflates it
       // itself, so never let the HTTP layer claim/translate the encoding.
       response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
