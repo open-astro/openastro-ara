@@ -206,18 +206,22 @@ if [ "$CHECK" -eq 1 ]; then
         fi
     fi
     rc=0
+    OKMAX=1
     if [ "$FS" = "exfat" ]; then
         fsck.exfat -y "$DEVICE" >/dev/null 2>&1 || rc=$?
     else
+        # e2fsck: 1 = fixed, 2 = fixed + "reboot suggested" (root-fs
+        # semantics; the store is never root) — both are successful repairs.
+        OKMAX=2
         e2fsck -f -y "$DEVICE" >/dev/null 2>&1 || rc=$?
     fi
-    # fsck exit 1 = errors found AND fixed — that's a successful check.
-    if [ "$rc" -gt 1 ]; then
+    # Exit codes up to OKMAX mean clean or repaired — a successful check.
+    if [ "$rc" -gt "$OKMAX" ]; then
         echo "ERROR: fsck_failed exit=$rc"
         exit 11
     fi
     mount_and_own "$UUID" "$FS" 0
-    if [ "$rc" -eq 1 ]; then
+    if [ "$rc" -ge 1 ]; then
         echo "OK $MOUNT_POINT checked repaired"
     else
         echo "OK $MOUNT_POINT checked clean"

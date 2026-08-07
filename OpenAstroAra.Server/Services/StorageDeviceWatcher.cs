@@ -54,8 +54,14 @@ public sealed partial class StorageDeviceWatcher : BackgroundService {
         if (!OperatingSystem.IsLinux() || _ws is null) {
             return; // nothing to watch on dev machines; nothing to tell without a bus
         }
-        // Seed silently: startup is not a change.
-        _lastSnapshot = TrySnapshot();
+        // Seed silently: startup is not a change. Inside the same safety
+        // net as the loop — .NET's default BackgroundServiceExceptionBehavior
+        // is StopHost, so an unguarded throw here could take the daemon down.
+        try {
+            _lastSnapshot = TrySnapshot();
+        } catch (Exception ex) {
+            LogSnapshotFailed(ex);
+        }
         using var timer = new PeriodicTimer(_interval);
         while (!stoppingToken.IsCancellationRequested) {
             try {
