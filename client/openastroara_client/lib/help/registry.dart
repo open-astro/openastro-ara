@@ -1735,8 +1735,9 @@ const Map<String, Help> helpRegistry = {
     title: 'Readout mode',
     body:
         'Many cameras offer several ways to read the sensor out, trading noise against dynamic range or speed. '
-        'On ZWO cameras for example, "Normal" balances everything, while modes like "Low noise"/"High DR" change how '
-        'the pixels are digitized. The right choice for deep-sky imaging is usually the lowest-read-noise mode; '
+        'The mode names in this list come straight from your camera\'s driver, so they differ by brand — ZWO, '
+        'ToupTek, QHY and others each use their own labels ("Normal", "Low noise", "High DR", "HCG", …). '
+        'Whatever the name, the right choice for deep-sky imaging is usually the lowest-read-noise mode; '
         'planetary/lucky imaging favors a fast mode. IMPORTANT: the mode changes the sensor\'s noise signature, so '
         'darks, flats and lights must all be captured in the SAME readout mode.',
   ),
