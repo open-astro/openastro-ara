@@ -32,11 +32,16 @@ class ProfileActivePanel extends ConsumerWidget {
         const SettingsSectionHeader('Profile'),
         ...async.when(
           loading: () => const [
-            SettingsRow(label: 'Name', value: 'Loading…'),
+            SettingsRow(
+              label: 'Name',
+              helpKey: 'profile.active.name',
+              value: 'Loading…',
+            ),
           ],
           error: (e, _) => [
             SettingsRow(
               label: 'Profiles',
+              helpKey: 'profile.active.available',
               value: 'Unavailable',
               hint: friendlyDaemonError(e),
             ),
@@ -44,21 +49,39 @@ class ProfileActivePanel extends ConsumerWidget {
           data: (list) {
             final active = list.active;
             return [
-              SettingsRow(label: 'Name', value: active?.name ?? '—'),
-              SettingsRow(label: 'Created', value: _stamp(active?.createdUtc)),
               SettingsRow(
-                  label: 'Last modified', value: _stamp(active?.updatedUtc)),
-              SettingsRow(label: 'Profile ID', value: active?.id ?? '—'),
+                label: 'Name',
+                helpKey: 'profile.active.name',
+                value: active?.name ?? '—',
+              ),
+              SettingsRow(
+                label: 'Created',
+                helpKey: 'profile.active.metadata',
+                value: _stamp(active?.createdUtc),
+              ),
+              SettingsRow(
+                label: 'Last modified',
+                helpKey: 'profile.active.metadata',
+                value: _stamp(active?.updatedUtc),
+              ),
+              SettingsRow(
+                label: 'Profile ID',
+                helpKey: 'profile.active.metadata',
+                value: active?.id ?? '—',
+              ),
               const SettingsSectionHeader('Profiles on this server'),
               SettingsRow(
                 label: 'Available',
+                helpKey: 'profile.active.available',
                 value: list.profiles.isEmpty
                     ? 'None'
                     : list.profiles
-                        .map((p) => p.id == list.activeId
-                            ? '${p.name} (active)'
-                            : p.name)
-                        .join(', '),
+                          .map(
+                            (p) => p.id == list.activeId
+                                ? '${p.name} (active)'
+                                : p.name,
+                          )
+                          .join(', '),
               ),
             ];
           },
@@ -69,7 +92,8 @@ class ProfileActivePanel extends ConsumerWidget {
             FilledButton.icon(
               onPressed: () => Navigator.of(context).push<void>(
                 MaterialPageRoute(
-                    builder: (_) => const ProfileManagementScreen()),
+                  builder: (_) => const ProfileManagementScreen(),
+                ),
               ),
               icon: const Icon(Icons.manage_accounts, size: 18),
               label: const Text('Manage profiles…'),
@@ -78,9 +102,9 @@ class ProfileActivePanel extends ConsumerWidget {
             Flexible(
               child: Text(
                 'Add, select, rename, delete, import and export profiles.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
               ),
             ),
           ],

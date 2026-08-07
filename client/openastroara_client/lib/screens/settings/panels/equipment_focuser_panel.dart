@@ -89,8 +89,9 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
   // Seeded once from the current position. Intentionally NOT reseeded on live
   // updates — this is the user's target, not a live value (the live position is
   // shown separately), so a background poll can't clobber what they're typing.
-  late final TextEditingController _target =
-      TextEditingController(text: widget.status.position?.toString() ?? '');
+  late final TextEditingController _target = TextEditingController(
+    text: widget.status.position?.toString() ?? '',
+  );
 
   // Whether this move should enable the device's temperature compensation. Seeded
   // from the current state; the user toggles it per move (only shown when the
@@ -108,11 +109,13 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
     final s = widget.status;
     if (s.isConnecting) return const Text('Reading…');
     if (s.connectionState == EquipmentConnectionState.error) {
-      return const Row(children: [
-        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-        SizedBox(width: 8),
-        Expanded(child: Text('Focuser read failed — check the device.')),
-      ]);
+      return const Row(
+        children: [
+          Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+          SizedBox(width: 8),
+          Expanded(child: Text('Focuser read failed — check the device.')),
+        ],
+      );
     }
     final caps = s.capabilities;
     // Absolute focusers take a destination (0..max, digits only); relative focusers
@@ -129,7 +132,10 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         if (s.isMoving)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text('Moving…', style: TextStyle(color: AraColors.accentBusy)),
+            child: Text(
+              'Moving…',
+              style: TextStyle(color: AraColors.accentBusy),
+            ),
           ),
         const SizedBox(height: 8),
         Row(
@@ -142,15 +148,16 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
                 inputFormatters: [
                   // Anchored so a dash is only ever a leading sign (no '50-00').
                   FilteringTextInputFormatter.allow(
-                      absolute ? RegExp(r'^[0-9]*$') : RegExp(r'^-?[0-9]*$')),
+                    absolute ? RegExp(r'^[0-9]*$') : RegExp(r'^-?[0-9]*$'),
+                  ),
                 ],
                 decoration: InputDecoration(
                   isDense: true,
                   labelText: absolute ? 'Target' : 'Steps (±)',
                   helperText: absolute
                       ? (caps != null && caps.maxPosition > caps.minPosition
-                          ? 'Range ${caps.minPosition}–${caps.maxPosition}'
-                          : null)
+                            ? 'Range ${caps.minPosition}–${caps.maxPosition}'
+                            : null)
                       : 'Relative move (− inward)',
                 ),
               ),
@@ -165,32 +172,37 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         if (caps?.canTempComp ?? false)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Row(children: [
-              Checkbox(
-                value: _useTempComp,
-                onChanged: (v) => setState(() => _useTempComp = v ?? false),
-              ),
-              const Text('Use temperature compensation for this move'),
-            ]),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: _useTempComp,
+                  onChanged: (v) => setState(() => _useTempComp = v ?? false),
+                ),
+                const Text('Use temperature compensation for this move'),
+              ],
+            ),
           ),
       ],
     );
   }
 
   Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [
-          Expanded(child: Text(label)),
-          Text(value),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value),
+      ],
+    ),
+  );
 
   Future<void> _move(FocuserCapabilities? caps, bool absolute) async {
     final messenger = ScaffoldMessenger.of(context);
     final raw = int.tryParse(_target.text.trim());
     if (raw == null) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('Enter a target position.')));
+        const SnackBar(content: Text('Enter a target position.')),
+      );
       return;
     }
     // Clamp an absolute target to the device range (a typo can't drive past
@@ -198,7 +210,8 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
     // max_position must not collapse the clamp to [0,0] and command a move to 0.
     // A relative step delta is sent as-is. Reflect the value actually sent back
     // into the field so it doesn't read a stale out-of-range number.
-    final target = (absolute && caps != null && caps.maxPosition > caps.minPosition)
+    final target =
+        (absolute && caps != null && caps.maxPosition > caps.minPosition)
         ? raw.clamp(caps.minPosition, caps.maxPosition)
         : raw;
     if (mounted && target != raw) _target.text = target.toString();
@@ -207,19 +220,20 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
           .read(focuserProvider.notifier)
           .move(target, useTempComp: _useTempComp);
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another action is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Another action is still in progress.')),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't move: ${describeEquipmentError(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't move: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }
-
 
 /// §59 — the "Run autofocus" control: starts the daemon's V-curve sweep as a
 /// background job and polls it to a terminal state, surfacing progress and the
@@ -279,15 +293,19 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
               _result =
                   'Lost contact with the server while autofocusing — autofocus may still be running. Check the Focuser panel.';
             });
-            debugPrint('[autofocus] poll gave up after $consecutivePollFailures consecutive failures: $e');
+            debugPrint(
+              '[autofocus] poll gave up after $consecutivePollFailures consecutive failures: $e',
+            );
             return;
           }
           continue; // transient blip — keep tracking
         }
         // Live probe count from the daemon's per-probe job ticks (3/9 …).
         if (polled != null && polled.total > 0 && mounted) {
-          setState(() =>
-              _runningLabel = 'Autofocusing… (${polled!.done}/${polled.total})');
+          setState(
+            () => _runningLabel =
+                'Autofocusing… (${polled!.done}/${polled.total})',
+          );
         }
         if (polled == null) {
           // The daemon no longer knows the job. Its in-memory store never
@@ -310,8 +328,10 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
         _running = false;
         _lastFailed = job.state == 'failed';
         _result = switch (job.state) {
-          'complete' => 'Autofocus complete — focuser is at the fitted best position.',
-          'failed' => job.errorMessage ?? 'Autofocus failed — see Support → Logs.',
+          'complete' =>
+            'Autofocus complete — focuser is at the fitted best position.',
+          'failed' =>
+            job.errorMessage ?? 'Autofocus failed — see Support → Logs.',
           'cancelled' => 'Autofocus was cancelled.',
           _ => 'Autofocus finished.',
         };
@@ -321,7 +341,8 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
       setState(() {
         _running = false;
         _lastFailed = true;
-        _result = 'Could not run autofocus: check the connection and try again.';
+        _result =
+            'Could not run autofocus: check the connection and try again.';
       });
       debugPrint('[autofocus] run failed: $e');
     }
@@ -330,7 +351,9 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
   @override
   Widget build(BuildContext context) {
     final canRun =
-        widget.focuserConnected && !_running && ref.watch(autofocusApiProvider) != null;
+        widget.focuserConnected &&
+        !_running &&
+        ref.watch(autofocusApiProvider) != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -342,7 +365,8 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.center_focus_strong, size: 16),
             label: Text(_running ? _runningLabel : 'Run autofocus'),
           ),
@@ -350,8 +374,10 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
         if (!widget.focuserConnected)
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: Text('Connect a focuser to run autofocus.',
-                style: TextStyle(fontSize: 12, color: AraColors.textSecondary)),
+            child: Text(
+              'Connect a focuser to run autofocus.',
+              style: TextStyle(fontSize: 12, color: AraColors.textSecondary),
+            ),
           ),
         if (_result != null)
           Padding(
@@ -359,8 +385,11 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
             child: Text(
               _result!,
               style: TextStyle(
-                  fontSize: 12,
-                  color: _lastFailed ? AraColors.accentError : AraColors.textSecondary),
+                fontSize: 12,
+                color: _lastFailed
+                    ? AraColors.accentError
+                    : AraColors.textSecondary,
+              ),
             ),
           ),
       ],

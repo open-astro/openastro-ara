@@ -22,8 +22,10 @@ class SkyDataPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Sky data — catalogs for planning + solving',
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Sky data — catalogs for planning + solving',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text(
                 'Star and object catalogues Ara plans and solves with: the '
@@ -32,8 +34,8 @@ class SkyDataPanel extends StatelessWidget {
                 'downloads — Stellarium renders its own sky. Open the manager '
                 'to browse, download, or remove packages.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+                  color: AraColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 24),
               FilledButton.icon(

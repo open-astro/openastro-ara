@@ -181,6 +181,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         ),
         const SettingsRow(
           label: 'File naming',
+          helpKey: 'session.filenames.always_written',
           value: 'Folders and filenames',
           hint: 'Edit in Your night → File naming',
         ),

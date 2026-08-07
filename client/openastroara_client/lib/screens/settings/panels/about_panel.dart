@@ -32,26 +32,27 @@ class AboutPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final version = ref.watch(aboutAppVersionProvider);
-    final dim = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('About',
-            style: TextStyle(
-                color: AraColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600)),
+        const Text(
+          'About',
+          style: TextStyle(
+            color: AraColors.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 12),
         Text(
           'OpenAstro Ara — WILMA (the desktop client)',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: AraColors.textPrimary),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AraColors.textPrimary),
         ),
         const SizedBox(height: 4),
         Text(
@@ -70,18 +71,22 @@ class AboutPanel extends ConsumerWidget {
           style: dim,
         ),
         const SizedBox(height: 16),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          OutlinedButton.icon(
-            icon: const Icon(Icons.description_outlined, size: 16),
-            label: const Text('Open-source licenses'),
-            onPressed: () => _showLicenses(context, version.value),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.open_in_new, size: 16),
-            label: const Text('Source on GitHub'),
-            onPressed: () => _openRepo(context),
-          ),
-        ]),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.description_outlined, size: 16),
+              label: const Text('Open-source licenses'),
+              onPressed: () => _showLicenses(context, version.value),
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Source on GitHub'),
+              onPressed: () => _openRepo(context),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         Text(
           'The licenses page lists every Dart/Flutter package bundled into this '
@@ -112,12 +117,18 @@ class AboutPanel extends ConsumerWidget {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok) {
         messenger.showSnackBar(
-            const SnackBar(content: Text('Could not open the browser — $_kRepoUrl')));
+          const SnackBar(
+            content: Text('Could not open the browser — $_kRepoUrl'),
+          ),
+        );
       }
     } catch (e, st) {
       developer.log('launchUrl failed', error: e, stackTrace: st);
       messenger.showSnackBar(
-          const SnackBar(content: Text('Could not open the browser — $_kRepoUrl')));
+        const SnackBar(
+          content: Text('Could not open the browser — $_kRepoUrl'),
+        ),
+      );
     }
   }
 }
@@ -128,10 +139,9 @@ class _DaemonIdentity extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dim = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
     final async = ref.watch(daemonVersionsProvider);
     final text = async.when(
       loading: () => 'Server: reading…',
@@ -143,9 +153,10 @@ class _DaemonIdentity extends ConsumerWidget {
         final sha = v.daemonGitSha.isEmpty
             ? ''
             : ' (${v.daemonGitSha.substring(0, v.daemonGitSha.length.clamp(0, 7))})';
-        final platform = [v.osRelease, v.osArch]
-            .where((p) => p.isNotEmpty)
-            .join(' · ');
+        final platform = [
+          v.osRelease,
+          v.osArch,
+        ].where((p) => p.isNotEmpty).join(' · ');
         return 'Server: ${v.daemonVersion}$sha'
             '${platform.isEmpty ? '' : '\n$platform'}';
       },

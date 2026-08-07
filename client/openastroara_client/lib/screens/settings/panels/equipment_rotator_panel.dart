@@ -51,9 +51,9 @@ class EquipmentRotatorPanel extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
             'Rotator angle is set by the centre-and-rotate step whenever a target carries a position angle; there is no separate toggle.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
           ),
         ),
       ],
@@ -74,7 +74,8 @@ class _RotatorBody extends ConsumerStatefulWidget {
 class _RotatorBodyState extends ConsumerState<_RotatorBody> {
   // Seeded once from the current sky angle; the user's target, not a live value.
   late final TextEditingController _target = TextEditingController(
-      text: widget.status.skyAngleDeg?.toStringAsFixed(1) ?? '');
+    text: widget.status.skyAngleDeg?.toStringAsFixed(1) ?? '',
+  );
   bool _useSkyAngle = true;
 
   @override
@@ -88,11 +89,13 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     final s = widget.status;
     if (s.isConnecting) return const Text('Reading…');
     if (s.connectionState == EquipmentConnectionState.error) {
-      return const Row(children: [
-        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-        SizedBox(width: 8),
-        Expanded(child: Text('Rotator read failed — check the device.')),
-      ]);
+      return const Row(
+        children: [
+          Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+          SizedBox(width: 8),
+          Expanded(child: Text('Rotator read failed — check the device.')),
+        ],
+      );
     }
     final caps = s.capabilities;
     return Column(
@@ -103,68 +106,88 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
         if (s.isMoving)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text('Moving…', style: TextStyle(color: AraColors.accentBusy)),
+            child: Text(
+              'Moving…',
+              style: TextStyle(color: AraColors.accentBusy),
+            ),
           ),
         if (caps?.canReverse ?? false)
-          Row(children: [
-            const Expanded(child: Text('Reverse direction')),
-            Switch(
-              value: s.reverse,
-              onChanged: s.isMoving ? null : (v) => _setReverse(v),
-            ),
-          ]),
+          Row(
+            children: [
+              const Expanded(child: Text('Reverse direction')),
+              Switch(
+                value: s.reverse,
+                onChanged: s.isMoving ? null : (v) => _setReverse(v),
+              ),
+            ],
+          ),
         const SizedBox(height: 8),
-        Row(children: [
-          SizedBox(
-            width: 130,
-            child: TextField(
-              controller: _target,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^[0-9]*\.?[0-9]*$')),
-              ],
-              decoration: const InputDecoration(
-                isDense: true,
-                labelText: 'Angle (°)',
-                helperText: '0–360',
+        Row(
+          children: [
+            SizedBox(
+              width: 130,
+              child: TextField(
+                controller: _target,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'^[0-9]*\.?[0-9]*$'),
+                  ),
+                ],
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Angle (°)',
+                  helperText: '0–360',
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          FilledButton(
-            onPressed: s.isMoving ? null : _move,
-            child: const Text('Move'),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: s.isMoving ? null : _sync,
-            child: const Text('Sync'),
-          ),
-        ]),
-        Row(children: [
-          Checkbox(
-            value: _useSkyAngle,
-            onChanged: (v) => setState(() => _useSkyAngle = v ?? true),
-          ),
-          const Text('Move to sky angle (off = mechanical)'),
-        ]),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: s.isMoving ? null : _move,
+              child: const Text('Move'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: s.isMoving ? null : _sync,
+              child: const Text('Sync'),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Checkbox(
+              value: _useSkyAngle,
+              onChanged: (v) => setState(() => _useSkyAngle = v ?? true),
+            ),
+            const Text('Move to sky angle (off = mechanical)'),
+          ],
+        ),
       ],
     );
   }
 
   Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Expanded(child: Text(label)), Text(value)]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value),
+      ],
+    ),
+  );
 
-  static String _fmt(double? deg) => deg == null ? '—' : '${deg.toStringAsFixed(1)}°';
+  static String _fmt(double? deg) =>
+      deg == null ? '—' : '${deg.toStringAsFixed(1)}°';
 
   // Parse + range-check [0, 360); returns null (with a SnackBar) on bad input.
   double? _parseAngle(ScaffoldMessengerState messenger) {
     final v = double.tryParse(_target.text.trim());
     if (v == null || v < 0 || v >= 360) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('Enter an angle in 0–360.')));
+        const SnackBar(content: Text('Enter an angle in 0–360.')),
+      );
       return null;
     }
     return v;
@@ -174,38 +197,54 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     final messenger = ScaffoldMessenger.of(context);
     final angle = _parseAngle(messenger);
     if (angle == null) return;
-    await _run(messenger, "move",
-        () => ref.read(rotatorProvider.notifier).move(angle, useSkyAngle: _useSkyAngle));
+    await _run(
+      messenger,
+      "move",
+      () => ref
+          .read(rotatorProvider.notifier)
+          .move(angle, useSkyAngle: _useSkyAngle),
+    );
   }
 
   Future<void> _sync() async {
     final messenger = ScaffoldMessenger.of(context);
     final angle = _parseAngle(messenger);
     if (angle == null) return;
-    await _run(messenger, "sync",
-        () => ref.read(rotatorProvider.notifier).sync(angle));
+    await _run(
+      messenger,
+      "sync",
+      () => ref.read(rotatorProvider.notifier).sync(angle),
+    );
   }
 
   Future<void> _setReverse(bool reverse) async {
     final messenger = ScaffoldMessenger.of(context);
-    await _run(messenger, "set reverse",
-        () => ref.read(rotatorProvider.notifier).setReverse(reverse));
+    await _run(
+      messenger,
+      "set reverse",
+      () => ref.read(rotatorProvider.notifier).setReverse(reverse),
+    );
   }
 
-  Future<void> _run(ScaffoldMessengerState messenger, String verb,
-      Future<bool> Function() action) async {
+  Future<void> _run(
+    ScaffoldMessengerState messenger,
+    String verb,
+    Future<bool> Function() action,
+  ) async {
     try {
       final performed = await action();
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another action is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Another action is still in progress.')),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }

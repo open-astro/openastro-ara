@@ -24,8 +24,8 @@ class CameraElectronicsPanel extends ConsumerStatefulWidget {
       _CameraElectronicsPanelState();
 }
 
-class _CameraElectronicsPanelState
-    extends ConsumerState<CameraElectronicsPanel> with PanelSaveRegistration {
+class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
+    with PanelSaveRegistration {
   String? _lastError;
 
   @override
@@ -41,7 +41,10 @@ class _CameraElectronicsPanelState
       await ref.read(cameraElectronicsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
       }
     }
   }
@@ -55,15 +58,15 @@ class _CameraElectronicsPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(cameraElectronicsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Saved.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -80,10 +83,9 @@ class _CameraElectronicsPanelState
   Widget build(BuildContext context) {
     final e = ref.watch(cameraElectronicsProvider);
     final n = ref.read(cameraElectronicsProvider.notifier);
-    final dim = Theme.of(context)
-        .textTheme
-        .bodyMedium
-        ?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -102,8 +104,11 @@ class _CameraElectronicsPanelState
             padding: const EdgeInsets.only(bottom: 4),
             child: Row(
               children: [
-                const Icon(Icons.camera_alt_outlined,
-                    size: 14, color: AraColors.accentInfo),
+                const Icon(
+                  Icons.camera_alt_outlined,
+                  size: 14,
+                  color: AraColors.accentInfo,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -119,6 +124,7 @@ class _CameraElectronicsPanelState
           ),
         EditableTextRow(
           label: 'Sensor name',
+          helpKey: 'img.electronics.sensor_name',
           currentValue: e.sensorName,
           getCanonical: () => ref.read(cameraElectronicsProvider).sensorName,
           parse: n.setSensorName,
@@ -126,6 +132,7 @@ class _CameraElectronicsPanelState
         ),
         EditableNumberRow(
           label: 'Read noise (e⁻ RMS)',
+          helpKey: 'img.electronics.read_noise',
           currentValue: _fmt(e.readNoiseE),
           getCanonical: () =>
               _fmt(ref.read(cameraElectronicsProvider).readNoiseE),
@@ -136,6 +143,7 @@ class _CameraElectronicsPanelState
         ),
         EditableNumberRow(
           label: 'Full-well capacity (e⁻)',
+          helpKey: 'img.electronics.full_well',
           currentValue: _fmt(e.fullWellE),
           getCanonical: () =>
               _fmt(ref.read(cameraElectronicsProvider).fullWellE),
@@ -146,6 +154,7 @@ class _CameraElectronicsPanelState
         ),
         EditableNumberRow(
           label: 'Conversion gain (e⁻/ADU)',
+          helpKey: 'img.electronics.conversion_gain',
           currentValue: _fmt(e.electronsPerAdu),
           getCanonical: () =>
               _fmt(ref.read(cameraElectronicsProvider).electronsPerAdu),
@@ -156,6 +165,7 @@ class _CameraElectronicsPanelState
         ),
         EditableNumberRow(
           label: 'Gain these values apply at',
+          helpKey: 'img.electronics.gain_reference',
           currentValue: e.gain.toString(),
           getCanonical: () =>
               ref.read(cameraElectronicsProvider).gain.toString(),
@@ -166,6 +176,7 @@ class _CameraElectronicsPanelState
         ),
         EditableNumberRow(
           label: 'Peak quantum efficiency (0–1)',
+          helpKey: 'img.electronics.peak_qe',
           currentValue: _fmt(e.quantumEfficiencyPeak),
           getCanonical: () =>
               _fmt(ref.read(cameraElectronicsProvider).quantumEfficiencyPeak),
@@ -176,8 +187,10 @@ class _CameraElectronicsPanelState
         ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
-          Text(_lastError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _lastError!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
           const SizedBox(height: 12),
         ],
         // Save lives in the settings-shell header (PanelSaveRegistration) —

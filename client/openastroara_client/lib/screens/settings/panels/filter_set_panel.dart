@@ -42,7 +42,10 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
       await ref.read(filterSetProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
       }
     }
   }
@@ -56,15 +59,15 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(filterSetProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Saved.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -76,10 +79,9 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     // Prefer the connected wheel's live slot names; fall back to the §37.4
     // filter-wheel label settings (which carry sensible defaults) so the
     // button works offline too.
-    final wheel = ref.read(filterWheelProvider).maybeWhen(
-          data: (v) => v,
-          orElse: () => null,
-        );
+    final wheel = ref
+        .read(filterWheelProvider)
+        .maybeWhen(data: (v) => v, orElse: () => null);
     final live = wheel?.slots.map((s) => s.name).toList() ?? const <String>[];
     final labels = live.any((s) => s.trim().isNotEmpty)
         ? live
@@ -93,10 +95,15 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     final before = ref.read(filterSetProvider).filters.length;
     ref.read(filterSetProvider.notifier).seedFromWheelLabels(labels);
     final added = ref.read(filterSetProvider).filters.length - before;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(added > 0
-            ? 'Added $added filter${added == 1 ? "" : "s"} from the wheel labels — check the kinds, then Save.'
-            : 'No new labels to add — set filter-wheel labels or add filters manually.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          added > 0
+              ? 'Added $added filter${added == 1 ? "" : "s"} from the wheel labels — check the kinds, then Save.'
+              : 'No new labels to add — set filter-wheel labels or add filters manually.',
+        ),
+      ),
+    );
   }
 
   ProfileApi? _api() {
@@ -108,10 +115,9 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
   Widget build(BuildContext context) {
     final set = ref.watch(filterSetProvider);
     final n = ref.read(filterSetProvider.notifier);
-    final dim = Theme.of(context)
-        .textTheme
-        .bodyMedium
-        ?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -135,8 +141,9 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
         Row(
           children: [
             TextButton.icon(
-              onPressed: () => n.addFilter(PlanningFilter(
-                  name: _nextName(set), kind: FilterKind.l)),
+              onPressed: () => n.addFilter(
+                PlanningFilter(name: _nextName(set), kind: FilterKind.l),
+              ),
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add filter'),
             ),
@@ -150,8 +157,10 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
         ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
-          Text(_lastError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _lastError!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
           const SizedBox(height: 12),
         ],
         // Save lives in the settings-shell header (PanelSaveRegistration) —
@@ -163,10 +172,11 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
   /// A non-colliding placeholder name for the Add button ('Filter 1', …) —
   /// the notifier rejects duplicates, so pick the first free number.
   static String _nextName(FilterSetSettings set) {
-    for (var i = set.filters.length + 1;; i++) {
+    for (var i = set.filters.length + 1; ; i++) {
       final candidate = 'Filter $i';
-      if (!set.filters
-          .any((f) => f.name.toLowerCase() == candidate.toLowerCase())) {
+      if (!set.filters.any(
+        (f) => f.name.toLowerCase() == candidate.toLowerCase(),
+      )) {
         return candidate;
       }
     }
@@ -201,6 +211,7 @@ class _FilterRow extends StatelessWidget {
                 children: [
                   EditableTextRow(
                     label: 'Name',
+                    helpKey: 'eq.filterset.name',
                     currentValue: filter.name,
                     getCanonical: () => filter.name,
                     parse: (s) {
@@ -212,6 +223,7 @@ class _FilterRow extends StatelessWidget {
                   ),
                   SettingsDropdownRow<FilterKind>(
                     label: 'Kind',
+                    helpKey: 'eq.filterset.kind',
                     value: filter.kind,
                     items: {for (final k in FilterKind.values) k: k.label},
                     onChanged: (k) {
@@ -219,7 +231,9 @@ class _FilterRow extends StatelessWidget {
                     },
                   ),
                   EditableNumberRow(
-                    label: 'Bandwidth (nm, 0 = default '
+                    helpKey: 'eq.filterset.bandwidth',
+                    label:
+                        'Bandwidth (nm, 0 = default '
                         '${_fmt(filter.kind.defaultBandwidthNm)})',
                     currentValue: _fmt(filter.bandwidthNm),
                     getCanonical: () => _fmt(filter.bandwidthNm),

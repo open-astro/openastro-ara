@@ -51,16 +51,19 @@ class EquipmentFlatPanel extends ConsumerWidget {
         const SettingsSectionHeader('Flat capture'),
         SettingsRow(
           label: 'Auto-brightness target (ADU)',
+          helpKey: 'eq.flat.auto_brightness_target',
           value: policies.flatTargetAdu.toString(),
           hint: 'Edit in Settings → Safety → Policies (flat sets)',
         ),
         SettingsRow(
           label: 'Target tolerance (%)',
+          helpKey: 'eq.flat.target_tolerance',
           value: policies.flatTargetAduTolerancePct.toString(),
           hint: 'Edit in Settings → Safety → Policies (flat sets)',
         ),
         SettingsRow(
           label: 'Frames per filter',
+          helpKey: 'eq.flat.frames_per_filter',
           value: policies.flatFramesPerFilter.toString(),
           hint: 'Edit in Settings → Safety → Policies (flat sets)',
         ),
@@ -80,11 +83,13 @@ class _FlatBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (status.connectionState) {
       EquipmentConnectionState.connected => _FlatReadout(status: status),
-      EquipmentConnectionState.error => const Row(children: [
+      EquipmentConnectionState.error => const Row(
+        children: [
           Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
           SizedBox(width: 8),
           Expanded(child: Text('Flat panel read failed — check the device.')),
-        ]),
+        ],
+      ),
       _ => const Text('Reading…'),
     };
   }
@@ -100,30 +105,36 @@ class _FlatReadout extends StatelessWidget {
     final (coverIcon, coverText) = status.isMoving
         ? (Icons.sync, 'Cover moving…')
         : status.coverOpen
-            ? (Icons.unfold_more, 'Cover open')
-            : (Icons.unfold_less, 'Cover closed');
+        ? (Icons.unfold_more, 'Cover open')
+        : (Icons.unfold_less, 'Cover closed');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(coverIcon, size: 20, color: AraColors.textSecondary),
-          const SizedBox(width: 8),
-          Text(coverText),
-        ]),
+        Row(
+          children: [
+            Icon(coverIcon, size: 20, color: AraColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(coverText),
+          ],
+        ),
         const SizedBox(height: 6),
-        Row(children: [
-          Icon(
-            status.lightOn ? Icons.lightbulb : Icons.lightbulb_outline,
-            size: 20,
-            color: status.lightOn
-                ? AraColors.accentConnected
-                : AraColors.textSecondary,
-          ),
-          const SizedBox(width: 8),
-          Text(status.lightOn
-              ? 'Light on · brightness ${status.brightness}'
-              : 'Light off'),
-        ]),
+        Row(
+          children: [
+            Icon(
+              status.lightOn ? Icons.lightbulb : Icons.lightbulb_outline,
+              size: 20,
+              color: status.lightOn
+                  ? AraColors.accentConnected
+                  : AraColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              status.lightOn
+                  ? 'Light on · brightness ${status.brightness}'
+                  : 'Light off',
+            ),
+          ],
+        ),
       ],
     );
   }

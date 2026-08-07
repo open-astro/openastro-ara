@@ -27,23 +27,27 @@ class GenericPlaceholderPanel extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.settings_suggest,
-                  size: 64, color: AraColors.textDisabled),
+              const Icon(
+                Icons.settings_suggest,
+                size: 64,
+                color: AraColors.textDisabled,
+              ),
               const SizedBox(height: 12),
-              Text(label,
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(label, style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 4),
-              Text(panelId,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AraColors.textDisabled,
-                      )),
+              Text(
+                panelId,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AraColors.textDisabled),
+              ),
               const SizedBox(height: 16),
               Text(
                 note,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+                  color: AraColors.textSecondary,
+                ),
               ),
             ],
           ),

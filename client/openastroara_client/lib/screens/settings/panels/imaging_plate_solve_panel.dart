@@ -20,8 +20,8 @@ class ImagingPlateSolvePanel extends ConsumerStatefulWidget {
       _ImagingPlateSolvePanelState();
 }
 
-class _ImagingPlateSolvePanelState
-    extends ConsumerState<ImagingPlateSolvePanel> with PanelSaveRegistration {
+class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
+    with PanelSaveRegistration {
   String? _lastError;
 
   @override
@@ -38,7 +38,12 @@ class _ImagingPlateSolvePanelState
           .read(plateSolveSettingsProvider.notifier)
           .hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -51,16 +56,15 @@ class _ImagingPlateSolvePanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(plateSolveSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -93,9 +97,11 @@ class _ImagingPlateSolvePanelState
           items: {
             PlateSolveEngine.astap: 'ASTAP',
             if (s.engine == PlateSolveEngine.astrometryNet)
-              PlateSolveEngine.astrometryNet: 'astrometry.net (not supported — ASTAP is used)',
+              PlateSolveEngine.astrometryNet:
+                  'astrometry.net (not supported — ASTAP is used)',
             if (s.engine == PlateSolveEngine.platesolve2)
-              PlateSolveEngine.platesolve2: 'PlateSolve 2 (not supported — ASTAP is used)',
+              PlateSolveEngine.platesolve2:
+                  'PlateSolve 2 (not supported — ASTAP is used)',
           },
           onChanged: (v) {
             if (v != null) n.setEngine(v);
@@ -103,6 +109,7 @@ class _ImagingPlateSolvePanelState
         ),
         EditableTextRow(
           label: 'Where to find the solver',
+          helpKey: 'img.platesolve.solver_path',
           currentValue: s.pathOrEndpoint,
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).pathOrEndpoint,
@@ -110,6 +117,7 @@ class _ImagingPlateSolvePanelState
         ),
         EditableTextRow(
           label: 'Index download path',
+          helpKey: 'img.platesolve.index_path',
           currentValue: s.indexDownloadPath,
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).indexDownloadPath,
@@ -131,10 +139,8 @@ class _ImagingPlateSolvePanelState
           label: 'Downsample factor (1..8)',
           helpKey: 'img.platesolve.downsample_factor',
           currentValue: s.downsampleFactor.toString(),
-          getCanonical: () => ref
-              .read(plateSolveSettingsProvider)
-              .downsampleFactor
-              .toString(),
+          getCanonical: () =>
+              ref.read(plateSolveSettingsProvider).downsampleFactor.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setDownsampleFactor(v);
@@ -142,6 +148,7 @@ class _ImagingPlateSolvePanelState
         ),
         EditableNumberRow(
           label: 'Timeout (s)',
+          helpKey: 'img.platesolve.timeout',
           currentValue: s.timeoutSeconds.toString(),
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).timeoutSeconds.toString(),

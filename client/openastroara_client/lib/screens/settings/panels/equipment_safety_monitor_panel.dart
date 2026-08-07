@@ -51,19 +51,23 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
         const SettingsSectionHeader('Behavior'),
         SettingsRow(
           label: 'On unsafe',
+          helpKey: 'eq.safety.on_unsafe',
           value: _unsafeActionLabel(policies.onUnsafe),
           hint: 'Edit in Settings → Safety → Policies',
         ),
         SettingsRow(
           label: 'Auto-resume when safe',
+          helpKey: 'eq.safety.auto_resume',
           value: policies.autoResumeWhenSafe ? 'On' : 'Off',
           hint: 'Edit in Settings → Safety → Policies',
         ),
         SettingsRow(
           label: 'Resume delay (min)',
+          helpKey: 'eq.safety.resume_delay',
           value: policies.resumeDelayMin.toString(),
           hint: 'Edit in Settings → Safety → Policies',
-        ),      ],
+        ),
+      ],
     );
   }
 }
@@ -82,13 +86,16 @@ class _SafetyBody extends StatelessWidget {
         // is_safe is only meaningful once connected; while connecting it's the
         // daemon default (transient), and `error` is a failed read, not a flag.
         switch (status.connectionState) {
-          EquipmentConnectionState.connected =>
-            _SafeIndicator(safe: status.safe),
-          EquipmentConnectionState.error => const Row(children: [
+          EquipmentConnectionState.connected => _SafeIndicator(
+            safe: status.safe,
+          ),
+          EquipmentConnectionState.error => const Row(
+            children: [
               Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
               SizedBox(width: 8),
               Expanded(child: Text('Sensor read failed — check the device.')),
-            ]),
+            ],
+          ),
           _ => const Text('Reading…'),
         },
         if (status.lastTransitionAt != null)
@@ -96,10 +103,9 @@ class _SafetyBody extends StatelessWidget {
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               'Last change: ${formatUtcMinute(status.lastTransitionAt!)}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
           ),
       ],
@@ -122,10 +128,10 @@ class _SafeIndicator extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           text,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(color: color, fontWeight: FontWeight.w600),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -135,8 +141,8 @@ class _SafeIndicator extends StatelessWidget {
 /// Mirrors the labels in Settings → Safety → Policies so the two panels can
 /// never describe the same setting differently.
 String _unsafeActionLabel(UnsafeAction action) => switch (action) {
-      UnsafeAction.pauseAndPark => 'Pause + park + close dome',
-      UnsafeAction.parkOnly => 'Park only',
-      UnsafeAction.abortAndPark => 'Abort sequence + park',
-      UnsafeAction.ignore => 'Ignore (not recommended)',
-    };
+  UnsafeAction.pauseAndPark => 'Pause + park + close dome',
+  UnsafeAction.parkOnly => 'Park only',
+  UnsafeAction.abortAndPark => 'Abort sequence + park',
+  UnsafeAction.ignore => 'Ignore (not recommended)',
+};

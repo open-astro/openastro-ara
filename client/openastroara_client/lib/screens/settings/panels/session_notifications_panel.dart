@@ -42,7 +42,12 @@ class _SessionNotificationsPanelState
           .read(notificationsSettingsProvider.notifier)
           .hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -55,7 +60,8 @@ class _SessionNotificationsPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -64,9 +70,7 @@ class _SessionNotificationsPanelState
           .read(notificationsSettingsProvider.notifier)
           .persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -115,39 +119,41 @@ class _SessionNotificationsPanelState
           onChanged: n.setSoundAlert,
         ),
         if (s.soundAlert)
-          Consumer(builder: (context, ref, _) {
-            final alarm = ref.watch(safetyAlarmProvider);
-            final an = ref.read(safetyAlarmProvider.notifier);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                EditableNumberRow(
-                  label: 'Alarm delay (s of silent popup first)',
-                  helpKey: 'session.notifications.alarm_delay',
-                  currentValue: alarm.delaySec.toString(),
-                  getCanonical: () =>
-                      ref.read(safetyAlarmProvider).delaySec.toString(),
-                  parse: (str) {
-                    final v = int.tryParse(str);
-                    if (v != null) an.setDelaySec(v);
-                  },
-                ),
-                SettingsDropdownRow<String>(
-                  label: 'Alarm tone',
-                  helpKey: 'session.notifications.alarm_tone',
-                  value: alarm.tone,
-                  items: const {
-                    'siren': 'Two-tone siren',
-                    'beeps': 'Urgent beeps',
-                    'chime': 'Rising chime',
-                  },
-                  onChanged: (v) {
-                    if (v != null) an.setTone(v);
-                  },
-                ),
-              ],
-            );
-          }),
+          Consumer(
+            builder: (context, ref, _) {
+              final alarm = ref.watch(safetyAlarmProvider);
+              final an = ref.read(safetyAlarmProvider.notifier);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  EditableNumberRow(
+                    label: 'Alarm delay (s of silent popup first)',
+                    helpKey: 'session.notifications.alarm_delay',
+                    currentValue: alarm.delaySec.toString(),
+                    getCanonical: () =>
+                        ref.read(safetyAlarmProvider).delaySec.toString(),
+                    parse: (str) {
+                      final v = int.tryParse(str);
+                      if (v != null) an.setDelaySec(v);
+                    },
+                  ),
+                  SettingsDropdownRow<String>(
+                    label: 'Alarm tone',
+                    helpKey: 'session.notifications.alarm_tone',
+                    value: alarm.tone,
+                    items: const {
+                      'siren': 'Two-tone siren',
+                      'beeps': 'Urgent beeps',
+                      'chime': 'Rising chime',
+                    },
+                    onChanged: (v) {
+                      if (v != null) an.setTone(v);
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
         EditableTextRow(
           label: 'Pushover app token',
           helpKey: 'session.notifications.pushover_token',
@@ -221,7 +227,8 @@ class _SessionNotificationsPanelState
         SettingsSwitchRow(
           // The threshold itself lives in Storage → "Warn below (GB free)";
           // quoting it live keeps the two panels from contradicting each other.
-          label: 'Disk space low (below '
+          label:
+              'Disk space low (below '
               '${ref.watch(storageSettingsProvider).minFreeDiskWarnGb} GB free)',
           helpKey: 'session.notifications.on_disk_space_low',
           value: s.onDiskSpaceLow,

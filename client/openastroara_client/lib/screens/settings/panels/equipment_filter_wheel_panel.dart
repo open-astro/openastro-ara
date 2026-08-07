@@ -99,24 +99,28 @@ class _FilterWheelBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (status.isConnecting) return const Text('Reading…');
     if (status.connectionState == EquipmentConnectionState.error) {
-      return const Row(children: [
-        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-        SizedBox(width: 8),
-        Expanded(child: Text('Filter wheel read failed — check the device.')),
-      ]);
+      return const Row(
+        children: [
+          Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+          SizedBox(width: 8),
+          Expanded(child: Text('Filter wheel read failed — check the device.')),
+        ],
+      );
     }
     final current = status.current;
     final currentText = current != null
         ? '${current.name.isEmpty ? 'Slot ${current.position}' : current.name} '
-            '(slot ${current.position})'
+              '(slot ${current.position})'
         : (status.isMoving ? 'Changing…' : '—');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          const Expanded(child: Text('Current filter')),
-          Text(currentText),
-        ]),
+        Row(
+          children: [
+            const Expanded(child: Text('Current filter')),
+            Text(currentText),
+          ],
+        ),
         const Divider(height: 20, color: AraColors.border),
         if (status.slots.isEmpty)
           const Text('This filter wheel reports no slots.')
@@ -136,21 +140,28 @@ class _FilterWheelBody extends ConsumerWidget {
     );
   }
 
-  Future<void> _select(BuildContext context, WidgetRef ref, FilterSlot slot) async {
+  Future<void> _select(
+    BuildContext context,
+    WidgetRef ref,
+    FilterSlot slot,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final performed =
-          await ref.read(filterWheelProvider.notifier).changeFilter(slot.position);
+      final performed = await ref
+          .read(filterWheelProvider.notifier)
+          .changeFilter(slot.position);
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another action is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Another action is still in progress.')),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't change filter: ${describeEquipmentError(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't change filter: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }
@@ -172,10 +183,9 @@ class _SlotRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondary = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: AraColors.textSecondary);
+    final secondary = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
     // Same empty-name fallback the "Current filter" header uses, so an unnamed
     // slot reads consistently in both places.
     final name = slot.name.isEmpty ? 'Slot ${slot.position}' : slot.name;
@@ -191,9 +201,10 @@ class _SlotRow extends StatelessWidget {
               '${slot.position}',
               textAlign: TextAlign.center,
               style: secondary?.copyWith(
-                  color: isCurrent
-                      ? AraColors.accentConnected
-                      : AraColors.textSecondary),
+                color: isCurrent
+                    ? AraColors.accentConnected
+                    : AraColors.textSecondary,
+              ),
             ),
           ),
           const SizedBox(width: 6),
@@ -202,8 +213,11 @@ class _SlotRow extends StatelessWidget {
           SizedBox(
             width: 20,
             child: isCurrent
-                ? const Icon(Icons.check,
-                    size: 16, color: AraColors.accentConnected)
+                ? const Icon(
+                    Icons.check,
+                    size: 16,
+                    color: AraColors.accentConnected,
+                  )
                 : null,
           ),
           Expanded(child: Text(name)),
@@ -227,8 +241,9 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     await ref.read(filterWheelLabelsProvider.notifier).persistToServer();
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Slot labels not saved: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Slot labels not saved: $e')));
     }
   }
 }

@@ -43,7 +43,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       await ref.read(customHorizonProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
       }
     }
   }
@@ -57,7 +60,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -70,9 +74,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       siteSaved = true;
       await ref.read(customHorizonProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -90,9 +92,11 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   Future<void> _fillFromGps() async {
     final api = ref.read(timeSyncApiProvider);
     if (api == null) {
-      setState(() => _gpsStatus =
-          'Not connected to a server — GPS fixes come from the dongle on the '
-          'server machine.');
+      setState(
+        () => _gpsStatus =
+            'Not connected to a server — GPS fixes come from the dongle on the '
+            'server machine.',
+      );
       return;
     }
     setState(() {
@@ -104,10 +108,12 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       final loc = state.location;
       if (!mounted) return;
       if (loc == null) {
-        setState(() => _gpsStatus =
-            'No GPS fix yet. Plug a USB GPS dongle into the computer running '
-            'Ara Server and give it a minute or two under open sky, then try '
-            'again.');
+        setState(
+          () => _gpsStatus =
+              'No GPS fix yet. Plug a USB GPS dongle into the computer running '
+              'Ara Server and give it a minute or two under open sky, then try '
+              'again.',
+        );
         return;
       }
       final n = ref.read(siteSettingsProvider.notifier);
@@ -120,13 +126,17 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       // zone from the coordinates (offline polygon lookup).
       n.setTimeZone(tz_map.latLngToTimezoneString(loc.lat, loc.lng));
       _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
-      setState(() => _gpsStatus =
-          'Filled from the server\'s GPS fix (source: ${state.source}). '
-          'Press Save to persist.');
+      setState(
+        () => _gpsStatus =
+            'Filled from the server\'s GPS fix (source: ${state.source}). '
+            'Press Save to persist.',
+      );
     } catch (_) {
       if (!mounted) return;
-      setState(() =>
-          _gpsStatus = 'Couldn\'t read the server\'s GPS state — try again.');
+      setState(
+        () =>
+            _gpsStatus = 'Couldn\'t read the server\'s GPS state — try again.',
+      );
     } finally {
       if (mounted) setState(() => _gpsBusy = false);
     }
@@ -178,7 +188,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.gps_fixed, size: 18),
                 label: const Text('Fill from GPS'),
               ),
@@ -195,12 +206,14 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         ),
         EditableTextRow(
           label: 'Site name',
+          helpKey: 'safety.site.site_name',
           currentValue: s.siteName,
           getCanonical: () => ref.read(siteSettingsProvider).siteName,
           parse: n.setSiteName,
         ),
         EditableNumberRow(
           label: 'Latitude (°)',
+          helpKey: 'safety.site.latitude',
           currentValue: s.latitudeDeg.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).latitudeDeg.toString(),
@@ -214,6 +227,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         ),
         EditableNumberRow(
           label: 'Longitude (°)',
+          helpKey: 'safety.site.longitude',
           currentValue: s.longitudeDeg.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).longitudeDeg.toString(),
@@ -227,6 +241,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         ),
         EditableNumberRow(
           label: 'Elevation (m)',
+          helpKey: 'safety.site.elevation',
           currentValue: s.elevationM.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).elevationM.toString(),
@@ -237,13 +252,15 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         ),
         EditableTextRow(
           label: 'Time zone',
+          helpKey: 'safety.site.time_zone',
           currentValue: s.timeZone,
           getCanonical: () => ref.read(siteSettingsProvider).timeZone,
           parse: (v) {
             _tzUserEdited = true; // pin: lat/lng edits stop overwriting it
             n.setTimeZone(v);
           },
-          hint: 'IANA name (e.g. America/Los_Angeles) — auto-filled from '
+          hint:
+              'IANA name (e.g. America/Los_Angeles) — auto-filled from '
               'the coordinates',
         ),
         const SettingsSectionHeader('Time sync'),
@@ -393,6 +410,7 @@ class _CustomHorizonEditor extends ConsumerWidget {
               Expanded(
                 child: EditableNumberRow(
                   label: 'Azimuth (°)',
+                  helpKey: 'safety.site.horizon_azimuth',
                   currentValue: points[i].azimuthDeg.toString(),
                   getCanonical: () =>
                       ref.read(customHorizonProvider)[i].azimuthDeg.toString(),
@@ -405,6 +423,7 @@ class _CustomHorizonEditor extends ConsumerWidget {
               Expanded(
                 child: EditableNumberRow(
                   label: 'Altitude (°)',
+                  helpKey: 'safety.site.horizon_altitude',
                   currentValue: points[i].altitudeDeg.toString(),
                   getCanonical: () =>
                       ref.read(customHorizonProvider)[i].altitudeDeg.toString(),

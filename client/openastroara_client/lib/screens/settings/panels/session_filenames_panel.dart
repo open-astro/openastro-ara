@@ -60,8 +60,10 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       _hydrated = true;
     } catch (e) {
       if (mounted) {
-        setState(() =>
-            _lastError = friendlyError(e, action: 'load your saved settings'));
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
       }
     }
   }
@@ -74,8 +76,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      setState(() =>
-          _lastError = 'Not connected — connect to your rig to save this.');
+      setState(
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -85,9 +88,11 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       await _hydrate();
       if (!_hydrated) {
         if (!mounted) return;
-        setState(() => _lastError =
-            'Couldn\'t load your saved settings — not saving over them. '
-            'Check the connection and try again.');
+        setState(
+          () => _lastError =
+              'Couldn\'t load your saved settings — not saving over them. '
+              'Check the connection and try again.',
+        );
         messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
         return;
       }
@@ -149,6 +154,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           const SettingsSectionHeader('Include in each name'),
           const SettingsRow(
             label: 'Date & time',
+            helpKey: 'session.filenames.datetime_token',
             value: 'Always',
             hint: 'What keeps every name unique and sorted',
           ),
@@ -174,10 +180,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             'This naming template was written by hand (or imported), so the '
             'usual choices are hidden to avoid rewriting it. Edit it below, '
             'or start over with the standard naming.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
           ),
           const SizedBox(height: 8),
           EditableTextRow(
@@ -192,8 +197,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: () => sn
-                  .setFilenameTemplate(const FrameNamingModel().compile()),
+              onPressed: () =>
+                  sn.setFilenameTemplate(const FrameNamingModel().compile()),
               child: const Text('Use standard naming'),
             ),
           ),
@@ -241,9 +246,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           hint: site.latitudeDeg == 0 && site.longitudeDeg == 0
               ? 'Coordinates not set — see Where you observe'
               : '${site.latitudeDeg.toStringAsFixed(4)}°, '
-                  '${site.longitudeDeg.toStringAsFixed(4)}°, '
-                  '${site.elevationM.round()} m — turn off before sharing '
-                  'frames if you don\'t want your location in them',
+                    '${site.longitudeDeg.toStringAsFixed(4)}°, '
+                    '${site.elevationM.round()} m — turn off before sharing '
+                    'frames if you don\'t want your location in them',
         ),
         SettingsSwitchRow(
           label: 'Optics',
@@ -253,8 +258,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           hint: optics.focalLengthMm <= 0
               ? 'Not set — see Imaging → Optics'
               : '${(optics.focalLengthMm * (optics.reducerFactor > 0 ? optics.reducerFactor : 1)).round()} mm'
-                  '${optics.apertureMm > 0 ? ' · ${optics.apertureMm.round()} mm aperture' : ''}'
-                  '${optics.pixelSizeUm > 0 ? ' · ${optics.pixelSizeUm} µm pixels' : ''}',
+                    '${optics.apertureMm > 0 ? ' · ${optics.apertureMm.round()} mm aperture' : ''}'
+                    '${optics.pixelSizeUm > 0 ? ' · ${optics.pixelSizeUm} µm pixels' : ''}',
         ),
         SettingsSwitchRow(
           label: 'Sensor temperature',
@@ -268,7 +273,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           helpKey: 'session.filenames.header_weather',
           value: fs.headerWeather,
           onChanged: fn.setHeaderWeather,
-          hint: 'Sky quality, ambient, humidity, dew point, pressure, wind, '
+          hint:
+              'Sky quality, ambient, humidity, dew point, pressure, wind, '
               'cloud cover — when a weather station is connected',
         ),
         SettingsSwitchRow(
@@ -276,19 +282,23 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           helpKey: 'session.filenames.header_ephemeris',
           value: fs.headerEphemeris,
           onChanged: fn.setHeaderEphemeris,
-          hint: 'Altitude of both, moon phase and illumination — computed '
+          hint:
+              'Altitude of both, moon phase and illumination — computed '
               'for your site at the moment of capture. Even with Your site '
               'off, these can roughly reveal your latitude',
         ),
         const SettingsRow(
           label: 'Always written',
+          helpKey: 'session.filenames.always_written',
           value: 'The essentials',
-          hint: 'Frame type, exposure, gain, filter, binning, capture time, '
+          hint:
+              'Frame type, exposure, gain, filter, binning, capture time, '
               'camera model — what calibration and plate solving need',
         ),
         const SettingsSectionHeader('Format'),
         SettingsRow(
           label: 'File format',
+          helpKey: 'session.storage.file_format',
           value: _formatLabel(ss.fileFormat),
           hint: 'Edit in Your night → Storage',
         ),
@@ -302,8 +312,10 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
         if (model != null)
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: Text('Advanced',
-                style: Theme.of(context).textTheme.titleSmall),
+            title: Text(
+              'Advanced',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             children: [
               EditableTextRow(
                 label: 'Template',
@@ -342,11 +354,11 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
   }
 
   String _formatLabel(StorageFileFormat f) => switch (f) {
-        StorageFileFormat.fits => 'FITS',
-        StorageFileFormat.xisf => 'XISF',
-        StorageFileFormat.fitsRice => 'FITS + RICE',
-        StorageFileFormat.fitsGzip => 'FITS + gzip',
-      };
+    StorageFileFormat.fits => 'FITS',
+    StorageFileFormat.xisf => 'XISF',
+    StorageFileFormat.fitsRice => 'FITS + RICE',
+    StorageFileFormat.fitsGzip => 'FITS + gzip',
+  };
 }
 
 /// Tonight's frame, named. Folders render as a breadcrumb; the filename gets
@@ -361,7 +373,9 @@ class _PreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final segments = previewSegments(
-        template, NamingPreviewContext(captured: DateTime.now()));
+      template,
+      NamingPreviewContext(captured: DateTime.now()),
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
@@ -373,17 +387,23 @@ class _PreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('TONIGHT THIS FRAME WOULD BE SAVED AS',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: AraColors.textDisabled,
-                  fontSize: 10,
-                  letterSpacing: 0.8)),
+          Text(
+            'TONIGHT THIS FRAME WOULD BE SAVED AS',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AraColors.textDisabled,
+              fontSize: 10,
+              letterSpacing: 0.8,
+            ),
+          ),
           const SizedBox(height: 10),
           if (segments.isEmpty)
-            Text('Nothing — the template produces no name. Frames fall back '
-                'to their internal id.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: AraColors.accentBusy))
+            Text(
+              'Nothing — the template produces no name. Frames fall back '
+              'to their internal id.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AraColors.accentBusy,
+              ),
+            )
           else
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -393,21 +413,33 @@ class _PreviewCard extends StatelessWidget {
                   if (i > 0)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(Icons.chevron_right,
-                          size: 14, color: AraColors.textDisabled),
+                      child: Icon(
+                        Icons.chevron_right,
+                        size: 14,
+                        color: AraColors.textDisabled,
+                      ),
                     ),
                   if (i < segments.length - 1) ...[
-                    Icon(Icons.folder_outlined,
-                        size: 14, color: AraColors.textSecondary),
+                    Icon(
+                      Icons.folder_outlined,
+                      size: 14,
+                      color: AraColors.textSecondary,
+                    ),
                     const SizedBox(width: 4),
-                    Text(segments[i],
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: AraColors.textSecondary)),
+                    Text(
+                      segments[i],
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
                   ] else
-                    Text(segments[i],
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w600)),
+                    Text(
+                      segments[i],
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                 ],
               ],
             ),
