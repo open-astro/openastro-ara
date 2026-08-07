@@ -92,14 +92,20 @@ public sealed partial class CaptureScanService : IDisposable {
         try {
             long framesCleared, sessionsCleared;
             await using (var conn = _db.OpenConnection()) {
+                // One transaction: a cancel/crash between the deletes must
+                // never leave frames gone with stale session rows behind.
+                await using var tx = (Microsoft.Data.Sqlite.SqliteTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
                 await using (var cmd = conn.CreateCommand()) {
+                    cmd.Transaction = tx;
                     cmd.CommandText = "DELETE FROM frames;";
                     framesCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                 }
                 await using (var cmd = conn.CreateCommand()) {
+                    cmd.Transaction = tx;
                     cmd.CommandText = "DELETE FROM sessions;";
                     sessionsCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                 }
+                await tx.CommitAsync(ct).ConfigureAwait(false);
             }
             // The synthetic recovery session was just deleted with the rest —
             // drop the in-memory cache or every re-insert fails its session FK
@@ -205,7 +211,9 @@ public sealed partial class CaptureScanService : IDisposable {
         // found". Enumeration is case-insensitive (.FIT/.FITS included), and
         // macOS AppleDouble droppings ("._Light_….fit") are metadata forks,
         // not FITS — skip them by name.
-        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fits").Concat(EnumerateFilesSafe(root, "*.fit"))) {
+        // One recursive walk, not one per extension — these are 1 TB
+        // take-home drives; LooksLikeFits does the exact-extension filtering.
+        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fit*")) {
             if (ct.IsCancellationRequested) break;
             if (!LooksLikeFits(fitsPath)) continue;
             try {
