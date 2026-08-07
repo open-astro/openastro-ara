@@ -81,6 +81,38 @@ public sealed partial class CaptureScanService : IDisposable {
     public void Dispose() => _scanLock.Dispose();
 
     /// <summary>
+    /// §50 stats maintenance — wipe the frame catalog (frames + sessions)
+    /// and re-ingest from whatever store is currently mounted, so the Stats
+    /// views truthfully describe THE CONNECTED DRIVE after a swap. Holds
+    /// the scan lock end-to-end: the wipe and the rebuilding scan are one
+    /// atomic maintenance operation from every other caller's view.
+    /// </summary>
+    public async Task<(long FramesCleared, long SessionsCleared, CaptureScanResult Scan)> ResetAndRescanAsync(CancellationToken ct) {
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            long framesCleared, sessionsCleared;
+            await using (var conn = _db.OpenConnection()) {
+                await using (var cmd = conn.CreateCommand()) {
+                    cmd.CommandText = "DELETE FROM frames;";
+                    framesCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                }
+                await using (var cmd = conn.CreateCommand()) {
+                    cmd.CommandText = "DELETE FROM sessions;";
+                    sessionsCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                }
+            }
+            LogCatalogReset(framesCleared, sessionsCleared);
+            var scan = await RunLockedAsync(ct).ConfigureAwait(false);
+            return (framesCleared, sessionsCleared, scan);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§50 catalog reset: cleared {Frames} frames and {Sessions} sessions; re-ingesting from the mounted store.")]
+    private partial void LogCatalogReset(long frames, long sessions);
+
+    /// <summary>
     /// Runs <paramref name="work"/> holding the scan lock — for storage
     /// maintenance (mount/reformat) that must not interleave with a scan
     /// walking the very tree being unmounted, nor with a sibling configure.

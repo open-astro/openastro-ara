@@ -257,6 +257,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StatsFrameQualityDto))]
 [JsonSerializable(typeof(StatsGuidingDto))]
 [JsonSerializable(typeof(StatsOverviewDto))]
+[JsonSerializable(typeof(StatsRebuildCatalogResultDto))]
 [JsonSerializable(typeof(StatsSparklineDto<System.DateTimeOffset, double>))]
 [JsonSerializable(typeof(StatsTargetsDto))]
 [JsonSerializable(typeof(StatsTargetSummaryDto))]

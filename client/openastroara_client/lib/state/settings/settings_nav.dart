@@ -175,6 +175,11 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
         label: 'Calibration',
         groupId: 'session',
       ),
+      SettingsPanelInfo(
+        id: 'session.stats',
+        label: 'Stats',
+        groupId: 'session',
+      ),
     ],
   ),
   // "Policies" and "Diagnostics mode" were our words for these. What the user
