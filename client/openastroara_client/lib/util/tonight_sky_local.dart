@@ -60,10 +60,21 @@ const int _windowStepMinutes = 5;
 const int _windowHalfSpanMinutes = 12 * 60;
 const double _siderealDegPerDay = 360.98564736629;
 
-PlanningDso _o(String id, String name, String type, double mag, double ra,
-        double dec) =>
-    PlanningDso(
-        id: id, name: name, type: type, magnitude: mag, raDeg: ra, decDeg: dec);
+PlanningDso _o(
+  String id,
+  String name,
+  String type,
+  double mag,
+  double ra,
+  double dec,
+) => PlanningDso(
+  id: id,
+  name: name,
+  type: type,
+  magnitude: mag,
+  raDeg: ra,
+  decDeg: dec,
+);
 
 /// The daemon's hardcoded starter catalog (TonightSkyService.Catalog),
 /// verbatim: J2000 positions, OpenNGC type codes where definite. The LAST
@@ -92,8 +103,7 @@ final List<PlanningDso> starterTonightCatalog = [
   _o('M17', 'Omega Nebula', 'HII', 6.0, 275.196, -16.171),
   _o('M57', 'Ring Nebula', 'PN', 8.8, 283.396, 33.029),
   _o('M27', 'Dumbbell Nebula', 'PN', 7.4, 299.901, 22.721),
-  _o(
-      'NGC7000', 'North America Nebula', 'HII', 4.0, 314.750, 44.330),
+  _o('NGC7000', 'North America Nebula', 'HII', 4.0, 314.750, 44.330),
 ];
 
 /// Rank the starter catalog for [site] + [optics] at [atUtc], mirroring the
@@ -121,9 +131,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   // the famous complexes, plus region-scale fields with no catalog anchor)
   // rides on top of whichever catalog is in play — see imaging_regions.dart.
   final objects = applyImagingRegions(
-      (catalog == null || catalog.isEmpty) ? starterTonightCatalog : catalog);
+    (catalog == null || catalog.isEmpty) ? starterTonightCatalog : catalog,
+  );
   final at = atUtc.toUtc();
-  final skyline = (site.useCustomHorizon &&
+  final skyline =
+      (site.useCustomHorizon &&
           customHorizon != null &&
           customHorizon.isNotEmpty)
       ? _HorizonSkyline(customHorizon)
@@ -131,8 +143,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
   // With a skyline, the FLAT pre-filter bar is its lowest vertex (an object
   // that never clears even the lowest terrain can be dropped early); the real
   // per-azimuth check happens in the sample loop.
-  final horizon =
-      skyline?.minAltitudeDeg ?? site.defaultHorizonAltitudeDeg;
+  final horizon = skyline?.minAltitudeDeg ?? site.defaultHorizonAltitudeDeg;
   final lat = site.latitudeDeg;
   final lon = site.longitudeDeg;
   final lst0 = _localSiderealTimeDeg(at, lon);
@@ -151,36 +162,42 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final twilight = _twilightSunAltitudeDeg(site.twilightDefinition);
   final sunAtNow = _sunEquatorialDeg(at);
   final sunHaNowDeg = _mod360(lst0 - sunAtNow.$1);
-  final sunAltNowDeg =
-      _altitudeFromHourAngleDeg(sunAtNow.$2, lat, sunHaNowDeg);
+  final sunAltNowDeg = _altitudeFromHourAngleDeg(sunAtNow.$2, lat, sunHaNowDeg);
   // Sun hour angle 180° = solar midnight; advance to the next one. Snapped
   // to a 5-min UTC boundary so two daytime asks land on the SAME grid — the
   // midnight estimate drifts by seconds across the day (equation of time)
   // and would otherwise jitter every window timestamp with it.
   final rawAnchor = sunAltNowDeg < twilight
       ? at
-      : at.add(Duration(
-          milliseconds:
-              (_mod360(180.0 - sunHaNowDeg) / 360.0 * 24.0 * 3600000.0)
-                  .round()));
+      : at.add(
+          Duration(
+            milliseconds:
+                (_mod360(180.0 - sunHaNowDeg) / 360.0 * 24.0 * 3600000.0)
+                    .round(),
+          ),
+        );
   final anchor = DateTime.fromMillisecondsSinceEpoch(
-      (rawAnchor.millisecondsSinceEpoch / (_windowStepMinutes * 60000))
-              .round() *
-          _windowStepMinutes *
-          60000,
-      isUtc: true);
+    (rawAnchor.millisecondsSinceEpoch / (_windowStepMinutes * 60000)).round() *
+        _windowStepMinutes *
+        60000,
+    isUtc: true,
+  );
   const stepsPerSide = _windowHalfSpanMinutes ~/ _windowStepMinutes;
   const sampleCount = stepsPerSide * 2 + 1;
   final sampleUtc = List<DateTime>.filled(sampleCount, at);
   final sampleLstDeg = List<double>.filled(sampleCount, 0);
   final sunIsDown = List<bool>.filled(sampleCount, false);
   for (var i = 0; i < sampleCount; i++) {
-    final t =
-        anchor.add(Duration(minutes: (i - stepsPerSide) * _windowStepMinutes));
+    final t = anchor.add(
+      Duration(minutes: (i - stepsPerSide) * _windowStepMinutes),
+    );
     final lst = _localSiderealTimeDeg(t, lon);
     final sun = _sunEquatorialDeg(t);
-    final sunAlt =
-        _altitudeFromHourAngleDeg(sun.$2, lat, _mod360(lst - sun.$1));
+    final sunAlt = _altitudeFromHourAngleDeg(
+      sun.$2,
+      lat,
+      _mod360(lst - sun.$1),
+    );
     sampleUtc[i] = t;
     sampleLstDeg[i] = lst;
     sunIsDown[i] = sunAlt < twilight;
@@ -200,20 +217,21 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final m = _moonEquatorialDeg(sampleUtc[i]);
     moonRaDeg[i] = m.$1;
     moonDecDeg[i] = m.$2;
-    moonUp[i] = _altitudeFromHourAngleDeg(
-            m.$2, lat, _mod360(sampleLstDeg[i] - m.$1)) >
+    moonUp[i] =
+        _altitudeFromHourAngleDeg(m.$2, lat, _mod360(sampleLstDeg[i] - m.$1)) >
         0.0;
   }
   // Illumination at the anchor (tonight's midnight when planning by day) so
   // the advisory matches the night being scored, not the daytime moment.
-  final moonIlluminationPct =
-      (_moonIlluminatedFraction(anchor) * 100.0).roundToDouble();
+  final moonIlluminationPct = (_moonIlluminatedFraction(anchor) * 100.0)
+      .roundToDouble();
 
   // NEXTGEN §1/§3.1 advisory inputs — mirrors the server's Rank preamble.
   // Advice degrades gracefully: empty filter set → no advice; unset
   // electronics/aperture → no optimal-sub figure (deliberately NO Tier-0
   // fallback here, matching the tonight list's stricter contract).
-  final exposureConfigured = electronics.readNoiseE > 0 &&
+  final exposureConfigured =
+      electronics.readNoiseE > 0 &&
       electronics.fullWellE > 0 &&
       optics.apertureMm > 0 &&
       optics.focalLengthMm > 0 &&
@@ -249,7 +267,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
       return (
         result.recommendedSec.roundToDouble(),
         result.recommendedSec,
-        input
+        input,
       );
     });
   }
@@ -259,7 +277,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final singleFrame = _fovArcmin(optics);
   final singleFrameFovDeg2 = singleFrame.$1 / 60.0 * (singleFrame.$2 / 60.0);
   final seeingArcsec = site.typicalSeeingArcsec;
-  final starTagAvailable = exposureConfigured &&
+  final starTagAvailable =
+      exposureConfigured &&
       singleFrameFovDeg2.isFinite &&
       singleFrameFovDeg2 > 0 &&
       seeingArcsec.isFinite &&
@@ -271,8 +290,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
       if (!starTagAvailable || input == null || recommendedSec <= 0) {
         return null;
       }
-      return stars.limitingMagnitude(input, recommendedSec, seeingArcsec,
-          snrThreshold: stars.registrationSnr);
+      return stars.limitingMagnitude(
+        input,
+        recommendedSec,
+        seeingArcsec,
+        snrThreshold: stars.registrationSnr,
+      );
     });
   }
 
@@ -299,10 +322,15 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // Multiplied through by cosDec (≥ 0, so the angle is unchanged) —
         // matches the daemon's AzimuthFromHourAngleDeg and avoids the
         // tan(dec) division that blows up at the exact pole (#858 review).
-        final azDeg = _mod360(_rad2deg(math.atan2(
-                math.sin(hRad) * cosDec,
-                cosH * sinLat * cosDec - sinDec * cosLat)) +
-            180.0);
+        final azDeg = _mod360(
+          _rad2deg(
+                math.atan2(
+                  math.sin(hRad) * cosDec,
+                  cosH * sinLat * cosDec - sinDec * cosLat,
+                ),
+              ) +
+              180.0,
+        );
         final altDeg = _rad2deg(math.asin(sinAlt.clamp(-1.0, 1.0)));
         up[i] = altDeg >= skyline.altitudeAt(azDeg);
       }
@@ -315,24 +343,35 @@ List<TonightSkyObject> computeTonightSkyLocal({
     // Each up-sample stands for its whole 5-min slot; the exclusive upper
     // bound is one step past the last up-sample (a single-sample window must
     // not report 0 h).
-    final windowEnd =
-        sampleUtc[run.$2].add(const Duration(minutes: _windowStepMinutes));
-    final integrationHours =
-        windowEnd.difference(windowStart).inMinutes / 60.0;
+    final windowEnd = sampleUtc[run.$2].add(
+      const Duration(minutes: _windowStepMinutes),
+    );
+    final integrationHours = windowEnd.difference(windowStart).inMinutes / 60.0;
     final remainStart = at.isAfter(windowStart) ? at : windowStart;
     final remainingHours = math.max(
-        0.0, windowEnd.difference(remainStart).inMinutes / 60.0);
+      0.0,
+      windowEnd.difference(remainStart).inMinutes / 60.0,
+    );
 
     // Transit nearest atUtc: hour angle reaches 0 at the sidereal rate.
     final h0 = _mod360(lst0 - o.raDeg);
     final signedDeg = h0 <= 180.0 ? -h0 : 360.0 - h0;
-    final transitUtc = at.add(Duration(
-        milliseconds:
-            (signedDeg / _siderealDegPerDay * 24.0 * 3600000.0).round()));
+    final transitUtc = at.add(
+      Duration(
+        milliseconds: (signedDeg / _siderealDegPerDay * 24.0 * 3600000.0)
+            .round(),
+      ),
+    );
 
     final altNow = _altitudeFromHourAngleDeg(o.decDeg, lat, h0);
     final (score, framing, reasons, hoursScore) = _scoreObject(
-        o, fov.$1, fov.$2, peakAltDeg, integrationHours, site.bortleClass);
+      o,
+      fov.$1,
+      fov.$2,
+      peakAltDeg,
+      integrationHours,
+      site.bortleClass,
+    );
 
     // Moon context over THIS window (separation at the midpoint).
     var moonUpCount = 0;
@@ -342,9 +381,16 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final moonUpFraction = moonUpCount / (run.$2 - run.$1 + 1);
     final mid = (run.$1 + run.$2) ~/ 2;
     final moonSeparationDeg = _angularSeparationDeg(
-        o.raDeg, o.decDeg, moonRaDeg[mid], moonDecDeg[mid]);
+      o.raDeg,
+      o.decDeg,
+      moonRaDeg[mid],
+      moonDecDeg[mid],
+    );
     final moonAltMidDeg = _altitudeFromHourAngleDeg(
-        moonDecDeg[mid], lat, _mod360(sampleLstDeg[mid] - moonRaDeg[mid]));
+      moonDecDeg[mid],
+      lat,
+      _mod360(sampleLstDeg[mid] - moonRaDeg[mid]),
+    );
 
     // NEXTGEN §1 filter advice + §3.1 star tag — same zero-point reason
     // pattern as the server: visible in the "Why?" breakdown, never a score
@@ -353,8 +399,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
     String? adviceReason;
     double? optimalSubS;
     final adviceLines = <String>[];
-    final advised =
-        adviseFilter(classifyEmission(o.type), filterSet, site.bortleClass);
+    final advised = adviseFilter(
+      classifyEmission(o.type),
+      filterSet,
+      site.bortleClass,
+    );
     if (advised != null) {
       advice = advised.$1;
       adviceReason = advised.$2;
@@ -364,11 +413,13 @@ List<TonightSkyObject> computeTonightSkyLocal({
       final subS = optimalSubS;
       if (mLim != null && subS != null) {
         final galLat = stars.galacticLatitudeDeg(o.raDeg, o.decDeg);
-        final starsPerSub = stars.cumulativeStarsPerDeg2(mLim, galLat) *
-            singleFrameFovDeg2;
+        final starsPerSub =
+            stars.cumulativeStarsPerDeg2(mLim, galLat) * singleFrameFovDeg2;
         if (starsPerSub < stars.minRegistrationStars) {
-          adviceLines.add('~${starsPerSub.toStringAsFixed(0)} stars/sub at '
-              '${_shortNum(subS)} s — thin for registration (+0)');
+          adviceLines.add(
+            '~${starsPerSub.toStringAsFixed(0)} stars/sub at '
+            '${_shortNum(subS)} s — thin for registration (+0)',
+          );
         }
       }
     }
@@ -386,28 +437,32 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final adjustReasons = <String>[];
     if (o.type == 'OCl') {
       adjusted *= 0.85;
-      adjustReasons.add('open cluster — usually better visual than imaging '
-          'targets (−15%)');
+      adjustReasons.add(
+        'open cluster — usually better visual than imaging '
+        'targets (−15%)',
+      );
     } else if (o.type == 'GCl') {
       adjusted *= 0.95;
       adjustReasons.add('globular cluster (−5%)');
     }
     if (classifyEmission(o.type) == EmissionClass.emissionLine &&
         filterSet.filters.isNotEmpty) {
-      final hasNarrowband = filterSet.filters.any((f) =>
-          f.kind == FilterKind.ha ||
-          f.kind == FilterKind.oiii ||
-          f.kind == FilterKind.sii ||
-          f.kind == FilterKind.duo ||
-          f.kind == FilterKind.tri);
+      final hasNarrowband = filterSet.filters.any(
+        (f) =>
+            f.kind == FilterKind.ha ||
+            f.kind == FilterKind.oiii ||
+            f.kind == FilterKind.sii ||
+            f.kind == FilterKind.duo ||
+            f.kind == FilterKind.tri,
+      );
       if (hasNarrowband) {
         adjusted *= 1.05;
-        adjustReasons
-            .add('emission target + narrowband in your wheel (+5%)');
+        adjustReasons.add('emission target + narrowband in your wheel (+5%)');
       } else {
         adjusted *= 0.85;
         adjustReasons.add(
-            'emission target but no narrowband filter in your set (−15%)');
+          'emission target but no narrowband filter in your set (−15%)',
+        );
       }
     }
     final finalScore = adjusted.clamp(0.0, 100.0);
@@ -432,7 +487,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         budgetFullHours = budget.full.practical ? budget.full.hours : null;
         integrationBudgetLine = budget.moonBrighteningMag >= 0.3
             ? '${budget.display} (tonight\'s moon costs '
-                '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
+                  '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
             : budget.display;
       }
     }
@@ -483,17 +538,17 @@ List<TonightSkyObject> computeTonightSkyLocal({
         budgetFullHours: budgetFullHours,
         hoursFreeScore: score > 0
             ? double.parse(
-                (finalScore * (score - hoursScore) / score).toStringAsFixed(1))
+                (finalScore * (score - hoursScore) / score).toStringAsFixed(1),
+              )
             : 0,
         scoreReasons: allReasons,
         filterAdvice: advice,
         adviceReason: adviceReason,
         optimalSubS: optimalSubS,
-        moonSeparationDeg:
-            double.parse(moonSeparationDeg.toStringAsFixed(1)),
+        moonSeparationDeg: double.parse(moonSeparationDeg.toStringAsFixed(1)),
         moonIlluminationPct: moonIlluminationPct,
         moonUpFraction: double.parse(moonUpFraction.toStringAsFixed(2)),
-      )
+      ),
     ));
   }
 
@@ -510,26 +565,29 @@ List<TonightSkyObject> computeTonightSkyLocal({
 // ── Scoring (port of ScoreObject) ──────────────────────────────────────────
 
 (double, TonightFraming, List<String>, double) _scoreObject(
-    PlanningDso o,
-    double fovWidthArcmin,
-    double fovHeightArcmin,
-    double peakAltDeg,
-    double integrationHours,
-    int bortleClass) {
+  PlanningDso o,
+  double fovWidthArcmin,
+  double fovHeightArcmin,
+  double peakAltDeg,
+  double integrationHours,
+  int bortleClass,
+) {
   final reasons = <String>[];
 
   // 1. Framing fit (dominant) — full parity with the daemon now that the
   //    cached catalog carries sizes; the starter list (no sizes) stays Unknown.
-  final framing =
-      _classifyFraming(o.sizeMajArcmin, fovWidthArcmin, fovHeightArcmin);
+  final framing = _classifyFraming(
+    o.sizeMajArcmin,
+    fovWidthArcmin,
+    fovHeightArcmin,
+  );
   double framingQ;
   String framingTag;
   if (framing == TonightFraming.unknown) {
     framingQ = 0.5; // neutral — no size to judge
     framingTag = 'size unknown';
   } else {
-    final ratio =
-        o.sizeMajArcmin! / math.min(fovWidthArcmin, fovHeightArcmin);
+    final ratio = o.sizeMajArcmin! / math.min(fovWidthArcmin, fovHeightArcmin);
     switch (framing) {
       case TonightFraming.good:
         framingQ = 1.0;
@@ -537,7 +595,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
       case TonightFraming.goodFit:
         // Ramp 0.70 → 1.0 across the 15–40% band: a clear, worthwhile target
         // that would still benefit from a longer focal length.
-        framingQ = _framingGoodFitFloorQ +
+        framingQ =
+            _framingGoodFitFloorQ +
             (1.0 - _framingGoodFitFloorQ) *
                 (ratio - _framingTooSmallRatio) /
                 (_framingFillsRatio - _framingTooSmallRatio);
@@ -545,7 +604,9 @@ List<TonightSkyObject> computeTonightSkyLocal({
       case TonightFraming.tooSmall:
         // Ramp toward the good-fit floor as the object approaches 15%.
         framingQ = math.max(
-            _framingFloorQ, _framingGoodFitFloorQ * ratio / _framingTooSmallRatio);
+          _framingFloorQ,
+          _framingGoodFitFloorQ * ratio / _framingTooSmallRatio,
+        );
         framingTag = 'small in frame';
       default: // tooBig
         framingQ = math.max(_framingFloorQ, _framingTooBigRatio / ratio);
@@ -556,18 +617,20 @@ List<TonightSkyObject> computeTonightSkyLocal({
   reasons.add('$framingTag (+${framingScore.toStringAsFixed(0)})');
 
   // 2. Integration hours — linear ramp saturating at 6 h.
-  final hoursScore = _hoursWeight *
-      (integrationHours / _hoursSaturationHours).clamp(0.0, 1.0);
+  final hoursScore =
+      _hoursWeight * (integrationHours / _hoursSaturationHours).clamp(0.0, 1.0);
   final h = integrationHours;
-  final hoursLabel =
-      h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toStringAsFixed(1);
+  final hoursLabel = h == h.roundToDouble()
+      ? h.toStringAsFixed(0)
+      : h.toStringAsFixed(1);
   reasons.add('$hoursLabel h dark window (+${hoursScore.toStringAsFixed(0)})');
 
   // 3. Peak altitude — sin(peak alt) tracks 1/airmass.
   final altScore =
       _altitudeWeight * math.max(0.0, math.sin(_deg2rad(peakAltDeg)));
   reasons.add(
-      'peak ${peakAltDeg.toStringAsFixed(0)}° (+${altScore.toStringAsFixed(0)})');
+    'peak ${peakAltDeg.toStringAsFixed(0)}° (+${altScore.toStringAsFixed(0)})',
+  );
 
   // 4. Surface brightness vs the Bortle sky — penalised, never zeroed.
   double sbQ;
@@ -575,8 +638,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final sb = o.surfaceBrightness;
   if (sb != null) {
     final contrastMag = skyMagFromBortle(bortleClass) - sb;
-    sbQ = ((contrastMag + _sbContrastSpanMag) / _sbContrastSpanMag)
-        .clamp(_sbFloorQ, 1.0);
+    sbQ = ((contrastMag + _sbContrastSpanMag) / _sbContrastSpanMag).clamp(
+      _sbFloorQ,
+      1.0,
+    );
     sbTag = contrastMag >= 0
         ? 'bright for Bortle $bortleClass sky'
         : 'faint for Bortle $bortleClass sky';
@@ -588,12 +653,22 @@ List<TonightSkyObject> computeTonightSkyLocal({
   reasons.add('$sbTag (+${sbScore.toStringAsFixed(0)})');
 
   // 5. Integrated magnitude — brighter nudged up, saturating at mag 12.
-  final magScore = _magnitudeWeight *
-      ((_magFaintFloor - o.magnitude) / _magFaintFloor).clamp(0.0, 1.0);
+  // Objects with NO magnitude (dark nebulae, HII regions) score neutral here —
+  // their worth was already judged by size/surface brightness above, and a
+  // missing number must not read as "faintest possible".
   final m = o.magnitude;
-  final magLabel =
-      m == m.roundToDouble() ? m.toStringAsFixed(0) : m.toStringAsFixed(1);
-  reasons.add('mag $magLabel (+${magScore.toStringAsFixed(0)})');
+  final magQ = m == null
+      ? 0.5
+      : ((_magFaintFloor - m) / _magFaintFloor).clamp(0.0, 1.0);
+  final magScore = _magnitudeWeight * magQ;
+  if (m == null) {
+    reasons.add('no integrated magnitude (+${magScore.toStringAsFixed(0)})');
+  } else {
+    final magLabel = m == m.roundToDouble()
+        ? m.toStringAsFixed(0)
+        : m.toStringAsFixed(1);
+    reasons.add('mag $magLabel (+${magScore.toStringAsFixed(0)})');
+  }
 
   final score = (framingScore + hoursScore + altScore + sbScore + magScore)
       .clamp(0.0, 100.0);
@@ -601,7 +676,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
 }
 
 TonightFraming _classifyFraming(
-    double? sizeMajArcmin, double fovWidthArcmin, double fovHeightArcmin) {
+  double? sizeMajArcmin,
+  double fovWidthArcmin,
+  double fovHeightArcmin,
+) {
   if (sizeMajArcmin == null ||
       sizeMajArcmin <= 0 ||
       fovWidthArcmin.isNaN ||
@@ -620,8 +698,11 @@ TonightFraming _classifyFraming(
 
 /// FOV (arcmin) of the optical train, enlarged by the mosaic tile count per
 /// axis; (NaN, NaN) when unconfigured.
-(double, double) _fovArcmin(OpticsSettings optics,
-    [int mosaicTilesX = 1, int mosaicTilesY = 1]) {
+(double, double) _fovArcmin(
+  OpticsSettings optics, [
+  int mosaicTilesX = 1,
+  int mosaicTilesY = 1,
+]) {
   final effectiveFocalMm = optics.focalLengthMm * optics.reducerFactor;
   if (effectiveFocalMm <= 0 ||
       optics.pixelSizeUm <= 0 ||
@@ -653,14 +734,14 @@ double _julianDate(DateTime utc) =>
   final t = (_julianDate(atUtc) - 2451545.0) / 36525.0;
   final l0 = _mod360(280.46646 + 36000.76983 * t + 0.0003032 * t * t);
   final m = _deg2rad(_mod360(357.52911 + 35999.05029 * t - 0.0001537 * t * t));
-  final c = (1.914602 - 0.004817 * t - 0.000014 * t * t) * math.sin(m) +
+  final c =
+      (1.914602 - 0.004817 * t - 0.000014 * t * t) * math.sin(m) +
       (0.019993 - 0.000101 * t) * math.sin(2 * m) +
       0.000289 * math.sin(3 * m);
   final lambda = _deg2rad(l0 + c);
   final eps = _deg2rad(23.439);
   final ra = math.atan2(math.cos(eps) * math.sin(lambda), math.cos(lambda));
-  final dec =
-      math.asin((math.sin(eps) * math.sin(lambda)).clamp(-1.0, 1.0));
+  final dec = math.asin((math.sin(eps) * math.sin(lambda)).clamp(-1.0, 1.0));
   return (_mod360(_rad2deg(ra)), _rad2deg(dec));
 }
 
@@ -668,14 +749,16 @@ double _julianDate(DateTime utc) =>
 /// geocentric; an advisory figure, not an ephemeris).
 (double, double) _moonEquatorialDeg(DateTime atUtc) {
   final t = (_julianDate(atUtc) - 2451545.0) / 36525.0;
-  final lambda = _mod360(218.32 + 481267.881 * t) +
+  final lambda =
+      _mod360(218.32 + 481267.881 * t) +
       6.29 * _sinDeg(135.0 + 477198.87 * t) -
       1.27 * _sinDeg(259.3 - 413335.36 * t) +
       0.66 * _sinDeg(235.7 + 890534.22 * t) +
       0.21 * _sinDeg(269.9 + 954397.74 * t) -
       0.19 * _sinDeg(357.5 + 35999.05 * t) -
       0.11 * _sinDeg(186.5 + 966404.03 * t);
-  final beta = 5.13 * _sinDeg(93.3 + 483202.02 * t) +
+  final beta =
+      5.13 * _sinDeg(93.3 + 483202.02 * t) +
       0.28 * _sinDeg(228.2 + 960400.89 * t) -
       0.28 * _sinDeg(318.3 + 6003.15 * t) -
       0.17 * _sinDeg(217.6 - 407332.21 * t);
@@ -683,10 +766,10 @@ double _julianDate(DateTime utc) =>
   final b = _deg2rad(beta);
   final eps = _deg2rad(23.439);
   final x = math.cos(b) * math.cos(l);
-  final y = math.cos(eps) * math.cos(b) * math.sin(l) -
-      math.sin(eps) * math.sin(b);
-  final z = math.sin(eps) * math.cos(b) * math.sin(l) +
-      math.cos(eps) * math.sin(b);
+  final y =
+      math.cos(eps) * math.cos(b) * math.sin(l) - math.sin(eps) * math.sin(b);
+  final z =
+      math.sin(eps) * math.cos(b) * math.sin(l) + math.cos(eps) * math.sin(b);
   final ra = math.atan2(y, x);
   final dec = math.asin(z.clamp(-1.0, 1.0));
   return (_mod360(_rad2deg(ra)), _rad2deg(dec));
@@ -696,15 +779,24 @@ double _julianDate(DateTime utc) =>
 /// Public sun/moon altitude snapshot for display surfaces (weather panel):
 /// geometric altitudes (deg) of the sun and moon at [atUtc] from the site.
 ({double sunAltDeg, double moonAltDeg}) sunMoonAltitudeDeg(
-    DateTime atUtc, double latitudeDeg, double longitudeDeg) {
+  DateTime atUtc,
+  double latitudeDeg,
+  double longitudeDeg,
+) {
   final lst = _localSiderealTimeDeg(atUtc, longitudeDeg);
   final sun = _sunEquatorialDeg(atUtc);
   final moon = _moonEquatorialDeg(atUtc);
   return (
-    sunAltDeg:
-        _altitudeFromHourAngleDeg(sun.$2, latitudeDeg, _mod360(lst - sun.$1)),
+    sunAltDeg: _altitudeFromHourAngleDeg(
+      sun.$2,
+      latitudeDeg,
+      _mod360(lst - sun.$1),
+    ),
     moonAltDeg: _altitudeFromHourAngleDeg(
-        moon.$2, latitudeDeg, _mod360(lst - moon.$1)),
+      moon.$2,
+      latitudeDeg,
+      _mod360(lst - moon.$1),
+    ),
   );
 }
 
@@ -713,7 +805,8 @@ double _julianDate(DateTime utc) =>
 /// feed): Schaefer NELM, sky luminance in cd/m², and NSU relative to a
 /// 21.60 mag/arcsec² reference sky.
 ({double nelm, double luminanceCdM2, double nsu}) sqmDerived(
-    double sqmMagArcsec2) {
+  double sqmMagArcsec2,
+) {
   // Clamp to the physically plausible meter range (review r2): a garbage
   // reading (e.g. 0) would overflow 10^(4.316 - sqm/5) to Infinity and
   // propagate; real skies span ~16 (city) to ~22 (pristine) mag/arcsec².
@@ -729,7 +822,8 @@ double _julianDate(DateTime utc) =>
 /// illuminated fraction [0..1] plus waxing/waning (from the fraction's trend
 /// over the next day) and a human phase name derived from both.
 ({double illuminatedFraction, bool waxing, String phaseName}) moonPhase(
-    DateTime atUtc) {
+  DateTime atUtc,
+) {
   final f = _moonIlluminatedFraction(atUtc);
   final waxing =
       _moonIlluminatedFraction(atUtc.add(const Duration(hours: 24))) >= f;
@@ -751,16 +845,20 @@ double _julianDate(DateTime utc) =>
 double _moonIlluminatedFraction(DateTime atUtc) {
   final sun = _sunEquatorialDeg(atUtc);
   final moon = _moonEquatorialDeg(atUtc);
-  final psi =
-      _deg2rad(_angularSeparationDeg(sun.$1, sun.$2, moon.$1, moon.$2));
+  final psi = _deg2rad(_angularSeparationDeg(sun.$1, sun.$2, moon.$1, moon.$2));
   return (1.0 - math.cos(psi)) / 2.0;
 }
 
 double _angularSeparationDeg(
-    double ra1Deg, double dec1Deg, double ra2Deg, double dec2Deg) {
+  double ra1Deg,
+  double dec1Deg,
+  double ra2Deg,
+  double dec2Deg,
+) {
   final d1 = _deg2rad(dec1Deg);
   final d2 = _deg2rad(dec2Deg);
-  final cosSep = math.sin(d1) * math.sin(d2) +
+  final cosSep =
+      math.sin(d1) * math.sin(d2) +
       math.cos(d1) * math.cos(d2) * math.cos(_deg2rad(ra1Deg - ra2Deg));
   return _rad2deg(math.acos(cosSep.clamp(-1.0, 1.0)));
 }
@@ -774,11 +872,15 @@ double _localSiderealTimeDeg(DateTime atUtc, double longitudeDeg) {
 }
 
 double _altitudeFromHourAngleDeg(
-    double decDeg, double latDeg, double hourAngleDeg) {
+  double decDeg,
+  double latDeg,
+  double hourAngleDeg,
+) {
   final dec = _deg2rad(decDeg);
   final lat = _deg2rad(latDeg);
   final h = _deg2rad(hourAngleDeg);
-  final sinAlt = math.sin(dec) * math.sin(lat) +
+  final sinAlt =
+      math.sin(dec) * math.sin(lat) +
       math.cos(dec) * math.cos(lat) * math.cos(h);
   return _rad2deg(math.asin(sinAlt.clamp(-1.0, 1.0)));
 }
@@ -818,12 +920,14 @@ class _HorizonSkyline {
   final double sinMinAltitude;
 
   _HorizonSkyline(List<(double, double)> vertices)
-      : _sorted = vertices.map((v) => (_mod360(v.$1), v.$2)).toList()
-          ..sort((a, b) => a.$1.compareTo(b.$1)),
-        minAltitudeDeg =
-            vertices.map((v) => v.$2).reduce((a, b) => a < b ? a : b),
-        sinMinAltitude = math.sin(_deg2rad(
-            vertices.map((v) => v.$2).reduce((a, b) => a < b ? a : b)));
+    : _sorted = vertices.map((v) => (_mod360(v.$1), v.$2)).toList()
+        ..sort((a, b) => a.$1.compareTo(b.$1)),
+      minAltitudeDeg = vertices
+          .map((v) => v.$2)
+          .reduce((a, b) => a < b ? a : b),
+      sinMinAltitude = math.sin(
+        _deg2rad(vertices.map((v) => v.$2).reduce((a, b) => a < b ? a : b)),
+      );
 
   /// Interpolated skyline altitude at [azDeg] (0–360, wrapping north).
   double altitudeAt(double azDeg) {
@@ -851,10 +955,10 @@ double _rad2deg(double r) => r * 180.0 / math.pi;
 double _sinDeg(double deg) => math.sin(_deg2rad(_mod360(deg)));
 
 String _adviceTag(TonightFilterAdvice approach) => switch (approach) {
-      TonightFilterAdvice.narrowband => 'narrowband',
-      TonightFilterAdvice.duoband => 'OSC + dual-band',
-      TonightFilterAdvice.broadband => 'broadband',
-    };
+  TonightFilterAdvice.narrowband => 'narrowband',
+  TonightFilterAdvice.duoband => 'OSC + dual-band',
+  TonightFilterAdvice.broadband => 'broadband',
+};
 
 String _shortNum(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
