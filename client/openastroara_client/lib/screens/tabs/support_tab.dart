@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../util/stream_save_location.dart';
@@ -75,7 +76,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       });
     } catch (e) {
       if (!mounted || gen != _refreshGen) return;
-      setState(() => _error = 'Could not load logs: $e');
+      setState(() => _error = friendlyError(e, action: 'load the logs'));
     } finally {
       if (mounted && gen == _refreshGen) setState(() => _loading = false);
     }
@@ -90,7 +91,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       // by chunk instead of being buffered whole in memory (§29.9 follow-up).
       final pick = widget.savePathPicker ?? pickStreamSavePath;
       final savePath =
-          await pick('Choose where to save the daemon log', 'openastroara-daemon.log');
+          await pick('Choose where to save the log', 'openastroara-server.log');
       if (!mounted || savePath == null) return;
       final name = await api.downloadLogTo(savePath);
       if (!mounted) return;
@@ -100,7 +101,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
+        SnackBar(content: Text(friendlyError(e, action: 'download that'))),
       );
     } finally {
       if (mounted) setState(() => _downloading = false);
@@ -127,7 +128,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     final hasServer = ref.watch(logsApiProvider) != null;
     if (!hasServer) {
       return const Center(
-        child: Text('Connect to a server to view daemon logs.'),
+        child: Text('Connect to your rig to see its logs.'),
       );
     }
     return Column(

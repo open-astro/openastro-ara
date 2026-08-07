@@ -190,6 +190,9 @@ public static class WsEventCatalog {
     public const string ServerMigrationFailed = "server.migration_failed";
 
     public const string StorageLogPressure = "storage.log_pressure";
+    // §29 — a block device appeared or vanished, or the store mount came/went;
+    // clients re-fetch device+space state (empty payload by design).
+    public const string StorageDevicesChanged = "storage.devices_changed";
 
     public const string NotificationPosted = "notification.posted";
     public const string NotificationDismissed = "notification.dismissed";
@@ -269,6 +272,7 @@ public static class WsEventCatalog {
         ServerPendingRestart, ServerRestartImminent,
         ServerMigratingDatabase, ServerMigrationComplete, ServerMigrationFailed,
         StorageLogPressure,
+        StorageDevicesChanged,
         NotificationPosted, NotificationDismissed, NotificationCleared,
         NotificationAlarmStarted, NotificationAlarmStopped,
         BugReportPrepared, BugReportSharingModeSet,

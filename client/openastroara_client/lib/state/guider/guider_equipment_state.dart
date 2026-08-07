@@ -73,7 +73,7 @@ class GuiderEquipmentNotifier
   }) async {
     final api = ref.read(guiderEquipmentApiProvider);
     if (api == null) {
-      throw StateError('No active server — connect to a daemon first.');
+      throw StateError('Not connected — connect to your rig to save this.');
     }
     return api.discoverAlpaca(
         numQueries: numQueries, timeoutSeconds: timeoutSeconds);
@@ -85,7 +85,7 @@ class GuiderEquipmentNotifier
   Future<void> pushProfile() async {
     final api = ref.read(guiderEquipmentApiProvider);
     if (api == null) {
-      throw StateError('No active server — connect to a daemon first.');
+      throw StateError('Not connected — connect to your rig to save this.');
     }
     await api.pushProfile();
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -37,7 +38,7 @@ class _ImagingPlateSolvePanelState
           .read(plateSolveSettingsProvider.notifier)
           .hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -50,7 +51,7 @@ class _ImagingPlateSolvePanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -58,11 +59,11 @@ class _ImagingPlateSolvePanelState
       await ref.read(plateSolveSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Plate Solve settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -101,7 +102,7 @@ class _ImagingPlateSolvePanelState
           },
         ),
         EditableTextRow(
-          label: 'Path / endpoint',
+          label: 'Where to find the solver',
           currentValue: s.pathOrEndpoint,
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).pathOrEndpoint,

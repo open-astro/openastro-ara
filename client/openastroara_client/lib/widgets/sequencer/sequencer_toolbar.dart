@@ -413,7 +413,7 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   }
 }
 
-/// Dry-run the editor's working body through the daemon's schema validator
+/// Dry-run the editor's working body through Ara's schema validator
 /// (`POST /validate`) and report the result in a SnackBar — green when valid,
 /// red with the first problem reason otherwise. Bracketed by the busy fence like
 /// [_save]; validation never persists, so it's safe regardless of run state.

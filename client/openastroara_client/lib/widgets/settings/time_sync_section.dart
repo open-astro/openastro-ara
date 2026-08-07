@@ -47,7 +47,7 @@ class TimeSyncSection extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(
-                      'No active server — connect to a daemon first.',
+                      'Not connected — connect to your rig to save this.',
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
@@ -133,7 +133,7 @@ class TimeSyncSection extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('No active server.')),
+        const SnackBar(content: Text('Connect to your rig first.')),
       );
       return;
     }
@@ -205,7 +205,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
   Future<void> _apply() async {
     final api = widget.api;
     if (api == null) {
-      setState(() => _error = 'No active server.');
+      setState(() => _error = 'Connect to your rig first.');
       return;
     }
     final parsed = DateTime.tryParse('${_time.text.trim()}Z');
@@ -285,7 +285,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Last-resort sync (§31): the entered time is applied at low '
+              'Last-resort sync: the entered time is applied at low '
               'trust — schedule-based instructions will warn before running.',
               style: theme.textTheme.bodySmall,
             ),

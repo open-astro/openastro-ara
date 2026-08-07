@@ -297,7 +297,7 @@ class _GuiderSectionState extends ConsumerState<_GuiderSection> {
                   'guiding both need it. The wizard walks through camera, '
                   'optics, mount and darks in a couple of minutes.'
               : 'Polar alignment also needs the guide camera (through the '
-                  'guider daemon).',
+                  'guider).',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),

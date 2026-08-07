@@ -376,14 +376,16 @@ void main() {
           rmsTotal: 0.5,
         ),
         profileApi: _FakeProfileApi(
-            () async => throw StateError('daemon unreachable')));
+            () async => throw StateError("Your rig didn't answer.")));
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pump();
     await tester.pump();
 
-    expect(find.textContaining('Could not load saved values'), findsOneWidget);
+    // A StateError already carries copy written for people — friendlyError
+    // passes it through rather than wrapping it in a second sentence.
+    expect(find.textContaining("Your rig didn't answer."), findsOneWidget);
     expect(applyButton(tester).onPressed, isNull,
-        reason: 'applying defaults would clobber the daemon-side profile');
+        reason: 'applying defaults would clobber the saved profile');
 
     await _teardownPanel(tester, container);
   });

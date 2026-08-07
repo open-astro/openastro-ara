@@ -155,7 +155,7 @@ class ProfileApi {
     return imagingDefaultsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's imaging-defaults section. Returns the daemon's
+  /// PUT the active profile's imaging-defaults section. Returns Ara's
   /// echo so the caller can confirm what was persisted.
   Future<ImagingDefaults> putImagingDefaults(ImagingDefaults value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -171,7 +171,7 @@ class ProfileApi {
     return opticsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's optics section. Returns the daemon's echo (it may
+  /// PUT the active profile's optics section. Returns Ara's echo (it may
   /// normalize fields — e.g. it rejects reducer_factor ≤ 0).
   Future<OpticsSettings> putOptics(OpticsSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -190,7 +190,7 @@ class ProfileApi {
     return cameraElectronicsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's camera-electronics section. Returns the daemon's
+  /// PUT the active profile's camera-electronics section. Returns Ara's
   /// echo (it validates ranges — e.g. QE peak must be in [0, 1]).
   Future<CameraElectronics> putCameraElectronics(
     CameraElectronics value,
@@ -250,7 +250,7 @@ class ProfileApi {
     return filterSetFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's planning filter set. Returns the daemon's echo
+  /// PUT the active profile's planning filter set. Returns Ara's echo
   /// (it rejects empty or duplicate case-insensitive names).
   Future<FilterSetSettings> putFilterSet(FilterSetSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -269,7 +269,7 @@ class ProfileApi {
     return _filterWheelLabelsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's filter-wheel slot labels. Returns the daemon's
+  /// PUT the active profile's filter-wheel slot labels. Returns Ara's
   /// echo (it trims each label; 400 on >32 slots or a label over 64 chars).
   Future<FilterWheelLabels> putFilterWheelLabels(
     FilterWheelLabels value,
@@ -545,6 +545,7 @@ class ProfileApi {
       sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
       pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
       apertureMm: (j['aperture_mm'] as num?)?.toDouble() ?? 0,
+      telescopeName: (j['telescope_name'] as String?) ?? '',
     );
   }
 
@@ -555,6 +556,7 @@ class ProfileApi {
     'sensor_height_px': v.sensorHeightPx,
     'pixel_size_um': v.pixelSizeUm,
     'aperture_mm': v.apertureMm,
+    'telescope_name': v.telescopeName,
   };
 
   // ── Camera electronics + filter set JSON mapping (NEXTGEN §4) ──────────
@@ -1133,11 +1135,23 @@ class ProfileApi {
       FilenamesSettings(
         dateSeparator: _dateSeparatorFromString(j['date_separator'] as String?),
         compressDarksAndBias: (j['compress_darks_and_bias'] as bool?) ?? true,
+        headerIdentity: (j['header_identity'] as bool?) ?? true,
+        headerSite: (j['header_site'] as bool?) ?? true,
+        headerOptics: (j['header_optics'] as bool?) ?? true,
+        headerTemperature: (j['header_temperature'] as bool?) ?? true,
+        headerWeather: (j['header_weather'] as bool?) ?? true,
+        headerEphemeris: (j['header_ephemeris'] as bool?) ?? true,
       );
 
   static Map<String, dynamic> _filenamesSettingsToJson(FilenamesSettings v) => {
     'date_separator': _dateSeparatorToString(v.dateSeparator),
     'compress_darks_and_bias': v.compressDarksAndBias,
+    'header_identity': v.headerIdentity,
+    'header_site': v.headerSite,
+    'header_optics': v.headerOptics,
+    'header_temperature': v.headerTemperature,
+    'header_weather': v.headerWeather,
+    'header_ephemeris': v.headerEphemeris,
   };
 
   static DateSeparator _dateSeparatorFromString(String? s) {
@@ -1186,6 +1200,7 @@ class ProfileApi {
             (j['max_sequence_runtime_min'] as num?)?.toInt() ?? 0,
         softWarningAltitudeDeg:
             (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
+        observerName: (j['observer_name'] as String?) ?? '',
       );
 
   static Map<String, dynamic> siteSettingsToJson(SiteSettings v) => {
@@ -1202,6 +1217,7 @@ class ProfileApi {
     'twilight_definition': v.twilightDefinition.name,
     'max_sequence_runtime_min': v.maxSequenceRuntimeMin,
     'soft_warning_altitude_deg': v.softWarningAltitudeDeg,
+    'observer_name': v.observerName,
   };
 
   static TwilightDefinition _twilightFromString(String? s) {

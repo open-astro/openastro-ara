@@ -107,7 +107,7 @@ class FilterWheelLabelsNotifier extends Notifier<FilterWheelLabels> {
   Future<void> persistToServer() {
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      throw StateError('No active server — connect to a daemon first.');
+      throw StateError('Not connected — connect to your rig to save this.');
     }
     // A failed predecessor must not wedge the chain — its error already went
     // to ITS caller; this persist proceeds regardless.

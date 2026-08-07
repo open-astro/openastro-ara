@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/camera_geometry_api.dart';
@@ -42,7 +43,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     try {
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -59,7 +60,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     if (api == null) {
       setState(() {
         _saving = false;
-        _lastError = 'No active server — connect to a daemon first.';
+        _lastError = 'Not connected — connect to your rig to save this.';
       });
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
@@ -67,10 +68,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     try {
       await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Optics saved to daemon.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -83,7 +84,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     final server = ref.read(activeServerProvider);
     final messenger = ScaffoldMessenger.of(context);
     if (server == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('No active server — connect to a daemon first.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Not connected — connect to your rig to save this.')));
       return;
     }
     setState(() {

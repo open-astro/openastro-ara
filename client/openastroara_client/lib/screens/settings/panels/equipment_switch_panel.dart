@@ -60,7 +60,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
     final connNotifier = ref.read(equipmentConnectionProvider.notifier);
     // Only offer Reconnect while no switch is currently connected/connecting —
     // reconnectAll re-dispatches every remembered switch, and re-connecting one
-    // that's live can tear it down if the daemon's remembered UniqueId differs
+    // that's live can tear it down if Ara's remembered UniqueId differs
     // from the live connection (e.g. its Alpaca host IP changed). An empty list
     // (every() is true) still offers it — that's the post-power-cycle case.
     final canReconnect = serverUp &&

@@ -118,7 +118,7 @@ void main() {
     test('every action id is unique and prefixed action.', () {
       final index = buildSearchIndex();
       final actions = index.where((e) => e.actionId != null).toList();
-      expect(actions, hasLength(5));
+      expect(actions, hasLength(6));
       expect(actions.map((e) => e.id).toSet().length, actions.length);
       expect(actions.map((e) => e.id), everyElement(startsWith('action.')));
     });
@@ -130,6 +130,7 @@ void main() {
       expect(searchSettings(index, 'best frames').any((e) => e.actionId == 'action.stats'), isTrue);
       expect(searchSettings(index, 'backup').any((e) => e.actionId == 'action.backup'), isTrue);
       expect(searchSettings(index, 'wizard').any((e) => e.actionId == 'action.wizard'), isTrue);
+      expect(searchSettings(index, 'unread').any((e) => e.actionId == 'action.notifications'), isTrue);
     });
   });
 }

@@ -31,6 +31,9 @@ public interface IEquipmentDiscoveryService {
 
 public interface ICameraService {
     Task<CameraDto?> GetAsync(CancellationToken ct);
+    // True when no exposure (sequenced, one-off REST, or live-view frame) holds
+    // the shared in-flight gate — storage maintenance must not run otherwise.
+    bool IsFreeToCapture(object consumer);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);

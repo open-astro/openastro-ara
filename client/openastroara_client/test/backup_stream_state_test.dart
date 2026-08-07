@@ -41,7 +41,8 @@ class _FakeClient implements BackupStreamClient {
   Future<void> Function()? onClaim;
   Uint8List Function(String frameId)? corruptor;
 
-  BackupStreamQueueEntry addFrame(String id, String payload, {bool withSha = true}) {
+  BackupStreamQueueEntry addFrame(String id, String payload,
+      {bool withSha = true, String? relativePath}) {
     final bytes = Uint8List.fromList(payload.codeUnits);
     frames[id] = bytes;
     final entry = BackupStreamQueueEntry(
@@ -50,6 +51,7 @@ class _FakeClient implements BackupStreamClient {
       sizeBytes: bytes.length,
       capturedAt: DateTime.utc(2026, 1, 1),
       sessionId: 'session-1',
+      relativePath: relativePath,
     );
     pending.add(entry);
     return entry;
@@ -512,6 +514,47 @@ void main() {
 
     expect(fake.releaseCalls, 1);
     expect(container.read(backupStreamProvider).enabled, isFalse);
+  });
+  test('a frame with a store-relative path mirrors the rig layout', () async {
+    fake.addFrame('frame-1', 'payload-1',
+        relativePath: '2026-08-05/Light/M31_180s_0001.fits');
+    final c = controller();
+    await c.setEnabled(true);
+    await settle();
+
+    final mirrored = File([
+      tempDir.path,
+      'pi-test',
+      '2026-08-05',
+      'Light',
+      'M31_180s_0001.fits'
+    ].join(Platform.pathSeparator));
+    expect(mirrored.existsSync(), isTrue,
+        reason: 'the backup should read like the original, not a UUID dump');
+  });
+
+  group('mirrorRelativeSegments', () {
+    test('normal path splits into sanitized segments', () {
+      expect(
+          BackupStreamController.mirrorRelativeSegments(
+              '2026-08-05/Light/M31_0001.fits'),
+          ['2026-08-05', 'Light', 'M31_0001.fits']);
+    });
+    test('traversal, absolute and extension-less paths are rejected', () {
+      expect(BackupStreamController.mirrorRelativeSegments('../../etc/passwd'),
+          isNull);
+      expect(BackupStreamController.mirrorRelativeSegments('/etc/passwd.fits'),
+          isNull);
+      expect(BackupStreamController.mirrorRelativeSegments('C:\\x\\y.fits'),
+          isNull);
+      expect(BackupStreamController.mirrorRelativeSegments('a/b/noext'), isNull);
+      expect(BackupStreamController.mirrorRelativeSegments(null), isNull);
+      expect(BackupStreamController.mirrorRelativeSegments(''), isNull);
+    });
+    test('dot segments vanish instead of climbing', () {
+      expect(BackupStreamController.mirrorRelativeSegments('a/./b/../c.fits'),
+          ['a', 'b', 'c.fits']);
+    });
   });
 }
 

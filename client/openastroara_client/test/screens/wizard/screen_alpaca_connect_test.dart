@@ -88,7 +88,7 @@ void main() {
     expect(api.scans, 1, reason: 'the probe runs automatically on entry');
     expect(api.closes, 1, reason: 'the one-shot probe client is closed (r3)');
     expect(container.read(wizardStepValidProvider), isTrue);
-    expect(find.textContaining('AlpacaBridge reachable'), findsOneWidget);
+    expect(find.textContaining('AlpacaBridge found'), findsOneWidget);
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
   });
 
@@ -183,7 +183,7 @@ void main() {
 
     expect(api.scans, 0, reason: 'no server → nothing to probe');
     expect(container.read(wizardStepValidProvider), isFalse);
-    expect(find.textContaining('No active server'), findsOneWidget);
+    expect(find.textContaining('Connect to your rig'), findsOneWidget);
     // r3: not a bridge problem — the install command would be a red herring.
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
     expect(find.text('sudo apt install alpaca-bridge'), findsNothing);

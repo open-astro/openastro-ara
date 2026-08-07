@@ -23,7 +23,7 @@ import '../../state/settings/safety_policies_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/settings/storage_settings_state.dart';
 
-/// §37 wizard Save. Maps the wizard's [ProfileDraft] onto the daemon's profile
+/// §37 wizard Save. Maps the wizard's [ProfileDraft] onto Ara's profile
 /// sections and persists it as a new active profile.
 ///
 /// The draft → section mappers are pure (base section + draft → new section)

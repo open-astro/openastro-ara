@@ -85,11 +85,11 @@ class _HelpDialog extends ConsumerWidget {
             const SizedBox(height: 4),
             _LinkRow(
               url: '$_kRepoUrl/issues',
-              label: '• $_kRepoUrl/issues  (file a new issue)',
+              label: '• $_kRepoUrl/issues (file a new issue)',
             ),
             _LinkRow(
               url: '$_kRepoUrl/wiki',
-              label: '• $_kRepoUrl/wiki  (docs + troubleshooting)',
+              label: '• $_kRepoUrl/wiki (docs + troubleshooting)',
             ),
           ],
         ),

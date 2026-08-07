@@ -37,6 +37,36 @@ public static class StatsEndpoints {
             .Produces<StatsOverviewDto>(StatusCodes.Status200OK)
             .WithName("GetStatsOverview");
 
+        // §50 maintenance — wipe the frame catalog and re-ingest from the
+        // mounted store, so stats describe the CONNECTED drive after a swap.
+        // Same exclusions as the storage mutations: never under a run, an
+        // exposure, or a concurrent scan (the reset holds the scan lock).
+        stats.MapPost("/rebuild-catalog", async (
+                Services.CaptureScanService scan,
+                Services.ActiveRunSessionRegistry runs,
+                Services.ICameraService camera,
+                CancellationToken ct) => {
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before rebuilding the catalog",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before rebuilding the catalog",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var (framesCleared, sessionsCleared, result) =
+                    await scan.ResetAndRescanAsync(ct).ConfigureAwait(false);
+                return Results.Ok(new StatsRebuildCatalogResultDto(
+                    framesCleared, sessionsCleared,
+                    result.Ran, result.SkipReason, result.SavePath, result.FramesRecovered));
+            })
+            .Produces<StatsRebuildCatalogResultDto>()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("RebuildStatsCatalog")
+            .WithSummary("Clear the frame catalog (stats + library) and re-ingest from the mounted store drive.");
+
         stats.MapGet("/targets",
                 async (IStatsService svc, CancellationToken ct) =>
                     Results.Ok(await svc.GetTargetsAsync(ct)))

@@ -228,7 +228,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Delete 1 frame'), findsOneWidget);
+    expect(find.text('Delete this frame?'), findsOneWidget);
 
     // Default: catalog-only (delete_from_disk false).
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));

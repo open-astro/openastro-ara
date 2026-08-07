@@ -257,6 +257,184 @@ public static class SystemEndpoints {
 
         // ─── Storage browse (§37.4/§29) — the save-directory picker's walk ───
         var storage = app.MapGroup("/api/v1/storage").WithTags("Storage");
+        // ─── §29.1.1/§29.1.3 USB store: enumerate, mount, reformat ───
+        storage.MapGet("/devices", async (IStorageDeviceService svc, CancellationToken ct) =>
+                Results.Ok(await svc.ListAsync(ct)))
+            .Produces<IReadOnlyList<StorageDeviceDto>>()
+            .WithName("ListStorageDevices")
+            .WithSummary("Block devices that could hold ARA data (the running system's disk is flagged, never offered).");
+
+        storage.MapPost("/configure", async (
+                StorageConfigureRequestDto request,
+                IStorageDeviceService svc,
+                IProfileStore profiles,
+                ActiveRunSessionRegistry runs,
+                ICameraService camera,
+                CaptureScanService scan,
+                CancellationToken ct) => {
+                if (string.IsNullOrWhiteSpace(request.Uuid)) {
+                    return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                // Never re-point (or reformat!) storage out from under a run —
+                // nor from under a one-off REST capture, which the run
+                // registry doesn't track but which is writing a frame all the
+                // same.
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before changing the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before changing the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                // Exclusive with any capture scan: a reformat mid-scan would
+                // unmount the tree the scan is walking.
+                var result = await scan.RunExclusiveAsync(
+                    () => svc.ConfigureAsync(request.Uuid, request.Format, request.ConfirmLabel, request.Filesystem, ct), ct)
+                    .ConfigureAwait(false);
+                if (!result.Success) {
+                    // 422 carries the helper's code so the client can offer the
+                    // right next step (e.g. not_ext4 → the reformat flow).
+                    return Results.Problem(
+                        title: result.Code,
+                        detail: result.Detail ?? result.Code,
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+                // Point capture at the freshly mounted store (§29.1.1 step 6).
+                var storageSettings = profiles.GetStorageSettings();
+                var saveDirectory = result.MountPoint ?? storageSettings.SaveDirectory;
+                profiles.PutStorageSettings(storageSettings with { SaveDirectory = saveDirectory });
+                // A drive that already carries frames should show them now,
+                // not after a manual rescan — that's this endpoint's whole
+                // "no restart needed" promise. Bounded work (§28.8: ~2s).
+                await scan.RunAsync(ct).ConfigureAwait(false);
+                return Results.Ok(new StorageConfigureResultDto(
+                    true, result.Code, result.Detail, result.MountPoint, saveDirectory));
+            })
+            .Produces<StorageConfigureResultDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ConfigureStorageDevice")
+            .WithSummary("Mount a drive as the ARA store (optionally reformatting it — exFAT by default, ext4 on request) and point saving at it.");
+
+        // §29 user-triggered disk check: unmount → fsck (fsck.exfat/e2fsck)
+        // → remount. exFAT has no journal, so this is its recovery story
+        // after an unclean power cut; deliberately user-triggered rather
+        // than automatic on every mount (Joey's call — no forced scans).
+        storage.MapPost("/check", async (
+                StorageCheckRequestDto request,
+                IStorageDeviceService svc,
+                ActiveRunSessionRegistry runs,
+                ICameraService camera,
+                CaptureScanService scan,
+                CancellationToken ct) => {
+                if (string.IsNullOrWhiteSpace(request.Uuid)) {
+                    return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                // Same exclusions as configure: never yank the store out from
+                // under a run, an in-flight exposure, or a capture scan.
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before checking the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before checking the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await scan.RunExclusiveAsync(
+                    () => svc.CheckAsync(request.Uuid, ct), ct).ConfigureAwait(false);
+                if (!result.Success) {
+                    return Results.Problem(
+                        title: result.Code,
+                        detail: result.Detail ?? result.Code,
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+                return Results.Ok(new StorageConfigureResultDto(
+                    true, result.Code, result.Detail, result.MountPoint, null));
+            })
+            .Produces<StorageConfigureResultDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("CheckStorageDevice")
+            .WithSummary("Run a filesystem check on the store drive (briefly unmounts it); code says clean or repaired.");
+
+        // §29 safe removal — flush + unmount so the take-home drive can be
+        // pulled without losing cached writes. Same exclusions as check.
+        storage.MapPost("/eject", async (
+                StorageCheckRequestDto request,
+                IStorageDeviceService svc,
+                ActiveRunSessionRegistry runs,
+                ICameraService camera,
+                CaptureScanService scan,
+                CancellationToken ct) => {
+                if (string.IsNullOrWhiteSpace(request.Uuid)) {
+                    return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before ejecting the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before ejecting the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await scan.RunExclusiveAsync(
+                    () => svc.EjectAsync(request.Uuid, ct), ct).ConfigureAwait(false);
+                if (!result.Success) {
+                    return Results.Problem(
+                        title: result.Code,
+                        detail: result.Detail ?? result.Code,
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+                return Results.Ok(new StorageConfigureResultDto(
+                    true, result.Code, result.Detail, null, null));
+            })
+            .Produces<StorageConfigureResultDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("EjectStorageDevice")
+            .WithSummary("Flush and unmount the store drive for safe removal; the fstab entry stays so a replug automounts.");
+
+        // §28.8 on demand. The startup scan already recovers FITS sitting on
+        // disk but absent from the catalog — which was enough while the save
+        // directory could only change by editing config and restarting. Now
+        // that a user can pick a different drive from the Storage panel, a
+        // disk arriving with a season of frames on it would stay invisible
+        // until the next restart. This is the "look at what is actually
+        // there" button.
+        storage.MapPost("/rescan", async (
+                CaptureScanService scan,
+                ActiveRunSessionRegistry runs,
+                CancellationToken ct) => {
+                // Scanning walks the whole captures tree; not while a run is
+                // writing into it.
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — wait for it to finish before scanning the drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await scan.RunAsync(ct).ConfigureAwait(false);
+                return Results.Ok(new StorageRescanResultDto(
+                    result.Ran,
+                    result.SkipReason,
+                    result.SavePath,
+                    result.TempFilesSwept,
+                    result.FramesRecovered));
+            })
+            .Produces<StorageRescanResultDto>()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("RescanStorage")
+            .WithSummary("Scan the save directory for frames already on disk but missing from the catalog, and add them.");
+
         storage.MapGet("/space", (IProfileStore profiles) => {
                 var configured = profiles.GetStorageSettings().SaveDirectory;
                 var isFallback = string.IsNullOrWhiteSpace(configured);

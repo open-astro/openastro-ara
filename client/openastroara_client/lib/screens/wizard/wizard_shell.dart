@@ -122,7 +122,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
 
     final server = ref.read(activeServerProvider);
     if (server == null) {
-      _showError(messenger, 'No active server — connect to a daemon before saving the profile.');
+      _showError(messenger, 'Connect to your rig before saving this profile.');
       return; // keep the wizard open; nothing to save against
     }
     final api = (widget.createApi ?? ProfileApi.new)(server);

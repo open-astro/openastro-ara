@@ -69,7 +69,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         duration: const Duration(seconds: 10),
-        content: Text('Emergency stop request FAILED — the daemon could not '
+        content: Text('Emergency stop failed — the rig did not respond: '
             'be reached ($e). Check your rig manually.'),
       ));
     } finally {

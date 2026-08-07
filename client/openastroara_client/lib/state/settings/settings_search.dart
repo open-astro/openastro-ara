@@ -326,6 +326,13 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     keywords: ['backup', 'restore', 'snapshot', 'export profile', 'save settings'],
   ),
   SettingsSearchEntry(
+    actionId: 'action.notifications',
+    label: 'Read your notifications',
+    groupLabel: 'Actions',
+    keywords: ['notifications', 'inbox', 'alerts', 'what happened', 'unread',
+        'messages', 'overnight'],
+  ),
+  SettingsSearchEntry(
     actionId: 'action.wizard',
     label: 'Run profile wizard',
     groupLabel: 'Actions',

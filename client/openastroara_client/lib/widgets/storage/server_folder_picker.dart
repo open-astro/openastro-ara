@@ -236,7 +236,7 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
         ),
         Tooltip(
           message: level != null && !level.isRoots && !level.writable
-              ? 'The daemon can\'t write here — pick another folder.'
+              ? 'The server can\'t write here — pick another folder.'
               : 'Save frames into this folder',
           child: FilledButton(
             onPressed: level != null && !level.isRoots && level.writable

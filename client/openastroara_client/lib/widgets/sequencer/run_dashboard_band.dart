@@ -125,7 +125,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                   if (run.startedUtc != null)
                     Text(_fmtDuration(elapsed), style: AraText.numeric),
                   if (remainingS > 0) ...[
-                    Text('  ·  ', style: AraText.caption),
+                    Text(' ·  ', style: AraText.caption),
                     Text(
                       '~${_fmtDuration(Duration(seconds: remainingS.round()))} left',
                       style: AraText.numeric,

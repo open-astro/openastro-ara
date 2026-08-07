@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/server_maintenance_api.dart';
@@ -38,7 +39,7 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Restart request failed: $e')));
+            SnackBar(content: Text(friendlyError(e, action: 'restart your rig'))));
       }
     } finally {
       api.close();
@@ -55,7 +56,7 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
         title: const Text('Restart the server now?'),
         content: const Text(
           'Any running sequence, capture or guiding session stops immediately. '
-          'The client reconnects on its own once the daemon is back (usually a '
+          'Ara reconnects on its own once the server is back (usually a '
           'few seconds).',
         ),
         actions: [

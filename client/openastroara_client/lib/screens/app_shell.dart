@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/notifications/notification_center.dart';
 import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/backup_stream_chip.dart';
 import '../widgets/command_palette.dart';
@@ -161,7 +162,13 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     ),
                                 ],
                               ),
-                              const VerticalDivider(width: 1, thickness: 1),
+                              // Ara's own border tone, not the theme default —
+                              // which renders as a bright line against the
+                              // near-black nav rail.
+                              const VerticalDivider(
+                                  width: 1,
+                                  thickness: 1,
+                                  color: AraColors.border),
                               // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
                               // once built, is KEPT ALIVE and merely hidden when another is
                               // selected. Critical for the Planning/Sky Atlas tab: its native
@@ -354,10 +361,12 @@ class _BottomStatusBar extends StatelessWidget {
               textStyle: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+          // Everything Ara decided while you weren't looking (§46).
+          const NotificationBell(),
           // Bug-report entry (§54) — wired in a Phase 12a follow-up.
           IconButton(
             icon: const Icon(Icons.help_outline, size: 18),
-            tooltip: 'Help / Report a bug (§54)',
+            tooltip: 'Help & report a bug',
             onPressed: () => showHelpDialog(context),
           ),
           const SizedBox(width: 4),

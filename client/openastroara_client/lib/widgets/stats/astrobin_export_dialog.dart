@@ -27,7 +27,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
     if (_launching != null) return;
     final api = ref.read(statsExportApiProvider);
     if (api == null) {
-      _snack('No server connected.');
+      _snack('Connect to your rig to restore a backup.');
       return;
     }
     setState(() => _launching = target);

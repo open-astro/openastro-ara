@@ -158,7 +158,7 @@ Map<String, dynamic> buildTargetBlock({
     throw ArgumentError.value(
       exposureSeconds,
       'exposureSeconds',
-      'must be > 0 (daemon rejects it)',
+      'must be > 0 (server rejects it)',
     );
   }
   if (frameCount < 1) {

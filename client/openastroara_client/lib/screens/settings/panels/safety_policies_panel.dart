@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -35,7 +36,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     try {
       await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -48,7 +49,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -56,11 +57,11 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Safety policies saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -70,7 +71,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       messenger.showSnackBar(const SnackBar(
-          content: Text('No active server — connect to a daemon first.')));
+          content: Text('Not connected — connect to your rig to save this.')));
       return;
     }
     try {
@@ -130,7 +131,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             if (v != null) n.setResumeDelayMin(v);
           },
         ),
-        const SettingsSectionHeader('Weather thresholds (§35.1)'),
+        const SettingsSectionHeader('Weather limits'),
         SettingsSwitchRow(
           label: 'React to weather-station thresholds',
           helpKey: 'safety.policies.weather_triggers',
@@ -207,7 +208,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           onChanged: n.setMeridianRecalGuider,
         ),
         SettingsSwitchRow(
-          label: 'Unattended flip safety (§58.9)',
+          label: 'Extra care on flips when you are away',
           hint: 'Pre-flip flight check, in-slew watchdog and hard pier-side '
               'verification. Turn off only if this mount misreports pier side.',
           value: s.flipSafetyEnabled,
@@ -226,7 +227,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           },
         ),
         SettingsSwitchRow(
-          label: 'Louder alerts during dark hours (§58.10)',
+          label: 'Louder alerts overnight',
           hint: 'While the site sits in astronomical darkness, '
               'equipment-impacting warnings ride one severity level higher so '
               'the alarm behaviour engages earlier for a sleeping user.',
@@ -234,9 +235,9 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           onChanged: n.setUnattendedEscalation,
         ),
         SettingsSwitchRow(
-          label: 'Unattended shutdown after failure (§58.12)',
+          label: 'Put the rig to bed if nobody responds',
           hint: 'If a run pauses awaiting your attention and nobody responds '
-              'within the wait window, the daemon parks the mount, warms the '
+              'within the wait window, Ara parks the mount, warms the '
               'cooler and disconnects the equipment. Any command — or simply '
               'opening WILMA — cancels the countdown.',
           value: s.unattendedShutdownEnabled,
@@ -264,9 +265,9 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             Expanded(
               child: Text(
                 s.firstFlipConfirmed
-                    ? 'First-flip announce (§58.8): already ran — later flips '
+                    ? 'First-flip announce: already ran — later flips '
                         'are silent. Re-arm after re-balancing or a rig change.'
-                    : 'First-flip announce (§58.8): armed — the next meridian '
+                    : 'First-flip announce: armed — the next meridian '
                         'flip alerts and waits 60 s before proceeding.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
@@ -331,7 +332,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           value: s.skipTargetIfRecoveryFails,
           onChanged: n.setSkipTargetIfRecoveryFails,
         ),
-        const SettingsSectionHeader('On critically-low disk (§29)'),
+        const SettingsSectionHeader('When the drive is nearly full'),
         SettingsDropdownRow<DiskSpaceCriticalAction>(
           label: 'Action',
           helpKey: 'safety.policies.on_disk_space_critical',
