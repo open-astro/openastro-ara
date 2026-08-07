@@ -540,6 +540,19 @@ const List<Setting> settingsRegistry = [
     relatedSettings: ['img.electronics.read_noise_e', 'img.optics.aperture_mm'],
   ),
 
+  // §50 Stats maintenance — an action, not a stored value: wipes the frame
+  // catalog and re-ingests from the mounted store so stats describe the
+  // connected drive.
+  Setting(
+    id: 'session.stats.rebuild_catalog',
+    label: 'Clear & rebuild stats',
+    description:
+        'Clears every cataloged frame and session, then re-reads the connected store drive — stats and the library then describe exactly what\'s on this disk. FITS files are never touched.',
+    keywords: ['stats', 'statistics', 'clear', 'reset', 'rebuild', 'catalog', 'recount', 'drive', 'swap'],
+    path: ['Settings', 'Your night', 'Stats'],
+    type: SettingType.complex(),
+    defaultValue: null,
+  ),
   // §29 Storage — 4 fields. State lives in `storageSettingsProvider`.
   Setting(
     id: 'session.storage.save_directory',

@@ -292,7 +292,7 @@ public static class SystemEndpoints {
                 // Exclusive with any capture scan: a reformat mid-scan would
                 // unmount the tree the scan is walking.
                 var result = await scan.RunExclusiveAsync(
-                    () => svc.ConfigureAsync(request.Uuid, request.Format, request.ConfirmLabel, ct), ct)
+                    () => svc.ConfigureAsync(request.Uuid, request.Format, request.ConfirmLabel, request.Filesystem, ct), ct)
                     .ConfigureAwait(false);
                 if (!result.Success) {
                     // 422 carries the helper's code so the client can offer the
@@ -318,7 +318,91 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ConfigureStorageDevice")
-            .WithSummary("Mount a drive as the ARA store (optionally reformatting it as ext4 first) and point saving at it.");
+            .WithSummary("Mount a drive as the ARA store (optionally reformatting it — exFAT by default, ext4 on request) and point saving at it.");
+
+        // §29 user-triggered disk check: unmount → fsck (fsck.exfat/e2fsck)
+        // → remount. exFAT has no journal, so this is its recovery story
+        // after an unclean power cut; deliberately user-triggered rather
+        // than automatic on every mount (Joey's call — no forced scans).
+        storage.MapPost("/check", async (
+                StorageCheckRequestDto request,
+                IStorageDeviceService svc,
+                ActiveRunSessionRegistry runs,
+                ICameraService camera,
+                CaptureScanService scan,
+                CancellationToken ct) => {
+                if (string.IsNullOrWhiteSpace(request.Uuid)) {
+                    return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                // Same exclusions as configure: never yank the store out from
+                // under a run, an in-flight exposure, or a capture scan.
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before checking the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before checking the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await scan.RunExclusiveAsync(
+                    () => svc.CheckAsync(request.Uuid, ct), ct).ConfigureAwait(false);
+                if (!result.Success) {
+                    return Results.Problem(
+                        title: result.Code,
+                        detail: result.Detail ?? result.Code,
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+                return Results.Ok(new StorageConfigureResultDto(
+                    true, result.Code, result.Detail, result.MountPoint, null));
+            })
+            .Produces<StorageConfigureResultDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("CheckStorageDevice")
+            .WithSummary("Run a filesystem check on the store drive (briefly unmounts it); code says clean or repaired.");
+
+        // §29 safe removal — flush + unmount so the take-home drive can be
+        // pulled without losing cached writes. Same exclusions as check.
+        storage.MapPost("/eject", async (
+                StorageCheckRequestDto request,
+                IStorageDeviceService svc,
+                ActiveRunSessionRegistry runs,
+                ICameraService camera,
+                CaptureScanService scan,
+                CancellationToken ct) => {
+                if (string.IsNullOrWhiteSpace(request.Uuid)) {
+                    return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before ejecting the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (!camera.IsFreeToCapture(runs)) {
+                    return Results.Problem(
+                        "an exposure is in progress — wait for it to finish before ejecting the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await scan.RunExclusiveAsync(
+                    () => svc.EjectAsync(request.Uuid, ct), ct).ConfigureAwait(false);
+                if (!result.Success) {
+                    return Results.Problem(
+                        title: result.Code,
+                        detail: result.Detail ?? result.Code,
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+                return Results.Ok(new StorageConfigureResultDto(
+                    true, result.Code, result.Detail, null, null));
+            })
+            .Produces<StorageConfigureResultDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("EjectStorageDevice")
+            .WithSummary("Flush and unmount the store drive for safe removal; the fstab entry stays so a replug automounts.");
 
         // §28.8 on demand. The startup scan already recovers FITS sitting on
         // disk but absent from the catalog — which was enough while the save

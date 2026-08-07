@@ -499,6 +499,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogPreCaptureDiskBlocked(frameId, freeBytes);
             return false;
         }
+        // §29 — an ejected store must fail capture LOUDLY. After eject the
+        // mount point still exists as an empty directory on the root disk;
+        // writing there would silently misdirect the night's frames onto the
+        // SD card (and eventually fill it) — the exact unattended scenario
+        // eject exists for.
+        if (StoreEjected(out var ejectedDir)) {
+            LogPreCaptureStoreEjected(frameId, ejectedDir);
+            return false;
+        }
         var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged
@@ -1071,6 +1080,40 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         < 0.47 => waxing ? "Waxing Crescent" : "Waning Crescent",
         _ => waxing ? "Waxing Gibbous" : "Waning Gibbous",
     };
+
+    /// <summary>
+    /// True when the configured save directory sits under the §29 store
+    /// mount point but nothing is mounted there — i.e. the drive was
+    /// ejected (or fell off) and a write would land on the root disk.
+    /// Best-effort: an unreadable /proc/self/mounts never blocks capture.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort pre-capture probe over profile + /proc reads; a probe fault must degrade to 'capture proceeds'. CA1031's log-and-recover boundary applies.")]
+    internal bool StoreEjected(out string saveDirectory) {
+        const string mountPoint = "/media/openastroara";
+        saveDirectory = string.Empty;
+        try {
+            if (_profileStore is null || !OperatingSystem.IsLinux()) {
+                return false;
+            }
+            var dir = _profileStore.GetStorageSettings().SaveDirectory;
+            if (string.IsNullOrWhiteSpace(dir) ||
+                !(dir == mountPoint || dir.StartsWith(mountPoint + "/", StringComparison.Ordinal))) {
+                return false;
+            }
+            saveDirectory = dir;
+            foreach (var line in File.ReadLines("/proc/self/mounts")) {
+                var parts = line.Split(' ');
+                if (parts.Length > 1 && parts[1] == mountPoint) {
+                    return false; // store is mounted — all good
+                }
+            }
+            return true;
+        } catch (Exception ex) {
+            LogPreCaptureDiskProbeFailed(ex);
+            return false;
+        }
+    }
 
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
     // profile policy says abort. Best-effort by design: no profile store, an unprobeable volume,
@@ -1843,6 +1886,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: save volume critically low ({FreeBytes} bytes free) and OnDiskSpaceCritical=abort — the exposure never started")]
     private partial void LogPreCaptureDiskBlocked(Guid frameId, long freeBytes);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: the store drive is ejected/unmounted (save directory {SaveDirectory}) — writing would land on the root disk. Reconnect the drive or choose a store.")]
+    private partial void LogPreCaptureStoreEjected(Guid frameId, string saveDirectory);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "§29 pre-capture disk probe failed — capture proceeds (the disk monitor owns reporting)")]
     private partial void LogPreCaptureDiskProbeFailed(Exception ex);

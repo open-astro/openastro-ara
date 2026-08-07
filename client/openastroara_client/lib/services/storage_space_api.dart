@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../state/saved_server_state.dart';
+import '../state/ws/ws_providers.dart';
 
 /// §29 — free/total bytes of the volume behind the daemon's save directory.
 /// Nulls when the volume is unreachable (e.g. an unmounted USB store), which
@@ -58,6 +59,13 @@ final storageSpaceProvider = FutureProvider.autoDispose<StorageSpace?>((ref) asy
   if (server == null) {
     return null;
   }
+  // Same nudge as storageDevicesProvider: an unplugged/replugged store
+  // changes what "free space" even means — re-read on the daemon's word.
+  ref.listen(wsEventsProvider, (prev, next) {
+    if (next.asData?.value.type == 'storage.devices_changed') {
+      ref.invalidateSelf();
+    }
+  });
   final api = StorageSpaceApi(server);
   ref.onDispose(api.close);
   return api.fetch();

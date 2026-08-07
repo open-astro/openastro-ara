@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../state/saved_server_state.dart';
+import '../state/ws/ws_providers.dart';
 
 /// §29.1.1 — a block device on the server that could hold ARA data.
 class StorageDevice {
@@ -32,8 +33,9 @@ class StorageDevice {
   final bool isSystemDisk;
   final bool isAraStore;
 
-  /// Only ext4 mounts cleanly; anything else needs the §29.1.3 reformat path.
-  bool get isExt4 => fileSystem == 'ext4';
+  /// exFAT (take-the-drive-home) and ext4 (rig-resident) both mount as the
+  /// store; anything else needs the §29.1.3 reformat path.
+  bool get isMountable => fileSystem == 'ext4' || fileSystem == 'exfat';
 
   /// A drive with no filesystem at all can be formatted without a label echo.
   bool get isBlank => (fileSystem ?? '').isEmpty;
@@ -54,7 +56,7 @@ class StorageDevice {
     final bits = <String>[
       if (sizeText.isNotEmpty) sizeText,
       if ((model ?? '').isNotEmpty && (label ?? '').isNotEmpty) model!,
-      if (isBlank) 'not formatted' else if (!isExt4) 'needs erasing ($fileSystem)',
+      if (isBlank) 'not formatted' else if (!isMountable) 'needs erasing ($fileSystem)',
       if (mountPoint != null && !isAraStore) 'in use at $mountPoint',
     ];
     return bits.join(' · ');
@@ -169,12 +171,14 @@ class StorageDevicesApi {
   }
 
   /// Mount [uuid] as the ARA store. With [format] true the drive is
-  /// **erased** and re-made as ext4; [confirmLabel] must equal its current
-  /// label (the server refuses otherwise).
+  /// **erased** and re-made as [filesystem] ('exfat' default, 'ext4' on
+  /// request); [confirmLabel] must equal its current label (the server
+  /// refuses otherwise).
   Future<StorageConfigureOutcome> configure({
     required String uuid,
     bool format = false,
     String? confirmLabel,
+    String? filesystem,
   }) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -183,6 +187,7 @@ class StorageDevicesApi {
           'uuid': uuid,
           'format': format,
           'confirm_label': ?confirmLabel,
+          'filesystem': ?filesystem,
         },
       );
       final data = res.data ?? const <String, dynamic>{};
@@ -194,6 +199,69 @@ class StorageDevicesApi {
       );
     } on DioException catch (e) {
       // 422 carries the helper's code in `title`, its detail in `detail`.
+      final body = e.response?.data;
+      if (body is Map) {
+        return StorageConfigureOutcome(
+          success: false,
+          code: body['title'] as String? ?? 'request_failed',
+          detail: body['detail'] as String?,
+        );
+      }
+      return StorageConfigureOutcome(
+        success: false,
+        code: 'request_failed',
+        detail: e.message,
+      );
+    }
+  }
+
+  /// User-triggered filesystem check (unmount → fsck → remount). The result
+  /// code is 'clean' or 'repaired' on success; exFAT has no journal, so this
+  /// is its recovery story after an unclean power cut.
+  Future<StorageConfigureOutcome> check({required String uuid}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/storage/check',
+        data: {'uuid': uuid},
+      );
+      final data = res.data ?? const <String, dynamic>{};
+      return StorageConfigureOutcome(
+        success: data['success'] as bool? ?? true,
+        code: data['code'] as String? ?? 'clean',
+        detail: data['detail'] as String?,
+      );
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      if (body is Map) {
+        return StorageConfigureOutcome(
+          success: false,
+          code: body['title'] as String? ?? 'request_failed',
+          detail: body['detail'] as String?,
+        );
+      }
+      return StorageConfigureOutcome(
+        success: false,
+        code: 'request_failed',
+        detail: e.message,
+      );
+    }
+  }
+
+  /// Safe removal: flush + unmount so the drive can be pulled without
+  /// losing cached writes. The rig's fstab entry stays — replug automounts.
+  Future<StorageConfigureOutcome> eject({required String uuid}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/storage/eject',
+        data: {'uuid': uuid},
+      );
+      final data = res.data ?? const <String, dynamic>{};
+      return StorageConfigureOutcome(
+        success: data['success'] as bool? ?? true,
+        code: data['code'] as String? ?? 'ejected',
+        detail: data['detail'] as String?,
+      );
+    } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map) {
         return StorageConfigureOutcome(
@@ -227,6 +295,14 @@ final storageDevicesProvider =
   if (server == null) {
     return const [];
   }
+  // §29 — the daemon watches /sys/block and broadcasts when a drive is
+  // plugged or pulled; re-fetch so an unplugged store shows as gone within
+  // seconds instead of whenever something else refreshes.
+  ref.listen(wsEventsProvider, (prev, next) {
+    if (next.asData?.value.type == 'storage.devices_changed') {
+      ref.invalidateSelf();
+    }
+  });
   final api = StorageDevicesApi(server);
   ref.onDispose(api.close);
   return api.list();

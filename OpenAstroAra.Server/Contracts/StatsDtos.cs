@@ -125,3 +125,15 @@ public sealed record StatsMilestoneDto(
     bool Achieved,
     double Threshold,
     double Current);
+
+/// <summary>POST /stats/rebuild-catalog result — §50 maintenance: the catalog
+/// was wiped and re-ingested from the mounted store, so stats (and the
+/// library) describe the connected drive. Rescanned=false carries the same
+/// skip reasons as /storage/rescan (no save dir, path missing/unwritable).</summary>
+public sealed record StatsRebuildCatalogResultDto(
+    long FramesCleared,
+    long SessionsCleared,
+    bool Rescanned,
+    string? SkipReason,
+    string? SavePath,
+    int FramesRecovered);

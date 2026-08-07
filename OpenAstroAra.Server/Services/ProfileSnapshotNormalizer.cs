@@ -109,7 +109,7 @@ public static class ProfileSnapshotNormalizer {
             SaveDirectory: "/media/openastroara",
             FileFormat: "fits",
             Compression: "rice",
-            FilenameTemplate: @"$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s"),
+            FilenameTemplate: @"$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s"),
         Notifications: new(
             InAppBanner: true, OsDesktop: true, SoundAlert: true,
             PushoverToken: "", TelegramBotToken: "",
