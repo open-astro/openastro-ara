@@ -168,7 +168,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
               onPressed: s.isMoving ? null : () => _move(caps, absolute),
               child: const Text('Move'),
             ),
-            const HelpIcon(helpKey: 'eq.focuser.move'),
+            HelpIcon(helpKey: 'eq.focuser.move', device: s.name),
           ],
         ),
         if (caps?.canTempComp ?? false)

@@ -102,7 +102,7 @@ class _MountBody extends ConsumerWidget {
           Row(
             children: [
               const Text('Tracking'),
-              const HelpIcon(helpKey: 'eq.mount.tracking'),
+              HelpIcon(helpKey: 'eq.mount.tracking', device: s.name),
               const Spacer(),
               Switch(
                 key: const Key('mount_tracking_switch'),
@@ -349,7 +349,10 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
           onPressed: busy ? null : _dispatchGoTo,
           child: const Text('GoTo'),
         ),
-        const HelpIcon(helpKey: 'eq.mount.goto'),
+        HelpIcon(
+          helpKey: 'eq.mount.goto',
+          device: ref.watch(mountProvider).value?.name,
+        ),
       ],
     );
   }

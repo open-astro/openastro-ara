@@ -119,7 +119,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           Row(
             children: [
               const Text('Cooler'),
-              const HelpIcon(helpKey: 'eq.camera.cooler'),
+              HelpIcon(helpKey: 'eq.camera.cooler', device: s.name),
               const Spacer(),
               Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
             ],
@@ -151,7 +151,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
                   onPressed: () => _setTarget(),
                   child: const Text('Set target'),
                 ),
-                const HelpIcon(helpKey: 'eq.camera.cooler_target'),
+                HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
               ],
             ),
         ],
@@ -181,7 +181,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               child: Row(
                 children: [
                   const Text('Readout mode'),
-                  const HelpIcon(helpKey: 'eq.camera.readout_mode'),
+                  HelpIcon(helpKey: 'eq.camera.readout_mode', device: s.name),
                   const Spacer(),
                   DropdownButton<int>(
                     value: _readoutIndex(caps.readoutModes, s.readoutMode),

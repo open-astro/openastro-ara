@@ -156,7 +156,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
               onPressed: s.isMoving ? null : _sync,
               child: const Text('Sync'),
             ),
-            const HelpIcon(helpKey: 'eq.rotator.move'),
+            HelpIcon(helpKey: 'eq.rotator.move', device: s.name),
           ],
         ),
         Row(

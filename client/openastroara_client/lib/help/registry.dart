@@ -16,6 +16,14 @@ class Help {
   /// (their titles already match), so this defaults empty.
   final List<String> keywords;
 
+  /// §69 hardware-aware notes: vendor substring (matched case-insensitively
+  /// against the CONNECTED device's name, e.g. "ZWO" in "ZWO ASI2600MM Pro")
+  /// → an addendum the help sheet shows as "For your hardware". Keep the
+  /// vendor keys in sync with the AlpacaBridge supported-drivers list
+  /// (https://www.openastro.net/docs/supported-drivers) — the
+  /// hardware-help-sync skill audits this on gear changes.
+  final Map<String, String> driverNotes;
+
   const Help({
     required this.key,
     required this.title,
@@ -24,7 +32,18 @@ class Help {
     this.relatedHelpKeys = const <String>[],
     this.relatedSettings = const <String>[],
     this.keywords = const <String>[],
+    this.driverNotes = const <String, String>{},
   });
+
+  /// The first driver note whose vendor key appears in [deviceName].
+  String? noteFor(String? deviceName) {
+    if (deviceName == null || deviceName.isEmpty) return null;
+    final lower = deviceName.toLowerCase();
+    for (final e in driverNotes.entries) {
+      if (lower.contains(e.key.toLowerCase())) return e.value;
+    }
+    return null;
+  }
 }
 
 const Map<String, Help> helpRegistry = {
@@ -1720,6 +1739,23 @@ const Map<String, Help> helpRegistry = {
         'glow roughly halve for every 5–6 °C of cooling. Turn it on well before imaging (it takes a few minutes to '
         'reach target), and let the camera WARM UP gradually before powering off on humid nights so dew doesn\'t '
         'condense on the cold sensor window.',
+
+    driverNotes: {
+      'ZWO':
+          'Cooled ZWO models ("Pro" suffix, e.g. ASI2600MC/MM Pro) regulate to a set-point and also '
+          'report cooler power. The Mini-series guide cameras (120/174/290 Mini) have no cooler — '
+          'this switch will not appear for them.',
+      'ToupTek':
+          'The ATR2600M is a cooled deep-sky camera; the GPCMOS guide camera is uncooled. ToupTek '
+          'coolers report power draw — a cooler pinned at 100% cannot hold the target; raise it.',
+      'QHY':
+          'The QHY268C is cooled with set-point regulation. The miniCam8M runs a compact cooler — '
+          'expect a smaller delta below ambient than a full-size cooled camera.',
+      'Player One':
+          'The Ceres 462M and Uranus-C PRO are planetary/guide-class cameras without TEC cooling — '
+          'cooling controls will not appear.',
+      'SVBONY': 'The SV905C2 has no cooler — cooling controls will not appear.',
+    },
   ),
   'eq.camera.cooler_target': Help(
     key: 'eq.camera.cooler_target',
@@ -1729,6 +1765,18 @@ const Map<String, Help> helpRegistry = {
         '~30–35 °C below ambient — set a target it can hold ALL night at your warmest expected temperature, or the '
         'noise level will drift between frames. Just as important: use the SAME target every night, so your dark '
         'calibration frames match your lights. −10 °C is a common year-round choice in temperate climates.',
+
+    driverNotes: {
+      'ZWO':
+          'ZWO Pro coolers manage ~30–35 °C below ambient. A year-round −10 °C target is the common '
+          'choice; the driver ramps gently on its own, so no manual stepping is needed.',
+      'ToupTek':
+          'ToupTek cooled cameras hold ~30 °C below ambient. Watch the reported cooler power: '
+          'sustained 100% means the target is too ambitious for tonight\'s ambient temperature.',
+      'QHY':
+          'QHY recommends conservative set-points and gradual warm-up; the driver handles ramping. '
+          'Keep the same target across nights so your dark library stays valid.',
+    },
   ),
   'eq.camera.readout_mode': Help(
     key: 'eq.camera.readout_mode',
@@ -1740,6 +1788,27 @@ const Map<String, Help> helpRegistry = {
         'Whatever the name, the right choice for deep-sky imaging is usually the lowest-read-noise mode; '
         'planetary/lucky imaging favors a fast mode. IMPORTANT: the mode changes the sensor\'s noise signature, so '
         'darks, flats and lights must all be captured in the SAME readout mode.',
+
+    driverNotes: {
+      'ZWO':
+          'ZWO cameras typically expose "Normal" plus low-noise/high-DR variants; the 2600-class '
+          'sensors are effectively zero-glow in any mode. Deep-sky: pick the lowest-read-noise mode '
+          'and keep gain at the HCG threshold (100 on the 2600 series).',
+      'ToupTek':
+          'ToupTek drivers commonly list modes like "CMS" (low conversion noise) and "HDR". '
+          'For deep-sky the low-noise mode is the usual choice; note ToupTek mode changes can also '
+          'alter the usable gain range shown below.',
+      'QHY':
+          'QHY exposes readout modes prominently (e.g. "PhotoGraphic", "High Gain", "Extend Full Well" '
+          'on the 268-class). These change read noise AND full-well substantially — re-check your '
+          'camera-electronics numbers after switching, and rebuild darks.',
+      'Player One':
+          'Player One planetary/guide cameras usually run a single fast readout path — if only one '
+          'mode is listed, there is nothing to choose.',
+      'SVBONY':
+          'The SV905C2 is a guide camera with a single readout path — if only one mode is listed, '
+          'there is nothing to choose.',
+    },
   ),
   'eq.mount.tracking': Help(
     key: 'eq.mount.tracking',
@@ -1750,6 +1819,22 @@ const Map<String, Help> helpRegistry = {
         'managed automatically (on after a slew, off when parked); this switch is the manual override. '
         'A mount left tracking unattended will eventually point at the ground or hit the pier — that\'s what the '
         'safety-policy limits are for.',
+
+    driverNotes: {
+      'ZWO':
+          'The AM-series are harmonic-drive mounts: no counterweights and high torque, but harmonic '
+          'gears have larger fast-moving periodic error than worm drives — guiding is effectively '
+          'mandatory for imaging, with short (0.5–1 s) guide exposures working best.',
+      'iOptron':
+          'iOptron HEM/HAE harmonic mounts behave like the AM series: no counterweight, guide with '
+          'short exposures. The HAE29C\'s encoders (EC models) largely remove periodic error.',
+      'Celestron':
+          'The CGX-L is a worm-drive mount: smooth long-period error that guides out easily, but it '
+          'needs proper balancing (slightly east-heavy) for best tracking.',
+      'Sky-Watcher':
+          'The HEQ5 PRO tracks well once belt-modded and balanced; SynScan connections can be over '
+          'USB/serial or Wi-Fi — the wired path is more reliable for all-night sessions.',
+    },
   ),
   'eq.mount.goto': Help(
     key: 'eq.mount.goto',
@@ -1759,6 +1844,16 @@ const Map<String, Help> helpRegistry = {
         'This is a raw coordinate slew — no plate-solve verification afterward, so the target lands only as accurately '
         'as your alignment. For framing a target for imaging, prefer the Planning flow, which slews AND centers with '
         'plate solving. Never GoTo blindly with the telescope near obstructions.',
+
+    driverNotes: {
+      'ZWO':
+          'AM-series harmonic mounts slew fast and hard — make especially sure the imaging train '
+          'clears the tripod/pier before a large GoTo, as there is no counterweight to remind you '
+          'of the swing envelope.',
+      'Sky-Watcher':
+          'Over SynScan the GoTo accuracy depends on the hand-controller/app alignment model; a '
+          'plate-solved centering pass after the slew is strongly recommended.',
+    },
   ),
   'eq.mount.manual_move': Help(
     key: 'eq.mount.manual_move',
@@ -1792,6 +1887,15 @@ const Map<String, Help> helpRegistry = {
         'Move turns the rotator to the entered angle. Sync does NOT move anything — it tells the rotator "your '
         'current position IS this angle", re-zeroing its scale, typically after a plate solve measured the true sky '
         'angle. Use Sync to calibrate, Move to actually rotate the camera for framing.',
+
+    driverNotes: {
+      'ZWO':
+          'The ZWO CAA reports mechanical angle only — always Sync after a plate solve so sky-angle '
+          'moves land correctly.',
+      'WandererAstro':
+          'The WandererRotator Mini is gear-driven with some backlash; approaching the target angle '
+          'from the same direction each time gives the most repeatable framing.',
+    },
   ),
   'eq.rotator.sky_angle': Help(
     key: 'eq.rotator.sky_angle',
@@ -1810,5 +1914,20 @@ const Map<String, Help> helpRegistry = {
         '(relative focusers, negative = inward). Moving changes focus — mid-sequence this ruins the current frame, so '
         'it\'s a setup/testing control; during sessions the autofocus routine owns the focuser. If you don\'t know '
         'your rough focus position, move in big steps toward smaller star donuts, then let autofocus finish the job.',
+
+    driverNotes: {
+      'ZWO':
+          'The ZWO EAF is an absolute focuser (positions 0–60000 by default). If positions seem '
+          'mirrored, reverse direction in the driver rather than remembering "backwards" offsets.',
+      'ToupTek':
+          'The ToupTek AAF is absolute with a configurable max step; check its backlash setting — '
+          'a few tens of steps of backlash compensation noticeably improves autofocus V-curves.',
+      'Gemini':
+          'The Gemini Automatic Astro Focuser Pro is absolute; its high step resolution means '
+          'autofocus step sizes need to be larger than you might expect.',
+      'Astroasis':
+          'The Oasis Focuser reports temperature from its probe — useful for temperature-triggered '
+          'refocus without a separate sensor.',
+    },
   ),
 };
