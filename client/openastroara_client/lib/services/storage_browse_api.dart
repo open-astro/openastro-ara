@@ -106,5 +106,38 @@ class StorageBrowseApi {
     return StorageBrowseLevel.fromJson(data);
   }
 
+  /// §65.4 preview-cache accounting: size + count of the thumbnail/stretch
+  /// sidecar JPEGs under the save directory.
+  Future<StorageCacheInfo> fetchCacheInfo() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/storage/cache');
+    return _parseCache(res.data);
+  }
+
+  /// Delete the whole preview cache; returns what was freed. Safe — sidecars
+  /// re-render on demand or via the server's boot-time warmer.
+  Future<StorageCacheInfo> clearCache() async {
+    final res = await _dio.delete<Map<String, dynamic>>(
+      '/api/v1/storage/cache',
+    );
+    return _parseCache(res.data);
+  }
+
+  static StorageCacheInfo _parseCache(dynamic data) {
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('storage/cache returned a non-object body');
+    }
+    return StorageCacheInfo(
+      files: data['files'] is int ? data['files'] as int : 0,
+      bytes: data['bytes'] is int ? data['bytes'] as int : 0,
+    );
+  }
+
   void close() => _dio.close(force: true);
+}
+
+/// §65.4 preview-cache size report (files + bytes of cache sidecars).
+class StorageCacheInfo {
+  final int files;
+  final int bytes;
+  const StorageCacheInfo({required this.files, required this.bytes});
 }

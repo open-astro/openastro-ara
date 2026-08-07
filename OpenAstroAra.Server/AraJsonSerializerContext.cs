@@ -262,6 +262,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StatsTargetsDto))]
 [JsonSerializable(typeof(StatsTargetSummaryDto))]
 [JsonSerializable(typeof(StorageBrowseDto))]
+[JsonSerializable(typeof(StorageCacheDto))]
 [JsonSerializable(typeof(StorageCreateFolderRequestDto))]
 [JsonSerializable(typeof(StorageBrowseEntryDto))]
 [JsonSerializable(typeof(StorageSettingsDto))]

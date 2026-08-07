@@ -435,6 +435,22 @@ public static class SystemEndpoints {
             .WithName("RescanStorage")
             .WithSummary("Scan the save directory for frames already on disk but missing from the catalog, and add them.");
 
+        // §65.4 preview-cache maintenance: GET measures the sidecar JPEGs
+        // (thumbnails + stretch variants) under the save directory; DELETE
+        // removes them. Always safe — everything re-renders on demand or via
+        // the boot-time warmer.
+        storage.MapGet("/cache", (IProfileStore profiles) =>
+                Results.Ok(PreviewCacheMaintenance.Measure(profiles.GetStorageSettings().SaveDirectory)))
+            .Produces<StorageCacheDto>()
+            .WithName("GetStorageCache")
+            .WithSummary("Size + count of the §65.4 preview/thumbnail cache sidecars under the save directory.");
+
+        storage.MapDelete("/cache", (IProfileStore profiles) =>
+                Results.Ok(PreviewCacheMaintenance.Clear(profiles.GetStorageSettings().SaveDirectory)))
+            .Produces<StorageCacheDto>()
+            .WithName("ClearStorageCache")
+            .WithSummary("Delete every §65.4 preview/thumbnail cache sidecar; reports files + bytes freed.");
+
         storage.MapGet("/space", (IProfileStore profiles) => {
                 var configured = profiles.GetStorageSettings().SaveDirectory;
                 var isFallback = string.IsNullOrWhiteSpace(configured);
