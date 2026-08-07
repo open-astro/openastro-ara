@@ -253,9 +253,14 @@ if [ "$FORMAT" -eq 1 ]; then
     # — is what made the take-home drive unreadable off-rig.)
     KIND=$(lsblk -no TYPE "$DEVICE" 2>/dev/null | head -n1)
     if [ "$KIND" = "disk" ]; then
-        PTYPE=83
-        [ "$NEW_FS" = "exfat" ] && PTYPE=07
-        if ! echo "type=$PTYPE" | sfdisk --quiet --wipe always "$DEVICE" >/dev/null 2>&1; then
+        # Explicit GPT (no 2 TiB MBR ceiling) with the partition-type GUID
+        # spelled out: modern sfdisk defaults unknown types to "Linux
+        # filesystem", and macOS/Windows refuse to even probe a partition
+        # typed Linux — the drive read as "initialize me" despite valid
+        # exFAT inside. Microsoft Basic Data is what retail drives use.
+        PTYPE=0FC63DAF-8483-4772-8E79-3D69D8477DE4   # Linux filesystem
+        [ "$NEW_FS" = "exfat" ] && PTYPE=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7  # Microsoft basic data
+        if ! printf 'label: gpt\ntype=%s\n' "$PTYPE" | sfdisk --quiet --wipe always "$DEVICE" >/dev/null 2>&1; then
             echo "ERROR: mkfs_failed partition_table"
             exit 7
         fi
