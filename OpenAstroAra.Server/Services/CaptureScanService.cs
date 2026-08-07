@@ -195,8 +195,15 @@ public sealed partial class CaptureScanService : IDisposable {
     private async Task<int> RecoverOrphanFitsAsync(string root, CancellationToken ct) {
         var recovered = 0;
         var seenIds = await LoadKnownIdsAsync(ct);
-        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fits")) {
+        // Both extensions the wild actually uses: Ara writes .fits, NINA (and
+        // most captured archives a user copies onto a take-home drive) write
+        // .fit — a whole drive of NINA frames previously scanned as "nothing
+        // found". Enumeration is case-insensitive (.FIT/.FITS included), and
+        // macOS AppleDouble droppings ("._Light_….fit") are metadata forks,
+        // not FITS — skip them by name.
+        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fits").Concat(EnumerateFilesSafe(root, "*.fit"))) {
             if (ct.IsCancellationRequested) break;
+            if (!LooksLikeFits(fitsPath)) continue;
             try {
                 var inserted = await TryRecoverAsync(fitsPath, seenIds, ct);
                 if (inserted) recovered++;
@@ -344,6 +351,9 @@ public sealed partial class CaptureScanService : IDisposable {
         // Skip nothing else: hidden dirs are fair game (dotfile trees a user
         // rsyncs over shouldn't hide their FITS from recovery).
         AttributesToSkip = 0,
+        // Linux globbing is case-sensitive by default; a drive of ".FIT"
+        // frames from a Windows capture rig must still be found.
+        MatchCasing = MatchCasing.CaseInsensitive,
     };
 
     private static IEnumerable<string> EnumerateFilesSafe(string root, string pattern) {
@@ -352,6 +362,15 @@ public sealed partial class CaptureScanService : IDisposable {
         } catch (DirectoryNotFoundException) {
             return Array.Empty<string>();
         }
+    }
+
+    /// <summary>The extensions the scan recognizes as FITS, shared with the
+    /// enumeration above so the two never drift.</summary>
+    internal static bool LooksLikeFits(string path) {
+        var name = Path.GetFileName(path);
+        if (name.StartsWith("._", StringComparison.Ordinal)) return false;
+        return name.EndsWith(".fits", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".fit", StringComparison.OrdinalIgnoreCase);
     }
 
     // Boxes a nullable value type for an ADO.NET parameter, mapping null to DBNull.

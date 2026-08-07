@@ -85,5 +85,14 @@ namespace OpenAstroAra.Test {
             count.CommandText = "SELECT (SELECT COUNT(*) FROM frames) + (SELECT COUNT(*) FROM sessions);";
             Assert.That(Convert.ToInt64(await count.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture), Is.Zero);
         }
+
+        [Test]
+        public void LooksLikeFits_accepts_both_extensions_and_skips_appledouble() {
+            Assert.That(CaptureScanService.LooksLikeFits("/d/a.fits"), Is.True);
+            Assert.That(CaptureScanService.LooksLikeFits("/d/Light_NGC6188_0004.fit"), Is.True, "NINA single-t extension");
+            Assert.That(CaptureScanService.LooksLikeFits("/d/B.FIT"), Is.True, "case-insensitive");
+            Assert.That(CaptureScanService.LooksLikeFits("/d/._Light_NGC6188_0004.fit"), Is.False, "macOS AppleDouble fork");
+            Assert.That(CaptureScanService.LooksLikeFits("/d/readme.txt"), Is.False);
+        }
     }
 }
