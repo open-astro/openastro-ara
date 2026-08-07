@@ -53,10 +53,9 @@ class _DataManagerModalState extends ConsumerState<DataManagerModal> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     '${formatBytes(usedBytes)} installed',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AraColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AraColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -78,11 +77,14 @@ class _DataManagerModalState extends ConsumerState<DataManagerModal> {
     if (async.hasError) {
       return _Centered(
         message: 'Could not load the data catalog.',
-        onRetry: () => unawaited(ref.read(dataManagerPackagesProvider.notifier).refresh()),
+        onRetry: () =>
+            unawaited(ref.read(dataManagerPackagesProvider.notifier).refresh()),
       );
     }
     if (packages == null) {
-      return const _Centered(message: 'Connect to a server to manage sky-data packages.');
+      return const _Centered(
+        message: 'Connect to a server to manage sky-data packages.',
+      );
     }
     if (packages.isEmpty) {
       return const _Centered(message: 'No sky-data packages are available.');
@@ -99,7 +101,10 @@ class _DataManagerModalState extends ConsumerState<DataManagerModal> {
       padding: const EdgeInsets.all(16),
       children: [
         for (final cat in categories) ...[
-          Text(_categoryLabel(cat), style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            _categoryLabel(cat),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: 4),
           ...byCategory[cat]!.map((p) => _PackageRow(package: p)),
           const SizedBox(height: 16),
@@ -110,11 +115,11 @@ class _DataManagerModalState extends ConsumerState<DataManagerModal> {
 }
 
 String _categoryLabel(String c) => switch (c) {
-      'catalog' => 'Star catalogs',
-      'horizon' => 'Horizon profiles',
-      '' => 'Other',
-      _ => c[0].toUpperCase() + c.substring(1),
-    };
+  'catalog' => 'Star catalogs',
+  'horizon' => 'Horizon profiles',
+  '' => 'Other',
+  _ => c[0].toUpperCase() + c.substring(1),
+};
 
 /// Human-readable byte size (binary units). Public so widget tests can assert it.
 String formatBytes(int bytes) {
@@ -150,17 +155,23 @@ class _PackageRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(package.name.isEmpty ? package.id : package.name,
-                    style: theme.textTheme.bodyMedium),
+                Text(
+                  package.name.isEmpty ? package.id : package.name,
+                  style: theme.textTheme.bodyMedium,
+                ),
                 if (package.description.isNotEmpty)
-                  Text(package.description,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AraColors.textSecondary)),
+                  Text(
+                    package.description,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AraColors.textSecondary,
+                    ),
+                  ),
                 if (progress != null && progress.phase == DownloadPhase.failed)
                   Text(
                     'Download ${progress.error ?? 'failed'}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.error),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
                   ),
                 if (progress != null && progress.isActive) ...[
                   const SizedBox(height: 6),
@@ -175,7 +186,9 @@ class _PackageRow extends ConsumerWidget {
           const SizedBox(width: 12),
           Text(
             formatBytes(package.sizeBytes),
-            style: theme.textTheme.bodySmall?.copyWith(color: AraColors.textDisabled),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AraColors.textDisabled,
+            ),
           ),
           const SizedBox(width: 12),
           _action(context, ref, progress),
@@ -184,7 +197,11 @@ class _PackageRow extends ConsumerWidget {
     );
   }
 
-  Widget _action(BuildContext context, WidgetRef ref, DownloadProgress? progress) {
+  Widget _action(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadProgress? progress,
+  ) {
     if (progress != null && progress.isActive) {
       return TextButton(
         onPressed: () => unawaited(_cancel(context, ref, progress.downloadId)),
@@ -204,22 +221,72 @@ class _PackageRow extends ConsumerWidget {
   }
 
   Future<void> _download(BuildContext context, WidgetRef ref) => _guarded(
-      context, () => ref.read(dataManagerPackagesProvider.notifier).download(package.id), 'Download failed');
+    context,
+    () => ref.read(dataManagerPackagesProvider.notifier).download(package.id),
+    'Download failed',
+  );
 
-  Future<void> _cancel(BuildContext context, WidgetRef ref, String downloadId) => _guarded(
-      context, () => ref.read(dataManagerPackagesProvider.notifier).cancel(downloadId), 'Cancel failed');
+  Future<void> _cancel(
+    BuildContext context,
+    WidgetRef ref,
+    String downloadId,
+  ) => _guarded(
+    context,
+    () => ref.read(dataManagerPackagesProvider.notifier).cancel(downloadId),
+    'Cancel failed',
+  );
 
-  Future<void> _delete(BuildContext context, WidgetRef ref) => _guarded(
-      context, () => ref.read(dataManagerPackagesProvider.notifier).delete(package.id), 'Remove failed');
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    // Removal is recoverable (re-download any time) but NOT consequence-free:
+    // planning features quietly degrade without their catalog. Say so before
+    // acting instead of letting Tonight's Sky mysteriously go empty.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Remove ${package.name.isEmpty ? package.id : package.name}?',
+        ),
+        content: Text(
+          'Features that rank and search the sky (Tonight\'s Sky, target '
+          'search, planning) rely on this catalog and will fall back to a '
+          'minimal built-in list without it.\n\n'
+          'Your images and settings are not affected, and you can download '
+          'the catalog again here at any time (${formatBytes(package.sizeBytes)}).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _guarded(
+      context,
+      () => ref.read(dataManagerPackagesProvider.notifier).delete(package.id),
+      'Remove failed',
+    );
+  }
 
   // Run an action and surface any failure as a SnackBar (download throws a 409 for an
   // already-installed package, or a transport error — the failure isn't in provider state).
-  Future<void> _guarded(BuildContext context, Future<void> Function() action, String label) async {
+  Future<void> _guarded(
+    BuildContext context,
+    Future<void> Function() action,
+    String label,
+  ) async {
     try {
       await action();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$label: $e')));
       }
     }
   }
