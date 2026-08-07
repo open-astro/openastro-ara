@@ -49,6 +49,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **Mosaic runs from the framing overlay** (back-filled, PR #912): multi-tile run creation.
 
 ### Changed
+- **By-object folders are the default.** New setups file frames as `M 31/2026-08-05/Light/…` (a folder per project, nights inside); calibration frames — which belong to the night, not a target — group beside the object folders as `<night>/<type>`. Existing profiles keep their saved scheme.
 - **The picture shows in seconds, not a minute.** After a capture the preview renders at readout time (pre-warmed into the §65.4 cache), mono frames decimate before the stretch, the image downloads via raw Alpaca ImageBytes (no 104 MB intermediate), and pixel conversion is a tiled parallel transpose — a 1 s exposure previews in ~5 s on a Pi 4, at full superpixel resolution (4096 px cap, up from 2048).
 - **Imaging tab redesigned around the frame.** The viewer owns the full canvas for every sensor aspect; exposure controls compact into a two-column grid at the top of a right rail with Solve, Guiding, Statistics, Diagnostics and Faults below. New frames open fit-to-window; double-click toggles fit ↔ 1:1 pixels at the click point.
 

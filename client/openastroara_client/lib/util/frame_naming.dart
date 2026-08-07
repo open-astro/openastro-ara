@@ -14,14 +14,16 @@ library;
 
 /// How frames are grouped into folders on the disk.
 enum FolderScheme {
-  /// `2026-08-03 / Light / …` — the default: one folder per night, split by
-  /// frame type so calibration never mixes into the lights.
+  /// `2026-08-03 / Light / …` — one folder per night, split by frame type
+  /// so calibration never mixes into the lights.
   nightAndType,
 
   /// `2026-08-03 / M 31 / Light / …` — nights first, then what you shot.
   nightTargetType,
 
-  /// `M 31 / 2026-08-03 / Light / …` — a folder per project, nights inside.
+  /// `M 31 / 2026-08-03 / Light / …` — the default: a folder per project,
+  /// nights inside. Calibration frames (no target) group beside the object
+  /// folders as `<night>/<type>`.
   targetNightType,
 
   /// Everything flat in the save folder.
@@ -38,7 +40,7 @@ enum NamePart { target, filter, exposure, sensorTemp, gain, frameNumber }
 /// not optional.
 class FrameNamingModel {
   const FrameNamingModel({
-    this.folders = FolderScheme.nightAndType,
+    this.folders = FolderScheme.targetNightType,
     this.parts = const {NamePart.filter, NamePart.exposure},
   });
 

@@ -54,7 +54,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         SaveDirectory: "/media/openastroara",
         FileFormat: "fits",
         Compression: "rice",
-        FilenameTemplate: @"$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s");
+        FilenameTemplate: "{target}/{night}/{type}/{datetime}_{filter}_{exposure}s");
 
     public ImagingDefaultsDto GetImagingDefaults() {
         lock (_lock) { return _imagingDefaults; }

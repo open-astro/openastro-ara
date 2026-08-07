@@ -36,10 +36,14 @@ void main() {
   group('the preview names tonight the way the server will', () {
     final captured = DateTime(2026, 8, 4, 1, 30, 5);
 
-    test('the standard scheme reads as a night', () {
+    test('the standard scheme reads as a project folder with nights inside',
+        () {
+      // Default is by-object: {target}/{night}/{type}. Calibration frames
+      // (no target) drop the leading segment and group as <night>/<type>.
       final segments = previewSegments(const FrameNamingModel().compile(),
           NamingPreviewContext(captured: captured));
       expect(segments, [
+        'M 31',
         '2026-08-03',
         'Light',
         '2026-08-04_01-30-05_L_180s.fits',
