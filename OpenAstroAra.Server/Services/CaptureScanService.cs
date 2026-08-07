@@ -262,7 +262,7 @@ public sealed partial class CaptureScanService : IDisposable {
         // they are instead of "Unknown Target" masquerading as an object in
         // the stats/target lists (Joey's call, from the NGC6188 archive).
         var target = LookupHeader(headers, "OBJECT")
-            ?? (frameType == FrameType.Light ? "Unknown Target" : "Calibration");
+            ?? (frameType == "light" ? "Unknown Target" : "Calibration");
         var filter = LookupHeader(headers, "FILTER");
         // §28: a FITS without a GAIN header records null (unknown), not a fake 0.
         var gain = ParseInt(LookupHeader(headers, "GAIN"));
