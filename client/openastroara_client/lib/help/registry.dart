@@ -1709,4 +1709,105 @@ const Map<String, Help> helpRegistry = {
         'The filename is for humans browsing folders; the header is what software actually reads — so a minimal '
         'filename template never loses data.',
   ),
+
+  // ── Live gear controls (§25.5.5 device panels) ──────────────────────────
+  'eq.camera.cooler': Help(
+    key: 'eq.camera.cooler',
+    title: 'Camera cooler',
+    body:
+        'Cooled astronomy cameras have a thermoelectric cooler (TEC) behind the sensor. Turning it on drives the '
+        'sensor down to the target temperature, which dramatically reduces thermal noise — hot pixels and background '
+        'glow roughly halve for every 5–6 °C of cooling. Turn it on well before imaging (it takes a few minutes to '
+        'reach target), and let the camera WARM UP gradually before powering off on humid nights so dew doesn\'t '
+        'condense on the cold sensor window.',
+  ),
+  'eq.camera.cooler_target': Help(
+    key: 'eq.camera.cooler_target',
+    title: 'Cooler target temperature',
+    body:
+        'The sensor temperature the cooler drives to and holds. Colder is quieter, but the cooler can only remove '
+        '~30–35 °C below ambient — set a target it can hold ALL night at your warmest expected temperature, or the '
+        'noise level will drift between frames. Just as important: use the SAME target every night, so your dark '
+        'calibration frames match your lights. −10 °C is a common year-round choice in temperate climates.',
+  ),
+  'eq.camera.readout_mode': Help(
+    key: 'eq.camera.readout_mode',
+    title: 'Readout mode',
+    body:
+        'Many cameras offer several ways to read the sensor out, trading noise against dynamic range or speed. '
+        'On ZWO cameras for example, "Normal" balances everything, while modes like "Low noise"/"High DR" change how '
+        'the pixels are digitized. The right choice for deep-sky imaging is usually the lowest-read-noise mode; '
+        'planetary/lucky imaging favors a fast mode. IMPORTANT: the mode changes the sensor\'s noise signature, so '
+        'darks, flats and lights must all be captured in the SAME readout mode.',
+  ),
+  'eq.mount.tracking': Help(
+    key: 'eq.mount.tracking',
+    title: 'Tracking',
+    body:
+        'When on, the mount continuously turns at sidereal rate to counteract Earth\'s rotation, keeping stars '
+        'stationary in the frame — without it every exposure longer than a second trails. Tracking is normally '
+        'managed automatically (on after a slew, off when parked); this switch is the manual override. '
+        'A mount left tracking unattended will eventually point at the ground or hit the pier — that\'s what the '
+        'safety-policy limits are for.',
+  ),
+  'eq.mount.goto': Help(
+    key: 'eq.mount.goto',
+    title: 'GoTo coordinates',
+    body:
+        'Slews the mount to the entered right ascension (in hours, 0–24) and declination (in degrees, −90 to +90). '
+        'This is a raw coordinate slew — no plate-solve verification afterward, so the target lands only as accurately '
+        'as your alignment. For framing a target for imaging, prefer the Planning flow, which slews AND centers with '
+        'plate solving. Never GoTo blindly with the telescope near obstructions.',
+  ),
+  'eq.mount.manual_move': Help(
+    key: 'eq.mount.manual_move',
+    title: 'Manual movement',
+    body:
+        'Nudges the mount in the chosen direction at the selected rate while you hold the button — for centering a '
+        'star by eye or testing that the mount responds. Rates are in multiples of sidereal speed: low rates (0.5–1×) '
+        'for fine centering, high rates for slewing across the sky. The center button is an immediate all-stop.',
+  ),
+  'eq.dome.shutter': Help(
+    key: 'eq.dome.shutter',
+    title: 'Dome shutter',
+    body:
+        'Opens or closes the dome\'s shutter (or the roof on a roll-off). The shutter is the weather barrier: '
+        'the safety system closes it automatically on an unsafe condition, and end-of-night shutdown closes it too. '
+        'Opening manually is fine for setup — just remember an open shutter with safety monitoring disabled means '
+        'nothing will protect the telescope if weather turns.',
+  ),
+  'eq.rotator.reverse': Help(
+    key: 'eq.rotator.reverse',
+    title: 'Reverse direction',
+    body:
+        'Flips which way the rotator turns for a positive angle change. Needed when the rotator is mounted mirrored '
+        '(e.g. on the far side of an off-axis guider) so that "rotate to 30°" turns the camera the way the software '
+        'expects. If plate-solved rotation angles keep moving AWAY from the requested angle, this is the fix.',
+  ),
+  'eq.rotator.move': Help(
+    key: 'eq.rotator.move',
+    title: 'Move / Sync',
+    body:
+        'Move turns the rotator to the entered angle. Sync does NOT move anything — it tells the rotator "your '
+        'current position IS this angle", re-zeroing its scale, typically after a plate solve measured the true sky '
+        'angle. Use Sync to calibrate, Move to actually rotate the camera for framing.',
+  ),
+  'eq.rotator.sky_angle': Help(
+    key: 'eq.rotator.sky_angle',
+    title: 'Sky angle vs mechanical',
+    body:
+        'With this checked, the angle you enter is a SKY position angle (0° = north up in the image, as used by '
+        'framing tools and plate solvers) and the software translates it to the right mechanical position. Unchecked, '
+        'the angle goes to the rotator hardware raw. Use sky angle for framing targets; mechanical only for testing '
+        'the device itself.',
+  ),
+  'eq.focuser.move': Help(
+    key: 'eq.focuser.move',
+    title: 'Move focuser',
+    body:
+        'Drives the focuser to the entered position (absolute focusers, in motor steps) or by a signed step count '
+        '(relative focusers, negative = inward). Moving changes focus — mid-sequence this ruins the current frame, so '
+        'it\'s a setup/testing control; during sessions the autofocus routine owns the focuser. If you don\'t know '
+        'your rough focus position, move in big steps toward smaller star donuts, then let autofocus finish the job.',
+  ),
 };

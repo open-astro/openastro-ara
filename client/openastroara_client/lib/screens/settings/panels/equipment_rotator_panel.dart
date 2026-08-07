@@ -8,6 +8,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/rotator_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -114,7 +115,9 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
         if (caps?.canReverse ?? false)
           Row(
             children: [
-              const Expanded(child: Text('Reverse direction')),
+              const Text('Reverse direction'),
+              const HelpIcon(helpKey: 'eq.rotator.reverse'),
+              const Spacer(),
               Switch(
                 value: s.reverse,
                 onChanged: s.isMoving ? null : (v) => _setReverse(v),
@@ -153,6 +156,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
               onPressed: s.isMoving ? null : _sync,
               child: const Text('Sync'),
             ),
+            const HelpIcon(helpKey: 'eq.rotator.move'),
           ],
         ),
         Row(
@@ -162,6 +166,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
               onChanged: (v) => setState(() => _useSkyAngle = v ?? true),
             ),
             const Text('Move to sky angle (off = mechanical)'),
+            const HelpIcon(helpKey: 'eq.rotator.sky_angle'),
           ],
         ),
       ],

@@ -8,6 +8,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/camera_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -117,7 +118,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
         if (caps?.hasCooler ?? false) ...[
           Row(
             children: [
-              const Expanded(child: Text('Cooler')),
+              const Text('Cooler'),
+              const HelpIcon(helpKey: 'eq.camera.cooler'),
+              const Spacer(),
               Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
             ],
           ),
@@ -148,6 +151,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
                   onPressed: () => _setTarget(),
                   child: const Text('Set target'),
                 ),
+                const HelpIcon(helpKey: 'eq.camera.cooler_target'),
               ],
             ),
         ],
@@ -176,7 +180,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  const Expanded(child: Text('Readout mode')),
+                  const Text('Readout mode'),
+                  const HelpIcon(helpKey: 'eq.camera.readout_mode'),
+                  const Spacer(),
                   DropdownButton<int>(
                     value: _readoutIndex(caps.readoutModes, s.readoutMode),
                     items: [

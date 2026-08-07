@@ -7,6 +7,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -100,7 +101,9 @@ class _MountBody extends ConsumerWidget {
         if (caps?.canSetTracking ?? false)
           Row(
             children: [
-              const Expanded(child: Text('Tracking')),
+              const Text('Tracking'),
+              const HelpIcon(helpKey: 'eq.mount.tracking'),
+              const Spacer(),
               Switch(
                 key: const Key('mount_tracking_switch'),
                 value: s.tracking,
@@ -292,9 +295,19 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
           _directionPad(disabled: busy || _rate == null),
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: Text(
-              'Hold a direction to move; release to stop. Centre stops all motion.',
-              style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    'Hold a direction to move; release to stop. Centre stops all motion.',
+                    style: TextStyle(
+                      color: AraColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                HelpIcon(helpKey: 'eq.mount.manual_move'),
+              ],
             ),
           ),
         ],
@@ -336,6 +349,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
           onPressed: busy ? null : _dispatchGoTo,
           child: const Text('GoTo'),
         ),
+        const HelpIcon(helpKey: 'eq.mount.goto'),
       ],
     );
   }

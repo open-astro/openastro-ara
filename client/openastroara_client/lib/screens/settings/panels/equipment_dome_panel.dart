@@ -8,6 +8,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/dome_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -140,6 +141,7 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
                       ),
                 child: const Text('Close shutter'),
               ),
+              const HelpIcon(helpKey: 'eq.dome.shutter'),
             ],
           ),
         Padding(

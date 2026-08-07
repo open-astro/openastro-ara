@@ -10,6 +10,7 @@ import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/settings_nav.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -167,6 +168,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
               onPressed: s.isMoving ? null : () => _move(caps, absolute),
               child: const Text('Move'),
             ),
+            const HelpIcon(helpKey: 'eq.focuser.move'),
           ],
         ),
         if (caps?.canTempComp ?? false)
