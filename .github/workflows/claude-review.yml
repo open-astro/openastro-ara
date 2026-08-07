@@ -119,9 +119,14 @@ jobs:
             — the permission rules reject any command containing substitution, and
             the review will silently fail to post.
             Do not submit the review text as a chat message.
+          # Read-only paging tools (sed -n/grep/head/tail/wc/cat/ls) are in the
+          # allowlist because on LARGE diffs the agent dumps `gh pr diff` to a
+          # file and pages through it — without them every page is a permission
+          # denial and the agent burns out before posting (root cause of #932's
+          # failed reviews; 900+ small-diff PRs never needed to page).
           claude_args: |
             --model sonnet
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*)"
 
       # Fallback poster (PR #932's failure mode): on large diffs the agent has
       # repeatedly produced its review but burned every attempt to run

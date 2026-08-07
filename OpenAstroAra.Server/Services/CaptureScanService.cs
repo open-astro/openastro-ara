@@ -340,11 +340,42 @@ public sealed partial class CaptureScanService : IDisposable {
     private readonly Dictionary<string, Guid> _recoverySessions = new(StringComparer.OrdinalIgnoreCase);
 
     private async Task<Guid> EnsureRecoverySessionAsync(string target, DateTimeOffset capturedUtc, CancellationToken ct) {
-        var night = capturedUtc.ToLocalTime().AddHours(-12).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var localCaptured = capturedUtc.ToLocalTime();
+        var night = localCaptured.AddHours(-12).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
         var key = $"{night}|{target}";
         if (_recoverySessions.TryGetValue(key, out var existing)) return existing;
-        var sid = Guid.NewGuid();
+
         await using var conn = _db.OpenConnection();
+
+        // The in-memory map only spans THIS process — a scan after a restart
+        // (or a later incremental recovery of more files from the same night)
+        // must reuse the session a PRIOR scan created, or the library shows
+        // duplicate "target — night" rows (review #932 finding 1). Sessions
+        // carry no target/night columns, so membership is derived the same way
+        // the library derives it: any existing frame of this target captured
+        // within this night's local-noon→noon window names the session.
+        // captured_utc is always written as a normalized UTC "O" string, so
+        // lexicographic BETWEEN is chronological.
+        var nightStartLocal = new DateTimeOffset(
+            localCaptured.AddHours(-12).Date.AddHours(12), localCaptured.Offset);
+        var lo = nightStartLocal.ToUniversalTime().ToString("O");
+        var hi = nightStartLocal.AddHours(24).ToUniversalTime().ToString("O");
+        await using (var probe = conn.CreateCommand()) {
+            probe.CommandText = """
+                SELECT session_id FROM frames
+                WHERE target_name = $target AND captured_utc >= $lo AND captured_utc < $hi
+                LIMIT 1;
+                """;
+            probe.Parameters.AddWithValue("$target", target);
+            probe.Parameters.AddWithValue("$lo", lo);
+            probe.Parameters.AddWithValue("$hi", hi);
+            if (await probe.ExecuteScalarAsync(ct) is string sidText && Guid.TryParse(sidText, out var persisted)) {
+                _recoverySessions[key] = persisted;
+                return persisted;
+            }
+        }
+
+        var sid = Guid.NewGuid();
         await using var cmd = conn.CreateCommand();
         // started_at/ended_at seed from the first recovered frame's capture
         // time (NOT scan time — the archive's real chronology is what the

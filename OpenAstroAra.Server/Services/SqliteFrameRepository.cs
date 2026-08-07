@@ -555,11 +555,14 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
                     seeded = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
                 }
+                // Write the cache BEFORE releasing the gate: a same-variant
+                // caller acquiring the freed slot must find the file and skip
+                // its own decode (review #932 finding 2).
+                TryWriteCache(cachePath, seeded);
+                EvictVariantsIfNeeded(filePath);
             } finally {
                 RenderGate.Release();
             }
-            TryWriteCache(cachePath, seeded);
-            EvictVariantsIfNeeded(filePath);
             return (seeded, "image/jpeg", appliedManual);
         }
 
@@ -600,11 +603,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
                 jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
             }
+            // Cache lands before the gate frees so the next same-variant
+            // caller serves from disk instead of re-decoding (review #932).
+            TryWriteCache(cachePath, jpeg);
+            EvictVariantsIfNeeded(filePath);
         } finally {
             RenderGate.Release();
         }
-        TryWriteCache(cachePath, jpeg);
-        EvictVariantsIfNeeded(filePath);
         return jpeg;
     }
 
@@ -643,10 +648,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
                 jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
             }
+            // Sidecar lands before the gate frees — same-tile callers queued
+            // on the gate must hit the cache re-check, not re-decode (review
+            // #932 finding 2).
+            TryWriteCache(thumbPath, jpeg);
         } finally {
             RenderGate.Release();
         }
-        TryWriteCache(thumbPath, jpeg);
         return (jpeg, "image/jpeg");
     }
 
