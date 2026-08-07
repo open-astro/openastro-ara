@@ -82,6 +82,15 @@ chmod 0755 "$STAGE/opt/openastroara/OpenAstroAra.Server"
 if [ -f "$STAGE/opt/openastroara/createdump" ]; then
     chmod 0755 "$STAGE/opt/openastroara/createdump"
 fi
+# Helper scripts that sudoers.d/openastroara lets the service account exec
+# directly (update.sh may be absent — it ships via the §33 update flow).
+if [ -f "$STAGE/opt/openastroara/update.sh" ]; then
+    chmod 0755 "$STAGE/opt/openastroara/update.sh"
+fi
+if [ -d "$STAGE/opt/openastroara/scripts" ]; then
+    find "$STAGE/opt/openastroara/scripts" -maxdepth 1 -type f -name '*.sh' \
+        -exec chmod 0755 {} +
+fi
 chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postrm"
 chmod 0440 "$STAGE/etc/sudoers.d/openastroara"
 
