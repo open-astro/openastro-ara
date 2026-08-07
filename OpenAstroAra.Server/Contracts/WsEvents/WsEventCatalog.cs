@@ -86,18 +86,6 @@ public static class WsEventCatalog {
     // frame_complete per capture ({frame_id, solved, consecutive_solve_failures}), paused when
     // 5 consecutive solves fail (§45.11 — the loop keeps retrying and resumes on the next good
     // solve), and error on a fatal routine failure ({reason, message}).
-    // §77.2/§77.4 — planetary mode + SER recording lifecycle. mode_entered
-    // ({camera_id, usbfs_memory_mb}) after the Alpaca detach + usbfs tune;
-    // mode_left ({camera_id, alpaca_reconnect_attempted}); recording_started
-    // ({camera_id, output_path, width, height, format}); recording_stopped
-    // carries the §77.1 honest-accounting finals ({output_path, frames_captured,
-    // frames_written, ring_dropped_frames, abandoned_frames, sdk_dropped_frames,
-    // achieved_fps, error}).
-    public const string PlanetaryModeEntered = "planetary.mode_entered";
-    public const string PlanetaryModeLeft = "planetary.mode_left";
-    public const string PlanetaryRecordingStarted = "planetary.recording_started";
-    public const string PlanetaryRecordingStopped = "planetary.recording_stopped";
-
     public const string PolarAlignStarted = "polar_align.started";
     public const string PolarAlignStopped = "polar_align.stopped";
     public const string PolarAlignProgress = "polar_align.progress";
@@ -202,6 +190,9 @@ public static class WsEventCatalog {
     public const string ServerMigrationFailed = "server.migration_failed";
 
     public const string StorageLogPressure = "storage.log_pressure";
+    // §29 — a block device appeared or vanished, or the store mount came/went;
+    // clients re-fetch device+space state (empty payload by design).
+    public const string StorageDevicesChanged = "storage.devices_changed";
 
     public const string NotificationPosted = "notification.posted";
     public const string NotificationDismissed = "notification.dismissed";
@@ -249,7 +240,6 @@ public static class WsEventCatalog {
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
         AutofocusCollimationVerdict,
-        PlanetaryModeEntered, PlanetaryModeLeft, PlanetaryRecordingStarted, PlanetaryRecordingStopped,
         AutofocusStarted,
         AutofocusShotComplete,
         AutofocusFallbackClassic,
@@ -282,6 +272,7 @@ public static class WsEventCatalog {
         ServerPendingRestart, ServerRestartImminent,
         ServerMigratingDatabase, ServerMigrationComplete, ServerMigrationFailed,
         StorageLogPressure,
+        StorageDevicesChanged,
         NotificationPosted, NotificationDismissed, NotificationCleared,
         NotificationAlarmStarted, NotificationAlarmStopped,
         BugReportPrepared, BugReportSharingModeSet,

@@ -59,7 +59,7 @@ class _FakeClient implements SequenceClient {
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   @override
-  Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
   @override
@@ -144,7 +144,7 @@ void main() {
     testWidgets('prompts to connect when no server', (tester) async {
       await pumpDialog(tester, build: () async => null);
       await tester.pumpAndSettle();
-      expect(find.textContaining('Connect to a daemon'), findsOneWidget);
+      expect(find.textContaining('Connect to your rig'), findsOneWidget);
     });
 
     testWidgets('empty message when the server has no sequences', (tester) async {
@@ -173,7 +173,7 @@ void main() {
       expect(find.byIcon(Icons.save_alt), findsOneWidget);
       await tester.tap(find.byIcon(Icons.save_alt));
       await tester.pump(); // start _run → show the SnackBar
-      expect(find.textContaining('Connect to a daemon to export'), findsOneWidget);
+      expect(find.textContaining('Connect to your rig to export'), findsOneWidget);
       // Export never pops the picker — the row is still there.
       expect(find.text('M31 LRGB'), findsOneWidget);
     });

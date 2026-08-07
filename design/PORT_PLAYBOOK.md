@@ -11079,7 +11079,7 @@ Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure
 - Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in the initial release
 - Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
 - Hot-reload of executor config without server restart
-- High-frame-rate / planetary concurrency model — not part of this executor design; §77's capture engine owns its own worker model (a capture thread feeding the pre-allocated ring plus a dedicated SER drain thread, per §77.1; Alpaca still has no video API, §18.J)
+- High-frame-rate / planetary concurrency model — not part of this executor design; §77's capture engine owns its own two-thread ring/drain model (Alpaca still has no video API, §18.J)
 
 ### 66.9 §61 search registry entries
 

@@ -34,6 +34,7 @@ import 'panels/session_filenames_panel.dart';
 import 'panels/session_notifications_panel.dart';
 import 'panels/sky_data_panel.dart';
 import '../tabs/support_tab.dart';
+import 'panels/session_stats_panel.dart';
 import 'panels/storage_panel.dart';
 
 /// Settings shell per §25.5.5 — tree on the left, selected panel on the
@@ -255,6 +256,7 @@ class _PanelBody extends StatelessWidget {
       'session.filenames' => const SessionFilenamesPanel(),
       'session.notifications' => const SessionNotificationsPanel(),
       'session.calibration' => const SessionCalibrationPanel(),
+      'session.stats' => const SessionStatsPanel(),
       'safety.policies' => const SafetyPoliciesPanel(),
       'safety.diagnostics' => const DiagnosticsModePanel(),
       'safety.site' => const SafetySitePanel(),
@@ -267,9 +269,7 @@ class _PanelBody extends StatelessWidget {
           panelId: panelId,
           label: findPanelInfo(panelId)?.label ?? panelId,
           note:
-              'This panel\'s form lands in a later Phase 12h sub-PR. The '
-              'settings tree navigation + Riverpod state are real today; '
-              'selecting a panel here is enough to verify the routing.',
+              'This section is not available yet.',
         ),
     };
   }

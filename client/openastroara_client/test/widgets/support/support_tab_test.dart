@@ -91,7 +91,7 @@ void main() {
     await tester.pumpWidget(_host(_FakeLogsClient(throwOnTail: true)));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Could not load logs'), findsOneWidget);
+    expect(find.textContaining("Couldn't load the logs"), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
 
@@ -125,7 +125,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('kept line'), findsOneWidget);
-    expect(find.textContaining('Could not load logs'), findsOneWidget);
+    expect(find.textContaining("Couldn't load the logs"), findsOneWidget);
   });
 
   testWidgets('download button is present', (tester) async {

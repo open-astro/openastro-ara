@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
@@ -42,7 +43,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       await ref.read(customHorizonProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = 'Could not load saved values: $e');
+        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
       }
     }
   }
@@ -56,7 +57,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -70,14 +71,14 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       await ref.read(customHorizonProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Site preferences saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
       setState(
         () => _lastError = siteSaved
             ? 'Site preferences saved, but the horizon skyline failed: $e'
-            : 'Save failed: $e',
+            : friendlyError(e, action: 'save that'),
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
@@ -249,7 +250,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         const TimeSyncSection(),
         const SettingsSectionHeader('Horizon'),
         SettingsSwitchRow(
-          label: 'Use custom horizon polygon (§36.8)',
+          label: 'Use my measured horizon',
           helpKey: 'safety.site.use_custom_horizon',
           value: s.useCustomHorizon,
           onChanged: n.setUseCustomHorizon,
@@ -379,7 +380,7 @@ class _CustomHorizonEditor extends ConsumerWidget {
                 ? 'No skyline entered yet — visibility falls back to the flat '
                       'default altitude until at least one vertex is added. Enter '
                       'the sky altitude of your obstructions per compass bearing; '
-                      'the daemon interpolates between vertices (wrapping north).'
+                      'Ara draws a smooth line between the points you enter.'
                 : 'Skyline vertices (azimuth 0-360°, altitude -10..90°). Values '
                       'are interpolated between vertices and saved with the panel.',
             style: theme.textTheme.bodySmall,

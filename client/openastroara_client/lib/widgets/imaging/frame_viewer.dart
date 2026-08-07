@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,16 +29,7 @@ class FrameViewer extends ConsumerWidget {
     return Container(
       color: AraColors.bgPanelAlt,
       child: preview.when(
-        // constrained: false + an unbounded boundary lays the image out at its
-        // native size so zooming walks into real pixels instead of magnifying a
-        // downscaled raster; minScale lets a large frame be pinched down to fit.
-        data: (bytes) => InteractiveViewer(
-          constrained: false,
-          boundaryMargin: const EdgeInsets.all(double.infinity),
-          minScale: 0.1,
-          maxScale: 8,
-          child: Image.memory(bytes, gaplessPlayback: true),
-        ),
+        data: (bytes) => _ZoomableFrame(bytes: bytes),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Text(
@@ -48,6 +42,117 @@ class FrameViewer extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// The captured-frame viewer: pinch/scroll zoom + pan, opening at fit-to-window,
+/// with double-click toggling between fit and 1:1 pixels at the click point —
+/// the quick look first, the pixels when you ask for them.
+class _ZoomableFrame extends StatefulWidget {
+  final Uint8List bytes;
+  const _ZoomableFrame({required this.bytes});
+
+  @override
+  State<_ZoomableFrame> createState() => _ZoomableFrameState();
+}
+
+class _ZoomableFrameState extends State<_ZoomableFrame> {
+  final TransformationController _transform = TransformationController();
+  Size? _imageSize;
+  Size? _fittedFor;
+  Offset _doubleTapAt = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveSize();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ZoomableFrame old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.bytes, widget.bytes)) {
+      // A new frame opens at fit, like the first one.
+      _imageSize = null;
+      _fittedFor = null;
+      _resolveSize();
+    }
+  }
+
+  Future<void> _resolveSize() async {
+    final image = await decodeImageFromList(widget.bytes);
+    if (!mounted) return;
+    setState(() =>
+        _imageSize = Size(image.width.toDouble(), image.height.toDouble()));
+    image.dispose();
+  }
+
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
+  }
+
+  double _fitScale(Size viewport, Size image) => math.min(
+      viewport.width / image.width, viewport.height / image.height);
+
+  Matrix4 _fitMatrix(Size viewport, Size image) {
+    final s = _fitScale(viewport, image);
+    return Matrix4.identity()
+      ..translateByDouble((viewport.width - image.width * s) / 2,
+          (viewport.height - image.height * s) / 2, 0, 1)
+      ..scaleByDouble(s, s, 1, 1);
+  }
+
+  void _onDoubleTap(Size viewport) {
+    final image = _imageSize;
+    if (image == null) return;
+    final fit = _fitScale(viewport, image);
+    final current = _transform.value.getMaxScaleOnAxis();
+    if ((current - fit).abs() < 0.01) {
+      // At fit → 1:1, keeping the double-clicked spot under the cursor.
+      final scenePoint = _transform.toScene(_doubleTapAt);
+      _transform.value = Matrix4.identity()
+        ..translateByDouble(_doubleTapAt.dx - scenePoint.dx,
+            _doubleTapAt.dy - scenePoint.dy, 0, 1);
+    } else {
+      _transform.value = _fitMatrix(viewport, image);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+      final image = _imageSize;
+      if (image != null && _fittedFor != viewport) {
+        // First layout with known dimensions: open at fit-to-window rather
+        // than a 1:1 corner crop. On a plain window RESIZE, only re-fit when
+        // the user was still at fit — a zoomed/panned view they set up
+        // deliberately must survive the resize.
+        final wasAtFit = _fittedFor == null ||
+            (_transform.value.getMaxScaleOnAxis() -
+                        _fitScale(_fittedFor!, image))
+                    .abs() <
+                0.01;
+        _fittedFor = viewport;
+        if (wasAtFit) {
+          _transform.value = _fitMatrix(viewport, image);
+        }
+      }
+      return GestureDetector(
+        onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
+        onDoubleTap: () => _onDoubleTap(viewport),
+        child: InteractiveViewer(
+          transformationController: _transform,
+          constrained: false,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          minScale: 0.05,
+          maxScale: 8,
+          child: Image.memory(widget.bytes, gaplessPlayback: true),
+        ),
+      );
+    });
   }
 }
 

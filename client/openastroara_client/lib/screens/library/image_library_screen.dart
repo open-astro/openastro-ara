@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import '../../util/friendly_error.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -62,7 +63,7 @@ class ImageLibraryScreen extends ConsumerWidget {
       body: sessions.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _CenteredNotice(
-          message: 'Could not load the library: $e',
+          message: friendlyError(e, action: 'load your library'),
           action: OutlinedButton(
             onPressed: () =>
                 ref.read(liveLibrarySessionsProvider.notifier).refresh(),

@@ -86,6 +86,8 @@ public interface IFrameRepository {
     /// knobs) so clients can sync their sliders; null for non-manual palettes.
     /// </summary>
     Task<(byte[] Bytes, string ContentType, OpenAstroAra.Stretch.StretchParams? AppliedManual)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct);
+    /// <summary>Raw 16-bit luminance histogram for the frame; null when the frame/file is gone.</summary>
+    Task<FrameHistogramDto?> GetHistogramAsync(Guid id, CancellationToken ct);
     Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct);
     Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct);
 

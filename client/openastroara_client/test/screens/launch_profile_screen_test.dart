@@ -128,7 +128,7 @@ void main() {
       child: const MaterialApp(home: LaunchProfileScreen()),
     ));
     await tester.pumpAndSettle();
-    expect(find.textContaining('No active server'), findsOneWidget);
+    expect(find.textContaining('Connect to your rig'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     expect(find.text('Image'), findsNothing);
   });

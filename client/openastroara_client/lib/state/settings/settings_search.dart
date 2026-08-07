@@ -259,18 +259,6 @@ const Map<String, List<String>> _panelKeywords = {
     'updates',
     'what changed',
   ],
-  'app.monitoring': [
-    'health check',
-    'healthz',
-    'readyz',
-    'uptime',
-    'prometheus',
-    'performance',
-    'latency',
-    'slow',
-    'websocket catalog',
-    'ws protocol',
-  ],
 };
 
 /// §61.10 — the main tabs as palette navigation targets. Indices come from
@@ -336,6 +324,13 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     label: 'Back up & restore…',
     groupLabel: 'Actions',
     keywords: ['backup', 'restore', 'snapshot', 'export profile', 'save settings'],
+  ),
+  SettingsSearchEntry(
+    actionId: 'action.notifications',
+    label: 'Read your notifications',
+    groupLabel: 'Actions',
+    keywords: ['notifications', 'inbox', 'alerts', 'what happened', 'unread',
+        'messages', 'overnight'],
   ),
   SettingsSearchEntry(
     actionId: 'action.wizard',

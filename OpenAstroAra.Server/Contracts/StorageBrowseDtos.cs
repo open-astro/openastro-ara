@@ -45,32 +45,3 @@ public sealed record StorageCreateFolderRequestDto(
     string Path,
     string Name);
 
-/// <summary>One real mounted filesystem a capture target could live on
-/// (§29.1). <c>IsRootDevice</c> means the mount lives on the same physical
-/// disk as the OS root — the SD card on a Pi — which §29 warns against for
-/// capture storage.</summary>
-public sealed record StorageDriveDto(
-    string Device,
-    string MountPoint,
-    string Filesystem,
-    long TotalBytes,
-    long FreeBytes,
-    bool IsRootDevice,
-    bool IsSaveTarget);
-
-/// <summary>
-/// §29.1 — <c>GET /api/v1/storage/status</c>: where the configured save
-/// directory actually lives (device, filesystem, REAL free space) plus every
-/// candidate drive, so the Storage panel can show truth instead of
-/// placeholders and warn only when capture genuinely targets the SD card.
-/// </summary>
-public sealed record StorageStatusDto(
-    string SaveDirectory,
-    bool SaveDirectoryExists,
-    string? MountPoint,
-    string? Device,
-    string? Filesystem,
-    long TotalBytes,
-    long FreeBytes,
-    bool OnRootDevice,
-    IReadOnlyList<StorageDriveDto> Drives);

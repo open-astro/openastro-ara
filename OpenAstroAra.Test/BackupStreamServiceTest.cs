@@ -104,6 +104,49 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Queue_carries_store_relative_path_and_never_leaks_outside_paths() {
+            var profile = new InMemoryProfileStore();
+            profile.PutStorageSettings(profile.GetStorageSettings() with { SaveDirectory = _dir });
+            var svc = new BackupStreamService(_db, profile);
+
+            Directory.CreateDirectory(Path.Combine(_dir, "2026-08-05", "Light"));
+            var inside = await InsertFrameAsync(
+                Path.Combine("2026-08-05", "Light", "M31_0001"), DateTimeOffset.UtcNow.AddMinutes(-5));
+            var outsideId = Guid.NewGuid();
+            await using (var conn = _db.OpenConnection()) {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = """
+                    INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
+                                        exposure_seconds, captured_utc, file_path, file_size_bytes,
+                                        width, height, bit_depth, sha256)
+                    VALUES ($id, $sid, 'M31', 'light', 'L', 300, $t, '/mnt/old-drive/orphan.fits', 1, 100, 100, 16, 'ab');
+                    """;
+                cmd.Parameters.AddWithValue("$id", outsideId.ToString());
+                cmd.Parameters.AddWithValue("$sid", Session.ToString());
+                cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O"));
+                await cmd.ExecuteNonQueryAsync();
+            }
+            await svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+
+            var queue = await svc.GetQueueAsync("wilma-desk", 10, CancellationToken.None);
+            Assert.That(queue!, Has.Count.EqualTo(2));
+            var insideEntry = queue!.Single(e => e.Id == inside.Id);
+            // Forward slashes, relative to the store root — the mirror's layout.
+            Assert.That(insideEntry.RelativePath, Is.EqualTo("2026-08-05/Light/M31_0001.fits"));
+            // A frame outside the current store (swapped drive) exposes no path
+            // at all — absolute paths and ".." must never reach a client.
+            Assert.That(queue.Single(e => e.Id == outsideId).RelativePath, Is.Null);
+        }
+
+        [Test]
+        public async Task Queue_without_profile_store_omits_relative_paths() {
+            var frame = await InsertFrameAsync("f", DateTimeOffset.UtcNow);
+            await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+            var queue = await _svc.GetQueueAsync("wilma-desk", 10, CancellationToken.None);
+            Assert.That(queue!.Single(e => e.Id == frame.Id).RelativePath, Is.Null);
+        }
+
+        [Test]
         public async Task Queue_serves_oldest_first_with_lazy_sha_backfill_and_ack_removes() {
             var older = await InsertFrameAsync("older", DateTimeOffset.UtcNow.AddMinutes(-10));
             var newer = await InsertFrameAsync("newer", DateTimeOffset.UtcNow);

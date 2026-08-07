@@ -94,6 +94,34 @@ public sealed record FrameListItemDto(
     string? SyncTarget = null);
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
+/// <summary>
+/// §12c.2 — the frame's RAW 16-bit statistics (pre-stretch: the preview's
+/// screen stretch hides everything these numbers show). 128 bins over the
+/// full ADU range for the plot; exact mean/SD/median/MAD plus min/max with
+/// their pixel counts — a NINA-style Statistics readout. Stars/Hfr ride
+/// along from the catalog's analysis columns (null until analysis lands);
+/// Gain/Offset/BitDepth from the capture record.
+/// </summary>
+public sealed record FrameHistogramDto(
+    IReadOnlyList<long> Bins,
+    int MinAdu,
+    long MinCount,
+    int MaxAdu,
+    long MaxCount,
+    double MeanAdu,
+    double StdDev,
+    double Median,
+    double Mad,
+    double LowClipFraction,
+    double HighClipFraction,
+    int Width = 0,
+    int Height = 0,
+    int BitDepth = 0,
+    int? Stars = null,
+    double? Hfr = null,
+    int? Gain = null,
+    int? Offset = null);
+
 public sealed record FramePreviewRequestDto(
     string StretchPalette,
     double? BlackPoint,
@@ -203,13 +231,17 @@ public sealed record BackupStreamClaimRequestDto(string Hostname);
 public sealed record BackupStreamClaimResultDto(
     string ActiveTarget);
 
-/// <summary>One pending frame in the §44.5 queue (oldest first). Sha256 is computed lazily and cached on first serve.</summary>
+/// <summary>One pending frame in the §44.5 queue (oldest first). Sha256 is computed lazily and cached on first serve.
+/// RelativePath is the frame's §29-templated path relative to the store root (forward slashes), so the
+/// desktop mirror can reproduce the same human-readable layout; null when the frame lives outside the
+/// current save directory (drive since swapped) — the client then falls back to id-based names.</summary>
 public sealed record BackupStreamQueueEntryDto(
     Guid Id,
     string? Sha256,
     long SizeBytes,
     DateTimeOffset CapturedAt,
-    Guid SessionId);
+    Guid SessionId,
+    string? RelativePath);
 
 /// <summary>POST /backup-stream/ack body — §44.5: WILMA confirms it stored + sha-verified the frame.</summary>
 public sealed record BackupStreamAckRequestDto(

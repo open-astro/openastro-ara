@@ -69,17 +69,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly IProfileStore? _profileStore;
     private readonly string? _fallbackFramesDir;
     private AlpacaCamera? _client;
+    // The connected device's HTTP endpoint, for the direct ImageBytes
+    // download (skips the client library's int[,] inflation). Set alongside
+    // _client under _gate; null means "use the library path".
+    private Uri? _deviceBaseAddress;
+    private int _deviceNumber;
+    private static readonly HttpClient ImageBytesHttp = new() { Timeout = TimeSpan.FromSeconds(120) };
     private DiscoveredDeviceDto? _device;
-
-    /// <summary>Last device this service connected (survives disconnect) — the §77.2
-    /// planetary-mode leave path uses it to restore the Alpaca connection.</summary>
-    internal DiscoveredDeviceDto? LastKnownDevice {
-        get {
-            lock (_gate) {
-                return _device;
-            }
-        }
-    }
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
     private CameraStateDto _runtime = IdleRuntime;
@@ -101,7 +97,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         IFocuserMediator? focuser = null,
         EquipmentEventPublisher? events = null,
         ImageHistoryService? imageHistory = null,
-        IEquipmentFaultSink? faults = null) {
+        IEquipmentFaultSink? faults = null,
+        IObservingConditionsService? weather = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _events = events;
         _faults = faults;
@@ -110,10 +107,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         _fallbackFramesDir = fallbackFramesDir;
         _focuser = focuser;
         _imageHistory = imageHistory;
+        _weather = weather;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
     private readonly ImageHistoryService? _imageHistory;
+
+    // §29.2 header enrichment — the sky the frame was taken under (SQM,
+    // ambient). Optional: no weather station, no headers, no complaints.
+    private readonly IObservingConditionsService? _weather;
 
     private readonly IFocuserMediator? _focuser;
 
@@ -179,6 +181,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _connectGeneration++;
             client = _client;
             _client = null;
+            _deviceBaseAddress = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -378,7 +381,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+        var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
+        var settingsMs = timing.ElapsedMilliseconds;
         // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
         // exposure start, not the request-accepted time the §60.5 response reported.
@@ -414,18 +419,67 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // finished image, nothing to stop. REST passes CancellationToken.None, so this is inert there.
         ct.ThrowIfCancellationRequested();
 
-        // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
-        object? imageArray;
+        var exposeMs = timing.ElapsedMilliseconds - settingsMs;
+
+        // The blocking download; runs on this worker. Preferred path: raw
+        // ImageBytes straight into the raster buffer (the client library's
+        // ImageArray receives the identical wire payload but inflates it to a
+        // 104 MB int[,] we'd immediately convert back down). Any failure falls
+        // back to the library path — correctness beats the saved second.
+        ushort[] pixels;
+        int width, height;
         Interlocked.Exchange(ref _downloading, 1);
         try {
-            imageArray = client.ImageArray;
+            // Read the endpoint under the gate WITH the staleness check the
+            // rest of the class uses: if a reconnect swapped _client between
+            // the ImageReady poll and here, the direct path could silently
+            // pull bytes from the NEW device's endpoint and save them under
+            // the old exposure's frame id. Stale → library path on the
+            // original client (which fails honestly if it's gone).
+            Uri? baseAddress = null;
+            var deviceNumber = 0;
+            lock (_gate) {
+                if (ReferenceEquals(_client, client)) {
+                    baseAddress = _deviceBaseAddress;
+                    deviceNumber = _deviceNumber;
+                }
+            }
+            (ushort[], int, int)? direct = null;
+            if (baseAddress is not null) {
+                try {
+                    direct = await AlpacaImageBytes.DownloadAsync(ImageBytesHttp, baseAddress, deviceNumber, ct)
+                        .ConfigureAwait(false);
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    LogImageBytesFallback(ex, frameId);
+                }
+            }
+            if (direct is { } d) {
+                (pixels, width, height) = d;
+            } else {
+                (pixels, width, height) = ConvertImageArray(client.ImageArray);
+            }
         } finally {
             Interlocked.Exchange(ref _downloading, 0);
         }
-        var (pixels, width, height) = ConvertImageArray(imageArray);
+        var downloadMs = timing.ElapsedMilliseconds - settingsMs - exposeMs;
+        LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs);
         RefreshCacheOnce();
         return (pixels, width, height, capturedAt);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Direct ImageBytes download failed for {FrameId} — falling back to the client library's ImageArray.")]
+    private partial void LogImageBytesFallback(Exception ex, Guid frameId);
+
+    // Decode/convert runs fused inside the download window (the direct
+    // ImageBytes path transposes as it decodes) — one honest number.
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} device timing: settings {SettingsMs}ms, expose+ready {ExposeMs}ms, download+convert {DownloadMs}ms.")]
+    private partial void LogCaptureDeviceTiming(Guid frameId, long settingsMs, long exposeMs, long downloadMs);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} store timing: fits-write {WriteMs}ms, register {RegisterMs}ms.")]
+    private partial void LogCaptureStoreTiming(Guid frameId, long writeMs, long registerMs);
 
     /// <summary>
     /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
@@ -445,6 +499,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogPreCaptureDiskBlocked(frameId, freeBytes);
             return false;
         }
+        // §29 — an ejected store must fail capture LOUDLY. After eject the
+        // mount point still exists as an empty directory on the root disk;
+        // writing there would silently misdirect the night's frames onto the
+        // SD card (and eventually fill it) — the exact unattended scenario
+        // eject exists for.
+        if (StoreEjected(out var ejectedDir)) {
+            LogPreCaptureStoreEjected(frameId, ejectedDir);
+            return false;
+        }
         var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged
@@ -456,7 +519,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
-        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos);
+        double? sensorTemp = null, tempSetPoint = null;
+        try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
+        try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
+        var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
+        var storeTiming = System.Diagnostics.Stopwatch.StartNew();
+        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
+            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions);
+        var writeMs = storeTiming.ElapsedMilliseconds;
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -466,6 +536,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return false;
         }
         LogCaptureComplete(frameId, width, height, filePath);
+        LogCaptureStoreTiming(frameId, writeMs, storeTiming.ElapsedMilliseconds - writeMs);
+        PrewarmPreview(frameId);
         if (frameType == FrameType.Light) {
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
             // time, and delaying frame.complete (or the next exposure) for a statistic is the
@@ -554,6 +626,36 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogFrameAnalysisFailed(ex, frameId);
         }
     }
+
+    /// <summary>
+    /// §65 — render the default-stretch preview variant into the cache the
+    /// moment the frame registers, instead of waiting for the client to ask.
+    /// The client's fetch then either hits the cache or joins this render
+    /// (single-flight in the repository), so the picture appears seconds
+    /// after readout — the full FITS keeps trickling to the desktop later.
+    /// Fire-and-forget: a preview failure must never affect the capture.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort cache warm on a background task: any render fault is logged and dropped — the client's own preview request still works (and reports its own errors). Log-and-recover boundary.")]
+    private void PrewarmPreview(Guid frameId) {
+        if (_frames is null) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                // Null palette → the profile's default stretch for the frame
+                // type — exactly what the client's parameterless fetch asks for.
+                await _frames.GetPreviewAsync(frameId,
+                    new FramePreviewRequestDto(null!, null, null, null, null, ApplyDebayer: true),
+                    CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogPreviewPrewarmFailed(ex, frameId);
+            }
+        });
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Preview pre-warm for frame {FrameId} failed (client fetch will render instead).")]
+    private partial void LogPreviewPrewarmFailed(Exception ex, Guid frameId);
 
     // §59 — the one detector posture the HFR trend and the live-view overlay must share. Both feed the same
     // instrument's picture of the frame, so a sensitivity retune here must reach both; a copy-pasted literal
@@ -665,12 +767,27 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 var width = ints.GetLength(0);
                 var height = ints.GetLength(1);
                 var pixels = new ushort[width * height];
-                for (var y = 0; y < height; y++) {
-                    var row = y * width;
-                    for (var x = 0; x < width; x++) {
-                        pixels[row + x] = (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                // This is a 26-million-element transpose ([x,y] column-major
+                // spec layout → row-major raster). The naive y-outer/x-inner
+                // loop strides the source by `height` ints every step — ~2s
+                // single-threaded on a Pi from cache misses alone. Tiling
+                // keeps both arrays inside L1 per block; the parallel-for
+                // spreads tiles across cores. Measured ~10x on-target.
+                const int tile = 64;
+                var tileRows = (height + tile - 1) / tile;
+                System.Threading.Tasks.Parallel.For(0, tileRows, tyi => {
+                    var y0 = tyi * tile;
+                    var y1 = Math.Min(y0 + tile, height);
+                    for (var x0 = 0; x0 < width; x0 += tile) {
+                        var x1 = Math.Min(x0 + tile, width);
+                        for (var x = x0; x < x1; x++) {
+                            for (var y = y0; y < y1; y++) {
+                                pixels[y * width + x] =
+                                    (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                            }
+                        }
                     }
-                }
+                });
                 return (pixels, width, height);
             }
             case double[,] doubles: {
@@ -715,10 +832,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, $"{frameId}.fits");
+        // §29.2 — name the file the way the profile's template says, so what
+        // lands on disk reads as the user's night ("2026-08-03/Light/…_L_180s.fits"),
+        // not a directory of UUIDs. Any failure in naming falls back to the
+        // id-based name: naming must never cost a frame.
+        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp);
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
@@ -753,8 +874,245 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
+        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt);
         fits.Complete(); // §28.7 atomic finish
         return path;
+    }
+
+    /// <summary>
+    /// Latest observing conditions, bounded to two seconds and swallowing
+    /// every failure — a slow or absent weather station must never delay or
+    /// fail a capture. Null simply means those headers are skipped.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort weather read for optional headers: any driver/transport fault must degrade to 'no weather headers', never a failed capture. CA1031's log-and-recover boundary applies.")]
+    private async Task<ObservingConditionsDto?> ReadConditionsBestEffortAsync(CancellationToken ct) {
+        if (_weather is null) return null;
+        try {
+            using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            bounded.CancelAfter(TimeSpan.FromSeconds(2));
+            var dto = await _weather.GetAsync(bounded.Token).ConfigureAwait(false);
+            return dto?.State == EquipmentConnectionState.Connected ? dto : null;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The headers the FITS standard and forty years of astro software expect
+    /// (fits.gsfc.nasa.gov): who took it (SWCREATE/INSTRUME), through what
+    /// (FOCALLEN/APTDIA/XPIXSZ), of what (OBJECT), from where
+    /// (SITELAT/SITELONG/SITEELEV), and how cold the sensor was
+    /// (CCD-TEMP/SET-TEMP). Everything is best-effort: a header that's
+    /// sometimes absent beats a capture that can fail on a flaky read, so
+    /// each source is guarded and zero/unset profile values are skipped.
+    /// RA/DEC need the mount and land with the pointing follow-up.
+    /// </summary>
+    /// <summary>All-on when the profile can't be read — a rich header is the
+    /// safe default for everything except a capture failure.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort profile read for header preferences; any store fault degrades to the all-on defaults rather than failing the write. CA1031's log-and-recover boundary applies.")]
+    private FilenamesSettingsDto ReadHeaderPrefsBestEffort() {
+        try {
+            return _profileStore?.GetFilenamesSettings()
+                ?? new FilenamesSettingsDto("forward_slash", true);
+        } catch (Exception) {
+            return new FilenamesSettingsDto("forward_slash", true);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
+    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt) {
+        try {
+            // §29.2 — the user chooses which optional groups their frames
+            // carry (Files & headers panel). All-on is the default; the off
+            // switches exist for real reasons — Site above all: coordinates
+            // in a shared frame reveal where someone lives.
+            var prefs = ReadHeaderPrefsBestEffort();
+
+            fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
+            if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
+                fits.SetHeader("OBJECT", targetName!, "target name");
+            }
+            if (_device?.Name is string cam && cam.Length > 0) {
+                fits.SetHeader("INSTRUME", cam, "camera");
+            }
+            if (prefs.HeaderTemperature) {
+                if (sensorTemp is double ccd) {
+                    fits.SetHeader("CCD-TEMP", ccd, "sensor temperature C");
+                }
+                if (tempSetPoint is double setp) {
+                    fits.SetHeader("SET-TEMP", setp, "cooler set point C");
+                }
+            }
+
+            var profile = _profileStore;
+            if (profile is null) return;
+
+            var optics = profile.GetOpticsSettings();
+            if (prefs.HeaderIdentity && !string.IsNullOrWhiteSpace(optics.TelescopeName)) {
+                fits.SetHeader("TELESCOP", optics.TelescopeName, "telescope");
+            }
+            if (prefs.HeaderOptics) {
+                var focal = optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1);
+                if (focal > 0) {
+                    fits.SetHeader("FOCALLEN", focal, "effective focal length mm");
+                }
+                if (optics.ApertureMm > 0) {
+                    fits.SetHeader("APTDIA", optics.ApertureMm, "aperture diameter mm");
+                }
+                if (optics.PixelSizeUm > 0) {
+                    // Effective pixel size after binning — what plate solvers want.
+                    fits.SetHeader("XPIXSZ", optics.PixelSizeUm * request.BinX, "pixel width um (binned)");
+                    fits.SetHeader("YPIXSZ", optics.PixelSizeUm * request.BinY, "pixel height um (binned)");
+                }
+            }
+
+            var site = profile.GetSiteSettings();
+            if (prefs.HeaderIdentity && !string.IsNullOrWhiteSpace(site.ObserverName)) {
+                fits.SetHeader("OBSERVER", site.ObserverName, "observer");
+            }
+            if (prefs.HeaderSite && (site.LatitudeDeg != 0 || site.LongitudeDeg != 0)) {
+                fits.SetHeader("SITELAT", site.LatitudeDeg, "observatory latitude deg");
+                fits.SetHeader("SITELONG", site.LongitudeDeg, "observatory longitude deg (E+)");
+                fits.SetHeader("SITEELEV", site.ElevationM, "observatory elevation m");
+            }
+
+            // The sky this frame was taken under, when a weather source is
+            // connected. SQM feeds gradient/quality tooling; ambient explains
+            // a warm sensor.
+            if (prefs.HeaderWeather && conditions is not null) {
+                if (conditions.SkyQualityMagArcsec2 is double sqm) {
+                    fits.SetHeader("SQM", sqm, "sky quality mag/arcsec^2");
+                }
+                if (conditions.SkyTemperatureC is double skyt) {
+                    fits.SetHeader("SKYTEMP", skyt, "sky temperature C");
+                }
+                if (conditions.TemperatureC is double amb) {
+                    fits.SetHeader("AMBTEMP", amb, "ambient temperature C");
+                }
+                if (conditions.HumidityPct is double hum) {
+                    fits.SetHeader("HUMIDITY", hum, "relative humidity pct");
+                }
+                if (conditions.DewPointC is double dew) {
+                    fits.SetHeader("DEWPOINT", dew, "dew point C");
+                }
+                if (conditions.PressureHpa is double press) {
+                    fits.SetHeader("PRESSURE", press, "barometric pressure hPa");
+                }
+                if (conditions.WindSpeedMs is double wind) {
+                    fits.SetHeader("WINDSPD", wind, "wind speed m/s");
+                }
+                if (conditions.WindGustMs is double gust) {
+                    fits.SetHeader("WINDGUST", gust, "wind gust m/s");
+                }
+                if (conditions.WindDirectionDeg is double wdir) {
+                    fits.SetHeader("WINDDIR", wdir, "wind direction deg");
+                }
+                if (conditions.CloudCoverPct is double cloud) {
+                    fits.SetHeader("CLOUDCVR", cloud, "cloud cover pct");
+                }
+            }
+
+            // Where the sun and moon were — the two numbers that explain a
+            // bright background or a gradient better than any note you'd
+            // write yourself. Computed from the site, so the Site coordinates
+            // must exist; guarded by its own switch because celestial
+            // geometry at a timestamp narrows down where a frame was taken.
+            // Deliberately independent of HeaderSite: the switches map 1:1 to
+            // the panel's groups, and the panel's Sun & moon hint spells out
+            // that celestial geometry at a timestamp still narrows down where
+            // a frame was taken — the user makes that call per group, not us.
+            // (0,0) as "not configured" is the product-wide convention (the
+            // client's site panel says "Coordinates not set" for exactly this
+            // pair). The one boat at that null-island point loses these
+            // headers; every unconfigured install avoids confidently wrong
+            // sun/moon numbers computed for a site that was never entered.
+            if (prefs.HeaderEphemeris && (site.LatitudeDeg != 0 || site.LongitudeDeg != 0)) {
+                WriteEphemerisHeaders(fits, site, capturedAt);
+            }
+        } catch (Exception ex) {
+            LogHeaderEnrichmentFailed(ex);
+        }
+    }
+
+    /// <summary>
+    /// SUNALT / MOONALT / MOONILL / MOONPHSE at the moment of capture, from
+    /// SiteAstrometry — the same pure-C# math the sequencer's unattended and
+    /// resume paths already trust. Deliberately NOT the NOVAS bodies: those
+    /// P/Invoke a native library and read a JPL ephemeris file, neither of
+    /// which ships on the rig, and their absence produced confidently wrong
+    /// numbers (sun at -73 in mid-morning) rather than a clean failure.
+    /// Meeus-grade accuracy (~0.1-1 deg) is exactly right for a header.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort ephemeris for optional headers: any math fault must never fail the frame write. CA1031's log-and-recover boundary applies.")]
+    private void WriteEphemerisHeaders(FitsImage fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
+        try {
+            // The frame's own capture instant — wall-clock at header-write
+            // time would drift by the exposure length plus readout.
+            var now = capturedAt;
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(now, site.LongitudeDeg);
+            var (sunRa, sunDec) = SiteAstrometry.SunEquatorialDeg(now);
+            var sunAlt = SiteAstrometry.AltitudeFromHourAngleDeg(sunDec, site.LatitudeDeg, lst - sunRa);
+            fits.SetHeader("SUNALT", Math.Round(sunAlt, 2), "sun altitude deg");
+
+            var (moonRa, moonDec) = SiteAstrometry.MoonEquatorialDeg(now);
+            var moonAlt = SiteAstrometry.AltitudeFromHourAngleDeg(moonDec, site.LatitudeDeg, lst - moonRa);
+            fits.SetHeader("MOONALT", Math.Round(moonAlt, 2), "moon altitude deg");
+
+            var illum = SiteAstrometry.MoonIlluminatedFraction(now);
+            fits.SetHeader("MOONILL", Math.Round(illum * 100, 1), "moon illumination pct");
+            var waxing = SiteAstrometry.MoonIlluminatedFraction(now.AddHours(1)) > illum;
+            fits.SetHeader("MOONPHSE", PhaseLabel(illum, waxing), "moon phase");
+        } catch (Exception ex) {
+            LogHeaderEnrichmentFailed(ex);
+        }
+    }
+
+    /// <summary>Phase name from illuminated fraction + direction — the way a
+    /// person says it, without needing an ephemeris of phase angles.</summary>
+    private static string PhaseLabel(double illum, bool waxing) => illum switch {
+        < 0.02 => "New Moon",
+        > 0.98 => "Full Moon",
+        >= 0.47 and <= 0.53 => waxing ? "First Quarter" : "Last Quarter",
+        < 0.47 => waxing ? "Waxing Crescent" : "Waning Crescent",
+        _ => waxing ? "Waxing Gibbous" : "Waning Gibbous",
+    };
+
+    /// <summary>
+    /// True when the configured save directory sits under the §29 store
+    /// mount point but nothing is mounted there — i.e. the drive was
+    /// ejected (or fell off) and a write would land on the root disk.
+    /// Best-effort: an unreadable /proc/self/mounts never blocks capture.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort pre-capture probe over profile + /proc reads; a probe fault must degrade to 'capture proceeds'. CA1031's log-and-recover boundary applies.")]
+    internal bool StoreEjected(out string saveDirectory) {
+        const string mountPoint = "/media/openastroara";
+        saveDirectory = string.Empty;
+        try {
+            if (_profileStore is null || !OperatingSystem.IsLinux()) {
+                return false;
+            }
+            var dir = _profileStore.GetStorageSettings().SaveDirectory;
+            if (string.IsNullOrWhiteSpace(dir) ||
+                !(dir == mountPoint || dir.StartsWith(mountPoint + "/", StringComparison.Ordinal))) {
+                return false;
+            }
+            saveDirectory = dir;
+            foreach (var line in File.ReadLines("/proc/self/mounts")) {
+                var parts = line.Split(' ');
+                if (parts.Length > 1 && parts[1] == mountPoint) {
+                    return false; // store is mounted — all good
+                }
+            }
+            return true;
+        } catch (Exception ex) {
+            LogPreCaptureDiskProbeFailed(ex);
+            return false;
+        }
     }
 
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
@@ -791,6 +1149,69 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // Save-directory resolution: the user's §29 storage setting when present AND creatable, else
     // the daemon-local fallback (dev boxes where /media/openastroara doesn't exist). The "manual"
     // subdir keeps REST captures apart from future sequence-run target dirs.
+    /// <summary>
+    /// Expand the profile's filename template for this frame; unique-ify with
+    /// " (2)", " (3)"… on collision (a Finder convention people already know);
+    /// fall back to <c>{frameId}.fits</c> flat in [rootDir] when the template
+    /// is empty, expands to nothing, or the folders can't be created.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Naming is best-effort by §29.2: any IO/template fault degrades to the id-based filename rather than costing the frame. The falling-back log preserves the cause.")]
+    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp) {
+        var fallback = Path.Combine(rootDir, $"{frameId}.fits");
+        try {
+            var template = _profileStore?.GetStorageSettings().FilenameTemplate;
+            var relative = FrameNaming.ExpandRelativePath(template, new FrameNamingContext(
+                ImageType: imageType,
+                CapturedLocal: capturedAt.ToLocalTime(),
+                ExposureSec: request.ExposureSec,
+                Filter: request.FilterName,
+                Gain: request.Gain,
+                Offset: request.CameraOffset,
+                BinX: request.BinX,
+                BinY: request.BinY,
+                SensorTemp: sensorTemp,
+                TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == "Manual capture"
+                    ? null : targetName,
+                FrameNumber: NextFrameNumber(rootDir)));
+            if (relative is null) return fallback;
+
+            var candidate = Path.Combine(rootDir, relative + ".fits");
+            var parent = Path.GetDirectoryName(candidate);
+            if (parent is not null) Directory.CreateDirectory(parent);
+            for (var n = 2; File.Exists(candidate); n++) {
+                candidate = Path.Combine(rootDir, $"{relative} ({n}).fits");
+            }
+            return candidate;
+        } catch (Exception ex) {
+            LogTemplateNamingFailed(ex, frameId);
+            return fallback;
+        }
+    }
+
+    // Session-scoped counter: monotonic per daemon lifetime, seeded from the
+    // catalog's frame count so numbers keep climbing across restarts instead
+    // of resetting to 0001 and colliding into " (2)" suffixes.
+    private int _frameCounter = -1;
+    private readonly Lock _frameCounterLock = new();
+
+    private int NextFrameNumber(string rootDir) {
+        lock (_frameCounterLock) {
+            if (_frameCounter < 0) {
+                var count = 0;
+                try {
+                    count = Directory.Exists(rootDir)
+                        ? Directory.EnumerateFiles(rootDir, "*.fits", new EnumerationOptions {
+                              RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0,
+                          }).Count()
+                        : 0;
+                } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                _frameCounter = count;
+            }
+            return ++_frameCounter;
+        }
+    }
+
     internal string ResolveFramesDir() {
         var configured = _profileStore?.GetStorageSettings().SaveDirectory;
         if (!string.IsNullOrWhiteSpace(configured)) {
@@ -1219,6 +1640,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
+                    _deviceBaseAddress = new Uri(
+                        $"{(device.UseHttps ? "https" : "http")}://{host}:{device.IpPort}/");
+                    _deviceNumber = device.AlpacaDeviceNumber;
                     _capabilities = null;   // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
@@ -1289,6 +1713,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private void DisposeClientLocked() {
         var c = _client;
         _client = null;
+        _deviceBaseAddress = null;
         if (c is not null) {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
@@ -1355,6 +1780,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             kind, details, DateTimeOffset.UtcNow));
     }
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Optional FITS headers could not all be written; frame is intact")]
+    private partial void LogHeaderEnrichmentFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Filename template failed for frame {FrameId}; using id-based name")]
+    private partial void LogTemplateNamingFailed(Exception ex, Guid frameId);
+
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' stopped answering — marked Error (§42.3)")]
     private partial void LogConnectionLost(string device);
 
@@ -1390,6 +1821,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _disposed = true;
             client = _client;
             _client = null;
+            _deviceBaseAddress = null;
         }
         _refreshTimer.Dispose();
         // Stop accepting analysis jobs and let the worker drain what it holds; analysis
@@ -1454,6 +1886,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: save volume critically low ({FreeBytes} bytes free) and OnDiskSpaceCritical=abort — the exposure never started")]
     private partial void LogPreCaptureDiskBlocked(Guid frameId, long freeBytes);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: the store drive is ejected/unmounted (save directory {SaveDirectory}) — writing would land on the root disk. Reconnect the drive or choose a store.")]
+    private partial void LogPreCaptureStoreEjected(Guid frameId, string saveDirectory);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "§29 pre-capture disk probe failed — capture proceeds (the disk monitor owns reporting)")]
     private partial void LogPreCaptureDiskProbeFailed(Exception ex);

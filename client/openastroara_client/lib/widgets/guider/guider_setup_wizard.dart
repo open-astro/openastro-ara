@@ -136,7 +136,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   Future<void> _hydrate() async {
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      setState(() => _error = 'No active server — connect to a daemon first.');
+      setState(() => _error = 'Not connected — connect to your rig to save this.');
       return;
     }
     setState(() => _busy = true);
@@ -362,7 +362,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       setState(() => _serverCopy = echoed);
       await equipment.pushProfile();
       if (!mounted) return;
-      // The wizard's fields are now the daemon's truth — reflect them into
+      // The wizard's fields are now Ara's truth — reflect them into
       // the shared provider through the bounded setters.
       final n = ref.read(phd2SettingsProvider.notifier);
       n.setHost(draft.host);
@@ -381,7 +381,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     } catch (e) {
       if (mounted) {
         setState(() => _error = friendlyDaemonError(e,
-            fallback: 'Apply failed — the daemon could not take the profile'));
+            fallback: 'Apply failed — Ara could not take the profile'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -534,8 +534,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             status?.connectionState == GuiderConnectionState.connected;
         return [
           const Text(
-              'Where is the OpenAstro Guider daemon running? Ara connects to '
-              'it over the network; the daemon owns the guide camera.'),
+              'Where is the OpenAstro Guider server running? Ara connects to '
+              'it over the network; Ara owns the guide camera.'),
           const SizedBox(height: 12),
           _textField(
             label: 'Host',
@@ -592,7 +592,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         return [
           const Text(
               'Pick the guide camera. The list covers every Alpaca server '
-              'found on the network, not just the one the guider daemon is '
+              'found on the network, not just the one the guider server is '
               'currently pointed at — use "Search network" if yours is '
               'missing.'),
           const SizedBox(height: 12),
@@ -697,9 +697,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       case _WizStep.mount:
         return [
           const Text(
-              'Pick the mount the daemon sends guide pulses to. An aux mount '
+              'Pick the mount Ara sends guide pulses to. An aux mount '
               'is only needed when the guiding connection can\'t report '
-              'pointing (leave it on daemon default otherwise).'),
+              'pointing (leave it on server default otherwise).'),
           const SizedBox(height: 12),
           // Mount/rotator synthesis is limited to the CAMERA's Alpaca server:
           // OpenAstro Guider has one Alpaca server per profile (derived from the camera on
@@ -720,7 +720,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           if (_isCrossServerPick(draft.guiderMount))
             Text(
               'This mount lives on a different Alpaca server than the guide '
-              'camera — the daemon supports one server, so this selection '
+              'camera — Ara supports one server, so this selection '
               'won\'t take effect. Pick a mount on the camera\'s server.',
               style: Theme.of(context)
                   .textTheme
@@ -765,14 +765,14 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         ];
       case _WizStep.apply:
         return [
-          const Text('Everything below is pushed to the guider daemon — its '
+          const Text('These settings go to the guider — its '
               'equipment reconnects with these selections.'),
           const SizedBox(height: 12),
-          _summaryRow('Daemon', '${draft.host}:${draft.port}'),
+          _summaryRow('Ara', '${draft.host}:${draft.port}'),
           _summaryRow(
               'Guide camera',
               draft.guiderCamera.isEmpty
-                  ? '(daemon default)'
+                  ? '(use the guider\'s own setting)'
                   : friendlyAlpacaChoiceLabel(
                       draft.guiderCamera, 'camera', _alpacaNames)),
           _summaryRow(
@@ -787,19 +787,19 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           _summaryRow(
               'Mount',
               draft.guiderMount.isEmpty
-                  ? '(daemon default)'
+                  ? '(use the guider\'s own setting)'
                   : friendlyAlpacaChoiceLabel(
                       draft.guiderMount, 'telescope', _alpacaNames)),
           _summaryRow(
               'Aux mount',
               draft.guiderAuxMount.isEmpty
-                  ? '(daemon default)'
+                  ? '(use the guider\'s own setting)'
                   : friendlyAlpacaChoiceLabel(
                       draft.guiderAuxMount, 'telescope', _alpacaNames)),
           _summaryRow(
               'Rotator',
               draft.guiderRotator.isEmpty
-                  ? '(daemon default)'
+                  ? '(use the guider\'s own setting)'
                   : friendlyAlpacaChoiceLabel(
                       draft.guiderRotator, 'rotator', _alpacaNames)),
           // Belt for a stale draft: the mount step restricts new picks to the
@@ -811,7 +811,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'A mount/rotator selection is on a different Alpaca server '
-                'than the guide camera and will NOT take effect — the daemon '
+                'than the guide camera and will NOT take effect — Ara '
                 'supports one Alpaca server (the camera\'s). Go Back to fix it.',
                 style: Theme.of(context)
                     .textTheme
@@ -827,7 +827,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               SizedBox(width: 6),
               Expanded(
                   child:
-                      Text('Applied — the daemon reconnected its equipment.')),
+                      Text('Applied — equipment reconnected.')),
             ])
           else
             FilledButton.icon(
@@ -847,7 +847,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         return [
           const Text(
               'A dark library removes hot pixels from guide frames — worth '
-              'building once per camera/cooling setup. The daemon captures '
+              'building once per camera/cooling setup. The server captures '
               'frames at a range of exposures; cover the guide scope first.'),
           const SizedBox(height: 12),
           if (!_darksStarted) ...[
@@ -1062,7 +1062,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             DropdownMenuItem(
               value: o,
               child: Text(
-                o.isEmpty ? '(daemon default)' : (labels?[o] ?? o),
+                o.isEmpty ? '(use the guider\'s own setting)' : (labels?[o] ?? o),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

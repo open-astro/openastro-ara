@@ -390,6 +390,10 @@ jobs:
           set -euo pipefail
           export OPENASTROARA_PROFILE_DIR="$RUNNER_TEMP/oara-smoke"
           export OPENASTROARA_PORT=5599
+          # The probes below query the sample M31 session, which is fixture
+          # data the server only plants when asked. A real install never sets
+          # this — see Program.ShouldSeedSampleData.
+          export OPENASTROARA_SEED_SAMPLE_DATA=1
           # Background the daemon. Redirect output so the workflow log
           # keeps the smoke responses + the server tail together if it
           # blows up.

@@ -26,7 +26,7 @@ class SkyDataPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
-                'Manages the data packages the daemon computes with: the '
+                'Star and object catalogues Ara plans and solves with: the '
                 'OpenNGC deep-sky catalog behind Tonight\'s Sky ranking and '
                 'the HYG star catalog. The planetarium itself needs no '
                 'downloads — Stellarium renders its own sky. Open the manager '

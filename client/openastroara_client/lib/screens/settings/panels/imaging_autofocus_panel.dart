@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -37,7 +38,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           .read(autofocusSettingsProvider.notifier)
           .hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -50,7 +51,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -58,11 +59,11 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
       await ref.read(autofocusSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Autofocus settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -208,7 +209,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           label: 'Abort sequence if AF fails',
           value: s.abortSequenceOnAfFailure,
           onChanged: n.setAbortSequenceOnAfFailure,
-          hint: '§35 — overrideable by diagnostics-mode policy',
+          hint: 'Safety rules can override this',
         ),
         SettingsSwitchRow(
           label: 'Restore position on failure',

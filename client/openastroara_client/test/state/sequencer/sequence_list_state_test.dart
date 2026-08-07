@@ -38,7 +38,7 @@ class _FakeSeqClient implements SequenceClient {
   final List<Completer<SequencePage>> calls = [];
 
   @override
-  Future<SequencePage> list({int limit = 50}) {
+  Future<SequencePage> list({int limit = 50, String? cursor}) {
     final c = Completer<SequencePage>();
     calls.add(c);
     return c.future;

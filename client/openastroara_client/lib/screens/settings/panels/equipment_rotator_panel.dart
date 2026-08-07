@@ -47,10 +47,14 @@ class EquipmentRotatorPanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.rotator, v),
         ),
         const SettingsSectionHeader('Framing'),
-        const SettingsRow(
-          label: 'Plate-solve to set angle',
-          value: 'On',
-          hint: '§38 Framing + Set-as-Target drives Sync',
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Rotator angle is set by the centre-and-rotate step whenever a target carries a position angle; there is no separate toggle.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AraColors.textSecondary,
+                ),
+          ),
         ),
       ],
     );

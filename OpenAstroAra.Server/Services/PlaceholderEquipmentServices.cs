@@ -46,6 +46,7 @@ static class PlaceholderEquipmentHelpers {
 
 public sealed class PlaceholderCameraService : ICameraService {
     public Task<CameraDto?> GetAsync(CancellationToken ct) => Task.FromResult<CameraDto?>(null);
+    public bool IsFreeToCapture(object consumer) => true; // no camera, no exposure to protect
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("camera.connect", idempotencyKey));
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>

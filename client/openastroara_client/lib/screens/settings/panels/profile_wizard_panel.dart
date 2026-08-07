@@ -23,7 +23,7 @@ class ProfileWizardPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
-                'Walks through the §37 18-screen / 7-stage wizard again, '
+                'Walks through the 18-screen / 7-stage wizard again,'
                 'starting from the current profile values as defaults. '
                 'Useful after swapping equipment or moving site.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(

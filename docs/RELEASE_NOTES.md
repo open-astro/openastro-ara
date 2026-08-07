@@ -23,9 +23,9 @@
 - **§43 configuration backup**: ZIP snapshots with retention pruning + restore (local or from another daemon's snapshot URL, SHA-256-gated).
 
 **Still placeholders (real impl ahead):**
-- Polar alignment (§45) — will drive the `openastro-guider` daemon's polar-align API.
-- §44 backup stream.
 - DSLR RAW decoding (libraw).
+
+*(Shipped since this list was written: §45 polar alignment end-to-end (PRs #888–#891; on-rig hardware close-out remains), the §44 backup stream both halves incl. §29-named mirror files, §29 storage/filenames/FITS headers (PR #923), and §76 Wizard 2.0 (PRs #901–#907) replacing the §37 18-screen flow.)*
 
 ### Client (`OpenAstroAra.Client` Flutter)
 

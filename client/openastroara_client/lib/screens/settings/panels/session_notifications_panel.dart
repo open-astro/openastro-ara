@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -6,7 +7,9 @@ import '../../../state/saved_server_state.dart';
 import '../../../state/alarm/safety_alarm_state.dart';
 import '../../../state/settings/notifications_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
+import '../../../state/settings/storage_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/notifications/notification_center.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §54 Notifications panel — editable form wired to
@@ -39,7 +42,7 @@ class _SessionNotificationsPanelState
           .read(notificationsSettingsProvider.notifier)
           .hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -52,7 +55,7 @@ class _SessionNotificationsPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -62,11 +65,11 @@ class _SessionNotificationsPanelState
           .persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Notifications saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -84,6 +87,17 @@ class _SessionNotificationsPanelState
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        // Choosing what you get told is only half of it — the other half is
+        // reading it later, which lives behind the bell.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showNotificationCenter(context),
+            icon: const Icon(Icons.notifications_none, size: 16),
+            label: const Text('Read your notifications'),
+          ),
+        ),
+        const SizedBox(height: 8),
         const SettingsSectionHeader('Channels'),
         SettingsSwitchRow(
           label: 'In-app banner',
@@ -96,7 +110,7 @@ class _SessionNotificationsPanelState
           onChanged: n.setOsDesktop,
         ),
         SettingsSwitchRow(
-          label: 'Sound alert (§35 alarm)',
+          label: 'Play a sound for safety alerts',
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
         ),
@@ -205,7 +219,10 @@ class _SessionNotificationsPanelState
           onChanged: n.setOnPlateSolveFailed,
         ),
         SettingsSwitchRow(
-          label: 'Disk space low (<10 GB)',
+          // The threshold itself lives in Storage → "Warn below (GB free)";
+          // quoting it live keeps the two panels from contradicting each other.
+          label: 'Disk space low (below '
+              '${ref.watch(storageSettingsProvider).minFreeDiskWarnGb} GB free)',
           helpKey: 'session.notifications.on_disk_space_low',
           value: s.onDiskSpaceLow,
           onChanged: n.setOnDiskSpaceLow,

@@ -39,7 +39,23 @@ namespace OpenAstroAra.Server.Services;
 /// from the §38 sequence orchestrator + §72 FITS writes start populating
 /// the directory; from that point this scan auto-heals across crashes.
 /// </summary>
-public sealed partial class CaptureScanService {
+/// <summary>
+/// What one scan actually did. [Ran] is false when the save directory was
+/// missing or unwritable — [SkipReason] then says which, so the caller can
+/// tell the user something specific instead of "0 frames found".
+/// </summary>
+public sealed record CaptureScanResult(
+    bool Ran,
+    string? SkipReason,
+    string SavePath,
+    int TempFilesSwept,
+    int FramesRecovered) {
+
+    public static CaptureScanResult Skipped(string savePath, string reason) =>
+        new(false, reason, savePath, 0, 0);
+}
+
+public sealed partial class CaptureScanService : IDisposable {
     private readonly IProfileStore _profile;
     private readonly IAraDatabase _db;
     private readonly ILogger<CaptureScanService> _logger;
@@ -55,22 +71,97 @@ public sealed partial class CaptureScanService {
     /// listening, and the work is bounded (typical captures dir has
     /// 0–10k files; §28.8 ceiling is 2s on a Pi 4 with 10k frames).
     /// </summary>
-    public async Task RunAsync(CancellationToken ct) {
+    // The service is a DI singleton shared by startup and POST /storage/rescan.
+    // Two overlapping scans would each snapshot known paths before either
+    // inserts, and both would then catalog the same orphan (frames.file_path
+    // has no unique constraint) — so scans serialize here.
+    private readonly SemaphoreSlim _scanLock = new(1, 1);
+
+    // Singleton — the DI container disposes it at host shutdown.
+    public void Dispose() => _scanLock.Dispose();
+
+    /// <summary>
+    /// §50 stats maintenance — wipe the frame catalog (frames + sessions)
+    /// and re-ingest from whatever store is currently mounted, so the Stats
+    /// views truthfully describe THE CONNECTED DRIVE after a swap. Holds
+    /// the scan lock end-to-end: the wipe and the rebuilding scan are one
+    /// atomic maintenance operation from every other caller's view.
+    /// </summary>
+    public async Task<(long FramesCleared, long SessionsCleared, CaptureScanResult Scan)> ResetAndRescanAsync(CancellationToken ct) {
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            long framesCleared, sessionsCleared;
+            await using (var conn = _db.OpenConnection()) {
+                // One transaction: a cancel/crash between the deletes must
+                // never leave frames gone with stale session rows behind.
+                await using var tx = (Microsoft.Data.Sqlite.SqliteTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+                await using (var cmd = conn.CreateCommand()) {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "DELETE FROM frames;";
+                    framesCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                }
+                await using (var cmd = conn.CreateCommand()) {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "DELETE FROM sessions;";
+                    sessionsCleared = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                }
+                await tx.CommitAsync(ct).ConfigureAwait(false);
+            }
+            // The synthetic recovery sessions were just deleted with the rest —
+            // drop the in-memory cache or every re-insert fails its session FK
+            // (found live: 339 frames re-scanned as 0 on the rig).
+            _recoverySessions.Clear();
+            LogCatalogReset(framesCleared, sessionsCleared);
+            var scan = await RunLockedAsync(ct).ConfigureAwait(false);
+            return (framesCleared, sessionsCleared, scan);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§50 catalog reset: cleared {Frames} frames and {Sessions} sessions; re-ingesting from the mounted store.")]
+    private partial void LogCatalogReset(long frames, long sessions);
+
+    /// <summary>
+    /// Runs <paramref name="work"/> holding the scan lock — for storage
+    /// maintenance (mount/reformat) that must not interleave with a scan
+    /// walking the very tree being unmounted, nor with a sibling configure.
+    /// </summary>
+    public async Task<T> RunExclusiveAsync<T>(Func<Task<T>> work, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(work);
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await work().ConfigureAwait(false);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
+    public async Task<CaptureScanResult> RunAsync(CancellationToken ct) {
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await RunLockedAsync(ct).ConfigureAwait(false);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
+    private async Task<CaptureScanResult> RunLockedAsync(CancellationToken ct) {
         var savePath = _profile.GetStorageSettings().SaveDirectory;
         if (string.IsNullOrEmpty(savePath)) {
             LogScanSkippedEmptyPath();
-            return;
+            return CaptureScanResult.Skipped(savePath ?? string.Empty, "no_save_directory");
         }
         if (!Directory.Exists(savePath)) {
             // Captures dir doesn't exist yet on fresh installs — that's
             // fine, we'll find it when the first capture writes. Don't
             // queue a critical notification for this case.
             LogScanSkippedMissingPath(savePath);
-            return;
+            return CaptureScanResult.Skipped(savePath, "path_missing");
         }
         if (!IsWritable(savePath)) {
             LogScanPathNotWritable(savePath);
-            return;
+            return CaptureScanResult.Skipped(savePath, "path_not_writable");
         }
 
         var tmpSwept = SweepStaleTempFiles(savePath);
@@ -80,6 +171,7 @@ public sealed partial class CaptureScanService {
         if (tmpSwept > 0 || orphansRecovered > 0) {
             LogScanComplete(tmpSwept, orphansRecovered);
         }
+        return new CaptureScanResult(true, null, savePath, tmpSwept, orphansRecovered);
     }
 
     private static bool IsWritable(string dir) {
@@ -114,8 +206,17 @@ public sealed partial class CaptureScanService {
     private async Task<int> RecoverOrphanFitsAsync(string root, CancellationToken ct) {
         var recovered = 0;
         var seenIds = await LoadKnownIdsAsync(ct);
-        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fits")) {
+        // Both extensions the wild actually uses: Ara writes .fits, NINA (and
+        // most captured archives a user copies onto a take-home drive) write
+        // .fit — a whole drive of NINA frames previously scanned as "nothing
+        // found". Enumeration is case-insensitive (.FIT/.FITS included), and
+        // macOS AppleDouble droppings ("._Light_….fit") are metadata forks,
+        // not FITS — skip them by name.
+        // One recursive walk, not one per extension — these are 1 TB
+        // take-home drives; LooksLikeFits does the exact-extension filtering.
+        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fit*")) {
             if (ct.IsCancellationRequested) break;
+            if (!LooksLikeFits(fitsPath)) continue;
             try {
                 var inserted = await TryRecoverAsync(fitsPath, seenIds, ct);
                 if (inserted) recovered++;
@@ -164,9 +265,13 @@ public sealed partial class CaptureScanService {
 
         var capturedUtc = ParseDateObs(headers) ?? File.GetLastWriteTimeUtc(fitsPath);
         var exposureSec = ParseExposure(headers) ?? 0.0;
-        var target = LookupHeader(headers, "OBJECT") ?? "Unknown Target";
         var imageType = LookupHeader(headers, "IMAGETYP") ?? "LIGHT";
         var frameType = MapImageTypeToFrameType(imageType);
+        // Calibration frames have no target by nature — label them as what
+        // they are instead of "Unknown Target" masquerading as an object in
+        // the stats/target lists (Joey's call, from the NGC6188 archive).
+        var target = LookupHeader(headers, "OBJECT")
+            ?? (frameType == "light" ? "Unknown Target" : "Calibration");
         var filter = LookupHeader(headers, "FILTER");
         // §28: a FITS without a GAIN header records null (unknown), not a fake 0.
         var gain = ParseInt(LookupHeader(headers, "GAIN"));
@@ -279,14 +384,40 @@ public sealed partial class CaptureScanService {
         }
     }
 
+    // IgnoreInaccessible matters more than it looks: a try/catch around the
+    // CALL only guards creating the lazy iterator — EnumerateFiles throws
+    // mid-iteration when the walk descends into a directory it can't open.
+    // Every ext4 volume has a root-owned lost+found at its root, so pointing
+    // the save directory at a mount root (which the §29 storage flow does for
+    // every user) crash-looped the daemon on startup until this scan learned
+    // to walk past what it can't read. Found on rc91, first boot after the T7
+    // became the store.
+    private static readonly EnumerationOptions SkipInaccessible = new() {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        // Skip nothing else: hidden dirs are fair game (dotfile trees a user
+        // rsyncs over shouldn't hide their FITS from recovery).
+        AttributesToSkip = 0,
+        // Linux globbing is case-sensitive by default; a drive of ".FIT"
+        // frames from a Windows capture rig must still be found.
+        MatchCasing = MatchCasing.CaseInsensitive,
+    };
+
     private static IEnumerable<string> EnumerateFilesSafe(string root, string pattern) {
         try {
-            return Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories);
-        } catch (UnauthorizedAccessException) {
-            return Array.Empty<string>();
+            return Directory.EnumerateFiles(root, pattern, SkipInaccessible);
         } catch (DirectoryNotFoundException) {
             return Array.Empty<string>();
         }
+    }
+
+    /// <summary>The extensions the scan recognizes as FITS, shared with the
+    /// enumeration above so the two never drift.</summary>
+    internal static bool LooksLikeFits(string path) {
+        var name = Path.GetFileName(path);
+        if (name.StartsWith("._", StringComparison.Ordinal)) return false;
+        return name.EndsWith(".fits", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".fit", StringComparison.OrdinalIgnoreCase);
     }
 
     // Boxes a nullable value type for an ADO.NET parameter, mapping null to DBNull.

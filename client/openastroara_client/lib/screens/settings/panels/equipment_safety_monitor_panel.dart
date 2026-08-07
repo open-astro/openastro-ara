@@ -5,6 +5,7 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/safety_monitor_status.dart';
 import '../../../state/equipment/safety_monitor_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/safety_policies_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/equipment_time_format.dart';
@@ -20,6 +21,7 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final connection = ref.watch(equipmentConnectionProvider);
+    final policies = ref.watch(safetyPoliciesProvider);
     final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(safetyMonitorProvider);
     final notifier = ref.read(safetyMonitorProvider.notifier);
@@ -47,19 +49,21 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
               n.setAutoConnect(EquipmentDeviceType.safetyMonitor, v),
         ),
         const SettingsSectionHeader('Behavior'),
-        const SettingsRow(
+        SettingsRow(
           label: 'On unsafe',
-          value: 'Park + close',
-          hint: '§35 safety policies — overrideable per profile',
+          value: _unsafeActionLabel(policies.onUnsafe),
+          hint: 'Edit in Settings → Safety → Policies',
         ),
-        const SettingsRow(label: 'Min safe window (min)', value: '15'),
-        const SettingsRow(label: 'Auto-resume when safe', value: 'On'),
-        const SettingsRow(
+        SettingsRow(
+          label: 'Auto-resume when safe',
+          value: policies.autoResumeWhenSafe ? 'On' : 'Off',
+          hint: 'Edit in Settings → Safety → Policies',
+        ),
+        SettingsRow(
           label: 'Resume delay (min)',
-          value: '10',
-          hint: 'wait this long after first "safe" reading',
-        ),
-      ],
+          value: policies.resumeDelayMin.toString(),
+          hint: 'Edit in Settings → Safety → Policies',
+        ),      ],
     );
   }
 }
@@ -127,3 +131,12 @@ class _SafeIndicator extends StatelessWidget {
     );
   }
 }
+
+/// Mirrors the labels in Settings → Safety → Policies so the two panels can
+/// never describe the same setting differently.
+String _unsafeActionLabel(UnsafeAction action) => switch (action) {
+      UnsafeAction.pauseAndPark => 'Pause + park + close dome',
+      UnsafeAction.parkOnly => 'Park only',
+      UnsafeAction.abortAndPark => 'Abort sequence + park',
+      UnsafeAction.ignore => 'Ignore (not recommended)',
+    };

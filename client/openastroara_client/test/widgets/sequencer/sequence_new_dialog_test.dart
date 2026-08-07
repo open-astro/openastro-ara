@@ -58,7 +58,7 @@ class _NewClient implements SequenceClient {
   @override
   Future<List<SequenceTemplate>> listTemplates() async => templates;
   @override
-  Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: const {});
@@ -227,7 +227,7 @@ void main() {
   testWidgets('prompts to connect when there is no server', (tester) async {
     await pumpDialog(tester, (ref) async => null); // null = disconnected
     await tester.pumpAndSettle();
-    expect(find.textContaining('Connect to a daemon'), findsOneWidget);
+    expect(find.textContaining('Connect to your rig'), findsOneWidget);
   });
 
   testWidgets('picking a template does not clobber a name the user typed',

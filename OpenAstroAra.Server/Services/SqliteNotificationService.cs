@@ -126,7 +126,7 @@ public sealed partial class SqliteNotificationService : INotificationService {
                    read, dismissed, dismissed_utc, payload_json,
                    related_entity_type, related_entity_id
             FROM notifications
-            WHERE 1=1
+            WHERE dismissed = 0
             """;
         if (unreadOnly == true) {
             sql += " AND read = 0";

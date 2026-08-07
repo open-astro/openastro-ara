@@ -98,7 +98,7 @@ class LogsApi implements LogsClient {
     }
     return fileNameFromContentDisposition(
             res.headers.value('content-disposition')) ??
-        'openastroara-daemon.log';
+        'openastroara-server.log';
   }
 
   @override

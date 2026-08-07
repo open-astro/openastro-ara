@@ -5,6 +5,7 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/flat_panel_status.dart';
 import '../../../state/equipment/flat_panel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/safety_policies_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -21,6 +22,7 @@ class EquipmentFlatPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final connection = ref.watch(equipmentConnectionProvider);
+    final policies = ref.watch(safetyPoliciesProvider);
     final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(flatPanelProvider);
     final notifier = ref.read(flatPanelProvider.notifier);
@@ -47,14 +49,20 @@ class EquipmentFlatPanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.flatPanel, v),
         ),
         const SettingsSectionHeader('Flat capture'),
-        const SettingsRow(label: 'Open cover on connect', value: 'On'),
-        const SettingsRow(label: 'Close cover on park', value: 'On'),
-        const SettingsRow(label: 'Calibrator min brightness', value: '0'),
-        const SettingsRow(label: 'Calibrator max brightness', value: '255'),
-        const SettingsRow(
-          label: 'Auto-brightness target ADU',
-          value: '30000',
-          hint: '§29.3.2 auto-exposure flats',
+        SettingsRow(
+          label: 'Auto-brightness target (ADU)',
+          value: policies.flatTargetAdu.toString(),
+          hint: 'Edit in Settings → Safety → Policies (flat sets)',
+        ),
+        SettingsRow(
+          label: 'Target tolerance (%)',
+          value: policies.flatTargetAduTolerancePct.toString(),
+          hint: 'Edit in Settings → Safety → Policies (flat sets)',
+        ),
+        SettingsRow(
+          label: 'Frames per filter',
+          value: policies.flatFramesPerFilter.toString(),
+          hint: 'Edit in Settings → Safety → Policies (flat sets)',
         ),
       ],
     );

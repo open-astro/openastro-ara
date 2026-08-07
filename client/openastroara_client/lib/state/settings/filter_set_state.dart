@@ -31,7 +31,7 @@ enum FilterKind {
         orElse: () => FilterKind.l,
       );
 
-  /// The kind's default effective passband in nm — mirrors the daemon's
+  /// The kind's default effective passband in nm — mirrors Ara's
   /// `OptimalSubCalculator.DefaultBandwidthNm` table so the filter-set editor
   /// can show what a 0 ("use default") bandwidth means. Duo/tri use the
   /// per-pixel single-line width (each OSC Bayer channel sees only the line

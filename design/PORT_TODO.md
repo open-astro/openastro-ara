@@ -1712,3 +1712,7 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
   harmless but useless for a remote PHD2 (it can't start a unit on another SBC).
   Skip the RequestStart when the configured host isn't loopback if the log noise
   ever matters.
+
+## openapi.yaml refresh (2026-08-05, from the docs audit)
+
+`OpenAstroAra.Server/openapi.yaml` is frozen at an early generation (28 paths). Missing entirely: `/storage/*` (devices/configure/rescan/space), `/backup-stream/*`, `/frames/{id}/{preview,histogram,thumbnail,download}`, `/liveview*`, faults, guider, polar-align, profiles CRUD, time-sync, jobs. The reasoning log (`API_CONTRACT.md`) is current; the machine-readable spec is not. Options: hand-refresh in arcs, or generate from the minimal-API metadata (Swashbuckle/NSwag emit) and hand-annotate. Until done, `API_CONTRACT.md` + the endpoint source files are the contract of record.

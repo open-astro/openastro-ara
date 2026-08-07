@@ -53,7 +53,7 @@ class _FakeClient implements SequenceClient {
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
       id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');
   @override
-  Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<String> start(String id) async {
     calls.add('start');

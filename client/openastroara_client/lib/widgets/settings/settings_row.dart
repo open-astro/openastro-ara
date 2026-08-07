@@ -71,19 +71,32 @@ class SettingsRow extends StatelessWidget {
 /// Section divider with title, for grouping rows inside a panel.
 class SettingsSectionHeader extends StatelessWidget {
   final String title;
-  const SettingsSectionHeader(this.title, {super.key});
+
+  /// Optional action riding on the header's baseline (a "See every header"
+  /// link, a Rescan button) — the Apple pattern of putting the section's
+  /// one action where the eye already is.
+  final Widget? trailing;
+  const SettingsSectionHeader(this.title, {super.key, this.trailing});
 
   @override
   Widget build(BuildContext context) {
+    final text = Text(
+      title,
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AraColors.textPrimary,
+            letterSpacing: 0.4,
+          ),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AraColors.textPrimary,
-              letterSpacing: 0.4,
+      child: trailing == null
+          ? text
+          : Row(
+              children: [
+                Expanded(child: text),
+                trailing!,
+              ],
             ),
-      ),
     );
   }
 }

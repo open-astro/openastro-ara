@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/guider_equipment_choices.dart';
@@ -57,7 +58,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
     } catch (e) {
-      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
     }
   }
 
@@ -82,7 +83,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'No active server — connect to a daemon first.');
+          () => _lastError = 'Not connected — connect to your rig to save this.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -91,11 +92,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('OpenAstro Guider settings saved to daemon.')),
+        const SnackBar(content: Text('Saved.')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(() => _lastError = friendlyError(e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -134,7 +135,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       messenger.showSnackBar(const SnackBar(
-          content: Text('No active server — connect to a daemon first.')));
+          content: Text('Not connected — connect to your rig to save this.')));
       return;
     }
     setState(() {
@@ -273,7 +274,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         const SettingsRow(
           label: 'Re-calibrate on meridian flip',
           value: 'Edit in Settings → Safety → Policies',
-          hint: '§35 meridian-flip behaviour',
+          hint: 'What the guider does across a meridian flip',
         ),
         const SettingsSectionHeader('Guider engine'),
         // §63.19 — how the guide camera sees the sky: through its own guide
@@ -407,7 +408,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   /// list it (disconnected, or a stale selection) — so hydrated state is
   /// always representable and never silently coerced.
   static Map<String, String> _slotItems(List<String> choices, String current) {
-    final items = <String, String>{'': '(daemon default)'};
+    final items = <String, String>{'': '(use the guider\'s own setting)'};
     for (final c in choices) {
       items[c] = c;
     }
@@ -494,7 +495,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         currentValue: phd2.guiderCameraId,
         getCanonical: () => ref.read(phd2SettingsProvider).guiderCameraId,
         parse: phd2N.setGuiderCameraId,
-        hint: 'Disambiguates duplicate camera names; blank = daemon default',
+        hint: 'Only needed when two cameras share a name',
       ),
       SettingsDropdownRow<String>(
         label: 'Guide mount',
@@ -525,7 +526,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         currentValue: phd2.guiderAlpacaHost,
         getCanonical: () => ref.read(phd2SettingsProvider).guiderAlpacaHost,
         parse: phd2N.setGuiderAlpacaHost,
-        hint: 'Blank = daemon default',
+        hint: 'Leave blank to keep the guider\'s setting',
       ),
       EditableNumberRow(
         label: 'Alpaca port',

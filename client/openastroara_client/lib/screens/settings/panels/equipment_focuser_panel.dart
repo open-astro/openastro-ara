@@ -277,7 +277,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
               _running = false;
               _lastFailed = true;
               _result =
-                  'Lost contact with the server while autofocusing — the sweep may still be running on the daemon; check the Focuser panel or the daemon log.';
+                  'Lost contact with the server while autofocusing — autofocus may still be running. Check the Focuser panel.';
             });
             debugPrint('[autofocus] poll gave up after $consecutivePollFailures consecutive failures: $e');
             return;
@@ -311,7 +311,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
         _lastFailed = job.state == 'failed';
         _result = switch (job.state) {
           'complete' => 'Autofocus complete — focuser is at the fitted best position.',
-          'failed' => job.errorMessage ?? 'Autofocus failed — see the daemon log.',
+          'failed' => job.errorMessage ?? 'Autofocus failed — see Support → Logs.',
           'cancelled' => 'Autofocus was cancelled.',
           _ => 'Autofocus finished.',
         };

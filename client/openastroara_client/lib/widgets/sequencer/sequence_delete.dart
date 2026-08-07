@@ -30,7 +30,7 @@ Future<bool> confirmAndDeleteSequence(
   final messenger = ScaffoldMessenger.of(context);
   if (api == null) {
     messenger.showSnackBar(const SnackBar(
-        content: Text('Connect to a daemon to delete sequences.'),
+        content: Text('Connect to your rig to delete sequences.'),
         backgroundColor: AraColors.accentError));
     return false;
   }
@@ -59,8 +59,8 @@ Future<bool> confirmAndDeleteSequence(
       title: Text(active ? 'Stop the run and delete?' : 'Delete sequence?'),
       content: Text(active
           ? '$displayName is currently running. This aborts the run, then '
-              'permanently deletes the sequence from the daemon.'
-          : 'This permanently deletes $displayName from the daemon.'),
+              'permanently deletes the sequence from Ara.'
+          : 'This permanently deletes $displayName from Ara.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),

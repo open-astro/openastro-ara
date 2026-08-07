@@ -21,19 +21,47 @@ class FilenamesSettings {
   final DateSeparator dateSeparator;
   final bool compressDarksAndBias;
 
+  // §29.2 — which optional FITS header groups every frame carries. All on by
+  // default; each off-switch exists for a reason (Site above all: coordinates
+  // in a shared frame reveal where you live).
+  final bool headerIdentity;
+  final bool headerSite;
+  final bool headerOptics;
+  final bool headerTemperature;
+  final bool headerWeather;
+  final bool headerEphemeris;
+
   const FilenamesSettings({
     this.dateSeparator = DateSeparator.forwardSlash,
     this.compressDarksAndBias = true,
+    this.headerIdentity = true,
+    this.headerSite = true,
+    this.headerOptics = true,
+    this.headerTemperature = true,
+    this.headerWeather = true,
+    this.headerEphemeris = true,
   });
 
   FilenamesSettings copyWith({
     DateSeparator? dateSeparator,
     bool? compressDarksAndBias,
+    bool? headerIdentity,
+    bool? headerSite,
+    bool? headerOptics,
+    bool? headerTemperature,
+    bool? headerWeather,
+    bool? headerEphemeris,
   }) =>
       FilenamesSettings(
         dateSeparator: dateSeparator ?? this.dateSeparator,
         compressDarksAndBias:
             compressDarksAndBias ?? this.compressDarksAndBias,
+        headerIdentity: headerIdentity ?? this.headerIdentity,
+        headerSite: headerSite ?? this.headerSite,
+        headerOptics: headerOptics ?? this.headerOptics,
+        headerTemperature: headerTemperature ?? this.headerTemperature,
+        headerWeather: headerWeather ?? this.headerWeather,
+        headerEphemeris: headerEphemeris ?? this.headerEphemeris,
       );
 }
 
@@ -46,6 +74,14 @@ class FilenamesSettingsNotifier extends Notifier<FilenamesSettings>
       state = state.copyWith(dateSeparator: d);
   void setCompressDarksAndBias(bool v) =>
       state = state.copyWith(compressDarksAndBias: v);
+  void setHeaderIdentity(bool v) => state = state.copyWith(headerIdentity: v);
+  void setHeaderSite(bool v) => state = state.copyWith(headerSite: v);
+  void setHeaderOptics(bool v) => state = state.copyWith(headerOptics: v);
+  void setHeaderTemperature(bool v) =>
+      state = state.copyWith(headerTemperature: v);
+  void setHeaderWeather(bool v) => state = state.copyWith(headerWeather: v);
+  void setHeaderEphemeris(bool v) =>
+      state = state.copyWith(headerEphemeris: v);
 
   Future<void> hydrateFromServer(ProfileApi api) =>
       hydrateGuarded(() => api.getFilenamesSettings());

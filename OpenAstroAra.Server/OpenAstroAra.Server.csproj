@@ -3,9 +3,6 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <!-- §77.1 video capture: the SER writer's O_DIRECT staging buffer needs a raw
-         address for its page-alignment computation (same precedent as Core/Image). -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>OpenAstroAra.Server</RootNamespace>
     <AssemblyName>OpenAstroAra.Server</AssemblyName>
@@ -70,7 +67,7 @@
          breaking major (IOpenApiMediaType.Example is read-only) the AspNetCore.OpenApi
          10.0.x source generator cannot compile against — keep 2.7.x. -->
     <PackageReference Include="Microsoft.OpenApi" Version="[2.11.0]" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.16" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.17" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): pin the patched native SQLite lib

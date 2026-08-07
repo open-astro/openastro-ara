@@ -36,6 +36,9 @@ class OpticsSettings {
   /// unavailable until it's set; framing keeps working without it).
   final double apertureMm;
 
+  // §29.2 — goes in every frame's TELESCOP header. Empty = header omitted.
+  final String telescopeName;
+
   const OpticsSettings({
     this.focalLengthMm = 0,
     this.reducerFactor = 1.0,
@@ -43,6 +46,7 @@ class OpticsSettings {
     this.sensorHeightPx = 0,
     this.pixelSizeUm = 0,
     this.apertureMm = 0,
+    this.telescopeName = '',
   });
 
   /// True once every input the FOV box needs is a usable positive value. The
@@ -92,6 +96,7 @@ class OpticsSettings {
     int? sensorHeightPx,
     double? pixelSizeUm,
     double? apertureMm,
+    String? telescopeName,
   }) =>
       OpticsSettings(
         focalLengthMm: focalLengthMm ?? this.focalLengthMm,
@@ -100,6 +105,7 @@ class OpticsSettings {
         sensorHeightPx: sensorHeightPx ?? this.sensorHeightPx,
         pixelSizeUm: pixelSizeUm ?? this.pixelSizeUm,
         apertureMm: apertureMm ?? this.apertureMm,
+        telescopeName: telescopeName ?? this.telescopeName,
       );
 }
 
@@ -142,6 +148,10 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings>
   void setApertureMm(double v) {
     if (v < 0) return;
     state = state.copyWith(apertureMm: v);
+  }
+
+  void setTelescopeName(String v) {
+    state = state.copyWith(telescopeName: v.trim());
   }
 
   /// Replace local state with what the daemon currently holds. Called when the

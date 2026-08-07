@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/profile_api.dart';
@@ -97,7 +98,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _hydrateError = 'Could not load saved values: $e');
+        setState(() => _hydrateError = friendlyError(e, action: 'load your saved settings'));
       }
     } finally {
       _hydrating = false;
@@ -110,7 +111,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   Future<void> _apply() async {
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      setState(() => _status = 'No active server — connect to a daemon first.');
+      setState(() => _status = 'Not connected — connect to your rig to save this.');
       return;
     }
     final draft = _draft;

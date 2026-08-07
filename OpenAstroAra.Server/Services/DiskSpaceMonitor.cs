@@ -219,6 +219,34 @@ namespace OpenAstroAra.Server.Services {
 
         // internal (not private): the §29 per-frame pre-capture check in CameraService probes the
         // same save volume the monitor watches, with the same longest-prefix root resolution.
+        /// <summary>Free + total bytes of the volume holding <paramref name="saveDir"/> —
+        /// the §29 storage panel's real numbers (replaces a hardcoded placeholder).</summary>
+        internal static (long Free, long Total)? TryGetSpace(string saveDir) {
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var full = Path.GetFullPath(saveDir);
+            var drives = DriveInfo.GetDrives().Where(IsReadySafe).ToList();
+            var root = LongestPrefixRoot(full, drives.Select(d => d.RootDirectory.FullName), comparison);
+            if (root is null) {
+                return null;
+            }
+            try {
+                var drive = drives.First(d => string.Equals(d.RootDirectory.FullName, root, comparison));
+                return (drive.AvailableFreeSpace, drive.TotalSize);
+            } catch (IOException) {
+                return null;
+            }
+
+            static bool IsReadySafe(DriveInfo d) {
+                try {
+                    return d.IsReady;
+                } catch (IOException) {
+                    return false;
+                } catch (UnauthorizedAccessException) {
+                    return false;
+                }
+            }
+        }
+
         internal static long? TryGetFreeBytes(string saveDir) {
             // Windows drive letters are case-insensitive (DriveInfo uppercases "D:\" but the save dir may be
             // "d:\..."); POSIX paths are case-sensitive. Match both the prefix test and the drive lookup the same way.

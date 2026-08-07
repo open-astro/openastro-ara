@@ -82,16 +82,24 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
   }
 
   /// Load the first page and return its items. Logs when the daemon reports more
-  /// pages than fit in the default limit — this slice shows only the first page;
-  /// the pagination/"load more" UI (using [SequencePage.nextCursor]) is a later
-  /// slice, and this warning makes the truncation visible until then.
+  /// Walks every page instead of showing the first one silently: a rig with
+  /// more sequences than the page limit used to lose the rest with only a
+  /// debug line. Bounded so a runaway cursor can't spin forever.
   Future<List<SequenceListItem>> _loadFirstPage(SequenceClient api) async {
-    final page = await api.list();
-    if (page.hasMore) {
-      debugPrint('[sequencer] sequence list truncated to the first page '
-          '(${page.items.length}); pagination is not wired yet.');
+    const maxPages = 20;
+    final all = <SequenceListItem>[];
+    String? cursor;
+    for (var page = 0; page < maxPages; page++) {
+      final result = await api.list(cursor: cursor);
+      all.addAll(result.items);
+      if (!result.hasMore || result.nextCursor == null) {
+        return all;
+      }
+      cursor = result.nextCursor;
     }
-    return page.items;
+    debugPrint('[sequencer] stopped after $maxPages pages of sequences '
+        '(${all.length} loaded) — Ara kept returning a cursor.');
+    return all;
   }
 }
 

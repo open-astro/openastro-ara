@@ -167,7 +167,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   Widget _body(PolarAlignLive live, bool noServer, Color color) {
     if (noServer) {
-      return const Text('No active server.', style: TextStyle(color: AraColors.textSecondary));
+      return const Text('Connect to your rig first.', style: TextStyle(color: AraColors.textSecondary));
     }
     switch (live.phase) {
       case PolarAlignStates.seeding:
@@ -289,8 +289,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: const TextStyle(fontSize: 10, color: AraColors.textSecondary)),
         const SizedBox(height: 8),
         Text(
-          'Az: ${formatArcmin(live.azErrorArcmin)}   '
-          'Alt: ${formatArcmin(live.altErrorArcmin)}   '
+          'Az: ${formatArcmin(live.azErrorArcmin)} '
+          'Alt: ${formatArcmin(live.altErrorArcmin)} '
           'Total: ${formatArcmin(live.totalErrorArcmin)}',
           key: const Key('polar-align-readout'),
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color),

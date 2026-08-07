@@ -8,7 +8,7 @@ import '../../theme/ara_colors.dart';
 import '../status_indicator.dart';
 import 'guider_dialog.dart';
 
-/// Maps the guider's async status to the §25.3 chip's status dot. Pure so the
+/// Maps the guider's async status to the chip's status dot. Pure so the
 /// mapping is unit-testable. `loading` reads as *info* (a connect/poll is in
 /// flight), `error` as *error*, and a resolved status delegates to
 /// [guiderStatusLevel].

@@ -113,6 +113,9 @@ public sealed record SiteSettingsDto(
     // listed but Tonight's Sky tags them so soft, low-elevation detail is an
     // informed choice, not a surprise. Advisory-only — never a score input.
     double SoftWarningAltitudeDeg = 30,
+    // §29.2 — what goes in the FITS OBSERVER header. Optional ctor default
+    // keeps older profile.json deserializing.
+    string ObserverName = "",
     // Measured sky brightness in mag/arcsec² (an SQM meter reading or a
     // lightpollutionmap value). 0 = not measured — planning derives the sky
     // from BortleClass instead. When set (~16–22.2 for real skies) it
@@ -162,7 +165,21 @@ public sealed record CalibrationStateDto(
 /// </summary>
 public sealed record FilenamesSettingsDto(
     string DateSeparator,
-    bool CompressDarksAndBias);
+    bool CompressDarksAndBias,
+    // §29.2 — which optional FITS header groups get written. All default on
+    // (a rich header is the right default); each is a deliberate off-switch,
+    // most notably Site: coordinates in a shared frame reveal where you live.
+    // Optional ctor defaults keep older profile.json deserializing.
+    bool HeaderSite = true,
+    bool HeaderOptics = true,
+    bool HeaderTemperature = true,
+    bool HeaderWeather = true,
+    bool HeaderIdentity = true,
+    // Sun/moon altitude + moon phase. Its own switch (not part of Site)
+    // because the numbers are DERIVED from the site coordinates — celestial
+    // geometry at a timestamp constrains where a frame was taken, so turning
+    // Site off for privacy should be able to silence this too.
+    bool HeaderEphemeris = true);
 
 /// <summary>
 /// §35 safety policies — unsafe-weather + meridian-flip + altitude-limit
@@ -427,7 +444,10 @@ public sealed record OpticsSettingsDto(
     int SensorWidthPx,
     int SensorHeightPx,
     double PixelSizeUm,
-    double ApertureMm = 0);
+    double ApertureMm = 0,
+    // §29.2 — what goes in the FITS TELESCOP header ("RedCat 51"). Optional
+    // ctor default keeps older profile.json deserializing.
+    string TelescopeName = "");
 
 /// <summary>
 /// NEXTGEN §3/§4 — camera electronics for exposure planning. Per-camera, per-mode

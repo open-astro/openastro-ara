@@ -47,7 +47,7 @@ String describeCalibrationActionError(Object? error) {
     if (error.response?.statusCode == 422) {
       final detail = data is Map ? data['detail'] : null;
       if (detail is String && detail.isNotEmpty) return detail;
-      return 'The guider daemon rejected the request — stop any active capture and try again.';
+      return 'The guider server rejected the request — stop any active capture and try again.';
     }
   }
   return 'The last guider request failed. Tap Refresh to recheck.';
