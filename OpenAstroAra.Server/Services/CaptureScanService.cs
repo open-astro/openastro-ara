@@ -356,14 +356,29 @@ public sealed partial class CaptureScanService : IDisposable {
         // within this night's local-noon→noon window names the session.
         // captured_utc is always written as a normalized UTC "O" string, so
         // lexicographic BETWEEN is chronological.
+        //
+        // ended_at IS NOT NULL excludes an IN-PROGRESS live session capturing
+        // the same target tonight (review #932, round 2): adopting it would
+        // let FinalizeRecoverySessionsAsync stamp an end time onto a session
+        // the orchestrator still owns — which the rest of the code reads as
+        // "session over" (EndSessionAsync keys its idempotence on
+        // ended_at IS NULL). The column doubles as the recovery marker:
+        // recovery sessions are born with ended_at set (seeded below from the
+        // first frame), live ones stay NULL until EndSessionAsync. A session
+        // that already ended is fair game — folding same-night strays into it
+        // is exactly the grouping the library wants, and re-stamping its
+        // range/count from actual frames is a correction, not damage.
         var nightStartLocal = new DateTimeOffset(
             localCaptured.AddHours(-12).Date.AddHours(12), localCaptured.Offset);
         var lo = nightStartLocal.ToUniversalTime().ToString("O");
         var hi = nightStartLocal.AddHours(24).ToUniversalTime().ToString("O");
         await using (var probe = conn.CreateCommand()) {
             probe.CommandText = """
-                SELECT session_id FROM frames
-                WHERE target_name = $target AND captured_utc >= $lo AND captured_utc < $hi
+                SELECT f.session_id FROM frames f
+                JOIN sessions s ON s.id = f.session_id
+                WHERE f.target_name = $target
+                  AND f.captured_utc >= $lo AND f.captured_utc < $hi
+                  AND s.ended_at IS NOT NULL
                 LIMIT 1;
                 """;
             probe.Parameters.AddWithValue("$target", target);
@@ -403,12 +418,16 @@ public sealed partial class CaptureScanService : IDisposable {
         await using var conn = _db.OpenConnection();
         foreach (var sid in _recoverySessions.Values) {
             await using var cmd = conn.CreateCommand();
+            // ended_at IS NOT NULL mirrors the probe's live-session exclusion:
+            // even if a live session ever slipped into the map, this UPDATE
+            // must not be the thing that marks it ended out from under the
+            // orchestrator.
             cmd.CommandText = """
                 UPDATE sessions SET
                     started_at = (SELECT MIN(captured_utc) FROM frames WHERE session_id = $id),
                     ended_at   = (SELECT MAX(captured_utc) FROM frames WHERE session_id = $id),
                     frame_count = (SELECT COUNT(*) FROM frames WHERE session_id = $id)
-                WHERE id = $id;
+                WHERE id = $id AND ended_at IS NOT NULL;
                 """;
             cmd.Parameters.AddWithValue("$id", sid.ToString());
             await cmd.ExecuteNonQueryAsync(ct);
