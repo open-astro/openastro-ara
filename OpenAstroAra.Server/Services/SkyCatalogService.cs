@@ -46,7 +46,12 @@ namespace OpenAstroAra.Server.Services {
     public sealed class SkyCatalogService : ISkyCatalogService {
 
         private readonly string _skyDataRoot;
-        private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime (published via Interlocked)
+        // Parsed rows + the installed-file-set signature they were built from, as ONE
+        // immutable pair behind a single reference: with two separate fields no write
+        // order is safe — a reader can pair the fresh signature with the stale list
+        // (or the stale signature with a fresher list) and skip a reparse it owed.
+        private sealed record DsoCache(long Signature, List<DsoRow> Rows);
+        private DsoCache? _dsos;     // parsed once, then cached until the file set changes (published via Volatile)
         private IReadOnlyList<DsoEntryDto>? _dsoEntries; // the GetAllDsos projection, cached so each request doesn't re-allocate it
         // LastWriteTimeUtc.Ticks of the catalog file whose parse last failed, so we don't re-parse a
         // known-bad file every request — but DO retry once the file changes on disk (corrupt → fixed
@@ -185,8 +190,8 @@ namespace OpenAstroAra.Server.Services {
         public IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct) {
             // The projection is immutable once built, so cache it: GetAllDsos is hit on every
             // /planning/tonight request and re-Select(...).ToList()-ing the ~13k-row catalog each time
-            // is pure waste. Published via Interlocked like _dsos (a rare concurrent first-build just
-            // produces equal lists; the first to publish wins and everyone shares it).
+            // is pure waste. Published via Volatile/CompareExchange like _dsos (a rare concurrent
+            // first-build just produces equal lists; the first to publish wins and everyone shares it).
             var cached = Volatile.Read(ref _dsoEntries);
             if (cached is not null) {
                 return cached;
@@ -215,8 +220,8 @@ namespace OpenAstroAra.Server.Services {
                 signature = unchecked(signature * 31 + File.GetLastWriteTimeUtc(path).Ticks);
             }
             var cached = Volatile.Read(ref _dsos);
-            if (cached is not null && Interlocked.Read(ref _dsoSignature) == signature) {
-                return cached;
+            if (cached is not null && cached.Signature == signature) {
+                return cached.Rows;
             }
             // A prior parse failed on a corrupt/unreadable CSV — skip the re-read rather than re-parsing
             // the bad file every request, UNLESS a file has since changed on disk (the user replaced a
@@ -247,15 +252,13 @@ namespace OpenAstroAra.Server.Services {
                 Interlocked.Exchange(ref _loadFailedWriteTicks, writeTicks);
                 return null;
             }
-            // Publish list + signature together (last-writer-wins is fine: both are
-            // derived from the same directory state; a racing pair produces equal data).
-            Interlocked.Exchange(ref _dsoSignature, signature);
+            // Publish rows + signature as one immutable pair (last-writer-wins is
+            // fine: both are derived from the same directory state; a racing pair
+            // produces equal data).
             Volatile.Write(ref _dsoEntries, null); // GetAllDsos re-projects from the fresh rows
-            Interlocked.Exchange(ref _dsos, parsed);
+            Volatile.Write(ref _dsos, new DsoCache(signature, parsed));
             return parsed;
         }
-
-        private long _dsoSignature;
 
         private static void ParseDsoCsvFile(string csvPath, List<DsoRow> list, CancellationToken ct) {
             using var reader = new StreamReader(csvPath);
