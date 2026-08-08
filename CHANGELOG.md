@@ -54,8 +54,6 @@ at the top. This happens in the same commit that pushes the release tag.
 - **Thumbnails cache as sidecars and renders are bounded.** `GetThumbnailAsync` wrote no cache, so every tile re-decoded the full FITS (~1.5 s each on a Pi, starving previews past any timeout). Thumbnails now write `.thumb.jpg` once; a render gate + single-flight map bound concurrent FITS decodes.
 - **Frame preview/export no longer time out.** Preview requests get a 60 s receive budget (was the client-wide 12 s), export 5 min.
 - **Storage panel shows the truth.** The false "storage is on the SD card" banner and hard-coded free space are gone (superseded by the §29 storage flow after the master merge).
-
-### Fixed
 - **Debian package file modes are now Debian-policy clean.** `build-deb.sh` normalizes the staged tree (dirs 0755, files 0644) before re-applying the intentional exceptions — the server ELF, `createdump`, the maintainer scripts, the sudoers drop-in (0440), and the sudo-invoked helper scripts under `/opt/openastroara` (previously shipped non-executable, breaking the sudoers-based storage/usbfs flows). Before this, every self-contained-publish file (DLLs included) shipped executable and checkout group-write bits leaked into the `.deb`. Contributed by @Jewber11 (PR #920).
 
 ### Added
