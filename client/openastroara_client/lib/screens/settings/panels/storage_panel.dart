@@ -14,6 +14,8 @@ import '../../../widgets/storage/storage_drive_dialog.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../services/storage_browse_api.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// Storage panel per §29 — save directory + format + compression + filename
@@ -42,7 +44,12 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     try {
       await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -53,8 +60,10 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     final messenger = ScaffoldMessenger.of(context);
     // §29 — block an inverted disk-space pair before it reaches the daemon (the server also rejects it 400).
     if (!ref.read(storageSettingsProvider.notifier).thresholdsValid) {
-      setState(() => _lastError =
-          'Critical disk threshold must be below the warning threshold.');
+      setState(
+        () => _lastError =
+            'Critical disk threshold must be below the warning threshold.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -62,16 +71,15 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     final api = _api();
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(storageSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -96,10 +104,12 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         // points and filesystems are plumbing; they live behind Advanced.
         const _DestinationCard(),
         ExpansionTile(
-          title: Text('Advanced',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
+          title: Text(
+            'Advanced',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+          ),
           tilePadding: EdgeInsets.zero,
           childrenPadding: const EdgeInsets.only(bottom: 8),
           children: [
@@ -107,7 +117,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
               label: 'Save folder',
               helpKey: 'session.storage.save_directory',
               currentValue: s.saveDirectory,
-              getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
+              getCanonical: () =>
+                  ref.read(storageSettingsProvider).saveDirectory,
               parse: n.setSaveDirectory,
             ),
             Align(
@@ -124,8 +135,9 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
                       context,
                       ref,
                       server: server,
-                      startPath:
-                          s.saveDirectory.isEmpty ? null : s.saveDirectory,
+                      startPath: s.saveDirectory.isEmpty
+                          ? null
+                          : s.saveDirectory,
                     );
                     if (picked != null) {
                       n.setSaveDirectory(picked);
@@ -169,6 +181,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         ),
         const SettingsRow(
           label: 'File naming',
+          helpKey: 'session.filenames.always_written',
           value: 'Folders and filenames',
           hint: 'Edit in Your night → File naming',
         ),
@@ -197,6 +210,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             if (gb != null) n.setMinFreeDiskCriticalGb(gb);
           },
         ),
+        const SettingsSectionHeader('Preview cache'),
+        const _PreviewCacheRow(),
         const SettingsSectionHeader('Backups'),
         EditableNumberRow(
           label: 'Keep backup snapshots',
@@ -220,67 +235,73 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         // Save lives in the settings-shell header (PanelSaveRegistration) —
         // fixed chrome, always visible, no scrolling to find it.
         const SizedBox(height: 24),
-        const SettingsSectionHeader('Copy frames to this computer as they arrive'),
-        Consumer(builder: (context, ref, _) {
-          final stream = ref.watch(backupStreamProvider);
-          final n = ref.read(backupStreamProvider.notifier);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SettingsSwitchRow(
-                label: 'Stream new frames to this device',
-                helpKey: 'session.storage.backup_stream',
-                value: stream.enabled,
-                hint: 'Mirror every captured FITS to this desktop as the night '
-                    'runs — a dead imaging drive then costs at most the frame '
-                    'being captured when it failed.',
-                onChanged: (v) => n.setEnabled(v),
-              ),
-              if (stream.enabled) ...[
-                EditableTextRow(
-                  label: 'Backup folder',
-                  helpKey: 'session.storage.backup_stream_folder',
-                  currentValue: stream.localRoot,
-                  getCanonical: () => ref.read(backupStreamProvider).localRoot,
-                  parse: n.setLocalRoot,
+        const SettingsSectionHeader(
+          'Copy frames to this computer as they arrive',
+        ),
+        Consumer(
+          builder: (context, ref, _) {
+            final stream = ref.watch(backupStreamProvider);
+            final n = ref.read(backupStreamProvider.notifier);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SettingsSwitchRow(
+                  label: 'Stream new frames to this device',
+                  helpKey: 'session.storage.backup_stream',
+                  value: stream.enabled,
+                  hint:
+                      'Mirror every captured FITS to this desktop as the night '
+                      'runs — a dead imaging drive then costs at most the frame '
+                      'being captured when it failed.',
+                  onChanged: (v) => n.setEnabled(v),
                 ),
-                EditableTextRow(
-                  label: 'Bandwidth cap (Mbps, 0 = unlimited)',
-                  helpKey: 'session.storage.backup_stream_mbps',
-                  currentValue: stream.maxMbps.toString(),
-                  getCanonical: () =>
-                      ref.read(backupStreamProvider).maxMbps.toString(),
-                  parse: (str) {
-                    final v = int.tryParse(str);
-                    if (v != null) n.setMaxMbps(v);
-                  },
-                ),
-              ],
-              // The problem line renders even when disabled — an auto-disable
-              // (another desktop took the slot) must explain itself, not just
-              // silently flip the toggle off.
-              if (stream.enabled || stream.problem != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    stream.problem ??
-                        (stream.active
-                            ? 'Streaming — ${stream.pendingCount} pending, '
-                                '${stream.syncedThisSession} synced this session '
-                                '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB)'
-                                '${stream.measuredMbps != null ? ', link ≈ ${stream.measuredMbps!.toStringAsFixed(0)} Mbps' : ''}.'
-                            : 'Starting…'),
-                    style: TextStyle(
-                      color: stream.problem != null
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).textTheme.bodySmall?.color,
-                      fontSize: 12,
+                if (stream.enabled) ...[
+                  EditableTextRow(
+                    label: 'Backup folder',
+                    helpKey: 'session.storage.backup_stream_folder',
+                    currentValue: stream.localRoot,
+                    getCanonical: () =>
+                        ref.read(backupStreamProvider).localRoot,
+                    parse: n.setLocalRoot,
+                  ),
+                  EditableTextRow(
+                    label: 'Bandwidth cap (Mbps, 0 = unlimited)',
+                    helpKey: 'session.storage.backup_stream_mbps',
+                    currentValue: stream.maxMbps.toString(),
+                    getCanonical: () =>
+                        ref.read(backupStreamProvider).maxMbps.toString(),
+                    parse: (str) {
+                      final v = int.tryParse(str);
+                      if (v != null) n.setMaxMbps(v);
+                    },
+                  ),
+                ],
+                // The problem line renders even when disabled — an auto-disable
+                // (another desktop took the slot) must explain itself, not just
+                // silently flip the toggle off.
+                if (stream.enabled || stream.problem != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      stream.problem ??
+                          (stream.active
+                              ? 'Streaming — ${stream.pendingCount} pending, '
+                                    '${stream.syncedThisSession} synced this session '
+                                    '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB)'
+                                    '${stream.measuredMbps != null ? ', link ≈ ${stream.measuredMbps!.toStringAsFixed(0)} Mbps' : ''}.'
+                              : 'Starting…'),
+                      style: TextStyle(
+                        color: stream.problem != null
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).textTheme.bodySmall?.color,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          );
-        }),
+              ],
+            );
+          },
+        ),
         const SizedBox(height: 24),
         const SettingsSectionHeader('Backup & Restore'),
         Padding(
@@ -288,7 +309,9 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           child: Text(
             'Back up your profile configuration (settings + sequences) to a ZIP '
             'snapshot on Ara, download a snapshot, or restore one.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         Align(
@@ -306,7 +329,6 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
     );
   }
 }
-
 
 /// §29 — where frames go, said the way a person would ask it: the drive's
 /// name, how much room is left, and one way to change it. Everything else
@@ -332,18 +354,23 @@ class _DestinationCard extends ConsumerWidget {
         .where((d) => d.isAraStore)
         .cast<StorageDevice?>()
         .firstWhere((_) => true, orElse: () => null);
-    final onSystemDisk = devices.asData?.value.any((d) => d.isSystemDisk && d.isAraStore) ?? false;
+    final onSystemDisk =
+        devices.asData?.value.any((d) => d.isSystemDisk && d.isAraStore) ??
+        false;
 
     final free = space.asData?.value?.freeBytes;
     final total = space.asData?.value?.totalBytes;
-    final usedFraction =
-        (free != null && total != null && total > 0) ? 1 - (free / total) : null;
+    final usedFraction = (free != null && total != null && total > 0)
+        ? 1 - (free / total)
+        : null;
 
     // Name it the way the user labelled it, not /dev/sdb1. friendlyName owns
     // the label→model→path fallback (including empty strings) — one place.
-    final title = current?.friendlyName ?? (onSystemDisk
-        ? 'Internal storage'
-        : (space.asData?.value?.isFallback ?? false)
+    final title =
+        current?.friendlyName ??
+        (onSystemDisk
+            ? 'Internal storage'
+            : (space.asData?.value?.isFallback ?? false)
             ? 'Server default folder'
             : 'Internal storage');
 
@@ -365,7 +392,9 @@ class _DestinationCard extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: AraColors.textSecondary.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: AraColors.textSecondary.withValues(alpha: 0.35),
+        ),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -373,22 +402,36 @@ class _DestinationCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Icon(current != null ? Icons.usb : Icons.sd_card,
-                  size: 32, color: AraColors.textSecondary),
+              Icon(
+                current != null ? Icons.usb : Icons.sd_card,
+                size: 32,
+                color: AraColors.textSecondary,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Frames are saved to', style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AraColors.textSecondary)),
+                    Text(
+                      'Frames are saved to',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(title,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AraColors.textSecondary)),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -422,7 +465,11 @@ class _DestinationCard extends ConsumerWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline, size: 16, color: AraColors.accentBusy),
+                const Icon(
+                  Icons.info_outline,
+                  size: 16,
+                  color: AraColors.accentBusy,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -430,8 +477,9 @@ class _DestinationCard extends ConsumerWidget {
                     'Sustained imaging wears out SD cards — choose an external '
                     'drive and it will be reconnected automatically after every '
                     'restart.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AraColors.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AraColors.textSecondary,
+                    ),
                   ),
                 ),
               ],
@@ -442,7 +490,6 @@ class _DestinationCard extends ConsumerWidget {
     );
   }
 }
-
 
 /// Runs the server-side §28.8 scan on demand and reports what it found in a
 /// snackbar. Spins in place while the walk runs — a big library takes a
@@ -462,12 +509,14 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
     final server = ref.read(activeServerProvider);
     if (server == null) return;
     final devices = ref.read(storageDevicesProvider).asData?.value;
-    final store =
-        devices?.where((d) => d.isAraStore && d.uuid != null).toList();
+    final store = devices
+        ?.where((d) => d.isAraStore && d.uuid != null)
+        .toList();
     final messenger = ScaffoldMessenger.of(context);
     if (store == null || store.isEmpty) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('No store drive to eject.')));
+        const SnackBar(content: Text('No store drive to eject.')),
+      );
       return;
     }
     setState(() => _busy = true);
@@ -477,15 +526,21 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
       if (!mounted) return;
       ref.invalidate(storageSpaceProvider);
       ref.invalidate(storageDevicesProvider);
-      messenger.showSnackBar(SnackBar(
-          content: Text(outcome.success
-              ? 'Ejected — safe to unplug the drive.'
-              : outcome.code == 'device_busy'
-                  ? 'The drive is busy — wait for writes to finish and try again.'
-                  : 'Eject failed: ${outcome.detail ?? outcome.code}')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            outcome.success
+                ? 'Ejected — safe to unplug the drive.'
+                : outcome.code == 'device_busy'
+                ? 'The drive is busy — wait for writes to finish and try again.'
+                : 'Eject failed: ${outcome.detail ?? outcome.code}',
+          ),
+        ),
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-          content: Text(friendlyError(e, action: 'eject the drive'))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(friendlyError(e, action: 'eject the drive'))),
+      );
     } finally {
       api.close();
       if (mounted) setState(() => _busy = false);
@@ -500,7 +555,8 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2))
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
           : const Icon(Icons.eject, size: 16),
       label: const Text('Eject'),
     );
@@ -522,11 +578,16 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
     final server = ref.read(activeServerProvider);
     if (server == null) return;
     final devices = ref.read(storageDevicesProvider).asData?.value;
-    final store = devices?.where((d) => d.isAraStore && d.uuid != null).toList();
+    final store = devices
+        ?.where((d) => d.isAraStore && d.uuid != null)
+        .toList();
     final messenger = ScaffoldMessenger.of(context);
     if (store == null || store.isEmpty) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('No store drive to check — connect one first.')));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No store drive to check — connect one first.'),
+        ),
+      );
       return;
     }
     final proceed = await showDialog<bool>(
@@ -534,16 +595,19 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
       builder: (context) => AlertDialog(
         title: const Text('Check the store drive?'),
         content: const Text(
-            'The drive is briefly taken offline while its filesystem is '
-            'verified and repaired if needed. Takes seconds to a couple of '
-            'minutes; capture must be idle.'),
+          'The drive is briefly taken offline while its filesystem is '
+          'verified and repaired if needed. Takes seconds to a couple of '
+          'minutes; capture must be idle.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Check disk')),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Check disk'),
+          ),
         ],
       ),
     );
@@ -554,16 +618,22 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
       final outcome = await api.check(uuid: store.first.uuid!);
       if (!mounted) return;
       ref.invalidate(storageSpaceProvider);
-      messenger.showSnackBar(SnackBar(
-          content: Text(outcome.success
-              ? (outcome.code == 'repaired'
-                  ? 'Disk checked — repairs were made. Worth re-running '
-                      '"Find frames on disk".'
-                  : 'Disk checked — clean.')
-              : 'Check failed: ${outcome.detail ?? outcome.code}')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            outcome.success
+                ? (outcome.code == 'repaired'
+                      ? 'Disk checked — repairs were made. Worth re-running '
+                            '"Find frames on disk".'
+                      : 'Disk checked — clean.')
+                : 'Check failed: ${outcome.detail ?? outcome.code}',
+          ),
+        ),
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-          content: Text(friendlyError(e, action: 'check the disk'))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(friendlyError(e, action: 'check the disk'))),
+      );
     } finally {
       api.close();
       if (mounted) setState(() => _busy = false);
@@ -578,7 +648,8 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2))
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
           : const Text('Check disk'),
     );
   }
@@ -608,8 +679,11 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
       }
       messenger.showSnackBar(SnackBar(content: Text(outcome.message)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-          content: Text(friendlyError(e, action: 'check the disk for frames'))));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(friendlyError(e, action: 'check the disk for frames')),
+        ),
+      );
     } finally {
       api.close();
       if (mounted) setState(() => _busy = false);
@@ -624,8 +698,125 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2))
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
           : const Text('Find frames on disk'),
+    );
+  }
+}
+
+/// §65.4 preview-cache size, live from the server, so "Clean cache" shows
+/// what it would actually free before the user commits.
+final storageCacheProvider = FutureProvider.autoDispose<StorageCacheInfo?>((
+  ref,
+) async {
+  final server = ref.watch(activeServerProvider);
+  if (server == null) return null;
+  final api = StorageBrowseApi(server);
+  ref.onDispose(api.close);
+  return api.fetchCacheInfo();
+});
+
+/// "Preview cache" row — current size + a Clean cache button, with the §69
+/// ⓘ help (hover for the short version, tap for the full story).
+class _PreviewCacheRow extends ConsumerStatefulWidget {
+  const _PreviewCacheRow();
+
+  @override
+  ConsumerState<_PreviewCacheRow> createState() => _PreviewCacheRowState();
+}
+
+class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
+  bool _cleaning = false;
+
+  String _size(StorageCacheInfo info) {
+    final mb = info.bytes / 1e6;
+    final size = mb >= 1000
+        ? '${(mb / 1000).toStringAsFixed(2)} GB'
+        : '${mb.toStringAsFixed(0)} MB';
+    return '$size · ${info.files} file${info.files == 1 ? '' : 's'}';
+  }
+
+  Future<void> _clean() async {
+    final server = ref.read(activeServerProvider);
+    if (server == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _cleaning = true);
+    final api = StorageBrowseApi(server);
+    try {
+      final freed = await api.clearCache();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            freed.files == 0
+                ? 'Preview cache was already empty.'
+                : 'Cleaned the preview cache — freed ${_size(freed)}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(friendlyError(e, action: 'clean the preview cache')),
+        ),
+      );
+    } finally {
+      api.close();
+      if (mounted) setState(() => _cleaning = false);
+      ref.invalidate(storageCacheProvider);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cache = ref.watch(storageCacheProvider);
+    final info = cache.asData?.value;
+    final String sizeText;
+    if (cache.isLoading) {
+      sizeText = 'Measuring…';
+    } else if (info == null) {
+      sizeText = cache.hasError ? 'Size unavailable' : 'Connect to a server';
+    } else if (info.files == 0) {
+      sizeText = 'Empty';
+    } else {
+      sizeText = _size(info);
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Row(
+              children: [
+                Text(
+                  'Thumbnails + previews',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+                ),
+                const HelpIcon(helpKey: 'session.storage.preview_cache'),
+              ],
+            ),
+          ),
+          Expanded(child: Text(sizeText)),
+          OutlinedButton.icon(
+            onPressed: _cleaning || info == null || info.files == 0
+                ? null
+                : _clean,
+            icon: _cleaning
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cleaning_services_outlined, size: 16),
+            label: Text(_cleaning ? 'Cleaning…' : 'Clean cache'),
+          ),
+        ],
+      ),
     );
   }
 }

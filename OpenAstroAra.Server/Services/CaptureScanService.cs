@@ -107,10 +107,10 @@ public sealed partial class CaptureScanService : IDisposable {
                 }
                 await tx.CommitAsync(ct).ConfigureAwait(false);
             }
-            // The synthetic recovery session was just deleted with the rest —
+            // The synthetic recovery sessions were just deleted with the rest —
             // drop the in-memory cache or every re-insert fails its session FK
             // (found live: 339 frames re-scanned as 0 on the rig).
-            _recoverySessionId = null;
+            _recoverySessions.Clear();
             LogCatalogReset(framesCleared, sessionsCleared);
             var scan = await RunLockedAsync(ct).ConfigureAwait(false);
             return (framesCleared, sessionsCleared, scan);
@@ -166,6 +166,7 @@ public sealed partial class CaptureScanService : IDisposable {
 
         var tmpSwept = SweepStaleTempFiles(savePath);
         var orphansRecovered = await RecoverOrphanFitsAsync(savePath, ct);
+        await FinalizeRecoverySessionsAsync(ct);
 
         if (tmpSwept > 0 || orphansRecovered > 0) {
             LogScanComplete(tmpSwept, orphansRecovered);
@@ -286,10 +287,14 @@ public sealed partial class CaptureScanService : IDisposable {
         var focuserPos = ParseInt(LookupHeader(headers, "FOCUSPOS"))
             ?? ParseInt(LookupHeader(headers, "FOCPOS"));
 
-        // Synthetic recovered session — one bucket for all orphans recovered
-        // in this scan. Real session tracking lands when §38 orchestrator
-        // writes the session_id into the FITS header on capture.
-        var sessionId = await EnsureRecoverySessionAsync(ct);
+        // Synthetic recovered session per (target, night) — a single global
+        // bucket lumps a whole archive into one "session" whose display name
+        // is whatever frame type is most numerous (a lights + darks import
+        // showed up as one giant "Calibration"). Night = local date shifted
+        // -12 h so an imaging run spanning midnight stays one session. Real
+        // session tracking lands when §38 orchestrator writes the session_id
+        // into the FITS header on capture.
+        var sessionId = await EnsureRecoverySessionAsync(target, capturedUtc, ct);
         var frameId = Guid.NewGuid();
 
         await using var conn = _db.OpenConnection();
@@ -332,25 +337,101 @@ public sealed partial class CaptureScanService : IDisposable {
         return true;
     }
 
-    private Guid? _recoverySessionId;
-    private async Task<Guid> EnsureRecoverySessionAsync(CancellationToken ct) {
-        if (_recoverySessionId.HasValue) return _recoverySessionId.Value;
-        var sid = Guid.NewGuid();
+    private readonly Dictionary<string, Guid> _recoverySessions = new(StringComparer.OrdinalIgnoreCase);
+
+    private async Task<Guid> EnsureRecoverySessionAsync(string target, DateTimeOffset capturedUtc, CancellationToken ct) {
+        var localCaptured = capturedUtc.ToLocalTime();
+        var night = localCaptured.AddHours(-12).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var key = $"{night}|{target}";
+        if (_recoverySessions.TryGetValue(key, out var existing)) return existing;
+
         await using var conn = _db.OpenConnection();
+
+        // The in-memory map only spans THIS process — a scan after a restart
+        // (or a later incremental recovery of more files from the same night)
+        // must reuse the session a PRIOR scan created, or the library shows
+        // duplicate "target — night" rows (review #932 finding 1). Sessions
+        // carry no target/night columns, so membership is derived the same way
+        // the library derives it: any existing frame of this target captured
+        // within this night's local-noon→noon window names the session.
+        // captured_utc is always written as a normalized UTC "O" string, so
+        // lexicographic BETWEEN is chronological.
+        //
+        // ended_at IS NOT NULL excludes an IN-PROGRESS live session capturing
+        // the same target tonight (review #932, round 2): adopting it would
+        // let FinalizeRecoverySessionsAsync stamp an end time onto a session
+        // the orchestrator still owns — which the rest of the code reads as
+        // "session over" (EndSessionAsync keys its idempotence on
+        // ended_at IS NULL). The column doubles as the recovery marker:
+        // recovery sessions are born with ended_at set (seeded below from the
+        // first frame), live ones stay NULL until EndSessionAsync. A session
+        // that already ended is fair game — folding same-night strays into it
+        // is exactly the grouping the library wants, and re-stamping its
+        // range/count from actual frames is a correction, not damage.
+        var nightStartLocal = new DateTimeOffset(
+            localCaptured.AddHours(-12).Date.AddHours(12), localCaptured.Offset);
+        var lo = nightStartLocal.ToUniversalTime().ToString("O");
+        var hi = nightStartLocal.AddHours(24).ToUniversalTime().ToString("O");
+        await using (var probe = conn.CreateCommand()) {
+            probe.CommandText = """
+                SELECT f.session_id FROM frames f
+                JOIN sessions s ON s.id = f.session_id
+                WHERE f.target_name = $target
+                  AND f.captured_utc >= $lo AND f.captured_utc < $hi
+                  AND s.ended_at IS NOT NULL
+                LIMIT 1;
+                """;
+            probe.Parameters.AddWithValue("$target", target);
+            probe.Parameters.AddWithValue("$lo", lo);
+            probe.Parameters.AddWithValue("$hi", hi);
+            if (await probe.ExecuteScalarAsync(ct) is string sidText && Guid.TryParse(sidText, out var persisted)) {
+                _recoverySessions[key] = persisted;
+                return persisted;
+            }
+        }
+
+        var sid = Guid.NewGuid();
         await using var cmd = conn.CreateCommand();
+        // started_at/ended_at seed from the first recovered frame's capture
+        // time (NOT scan time — the archive's real chronology is what the
+        // library sorts by) and widen in FinalizeRecoverySessionsAsync.
         cmd.CommandText = """
             INSERT INTO sessions
                 (id, profile_id, sequence_json, started_at, ended_at,
                  recovery_needed, last_completed_instruction_id,
                  current_target_id, frame_count)
             VALUES
-                ($id, NULL, NULL, $now, $now, 0, NULL, NULL, 0);
+                ($id, NULL, NULL, $captured, $captured, 0, NULL, NULL, 0);
             """;
         cmd.Parameters.AddWithValue("$id", sid.ToString());
-        cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("$captured", capturedUtc.ToString("O"));
         await cmd.ExecuteNonQueryAsync(ct);
-        _recoverySessionId = sid;
+        _recoverySessions[key] = sid;
         return sid;
+    }
+
+    // After the scan, stamp each recovery session with its frames' true
+    // MIN/MAX capture window + count, so the library shows the archive's
+    // chronology rather than one row per scan run dated "today".
+    private async Task FinalizeRecoverySessionsAsync(CancellationToken ct) {
+        if (_recoverySessions.Count == 0) return;
+        await using var conn = _db.OpenConnection();
+        foreach (var sid in _recoverySessions.Values) {
+            await using var cmd = conn.CreateCommand();
+            // ended_at IS NOT NULL mirrors the probe's live-session exclusion:
+            // even if a live session ever slipped into the map, this UPDATE
+            // must not be the thing that marks it ended out from under the
+            // orchestrator.
+            cmd.CommandText = """
+                UPDATE sessions SET
+                    started_at = (SELECT MIN(captured_utc) FROM frames WHERE session_id = $id),
+                    ended_at   = (SELECT MAX(captured_utc) FROM frames WHERE session_id = $id),
+                    frame_count = (SELECT COUNT(*) FROM frames WHERE session_id = $id)
+                WHERE id = $id AND ended_at IS NOT NULL;
+                """;
+            cmd.Parameters.AddWithValue("$id", sid.ToString());
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
     }
 
     // IgnoreInaccessible matters more than it looks: a try/catch around the

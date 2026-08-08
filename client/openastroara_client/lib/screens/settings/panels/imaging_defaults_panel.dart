@@ -39,7 +39,12 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     } catch (e) {
       // Hydration failures are non-fatal — the user can still edit + Save,
       // and a real failure will resurface on Save with a clearer error.
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -52,16 +57,15 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(imagingDefaultsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -83,9 +87,13 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       children: [
         EditableNumberRow(
           label: 'Default exposure (s)',
+          helpKey: 'imaging.defaults.exposure',
           currentValue: d.defaultExposure.inSeconds.toString(),
-          getCanonical: () =>
-              ref.read(imagingDefaultsProvider).defaultExposure.inSeconds.toString(),
+          getCanonical: () => ref
+              .read(imagingDefaultsProvider)
+              .defaultExposure
+              .inSeconds
+              .toString(),
           parse: (s) {
             final i = int.tryParse(s);
             if (i == null) return;
@@ -127,6 +135,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         ),
         SettingsDropdownRow<FrameKind>(
           label: 'Default frame type',
+          helpKey: 'imaging.defaults.frame_type',
           value: d.defaultFrameKind,
           items: const {
             FrameKind.light: 'Light',
@@ -140,6 +149,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         ),
         EditableNumberRow(
           label: 'Cooling target temperature (°C)',
+          helpKey: 'imaging.defaults.cooling_target',
           currentValue: d.coolerTargetC.toString(),
           getCanonical: () =>
               ref.read(imagingDefaultsProvider).coolerTargetC.toString(),

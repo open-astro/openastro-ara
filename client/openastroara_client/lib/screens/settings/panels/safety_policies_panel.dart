@@ -36,7 +36,12 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     try {
       await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -49,16 +54,15 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -70,16 +74,24 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Not connected — connect to your rig to save this.')));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Not connected — connect to your rig to save this.'),
+        ),
+      );
       return;
     }
     try {
       await ref.read(safetyPoliciesProvider.notifier).rearmFirstFlip(api);
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(
-          content: Text('First-flip announce re-armed — the next flip will '
-              'alert and wait 60 s.')));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'First-flip announce re-armed — the next flip will '
+            'alert and wait 60 s.',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('Re-arm failed: $e')));
@@ -136,7 +148,8 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           label: 'React to weather-station thresholds',
           helpKey: 'safety.policies.weather_triggers',
           value: s.weatherTriggersEnabled,
-          hint: 'With a weather station connected, a breached threshold below '
+          hint:
+              'With a weather station connected, a breached threshold below '
               'makes conditions unsafe — the same reaction as the safety '
               'monitor (the action above runs, and auto-resume waits for the '
               'weather to clear too).',
@@ -209,13 +222,15 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
         ),
         SettingsSwitchRow(
           label: 'Extra care on flips when you are away',
-          hint: 'Pre-flip flight check, in-slew watchdog and hard pier-side '
+          hint:
+              'Pre-flip flight check, in-slew watchdog and hard pier-side '
               'verification. Turn off only if this mount misreports pier side.',
           value: s.flipSafetyEnabled,
           onChanged: n.setFlipSafetyEnabled,
         ),
         EditableNumberRow(
           label: 'Expected flip-slew duration (s)',
+          helpKey: 'safety.policies.expected_flip_slew_s',
           currentValue: s.expectedFlipSlewSeconds.toString(),
           getCanonical: () => ref
               .read(safetyPoliciesProvider)
@@ -228,7 +243,8 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
         ),
         SettingsSwitchRow(
           label: 'Louder alerts overnight',
-          hint: 'While the site sits in astronomical darkness, '
+          hint:
+              'While the site sits in astronomical darkness, '
               'equipment-impacting warnings ride one severity level higher so '
               'the alarm behaviour engages earlier for a sleeping user.',
           value: s.unattendedEscalation,
@@ -236,7 +252,8 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
         ),
         SettingsSwitchRow(
           label: 'Put the rig to bed if nobody responds',
-          hint: 'If a run pauses awaiting your attention and nobody responds '
+          hint:
+              'If a run pauses awaiting your attention and nobody responds '
               'within the wait window, Ara parks the mount, warms the '
               'cooler and disconnects the equipment. Any command — or simply '
               'opening WILMA — cancels the countdown.',
@@ -245,6 +262,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
         ),
         EditableNumberRow(
           label: 'Unattended shutdown wait (min)',
+          helpKey: 'safety.policies.unattended_shutdown_wait_min',
           currentValue: s.unattendedShutdownWaitMinutes.toString(),
           getCanonical: () => ref
               .read(safetyPoliciesProvider)
@@ -261,27 +279,29 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
         // there is no way to silently skip the announce.
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [
-            Expanded(
-              child: Text(
-                s.firstFlipConfirmed
-                    ? 'First-flip announce: already ran — later flips '
-                        'are silent. Re-arm after re-balancing or a rig change.'
-                    : 'First-flip announce: armed — the next meridian '
-                        'flip alerts and waits 60 s before proceeding.',
-                style: Theme.of(context).textTheme.bodyMedium,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  s.firstFlipConfirmed
+                      ? 'First-flip announce: already ran — later flips '
+                            'are silent. Re-arm after re-balancing or a rig change.'
+                      : 'First-flip announce: armed — the next meridian '
+                            'flip alerts and waits 60 s before proceeding.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              key: const Key('rearm_first_flip'),
-              // Immediate daemon round-trip (not deferred to Save): the flag
-              // is daemon-owned and the general Save deliberately can't touch
-              // it, so the button is the only client-side path — one-way.
-              onPressed: s.firstFlipConfirmed ? _rearmFirstFlip : null,
-              child: const Text('Re-arm'),
-            ),
-          ]),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                key: const Key('rearm_first_flip'),
+                // Immediate daemon round-trip (not deferred to Save): the flag
+                // is daemon-owned and the general Save deliberately can't touch
+                // it, so the button is the only client-side path — one-way.
+                onPressed: s.firstFlipConfirmed ? _rearmFirstFlip : null,
+                child: const Text('Re-arm'),
+              ),
+            ],
+          ),
         ),
         const SettingsSectionHeader('On altitude limit'),
         SettingsDropdownRow<AltitudeLimitAction>(
@@ -338,7 +358,8 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           helpKey: 'safety.policies.on_disk_space_critical',
           value: s.onDiskSpaceCritical,
           items: const {
-            DiskSpaceCriticalAction.warn: 'Warn only (diagnostic + notification)',
+            DiskSpaceCriticalAction.warn:
+                'Warn only (diagnostic + notification)',
             DiskSpaceCriticalAction.abort: 'Abort the running sequence',
           },
           onChanged: (v) {

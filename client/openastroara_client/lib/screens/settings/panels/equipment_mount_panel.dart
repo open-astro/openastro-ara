@@ -7,6 +7,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -73,11 +74,13 @@ class _MountBody extends ConsumerWidget {
     final s = status;
     if (s.isConnecting) return const Text('Reading…');
     if (s.connectionState == EquipmentConnectionState.error) {
-      return const Row(children: [
-        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-        SizedBox(width: 8),
-        Expanded(child: Text('Mount read failed — check the device.')),
-      ]);
+      return const Row(
+        children: [
+          Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+          SizedBox(width: 8),
+          Expanded(child: Text('Mount read failed — check the device.')),
+        ],
+      );
     }
     final caps = s.capabilities;
     return Column(
@@ -90,79 +93,120 @@ class _MountBody extends ConsumerWidget {
         if (s.isBusy)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(s.runtimeState == 'unparking' ? 'Unparking…' : 'Slewing…',
-                style: const TextStyle(color: AraColors.accentBusy)),
+            child: Text(
+              s.runtimeState == 'unparking' ? 'Unparking…' : 'Slewing…',
+              style: const TextStyle(color: AraColors.accentBusy),
+            ),
           ),
         if (caps?.canSetTracking ?? false)
-          Row(children: [
-            const Expanded(child: Text('Tracking')),
-            Switch(
-              key: const Key('mount_tracking_switch'),
-              value: s.tracking,
-              onChanged: s.parked
-                  ? null
-                  : (v) => _run(context, ref, 'set tracking',
-                      () => ref.read(mountProvider.notifier).setTracking(v)),
-            ),
-          ]),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          if ((caps?.canPark ?? false) && !s.parked)
-            OutlinedButton(
-              onPressed: s.isBusy
-                  ? null
-                  : () => _run(context, ref, 'park',
-                      () => ref.read(mountProvider.notifier).park()),
-              child: const Text('Park'),
-            ),
-          if ((caps?.canUnpark ?? false) && s.parked)
-            OutlinedButton(
-              onPressed: s.isBusy
-                  ? null
-                  : () => _run(context, ref, 'unpark',
-                      () => ref.read(mountProvider.notifier).unpark()),
-              child: const Text('Unpark'),
-            ),
-          // Home slews to the mount's homing switch — disabled while parked (must
-          // unpark first) or busy. Shown only when the mount supports FindHome.
-          if (caps?.canFindHome ?? false)
-            OutlinedButton(
-              onPressed: (s.isBusy || s.parked)
-                  ? null
-                  : () => _run(context, ref, 'home',
-                      () => ref.read(mountProvider.notifier).findHome()),
-              child: const Text('Home'),
-            ),
-          OutlinedButton(
-            onPressed: () => _run(context, ref, 'stop',
-                () => ref.read(mountProvider.notifier).abortSlew()),
-            child: const Text('Stop'),
+          Row(
+            children: [
+              const Text('Tracking'),
+              HelpIcon(helpKey: 'eq.mount.tracking', device: s.name),
+              const Spacer(),
+              Switch(
+                key: const Key('mount_tracking_switch'),
+                value: s.tracking,
+                onChanged: s.parked
+                    ? null
+                    : (v) => _run(
+                        context,
+                        ref,
+                        'set tracking',
+                        () => ref.read(mountProvider.notifier).setTracking(v),
+                      ),
+              ),
+            ],
           ),
-        ]),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if ((caps?.canPark ?? false) && !s.parked)
+              OutlinedButton(
+                onPressed: s.isBusy
+                    ? null
+                    : () => _run(
+                        context,
+                        ref,
+                        'park',
+                        () => ref.read(mountProvider.notifier).park(),
+                      ),
+                child: const Text('Park'),
+              ),
+            if ((caps?.canUnpark ?? false) && s.parked)
+              OutlinedButton(
+                onPressed: s.isBusy
+                    ? null
+                    : () => _run(
+                        context,
+                        ref,
+                        'unpark',
+                        () => ref.read(mountProvider.notifier).unpark(),
+                      ),
+                child: const Text('Unpark'),
+              ),
+            // Home slews to the mount's homing switch — disabled while parked (must
+            // unpark first) or busy. Shown only when the mount supports FindHome.
+            if (caps?.canFindHome ?? false)
+              OutlinedButton(
+                onPressed: (s.isBusy || s.parked)
+                    ? null
+                    : () => _run(
+                        context,
+                        ref,
+                        'home',
+                        () => ref.read(mountProvider.notifier).findHome(),
+                      ),
+                child: const Text('Home'),
+              ),
+            OutlinedButton(
+              onPressed: () => _run(
+                context,
+                ref,
+                'stop',
+                () => ref.read(mountProvider.notifier).abortSlew(),
+              ),
+              child: const Text('Stop'),
+            ),
+          ],
+        ),
       ],
     );
   }
 
   Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Expanded(child: Text(label)), Text(value)]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value),
+      ],
+    ),
+  );
 
-  Future<void> _run(BuildContext context, WidgetRef ref, String verb,
-      Future<bool> Function() action) async {
+  Future<void> _run(
+    BuildContext context,
+    WidgetRef ref,
+    String verb,
+    Future<bool> Function() action,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final performed = await action();
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another action is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Another action is still in progress.')),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }
@@ -189,7 +233,9 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   @override
   void initState() {
     super.initState();
-    _rate = _defaultRate(widget.status.capabilities?.axisRatesDegPerSec ?? const []);
+    _rate = _defaultRate(
+      widget.status.capabilities?.axisRatesDegPerSec ?? const [],
+    );
   }
 
   @override
@@ -199,8 +245,10 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     // then reconnect to different hardware), re-seed _rate — otherwise it holds the
     // old mount's value: no chip shows selected and a nudge sends a stale rate the
     // new driver may reject or clamp with no feedback.
-    final oldRates = old.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
-    final newRates = widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
+    final oldRates =
+        old.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
+    final newRates =
+        widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
     if (!_sameRates(oldRates, newRates)) {
       _rate = _defaultRate(newRates);
     }
@@ -236,15 +284,31 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
         if (caps?.canSlew ?? false) _goTo(busy),
         if (caps?.canMoveAxis ?? false) ...[
           const SizedBox(height: 16),
-          if (rates.isNotEmpty) _speedPicker(rates) else
-            const Text('This mount reports no manual slew rates.',
-                style: TextStyle(color: AraColors.textSecondary)),
+          if (rates.isNotEmpty)
+            _speedPicker(rates)
+          else
+            const Text(
+              'This mount reports no manual slew rates.',
+              style: TextStyle(color: AraColors.textSecondary),
+            ),
           const SizedBox(height: 10),
           _directionPad(disabled: busy || _rate == null),
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: Text('Hold a direction to move; release to stop. Centre stops all motion.',
-                style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    'Hold a direction to move; release to stop. Centre stops all motion.',
+                    style: TextStyle(
+                      color: AraColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                HelpIcon(helpKey: 'eq.mount.manual_move'),
+              ],
+            ),
           ),
         ],
       ],
@@ -252,53 +316,76 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   }
 
   Widget _goTo(bool busy) {
-    return Row(children: [
-      SizedBox(
-        width: 110,
-        child: TextField(
-          controller: _ra,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(isDense: true, labelText: 'RA (h)'),
+    return Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: TextField(
+            controller: _ra,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'RA (h)',
+            ),
+          ),
         ),
-      ),
-      const SizedBox(width: 8),
-      SizedBox(
-        width: 110,
-        child: TextField(
-          controller: _dec,
-          keyboardType:
-              const TextInputType.numberWithOptions(signed: true, decimal: true),
-          decoration: const InputDecoration(isDense: true, labelText: 'Dec (°)'),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 110,
+          child: TextField(
+            controller: _dec,
+            keyboardType: const TextInputType.numberWithOptions(
+              signed: true,
+              decimal: true,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'Dec (°)',
+            ),
+          ),
         ),
-      ),
-      const SizedBox(width: 12),
-      FilledButton(
-        onPressed: busy ? null : _dispatchGoTo,
-        child: const Text('GoTo'),
-      ),
-    ]);
+        const SizedBox(width: 12),
+        FilledButton(
+          onPressed: busy ? null : _dispatchGoTo,
+          child: const Text('GoTo'),
+        ),
+        HelpIcon(
+          helpKey: 'eq.mount.goto',
+          device: ref.watch(mountProvider).value?.name,
+        ),
+      ],
+    );
   }
 
   Future<void> _dispatchGoTo() async {
     final messenger = ScaffoldMessenger.of(context);
     final ra = double.tryParse(_ra.text.trim());
     final dec = double.tryParse(_dec.text.trim());
-    if (ra == null || dec == null || ra < 0 || ra >= 24 || dec < -90 || dec > 90) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Enter RA 0–24 h and Dec −90 to 90°.')));
+    if (ra == null ||
+        dec == null ||
+        ra < 0 ||
+        ra >= 24 ||
+        dec < -90 ||
+        dec > 90) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter RA 0–24 h and Dec −90 to 90°.')),
+      );
       return;
     }
     try {
       final performed = await ref.read(mountProvider.notifier).slewTo(ra, dec);
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-            content: Text('Another action is still in progress.')));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Another action is still in progress.')),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't slew: ${describeEquipmentError(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't slew: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 
@@ -321,43 +408,57 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
 
   Widget _directionPad({required bool disabled}) {
     Widget pad(IconData icon, List<(int, double)> moves) => _HoldButton(
-          icon: icon,
-          enabled: !disabled,
-          onStart: () => _start(moves),
-          onStop: () => _stop(moves.map((m) => m.$1).toSet()),
-        );
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Row(mainAxisSize: MainAxisSize.min, children: [
-        pad(Icons.north_west, [(_secondary, 1), (_primary, -1)]),
-        pad(Icons.north, [(_secondary, 1)]),
-        pad(Icons.north_east, [(_secondary, 1), (_primary, 1)]),
-      ]),
-      Row(mainAxisSize: MainAxisSize.min, children: [
-        pad(Icons.west, [(_primary, -1)]),
-        _stopButton(),
-        pad(Icons.east, [(_primary, 1)]),
-      ]),
-      Row(mainAxisSize: MainAxisSize.min, children: [
-        pad(Icons.south_west, [(_secondary, -1), (_primary, -1)]),
-        pad(Icons.south, [(_secondary, -1)]),
-        pad(Icons.south_east, [(_secondary, -1), (_primary, 1)]),
-      ]),
-    ]);
+      icon: icon,
+      enabled: !disabled,
+      onStart: () => _start(moves),
+      onStop: () => _stop(moves.map((m) => m.$1).toSet()),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            pad(Icons.north_west, [(_secondary, 1), (_primary, -1)]),
+            pad(Icons.north, [(_secondary, 1)]),
+            pad(Icons.north_east, [(_secondary, 1), (_primary, 1)]),
+          ],
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            pad(Icons.west, [(_primary, -1)]),
+            _stopButton(),
+            pad(Icons.east, [(_primary, 1)]),
+          ],
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            pad(Icons.south_west, [(_secondary, -1), (_primary, -1)]),
+            pad(Icons.south, [(_secondary, -1)]),
+            pad(Icons.south_east, [(_secondary, -1), (_primary, 1)]),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _stopButton() => Padding(
-        padding: const EdgeInsets.all(4),
-        child: SizedBox(
-          width: 52,
-          height: 52,
-          child: OutlinedButton(
-            onPressed: () => ref.read(mountProvider.notifier).abortSlew(),
-            style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero, shape: const CircleBorder()),
-            child: const Icon(Icons.stop, color: AraColors.accentError),
-          ),
+    padding: const EdgeInsets.all(4),
+    child: SizedBox(
+      width: 52,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: () => ref.read(mountProvider.notifier).abortSlew(),
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(),
         ),
-      );
+        child: const Icon(Icons.stop, color: AraColors.accentError),
+      ),
+    ),
+  );
 
   void _start(List<(int, double)> moves) {
     final rate = _rate;
@@ -466,8 +567,10 @@ class _HoldButtonState extends State<_HoldButton> {
             border: Border.all(color: AraColors.border),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(widget.icon,
-              color: widget.enabled ? null : AraColors.textDisabled),
+          child: Icon(
+            widget.icon,
+            color: widget.enabled ? null : AraColors.textDisabled,
+          ),
         ),
       ),
     );

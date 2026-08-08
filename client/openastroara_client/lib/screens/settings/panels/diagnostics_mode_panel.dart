@@ -42,16 +42,22 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Not connected — this choice is saved on this computer for now.'),
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Not connected — this choice is saved on this computer for now.',
+          ),
+        ),
+      );
       return;
     }
     try {
       await ref.read(diagnosticsModeProvider.notifier).persistToServer(api);
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'save that'))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(friendlyError(e, action: 'save that'))),
+      );
     }
   }
 
@@ -143,22 +149,22 @@ class _ModeOption extends StatelessWidget {
                 selected
                     ? Icons.radio_button_checked
                     : Icons.radio_button_unchecked,
-                color:
-                    selected ? AraColors.selectionBg : AraColors.textSecondary,
+                color: selected
+                    ? AraColors.selectionBg
+                    : AraColors.textSecondary,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label,
-                        style: Theme.of(context).textTheme.titleSmall),
+                    Text(label, style: Theme.of(context).textTheme.titleSmall),
                     const SizedBox(height: 4),
                     Text(
                       description,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
+                        color: AraColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),

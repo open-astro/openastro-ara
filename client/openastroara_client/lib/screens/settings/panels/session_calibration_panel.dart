@@ -23,7 +23,8 @@ class SessionCalibrationPanel extends ConsumerStatefulWidget {
 }
 
 class _SessionCalibrationPanelState
-    extends ConsumerState<SessionCalibrationPanel> with PanelSaveRegistration {
+    extends ConsumerState<SessionCalibrationPanel>
+    with PanelSaveRegistration {
   String? _lastError;
 
   @override
@@ -39,7 +40,10 @@ class _SessionCalibrationPanelState
       await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
       }
     }
   }
@@ -53,16 +57,15 @@ class _SessionCalibrationPanelState
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -93,10 +96,9 @@ class _SessionCalibrationPanelState
             'start; panel flats start automatically when the run ends (light '
             'your panel when notified); sky flats are generated ready to run '
             'at twilight.',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         SettingsDropdownRow<CalibrationCaptureDefault>(

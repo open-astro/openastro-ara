@@ -19,16 +19,18 @@ class ProfileWizardPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Re-run profile wizard',
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Re-run profile wizard',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text(
                 'Walks through the 18-screen / 7-stage wizard again,'
                 'starting from the current profile values as defaults. '
                 'Useful after swapping equipment or moving site.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+                  color: AraColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 24),
               FilledButton.icon(

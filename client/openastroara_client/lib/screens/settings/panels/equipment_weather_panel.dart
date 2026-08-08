@@ -56,21 +56,25 @@ class EquipmentWeatherPanel extends ConsumerWidget {
         // with what actually parks the rig.
         SettingsRow(
           label: 'Weather triggers safety',
+          helpKey: 'eq.weather.triggers_safety',
           value: policies.weatherTriggersEnabled ? 'On' : 'Off',
           hint: 'Edit in Settings → Safety → Policies',
         ),
         SettingsRow(
           label: 'Wind speed max (km/h)',
+          helpKey: 'eq.weather.wind_max',
           value: policies.maxWindKmh.toString(),
           hint: 'Edit in Settings → Safety → Policies',
         ),
         SettingsRow(
           label: 'Humidity max (%)',
+          helpKey: 'eq.weather.humidity_max',
           value: policies.maxHumidityPct.toString(),
           hint: 'Edit in Settings → Safety → Policies',
         ),
         SettingsRow(
           label: 'Dew-point margin (°C)',
+          helpKey: 'eq.weather.dewpoint_margin',
           value: policies.minDewDeltaC.toString(),
           hint: 'Edit in Settings → Safety → Policies',
         ),
@@ -91,11 +95,13 @@ class _WeatherBody extends ConsumerWidget {
     // sub-state is a failed read, not "no sensors" — surface it distinctly.
     if (status.isConnecting) return const Text('Reading…');
     if (status.connectionState == EquipmentConnectionState.error) {
-      return const Row(children: [
-        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-        SizedBox(width: 8),
-        Expanded(child: Text('Sensor read failed — check the device.')),
-      ]);
+      return const Row(
+        children: [
+          Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+          SizedBox(width: 8),
+          Expanded(child: Text('Sensor read failed — check the device.')),
+        ],
+      );
     }
 
     final rows = <Widget?>[
@@ -120,8 +126,10 @@ class _WeatherBody extends ConsumerWidget {
       final derived = sqmDerived(sqm);
       rows.addAll([
         _computed('Limiting magnitude (NELM)', derived.nelm.toStringAsFixed(2)),
-        _computed('Sky luminance',
-            '${derived.luminanceCdM2.toStringAsExponential(2)} cd/m²'),
+        _computed(
+          'Sky luminance',
+          '${derived.luminanceCdM2.toStringAsExponential(2)} cd/m²',
+        ),
         _computed('Night sky units (NSU)', derived.nsu.toStringAsFixed(2)),
       ]);
     }
@@ -137,24 +145,31 @@ class _WeatherBody extends ConsumerWidget {
     // would confidently report Null Island altitudes — skip the rows instead.
     final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;
     if (siteSet) {
-      final alt =
-          sunMoonAltitudeDeg(nowUtc, site.latitudeDeg, site.longitudeDeg);
+      final alt = sunMoonAltitudeDeg(
+        nowUtc,
+        site.latitudeDeg,
+        site.longitudeDeg,
+      );
       rows.addAll([
         _computed('Sun altitude', '${alt.sunAltDeg.toStringAsFixed(1)}°'),
         _computed('Moon altitude', '${alt.moonAltDeg.toStringAsFixed(1)}°'),
       ]);
     }
     final moon = moonPhase(nowUtc);
-    rows.add(Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          const Expanded(child: Text('Moon')),
-          Text('${(moon.illuminatedFraction * 100).round()}% lit — '
-              '${moon.phaseName}'),
-        ],
+    rows.add(
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            const Expanded(child: Text('Moon')),
+            Text(
+              '${(moon.illuminatedFraction * 100).round()}% lit — '
+              '${moon.phaseName}',
+            ),
+          ],
+        ),
       ),
-    ));
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,18 +177,19 @@ class _WeatherBody extends ConsumerWidget {
         if (noSensors)
           // Computed sky rows still follow, so say what IS shown rather than
           // a bare "no sensors" that contradicts the list under it.
-          const Text('This weather station reports no sensors — showing '
-              'computed sky data only.'),
+          const Text(
+            'This weather station reports no sensors — showing '
+            'computed sky data only.',
+          ),
         ...rows,
         if (status.capturedAt != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               'Updated: ${formatUtcMinute(status.capturedAt!)}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
           ),
       ],
@@ -182,14 +198,14 @@ class _WeatherBody extends ConsumerWidget {
 
   // A computed (non-sensor) row: same layout as [_sensor], value pre-formatted.
   Widget _computed(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(child: Text(label)),
-            Text(value),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value),
+      ],
+    ),
+  );
 
   // Returns null for an unimplemented (null) sensor — or a non-finite one (a
   // driver emitting NaN/Infinity) — so it's omitted rather than rendered as "NaN".

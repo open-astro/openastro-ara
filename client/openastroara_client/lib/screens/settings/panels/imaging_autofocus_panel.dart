@@ -34,11 +34,14 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     final api = _api();
     if (api == null) return;
     try {
-      await ref
-          .read(autofocusSettingsProvider.notifier)
-          .hydrateFromServer(api);
+      await ref.read(autofocusSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -51,16 +54,15 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
     try {
       await ref.read(autofocusSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -135,11 +137,10 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
         ),
         EditableNumberRow(
           label: 'Exposure time (s)',
+          helpKey: 'img.autofocus.exposure',
           currentValue: s.exposureSeconds.toString(),
-          getCanonical: () => ref
-              .read(autofocusSettingsProvider)
-              .exposureSeconds
-              .toString(),
+          getCanonical: () =>
+              ref.read(autofocusSettingsProvider).exposureSeconds.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setExposureSeconds(v);
@@ -147,6 +148,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
         ),
         EditableNumberRow(
           label: 'Binning',
+          helpKey: 'img.autofocus.binning',
           currentValue: s.binning.toString(),
           getCanonical: () =>
               ref.read(autofocusSettingsProvider).binning.toString(),
@@ -157,6 +159,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
         ),
         EditableTextRow(
           label: 'Filter for AF',
+          helpKey: 'img.autofocus.filter',
           currentValue: s.afFilter,
           getCanonical: () => ref.read(autofocusSettingsProvider).afFilter,
           parse: n.setAfFilter,
@@ -171,10 +174,8 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           label: 'After temp delta (°C)',
           helpKey: 'img.autofocus.trigger_temp_delta_c',
           currentValue: s.triggerTempDeltaC.toString(),
-          getCanonical: () => ref
-              .read(autofocusSettingsProvider)
-              .triggerTempDeltaC
-              .toString(),
+          getCanonical: () =>
+              ref.read(autofocusSettingsProvider).triggerTempDeltaC.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setTriggerTempDeltaC(v);
@@ -184,10 +185,8 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           label: 'On HFR drift threshold (%)',
           helpKey: 'img.autofocus.trigger_hfr_drift_pct',
           currentValue: s.triggerHfrDriftPct.toString(),
-          getCanonical: () => ref
-              .read(autofocusSettingsProvider)
-              .triggerHfrDriftPct
-              .toString(),
+          getCanonical: () =>
+              ref.read(autofocusSettingsProvider).triggerHfrDriftPct.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setTriggerHfrDriftPct(v);

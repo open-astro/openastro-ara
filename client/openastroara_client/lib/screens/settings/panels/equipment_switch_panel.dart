@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/switch_device.dart';
-import '../../../services/equipment_device_api.dart' show isNotFoundEquipmentError;
+import '../../../services/equipment_device_api.dart'
+    show isNotFoundEquipmentError;
 import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
@@ -21,7 +22,8 @@ class EquipmentSwitchPanel extends ConsumerStatefulWidget {
   const EquipmentSwitchPanel({super.key});
 
   @override
-  ConsumerState<EquipmentSwitchPanel> createState() => _EquipmentSwitchPanelState();
+  ConsumerState<EquipmentSwitchPanel> createState() =>
+      _EquipmentSwitchPanelState();
 }
 
 class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
@@ -38,8 +40,11 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
     super.initState();
     _settlePoll = Timer.periodic(const Duration(milliseconds: 1500), (_) {
       final list = ref.read(switchListProvider).value;
-      final anyConnecting = list != null &&
-          list.any((d) => d.connectionState == SwitchConnectionState.connecting);
+      final anyConnecting =
+          list != null &&
+          list.any(
+            (d) => d.connectionState == SwitchConnectionState.connecting,
+          );
       if (anyConnecting) {
         ref.read(switchListProvider.notifier).refresh();
       }
@@ -63,11 +68,14 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
     // that's live can tear it down if Ara's remembered UniqueId differs
     // from the live connection (e.g. its Alpaca host IP changed). An empty list
     // (every() is true) still offers it — that's the post-power-cycle case.
-    final canReconnect = serverUp &&
+    final canReconnect =
+        serverUp &&
         switches.maybeWhen(
-          data: (list) => list.every((d) =>
-              d.connectionState != SwitchConnectionState.connected &&
-              d.connectionState != SwitchConnectionState.connecting),
+          data: (list) => list.every(
+            (d) =>
+                d.connectionState != SwitchConnectionState.connected &&
+                d.connectionState != SwitchConnectionState.connecting,
+          ),
           orElse: () => false,
         );
     return ListView(
@@ -120,23 +128,24 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
           )
         else
           ...switch (switches) {
-            AsyncData(:final value) => value.isEmpty
-                ? const [_EmptyState()]
-                : [for (final d in value) _SwitchCard(device: d)],
+            AsyncData(:final value) =>
+              value.isEmpty
+                  ? const [_EmptyState()]
+                  : [for (final d in value) _SwitchCard(device: d)],
             AsyncError(:final error) => [
-                _MessageRow(
-                  icon: Icons.error_outline,
-                  color: AraColors.accentError,
-                  text: "Couldn't read the switch list: ${_msg(error)}",
-                  onRetry: () => ref.read(switchListProvider.notifier).refresh(),
-                ),
-              ],
+              _MessageRow(
+                icon: Icons.error_outline,
+                color: AraColors.accentError,
+                text: "Couldn't read the switch list: ${_msg(error)}",
+                onRetry: () => ref.read(switchListProvider.notifier).refresh(),
+              ),
+            ],
             _ => const [
-                Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ],
+              Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ],
           },
       ],
     );
@@ -145,22 +154,25 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
   Future<void> _reconnectAll(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final performed = await ref.read(switchListProvider.notifier).reconnectAll();
+      final performed = await ref
+          .read(switchListProvider.notifier)
+          .reconnectAll();
       if (!performed) {
         // Re-entrancy guard fired (a port write/connect is still in flight) —
         // tell the user instead of swallowing the tap.
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another connect/disconnect is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Another connect/disconnect is still in progress.'),
+          ),
+        );
       }
     } catch (e) {
       final text = isNotFoundEquipmentError(e)
           ? 'No previous switches to reconnect — use “Add switch” first.'
           : "Couldn't reconnect switches: ${_msg(e)}";
-      messenger.showSnackBar(SnackBar(
-        content: Text(text),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
+      );
     }
   }
 
@@ -179,10 +191,12 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
         try {
           await ref.read(switchListProvider.notifier).connect(device);
         } catch (e) {
-          messenger.showSnackBar(SnackBar(
-            content: Text("Couldn't connect ${device.name}: ${_msg(e)}"),
-            backgroundColor: AraColors.accentError,
-          ));
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text("Couldn't connect ${device.name}: ${_msg(e)}"),
+              backgroundColor: AraColors.accentError,
+            ),
+          );
         }
       },
     );
@@ -197,7 +211,9 @@ class _SwitchCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final title = device.name.isEmpty ? 'Switch ${device.alpacaDeviceNumber}' : device.name;
+    final title = device.name.isEmpty
+        ? 'Switch ${device.alpacaDeviceNumber}'
+        : device.name;
     return Card(
       color: AraColors.bgPanel,
       margin: const EdgeInsets.only(top: 12),
@@ -209,7 +225,10 @@ class _SwitchCard extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 _StateChip(state: device.connectionState),
                 IconButton(
@@ -230,7 +249,9 @@ class _SwitchCard extends ConsumerWidget {
             ),
             Text(
               'device #${device.alpacaDeviceNumber}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
             const Divider(height: 20, color: AraColors.border),
             if (device.isConnected && device.ports.isNotEmpty)
@@ -243,7 +264,9 @@ class _SwitchCard extends ConsumerWidget {
                   device.isConnected
                       ? 'No ports reported by this switch.'
                       : 'Ports appear once the switch is connected.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
                 ),
               ),
           ],
@@ -262,17 +285,21 @@ class _SwitchCard extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: Text('Remove $name?'),
         content: const Text(
-            'The switch is dropped from the list and will no longer '
-            'auto-connect on boot. Reconnect it any time via Add switch.'),
+          'The switch is dropped from the list and will no longer '
+          'auto-connect on boot. Reconnect it any time via Add switch.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              style: FilledButton.styleFrom(
-                  backgroundColor: AraColors.accentError),
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Remove')),
+            style: FilledButton.styleFrom(
+              backgroundColor: AraColors.accentError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -280,10 +307,12 @@ class _SwitchCard extends ConsumerWidget {
     try {
       await ref.read(switchListProvider.notifier).remove(device.deviceId);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't remove: ${_msg(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't remove: ${_msg(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 
@@ -292,10 +321,12 @@ class _SwitchCard extends ConsumerWidget {
     try {
       await ref.read(switchListProvider.notifier).disconnect(device.deviceId);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't disconnect: ${_msg(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't disconnect: ${_msg(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }
@@ -326,7 +357,9 @@ class _PortRowState extends ConsumerState<_PortRow> {
   Future<void> _write(double value) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(switchListProvider.notifier).setValue(
+      await ref
+          .read(switchListProvider.notifier)
+          .setValue(
             deviceId: widget.deviceId,
             portId: widget.port.id,
             value: value,
@@ -336,10 +369,12 @@ class _PortRowState extends ConsumerState<_PortRow> {
       // didUpdateWidget won't reset us — snap the slider back off the (rejected)
       // drag position to the last confirmed value.
       if (mounted) setState(() => _dragValue = null);
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't set ${widget.port.name}: ${_msg(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't set ${widget.port.name}: ${_msg(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 
@@ -375,8 +410,12 @@ class _PortRowState extends ConsumerState<_PortRow> {
           Row(
             children: [
               Expanded(child: Text(label)),
-              Text(_fmt(value),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary)),
+              Text(
+                _fmt(value),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              ),
             ],
           ),
           Slider(
@@ -405,7 +444,10 @@ class _PortLine extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        children: [Expanded(child: Text(label)), trailing],
+        children: [
+          Expanded(child: Text(label)),
+          trailing,
+        ],
       ),
     );
   }
@@ -418,10 +460,16 @@ class _StateChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, text) = switch (state) {
-      SwitchConnectionState.connected => (AraColors.accentConnected, 'Connected'),
+      SwitchConnectionState.connected => (
+        AraColors.accentConnected,
+        'Connected',
+      ),
       SwitchConnectionState.connecting => (AraColors.accentBusy, 'Connecting'),
       SwitchConnectionState.error => (AraColors.accentError, 'Error'),
-      SwitchConnectionState.disconnected => (AraColors.textSecondary, 'Disconnected'),
+      SwitchConnectionState.disconnected => (
+        AraColors.textSecondary,
+        'Disconnected',
+      ),
       SwitchConnectionState.unknown => (AraColors.textSecondary, 'Unknown'),
     };
     return Container(
@@ -444,13 +492,23 @@ class _EmptyState extends StatelessWidget {
       child: Center(
         child: Column(
           children: [
-            const Icon(Icons.power_outlined, size: 40, color: AraColors.textDisabled),
+            const Icon(
+              Icons.power_outlined,
+              size: 40,
+              color: AraColors.textDisabled,
+            ),
             const SizedBox(height: 8),
-            Text('No switches connected',
-                style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'No switches connected',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 4),
-            Text('Use “Add switch” to discover and connect a power/relay box.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary)),
+            Text(
+              'Use “Add switch” to discover and connect a power/relay box.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            ),
           ],
         ),
       ),
@@ -463,7 +521,12 @@ class _MessageRow extends StatelessWidget {
   final Color color;
   final String text;
   final VoidCallback onRetry;
-  const _MessageRow({required this.icon, required this.color, required this.text, required this.onRetry});
+  const _MessageRow({
+    required this.icon,
+    required this.color,
+    required this.text,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -481,6 +544,8 @@ class _MessageRow extends StatelessWidget {
   }
 }
 
-String _fmt(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+String _fmt(double v) =>
+    v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 
-String _msg(Object? e) => e == null ? 'unknown error' : e.toString().replaceFirst('Exception: ', '');
+String _msg(Object? e) =>
+    e == null ? 'unknown error' : e.toString().replaceFirst('Exception: ', '');

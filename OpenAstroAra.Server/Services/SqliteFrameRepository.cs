@@ -492,63 +492,124 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23));
     }
 
-    public async Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
+    public async Task<(byte[] Bytes, string ContentType, OpenAstroAra.Stretch.StretchParams? AppliedManual)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
         var (filePath, frameType) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
-            return (PlaceholderJpegBytes, "image/jpeg");
+            return (PlaceholderJpegBytes, "image/jpeg", null);
         }
 
         var stretchDefaults = _profile.GetStretchDefaults();
         var algorithm = ResolveAlgorithm(request.StretchPalette, frameType, stretchDefaults.LightDefault);
         var stretchParams = BuildParams(request, algorithm, stretchDefaults);
 
+        // §65.9 auto-seed: a manual request with NO knobs takes its bp/mp/wp
+        // from the image's own STF statistics instead of the static profile
+        // seeds — absolute-range seeds (bp 0.02) clip linear astro data, whose
+        // signal lives almost entirely below 2% of full scale, to black. The
+        // derivation needs the pixels, so this path's cache check moves inside
+        // the render gate. The applied knobs return to the caller so the
+        // client can sync its sliders to what was actually rendered.
+        var autoSeedManual =
+            algorithm == OpenAstroAra.Stretch.StretchAlgorithm.Manual
+            && request.BlackPoint is null && request.MidtonePoint is null
+            && request.WhitePoint is null;
+        var appliedManual = algorithm == OpenAstroAra.Stretch.StretchAlgorithm.Manual
+            ? stretchParams : (OpenAstroAra.Stretch.StretchParams?)null;
+
         // §65.4 variant cache: look for an existing JPEG on disk before
         // re-running the stretch + encode. Cache key includes the algorithm
         // ID + a hash of the manual stretch params (rounded to 3 decimal
         // places so rapid slider drags don't blow the cache).
-        var cachePath = ComputeCacheKey(filePath, algorithm, stretchParams);
-        if (TryServeFromCache(cachePath) is byte[] cached) {
-            // Touch atime so the LRU sweep keeps the most-recently-served
-            // variants warm.
-            try { File.SetLastAccessTimeUtc(cachePath, DateTime.UtcNow); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* ignore */ }
-            return (cached, "image/jpeg");
+        string? cachePath = null;
+        if (!autoSeedManual) {
+            cachePath = ComputeCacheKey(filePath, algorithm, stretchParams);
+            if (TryServeFromCache(cachePath) is byte[] cached) {
+                // Touch atime so the LRU sweep keeps the most-recently-served
+                // variants warm.
+                try { File.SetLastAccessTimeUtc(cachePath, DateTime.UtcNow); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* ignore */ }
+                return (cached, "image/jpeg", appliedManual);
+            }
+        }
+
+        // §65.9 auto-seed: the STF derivation needs the pixels before the
+        // cache key exists, so this rare path renders inline under the gate
+        // instead of joining the single-flight map.
+        if (autoSeedManual) {
+            await RenderGate.WaitAsync(ct).ConfigureAwait(false);
+            byte[] seeded;
+            try {
+                var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+                WarmHistogramCache(filePath, pixels);
+                stretchParams = OpenAstroAra.Stretch.Stretcher.DeriveStfParams(pixels);
+                appliedManual = stretchParams;
+                cachePath = ComputeCacheKey(filePath, algorithm, stretchParams);
+                if (TryServeFromCache(cachePath) is byte[] seededHit) {
+                    return (seededHit, "image/jpeg", appliedManual);
+                }
+                if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var seedPattern)) {
+                    var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, seedPattern, algorithm, stretchParams);
+                    seeded = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
+                } else {
+                    var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
+                    var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
+                    var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
+                    seeded = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
+                }
+                // Write the cache BEFORE releasing the gate: a same-variant
+                // caller acquiring the freed slot must find the file and skip
+                // its own decode (review #932 finding 2).
+                TryWriteCache(cachePath, seeded);
+                EvictVariantsIfNeeded(filePath);
+            } finally {
+                RenderGate.Release();
+            }
+            return (seeded, "image/jpeg", appliedManual);
         }
 
         // Single-flight per variant: the capture-time pre-warm and the
         // client's own fetch land within the same second — one render, both
         // callers get its bytes. (Also collapses rapid stretch-slider drags.)
-        var render = _renders.GetOrAdd(cachePath,
-            _ => new Lazy<Task<byte[]>>(() => Task.Run(() => RenderPreview(filePath, algorithm, stretchParams, cachePath))));
+        var render = _renders.GetOrAdd(cachePath!,
+            _ => new Lazy<Task<byte[]>>(() => Task.Run(() => RenderPreview(filePath, algorithm, stretchParams, cachePath!))));
         try {
-            return (await render.Value.ConfigureAwait(false), "image/jpeg");
+            return (await render.Value.ConfigureAwait(false), "image/jpeg", appliedManual);
         } finally {
-            _renders.TryRemove(cachePath, out _);
+            _renders.TryRemove(cachePath!, out _);
         }
     }
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<byte[]>>> _renders = new(StringComparer.Ordinal);
 
     private byte[] RenderPreview(string filePath, OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams, string cachePath) {
-        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
-        // Free ride: the raw pixels are in hand, so the histogram cache warms
-        // with the first (capture-time pre-warmed) preview render.
-        WarmHistogramCache(filePath, pixels);
+        // Renders are CPU- and memory-bound full-FITS decodes; a burst of
+        // distinct variants must queue here, not run all at once on a Pi.
+        RenderGate.Wait();
         byte[] jpeg;
-        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
-            // Superpixel debayer already halves the resolution before stretch.
-            var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
-        } else {
-            // Mono: box-average down to the preview size BEFORE the stretch —
-            // stretching 26 MP only for the encoder to discard most of it is
-            // where a Pi spends its preview minute.
-            var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
-            var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
-            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
+        try {
+            var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+            // Free ride: the raw pixels are in hand, so the histogram cache warms
+            // with the first (capture-time pre-warmed) preview render.
+            WarmHistogramCache(filePath, pixels);
+            if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+                // Superpixel debayer already halves the resolution before stretch.
+                var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
+                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
+            } else {
+                // Mono: box-average down to the preview size BEFORE the stretch —
+                // stretching 26 MP only for the encoder to discard most of it is
+                // where a Pi spends its preview minute.
+                var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
+                var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
+                var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp, stretchParams);
+                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, dw, dh, maxDim: PreviewMaxDim);
+            }
+            // Cache lands before the gate frees so the next same-variant
+            // caller serves from disk instead of re-decoding (review #932).
+            TryWriteCache(cachePath, jpeg);
+            EvictVariantsIfNeeded(filePath);
+        } finally {
+            RenderGate.Release();
         }
-        TryWriteCache(cachePath, jpeg);
-        EvictVariantsIfNeeded(filePath);
         return jpeg;
     }
 
@@ -557,19 +618,42 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return (PlaceholderJpegBytes, "image/jpeg");
         }
-        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
-        // Thumbnail: §65.4 always uses the default stretch (re-stretch on
-        // thumbnails is not supported in v0.0.1). Per-frame-type override
-        // still applies — calibration frames get linear.
-        var stretchDefaults = _profile.GetStretchDefaults();
-        var algorithm = ResolveAlgorithm(null, frameType, stretchDefaults.LightDefault);
+        // §65.4 names thumbnails <stem>.thumb.jpg beside the FITS and the
+        // eviction sweep deliberately spares them — but nothing ever wrote
+        // one, so every request re-decoded the full FITS (~seconds per tile
+        // on a Pi, and a thumbnail grid queues hundreds). Serve the sidecar
+        // when present and write it after the first render.
+        var dir = Path.GetDirectoryName(filePath) ?? "";
+        var stem = Path.GetFileNameWithoutExtension(filePath);
+        var thumbPath = Path.Combine(dir, $"{stem}.thumb.jpg");
+        if (TryServeFromCache(thumbPath) is byte[] cached) {
+            return (cached, "image/jpeg");
+        }
+        await RenderGate.WaitAsync(ct).ConfigureAwait(false);
         byte[] jpeg;
-        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
-            var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
-        } else {
-            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
+        try {
+            if (TryServeFromCache(thumbPath) is byte[] raced) {
+                return (raced, "image/jpeg");
+            }
+            var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+            // Thumbnail: §65.4 always uses the default stretch (re-stretch on
+            // thumbnails is not supported in v0.0.1). Per-frame-type override
+            // still applies — calibration frames get linear.
+            var stretchDefaults = _profile.GetStretchDefaults();
+            var algorithm = ResolveAlgorithm(null, frameType, stretchDefaults.LightDefault);
+            if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+                var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
+                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
+            } else {
+                var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
+                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
+            }
+            // Sidecar lands before the gate frees — same-tile callers queued
+            // on the gate must hit the cache re-check, not re-decode (review
+            // #932 finding 2).
+            TryWriteCache(thumbPath, jpeg);
+        } finally {
+            RenderGate.Release();
         }
         return (jpeg, "image/jpeg");
     }
@@ -989,6 +1073,14 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // encode time and a bigger JPEG than the old 2048; the capture-time
     // pre-warm hides the render, the transfer rides a LAN.
     private const int PreviewMaxDim = 4096;
+
+    // Bounds concurrent full-FITS decodes across previews + thumbnails. Each
+    // render pins a full frame's pixels and pegs a core; the library grid can
+    // request dozens of tiles at once, which on a Pi queued minutes of work
+    // and starved every other request. Two in flight overlaps I/O with CPU
+    // while keeping the box responsive. Static and process-lifetime — never
+    // disposed (disposal would race in-flight WaitAsync callers).
+    private static readonly SemaphoreSlim RenderGate = new(2, 2);
 
     // §29 storage-pressure threshold. When the captures volume free space
     // drops below this, the §65.4 variant-eviction path nukes all alt-

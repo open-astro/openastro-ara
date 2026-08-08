@@ -58,7 +58,12 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -70,8 +75,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   void _syncDerivedFocalLength() {
     if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
     final optics = ref.read(opticsSettingsProvider);
-    ref.read(phd2SettingsProvider.notifier).setGuideFocalLength(
-        derivedOagGuideFocalLength(optics.focalLengthMm, optics.reducerFactor));
+    ref
+        .read(phd2SettingsProvider.notifier)
+        .setGuideFocalLength(
+          derivedOagGuideFocalLength(
+            optics.focalLengthMm,
+            optics.reducerFactor,
+          ),
+        );
   }
 
   @override
@@ -83,7 +94,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(
-          () => _lastError = 'Not connected — connect to your rig to save this.');
+        () => _lastError = 'Not connected — connect to your rig to save this.',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -91,9 +103,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     try {
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Saved.')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(e, action: 'save that'));
@@ -108,21 +118,26 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       _discoveredServers = null;
     });
     try {
-      final servers =
-          await ref.read(guiderEquipmentProvider.notifier).discoverAlpaca();
+      final servers = await ref
+          .read(guiderEquipmentProvider.notifier)
+          .discoverAlpaca();
       if (!mounted) return;
       setState(() {
         _discoveredServers = servers;
         _equipmentStatus = servers.isEmpty
             ? 'No Alpaca servers answered on the guider\'s network.'
             : 'Found ${servers.length} Alpaca '
-                'server${servers.length == 1 ? '' : 's'} — tap one to fill '
-                'host/port.';
+                  'server${servers.length == 1 ? '' : 's'} — tap one to fill '
+                  'host/port.';
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _equipmentStatus =
-          friendlyDaemonError(e, fallback: 'Alpaca discovery failed'));
+      setState(
+        () => _equipmentStatus = friendlyDaemonError(
+          e,
+          fallback: 'Alpaca discovery failed',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _discovering = false);
     }
@@ -134,8 +149,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Not connected — connect to your rig to save this.')));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Not connected — connect to your rig to save this.'),
+        ),
+      );
       return;
     }
     setState(() {
@@ -147,12 +165,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Equipment selection pushed to the guider.')));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Equipment selection pushed to the guider.'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      final msg =
-          friendlyDaemonError(e, fallback: 'Apply to guider failed');
+      final msg = friendlyDaemonError(e, fallback: 'Apply to guider failed');
       setState(() => _equipmentStatus = msg);
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     } finally {
@@ -178,12 +198,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         const SettingsSectionHeader('OpenAstro Guider connection'),
         EditableTextRow(
           label: 'Host',
+          helpKey: 'eq.guider.host',
           currentValue: phd2.host,
           getCanonical: () => ref.read(phd2SettingsProvider).host,
           parse: phd2N.setHost,
         ),
         EditableNumberRow(
           label: 'Port',
+          helpKey: 'eq.guider.port',
           currentValue: phd2.port.toString(),
           getCanonical: () => ref.read(phd2SettingsProvider).port.toString(),
           parse: (s) {
@@ -193,6 +215,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         ),
         EditableTextRow(
           label: 'Profile',
+          helpKey: 'eq.guider.profile',
           currentValue: phd2.phd2Profile,
           getCanonical: () => ref.read(phd2SettingsProvider).phd2Profile,
           parse: phd2N.setPhd2Profile,
@@ -203,7 +226,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.guider),
           onChanged: (v) => connN.setAutoConnect(EquipmentDeviceType.guider, v),
-          hint: 'Off by default — guider connect starts the OpenAstro Guider client',
+          hint:
+              'Off by default — guider connect starts the OpenAstro Guider client',
         ),
         const SettingsSectionHeader('Dithering'),
         SettingsSwitchRow(
@@ -213,6 +237,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         ),
         EditableNumberRow(
           label: 'Dither every N frames',
+          helpKey: 'eq.guider.dither_every_n',
           currentValue: phd2.ditherEveryNFrames.toString(),
           getCanonical: () =>
               ref.read(phd2SettingsProvider).ditherEveryNFrames.toString(),
@@ -245,6 +270,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         ),
         EditableNumberRow(
           label: 'Settle time (s)',
+          helpKey: 'eq.guider.settle_time',
           currentValue: phd2.settleTimeSec.toString(),
           getCanonical: () =>
               ref.read(phd2SettingsProvider).settleTimeSec.toString(),
@@ -273,6 +299,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         ),
         const SettingsRow(
           label: 'Re-calibrate on meridian flip',
+          helpKey: 'eq.guider.recal_on_flip',
           value: 'Edit in Settings → Safety → Policies',
           hint: 'What the guider does across a meridian flip',
         ),
@@ -295,21 +322,25 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           },
         ),
         if (phd2.guiderSetupType == 'oag')
-          Builder(builder: (context) {
-            final optics = ref.watch(opticsSettingsProvider);
-            final derived = derivedOagGuideFocalLength(
-                optics.focalLengthMm, optics.reducerFactor);
-            return SettingsRow(
-              label: 'Guide focal length (mm)',
-              value: derived == 0 ? 'unset' : '$derived',
-              hint: derived == 0
-                  ? 'Derived from main optics — set the telescope focal '
-                      'length in Equipment → Optics first'
-                  : 'Derived from main optics: '
-                      '${_fmtMm(optics.focalLengthMm)} mm × '
-                      '${_fmtFactor(optics.reducerFactor)} = $derived mm',
-            );
-          })
+          Builder(
+            builder: (context) {
+              final optics = ref.watch(opticsSettingsProvider);
+              final derived = derivedOagGuideFocalLength(
+                optics.focalLengthMm,
+                optics.reducerFactor,
+              );
+              return SettingsRow(
+                label: 'Guide focal length (mm)',
+                value: derived == 0 ? 'unset' : '$derived',
+                hint: derived == 0
+                    ? 'Derived from main optics — set the telescope focal '
+                          'length in Equipment → Optics first'
+                    : 'Derived from main optics: '
+                          '${_fmtMm(optics.focalLengthMm)} mm × '
+                          '${_fmtFactor(optics.reducerFactor)} = $derived mm',
+              );
+            },
+          )
         else
           EditableNumberRow(
             label: 'Guide focal length (mm)',
@@ -429,31 +460,38 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final refreshing = equipment.isLoading;
 
     return [
-      Wrap(spacing: 12, runSpacing: 8, children: [
-        OutlinedButton.icon(
-          onPressed: refreshing
-              ? null
-              : () => ref.read(guiderEquipmentProvider.notifier).refresh(),
-          icon: refreshing
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.refresh, size: 18),
-          label: const Text('Refresh choices'),
-        ),
-        OutlinedButton.icon(
-          onPressed:
-              (_discovering || !connected) ? null : () => _discoverAlpaca(),
-          icon: _discovering
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.travel_explore, size: 18),
-          label: const Text('Discover Alpaca'),
-        ),
-      ]),
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: refreshing
+                ? null
+                : () => ref.read(guiderEquipmentProvider.notifier).refresh(),
+            icon: refreshing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 18),
+            label: const Text('Refresh choices'),
+          ),
+          OutlinedButton.icon(
+            onPressed: (_discovering || !connected)
+                ? null
+                : () => _discoverAlpaca(),
+            icon: _discovering
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.travel_explore, size: 18),
+            label: const Text('Discover Alpaca'),
+          ),
+        ],
+      ),
       if (!connected)
         Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -466,24 +504,29 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       if (_discoveredServers != null && _discoveredServers!.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Wrap(spacing: 8, runSpacing: 4, children: [
-            for (final s in _discoveredServers!)
-              ActionChip(
-                label: Text(s),
-                onPressed: () {
-                  final parsed = parseHostPort(s);
-                  if (parsed.host != null) {
-                    phd2N.setGuiderAlpacaHost(parsed.host!);
-                  }
-                  if (parsed.port != null) {
-                    phd2N.setGuiderAlpacaPort(parsed.port!);
-                  }
-                },
-              ),
-          ]),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final s in _discoveredServers!)
+                ActionChip(
+                  label: Text(s),
+                  onPressed: () {
+                    final parsed = parseHostPort(s);
+                    if (parsed.host != null) {
+                      phd2N.setGuiderAlpacaHost(parsed.host!);
+                    }
+                    if (parsed.port != null) {
+                      phd2N.setGuiderAlpacaPort(parsed.port!);
+                    }
+                  },
+                ),
+            ],
+          ),
         ),
       SettingsDropdownRow<String>(
         label: 'Guide camera',
+        helpKey: 'eq.guider.guide_camera',
         value: phd2.guiderCamera,
         items: _slotItems(choices.cameras, phd2.guiderCamera),
         onChanged: (v) {
@@ -492,6 +535,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       EditableTextRow(
         label: 'Guide camera ID',
+        helpKey: 'eq.guider.guide_camera_id',
         currentValue: phd2.guiderCameraId,
         getCanonical: () => ref.read(phd2SettingsProvider).guiderCameraId,
         parse: phd2N.setGuiderCameraId,
@@ -499,6 +543,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       SettingsDropdownRow<String>(
         label: 'Guide mount',
+        helpKey: 'eq.guider.guide_mount',
         value: phd2.guiderMount,
         items: _slotItems(choices.mounts, phd2.guiderMount),
         onChanged: (v) {
@@ -507,6 +552,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       SettingsDropdownRow<String>(
         label: 'Aux mount',
+        helpKey: 'eq.guider.aux_mount',
         value: phd2.guiderAuxMount,
         items: _slotItems(choices.auxMounts, phd2.guiderAuxMount),
         onChanged: (v) {
@@ -515,6 +561,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       SettingsDropdownRow<String>(
         label: 'Rotator',
+        helpKey: 'eq.guider.rotator',
         value: phd2.guiderRotator,
         items: _slotItems(choices.rotators, phd2.guiderRotator),
         onChanged: (v) {
@@ -523,6 +570,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       EditableTextRow(
         label: 'Alpaca host',
+        helpKey: 'eq.guider.alpaca_host',
         currentValue: phd2.guiderAlpacaHost,
         getCanonical: () => ref.read(phd2SettingsProvider).guiderAlpacaHost,
         parse: phd2N.setGuiderAlpacaHost,
@@ -530,6 +578,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       EditableNumberRow(
         label: 'Alpaca port',
+        helpKey: 'eq.guider.alpaca_port',
         currentValue: phd2.guiderAlpacaPort.toString(),
         getCanonical: () =>
             ref.read(phd2SettingsProvider).guiderAlpacaPort.toString(),
@@ -546,21 +595,24 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             FilledButton.icon(
-              onPressed:
-                  (_applying || !connected) ? null : () => _applyToGuider(),
+              onPressed: (_applying || !connected)
+                  ? null
+                  : () => _applyToGuider(),
               icon: _applying
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.send, size: 18),
               label: const Text('Apply to guider'),
             ),
             // The step-by-step alternative to this panel — connection →
             // camera → optics → mount → apply → darks, OpenAstro Guider-wizard style.
             TextButton.icon(
-              onPressed:
-                  _applying ? null : () => showGuiderSetupWizard(context),
+              onPressed: _applying
+                  ? null
+                  : () => showGuiderSetupWizard(context),
               icon: const Icon(Icons.auto_fix_high, size: 16),
               label: const Text('Setup wizard…'),
             ),

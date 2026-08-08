@@ -51,17 +51,20 @@ class _AddTagDialogState extends State<_AddTagDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
-            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-            child: const Text('Add')),
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Add'),
+        ),
       ],
     );
   }
 }
 
-class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
+class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
+    with SingleTickerProviderStateMixin {
   static const _palettes = [
     'auto_stf',
     'linear',
@@ -69,7 +72,6 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     'asinh',
     'sqrt',
     'equalized',
-    'manual',
   ];
 
   String _stretch = 'auto_stf';
@@ -78,9 +80,6 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   // dropdown reverts to this so the picker never claims a render that didn't
   // happen (r1).
   String? _loadedStretch;
-  // The knob values the visible manual render used — snapped back on a failed
-  // re-render so the sliders never disagree with the pixels (r1).
-  (double, double, double)? _loadedKnobs;
   bool _loading = false;
   String? _error;
   // Guards against a slow older fetch overwriting a newer palette choice.
@@ -92,17 +91,19 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   LibraryFrameDetail? _detail;
   bool _tagBusy = false;
 
-  // §65.9 manual stretch sliders (0–1 normalized; seeds match the server's
-  // profile defaults). Edits debounce 200 ms into a server re-render — the
-  // documented v0.0.1 UX (client-side real-time stretching is v0.1.0).
-  double _black = 0.02;
-  double _midtone = 0.5;
-  double _white = 0.98;
-  Timer? _sliderDebounce;
-
   @override
   void initState() {
     super.initState();
+    _zoomAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    // Stretch memory: open with the palette the user last rendered with this
+    // session, not the default.
+    final memory = ref.read(viewerStretchMemoryProvider);
+    if (memory != null) {
+      _stretch = memory.palette;
+    }
     _load();
     _loadDetail();
   }
@@ -125,8 +126,11 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     if (api == null || detail == null) return;
     setState(() => _tagBusy = true);
     try {
-      await api.bulkTag([widget.frame.id],
-          addTags: [?add], removeTags: [?remove]);
+      await api.bulkTag(
+        [widget.frame.id],
+        addTags: [?add],
+        removeTags: [?remove],
+      );
       if (!mounted) return;
       final tags = [...detail.tags];
       if (remove != null) tags.remove(remove);
@@ -147,8 +151,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     } on Exception catch (e) {
       if (!mounted) return;
       setState(() => _tagBusy = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Tag update failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Tag update failed: $e')));
     }
   }
 
@@ -161,16 +166,58 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     await _editTags(add: tag);
   }
 
+  // Double-click zoom: toggles between fit and a magnified view centered on
+  // the click, like the Live View pane. Animated so the jump reads as motion.
+  static const double _doubleTapScale = 3.0;
+  final TransformationController _viewer = TransformationController();
+  // Created in initState — a `late final` initialized on first use would be
+  // CREATED by dispose() when the user never double-clicked (unmount touches
+  // the field), which trips the deactivated-ancestor-lookup assert.
+  late final AnimationController _zoomAnim;
+  Animation<Matrix4>? _zoomTween;
+  Offset? _doubleTapLocal;
+
   @override
   void dispose() {
-    _sliderDebounce?.cancel();
+    _zoomAnim.dispose();
+    _viewer.dispose();
     super.dispose();
   }
 
-  void _onSliderChanged() {
-    // Coalesce drag events into one render request per 200 ms of quiet.
-    _sliderDebounce?.cancel();
-    _sliderDebounce = Timer(const Duration(milliseconds: 200), _load);
+  void _animateViewerTo(Matrix4 target) {
+    _zoomTween = Matrix4Tween(
+      begin: _viewer.value,
+      end: target,
+    ).animate(CurvedAnimation(parent: _zoomAnim, curve: Curves.easeOutCubic));
+    _zoomAnim
+      ..removeListener(_applyZoomTick)
+      ..addListener(_applyZoomTick)
+      ..forward(from: 0);
+  }
+
+  void _applyZoomTick() {
+    final t = _zoomTween;
+    if (t != null) _viewer.value = t.value;
+  }
+
+  void _onDoubleTap() {
+    final zoomedIn = _viewer.value.getMaxScaleOnAxis() > 1.01;
+    if (zoomedIn) {
+      _animateViewerTo(Matrix4.identity());
+      return;
+    }
+    final p = _doubleTapLocal;
+    if (p == null) return;
+    // Scale about the click point so the pixel under the cursor stays put.
+    final target = Matrix4.identity()
+      ..translateByDouble(
+        -p.dx * (_doubleTapScale - 1),
+        -p.dy * (_doubleTapScale - 1),
+        0,
+        1,
+      )
+      ..scaleByDouble(_doubleTapScale, _doubleTapScale, 1, 1);
+    _animateViewerTo(target);
   }
 
   Future<void> _load() async {
@@ -183,12 +230,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     });
     final requested = _stretch;
     try {
-      final bytes = await api.fetchPreview(
+      final (bytes, _) = await api.fetchPreview(
         widget.frame.id,
         stretch: requested,
-        blackPoint: requested == 'manual' ? _black : null,
-        midtonePoint: requested == 'manual' ? _midtone : null,
-        whitePoint: requested == 'manual' ? _white : null,
       );
       if (!mounted || gen != _fetchGen) return;
       setState(() {
@@ -196,11 +240,11 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         // a full-resolution image on every palette switch (r1).
         _preview = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
         _loadedStretch = requested;
-        if (requested == 'manual') {
-          _loadedKnobs = (_black, _midtone, _white);
-        }
         _loading = false;
       });
+      // Only successful renders earn a spot in the session memory — a failed
+      // palette must not become the next frame's opening state.
+      ref.read(viewerStretchMemoryProvider.notifier).remember(requested);
     } on Exception catch (e) {
       if (!mounted || gen != _fetchGen) return;
       setState(() {
@@ -208,16 +252,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         _error = 'Preview unavailable: $e';
         // Keep the last good render on screen, but snap the picker back to
         // the palette it was actually rendered with (r1: the dropdown must
-        // never read as if the failed palette succeeded) — and the sliders
-        // back to the knobs of the visible render, so a re-drag doesn't
-        // resend the failing values and the UI matches the pixels.
+        // never read as if the failed palette succeeded).
         if (_loadedStretch != null) {
           _stretch = _loadedStretch!;
-        }
-        if (_loadedKnobs case (final b, final m, final w)) {
-          _black = b;
-          _midtone = m;
-          _white = w;
         }
       });
     }
@@ -243,8 +280,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         _rating = previous;
         _ratingBusy = false;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Rating failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Rating failed: $e')));
     }
   }
 
@@ -266,7 +304,12 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         ('Offset', d.offset?.toString() ?? '—'),
         // 0.0 may be the uncooled-camera sentinel (see LibraryFrameDetail) —
         // rendered as-is until the server-side nullable pass lands.
-        ('Sensor', d.temperatureC != null ? '${d.temperatureC!.toStringAsFixed(1)}°C' : '—'),
+        (
+          'Sensor',
+          d.temperatureC != null
+              ? '${d.temperatureC!.toStringAsFixed(1)}°C'
+              : '—',
+        ),
         if (d.focuserPosition != null) ('Focus', '${d.focuserPosition} steps'),
         if (d.width > 0) ('Size', '${d.width}×${d.height}'),
       ],
@@ -277,8 +320,10 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${f.filterName ?? f.frameType} · ${exposure}s',
-            style: const TextStyle(fontSize: 14)),
+        title: Text(
+          '${f.filterName ?? f.frameType} · ${exposure}s',
+          style: const TextStyle(fontSize: 14),
+        ),
         actions: [
           // §65 stretch picker — server-side render per palette.
           DropdownButton<String>(
@@ -292,9 +337,6 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
                 ? null
                 : (v) {
                     if (v == null || v == _stretch) return;
-                    // A pending slider debounce must not re-fetch after the
-                    // palette switch already rendered (r1).
-                    _sliderDebounce?.cancel();
                     setState(() => _stretch = v);
                     _load();
                   },
@@ -308,31 +350,38 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: InteractiveViewer(
-                    maxScale: 8,
-                    child: Center(
-                      child: _preview != null
-                          ? Image.memory(
-                              _preview!,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                              // Undecodable bytes (truncated response) degrade
-                              // like the thumbnail path instead of a render error.
-                              errorBuilder: (_, _, _) => const Icon(
+                  child: GestureDetector(
+                    onDoubleTapDown: (d) => _doubleTapLocal = d.localPosition,
+                    onDoubleTap: _onDoubleTap,
+                    child: InteractiveViewer(
+                      transformationController: _viewer,
+                      maxScale: 8,
+                      child: Center(
+                        child: _preview != null
+                            ? Image.memory(
+                                _preview!,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                                // Undecodable bytes (truncated response) degrade
+                                // like the thumbnail path instead of a render error.
+                                errorBuilder: (_, _, _) => const Icon(
                                   Icons.broken_image_outlined,
                                   size: 64,
-                                  color: AraColors.textDisabled),
-                            )
-                          : thumbUrl != null
-                              ? Image.network(
-                                  thumbUrl,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, _, _) => const Icon(
-                                      Icons.broken_image_outlined,
-                                      size: 64,
-                                      color: AraColors.textDisabled),
-                                )
-                              : const Icon(Icons.image_outlined, size: 64),
+                                  color: AraColors.textDisabled,
+                                ),
+                              )
+                            : thumbUrl != null
+                            ? Image.network(
+                                thumbUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 64,
+                                  color: AraColors.textDisabled,
+                                ),
+                              )
+                            : const Icon(Icons.image_outlined, size: 64),
+                      ),
                     ),
                   ),
                 ),
@@ -341,57 +390,32 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
                     top: 12,
                     right: 12,
                     child: SizedBox(
-                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
                 if (_error != null)
                   Positioned(
                     left: 12,
                     bottom: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       color: AraColors.bgPanel,
-                      child: Text(_error!,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AraColors.accentBusy)),
+                      child: Text(
+                        _error!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AraColors.accentBusy,
+                        ),
+                      ),
                     ),
                   ),
               ],
             ),
           ),
-          if (_stretch == 'manual')
-            Container(
-              width: double.infinity,
-              color: AraColors.bgPanelAlt,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _StretchSlider(
-                  label: 'Black',
-                  value: _black,
-                  onChanged: (v) {
-                    setState(() => _black = v.clamp(0.0, _white - 0.01));
-                    _onSliderChanged();
-                  },
-                ),
-                _StretchSlider(
-                  label: 'Midtone',
-                  value: _midtone,
-                  onChanged: (v) {
-                    setState(() => _midtone = v);
-                    _onSliderChanged();
-                  },
-                ),
-                _StretchSlider(
-                  label: 'White',
-                  value: _white,
-                  onChanged: (v) {
-                    setState(() => _white = v.clamp(_black + 0.01, 1.0));
-                    _onSliderChanged();
-                  },
-                ),
-              ]),
-            ),
           Container(
             width: double.infinity,
             color: AraColors.bgPanel,
@@ -401,30 +425,35 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
               children: [
                 // §40.5 rating editor — reuses the §40.8 bulk endpoint with a
                 // single id; tapping the current rating clears it.
-                Row(children: [
-                  for (var star = 1; star <= 5; star++)
-                    InkWell(
-                      onTap: _ratingBusy || api == null
-                          ? null
-                          : () => _setRating(star == _rating ? 0 : star),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Icon(
-                          star <= _rating ? Icons.star : Icons.star_border,
-                          size: 18,
-                          color: star <= _rating
-                              ? AraColors.accentBusy
-                              : AraColors.textSecondary,
+                Row(
+                  children: [
+                    for (var star = 1; star <= 5; star++)
+                      InkWell(
+                        onTap: _ratingBusy || api == null
+                            ? null
+                            : () => _setRating(star == _rating ? 0 : star),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Icon(
+                            star <= _rating ? Icons.star : Icons.star_border,
+                            size: 18,
+                            color: star <= _rating
+                                ? AraColors.accentBusy
+                                : AraColors.textSecondary,
+                          ),
                         ),
                       ),
-                    ),
-                  if (_ratingBusy)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: SizedBox(
-                          width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-                    ),
-                ]),
+                    if (_ratingBusy)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 // §40.5 tag editor — chips delete individual tags; the + chip
                 // adds one. Same single-id reuse of the §40.8 bulk endpoint.
@@ -457,11 +486,12 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
                   runSpacing: 6,
                   children: [
                     for (final (label, value) in rows)
-                      Text('$label: $value',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AraColors.textSecondary)),
+                      Text(
+                        '$label: $value',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -470,40 +500,5 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         ],
       ),
     );
-  }
-}
-
-/// One labelled 0–1 stretch slider row (§65.9).
-class _StretchSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final ValueChanged<double> onChanged;
-  const _StretchSlider({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      SizedBox(
-          width: 60,
-          child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
-      Expanded(
-        child: Slider(
-          value: value.clamp(0.0, 1.0),
-          onChanged: onChanged,
-        ),
-      ),
-      SizedBox(
-          width: 44,
-          child: Text(value.toStringAsFixed(2),
-              textAlign: TextAlign.right,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary))),
-    ]);
   }
 }

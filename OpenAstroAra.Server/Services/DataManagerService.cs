@@ -98,6 +98,90 @@ namespace OpenAstroAra.Server.Services {
                 InstalledUtc: null,
                 SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/NGC.csv"),
                 Recommended: true),
+            new DataPackageDto(
+                Id: "sharpless-hii",
+                Name: "Sharpless HII regions (Sh2)",
+                // OpenNGC-layout add-on catalog (see open-astro/sky-data CATALOG-SOURCES.md for
+                // provenance + license attribution). Commit-pinned; SHA-verified; ships as a
+                // .deb seed for offline-first installs.
+                Description: "313 emission nebulae — the narrowband imager's catalog; many favorites (Cave, Tulip) aren't in NGC/IC.",
+                Category: "catalog",
+                SizeBytes: 20702,
+                Version: "1959ApJS-4-257",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/sh2.csv"),
+                Recommended: true),
+            new DataPackageDto(
+                Id: "ldn-dark",
+                Name: "Lynds dark nebulae (LDN)",
+                // OpenNGC-layout add-on catalog (see open-astro/sky-data CATALOG-SOURCES.md for
+                // provenance + license attribution). Commit-pinned; SHA-verified; ships as a
+                // .deb seed for offline-first installs.
+                Description: "1,787 dark nebulae for widefield dark-cloud imaging (Lynds 1962).",
+                Category: "catalog",
+                SizeBytes: 123552,
+                Version: "1962ApJS-7-1",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/ldn.csv"),
+                Recommended: true),
+            new DataPackageDto(
+                Id: "barnard-dark",
+                Name: "Barnard dark objects",
+                // OpenNGC-layout add-on catalog (see open-astro/sky-data CATALOG-SOURCES.md for
+                // provenance + license attribution). Commit-pinned; SHA-verified; ships as a
+                // .deb seed for offline-first installs.
+                Description: "349 dark nebulae from Barnard's photographic atlas — B33 Horsehead and friends.",
+                Category: "catalog",
+                SizeBytes: 22849,
+                Version: "Barnard-1927",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/barnard.csv"),
+                Recommended: true),
+            new DataPackageDto(
+                Id: "vdb-reflection",
+                Name: "van den Bergh reflection nebulae (vdB)",
+                // OpenNGC-layout add-on catalog (see open-astro/sky-data CATALOG-SOURCES.md for
+                // provenance + license attribution). Commit-pinned; SHA-verified; ships as a
+                // .deb seed for offline-first installs.
+                Description: "158 reflection nebulae around bright stars (van den Bergh 1966).",
+                Category: "catalog",
+                SizeBytes: 13575,
+                Version: "1966AJ-71-990",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/vdb.csv"),
+                Recommended: true),
+            new DataPackageDto(
+                Id: "abell-pn",
+                Name: "Abell planetary nebulae",
+                // OpenNGC-layout add-on catalog (see open-astro/sky-data CATALOG-SOURCES.md for
+                // provenance + license attribution). Commit-pinned; SHA-verified; ships as a
+                // .deb seed for offline-first installs.
+                Description: "86 large, faint planetary nebulae (Abell 1966) — classic challenge targets.",
+                Category: "catalog",
+                SizeBytes: 10173,
+                Version: "Abell-1966",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/abell-pn.csv"),
+                Recommended: true),
+            new DataPackageDto(
+                Id: "arp-peculiar",
+                Name: "Arp peculiar galaxies",
+                // OpenNGC-layout add-on catalog (see open-astro/sky-data CATALOG-SOURCES.md for
+                // provenance + license attribution). Commit-pinned; SHA-verified; ships as a
+                // .deb seed for offline-first installs.
+                Description: "338 interacting/peculiar galaxies from the Arp atlas — Antennae, Stephan's Quintet.",
+                Category: "catalog",
+                SizeBytes: 33176,
+                Version: "Arp-1966",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/arp.csv"),
+                Recommended: true),
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
             // the §36 Tonight's-Sky overlay, not fetched via the Data Manager; the real horizon feature re-adds it
@@ -112,6 +196,12 @@ namespace OpenAstroAra.Server.Services {
             new Dictionary<string, string>(StringComparer.Ordinal) {
                 ["hyg-stars"] = "8e3ff9e67445e558a759b117910850cff1b1d4d492f45f715c2ee2db3d869bac",
                 ["openngc-dso"] = "840fe0c9ee1332e551b2e722a0e92726cd7b157914a3d2177602832aadd3aa9e",
+                ["sharpless-hii"] = "cb090575c57699eb9d57de6acc9c8ae2b5b8165e52cec9dbbb47732ec203a148",
+                ["ldn-dark"] = "88b32186b1058fdf3cdf7f3c1d02930441cd57d13fa9b374fc159e937882312c",
+                ["barnard-dark"] = "67db5d2ed5928bf93f94fbce8575184aba81b5731743b4982dd25cda1f290ed2",
+                ["vdb-reflection"] = "9b0024925ec9f5ef50e84a4efb6f7cf8535994aa0e2018b354ffce2f99b977f5",
+                ["abell-pn"] = "aea2591ad1e1f0245205fca946a363cef8820e05a6e5e422ce1e4ed16f26e200",
+                ["arp-peculiar"] = "afe3aed0bbcfc5bd807e88a4b1f4ae15a493d9170d1bdff8a528a7a80e04f853",
             };
 
         /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
@@ -349,6 +439,22 @@ namespace OpenAstroAra.Server.Services {
                 // GET conditional on the validator the prior install recorded. A 304 means nothing changed → keep the
                 // install untouched. Null for a fresh install, so the GET is unconditional.
                 var knownValidator = SkyDataInstaller.ReadRemoteLastModified(targetDir);
+
+                // §36 offline restore: a bundled seed IS the pinned artifact the
+                // URL serves (SHA-verified either way), so install from it without
+                // touching the network — instant, and it works at a remote site.
+                // A seed that fails verification (stale bundle after a curation
+                // bump) falls through to the normal network path.
+                if (SeedPathFor(pkg) is { } seedPath) {
+                    try {
+                        await InstallFromSeedAsync(pkg, seedPath, ct).ConfigureAwait(false);
+                        await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
+                        LogSeededPackage(pkg.Id);
+                        return;
+                    } catch (Exception ex) when (ex is not OperationCanceledException) {
+                        LogSeedFailed(pkg.Id, ex);
+                    }
+                }
 
                 idleCts.CancelAfter(_idleTimeout);
                 await using var fetch = await _fetcher.OpenAsync(pkg.SourceUrl!, knownValidator, ct).ConfigureAwait(false);
@@ -588,7 +694,65 @@ namespace OpenAstroAra.Server.Services {
         // window, so a graceful stop ends with the staging dirs reclaimed by the workers' own finally
         // paths instead of abandoned mid-extract (the boot-time SweepStaleScratch still covers a hard
         // kill, which no drain can catch).
-        Task IHostedService.StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        Task IHostedService.StartAsync(CancellationToken cancellationToken) {
+            // §36 offline-first seeding: the .deb ships every curated catalog as a
+            // seed copy under {app}/seed-data/{id}/. Install any missing package
+            // from its seed at boot, so a fresh rig at a remote site (or a rig
+            // whose user removed a catalog while offline) has full catalogs with
+            // zero network. Background — boot must not wait on file copies.
+            _ = Task.Run(() => SeedMissingPackagesAsync(CancellationToken.None), CancellationToken.None);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>The bundled seed artifact for a package (the same pinned file
+        /// its SourceUrl serves), or null when the .deb didn't ship one.</summary>
+        internal static string? SeedPathFor(DataPackageDto pkg) {
+            if (pkg.SourceUrl is null) return null;
+            var fileName = Path.GetFileName(pkg.SourceUrl.AbsolutePath);
+            if (string.IsNullOrEmpty(fileName)) return null;
+            var path = Path.Combine(AppContext.BaseDirectory, "seed-data", pkg.Id, fileName);
+            return File.Exists(path) ? path : null;
+        }
+
+        internal async Task<int> SeedMissingPackagesAsync(CancellationToken ct) {
+            var seeded = 0;
+            foreach (var pkg in _catalog) {
+                if (ct.IsCancellationRequested) break;
+                if (IsInstalled(pkg.Id)) continue;
+                var seedPath = SeedPathFor(pkg);
+                if (seedPath is null) continue;
+                try {
+                    await InstallFromSeedAsync(pkg, seedPath, ct).ConfigureAwait(false);
+                    seeded++;
+                    LogSeededPackage(pkg.Id);
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    // A bad seed must not take the daemon down — the package
+                    // simply stays uninstalled and the online path remains.
+                    LogSeedFailed(pkg.Id, ex);
+                }
+            }
+            return seeded;
+        }
+
+        private async Task InstallFromSeedAsync(DataPackageDto pkg, string seedPath, CancellationToken ct) {
+            var targetDir = PackageDir(pkg.Id)!;
+            var ceiling = ExtractionCeiling(pkg);
+            var expectedSha = _expectedDigests.GetValueOrDefault(pkg.Id);
+            await using var source = new FileStream(seedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 81920, useAsync: true);
+            if (IsArchiveFormat(pkg.SourceUrl!)) {
+                await SkyDataInstaller.InstallFromTarGzAsync(source, targetDir, ceiling, null, ct, expectedSha).ConfigureAwait(false);
+            } else {
+                var gunzip = seedPath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
+                await SkyDataInstaller.InstallFromFileAsync(source, targetDir, CatalogFileName, gunzip, ceiling, null, ct, expectedSha).ConfigureAwait(false);
+            }
+        }
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§36 seeded catalog package '{PackageId}' from the bundled copy")]
+        private partial void LogSeededPackage(string packageId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§36 could not seed package '{PackageId}' from the bundled copy")]
+        private partial void LogSeedFailed(string packageId, Exception ex);
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Shutdown must never throw. Workers own their failure reporting (WS events + logs); this await exists only to hold the host open while they wind down.")]

@@ -43,7 +43,12 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     try {
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
-      if (mounted) setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+      if (mounted) {
+        setState(
+          () =>
+              _lastError = friendlyError(e, action: 'load your saved settings'),
+        );
+      }
     }
   }
 
@@ -84,7 +89,11 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
     final server = ref.read(activeServerProvider);
     final messenger = ScaffoldMessenger.of(context);
     if (server == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('Not connected — connect to your rig to save this.')));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Not connected — connect to your rig to save this.'),
+        ),
+      );
       return;
     }
     setState(() {
@@ -96,8 +105,13 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       // ref.read on a disposed WidgetRef throws; bail if the panel went away mid-request.
       if (!mounted) return;
       if (geometry == null) {
-        messenger.showSnackBar(const SnackBar(
-            content: Text('Connect a camera that reports its sensor size first.')));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Connect a camera that reports its sensor size first.',
+            ),
+          ),
+        );
         return;
       }
       final n = ref.read(opticsSettingsProvider.notifier);
@@ -109,13 +123,22 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       final api = _api();
       if (api == null) {
         // The values are in the form, but the server vanished mid-read — be honest that nothing saved.
-        messenger.showSnackBar(const SnackBar(
-            content: Text('Read the camera, but no server is connected to save to.')));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Read the camera, but no server is connected to save to.',
+            ),
+          ),
+        );
         return;
       }
       await n.persistToServer(api);
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(content: Text('Filled sensor size from the connected camera.')));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Filled sensor size from the connected camera.'),
+          ),
+        );
       }
     } catch (e) {
       // Set the field without its own setState; the finally's setState rebuilds with it.
@@ -140,8 +163,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       children: [
         EditableNumberRow(
           label: 'Focal length (mm)',
+          helpKey: 'imaging.optics.focal_length',
           currentValue: _fmt(o.focalLengthMm),
-          getCanonical: () => _fmt(ref.read(opticsSettingsProvider).focalLengthMm),
+          getCanonical: () =>
+              _fmt(ref.read(opticsSettingsProvider).focalLengthMm),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setFocalLengthMm(v);
@@ -149,8 +174,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         ),
         EditableNumberRow(
           label: 'Reducer / barlow factor (×)',
+          helpKey: 'imaging.optics.reducer',
           currentValue: _fmt(o.reducerFactor),
-          getCanonical: () => _fmt(ref.read(opticsSettingsProvider).reducerFactor),
+          getCanonical: () =>
+              _fmt(ref.read(opticsSettingsProvider).reducerFactor),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setReducerFactor(v);
@@ -158,6 +185,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         ),
         EditableNumberRow(
           label: 'Aperture (mm)',
+          helpKey: 'imaging.optics.aperture',
           currentValue: _fmt(o.apertureMm),
           getCanonical: () => _fmt(ref.read(opticsSettingsProvider).apertureMm),
           parse: (s) {
@@ -167,8 +195,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         ),
         EditableNumberRow(
           label: 'Sensor width (px)',
+          helpKey: 'imaging.optics.sensor_width',
           currentValue: o.sensorWidthPx.toString(),
-          getCanonical: () => ref.read(opticsSettingsProvider).sensorWidthPx.toString(),
+          getCanonical: () =>
+              ref.read(opticsSettingsProvider).sensorWidthPx.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setSensorWidthPx(v);
@@ -176,8 +206,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         ),
         EditableNumberRow(
           label: 'Sensor height (px)',
+          helpKey: 'imaging.optics.sensor_height',
           currentValue: o.sensorHeightPx.toString(),
-          getCanonical: () => ref.read(opticsSettingsProvider).sensorHeightPx.toString(),
+          getCanonical: () =>
+              ref.read(opticsSettingsProvider).sensorHeightPx.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setSensorHeightPx(v);
@@ -185,8 +217,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         ),
         EditableNumberRow(
           label: 'Pixel size (µm)',
+          helpKey: 'imaging.optics.pixel_size',
           currentValue: _fmt(o.pixelSizeUm),
-          getCanonical: () => _fmt(ref.read(opticsSettingsProvider).pixelSizeUm),
+          getCanonical: () =>
+              _fmt(ref.read(opticsSettingsProvider).pixelSizeUm),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setPixelSizeUm(v);
@@ -196,18 +230,29 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            onPressed: (_refreshing || _saving) ? null : () => _refreshFromCamera(),
+            onPressed: (_refreshing || _saving)
+                ? null
+                : () => _refreshFromCamera(),
             icon: _refreshing
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.camera_alt_outlined, size: 16),
-            label: Text(_refreshing ? 'Reading camera…' : 'Refresh from connected camera'),
+            label: Text(
+              _refreshing ? 'Reading camera…' : 'Refresh from connected camera',
+            ),
           ),
         ),
         const SizedBox(height: 8),
         _FovReadout(optics: o),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
-          Text(_lastError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _lastError!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
           const SizedBox(height: 12),
         ],
         // Save lives in the settings-shell header (PanelSaveRegistration) —

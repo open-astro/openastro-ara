@@ -44,6 +44,28 @@ cp -r "$SOURCE_TREE/." "$STAGE/"
 mkdir -p "$STAGE/opt/openastroara"
 cp -r "$PUBLISH_DIR/." "$STAGE/opt/openastroara/"
 
+# §36 offline-first: bundle every curated sky-data catalog as a seed copy.
+# The manifest is the single source of truth for what ships (a unit test keeps
+# it in lockstep with DataManagerService.Catalog); each artifact is fetched
+# from its commit-pinned URL and SHA-256 verified before it enters the .deb.
+SEED_MANIFEST="$SCRIPT_DIR/seed-manifest.tsv"
+if [ -f "$SEED_MANIFEST" ]; then
+  while IFS=$'\t' read -r pkg_id url sha; do
+    [ -z "$pkg_id" ] && continue
+    case "$pkg_id" in \#*) continue ;; esac
+    fname="$(basename "$url")"
+    dest="$STAGE/opt/openastroara/seed-data/$pkg_id"
+    mkdir -p "$dest"
+    echo "seed: $pkg_id <- $fname"
+    curl -fsSL --retry 3 -o "$dest/$fname" "$url"
+    actual="$(sha256sum "$dest/$fname" | cut -d' ' -f1)"
+    if [ "$actual" != "$sha" ]; then
+      echo "error: seed $pkg_id sha256 mismatch (expected $sha, got $actual)" >&2
+      exit 1
+    fi
+  done < "$SEED_MANIFEST"
+fi
+
 # Ship the license documents per §15/§17.2: the project license + NINA
 # lineage notice, and the generated third-party notices
 # (scripts/generate-3rd-party-licenses.py keeps the repo-root file fresh;

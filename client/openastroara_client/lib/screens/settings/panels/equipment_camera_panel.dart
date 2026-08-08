@@ -8,6 +8,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/camera_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -76,18 +77,24 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     final s = widget.status;
     if (s.isConnecting) return const Text('Reading…');
     if (s.connectionState == EquipmentConnectionState.error) {
-      return const Row(children: [
-        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-        SizedBox(width: 8),
-        Expanded(child: Text('Camera read failed — check the device.')),
-      ]);
+      return const Row(
+        children: [
+          Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+          SizedBox(width: 8),
+          Expanded(child: Text('Camera read failed — check the device.')),
+        ],
+      );
     }
     final caps = s.capabilities;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row('CCD temperature',
-            s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+        _row(
+          'CCD temperature',
+          s.ccdTemperature == null
+              ? '—'
+              : '${s.ccdTemperature!.toStringAsFixed(1)} °C',
+        ),
         if (s.coolerPowerPct != null)
           _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
         // §25.5.5 — the target the TEC is cooling TO (read back from the daemon),
@@ -109,45 +116,59 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
         // cooler (CoolerOn implemented, CanSetCCDTemperature=false) gets the
         // Switch alone instead of no cooler UI at all.
         if (caps?.hasCooler ?? false) ...[
-          Row(children: [
-            const Expanded(child: Text('Cooler')),
-            Switch(
-              value: s.coolerOn,
-              onChanged: (v) => _setCooler(v),
-            ),
-          ]),
+          Row(
+            children: [
+              const Text('Cooler'),
+              HelpIcon(helpKey: 'eq.camera.cooler', device: s.name),
+              const Spacer(),
+              Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
+            ],
+          ),
           if (caps?.canSetTemperature ?? false)
-            Row(children: [
-              SizedBox(
-                width: 130,
-                child: TextField(
-                  controller: _target,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(signed: true, decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^-?[0-9]*\.?[0-9]*$')),
-                  ],
-                  decoration: const InputDecoration(
-                      isDense: true, labelText: 'Target (°C)'),
+            Row(
+              children: [
+                SizedBox(
+                  width: 130,
+                  child: TextField(
+                    controller: _target,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: true,
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^-?[0-9]*\.?[0-9]*$'),
+                      ),
+                    ],
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'Target (°C)',
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: () => _setTarget(),
-                child: const Text('Set target'),
-              ),
-            ]),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () => _setTarget(),
+                  child: const Text('Set target'),
+                ),
+                HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
+              ],
+            ),
         ],
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
           _row('Sensor', '${caps.sensorWidth} × ${caps.sensorHeight}'),
           if (caps.pixelSizeUm > 0)
             _row(
-                'Pixel size',
-                caps.pixelSizeUmY > 0 && caps.pixelSizeUmY != caps.pixelSizeUm
-                    ? '${caps.pixelSizeUm.toStringAsFixed(2)} × ${caps.pixelSizeUmY.toStringAsFixed(2)} μm'
-                    : '${caps.pixelSizeUm.toStringAsFixed(2)} μm'),
-          _row('Sensor type', caps.isColor ? 'Colour (${caps.bayerPattern})' : 'Mono'),
+              'Pixel size',
+              caps.pixelSizeUmY > 0 && caps.pixelSizeUmY != caps.pixelSizeUm
+                  ? '${caps.pixelSizeUm.toStringAsFixed(2)} × ${caps.pixelSizeUmY.toStringAsFixed(2)} μm'
+                  : '${caps.pixelSizeUm.toStringAsFixed(2)} μm',
+            ),
+          _row(
+            'Sensor type',
+            caps.isColor ? 'Colour (${caps.bayerPattern})' : 'Mono',
+          ),
           if (caps.maxGain > caps.minGain)
             _row('Gain range', '${caps.minGain}–${caps.maxGain}'),
           if (caps.maxOffset > caps.minOffset)
@@ -157,25 +178,34 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           if (caps.readoutModes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Row(children: [
-                const Expanded(child: Text('Readout mode')),
-                DropdownButton<int>(
-                  value: _readoutIndex(caps.readoutModes, s.readoutMode),
-                  items: [
-                    for (var i = 0; i < caps.readoutModes.length; i++)
-                      DropdownMenuItem(value: i, child: Text(caps.readoutModes[i])),
-                  ],
-                  onChanged: s.isBusy
-                      ? null
-                      : (i) {
-                          if (i != null) {
-                            _run(() => ref
-                                .read(cameraStatusProvider.notifier)
-                                .setReadoutMode(i));
-                          }
-                        },
-                ),
-              ]),
+              child: Row(
+                children: [
+                  const Text('Readout mode'),
+                  HelpIcon(helpKey: 'eq.camera.readout_mode', device: s.name),
+                  const Spacer(),
+                  DropdownButton<int>(
+                    value: _readoutIndex(caps.readoutModes, s.readoutMode),
+                    items: [
+                      for (var i = 0; i < caps.readoutModes.length; i++)
+                        DropdownMenuItem(
+                          value: i,
+                          child: Text(caps.readoutModes[i]),
+                        ),
+                    ],
+                    onChanged: s.isBusy
+                        ? null
+                        : (i) {
+                            if (i != null) {
+                              _run(
+                                () => ref
+                                    .read(cameraStatusProvider.notifier)
+                                    .setReadoutMode(i),
+                              );
+                            }
+                          },
+                  ),
+                ],
+              ),
             ),
         ],
       ],
@@ -183,9 +213,14 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
   }
 
   Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Expanded(child: Text(label)), Text(value)]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value),
+      ],
+    ),
+  );
 
   // The Switch only toggles the cooler. CoolerOn and the set-point are
   // independent ASCOM properties, so toggling never carries a (possibly stale)
@@ -198,13 +233,16 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     final t = _parseTarget();
     if (t == null) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('Enter a target temperature.')));
+        const SnackBar(content: Text('Enter a target temperature.')),
+      );
       return;
     }
     // Setting a target turns the cooler on.
-    await _run(() => ref
-        .read(cameraStatusProvider.notifier)
-        .setCooler(true, targetTemperatureC: t));
+    await _run(
+      () => ref
+          .read(cameraStatusProvider.notifier)
+          .setCooler(true, targetTemperatureC: t),
+    );
   }
 
   double? _parseTarget() => double.tryParse(_target.text.trim());
@@ -222,15 +260,17 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     try {
       final performed = await action();
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another action is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Another action is still in progress.')),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't set cooler: ${describeEquipmentError(e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't set cooler: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }

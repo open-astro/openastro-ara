@@ -44,3 +44,9 @@ public sealed record StorageBrowseEntryDto(
 public sealed record StorageCreateFolderRequestDto(
     string Path,
     string Name);
+
+
+/// <summary>§65.4 preview-cache accounting — the thumbnail + stretch-variant
+/// sidecar JPEGs living beside the FITS files under the save directory.
+/// GET measures; DELETE reports what it removed.</summary>
+public sealed record StorageCacheDto(int Files, long Bytes);

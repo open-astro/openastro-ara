@@ -77,4 +77,16 @@
     </None>
   </ItemGroup>
 
+  <!-- macOS dev convenience, mirrored from OpenAstroAra.Server.csproj (playbook §23.1):
+       tests that exercise the §72 FITS P/Invoke (CaptureScanRecoverySessionTest writes real
+       FITS fixtures) need libcfitsio in the probing path; Homebrew's /opt/homebrew/lib isn't
+       searched and SIP strips DYLD_* under the dotnet launcher. No-op on Linux/Windows/CI
+       (CI installs the system package) and when cfitsio isn't brew-installed. -->
+  <Target Name="CopyLibCfitsioMacOS" AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64' And Exists('/opt/homebrew/lib/libcfitsio.dylib')">
+    <Copy SourceFiles="/opt/homebrew/lib/libcfitsio.dylib"
+          DestinationFiles="$(OutDir)runtimes/osx-arm64/native/libcfitsio.dylib"
+          SkipUnchangedFiles="true" ContinueOnError="true" />
+  </Target>
+
 </Project>

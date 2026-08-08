@@ -26,6 +26,12 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static class SystemEndpoints {
 
+    /// <summary>OpenNGC type codes for extended objects that legitimately carry no
+    /// integrated magnitude (nebulae of all stripes) — the planning cull must not
+    /// drop these for lacking a number that doesn't apply to them.</summary>
+    private static bool IsMagnitudelessImagingType(string type) =>
+        type is "HII" or "EmN" or "RfN" or "DrkN" or "Neb" or "Cl+N" or "SNR" or "PN";
+
     private static IResult NotImplementedStub(string endpoint, string section) =>
         Results.Problem(
             type: "https://openastro.net/errors/not-implemented",
@@ -183,9 +189,17 @@ public static class SystemEndpoints {
                     var cap = maxMag ?? 12.0;
                     var list = new List<DsoEntryDto>();
                     foreach (var d in dsos) {
-                        // Objects with no recorded magnitude are dropped — same rule as the
-                        // TonightSkyService cull this endpoint replaces the reach into.
-                        if (d.Magnitude is { } mag && mag <= cap) {
+                        if (d.Magnitude is { } mag) {
+                            if (mag <= cap) {
+                                list.Add(d);
+                            }
+                        } else if (IsMagnitudelessImagingType(d.Type)) {
+                            // Nebulae (HII regions, dark/reflection nebulae, SNRs…) legitimately
+                            // have NO integrated magnitude — Sh2/LDN/Barnard rows would all be
+                            // culled by a magnitude bound they can never satisfy. Pass them
+                            // through; the client ranker scores them on size/surface brightness.
+                            // Magnitude-less rows of OTHER types (stars, duplicate stubs) stay
+                            // dropped, same as the original TonightSkyService cull.
                             list.Add(d);
                         }
                     }
@@ -434,6 +448,22 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("RescanStorage")
             .WithSummary("Scan the save directory for frames already on disk but missing from the catalog, and add them.");
+
+        // §65.4 preview-cache maintenance: GET measures the sidecar JPEGs
+        // (thumbnails + stretch variants) under the save directory; DELETE
+        // removes them. Always safe — everything re-renders on demand or via
+        // the boot-time warmer.
+        storage.MapGet("/cache", (IProfileStore profiles) =>
+                Results.Ok(PreviewCacheMaintenance.Measure(profiles.GetStorageSettings().SaveDirectory)))
+            .Produces<StorageCacheDto>()
+            .WithName("GetStorageCache")
+            .WithSummary("Size + count of the §65.4 preview/thumbnail cache sidecars under the save directory.");
+
+        storage.MapDelete("/cache", (IProfileStore profiles) =>
+                Results.Ok(PreviewCacheMaintenance.Clear(profiles.GetStorageSettings().SaveDirectory)))
+            .Produces<StorageCacheDto>()
+            .WithName("ClearStorageCache")
+            .WithSummary("Delete every §65.4 preview/thumbnail cache sidecar; reports files + bytes freed.");
 
         storage.MapGet("/space", (IProfileStore profiles) => {
                 var configured = profiles.GetStorageSettings().SaveDirectory;

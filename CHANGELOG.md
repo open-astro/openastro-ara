@@ -35,7 +35,25 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added
+- **Six add-on deep-sky catalogs.** Sharpless HII regions (313), Lynds dark nebulae (1,787), Barnard dark objects (349), van den Bergh reflection nebulae (158), Abell planetary nebulae (86), and Arp peculiar galaxies (338) — commit-pinned in `open-astro/sky-data`, SHA-verified, normalized to the OpenNGC layout. Each appears as a toggleable planetarium catalog and feeds Tonight's Sky ranking + planning search.
+- **Offline-first catalog seeding.** The `.deb` bundles every curated sky-data package as a seed copy (`packaging/seed-manifest.tsv`, locked to the curated list by a unit test). Missing packages install from the seed at boot, and a Download prefers the seed — fresh installs and post-Remove restores need zero network at a remote site.
+- **Preview cache management.** `GET/DELETE /api/v1/storage/cache` measure/sweep the §65.4 thumbnail + stretch-variant sidecars; the Storage panel shows the live cache size with a Clean cache button.
+- **Background thumbnail + preview warmer.** After boot the server renders any missing `.thumb.jpg` sidecars and default-stretch preview variants, so the library is instant instead of paying a full FITS decode per tile.
+- **§69 full info-button coverage.** Every settings row and live gear control carries an ⓘ with a written help entry (95 → 170+ registry entries) — the info buttons are the manual. Gear entries carry per-vendor driver notes matched against the connected Alpaca device ("For your ZWO ASI2600MM Pro"), kept current by the new `hardware-help-sync` repo skill.
+- **Photos-style Image Library.** Session sections with lazy thumbnail grids (off-screen tiles never fetch), overflow-menu session actions, inline debounced search, double-click zoom in the frame viewer, and session-scoped stretch-palette memory.
+
+### Changed
+- **Recovered archives group into real sessions.** The §28.8 orphan scan creates one session per (target, night) with true capture-time bounds instead of one bucket dated "today" — a lights+darks import no longer masquerades as a giant "Calibration" session.
+- **Manual stretch removed from the frame viewer.** The palette picker offers the six presets; a knobless manual render server-side now STF-seeds from the image's own statistics and echoes the applied values via `X-Ara-Stretch-*` headers.
+- **Data Manager is embedded in the Sky Data panel** (no modal hop), and catalog removal asks for confirmation with consequences spelled out.
+
 ### Fixed
+- **Planning search finds Sh2/LDN/Barnard/vdB/Abell/Arp designations.** Queries resolve against the local planning mirror first (case/space/dash-insensitive, common names included) and centre by coordinates; only a miss falls through to the Stellarium engine's own search.
+- **Magnitude-less nebulae survive the planning cull.** The `/dso-catalog` mag ≤ 12 cull dropped every object with no magnitude — all dark nebulae and most HII regions. Nebula types now pass through (planning feed 1,987 → 4,683 objects); the client ranker scores them neutrally on the magnitude term.
+- **Thumbnails cache as sidecars and renders are bounded.** `GetThumbnailAsync` wrote no cache, so every tile re-decoded the full FITS (~1.5 s each on a Pi, starving previews past any timeout). Thumbnails now write `.thumb.jpg` once; a render gate + single-flight map bound concurrent FITS decodes.
+- **Frame preview/export no longer time out.** Preview requests get a 60 s receive budget (was the client-wide 12 s), export 5 min.
+- **Storage panel shows the truth.** The false "storage is on the SD card" banner and hard-coded free space are gone (superseded by the §29 storage flow after the master merge).
 - **Debian package file modes are now Debian-policy clean.** `build-deb.sh` normalizes the staged tree (dirs 0755, files 0644) before re-applying the intentional exceptions — the server ELF, `createdump`, the maintainer scripts, the sudoers drop-in (0440), and the sudo-invoked helper scripts under `/opt/openastroara` (previously shipped non-executable, breaking the sudoers-based storage/usbfs flows). Before this, every self-contained-publish file (DLLs included) shipped executable and checkout group-write bits leaked into the `.deb`. Contributed by @Jewber11 (PR #920).
 
 ### Added
