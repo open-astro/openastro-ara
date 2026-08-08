@@ -14,6 +14,13 @@ name: Claude Code Review
 #    available, the workflow definition comes from the default branch, and the
 #    explicit github.token sidesteps the App exchange that 401s under this
 #    trigger. The label click is the trust decision.
+#
+#  • BOTH paths force a single-pass inline review (--disallowedTools blocks
+#    subagent/scheduler tools): the headless run terminates when the agent's
+#    turn ends, so a review fanned out to background subagents is silently
+#    discarded — #932's actual failure mode, proven by the run-transcript
+#    artifact (#936): "I'll wait for the four review agents to finish" was the
+#    agent's final message, and no comment ever posted.
 on:
   pull_request:
     types: [opened, synchronize]
@@ -76,8 +83,20 @@ jobs:
               "✅ Approved" if no significant issues, or
               "⚠️ Issues found" if there are things to address.
 
-            Post your review as a SINGLE top-level comment. To post it: first
-            write the full review text to /tmp/review.md with the Write tool,
+            Do the ENTIRE review yourself, inline, in this session. This is a
+            one-shot headless run: it terminates the moment your turn ends, so
+            NEVER launch subagents or background tasks and never schedule
+            wake-ups — anything still running when your turn ends is discarded
+            and the review never posts (this exact failure looped on PR #932).
+            For a large diff, page through `gh pr diff <PR NUMBER>` piped to
+            `sed -n 'START,ENDp'`; do not redirect output to files — the
+            sandbox blocks shell redirection (use the Write tool for the one
+            file you need, below).
+
+            Post your review as a SINGLE top-level comment, and post it BEFORE
+            you finish — the check fails if the run ends without a fresh
+            comment. To post it: first write the full review text to
+            /tmp/review.md with the Write tool,
             then run exactly `gh pr comment <PR NUMBER> --body-file /tmp/review.md`.
             Do NOT use --body with command substitution ($(...)/backticks/heredocs)
             — the permission rules reject any command containing substitution, and
@@ -85,7 +104,8 @@ jobs:
             Do not submit the review text as a chat message.
           claude_args: |
             --model sonnet
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git fetch:*),Bash(git merge-base:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*),Bash(echo:*),Bash(awk:*)"
+            --disallowedTools "Task,Agent,Workflow,ScheduleWakeup,CronCreate,CronDelete,Monitor"
 
 
       # Diagnostics: when a review run misbehaves (agent produced no comment,
@@ -230,8 +250,20 @@ jobs:
               "✅ Approved" if no significant issues, or
               "⚠️ Issues found" if there are things to address.
 
-            Post your review as a SINGLE top-level comment. To post it: first
-            write the full review text to /tmp/review.md with the Write tool,
+            Do the ENTIRE review yourself, inline, in this session. This is a
+            one-shot headless run: it terminates the moment your turn ends, so
+            NEVER launch subagents or background tasks and never schedule
+            wake-ups — anything still running when your turn ends is discarded
+            and the review never posts (this exact failure looped on PR #932).
+            For a large diff, page through `gh pr diff <PR NUMBER>` piped to
+            `sed -n 'START,ENDp'`; do not redirect output to files — the
+            sandbox blocks shell redirection (use the Write tool for the one
+            file you need, below).
+
+            Post your review as a SINGLE top-level comment, and post it BEFORE
+            you finish — the check fails if the run ends without a fresh
+            comment. To post it: first write the full review text to
+            /tmp/review.md with the Write tool,
             then run exactly `gh pr comment <PR NUMBER> --body-file /tmp/review.md`.
             Do NOT use --body with command substitution ($(...)/backticks/heredocs)
             — the permission rules reject any command containing substitution, and
@@ -239,7 +271,8 @@ jobs:
             Do not submit the review text as a chat message.
           claude_args: |
             --model sonnet
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git fetch:*),Bash(git merge-base:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*),Bash(echo:*),Bash(awk:*)"
+            --disallowedTools "Task,Agent,Workflow,ScheduleWakeup,CronCreate,CronDelete,Monitor"
 
       # Per #862/#863 (and round-tripped back from AlpacaBridge's port, which
       # added the label-gated pull_request_target fork flow above): the action
