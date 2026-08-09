@@ -1,6 +1,6 @@
 /// §2/§28.9 offline planning — a client-managed draft sequence: a raw §38.1
 /// body held locally (app-support JSON file) until it's pushed to a daemon as
-/// a real sequence. Drafts are WILMA-side by design ("build offline, push when
+/// a real sequence. Drafts are client-side by design ("build offline, push when
 /// ready"); the daemon never sees one until the push.
 class DraftSequence {
   /// Local id, always carrying the [draftIdPrefix] so every consumer of

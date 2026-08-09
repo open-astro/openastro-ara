@@ -7,7 +7,7 @@ import '../services/ws_event_stream.dart';
 import '../state/time_sync_state.dart';
 import '../state/ws/ws_providers.dart';
 
-/// §31.1 — "WILMA pushes time on every connect". Wraps the app shell (next to
+/// §31.1 — "the client pushes time on every connect". Wraps the app shell (next to
 /// the §27 ConnectionPolicyListener) and fires the best-effort time-sync push
 /// on every transition INTO `connected` — first connect and every reconnect,
 /// exactly the playbook's cadence. The push itself no-ops when the daemon

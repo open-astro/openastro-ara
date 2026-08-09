@@ -9,7 +9,7 @@ import '../state/ws/ws_providers.dart';
 /// §27 single-client policy surfacing. Wraps the app shell's body and listens
 /// for the two daemon-initiated moments that need a modal:
 ///
-///  1. `connection.request` — another WILMA asked to connect while THIS client
+///  1. `connection.request` — another client asked to connect while THIS client
 ///     holds the control slot → "X wants to connect. [Allow] [Keep me
 ///     connected]". Unanswered, the daemon times the request out at 30 s, so
 ///     the dialog auto-dismisses just before that.
@@ -89,7 +89,7 @@ class _ConnectionPolicyListenerState
         builder: (dialogContext) => AlertDialog(
           title: const Text('Session transferred'),
           content: const Text(
-            'Another WILMA client took control of the observatory, so this '
+            'Another client took control of the observatory, so this '
             'client was disconnected. The running sequence is unaffected — it '
             'continues on Ara.',
           ),
@@ -161,7 +161,7 @@ class _TakeoverRequestDialogState extends State<_TakeoverRequestDialog> {
     return AlertDialog(
       title: Text('${widget.from} wants to connect'),
       content: const Text(
-        'Only one WILMA can control the observatory at a time. Allowing '
+        'Only one client can control the observatory at a time. Allowing '
         'hands control to the other client and disconnects this one; the '
         'running sequence continues either way.',
       ),

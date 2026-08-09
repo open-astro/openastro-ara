@@ -234,7 +234,7 @@ class ActiveFaultsAccumulator {
   /// Fold unresolved history rows (`GET /api/v1/faults?unresolvedOnly=true`)
   /// into the standing set — the launch/reconnect resync the transition-edge
   /// WS events can't provide (each fault broadcasts exactly once, so a fault
-  /// that fired while WILMA was closed is otherwise invisible until the next
+  /// that fired while the client was closed is otherwise invisible until the next
   /// transition). Live state always wins: a seeded row never downgrades or
   /// replaces an equal-or-worse entry that live events already produced.
   /// Advisory rows older than [advisoryTtl] and recovery-tracked rows older
@@ -318,7 +318,7 @@ class ActiveFaultsNotifier extends Notifier<ActiveFaultsSnapshot> {
       if (folded != null) state = folded;
     });
     // The fault WS events are transition-edge one-shots — a fault that fired
-    // while WILMA was closed (or while the socket was down past the resume
+    // while the client was closed (or while the socket was down past the resume
     // window) never re-broadcasts. Seed the standing set from the §42.5 fault
     // log now, and re-seed whenever the server link comes back.
     final api = ref.watch(faultsApiProvider);

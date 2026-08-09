@@ -26,6 +26,27 @@ class WindowModeService {
     return task;
   }
 
+  /// Sets the native window title (product name + version). Rides the same
+  /// channel/chain as the mode calls; same fail-silent contract — a platform
+  /// without the handler just keeps its build-time title.
+  Future<void> setTitle(String title) {
+    final task = _chain.then((_) => _applyTitle(title));
+    _chain = task;
+    return task;
+  }
+
+  Future<void> _applyTitle(String title) async {
+    if (_unsupported) return;
+    try {
+      await _channel.invokeMethod<void>('title', title);
+    } on MissingPluginException {
+      _unsupported = true;
+    } on PlatformException {
+      // Transient native failure — the title keeps its previous value; the
+      // next launch retries naturally.
+    }
+  }
+
   Future<void> _apply(WindowMode mode) async {
     if (_unsupported || _current == mode) return;
     final previous = _current;

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app_version.dart';
 import '../../../services/server_maintenance_api.dart';
 import '../../../theme/ara_colors.dart';
 
@@ -15,9 +16,10 @@ const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 /// separate because that one is private to its library).
 final aboutAppVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
-  return info.buildNumber.isEmpty
-      ? info.version
-      : '${info.version}+${info.buildNumber}';
+  final version = '${info.version}$kReleaseStage';
+  final withBuild =
+      info.buildNumber.isEmpty ? version : '$version+${info.buildNumber}';
+  return '$withBuild ($buildDateLabel)';
 });
 
 /// Settings → System → About: what this app is, its licence, the source repo,
@@ -49,7 +51,7 @@ class AboutPanel extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'OpenAstro Ara — WILMA (the desktop client)',
+          'OpenAstro Ara — the desktop client',
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(color: AraColors.textPrimary),
@@ -103,7 +105,7 @@ class AboutPanel extends ConsumerWidget {
     // package's LICENSE is registered by the build tooling automatically.
     showLicensePage(
       context: context,
-      applicationName: 'OpenAstro Ara (WILMA)',
+      applicationName: 'OpenAstro Ara',
       applicationVersion: version,
       applicationLegalese:
           'Client: AGPL-3.0 · Ara: MPL-2.0\nForked from N.I.N.A. (MPL-2.0)',

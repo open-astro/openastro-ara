@@ -6,6 +6,11 @@ class MainFlutterWindow: NSWindow {
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
 
+    // Build-time title (the xib carries the bundle name, "openastroara");
+    // Dart re-stamps it with the version ("OpenAstro Ara 0.0.1a") over the
+    // window channel as soon as PackageInfo resolves.
+    self.title = "OpenAstro Ara"
+
     // Launchpad-first sizing: the app opens on the compact launchpad (server
     // connect + profile box), and the Dart router flips the window to the
     // maximized "workstation" mode when the §25 shell mounts — via the
@@ -46,6 +51,13 @@ class MainFlutterWindow: NSWindow {
         // workstation frame — detach the autosave name first.
         self.setFrameAutosaveName("")
         self.applyLaunchpadFrame()
+        result(nil)
+      case "title":
+        // "OpenAstro Ara <version>" — composed Dart-side so pubspec.yaml
+        // stays the single source of the version string.
+        if let title = call.arguments as? String {
+          self.title = title
+        }
         result(nil)
       default:
         result(FlutterMethodNotImplemented)

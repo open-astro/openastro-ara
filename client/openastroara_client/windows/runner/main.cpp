@@ -30,7 +30,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // §25 shell mounts (see flutter_window.cpp).
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(960, 680);
-  if (!window.Create(L"openastroara", origin, size)) {
+  // Build-time title; Dart re-stamps it with the version ("OpenAstro Ara
+  // 0.0.1a") over the window channel as soon as PackageInfo resolves.
+  if (!window.Create(L"OpenAstro Ara", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

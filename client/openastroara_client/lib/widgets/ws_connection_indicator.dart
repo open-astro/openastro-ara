@@ -35,7 +35,7 @@ class WsConnectionIndicator extends ConsumerWidget {
     StatusLevel.disconnected,
     'Server disconnected',
   ),
-  // §27 — another WILMA took the control slot; deliberate, not a fault.
+  // §27 — another client took the control slot; deliberate, not a fault.
   WsConnectionState.takenOver => (
     StatusLevel.disconnected,
     'Session transferred',

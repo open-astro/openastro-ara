@@ -109,7 +109,7 @@ final wsEventsProvider = StreamProvider.autoDispose<WsEvent>((ref) {
   return stream?.events ?? const Stream<WsEvent>.empty();
 });
 
-/// §27 takeover requests from the daemon (another WILMA wants the control
+/// §27 takeover requests from the daemon (another client wants the control
 /// slot; this client is the current holder). The app shell listens and shows
 /// the Allow / Keep-me-connected modal. Empty when no server is saved.
 final wsTakeoverRequestsProvider =

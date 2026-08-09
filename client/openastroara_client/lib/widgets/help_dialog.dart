@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app_version.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
 
@@ -28,11 +29,14 @@ const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 /// across rebuilds of the help dialog.
 final _appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
-  // Format: `<version>+<build>` (e.g. `0.0.1+1`). Empty build number is
-  // skipped so the trailing `+` doesn't dangle.
-  return info.buildNumber.isEmpty
-      ? info.version
-      : '${info.version}+${info.buildNumber}';
+  // Format: `<version><stage>+<build> (<build date>)` (e.g. `0.0.1a+1
+  // (2026-08-09)`, or `(dev)` for a local build). Empty build number is
+  // skipped so the trailing `+` doesn't dangle. The date rides along into
+  // §54 bug reports, which is exactly where "which alpha?" gets asked.
+  final version = '${info.version}$kReleaseStage';
+  final withBuild =
+      info.buildNumber.isEmpty ? version : '$version+${info.buildNumber}';
+  return '$withBuild ($buildDateLabel)';
 });
 
 class _HelpDialog extends ConsumerWidget {
