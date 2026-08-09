@@ -11,8 +11,8 @@ Homepage: https://github.com/open-astro/openastro-ara
 Description: OpenAstro Ara server daemon for astrophotography
  OpenAstro Ara is the daemon half of the OpenAstro stack — it runs on a
  Raspberry Pi (or other arm64 SBC) next to your astrophotography mount,
- exposes a REST + WebSocket API on the LAN, and is driven by the WILMA
- client app (mobile + desktop).
+ exposes a REST + WebSocket API on the LAN, and is driven by the
+ OpenAstro Ara app (mobile + desktop).
  .
  This package installs the self-contained .NET 10 server binary to
  /opt/openastroara, configures a hardened systemd service unit, creates
