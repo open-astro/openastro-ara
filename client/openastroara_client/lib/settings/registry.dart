@@ -212,7 +212,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.unattended_shutdown_enabled',
     label: 'Put the rig to bed if nobody responds',
-    description: 'When a run pauses awaiting your attention (a failed meridian flip overnight) and nobody responds within the wait window, Ara puts the rig to bed: guider stopped, mount parked, equipment disconnected, cooler warmed gently, camera disconnected last. Dismissing the alert, any command, or opening WILMA cancels the countdown. Disabling is allowed but not recommended.',
+    description: 'When a run pauses awaiting your attention (a failed meridian flip overnight) and nobody responds within the wait window, Ara puts the rig to bed: guider stopped, mount parked, equipment disconnected, cooler warmed gently, camera disconnected last. Dismissing the alert, any command, or opening the app cancels the countdown. Disabling is allowed but not recommended.',
     keywords: ['unattended', 'shutdown', 'countdown', 'overnight', 'failure', 'park', 'warm', 'cooler', 'graceful', 'sleeping', 'battery'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
@@ -621,7 +621,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.capture_default',
     label: 'Capture calibration after a sequence',
-    description: 'The sequence-start behaviour for end-of-night calibration: ask each run (WILMA prompts), automatically capture panel flats when the run ends, generate sky flats ready for twilight, or never. The matching flats replay the night\'s own focus, gain, and offset per filter.',
+    description: 'The sequence-start behaviour for end-of-night calibration: ask each run (the app prompts), automatically capture panel flats when the run ends, generate sky flats ready for twilight, or never. The matching flats replay the night\'s own focus, gain, and offset per filter.',
     keywords: ['calibration', 'flats', 'auto flats', 'panel', 'sky flats', 'twilight', 'end of night', 'prompt', 'ask'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.enumValue(['Ask at each sequence start', 'Panel flats at end', 'Sky flats at twilight', 'Never']),

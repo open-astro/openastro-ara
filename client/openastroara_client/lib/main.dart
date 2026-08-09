@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app_version.dart';
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
@@ -29,7 +31,7 @@ class OpenAstroAraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OpenAstro Ara WILMA',
+      title: 'OpenAstro Ara',
       theme: buildAraTheme(),
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
@@ -45,7 +47,7 @@ class OpenAstroAraApp extends StatelessWidget {
 /// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
 /// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
 /// once the user clicks [Image] and the launch gate passes. "Plan offline"
-/// (§2 — WILMA is a planning workstation, not a thin client) bypasses both
+/// (§2 — the client is a planning workstation, not a thin viewer) bypasses both
 /// gates and enters the shell with no server for the session.
 class _RootRouter extends ConsumerWidget {
   const _RootRouter();
@@ -57,6 +59,16 @@ class _RootRouter extends ConsumerWidget {
     // open Settings → Storage first (listen, not watch — per-frame sync
     // counters must not rebuild the whole app).
     ref.listen(backupStreamProvider, (previous, next) {});
+    // Native window title: "OpenAstro Ara 0.0.1a" — the runners' build-time
+    // titles carry no version, so stamp it as soon as PackageInfo resolves.
+    ref.listen(appDisplayVersionProvider, (previous, next) {
+      final version = next.asData?.value;
+      if (version != null) {
+        unawaited(
+          ref.read(windowModeProvider).setTitle('$kAppName $version'),
+        );
+      }
+    });
     // Materialize the DSO-catalog mirror sync (fetch-on-connect) at the root
     // so offline planning has the full catalog after any connected session.
     ref.listen(dsoCatalogSyncProvider, (previous, next) {});

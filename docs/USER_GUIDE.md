@@ -1,13 +1,13 @@
 # OpenAstro Ara — User Guide (v0.0.1)
 
 Ara is two programs: a **daemon** that runs at the telescope all night (Raspberry Pi is the
-reference platform) and **WILMA**, the client app you plan and monitor from (Windows, iOS, Linux,
+reference platform) and the **OpenAstro Ara app** you plan and monitor from (Windows, iOS, Linux,
 macOS, Android). The daemon owns the session — close the laptop, imaging keeps going.
 
 Installation is covered elsewhere: [`DEPLOY.md`](DEPLOY.md) for putting a release on a Pi,
 [`RUNNING.md`](RUNNING.md) for building from source. This guide starts at "both are installed."
 
-Throughout WILMA, **⌘K / Ctrl-K** searches every setting by keyword, and the **?** affordances open
+Throughout the app, **⌘K / Ctrl-K** searches every setting by keyword, and the **?** affordances open
 contextual help — when this guide says "find the X setting," search is the fast way there.
 
 ---
@@ -15,9 +15,9 @@ contextual help — when this guide says "find the X setting," search is the fas
 ## 1. First contact
 
 1. Start the daemon (it listens on port `5555` and announces itself on the LAN via mDNS).
-2. Open WILMA. On first run it scans for daemons; pick yours (or add it by hostname/IP if your
+2. Open the app. On first run it scans for daemons; pick yours (or add it by hostname/IP if your
    network blocks mDNS).
-3. WILMA claims the **control slot**: one client drives the daemon at a time. A second client that
+3. The app claims the **control slot**: one client drives the daemon at a time. A second client that
    connects can request a takeover — you'll get an Allow/Keep-connected prompt on the current one.
    Everything is LAN-only in v0.0.1 (no TLS/auth) — treat the network as trusted, or VPN into it.
 
@@ -128,7 +128,7 @@ View** runs a fast framing/focus loop when you need to point or focus by eye.
 Ara assumes you're asleep while it works:
 
 - **End-of-session flats**: starting a run pops the "Capture calibration frames tonight?" dialog
-  in WILMA (or silently applies your remembered preference — set it under **Settings → Session →
+  in the app (or silently applies your remembered preference — set it under **Settings → Session →
   Calibration**). Answer "Panel flats at end" and, when the run completes, ARA generates a
   matching-flats sequence from tonight's session — each filter at tonight's exact focus, gain,
   and offset — and starts it immediately (light your panel when notified); "Sky flats at
@@ -150,12 +150,12 @@ Ara assumes you're asleep while it works:
   Set the target ADU, frames per filter, the sky patch (azimuth/altitude), the stop-above/below
   bounds, and the wait-for sun altitude under **Settings → Session → Calibration**; the step is
   also in the sequence editor's Calibration category for hand-built plans.
-- **Emergency stop**: the red **Emergency Stop** button on WILMA's bottom status bar is always one
+- **Emergency stop**: the red **Emergency Stop** button on the app's bottom status bar is always one
   tap away, on every tab. After a confirmation it makes the daemon abort the running sequence and
   the in-flight exposure, stop guiding, park the mount, and switch the flat panel light off — then
   reports honestly what each step did (an unreachable mount is called out loudly so you go check,
   never papered over). A panicked double-press is ignored while the first stop is running.
-- **Audible alarm**: when anything above reports UNSAFE, WILMA pops a safety modal at once and,
+- **Audible alarm**: when anything above reports UNSAFE, the app pops a safety modal at once and,
   after a short silent delay (default 5 s — silence it from the screen before it ever rings),
   loops an alarm tone at full volume until you silence it or conditions clear. Pick the tone and
   delay under **Settings → Session → Notifications**; the master switch is the "Sound alert"
@@ -163,7 +163,7 @@ Ara assumes you're asleep while it works:
 - **Safety monitor reactions**: with an Alpaca SafetyMonitor connected, the daemon polls it every
   10 seconds and reacts the moment it reports unsafe, per **Settings → Safety → Policies → "When
   conditions turn unsafe"**: pause the sequence + stop guiding + park (the default), park only,
-  abort + park, or notify only. WILMA gets a `safety.unsafe` alert before the action runs. If
+  abort + park, or notify only. The app gets a `safety.unsafe` alert before the action runs. If
   **auto-resume when safe** is on, the daemon waits your configured delay after conditions clear,
   unparks, restores tracking, and resumes the paused run — verify pointing afterwards unless your
   sequence re-centers its target. A run that is paused *awaiting you* (e.g. after a failed flip)
@@ -192,7 +192,7 @@ Ara assumes you're asleep while it works:
 - **Unattended shutdown**: if a run sits paused-awaiting-you and nobody responds within the
   configured window (default 10 min), the daemon puts the rig to bed — guider stopped, mount
   parked, accessories disconnected, cooler warmed gently at your ramp rate, camera last — and
-  leaves a morning summary. Any sign of you (opening WILMA, dismissing the alert, any command)
+  leaves a morning summary. Any sign of you (opening the app, dismissing the alert, any command)
   cancels the countdown. Configurable under Settings → Safety → Policies.
 - **Notifications** escalate in severity during astronomical darkness so the alarm-worthy ones
   reach you; the §35 alarm loops on Critical until acknowledged.

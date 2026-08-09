@@ -25,7 +25,7 @@ import '../state/settings/storage_settings_state.dart';
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
 /// daemon side (`GET`/`PUT /api/v1/profile/imaging-defaults` backed by an
-/// in-memory store); this class is the WILMA-side counterpart that the
+/// in-memory store); this class is the client-side counterpart that the
 /// settings panels call to round-trip their state.
 ///
 /// Each profile section is one method pair (`get…` / `put…`). 12h.6b ships

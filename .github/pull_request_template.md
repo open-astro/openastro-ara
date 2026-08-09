@@ -20,7 +20,7 @@ Thank you for contributing to OpenAstro Ara. Please fill this out — keeps revi
 - [ ] N/A — no settings touched
 - [ ] Every new setting has a corresponding entry in `client/openastroara_client/lib/settings/registry.dart`
 - [ ] Each new entry has a non-empty `description` and ≥3 search keywords
-- [ ] Search verified — typing common keywords in WILMA's ⌘K palette finds the setting
+- [ ] Search verified — typing common keywords in the app's ⌘K palette finds the setting
 
 ## §69.4 help-registry checklist (only if this PR adds a new ⓘ help icon)
 

@@ -61,6 +61,21 @@ bool FlutterWindow::OnCreate() {
           SetWindowPos(hwnd, nullptr, x, y, w, h,
                        SWP_NOZORDER | SWP_NOACTIVATE);
           result->Success();
+        } else if (call.method_name() == "title") {
+          // "OpenAstro Ara <version>" — composed Dart-side so pubspec.yaml
+          // stays the single source of the version string.
+          const auto* title = std::get_if<std::string>(call.arguments());
+          if (title != nullptr) {
+            int len = ::MultiByteToWideChar(CP_UTF8, 0, title->c_str(), -1,
+                                            nullptr, 0);
+            if (len > 0) {
+              std::wstring wide(static_cast<size_t>(len), L'\0');
+              ::MultiByteToWideChar(CP_UTF8, 0, title->c_str(), -1,
+                                    wide.data(), len);
+              ::SetWindowText(hwnd, wide.c_str());
+            }
+          }
+          result->Success();
         } else {
           result->NotImplemented();
         }

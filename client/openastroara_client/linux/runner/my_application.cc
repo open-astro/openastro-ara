@@ -53,6 +53,21 @@ static void window_mode_method_cb(FlMethodChannel* channel,
       }
     }
     fl_method_call_respond_success(method_call, nullptr, nullptr);
+  } else if (g_strcmp0(method, "title") == 0) {
+    // "OpenAstro Ara <version>" — composed Dart-side so pubspec.yaml stays
+    // the single source of the version string. Set both the window title and
+    // the header bar (when GNOME-style chrome is in use, the header bar's own
+    // title is what actually renders).
+    FlValue* args = fl_method_call_get_args(method_call);
+    if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
+      const gchar* title = fl_value_get_string(args);
+      gtk_window_set_title(window, title);
+      GtkWidget* titlebar = gtk_window_get_titlebar(window);
+      if (titlebar != nullptr && GTK_IS_HEADER_BAR(titlebar)) {
+        gtk_header_bar_set_title(GTK_HEADER_BAR(titlebar), title);
+      }
+    }
+    fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else {
     fl_method_call_respond_not_implemented(method_call, nullptr);
   }
@@ -81,14 +96,16 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
+  // Build-time title; Dart re-stamps it with the version ("OpenAstro Ara
+  // 0.0.1a") over the window channel as soon as PackageInfo resolves.
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "openastroara");
+    gtk_header_bar_set_title(header_bar, "OpenAstro Ara");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "openastroara");
+    gtk_window_set_title(window, "OpenAstro Ara");
   }
 
   // Window/taskbar icon: the Ara constellation mark, loaded from the Flutter

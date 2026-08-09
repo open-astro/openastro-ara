@@ -60,7 +60,7 @@ class WsConnectionRequest {
 /// frame arrives or the connect-grace window elapses on a still-open socket;
 /// `reconnecting` is a drop being retried with backoff; `disconnected` is the
 /// pre-connect and post-dispose terminal state. `takenOver` is the §27 close
-/// code 4004 — another WILMA took the control slot — and is terminal until the
+/// code 4004 — another client took the control slot — and is terminal until the
 /// user explicitly reconnects (auto-reconnecting would fight the new holder).
 enum WsConnectionState {
   connecting,
@@ -160,7 +160,7 @@ class WsEventStream {
   Stream<WsEvent> get events => _events.stream;
 
   /// §27 — takeover requests from the daemon (this client is the current
-  /// holder; another WILMA asked to connect). The consumer shows the modal and
+  /// holder; another client asked to connect). The consumer shows the modal and
   /// answers via [sendConnectionResponse].
   Stream<WsConnectionRequest> get connectionRequests =>
       _connectionRequests.stream;
@@ -224,7 +224,7 @@ class WsEventStream {
     // upgrade can carry the session id and this socket's frames count as holder
     // liveness. A failed/denied claim degrades to an unbound socket: the event
     // stream is read-only state, not control, so it must keep working even when
-    // another WILMA holds the slot (or the daemon predates §27).
+    // another client holds the slot (or the daemon predates §27).
     String? sessionId;
     final claim = _claimSession;
     if (claim != null) {
@@ -393,7 +393,7 @@ class WsEventStream {
       );
     }
     if (_disposed) return;
-    // §27 — close code 4004 means another WILMA took the control slot. This is
+    // §27 — close code 4004 means another client took the control slot. This is
     // deliberate and terminal: auto-reconnecting would re-claim against the new
     // holder (popping takeover modals at them in a loop). The user re-enters via
     // an explicit action (connect() works again from this state).

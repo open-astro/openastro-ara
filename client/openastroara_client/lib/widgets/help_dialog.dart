@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app_version.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
 
@@ -27,12 +28,9 @@ const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 /// the single source of truth. FutureProvider so the async fetch is cached
 /// across rebuilds of the help dialog.
 final _appVersionProvider = FutureProvider<String>((ref) async {
-  final info = await PackageInfo.fromPlatform();
-  // Format: `<version>+<build>` (e.g. `0.0.1+1`). Empty build number is
-  // skipped so the trailing `+` doesn't dangle.
-  return info.buildNumber.isEmpty
-      ? info.version
-      : '${info.version}+${info.buildNumber}';
+  // The shared formatter puts the build date into §54 bug reports too —
+  // exactly where "which alpha are you on?" gets asked.
+  return formatFullVersion(await PackageInfo.fromPlatform());
 });
 
 class _HelpDialog extends ConsumerWidget {
@@ -123,10 +121,7 @@ class _HelpDialog extends ConsumerWidget {
     // the whole button do nothing.
     String version = '(unknown)';
     try {
-      final info = await PackageInfo.fromPlatform();
-      version = info.buildNumber.isEmpty
-          ? info.version
-          : '${info.version}+${info.buildNumber}';
+      version = formatFullVersion(await PackageInfo.fromPlatform());
     } catch (e, st) {
       developer.log('Failed to read PackageInfo',
           name: 'openastroara.help_dialog', error: e, stackTrace: st);

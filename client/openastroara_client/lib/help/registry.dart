@@ -57,7 +57,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Safety alarm delay',
     body:
         'When Ara reports UNSAFE (safety monitor, weather threshold, or an '
-        'emergency stop), WILMA pops the safety modal immediately but waits this many '
+        'emergency stop), the app pops the safety modal immediately but waits this many '
         'seconds before the tone starts looping at full volume — if you are at the screen '
         'you can silence it before it ever rings; if you are asleep, it rings. The server '
         'fires the event BEFORE its reaction runs, so the alarm and the park happen in '

@@ -135,7 +135,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               ),
             ]),
             const SizedBox(height: 16),
-            // §2 offline planning — WILMA can do real work without the Pi:
+            // §2 offline planning — the client can do real work without the Pi:
             // enter the shell with no server to build the night's plan; drafts
             // push to a daemon once one is connected. Self-gated: disabled
             // until a profile has been cached from a connected session.

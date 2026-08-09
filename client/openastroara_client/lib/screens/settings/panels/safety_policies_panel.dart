@@ -256,7 +256,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
               'If a run pauses awaiting your attention and nobody responds '
               'within the wait window, Ara parks the mount, warms the '
               'cooler and disconnects the equipment. Any command — or simply '
-              'opening WILMA — cancels the countdown.',
+              'opening the app — cancels the countdown.',
           value: s.unattendedShutdownEnabled,
           onChanged: n.setUnattendedShutdownEnabled,
         ),

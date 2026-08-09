@@ -13,7 +13,7 @@ final serverApiFactoryProvider = Provider<ServerApi Function(AraServer)>(
       (server) => ServerApi(server),
 );
 
-/// §27 single-client control-session state. [sessionId] set = this WILMA holds
+/// §27 single-client control-session state. [sessionId] set = this client holds
 /// the control slot; [deniedReason] set = the last claim was refused (another
 /// client holds it / holder unresponsive). Both null = no claim attempted yet,
 /// or the daemon predates §27 / was unreachable (the event stream then runs
@@ -124,9 +124,9 @@ class ClientSessionNotifier extends Notifier<ClientSessionState> {
   static String _localHostname() {
     try {
       final name = Platform.localHostname.trim();
-      return name.isEmpty ? 'WILMA client' : name;
+      return name.isEmpty ? 'Ara client' : name;
     } on Object {
-      return 'WILMA client';
+      return 'Ara client';
     }
   }
 }

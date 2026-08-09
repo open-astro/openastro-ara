@@ -28,9 +28,10 @@ void main() {
   testWidgets('renders the app identity, version, and license posture',
       (tester) async {
     await pumpPanel(tester);
-    expect(find.textContaining('OpenAstro Ara — WILMA'), findsOneWidget);
-    expect(find.textContaining('Version 0.0.1+1'), findsOneWidget,
-        reason: 'pubspec is the single source of truth via package_info_plus');
+    expect(find.textContaining('OpenAstro Ara — the desktop client'), findsOneWidget);
+    expect(find.textContaining('Version 0.0.1a+1'), findsOneWidget,
+        reason: 'pubspec is the single source of truth via package_info_plus, '
+            'with the kReleaseStage alpha marker appended');
     expect(find.textContaining('AGPL-3.0'), findsOneWidget);
     expect(find.textContaining('MPL-2.0'), findsOneWidget);
     expect(find.textContaining('N.I.N.A.'), findsOneWidget,
@@ -48,7 +49,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(LicensePage), findsOneWidget);
-    expect(find.text('OpenAstro Ara (WILMA)'), findsWidgets,
+    expect(find.text('OpenAstro Ara'), findsWidgets,
         reason: 'the application name heads the licenses page');
   });
 }

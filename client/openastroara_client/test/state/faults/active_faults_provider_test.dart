@@ -124,7 +124,7 @@ void main() {
       expect(fakeApi.lastUnresolvedOnly, isTrue);
       final snap = container.read(activeFaultsProvider);
       expect(snap.byDeviceType['telescope']!.level, StatusLevel.error,
-          reason: 'a fault that fired while WILMA was closed seeds the chip');
+          reason: 'a fault that fired while the client was closed seeds the chip');
       expect(snap.worstFor(const {'telescope'}), StatusLevel.error);
     });
 

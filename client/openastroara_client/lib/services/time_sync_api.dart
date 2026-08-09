@@ -99,7 +99,7 @@ abstract interface class TimeSyncClient {
 
   /// `POST /api/v1/server/time-sync` — push this device's clock as a §31.2
   /// medium-trust `client` sync (modern devices on Wi-Fi/cellular are
-  /// NTP-synced). No location: desktop WILMA has no geo fix; the mobile-GPS
+  /// NTP-synced). No location: the desktop client has no geo fix; the mobile-GPS
   /// source lands with the §31 mobile slice.
   Future<void> pushClientTime(DateTime utcNow);
 
