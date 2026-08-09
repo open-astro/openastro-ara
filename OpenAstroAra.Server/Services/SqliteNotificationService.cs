@@ -112,6 +112,24 @@ public sealed partial class SqliteNotificationService : INotificationService {
         LogSeededNotifications();
     }
 
+    /// <summary>
+    /// Remove the fixture notifications if a PREVIOUS build left them behind
+    /// (pre-#923 builds seeded unconditionally on real installs — see
+    /// SqliteFrameRepository.ScrubSampleDataAsync for the full story).
+    /// Matches only the fixed sentinel GUIDs; real notifications carry
+    /// random v4 ids. Idempotent, runs when sample seeding is disabled.
+    /// </summary>
+    public async Task ScrubSampleDataAsync(CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM notifications WHERE id IN ($n1, $n2, $n3);";
+        cmd.Parameters.AddWithValue("$n1", SampleIds[0].ToString());
+        cmd.Parameters.AddWithValue("$n2", SampleIds[1].ToString());
+        cmd.Parameters.AddWithValue("$n3", SampleIds[2].ToString());
+        var removed = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        if (removed > 0) LogScrubbedNotifications(removed);
+    }
+
     public async Task<CursorPage<NotificationDto>> ListAsync(int limit, string? cursor, bool? unreadOnly, CancellationToken ct) {
         var offset = 0;
         if (!string.IsNullOrEmpty(cursor) && int.TryParse(cursor, out var parsed) && parsed >= 0) {
@@ -336,4 +354,7 @@ public sealed partial class SqliteNotificationService : INotificationService {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Seeded 3 sample notifications into catalog")]
     private partial void LogSeededNotifications();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Scrubbed {Rows} demo fixture notification(s) left behind by a pre-#923 build")]
+    private partial void LogScrubbedNotifications(int rows);
 }

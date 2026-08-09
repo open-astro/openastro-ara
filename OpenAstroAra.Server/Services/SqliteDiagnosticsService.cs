@@ -115,6 +115,26 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
         LogSeededEvents();
     }
 
+    /// <summary>
+    /// Remove the fixture diagnostic events if a PREVIOUS build left them
+    /// behind (pre-#923 builds seeded unconditionally on real installs — see
+    /// SqliteFrameRepository.ScrubSampleDataAsync for the full story).
+    /// Matches only the fixed sentinel GUIDs; real events carry random v4
+    /// ids. Idempotent, runs when sample seeding is disabled.
+    /// </summary>
+    public async Task ScrubSampleDataAsync(CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "DELETE FROM diagnostic_events WHERE id IN ($e1, $e2, $e3, $e4);";
+        cmd.Parameters.AddWithValue("$e1", SampleIssueId.ToString());
+        cmd.Parameters.AddWithValue("$e2", SampleHistoryIds[0].ToString());
+        cmd.Parameters.AddWithValue("$e3", SampleHistoryIds[1].ToString());
+        cmd.Parameters.AddWithValue("$e4", SampleHistoryIds[2].ToString());
+        var removed = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        if (removed > 0) LogScrubbedEvents(removed);
+    }
+
     public async Task<DiagnosticsStateDto> GetStateAsync(CancellationToken ct) {
         await using var conn = _db.OpenConnection();
         var mode = await ReadModeAsync(conn, ct);
@@ -340,4 +360,7 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Seeded sample diagnostic events")]
     private partial void LogSeededEvents();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Scrubbed {Rows} demo fixture diagnostic event(s) left behind by a pre-#923 build")]
+    private partial void LogScrubbedEvents(int rows);
 }
