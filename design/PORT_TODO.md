@@ -294,7 +294,9 @@ PORT_DECISIONS; `docs/DEPLOY.md` documents the §34.1 install flow). CI builds t
 artifact today. **Hosting + signing + the upload flow are LIVE (Joey, 2026-08-09)** — the repo
 serves suite `trixie`/`main`/arm64 with a pre-dearmored keyring at
 `repo/openastro-archive-keyring.gpg`, proven end-to-end with **alpacabridge 3.3.0** in the pool
-(`pool/main/alpacabride/`), which our `Recommends: alpacabridge` resolves exactly. DEPLOY.md's
+(`pool/main/alpacabride/` — sic: the LIVE server's pool directory is spelled without the "g",
+per its own Packages index; harmless since apt follows the index, but worth fixing server-side
+on the next upload), which our `Recommends: alpacabridge` resolves exactly. DEPLOY.md's
 install block was corrected to the live layout (it previously said suite `stable` + `/gpg.key`).
 Still open before the `v0.0.1-ara.1` tag is a real release:
 
