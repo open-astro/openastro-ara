@@ -287,19 +287,24 @@ the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up
   (thresholds decide WHEN, on_unsafe decides WHAT — PORT_DECISIONS 2026-07-07); alarm knobs are
   device-local (Settings → Notifications), not profile fields, so the wizard doesn't carry them.
 
-## §34 apt.openastro.net publish pipeline — release-blocking (2026-07-07)
+## §34 apt.openastro.net publish pipeline — release-blocking (2026-07-07; hosting LIVE 2026-08-09)
 
 Releases ship through the **apt.openastro.net** APT repository (user decision 2026-07-07 — see
-PORT_DECISIONS; `docs/DEPLOY.md` now documents the §34.1 install flow). CI builds the `.deb` as an
-artifact today; still to build before the `v0.0.1-ara.1` tag can be a real release:
+PORT_DECISIONS; `docs/DEPLOY.md` documents the §34.1 install flow). CI builds the `.deb` as an
+artifact today. **Hosting + signing + the upload flow are LIVE (Joey, 2026-08-09)** — the repo
+serves suite `trixie`/`main`/arm64 with a pre-dearmored keyring at
+`repo/openastro-archive-keyring.gpg`, proven end-to-end with **alpacabridge 3.3.0** in the pool
+(`pool/main/alpacabride/` — sic: the LIVE server's pool directory is spelled without the "g",
+per its own Packages index; harmless since apt follows the index, but worth fixing server-side
+on the next upload), which our `Recommends: alpacabridge` resolves exactly. DEPLOY.md's
+install block was corrected to the live layout (it previously said suite `stable` + `/gpg.key`).
+Still open before the `v0.0.1-ara.1` tag is a real release:
 
-- **Repo publish job** — reprepro or aptly per §34.5, triggered on tag push, laying out
-  `dists/stable/main/binary-arm64` + `pool/main/o/openastroara-server/`.
-- **Hosting + signing** — stand up apt.openastro.net (static hosting suffices for a reprepro tree)
-  and generate the repo GPG signing key; publish its public half at `/gpg.key` (the path
-  DEPLOY.md's one-time setup curls).
-- **Sibling packages** — §34.2's Recommends (`alpaca-bridge`, the guider daemon) need their `.deb`s
-  in the same pool for the default install to resolve; coordinate with those repos.
+- **`openastroara-server` into the pool** — feed the CI-built (or §34.5 tag-built) `.deb` through
+  the same upload flow that published alpacabridge. Also the delivery vehicle for the pre-#923
+  demo-fixture scrub owed to early installers (#939).
+- **Sibling `openastro-guider`** — joins the pool when its packaging exists (a Recommends on a
+  missing package is soft; installs proceed without it).
 
 ## §36 Planning / webview / connection — follow-ups (2026-06-27)
 - **Playbook prose still says root-level `DEPLOY.md`/`RUNNING.md` (from the #730 review, non-blocking).** `design/PORT_PLAYBOOK.md` has ~a dozen bare-text (non-link) mentions of the guide filenames without the `docs/` prefix (e.g. the §13/§34.6 prose). Nothing is broken (no markdown links), but sweep them to `docs/DEPLOY.md`/`docs/RUNNING.md` on the next deliberate playbook pass — the playbook is user-authoritative, so this rides a maintainer-approved edit, not an autonomous one.

@@ -11,9 +11,11 @@ The Flutter client (`OpenAstroAra.Client`) runs on macOS, iOS, Android, Windows,
 The daemon is released through the OpenAstro APT repository at **apt.openastro.net** (playbook §34).
 
 ```bash
-# 1. Add the OpenAstro APT repo (one-time)
-curl -fsSL https://apt.openastro.net/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/openastro.gpg
-echo "deb [signed-by=/usr/share/keyrings/openastro.gpg] https://apt.openastro.net stable main" \
+# 1. Add the OpenAstro APT repo (one-time) — matches the live instructions at
+#    https://apt.openastro.net (suite `trixie`, pre-dearmored keyring)
+sudo curl -fsSL https://apt.openastro.net/repo/openastro-archive-keyring.gpg \
+  -o /usr/share/keyrings/openastro-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openastro-archive-keyring.gpg] https://apt.openastro.net trixie main" \
   | sudo tee /etc/apt/sources.list.d/openastro.list
 sudo apt update
 
@@ -34,7 +36,7 @@ equipment hub and the guider daemon — via apt Recommends; pass `--no-install-r
 daemon-only install.
 
 **Offline / one-off install:** every release's `.deb` also lives in the repo pool
-(`https://apt.openastro.net/pool/main/o/openastroara-server/`) — download it on another machine
+(`https://apt.openastro.net/pool/main/`) — download it on another machine
 and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 
 ---

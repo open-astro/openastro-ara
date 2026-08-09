@@ -42,13 +42,16 @@ seeding, Imaging-tab fault feed, §42.6 per-session timeline + library badges):
 The only remaining *engineering* that blocks the first public release, plus the gates that are
 not code:
 
-- **§34 apt.openastro.net publish pipeline** (PORT_TODO "§34 apt.openastro.net publish pipeline"):
-  - Repo publish job — reprepro/aptly on tag push per §34.5, laying out
-    `dists/stable/main/binary-arm64` + `pool/`.
-  - Hosting + signing — stand up apt.openastro.net, generate the repo GPG signing key, publish
-    the public half at `/gpg.key`.
-  - Sibling packages — §34.2 Recommends (`alpaca-bridge`, guider daemon) need their `.deb`s in
-    the same pool; coordinate with those repos.
+- **§34 apt.openastro.net publish pipeline** — **hosting + signing + upload pipeline LIVE
+  (Joey, 2026-08-09)**: apt.openastro.net serves suite `trixie`/`main`/arm64 with a
+  pre-dearmored keyring at `repo/openastro-archive-keyring.gpg`, proven end-to-end with
+  **alpacabridge 3.3.0** in the pool (matches our `Recommends: alpacabridge` exactly).
+  Remaining:
+  - **`openastroara-server` into the pool** — feed the CI-built `.deb` (or a tag-built one per
+    §34.5) through the same upload flow. This is also the delivery vehicle for the pre-#923
+    demo-fixture scrub owed to early installers.
+  - Sibling `openastro-guider` `.deb` joins the pool when its packaging exists (Recommends on a
+    missing package is soft — installs proceed).
 - **§13/§34 RPi install + smoke test** — physical-Pi-gated.
 - **First public release tag `v0.0.1-ara.1`** — user authority; tagged on master after the smoke test.
 - **Hardware-gated validations parked with the release** (PORT_TODO "Parked blockers"):
@@ -97,12 +100,10 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
      PascalCase (`Fork`), RPC keys snake_case (`fork`).
   - The 7 documented workarounds in `PHD2-GAP.md` stay as-is; promote any individually if field
     friction emerges.
-- **§45 polar alignment, remaining phases** (gated on the upgraded daemon running):
-  daemon FITS spike (verify `capture_single_frame` emits a solver-ready FITS; measure the
-  per-solve error budget to pick 2-pt vs 3-pt) → `PolarAlignService` state machine replacing
-  `PlaceholderPolarAlignService` (preflight/lease → 2-frame seed with Alpaca RA slews → live
-  adjust loop → verify + hand-back restore) → §45.9 endpoints + WS events → the WILMA
-  bullseye/arrows screen.
+- ~~**§45 polar alignment, remaining phases**~~ — SHIPPED 2026-07-30 (#888–#891) + the
+  capture-fetch/profile-bridge follow-ups (#897/#898): real `PolarAlignService` state machine,
+  §45.9 endpoints + WS events, the client bullseye/arrows screen. Remaining: the **on-sky
+  validation close-out only** (mount + clear sky — parked with the release's hardware gates).
 - **§63.4 profile lifecycle beyond connect-time** — ~~`delete_profile`~~ shipped:
   `DELETE /profiles/{id}` fires a best-effort `delete_profile(name, delete_dark_files=true)` for
   the twin via `GuiderService.TryDeleteAraGuiderProfileAsync` (no guider connected → logged
@@ -232,7 +233,7 @@ The former version-bucketed roadmap, regrouped. Source §s preserved; nothing dr
 ### 7.4 Equipment breadth
 | Feature | Source | Notes |
 |---|---|---|
-| **§47 mosaic imaging** | §47 | Replace `PlaceholderMosaicService`; panel math + sequencer integration. |
+| **§47 mosaic projects (persistence only)** | §47 | Shooting mosaics WORKS end-to-end today: the framing overlay's N×M grid fans out into named panel targets, each plate-solve-centred (`CenterAndRotate`) to the drawn grid with the PA carried; Tonight's Sky does the fit math. What remains is only the server-side mosaic-as-a-project entity — replace `PlaceholderMosaicService` (`/api/v1/mosaics` is in-memory) so per-panel completion persists across nights ("panels 1–3 done, 4–6 owed"). |
 | **Dedicated polar-align cameras** | §45.14 | Native iPolar / PoleMaster / Alpaca-tagged "PolarAlignCamera" devices; same UI + math, smaller frames. |
 | **Astrometry.net solver support** | §18.I | If demand emerges; Survey-Manager-style UI for index downloads. (ASTAP backend packaging — building headless `astap_command_line` from the fork, `.deb`, star DB, `ASTAPLocation` — is ops work already possible with no ARA code change.) |
 | **First-connect conformance check, default on** | §52.5 | Currently optional + off; flip the default once compliance testing matures. |
