@@ -233,7 +233,7 @@ The former version-bucketed roadmap, regrouped. Source §s preserved; nothing dr
 ### 7.4 Equipment breadth
 | Feature | Source | Notes |
 |---|---|---|
-| **§47 mosaic imaging** | §47 | Replace `PlaceholderMosaicService`; panel math + sequencer integration. |
+| **§47 mosaic projects (persistence only)** | §47 | Shooting mosaics WORKS end-to-end today: the framing overlay's N×M grid fans out into named panel targets, each plate-solve-centred (`CenterAndRotate`) to the drawn grid with the PA carried; Tonight's Sky does the fit math. What remains is only the server-side mosaic-as-a-project entity — replace `PlaceholderMosaicService` (`/api/v1/mosaics` is in-memory) so per-panel completion persists across nights ("panels 1–3 done, 4–6 owed"). |
 | **Dedicated polar-align cameras** | §45.14 | Native iPolar / PoleMaster / Alpaca-tagged "PolarAlignCamera" devices; same UI + math, smaller frames. |
 | **Astrometry.net solver support** | §18.I | If demand emerges; Survey-Manager-style UI for index downloads. (ASTAP backend packaging — building headless `astap_command_line` from the fork, `.deb`, star DB, `ASTAPLocation` — is ops work already possible with no ARA code change.) |
 | **First-connect conformance check, default on** | §52.5 | Currently optional + off; flip the default once compliance testing matures. |
