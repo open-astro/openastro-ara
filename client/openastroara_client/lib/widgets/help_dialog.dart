@@ -28,15 +28,9 @@ const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 /// the single source of truth. FutureProvider so the async fetch is cached
 /// across rebuilds of the help dialog.
 final _appVersionProvider = FutureProvider<String>((ref) async {
-  final info = await PackageInfo.fromPlatform();
-  // Format: `<version><stage>+<build> (<build date>)` (e.g. `0.0.1a+1
-  // (2026-08-09)`, or `(dev)` for a local build). Empty build number is
-  // skipped so the trailing `+` doesn't dangle. The date rides along into
-  // §54 bug reports, which is exactly where "which alpha?" gets asked.
-  final version = '${info.version}$kReleaseStage';
-  final withBuild =
-      info.buildNumber.isEmpty ? version : '$version+${info.buildNumber}';
-  return '$withBuild ($buildDateLabel)';
+  // The shared formatter puts the build date into §54 bug reports too —
+  // exactly where "which alpha are you on?" gets asked.
+  return formatFullVersion(await PackageInfo.fromPlatform());
 });
 
 class _HelpDialog extends ConsumerWidget {
@@ -127,10 +121,7 @@ class _HelpDialog extends ConsumerWidget {
     // the whole button do nothing.
     String version = '(unknown)';
     try {
-      final info = await PackageInfo.fromPlatform();
-      version = info.buildNumber.isEmpty
-          ? info.version
-          : '${info.version}+${info.buildNumber}';
+      version = formatFullVersion(await PackageInfo.fromPlatform());
     } catch (e, st) {
       developer.log('Failed to read PackageInfo',
           name: 'openastroara.help_dialog', error: e, stackTrace: st);

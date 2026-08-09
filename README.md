@@ -2,7 +2,7 @@
 
 [![Server license: MPL 2.0](https://img.shields.io/badge/Server%20License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/) [![Client license: AGPL v3](https://img.shields.io/badge/Client%20License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
 
-A headless ASP.NET Core daemon on .NET 10 (`OpenAstroAra.Server`) + a cross-platform Flutter client (`client/openastroara_client`) for deep-sky astrophotography. The daemon controls all equipment **exclusively over ASCOM Alpaca (no COM)** — which is what lets it run headless on Linux. It **deploys on ARM64 Linux** — Raspberry Pi 4/5 is the reference platform; other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Debian Trixie arm64 are best-effort per playbook §13.1. The client runs on **WILMA — Windows, iOS, Linux, macOS, and Android** — from one Flutter codebase, and discovers the daemon on the LAN via mDNS.
+A headless ASP.NET Core daemon on .NET 10 (`OpenAstroAra.Server`) + a cross-platform Flutter client (`client/openastroara_client`) for deep-sky astrophotography. The daemon controls all equipment **exclusively over ASCOM Alpaca (no COM)** — which is what lets it run headless on Linux. It **deploys on ARM64 Linux** — Raspberry Pi 4/5 is the reference platform; other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Debian Trixie arm64 are best-effort per playbook §13.1. The client runs on **Windows, iOS, Linux, macOS, and Android** from one Flutter codebase, and discovers the daemon on the LAN via mDNS.
 
 The product model is ASIAir-like: server runs the night, client is for planning and monitoring. Close the laptop, imaging keeps going.
 
@@ -23,7 +23,7 @@ openastro-ara/                       (this repo)
 │                                    ← inherited from NINA, ported during Phase 0.5
 ├── OpenAstroAra.Fits / Stretch      ← FITS I/O + stretch/preview (with *.Tests projects)
 │                                    ← plus OpenAstroAra.TestHarness (virtual-observatory bench)
-├── client/openastroara_client/      ← WILMA: Flutter desktop + mobile client (Phase 11+)
+├── client/openastroara_client/      ← Flutter desktop + mobile client (Phase 11+)
 └── design/                          ← port playbook + tracking docs (not shipped)
 ```
 
@@ -39,6 +39,6 @@ openastro-ara/                       (this repo)
 Split by directory (see `NOTICE.md` and `design/PORT_DECISIONS.md` 2026-07-01):
 
 - **Server/daemon and everything else:** [Mozilla Public License 2.0](LICENSE.txt) — same as upstream NINA, whose derived files keep their MPL lineage.
-- **WILMA client (`client/openastroara_client/`):** [GNU AGPL v3 or later](client/openastroara_client/LICENSE) — the client is wholly original work; AGPL keeps derived clients open even when served from a device rather than shipped.
+- **Client (`client/openastroara_client/`):** [GNU AGPL v3 or later](client/openastroara_client/LICENSE) — the client is wholly original work; AGPL keeps derived clients open even when served from a device rather than shipped.
 
 The client and daemon talk over REST/WebSocket as separate programs, so the licenses apply independently.

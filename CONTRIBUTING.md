@@ -18,7 +18,7 @@ ensures alignment with the design docs under `design/` and avoids duplicate work
 ## Reporting bugs
 
 Use the **Bug report** issue template. The fastest way to a fix is attaching the in-app bundle:
-**WILMA → Help → Report a bug** packages the daemon logs, your profile (with secrets redacted on
+**Help → Report a bug** (in the app) packages the daemon logs, your profile (with secrets redacted on
 export), and recent diagnostics into one zip. Strip anything you consider private before uploading.
 
 ## Repository layout
@@ -30,7 +30,7 @@ OpenAstroAra.{Core,Astrometry,Profile,Image,Equipment,Sequencer,PlateSolving}/
 OpenAstroAra.{Fits,Stretch}/   ← Ara-original imaging libraries (FITS IO, display stretch)
 OpenAstroAra.Test/             ← NUnit server tests
 OpenAstroAra.TestHarness/      ← §42.2 virtual-observatory bench (fault-injection fakes)
-client/openastroara_client/    ← WILMA, the Flutter client (AGPL-3.0)
+client/openastroara_client/    ← the Flutter client (AGPL-3.0)
 design/                        ← the port playbook + append-only decision/TODO logs
 ```
 

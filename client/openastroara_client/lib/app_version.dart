@@ -28,3 +28,14 @@ const String kBuildDate = String.fromEnvironment('ARA_BUILD_DATE');
 
 /// `2026-08-09` for CI builds, `dev` for local ones.
 String get buildDateLabel => kBuildDate.isEmpty ? 'dev' : kBuildDate;
+
+/// The full version line the About panel and bug-report dialog show:
+/// `<version><stage>+<build> (<build date>)`, e.g. `0.0.1a+1 (2026-08-09)`
+/// — or `(dev)` on a local build. One formatter so the two surfaces can't
+/// drift apart. An empty build number is skipped so no `+` dangles.
+String formatFullVersion(PackageInfo info) {
+  final version = '${info.version}$kReleaseStage';
+  final withBuild =
+      info.buildNumber.isEmpty ? version : '$version+${info.buildNumber}';
+  return '$withBuild ($buildDateLabel)';
+}

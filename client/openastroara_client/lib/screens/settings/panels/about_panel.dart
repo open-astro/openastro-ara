@@ -15,11 +15,7 @@ const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 /// single source of truth (same pattern as the help dialog's provider — kept
 /// separate because that one is private to its library).
 final aboutAppVersionProvider = FutureProvider<String>((ref) async {
-  final info = await PackageInfo.fromPlatform();
-  final version = '${info.version}$kReleaseStage';
-  final withBuild =
-      info.buildNumber.isEmpty ? version : '$version+${info.buildNumber}';
-  return '$withBuild ($buildDateLabel)';
+  return formatFullVersion(await PackageInfo.fromPlatform());
 });
 
 /// Settings → System → About: what this app is, its licence, the source repo,
