@@ -178,6 +178,41 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         LogSeededFrames();
     }
 
+    /// <summary>
+    /// Remove the fixture session + frames if a PREVIOUS build left them
+    /// behind. Builds before #923 ran <see cref="EnsureSeededAsync"/>
+    /// unconditionally, so every real install seeded the demo M31 session
+    /// into the user's own catalog — Stats then reported a night they never
+    /// had. Deletion matches ONLY the fixed sentinel GUIDs the seeder mints
+    /// (real frames carry random v4 ids), so real data can never match.
+    /// Idempotent and single-digit-ms; runs on every boot where sample
+    /// seeding is disabled.
+    /// </summary>
+    public async Task ScrubSampleDataAsync(CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var frames = conn.CreateCommand();
+        frames.CommandText =
+            "DELETE FROM frames WHERE id IN ($f1, $f2, $f3) AND session_id = $sid;";
+        frames.Parameters.AddWithValue("$f1", SampleFrameIds[0].ToString());
+        frames.Parameters.AddWithValue("$f2", SampleFrameIds[1].ToString());
+        frames.Parameters.AddWithValue("$f3", SampleFrameIds[2].ToString());
+        frames.Parameters.AddWithValue("$sid", SampleSessionId.ToString());
+        var removed = await frames.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        // The FK points frames → sessions, so the session goes second — and
+        // only once it owns no frames at all (a user could conceivably have
+        // moved real frames into the demo session via bulk-move; leave it
+        // alone in that case rather than orphan them).
+        await using var session = conn.CreateCommand();
+        session.CommandText = """
+            DELETE FROM sessions WHERE id = $sid
+              AND NOT EXISTS (SELECT 1 FROM frames WHERE session_id = $sid);
+            """;
+        session.Parameters.AddWithValue("$sid", SampleSessionId.ToString());
+        removed += await session.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        if (removed > 0) LogScrubbedSampleData(removed);
+    }
+
     /// <inheritdoc />
     public async Task InsertAsync(FrameDto frame, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(frame);
@@ -1395,4 +1430,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Seeded sample session + 3 sample frames into catalog")]
     private partial void LogSeededFrames();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Scrubbed {Rows} demo fixture row(s) left behind by a pre-#923 build")]
+    private partial void LogScrubbedSampleData(int rows);
 }
