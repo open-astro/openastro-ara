@@ -954,8 +954,8 @@ public partial class Program {
         // frame" score for an image that does not exist. Opt in explicitly.
         var notificationSvc = app.Services.GetRequiredService<INotificationService>();
         var diagnosticsSvc = app.Services.GetRequiredService<IDiagnosticsService>();
+        var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
         if (ShouldSeedSampleData()) {
-            var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
             if (frameRepo is SqliteFrameRepository sqliteRepo) {
                 sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
             }
@@ -964,6 +964,23 @@ public partial class Program {
             }
             if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
                 sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+        } else {
+            // Self-heal (the #923 gate's missing half): builds published
+            // BEFORE the gate seeded these fixtures unconditionally, so any
+            // real install from an older .deb is still carrying the demo M31
+            // session, sample notifications, and sample diagnostics in the
+            // user's own catalog. Upgrading alone never removed them — scrub
+            // the fixed sentinel ids here so affected installs heal on their
+            // next boot. Exact-id matching means real data can never match.
+            if (frameRepo is SqliteFrameRepository sqliteRepo) {
+                sqliteRepo.ScrubSampleDataAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            if (notificationSvc is SqliteNotificationService sqliteNotif) {
+                sqliteNotif.ScrubSampleDataAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
+                sqliteDiag.ScrubSampleDataAsync(CancellationToken.None).GetAwaiter().GetResult();
             }
         }
 
