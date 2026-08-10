@@ -25,6 +25,11 @@ class AraColors {
   static const accentInfo = Color(0xFF42A5F5);
   static const accentDisconnected = Color(0xFF606060);
 
+  /// Amber warning — HIG-style inline warning (icon + color + text, never
+  /// color alone). Shares the hue with [accentBusy] but reads as a distinct
+  /// semantic for warning surfaces (e.g. "reachable, but unverified").
+  static const accentWarning = Color(0xFFFFB300);
+
   // Selection / buttons
   static const selectionBg = Color(0xFF1976D2);
   static const selectionFg = Color(0xFFFFFFFF);

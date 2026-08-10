@@ -22,12 +22,14 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> add(AraServer server) async {}
 }
 
-/// Scriptable discovery fake: throws while [failing], returns an empty list
-/// (a clean "bridge reachable, no gear on this scan" response) otherwise.
+/// Scriptable discovery fake: throws while [failing], returns [devices]
+/// (a clean "bridge reachable" response — empty list or advertised slots)
+/// otherwise.
 class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
   bool failing;
   int scans = 0;
-  _FakeDiscoveryApi({this.failing = false});
+  List<DiscoveredDevice> devices;
+  _FakeDiscoveryApi({this.failing = false, this.devices = const []});
 
   @override
   Future<List<DiscoveredDevice>> discover(
@@ -41,7 +43,7 @@ class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
         message: 'connection refused',
       );
     }
-    return const <DiscoveredDevice>[];
+    return devices;
   }
 
   int closes = 0;
@@ -90,6 +92,43 @@ void main() {
     expect(container.read(wizardStepValidProvider), isTrue);
     expect(find.textContaining('AlpacaBridge found'), findsOneWidget);
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
+    // HIG: a clean reachability result renders as SUCCESS (green check).
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+  });
+
+  testWidgets('§68.2 advertised-but-unverified devices are reported honestly — '
+      'reachability, not a connected count', (tester) async {
+    // A registered bridge slot with NO hardware behind it (phantom device):
+    // the bridge advertises a vendor name, /connected is false. The success
+    // copy must not read as "cameras seen".
+    const phantom = DiscoveredDevice(
+      uniqueId: 'PLAYERONE_SN_0',
+      name: 'Mars-C II',
+      deviceType: EquipmentDeviceType.camera,
+      hostName: '192.168.168.1',
+      ipAddress: '192.168.168.1',
+      ipPort: 6800,
+      alpacaDeviceNumber: 1,
+      useHttps: false,
+    );
+    final api = _FakeDiscoveryApi(devices: const [phantom]);
+    final container = await _pump(tester, api);
+
+    expect(container.read(wizardStepValidProvider), isTrue,
+        reason: 'reachability gate still passes with advertised slots');
+    final message = tester
+        .widget<Text>(find.textContaining('AlpacaBridge found'))
+        .data;
+    expect(message, contains('AlpacaBridge found'));
+    expect(message, contains('advertised'));
+    expect(message, contains('connectivity not verified'));
+    expect(message, isNot(contains('camera(s) seen')));
+    expect(message, isNot(contains('seen on this scan')));
+    // HIG: advertised-but-unverified slots render as a WARNING (amber
+    // triangle), not a green success — attention, not a clean bill.
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsNothing);
   });
 
   testWidgets('§68.2 missing bridge: Next stays blocked, the install command '

@@ -46,6 +46,10 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   late final ProfileDraft _draft;
   String? _result;
   bool _ok = false;
+  // Advertised-but-unverified devices (registered slots, possibly no
+  // hardware behind them): the handshake still passes (§68.2 reachability)
+  // but the panel must render as a WARNING, not a success.
+  bool _advertisedUnverified = false;
   bool _testing = false;
   bool _skipped = false;
   // True when the last probe couldn't even start (no daemon connection) — a
@@ -103,8 +107,19 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       if (!mounted) return;
       setState(() {
         _ok = true;
-        _result = 'AlpacaBridge found — '
-            '${devices.length} camera(s) seen on this scan.';
+        // §68.2 — the handshake gate is REACHABILITY, not gear presence: a
+        // clean discovery response means the bridge is up. Advertised devices
+        // are NOT verified connected — a registered-but-absent slot (vendor
+        // SDK name with no hardware behind it) must not read as a connected
+        // camera — so the copy reports the count as "advertised" only and the
+        // panel renders as a warning (HIG: icon + color + text, never color
+        // alone) until the user actually connects gear.
+        _advertisedUnverified = devices.isNotEmpty;
+        _result = devices.isEmpty
+            ? 'AlpacaBridge found — reachable (no devices advertised).'
+            : 'AlpacaBridge found — reachable; '
+                  '${devices.length} device(s) advertised, '
+                  'connectivity not verified.';
       });
       _setValid(true); // §68.2 — handshake succeeded, Next unblocks
     } on DioException catch (e) {
@@ -185,18 +200,36 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
         ),
         if (_ok && _result != null) ...[
           const SizedBox(height: 16),
+          // HIG-style inline status: icon + color + text (never color alone),
+          // leading icon top-aligned with the first text line. Amber warning
+          // when the bridge advertises slots that are NOT verified connected;
+          // green success only for a genuinely clean reachability result.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: AraColors.accentConnected.withValues(alpha: 0.15),
+              color: (_advertisedUnverified
+                      ? AraColors.accentWarning
+                      : AraColors.accentConnected)
+                  .withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: AraColors.accentConnected),
+              border: Border.all(
+                color: _advertisedUnverified
+                    ? AraColors.accentWarning
+                    : AraColors.accentConnected,
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.check_circle,
-                    size: 18, color: AraColors.accentConnected),
+                Icon(
+                  _advertisedUnverified
+                      ? Icons.warning_amber_rounded
+                      : Icons.check_circle,
+                  size: 18,
+                  color: _advertisedUnverified
+                      ? AraColors.accentWarning
+                      : AraColors.accentConnected,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(_result!,
@@ -435,7 +468,9 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                       return ListTile(
                         title: Text(d.name),
                         subtitle: Text(
-                          '$scheme://$host:${d.ipPort} ·  device #${d.alpacaDeviceNumber}',
+                          '$scheme://$host:${d.ipPort} ·  '
+                          'device #${d.alpacaDeviceNumber}\n'
+                          'Advertised — connectivity is verified when you connect',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AraColors.textSecondary,
                               ),
