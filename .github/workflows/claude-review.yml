@@ -224,8 +224,12 @@ jobs:
           # when the maintainer has applied the safe-to-review label. List
           # trusted fork contributors here (never '*') — the label remains
           # the per-PR trust decision, this list is the per-person one.
-          # Requires the explicit github_token above.
-          allowed_non_write_users: "Jewber11"
+          # Requires the explicit github_token above. Kept in sync with the
+          # AlpacaBridge repo's list (same contributors work across both);
+          # without a contributor here, their own pushes fail the review job
+          # even under the label — only maintainer actions (like applying
+          # the label) trigger successfully.
+          allowed_non_write_users: "Jewber11,htly9981,Knetus56,zeroastroboy"
           # Keep the whole review in ONE top-level comment that updates in place,
           # instead of posting a new comment on every push.
           use_sticky_comment: true
