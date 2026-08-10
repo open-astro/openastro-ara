@@ -531,14 +531,31 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         bool atHome;
         try { atHome = c.AtHome; } catch (Exception) { atHome = false; }
 
-        // State precedence: a slew in progress wins (the mount is moving); then a parked mount (a
-        // definite rest state); then active tracking; otherwise idle.
-        var state = slewing ? "slewing"
-            : parked ? "parked"
-            : tracking ? "tracking"
-            : "idle";
+        // §42.9 — resolve the runtime-state token from the raw mount flags via
+        // the shared helper so the precedence (incl. the parked-over-slewing
+        // contradiction guard) is unit-tested in one place.
+        var state = ResolveRuntimeState(slewing, parked, tracking);
         return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome);
     }
+
+    /// <summary>
+    /// Maps raw mount flags to the runtime-state token. Precedence: a slew in
+    /// progress wins (the mount is moving), then a parked mount (a definite rest
+    /// state), then active tracking, otherwise idle.
+    /// </summary>
+    /// <remarks>
+    /// §42.9 contradiction guard: <c>AtPark</c> is a definite rest state — a
+    /// parked mount cannot be slewing. A driver/bridge that reports
+    /// <c>Slewing == true</c> while <c>AtPark == true</c> is lying or stale (the
+    /// AlpacaBridge ZWO vendor did exactly this with no mount attached), so
+    /// "parked" wins over "slewing" — a buggy/phantom device can never paint
+    /// the mount as moving.
+    /// </remarks>
+    internal static string ResolveRuntimeState(bool slewing, bool parked, bool tracking) =>
+        (slewing && !parked) ? "slewing"
+        : parked ? "parked"
+        : tracking ? "tracking"
+        : "idle";
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported capability property throws; each flag falls back to false (and the rate list to empty) rather than failing the whole capability read. The RA/Dec range is fixed, so there is no essential field whose failure should null the whole DTO. CA1031's log-and-recover boundary applies.")]
