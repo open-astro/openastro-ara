@@ -91,8 +91,15 @@ public static partial class EquipmentEndpoints {
             await svc.AbortExposureAsync(ct); return Results.Accepted();
         });
         camera.MapPost("/cooler", async ([FromBody] CameraCoolerRequestDto request, ICameraService svc, CancellationToken ct) => {
-            await svc.SetCoolerAsync(request.Enabled, request.TargetTemperatureC, ct);
-            return Results.Accepted();
+            try {
+                await svc.SetCoolerAsync(request.Enabled, request.TargetTemperatureC, ct);
+                return Results.Accepted();
+            } catch (System.InvalidOperationException ex) {
+                // Capability gates (no cooler / no TEC set-point) + device write
+                // failures map to a clean 409 with the reason — never a 500, which
+                // would bypass CORS and read in browsers as a network error.
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
         });
         // §25.5.5 — readout-mode selection (index into caps.readout_modes, driver order).
         camera.MapPost("/readoutmode", async ([FromBody] CameraReadoutModeRequestDto request, ICameraService svc, CancellationToken ct) => {

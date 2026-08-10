@@ -9,8 +9,18 @@ import '../models/server.dart';
 String describeEquipmentError(Object? e) {
   if (e == null) return 'unknown error';
   if (e is DioException) {
-    final code = e.response?.statusCode;
-    if (code != null) return 'server returned $code';
+    final res = e.response;
+    if (res != null) {
+      final code = res.statusCode;
+      // Prefer the server's problem-details message (e.g. a 409 "this camera
+      // does not support cooling") over a bare status code.
+      final data = res.data;
+      if (data is Map<String, dynamic>) {
+        final detail = data['detail'] ?? data['title'];
+        if (detail is String && detail.isNotEmpty) return detail;
+      }
+      if (code != null) return 'server returned $code';
+    }
     return e.message ?? 'network error';
   }
   return e.toString().replaceFirst('Exception: ', '');
