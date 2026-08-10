@@ -92,6 +92,9 @@ void main() {
     expect(container.read(wizardStepValidProvider), isTrue);
     expect(find.textContaining('AlpacaBridge found'), findsOneWidget);
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
+    // HIG: a clean reachability result renders as SUCCESS (green check).
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
   });
 
   testWidgets('§68.2 advertised-but-unverified devices are reported honestly — '
@@ -122,6 +125,10 @@ void main() {
     expect(message, contains('connectivity not verified'));
     expect(message, isNot(contains('camera(s) seen')));
     expect(message, isNot(contains('seen on this scan')));
+    // HIG: advertised-but-unverified slots render as a WARNING (amber
+    // triangle), not a green success — attention, not a clean bill.
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsNothing);
   });
 
   testWidgets('§68.2 missing bridge: Next stays blocked, the install command '
