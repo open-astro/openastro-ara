@@ -103,8 +103,16 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       if (!mounted) return;
       setState(() {
         _ok = true;
-        _result = 'AlpacaBridge found — '
-            '${devices.length} camera(s) seen on this scan.';
+        // §68.2 — the handshake gate is REACHABILITY, not gear presence: a
+        // clean discovery response means the bridge is up. Advertised devices
+        // are NOT verified connected — a registered-but-absent slot (vendor
+        // SDK name with no hardware behind it) must not read as a connected
+        // camera — so the copy reports the count as "advertised" only.
+        _result = devices.isEmpty
+            ? 'AlpacaBridge found — reachable (no devices advertised).'
+            : 'AlpacaBridge found — reachable; '
+                  '${devices.length} device(s) advertised, '
+                  'connectivity not verified.';
       });
       _setValid(true); // §68.2 — handshake succeeded, Next unblocks
     } on DioException catch (e) {
@@ -435,7 +443,9 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                       return ListTile(
                         title: Text(d.name),
                         subtitle: Text(
-                          '$scheme://$host:${d.ipPort} ·  device #${d.alpacaDeviceNumber}',
+                          '$scheme://$host:${d.ipPort} ·  '
+                          'device #${d.alpacaDeviceNumber}\n'
+                          'Advertised — connectivity is verified when you connect',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AraColors.textSecondary,
                               ),
