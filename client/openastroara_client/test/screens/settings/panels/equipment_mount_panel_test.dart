@@ -199,10 +199,12 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
     ));
     await tester.pumpAndSettle();
-    // The single-rate fixture (4.0 °/s) now yields ZWO-style presets with a
-    // mid default — pick 100% so the held move runs at the mount's max.
-    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
-    await tester.pump();
+    // The single-rate fixture (4.0 °/s) yields the ASIAir x ladder with a mid
+    // default — scroll the speed wheel to the end so the held move runs at the
+    // mount's max (4.0 °/s, labelled MAX).
+    await tester.drag(
+        find.byType(ListWheelScrollView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
     // Press and hold the North button → starts a move at the picked rate.
     final hold = await tester.startGesture(tester.getCenter(find.byIcon(Icons.north)));
     await tester.pump();

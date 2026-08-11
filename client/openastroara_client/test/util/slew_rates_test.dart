@@ -1,31 +1,40 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/util/slew_rates.dart';
 
-/// ZWO-ASIAir-style slew-rate ladder: the mount's own rates when it reports
-/// several, else percentage presets of the max (1/5/10/25/50/100%). Every
+/// ASIAir-style slew-speed ladder: x-multipliers of sidereal rate (1x =
+/// tracking speed) capped at the mount's max, with MAX exactly the max. Every
 /// option must be <= the mount's max — the UI can never ask a mount to slew
 /// faster than it advertises.
 void main() {
-  test('single mount rate (AM5N 6.016 °/s) yields ZWO-style presets', () {
+  test('single mount rate (AM5N 6.016 °/s) yields the ASIAir x ladder', () {
     final options = buildSlewRateOptions(const [6.016427458257683]);
-    expect(options, hasLength(6));
-    // Ascending, first is 1% of max, last is exactly max.
-    final rates = options.map((o) => o.rateDegPerSec).toList();
-    for (var i = 1; i < rates.length; i++) {
-      expect(rates[i], greaterThan(rates[i - 1]));
+    // 1x..512x sidereal are all < 6.016 °/s, plus MAX -> 10 options.
+    expect(options, hasLength(10));
+    expect(options.first.rateDegPerSec, closeTo(kSiderealRateDegPerSec, 1e-12));
+    expect(options.first.label, '1x');
+    expect(options[8].label, '512x');
+    expect(options.last.label, 'MAX');
+    expect(options.last.rateDegPerSec, closeTo(6.016427458257683, 1e-9));
+    // Ascending.
+    for (var i = 1; i < options.length; i++) {
+      expect(options[i].rateDegPerSec, greaterThan(options[i - 1].rateDegPerSec));
     }
-    expect(rates.first, closeTo(6.016427458257683 * 0.01, 1e-9));
-    expect(rates.last, closeTo(6.016427458257683, 1e-9));
-    // Preset labels carry the percentage.
-    expect(options.last.label, startsWith('100%'));
-    expect(options[3].label, startsWith('25%'));
-    // Labels also carry the deg/s value.
-    expect(options.last.label, contains('°/s'));
+    // x presets carry the deg/s detail line.
+    expect(options[1].detail, isNotNull);
+  });
+
+  test('ladder stops below the max and never exceeds it', () {
+    // Max 2.0 °/s: 1x..512x (2.14) — 512x is dropped, MAX = 2.0.
+    final options = buildSlewRateOptions(const [2.0]);
+    expect(options.last.rateDegPerSec, closeTo(2.0, 1e-9));
+    expect(options.map((o) => o.rateDegPerSec).any((r) => r > 2.0), isFalse);
+    expect(options.any((o) => o.label == '512x'), isFalse);
   });
 
   test('multiple mount rates are honored as-is (no presets injected)', () {
     final options = buildSlewRateOptions(const [1.0, 4.0, 6.0]);
     expect(options.map((o) => o.rateDegPerSec).toList(), [1.0, 4.0, 6.0]);
+    expect(options.first.label, '1°/s'); // deg/s labels for a driver ladder
   });
 
   test('no rate ever exceeds the mount max', () {
@@ -36,7 +45,8 @@ void main() {
       const [10.0, 0.0, -3.0],
     ]) {
       final options = buildSlewRateOptions(mountRates);
-      final maxRate = mountRates.where((r) => r > 0).reduce((a, b) => a > b ? a : b);
+      final maxRate =
+          mountRates.where((r) => r > 0).reduce((a, b) => a > b ? a : b);
       for (final o in options) {
         expect(o.rateDegPerSec, lessThanOrEqualTo(maxRate),
             reason: '$o must not exceed max $maxRate');

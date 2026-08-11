@@ -227,9 +227,10 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   final _ra = TextEditingController();
   final _dec = TextEditingController();
   double? _rate;
-  // ZWO-ASIAir-style speed ladder: the mount's own rates when it reports
-  // several, else percentage presets of the max. Never exceeds the max.
+  // ASIAir-style speed ladder: the mount's own rates when it reports
+  // several, else x-of-sidereal presets capped at the max. Never exceeds max.
   List<SlewRateOption> _rateOptions = const [];
+  FixedExtentScrollController? _wheelController;
 
   static const int _primary = 0; // RA / Azimuth (E/W)
   static const int _secondary = 1; // Dec / Altitude (N/S)
@@ -241,6 +242,9 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       widget.status.capabilities?.axisRatesDegPerSec ?? const [],
     );
     _rate = _defaultRate(_rateOptions);
+    _wheelController = FixedExtentScrollController(
+      initialItem: _defaultRateIndex(_rateOptions),
+    );
   }
 
   @override
@@ -257,12 +261,16 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     if (!_sameRates(oldRates, newRates)) {
       _rateOptions = buildSlewRateOptions(newRates);
       _rate = _defaultRate(_rateOptions);
+      _wheelController?.jumpToItem(_defaultRateIndex(_rateOptions));
     }
   }
 
   // Default to a middle rate — a usable nudge without lurching at full speed.
+  static int _defaultRateIndex(List<SlewRateOption> options) =>
+      options.isEmpty ? 0 : (options.length - 1) ~/ 2;
+
   static double? _defaultRate(List<SlewRateOption> options) =>
-      options.isEmpty ? null : options[(options.length - 1) ~/ 2].rateDegPerSec;
+      options.isEmpty ? null : options[_defaultRateIndex(options)].rateDegPerSec;
 
   static bool _sameRates(List<double> a, List<double> b) {
     if (a.length != b.length) return false;
@@ -276,6 +284,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   void dispose() {
     _ra.dispose();
     _dec.dispose();
+    _wheelController?.dispose();
     super.dispose();
   }
 
@@ -394,19 +403,55 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     }
   }
 
+  // Apple-HIG-style speed wheel (like the watchOS picker): a vertical scroll
+  // of the ladder with the centred option highlighted. The centred rate is the
+  // live selection — the direction pad uses it at press time.
   Widget _speedPicker(List<SlewRateOption> options) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    final controller = _wheelController;
+    if (controller == null) return const SizedBox.shrink();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text('Speed'),
-        for (final o in options)
-          ChoiceChip(
-            label: Text(o.label),
-            selected: _rate == o.rateDegPerSec,
-            onSelected: (_) => setState(() => _rate = o.rateDegPerSec),
+        const Padding(
+          padding: EdgeInsets.only(right: 12),
+          child: Text('Speed'),
+        ),
+        Expanded(
+          child: SizedBox(
+            height: 140, // ~4.5 rows of itemExtent 30 visible — watchOS-like
+            child: ListWheelScrollView.useDelegate(
+              controller: controller,
+              itemExtent: 30,
+              diameterRatio: 2.4,
+              useMagnifier: true,
+              magnification: 1.15,
+              physics: const FixedExtentScrollPhysics(),
+              onSelectedItemChanged: (i) =>
+                  setState(() => _rate = options[i].rateDegPerSec),
+              childDelegate: ListWheelChildBuilderDelegate(
+                childCount: options.length,
+                builder: (context, i) {
+                  final o = options[i];
+                  final selected =
+                      i == controller.selectedItem && _rate == o.rateDegPerSec;
+                  return Center(
+                    child: Text(
+                      o.detail == null ? o.label : '${o.label} · ${o.detail}',
+                      style: TextStyle(
+                        color: selected
+                            ? AraColors.textPrimary
+                            : AraColors.textSecondary,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.normal,
+                        fontSize: selected ? 16 : 13,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
+        ),
       ],
     );
   }
