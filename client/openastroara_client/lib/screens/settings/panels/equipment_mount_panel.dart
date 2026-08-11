@@ -461,16 +461,27 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
                         i == controller.selectedItem &&
                         _rate == o.rateDegPerSec;
                     return Center(
-                      child: Text(
-                        o.detail == null ? o.label : '${o.label} · ${o.detail}',
-                        style: TextStyle(
-                          color: selected
-                              ? AraColors.textPrimary
-                              : AraColors.textSecondary,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          fontSize: selected ? 16 : 13,
+                      child: Padding(
+                        // Same inset as the glass capsule's margin, so the
+                        // text always fits inside the highlight.
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            o.detail == null
+                                ? o.label
+                                : '${o.label} · ${o.detail}',
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: selected
+                                  ? AraColors.textPrimary
+                                  : AraColors.textSecondary,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              fontSize: selected ? 16 : 13,
+                            ),
+                          ),
                         ),
                       ),
                     );
