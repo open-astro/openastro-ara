@@ -10,6 +10,7 @@ import '../../models/profile_share_import_preview.dart';
 import '../../services/profile_share_file.dart';
 import '../../state/profile_management_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// §70 import — pick a shared profile-share file, preview what it'll create +
 /// what the recipient must re-enter, and on confirm commit it into a new
@@ -222,12 +223,19 @@ Future<bool> _confirmImport(
 }
 
 /// Turn a transport error into a user-facing line — prefer the daemon's
-/// ProblemDetails `detail` (e.g. the 409 "select another profile first").
+/// ProblemDetails `detail` (e.g. the 409 "select another profile first"). When
+/// the server sent nothing (timeouts, connection failures, the browser's
+/// CORS-masked network errors), delegate to [friendlyError] so a raw
+/// DioException/XHR dump never reaches the user — the fallback's
+/// `"Couldn't <action>"` wording becomes friendlyError's action.
 String friendlyDaemonError(Object e, {String fallback = 'Something went wrong'}) {
   if (e is DioException) {
     final data = e.response?.data;
     if (data is Map && data['detail'] is String) return data['detail'] as String;
-    return '$fallback: ${e.message ?? 'network error'}';
+    final action = fallback.startsWith("Couldn't ")
+        ? fallback.substring("Couldn't ".length)
+        : 'do that';
+    return friendlyError(e, action: action);
   }
   if (e is StateError) return e.message;
   return fallback;
