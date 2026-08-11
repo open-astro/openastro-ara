@@ -200,11 +200,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
     // The single-rate fixture (4.0 °/s) yields the ASIAir x ladder with a mid
-    // default — scroll the speed wheel to the end so the held move runs at the
-    // mount's max (4.0 °/s, labelled MAX).
-    await tester.drag(
-        find.byType(ListWheelScrollView), const Offset(0, -2000));
-    await tester.pumpAndSettle();
+    // default — pick MAX so the held move runs at the mount's max (4.0 °/s).
+    await tester.tap(find.widgetWithText(ChoiceChip, 'MAX'));
+    await tester.pump();
     // Press and hold the North button → starts a move at the picked rate.
     final hold = await tester.startGesture(tester.getCenter(find.byIcon(Icons.north)));
     await tester.pump();
