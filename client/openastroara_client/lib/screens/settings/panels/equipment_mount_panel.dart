@@ -426,7 +426,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
               // Frosted-glass capsule behind the centred row (watchOS).
               IgnorePointer(
                 child: Container(
-                  height: itemExtent * 1.8, // roomy single-row emphasis
+                  height: itemExtent * 2.6, // tall glass — roomy emphasis
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
