@@ -419,7 +419,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
         const SizedBox(width: 8),
         SizedBox(
           width: 110, // same width as the RA/Dec text fields above
-          height: 96, // twice the dense field height
+          height: 168, // 6 rows — taller, more of the ladder visible
           child: Stack(
             alignment: Alignment.center,
             children: [
