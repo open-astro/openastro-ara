@@ -423,19 +423,19 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Frosted-glass capsule behind the centred row (watchOS).
+              // Frosted-glass capsule behind the centred rows (watchOS).
               IgnorePointer(
                 child: Container(
-                  height: itemExtent + 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 28),
+                  height: itemExtent * 2 + 12, // ~2 rows of emphasis
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.16),
                     ),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(12),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
