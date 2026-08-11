@@ -426,8 +426,8 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
               // Frosted-glass capsule behind the centred row (watchOS).
               IgnorePointer(
                 child: Container(
-                  height: itemExtent * 2.6, // tall glass — roomy emphasis
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  height: itemExtent * 1.8, // roomy single-row emphasis
+                  margin: const EdgeInsets.symmetric(horizontal: 0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
@@ -464,7 +464,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
                       child: Padding(
                         // Same inset as the glass capsule's margin, so the
                         // text always fits inside the highlight.
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 0),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
