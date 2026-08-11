@@ -418,7 +418,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
         const SizedBox(width: 8),
         Expanded(
           child: SizedBox(
-            height: 116, // ~4 rows visible — snug against the label
+            height: 96, // twice the dense RA/Dec text-field height
             child: Stack(
               alignment: Alignment.center,
               children: [
