@@ -271,8 +271,9 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   static int _defaultRateIndex(List<SlewRateOption> options) =>
       options.isEmpty ? 0 : (options.length - 1) ~/ 2;
 
-  static double? _defaultRate(List<SlewRateOption> options) =>
-      options.isEmpty ? null : options[_defaultRateIndex(options)].rateDegPerSec;
+  static double? _defaultRate(List<SlewRateOption> options) => options.isEmpty
+      ? null
+      : options[_defaultRateIndex(options)].rateDegPerSec;
 
   static bool _sameRates(List<double> a, List<double> b) {
     if (a.length != b.length) return false;
@@ -416,67 +417,67 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       children: [
         const Text('Speed'),
         const SizedBox(width: 8),
-        Expanded(
-          child: SizedBox(
-            height: 96, // twice the dense RA/Dec text-field height
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Frosted-glass capsule behind the centred row (watchOS).
-                IgnorePointer(
-                  child: Container(
-                    height: itemExtent + 8,
-                    margin: const EdgeInsets.symmetric(horizontal: 28),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.16),
-                      ),
+        SizedBox(
+          width: 110, // same width as the RA/Dec text fields above
+          height: 96, // twice the dense field height
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Frosted-glass capsule behind the centred row (watchOS).
+              IgnorePointer(
+                child: Container(
+                  height: itemExtent + 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 28),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(11),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                        child: Container(
-                          color: Colors.white.withValues(alpha: 0.07),
-                        ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        color: Colors.white.withValues(alpha: 0.07),
                       ),
                     ),
                   ),
                 ),
-                ListWheelScrollView.useDelegate(
-                  controller: controller,
-                  itemExtent: itemExtent,
-                  diameterRatio: 1.7,
-                  overAndUnderCenterOpacity: 0.45,
-                  physics: const FixedExtentScrollPhysics(),
-                  onSelectedItemChanged: (i) => setState(
-                      () => _rate = options[i].rateDegPerSec),
-                  childDelegate: ListWheelChildBuilderDelegate(
-                    childCount: options.length,
-                    builder: (context, i) {
-                      final o = options[i];
-                      final selected =
-                          i == controller.selectedItem &&
-                          _rate == o.rateDegPerSec;
-                      return Center(
-                        child: Text(
-                          o.detail == null ? o.label : '${o.label} · ${o.detail}',
-                          style: TextStyle(
-                            color: selected
-                                ? AraColors.textPrimary
-                                : AraColors.textSecondary,
-                            fontWeight:
-                                selected ? FontWeight.w600 : FontWeight.normal,
-                            fontSize: selected ? 16 : 13,
-                          ),
+              ),
+              ListWheelScrollView.useDelegate(
+                controller: controller,
+                itemExtent: itemExtent,
+                diameterRatio: 1.7,
+                overAndUnderCenterOpacity: 0.45,
+                physics: const FixedExtentScrollPhysics(),
+                onSelectedItemChanged: (i) =>
+                    setState(() => _rate = options[i].rateDegPerSec),
+                childDelegate: ListWheelChildBuilderDelegate(
+                  childCount: options.length,
+                  builder: (context, i) {
+                    final o = options[i];
+                    final selected =
+                        i == controller.selectedItem &&
+                        _rate == o.rateDegPerSec;
+                    return Center(
+                      child: Text(
+                        o.detail == null ? o.label : '${o.label} · ${o.detail}',
+                        style: TextStyle(
+                          color: selected
+                              ? AraColors.textPrimary
+                              : AraColors.textSecondary,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          fontSize: selected ? 16 : 13,
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
