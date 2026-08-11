@@ -412,30 +412,30 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   Widget _speedPicker(List<SlewRateOption> options) {
     final controller = _wheelController;
     if (controller == null) return const SizedBox.shrink();
-    const itemExtent = 28.0;
+    const itemExtent = 32.0;
     return Row(
       children: [
         const Text('Speed'),
         const SizedBox(width: 8),
         SizedBox(
           width: 110, // same width as the RA/Dec text fields above
-          height: 84, // 3 rows visible — the rest scroll into view
+          height: 96, // 3 rows visible — the rest scroll into view
           child: Stack(
             alignment: Alignment.center,
             children: [
               // Frosted-glass capsule behind the centred row (watchOS).
               IgnorePointer(
                 child: Container(
-                  height: itemExtent + 10, // single-row emphasis
-                  margin: const EdgeInsets.symmetric(horizontal: 22),
+                  height: itemExtent * 1.8, // roomy single-row emphasis
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.16),
                     ),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
@@ -464,7 +464,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
                       child: Padding(
                         // Same inset as the glass capsule's margin, so the
                         // text always fits inside the highlight.
-                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
@@ -479,7 +479,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
                               fontWeight: selected
                                   ? FontWeight.w600
                                   : FontWeight.normal,
-                              fontSize: selected ? 16 : 13,
+                              fontSize: selected ? 18 : 16,
                             ),
                           ),
                         ),
