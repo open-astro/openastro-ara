@@ -3,11 +3,18 @@ import 'package:dio/dio.dart';
 import '../models/discovered_device.dart';
 import '../models/server.dart';
 
-/// A short, user-facing message for an equipment API error. Superseded by
-/// `friendlyError` (lib/util/friendly_error.dart) for user-facing copy — which
-/// surfaces the server's problem-detail and maps timeouts/connection errors to
-/// actionable sentences instead of raw DioException text. Kept only as the
-/// predicate [isNotFoundEquipmentError]'s home.
+/// A short, user-facing message for an equipment API error. A [DioException]'s
+/// `toString()` dumps the request URL + headers + body (a multi-line paragraph in
+/// a SnackBar), so extract just the gist. Shared by every equipment panel.
+String describeEquipmentError(Object? e) {
+  if (e == null) return 'unknown error';
+  if (e is DioException) {
+    final code = e.response?.statusCode;
+    if (code != null) return 'server returned $code';
+    return e.message ?? 'network error';
+  }
+  return e.toString().replaceFirst('Exception: ', '');
+}
 
 /// True when [e] is a 404 from the equipment API — e.g. a reconnect with no
 /// remembered device for that type, distinct from a real failure.

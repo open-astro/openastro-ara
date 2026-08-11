@@ -7,7 +7,6 @@ import '../../../models/switch_device.dart';
 import '../../../services/equipment_device_api.dart'
     show isNotFoundEquipmentError;
 import '../../../state/equipment/switch_state.dart';
-import '../../../util/friendly_error.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
 import '../../../theme/ara_colors.dart';
@@ -137,7 +136,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
               _MessageRow(
                 icon: Icons.error_outline,
                 color: AraColors.accentError,
-                text: friendlyError(error, action: 'read the switch list'),
+                text: "Couldn't read the switch list: ${_msg(error)}",
                 onRetry: () => ref.read(switchListProvider.notifier).refresh(),
               ),
             ],
@@ -170,7 +169,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
     } catch (e) {
       final text = isNotFoundEquipmentError(e)
           ? 'No previous switches to reconnect — use “Add switch” first.'
-          : friendlyError(e, action: 'reconnect the switches');
+          : "Couldn't reconnect switches: ${_msg(e)}";
       messenger.showSnackBar(
         SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
       );
@@ -194,7 +193,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
         } catch (e) {
           messenger.showSnackBar(
             SnackBar(
-              content: Text(friendlyError(e, action: 'connect ${device.name}')),
+              content: Text("Couldn't connect ${device.name}: ${_msg(e)}"),
               backgroundColor: AraColors.accentError,
             ),
           );
@@ -310,7 +309,7 @@ class _SwitchCard extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'remove that device')),
+          content: Text("Couldn't remove: ${_msg(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
@@ -324,7 +323,7 @@ class _SwitchCard extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'disconnect that device')),
+          content: Text("Couldn't disconnect: ${_msg(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
@@ -372,7 +371,7 @@ class _PortRowState extends ConsumerState<_PortRow> {
       if (mounted) setState(() => _dragValue = null);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'set ${widget.port.name}')),
+          content: Text("Couldn't set ${widget.port.name}: ${_msg(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
@@ -547,3 +546,6 @@ class _MessageRow extends StatelessWidget {
 
 String _fmt(double v) =>
     v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+String _msg(Object? e) =>
+    e == null ? 'unknown error' : e.toString().replaceFirst('Exception: ', '');

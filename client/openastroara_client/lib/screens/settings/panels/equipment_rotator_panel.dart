@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/rotator_status.dart';
-import '../../../util/friendly_error.dart';
+import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/rotator_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -246,7 +246,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: verb)),
+          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

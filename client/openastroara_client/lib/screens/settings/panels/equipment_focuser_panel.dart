@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/equipment_device_status.dart';
 import '../../../models/focuser_status.dart';
 import '../../../services/autofocus_api.dart';
-import '../../../util/friendly_error.dart';
+import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/settings_nav.dart';
@@ -229,7 +229,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'move the focuser')),
+          content: Text("Couldn't move: ${describeEquipmentError(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
