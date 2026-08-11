@@ -419,23 +419,23 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
         const SizedBox(width: 8),
         SizedBox(
           width: 110, // same width as the RA/Dec text fields above
-          height: 168, // 6 rows — taller, more of the ladder visible
+          height: 84, // 3 rows visible — the rest scroll into view
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Frosted-glass capsule behind the centred rows (watchOS).
+              // Frosted-glass capsule behind the centred row (watchOS).
               IgnorePointer(
                 child: Container(
-                  height: itemExtent * 2 + 12, // ~2 rows of emphasis
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  height: itemExtent + 10, // single-row emphasis
+                  margin: const EdgeInsets.symmetric(horizontal: 22),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.16),
                     ),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
