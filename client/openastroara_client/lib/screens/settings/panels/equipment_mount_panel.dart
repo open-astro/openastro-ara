@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -403,52 +405,77 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     }
   }
 
-  // Apple-HIG-style speed wheel (like the watchOS picker): a vertical scroll
-  // of the ladder with the centred option highlighted. The centred rate is the
-  // live selection — the direction pad uses it at press time.
+  // watchOS-style glass speed wheel: a tight vertical scroll with a frosted
+  // highlight capsule behind the centred row (items scroll through it), the
+  // centred rate staying live for the direction pad.
   Widget _speedPicker(List<SlewRateOption> options) {
     final controller = _wheelController;
     if (controller == null) return const SizedBox.shrink();
+    const itemExtent = 28.0;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(right: 12),
-          child: Text('Speed'),
-        ),
+        const Text('Speed'),
+        const SizedBox(width: 8),
         Expanded(
           child: SizedBox(
-            height: 140, // ~4.5 rows of itemExtent 30 visible — watchOS-like
-            child: ListWheelScrollView.useDelegate(
-              controller: controller,
-              itemExtent: 30,
-              diameterRatio: 2.4,
-              useMagnifier: true,
-              magnification: 1.15,
-              physics: const FixedExtentScrollPhysics(),
-              onSelectedItemChanged: (i) =>
-                  setState(() => _rate = options[i].rateDegPerSec),
-              childDelegate: ListWheelChildBuilderDelegate(
-                childCount: options.length,
-                builder: (context, i) {
-                  final o = options[i];
-                  final selected =
-                      i == controller.selectedItem && _rate == o.rateDegPerSec;
-                  return Center(
-                    child: Text(
-                      o.detail == null ? o.label : '${o.label} · ${o.detail}',
-                      style: TextStyle(
-                        color: selected
-                            ? AraColors.textPrimary
-                            : AraColors.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.normal,
-                        fontSize: selected ? 16 : 13,
+            height: 116, // ~4 rows visible — snug against the label
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Frosted-glass capsule behind the centred row (watchOS).
+                IgnorePointer(
+                  child: Container(
+                    height: itemExtent + 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 28),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.16),
                       ),
                     ),
-                  );
-                },
-              ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(
+                          color: Colors.white.withValues(alpha: 0.07),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                ListWheelScrollView.useDelegate(
+                  controller: controller,
+                  itemExtent: itemExtent,
+                  diameterRatio: 1.7,
+                  overAndUnderCenterOpacity: 0.45,
+                  physics: const FixedExtentScrollPhysics(),
+                  onSelectedItemChanged: (i) => setState(
+                      () => _rate = options[i].rateDegPerSec),
+                  childDelegate: ListWheelChildBuilderDelegate(
+                    childCount: options.length,
+                    builder: (context, i) {
+                      final o = options[i];
+                      final selected =
+                          i == controller.selectedItem &&
+                          _rate == o.rateDegPerSec;
+                      return Center(
+                        child: Text(
+                          o.detail == null ? o.label : '${o.label} · ${o.detail}',
+                          style: TextStyle(
+                            color: selected
+                                ? AraColors.textPrimary
+                                : AraColors.textSecondary,
+                            fontWeight:
+                                selected ? FontWeight.w600 : FontWeight.normal,
+                            fontSize: selected ? 16 : 13,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ),
