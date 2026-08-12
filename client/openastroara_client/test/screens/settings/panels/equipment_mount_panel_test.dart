@@ -199,6 +199,10 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
     ));
     await tester.pumpAndSettle();
+    // The single-rate fixture (4.0 °/s) yields percentage presets with a mid
+    // default — pick 100% so the held move runs at the mount's max (4.0 °/s).
+    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+    await tester.pump();
     // Press and hold the North button → starts a move at the picked rate.
     final hold = await tester.startGesture(tester.getCenter(find.byIcon(Icons.north)));
     await tester.pump();
