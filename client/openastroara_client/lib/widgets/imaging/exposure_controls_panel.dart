@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -298,6 +300,16 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
   /// parked there — or parked anywhere else (accepted but failed in flight).
   int? _pendingTargetPosition;
 
+  /// True once the wheel has been SEEN turning after a commanded move — only
+  /// then may a settled-off-target status count as a failed landing. Right
+  /// after the command the wheel may still report its old idle position for a
+  /// poll or two; without this gate that would fake a failure instantly.
+  bool _sawMove = false;
+
+  /// Backstop for an accepted move that never reports ANY movement (stuck
+  /// driver): after this fires without a landing, the picker reverts.
+  Timer? _stallTimer;
+
   _FilterPhase _phase = _FilterPhase.idle;
 
   /// Drives the red busy pulse (repeat/reverse) and the green confirm flash.
@@ -317,6 +329,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
 
   @override
   void dispose() {
+    _stallTimer?.cancel();
     _flash.dispose();
     super.dispose();
   }
@@ -343,34 +356,45 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
     ref.listen(filterWheelProvider, (prev, next) {
       final wheel = next.maybeWhen(data: (s) => s, orElse: () => null);
       final pending = _pendingTargetPosition;
-      if (pending != null && wheel != null && !wheel.isMoving) {
-        _pendingTargetPosition = null;
+      if (wheel != null && wheel.isMoving) {
+        _sawMove = true;
+        if (_phase != _FilterPhase.changing) {
+          setState(() {
+            _phase = _FilterPhase.changing;
+            _flash.value = 0;
+            _flash.repeat(reverse: true);
+          });
+        }
+      } else if (pending != null && wheel != null && !wheel.isMoving) {
+        // The wheel is parked. Landed on the commanded slot — success (even
+        // if the move was too fast to observe the moving state). Settled
+        // elsewhere — only a failure if we actually SAW it move after the
+        // command; otherwise it just hasn't started yet, so keep waiting.
         if (wheel.currentSlot == pending) {
-          // Landed on the commanded slot: re-enable + green confirm flash.
+          _pendingTargetPosition = null;
+          _sawMove = false;
+          _stallTimer?.cancel();
           setState(() {
             _phase = _FilterPhase.updated;
             _flash.stop();
-            _flash.forward(from: 0).whenComplete(() {
+            _flash.value = 0;
+            _flash.forward().whenComplete(() {
               if (mounted) setState(() => _phase = _FilterPhase.idle);
             });
           });
-        } else {
-          // Settled elsewhere (accepted but never landed): show the truth.
+        } else if (_sawMove) {
+          _pendingTargetPosition = null;
+          _sawMove = false;
+          _stallTimer?.cancel();
           setState(() {
             _phase = _FilterPhase.idle;
             _flash.stop();
             _resetToken++;
           });
         }
-      } else if (wheel != null && wheel.isMoving) {
-        if (_phase != _FilterPhase.changing) {
-          setState(() {
-            _phase = _FilterPhase.changing;
-            _flash.repeat(reverse: true);
-          });
-        }
       } else if (_phase == _FilterPhase.changing && pending == null) {
-        // The wheel stopped turning and nothing of ours is pending — done.
+        // An external move settled (no pending of ours) — done.
+        _sawMove = false;
         setState(() {
           _phase = _FilterPhase.idle;
           _flash.stop();
@@ -451,19 +475,40 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
               // not when the first poll reports the wheel turning.
               setState(() {
                 _phase = _FilterPhase.changing;
+                _flash.value = 0;
                 _flash.repeat(reverse: true);
               });
               _pendingTargetPosition = slot.position;
+              _sawMove = false;
+              _stallTimer?.cancel();
+              _stallTimer = Timer(const Duration(seconds: 10), () {
+                // Accepted but never reported ANY movement — stuck driver.
+                if (!mounted || _phase != _FilterPhase.changing) return;
+                setState(() {
+                  _phase = _FilterPhase.idle;
+                  _flash.stop();
+                  _pendingTargetPosition = null;
+                  _sawMove = false;
+                  _resetToken++;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text("Couldn't change the filter - the wheel "
+                      'didn\'t start moving.'),
+                  backgroundColor: AraColors.accentError,
+                ));
+              });
               try {
                 final performed = await ref
                     .read(filterWheelProvider.notifier)
                     .changeFilter(slot.position);
                 if (!performed) {
+                  _stallTimer?.cancel();
                   if (mounted) {
                     setState(() {
                       _phase = _FilterPhase.idle;
                       _flash.stop();
                       _pendingTargetPosition = null;
+                      _sawMove = false;
                       _resetToken++;
                     });
                   }
@@ -482,11 +527,13 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
                   widget.onChanged(n);
                 }
               } catch (e) {
+                _stallTimer?.cancel();
                 if (mounted) {
                   setState(() {
                     _phase = _FilterPhase.idle;
                     _flash.stop();
                     _pendingTargetPosition = null;
+                    _sawMove = false;
                     _resetToken++;
                   });
                 }

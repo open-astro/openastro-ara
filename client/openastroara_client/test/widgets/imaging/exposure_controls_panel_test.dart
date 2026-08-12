@@ -12,6 +12,9 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   final List<int> changeCalls = [];
   bool failMoves = false;
   bool failInFlight = false;
+  // How long a successful move takes before the wheel reports the landing
+  // (so a test can observe the busy state mid-flight).
+  Duration moveDelay = Duration.zero;
   // What the wheel reports AFTER a move lands (default: the named _wheelAt
   // slots). Set to an unnamed-slot list to simulate a driver that never names
   // a position.
@@ -46,6 +49,9 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
         slots: slots,
       ));
       return true;
+    }
+    if (moveDelay > Duration.zero) {
+      await Future<void>.delayed(moveDelay);
     }
     park(FilterWheelStatus(
       deviceId: 'fw',
@@ -437,6 +443,55 @@ void main() {
     // filter.
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     expect(wheel.changeCalls, [1]);
+  });
+
+  testWidgets('the busy pulse re-arms on every move (not just the first)',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0)); // on L
+    wheel.moveDelay = const Duration(milliseconds: 100);
+    await tester.pump();
+
+    DropdownButtonFormField<String> field() => tester
+        .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>));
+
+    Future<void> pick(String name, String landedName) async {
+      await tester.tap(find.text(container
+              .read(exposureControllerProvider)
+              .filterSlot)
+          .last); // open
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(name).last);
+      await tester.pump(const Duration(milliseconds: 50)); // mid-flight
+      expect(field().onChanged, isNull,
+          reason: 'busy -> disabled while the move is in flight ($name)');
+      expect(field().decoration.enabledBorder, isNotNull,
+          reason: 'busy border pulse is active ($name)');
+      await tester.pumpAndSettle(); // landing + green flash
+      expect(field().onChanged, isNotNull,
+          reason: 're-enabled after landing ($name)');
+      expect(container.read(exposureControllerProvider).filterSlot, landedName);
+    }
+
+    // First move — and then a SECOND move: the pulse must re-arm both times
+    // (a previous run resumed the controller at its end value, showing no red).
+    await pick('Ha', 'Ha');
+    await pick('OIII', 'OIII');
   });
 
   testWidgets('picking a filter with no connected wheel only tags the capture',
