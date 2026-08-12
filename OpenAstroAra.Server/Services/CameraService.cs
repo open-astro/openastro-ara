@@ -282,20 +282,55 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
         var client = RequireConnectedClient();
+        // §25.5.5 — capability gates BEFORE any device write: a camera without a
+        // cooler (CoolerOn not implemented) or without TEC set-point regulation
+        // must fail with a clean message, never a 500 from the driver's
+        // PropertyNotImplementedException (a 500 also bypasses CORS and surfaces
+        // in browsers as a misleading "network error"). Skipped only when the
+        // cached caps haven't been read yet — the write is then attempted and
+        // its failure mapped cleanly below.
+        var gateError = CoolerCapabilityError(
+            _capabilities?.CanSetTemperature, _capabilities?.HasCooler, targetTemperatureC);
+        if (gateError is not null) {
+            throw new InvalidOperationException(gateError);
+        }
         // §42.2 — a commanded cooler change starts a fresh drift baseline BEFORE the write is
         // dispatched (a new set-point legitimately starts far from the sensor; the old episode
         // and accumulation must not carry into it).
         lock (_gate) {
             _coolingDrift.Reset();
         }
-        await Task.Run(() => {
-            if (targetTemperatureC is double target) {
-                client.SetCCDTemperature = target;
-            }
-            client.CoolerOn = enabled;
-        }, CancellationToken.None).ConfigureAwait(false);
+        try {
+            await Task.Run(() => {
+                if (targetTemperatureC is double target) {
+                    client.SetCCDTemperature = target;
+                }
+                client.CoolerOn = enabled;
+            }, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            // The caps probe can read CoolerOn successfully while the SETTER still
+            // throws (observed on a Player One camera that exposes a cooler but
+            // refuses the write). Surface a clean message instead of a 500.
+            throw new InvalidOperationException(
+                $"the camera rejected the cooler write ({ex.GetType().Name}) — it may not support cooling", ex);
+        }
         RefreshCacheOnce();
     }
+
+    /// <summary>
+    /// §25.5.5 cooler capability gate: returns the human-readable refusal reason
+    /// when the request cannot be honored, else null. A camera without a cooler
+    /// (HasCooler=false) can't be toggled at all; a camera without TEC
+    /// regulation (CanSetTemperature=false) can't take a set-point (a "dumb"
+    /// on/off cooler is still toggleable). Null caps (not yet read) skip the
+    /// gate — the write itself is then attempted and its failure mapped cleanly.
+    /// </summary>
+    internal static string? CoolerCapabilityError(bool? canSetTemperature, bool? hasCooler, double? targetTemperatureC) =>
+        hasCooler == false
+            ? "this camera does not support cooling"
+            : (targetTemperatureC is double && canSetTemperature == false)
+                ? "this camera does not support a cooler set-point (can_set_temperature=false)"
+                : null;
 
     // §25.5.5 — select a readout mode by driver index. The list is re-read from the device inside
     // the write (not from the cached caps) so the validation matches what the driver will accept

@@ -155,6 +155,20 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               ],
             ),
         ],
+        // A camera with no cooler at all (has_cooler=false — CoolerOn not
+        // implemented) gets an explicit muted row instead of an absent section:
+        // absence reads as "missing UI", the row reads as "no cooling".
+        if (caps != null && !caps.hasCooler)
+          Row(
+            children: [
+              const Text('Cooler'),
+              const Spacer(),
+              Text(
+                'Does not support cooling',
+                style: const TextStyle(color: AraColors.textDisabled),
+              ),
+            ],
+          ),
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
           _row('Sensor', '${caps.sensorWidth} × ${caps.sensorHeight}'),
