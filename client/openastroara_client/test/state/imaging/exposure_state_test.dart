@@ -162,10 +162,11 @@ void main() {
       expect(container.read(exposureControllerProvider).filterSlot, 'L');
     });
 
-    test('an unnamed current slot leaves filterSlot alone', () async {
+    test('an unnamed current slot leaves filterSlot alone — until a name arrives',
+        () async {
       container.read(exposureControllerProvider);
       final wheel = await _initWheel(container);
-      wheel.park(FilterWheelStatus(
+      final unnamed = FilterWheelStatus(
         deviceId: 'fw',
         name: 'FILTERWHEEL',
         connectionState: EquipmentConnectionState.connected,
@@ -175,9 +176,27 @@ void main() {
           FilterSlot(position: 0, name: 'L', focusOffset: 0),
           FilterSlot(position: 1, name: '', focusOffset: 0),
         ],
-      ));
+      );
+      wheel.park(unnamed);
       await _settle();
       expect(container.read(exposureControllerProvider).filterSlot, 'L');
+
+      // Same position, same physical slot — but the driver now reports its
+      // name. The picker must sync even though the wheel never "moved" (the
+      // latch may only engage once a named slot was actually found).
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 1,
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+        ],
+      ));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     });
   });
 }

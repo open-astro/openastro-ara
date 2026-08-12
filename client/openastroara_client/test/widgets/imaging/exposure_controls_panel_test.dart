@@ -225,5 +225,15 @@ void main() {
     expect(find.text('driver rejected the move'), findsOneWidget,
         reason: 'the failure surfaces as a snackbar (StateError passes through '
             'friendlyError verbatim), not a silent drop');
+    // The controlled button re-syncs to state: it must still DISPLAY L, not
+    // the just-tapped name (DropdownButtonFormField would have lied here).
+    expect(
+      find.descendant(
+        of: find.byType(DropdownButton<String>),
+        matching: find.text('L'),
+      ),
+      findsOneWidget,
+      reason: 'the picker shows the wheel\'s actual filter after a failed move',
+    );
   });
 }

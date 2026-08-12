@@ -283,13 +283,20 @@ class _FilterDropdown extends ConsumerWidget {
           labels.labelAt(slot),
     ];
     if (!names.contains(value)) names.insert(0, value);
-    return DropdownButtonFormField<String>(
-      initialValue: value,
+    // Controlled DropdownButton (not DropdownButtonFormField): the displayed
+    // value always mirrors [value] from state. FormField would show the
+    // just-tapped name even when the move fails and state deliberately stays
+    // put — leaving the picker lying about the filter in the light path.
+    return InputDecorator(
       decoration: const InputDecoration(labelText: 'Filter'),
-      items: [
-        for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
-      ],
-      onChanged: (n) async {
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          items: [
+            for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
+          ],
+          onChanged: (n) async {
         if (n == null) return;
         final wheel = ref
             .read(filterWheelProvider)
@@ -328,7 +335,9 @@ class _FilterDropdown extends ConsumerWidget {
             ));
           }
         }
-      },
+          },
+        ),
+      ),
     );
   }
 }

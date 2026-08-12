@@ -82,9 +82,13 @@ class ExposureController extends Notifier<ExposureParams> {
   void _syncFilterToSlot(FilterWheelStatus status) {
     final pos = status.currentSlot;
     if (pos == null || pos == _lastSyncedSlot) return;
-    _lastSyncedSlot = pos;
     for (final slot in status.slots) {
       if (slot.position == pos && slot.name.isNotEmpty) {
+        // Latch only once a named slot was actually found: a wheel parked on
+        // an as-yet-unnamed slot (driver hasn't reported names yet) must still
+        // sync when the name arrives on a later poll — latching early would
+        // short-circuit that forever (the slot never "moves").
+        _lastSyncedSlot = pos;
         if (slot.name != state.filterSlot) {
           state = state.copyWith(filterSlot: slot.name);
         }
