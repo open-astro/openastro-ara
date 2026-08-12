@@ -135,7 +135,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       setState(
         () => _equipmentStatus = friendlyDaemonError(
           e,
-          fallback: 'Alpaca discovery failed',
+          fallback: "Couldn't discover Alpaca devices",
         ),
       );
     } finally {
@@ -172,7 +172,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       );
     } catch (e) {
       if (!mounted) return;
-      final msg = friendlyDaemonError(e, fallback: 'Apply to guider failed');
+      final msg = friendlyDaemonError(e, fallback: "Couldn't apply to the guider");
       setState(() => _equipmentStatus = msg);
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     } finally {

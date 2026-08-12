@@ -46,7 +46,7 @@ class ProfileManagementScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorState(
-          message: friendlyDaemonError(e),
+          message: friendlyDaemonError(e, fallback: "Couldn't load the profiles"),
           onRetry: () => ref.read(profileManagementProvider.notifier).refresh(),
         ),
         data: (list) => _ProfileListView(list: list),

@@ -231,12 +231,26 @@ Future<bool> _confirmImport(
 String friendlyDaemonError(Object e, {String fallback = 'Something went wrong'}) {
   if (e is DioException) {
     final data = e.response?.data;
+    // Checked here first (and again inside friendlyError) so the server's own
+    // words win verbatim without friendlyError's "Couldn't …" prefix wrapping
+    // them; the re-check inside friendlyError only serves as a belt-and-braces
+    // fallback and picks up the ProblemDetails `title` as well.
     if (data is Map && data['detail'] is String) return data['detail'] as String;
-    final action = fallback.startsWith("Couldn't ")
-        ? fallback.substring("Couldn't ".length)
-        : 'do that';
-    return friendlyError(e, action: action);
+    return friendlyError(e, action: _actionFromFallback(fallback));
   }
   if (e is StateError) return e.message;
   return fallback;
+}
+
+/// Derives friendlyError's action from a fallback sentence, whatever its
+/// wording: `"Couldn't load the profiles"`, `"Could not load guider settings"`
+/// or `"Connect failed"` all yield a meaningful verb phrase instead of the
+/// generic "do that".
+String _actionFromFallback(String fallback) {
+  final action = fallback
+      .replaceFirst(RegExp(r"^Couldn't\s+", caseSensitive: false), '')
+      .replaceFirst(RegExp(r'^Could not\s+', caseSensitive: false), '')
+      .replaceFirst(RegExp(r'\s+failed.*$', caseSensitive: false), '')
+      .trim();
+  return action.isEmpty ? 'do that' : action;
 }

@@ -148,7 +148,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(
-          () => _status = friendlyDaemonError(e, fallback: 'Apply failed'));
+          () => _status = friendlyDaemonError(e, fallback: "Couldn't apply the tuning"));
     } finally {
       if (mounted) setState(() => _applying = false);
     }
