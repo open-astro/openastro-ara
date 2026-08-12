@@ -258,7 +258,11 @@ void main() {
 
     final wheel = container.read(filterWheelProvider.notifier)
         as _FakeWheelNotifier;
-    wheel.park(_wheelAt(1)); // wheel already on Ha
+    // Connect at L (first-connect home-to-L is a no-op there), then the wheel
+    // is moved to Ha via the panel — the picker follows.
+    wheel.park(_wheelAt(0));
+    await tester.pump();
+    wheel.park(_wheelAt(1)); // wheel now on Ha
     await tester.pump();
 
     // The dropdown mirrors the wheel (value = Ha); pick Ha again.

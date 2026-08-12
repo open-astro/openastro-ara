@@ -11,8 +11,15 @@ import 'package:openastroara/state/settings/settings_nav.dart';
 /// test says so (the real notifier's async poll cycle would clobber direct
 /// state writes).
 class _FakeWheelNotifier extends FilterWheelNotifier {
+  /// Positions the controller commanded (e.g. the home-to-L move).
+  final List<int> changeCalls = [];
   @override
   Future<FilterWheelStatus?> build() async => null;
+  @override
+  Future<bool> changeFilter(int position) async {
+    changeCalls.add(position);
+    return true;
+  }
 
   void park(FilterWheelStatus status) => state = AsyncData(status);
 
@@ -270,6 +277,29 @@ void main() {
       container.read(selectedTabIndexProvider.notifier).select(kLiveTabIndex);
       await _settle();
       expect(container.read(exposureControllerProvider).filterSlot, 'G');
+    });
+
+    test('first connect homes the wheel to slot 0 (L)', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      // Wheel connects already parked on slot 3 (B) — first connect homes L.
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(wheel.changeCalls, [0],
+          reason: 'first launch moves the wheel to the default L slot');
+    });
+
+    test('reconnect does not re-home an already-homed wheel', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.park(_wheelAt(3)); // first connect -> home to 0
+      await _settle();
+      wheel.park(_wheelAt(0, connected: false)); // disconnect
+      await _settle();
+      wheel.park(_wheelAt(2)); // reconnect at 2 — already homed this session
+      await _settle();
+      expect(wheel.changeCalls, [0],
+          reason: 'only the first connect of a session homes the wheel');
     });
 
     test('a different wheel device resets the latch too', () async {

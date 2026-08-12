@@ -57,6 +57,10 @@ class ExposureController extends Notifier<ExposureParams> {
   int? _lastSyncedSlot;
   String? _lastDeviceId;
 
+  /// Whether the wheel has been homed to slot 0 (L) this session — the
+  /// default filter on first launch. Only the FIRST connect homes it.
+  bool _homed = false;
+
   @override
   ExposureParams build() {
     // §25.5 follow-up: the Imaging picker follows the physical wheel. Whenever
@@ -83,10 +87,19 @@ class ExposureController extends Notifier<ExposureParams> {
         return;
       }
       // A different wheel (or the first sighting): the old latch belongs to
-      // the previous device — re-sync against this one.
+      // the previous device — re-sync against this one. On the FIRST connect
+      // of a session, home the wheel to slot 0 (L) — the default filter.
       if (status.deviceId != _lastDeviceId) {
+        final firstConnect = _lastDeviceId == null;
         _lastSyncedSlot = null;
         _lastDeviceId = status.deviceId;
+        if (firstConnect &&
+            !_homed &&
+            status.currentSlot != null &&
+            status.currentSlot != 0) {
+          _homed = true;
+          ref.read(filterWheelProvider.notifier).changeFilter(0);
+        }
       }
       if (status.isMoving) return;
       _syncFilterToSlot(status);
@@ -100,6 +113,12 @@ class ExposureController extends Notifier<ExposureParams> {
           .read(filterWheelProvider)
           .maybeWhen(data: (s) => s, orElse: () => null);
       if (status != null && status.isConnected && !status.isMoving) {
+        // First launch with the wheel already connected before this provider
+        // built: home to slot 0 (L) too.
+        if (!_homed && status.currentSlot != null && status.currentSlot != 0) {
+          _homed = true;
+          ref.read(filterWheelProvider.notifier).changeFilter(0);
+        }
         _syncFilterToSlot(status);
       }
     });

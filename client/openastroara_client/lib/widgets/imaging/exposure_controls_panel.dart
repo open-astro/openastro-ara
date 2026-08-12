@@ -334,6 +334,41 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
     super.dispose();
   }
 
+  /// Backstop for an accepted move that never reports ANY movement. The
+  /// client's live poll runs every 15 s, so a landing can legitimately take a
+  /// poll to be seen — only a command that never STARTED the wheel is an
+  /// error at 10 s; a started-but-unreported landing gets a generous hard
+  /// cap instead (the wheel panel shows the driver state meanwhile).
+  void _startStallTimer() {
+    _stallTimer?.cancel();
+    _stallTimer = Timer(const Duration(seconds: 10), () {
+      if (!mounted || _phase != _FilterPhase.changing) return;
+      if (_sawMove) {
+        // The wheel is turning; the landing poll (15 s cadence) will
+        // reconcile. Re-arm a hard backstop in case it never reports.
+        _stallTimer = Timer(const Duration(seconds: 45), _stallHard);
+      } else {
+        _stallHard();
+      }
+    });
+  }
+
+  void _stallHard() {
+    if (!mounted || _phase != _FilterPhase.changing) return;
+    setState(() {
+      _phase = _FilterPhase.idle;
+      _flash.stop();
+      _pendingTargetPosition = null;
+      _sawMove = false;
+      _resetToken++;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text("Couldn't change the filter - the wheel "
+          'didn\'t start moving.'),
+      backgroundColor: AraColors.accentError,
+    ));
+  }
+
   /// The underline color while busy: a red pulse during the move, a green
   /// pulse on a confirmed landing; null restores the theme default.
   Color? get _blinkColor {
@@ -480,23 +515,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
               });
               _pendingTargetPosition = slot.position;
               _sawMove = false;
-              _stallTimer?.cancel();
-              _stallTimer = Timer(const Duration(seconds: 10), () {
-                // Accepted but never reported ANY movement — stuck driver.
-                if (!mounted || _phase != _FilterPhase.changing) return;
-                setState(() {
-                  _phase = _FilterPhase.idle;
-                  _flash.stop();
-                  _pendingTargetPosition = null;
-                  _sawMove = false;
-                  _resetToken++;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text("Couldn't change the filter - the wheel "
-                      'didn\'t start moving.'),
-                  backgroundColor: AraColors.accentError,
-                ));
-              });
+              _startStallTimer();
               try {
                 final performed = await ref
                     .read(filterWheelProvider.notifier)
