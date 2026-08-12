@@ -273,6 +273,34 @@ class _FilterDropdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final labels = ref.watch(filterWheelLabelsProvider);
+    final wheel = ref
+        .watch(filterWheelProvider)
+        .maybeWhen(data: (s) => s, orElse: () => null);
+    // The wheel is turning: show progress in the same box so the user knows
+    // the picker is about to snap to the new slot (instead of looking stuck).
+    final moving = wheel != null && wheel.isConnected && wheel.isMoving;
+    if (moving) {
+      return InputDecorator(
+        decoration: const InputDecoration(labelText: 'Filter'),
+        child: SizedBox(
+          // Matches the button's internal 48px so the box doesn't resize
+          // while the wheel turns.
+          height: 48,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              Text('Changing…', style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+      );
+    }
     // Dedupe (keep-first): two slots labelled identically would otherwise crash
     // DropdownButtonFormField's exactly-one-item-per-value assertion (r1 —
     // nothing stops duplicate slot labels at entry, and a name-keyed picker

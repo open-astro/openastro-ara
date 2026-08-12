@@ -124,6 +124,51 @@ void main() {
     expect(find.text('L'), findsOneWidget);
   });
 
+  testWidgets('shows a Changing indicator while the wheel is moving',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0)); // parked on L
+    await tester.pump();
+    expect(find.text('Changing…'), findsNothing);
+
+    // Wheel starts turning — the picker shows progress instead of looking
+    // stuck on the stale value.
+    wheel.park(FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: 'moving',
+      currentSlot: null,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+        FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+      ],
+    ));
+    await tester.pump();
+    expect(find.text('Changing…'), findsOneWidget);
+
+    // Wheel lands on Ha — the indicator clears and the value shows.
+    wheel.park(_wheelAt(1));
+    await tester.pumpAndSettle();
+    expect(find.text('Changing…'), findsNothing);
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+  });
+
   testWidgets('picking a filter also moves the connected wheel to that slot',
       (tester) async {
     final container = ProviderContainer(overrides: [

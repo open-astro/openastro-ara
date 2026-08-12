@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
 
 /// A controllable stand-in for the live wheel poller: it only moves when the
 /// test says so (the real notifier's async poll cycle would clobber direct
@@ -247,6 +249,27 @@ void main() {
       wheel.park(_wheelAt(0));
       await _settle();
       expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    });
+
+    test('re-entering the Live tab re-syncs to the wheel\'s current slot',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      wheel.park(_wheelAt(2)); // on G → picker G, latch 2
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+
+      // A stale pick made while the wheel stays put — the latch keeps it
+      // alive while away from the Live tab.
+      notifier.setFilterSlot('Ha');
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // Entering the Live tab forces the wheel's CURRENT slot to win.
+      container.read(selectedTabIndexProvider.notifier).select(kLiveTabIndex);
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'G');
     });
 
     test('a different wheel device resets the latch too', () async {

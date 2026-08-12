@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
+import '../app_shell_state.dart';
 import '../equipment/filter_wheel_state.dart';
+import '../settings/settings_nav.dart';
 
 /// State for the Imaging tab's exposure controls per playbook §25.5.1.
 /// Per-frame values are kept in memory only; the active profile's defaults
@@ -100,6 +102,21 @@ class ExposureController extends Notifier<ExposureParams> {
       if (status != null && status.isConnected && !status.isMoving) {
         _syncFilterToSlot(status);
       }
+    });
+    // Re-entering the Live/Imaging tab: reflect the wheel's CURRENT slot even
+    // when the latch would normally skip it (the wheel may have moved while on
+    // another tab — a sequence, the §37.4 panel, or an external client).
+    ref.listen(selectedTabIndexProvider, (prev, next) {
+      if (next != kLiveTabIndex) return;
+      Future.microtask(() {
+        if (!ref.mounted) return;
+        final status = ref
+            .read(filterWheelProvider)
+            .maybeWhen(data: (s) => s, orElse: () => null);
+        if (status == null || !status.isConnected || status.isMoving) return;
+        _lastSyncedSlot = null; // force: the wheel's current slot wins here
+        _syncFilterToSlot(status);
+      });
     });
     return const ExposureParams();
   }
