@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/filter_wheel_status.dart';
-import '../../../services/equipment_device_api.dart';
+import '../../../util/friendly_error.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
@@ -158,7 +158,7 @@ class _FilterWheelBody extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't change filter: ${describeEquipmentError(e)}"),
+          content: Text(friendlyError(e, action: 'change the filter')),
           backgroundColor: AraColors.accentError,
         ),
       );
