@@ -59,7 +59,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <!-- GHSA-v5pm-xwqc-g5wc: pin the patched Microsoft.OpenApi (≥ 2.7.5 fixes the
          circular-schema-reference parsing DoS) over the transitive 2.0.0 that
          Microsoft.AspNetCore.OpenApi 10.0.0 pulls; NU1903 is warning-as-error here.
@@ -67,9 +67,9 @@
          breaking major (IOpenApiMediaType.Example is read-only) the AspNetCore.OpenApi
          10.0.x source generator cannot compile against — keep 2.7.x. -->
     <PackageReference Include="Microsoft.OpenApi" Version="[2.11.0]" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.17" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.18" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): pin the patched native SQLite lib
          (3.53.3 = SQLite ≥ 3.50.2) over the transitive 2.1.11 that
          Microsoft.EntityFrameworkCore.Sqlite / Microsoft.Data.Sqlite 10.0.x pull.
@@ -79,7 +79,7 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <!-- §31.4 USB-GPS self-sync: serial NMEA reads from /dev/ttyUSB*/ttyACM*. Microsoft-maintained,
          Linux support via a bundled native shim; plain P/Invoke so NativeAOT publish stays clean. -->
-    <PackageReference Include="System.IO.Ports" Version="10.0.10" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.11" />
     <!-- §29.9.2 daemon log file: a rolling Compact-JSON (CLEF) sink the §29.9
          log endpoints tail/download. Both Apache-2.0 (Serilog), release-safe.
          Tail reads the CLEF lines back with System.Text.Json directly (no
