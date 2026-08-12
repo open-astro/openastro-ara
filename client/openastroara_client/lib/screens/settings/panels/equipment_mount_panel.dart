@@ -7,6 +7,7 @@ import '../../../util/friendly_error.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../util/slew_rates.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -226,6 +227,9 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   final _ra = TextEditingController();
   final _dec = TextEditingController();
   double? _rate;
+  // Slew-speed options: the mount's own rates when it reports several, else
+  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
+  List<SlewRateOption> _rateOptions = const [];
 
   static const int _primary = 0; // RA / Azimuth (E/W)
   static const int _secondary = 1; // Dec / Altitude (N/S)
@@ -233,9 +237,10 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   @override
   void initState() {
     super.initState();
-    _rate = _defaultRate(
+    _rateOptions = buildSlewRateOptions(
       widget.status.capabilities?.axisRatesDegPerSec ?? const [],
     );
+    _rate = _defaultRate(_rateOptions);
   }
 
   @override
@@ -250,13 +255,15 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     final newRates =
         widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
     if (!_sameRates(oldRates, newRates)) {
-      _rate = _defaultRate(newRates);
+      _rateOptions = buildSlewRateOptions(newRates);
+      _rate = _defaultRate(_rateOptions);
     }
   }
 
   // Default to a middle rate — a usable nudge without lurching at full speed.
-  static double? _defaultRate(List<double> rates) =>
-      rates.isEmpty ? null : rates[(rates.length - 1) ~/ 2];
+  static double? _defaultRate(List<SlewRateOption> options) => options.isEmpty
+      ? null
+      : options[(options.length - 1) ~/ 2].rateDegPerSec;
 
   static bool _sameRates(List<double> a, List<double> b) {
     if (a.length != b.length) return false;
@@ -277,15 +284,14 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   Widget build(BuildContext context) {
     final caps = widget.status.capabilities;
     final busy = widget.status.isBusy;
-    final rates = caps?.axisRatesDegPerSec ?? const <double>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (caps?.canSlew ?? false) _goTo(busy),
         if (caps?.canMoveAxis ?? false) ...[
           const SizedBox(height: 16),
-          if (rates.isNotEmpty)
-            _speedPicker(rates)
+          if (_rateOptions.isNotEmpty)
+            _speedPicker(_rateOptions)
           else
             const Text(
               'This mount reports no manual slew rates.',
@@ -389,18 +395,23 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     }
   }
 
-  Widget _speedPicker(List<double> rates) {
+  // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
+  // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
+  // multi-rate mounts). The selected rate is what the direction pad sends at
+  // press time; it defaults to the middle option, so a fresh connect never
+  // lurches at full speed.
+  Widget _speedPicker(List<SlewRateOption> options) {
     return Wrap(
       spacing: 8,
       runSpacing: 4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         const Text('Speed'),
-        for (final r in rates)
+        for (final o in options)
           ChoiceChip(
-            label: Text(_fmtRate(r)),
-            selected: _rate == r,
-            onSelected: (_) => setState(() => _rate = r),
+            label: Text(o.label),
+            selected: _rate == o.rateDegPerSec,
+            onSelected: (_) => setState(() => _rate = o.rateDegPerSec),
           ),
       ],
     );
@@ -491,10 +502,6 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       // ref.read threw during teardown — nothing to do; Stop/AbortSlew is the backstop.
     }
   }
-
-  static String _fmtRate(double r) => r >= 1
-      ? '${r.toStringAsFixed(r == r.roundToDouble() ? 0 : 1)}°/s'
-      : '${r.toStringAsFixed(3)}°/s';
 }
 
 /// A press-and-hold button: fires [onStart] on pointer-down and [onStop] on
