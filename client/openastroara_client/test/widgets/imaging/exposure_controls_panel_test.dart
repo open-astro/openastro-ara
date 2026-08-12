@@ -144,7 +144,7 @@ void main() {
     expect(find.text('L'), findsOneWidget);
   });
 
-  testWidgets('shows a Changing indicator while the wheel is moving',
+  testWidgets('the picker disables + pulses while the wheel is moving',
       (tester) async {
     final container = ProviderContainer(overrides: [
       filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
@@ -163,10 +163,13 @@ void main() {
         as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // parked on L
     await tester.pump();
-    expect(find.text('Changing…'), findsNothing);
 
-    // Wheel starts turning — the picker shows progress instead of looking
-    // stuck on the stale value.
+    DropdownButtonFormField<String> field() => tester
+        .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>));
+    expect(field().onChanged, isNotNull, reason: 'enabled while parked');
+
+    // Wheel starts turning — the picker disables and the busy border shows.
     wheel.park(FilterWheelStatus(
       deviceId: 'fw',
       name: 'FILTERWHEEL',
@@ -180,12 +183,16 @@ void main() {
       ],
     ));
     await tester.pump();
-    expect(find.text('Changing…'), findsOneWidget);
+    expect(field().onChanged, isNull, reason: 'disabled while the wheel turns');
+    expect(field().decoration.enabledBorder, isNotNull,
+        reason: 'busy border pulse is active');
 
-    // Wheel lands on Ha — the indicator clears and the value shows.
+    // Wheel lands on Ha — re-enabled, value shows.
     wheel.park(_wheelAt(1));
     await tester.pumpAndSettle();
-    expect(find.text('Changing…'), findsNothing);
+    expect(field().onChanged, isNotNull, reason: 're-enabled after landing');
+    expect(field().decoration.enabledBorder, isNull,
+        reason: 'busy border cleared after landing');
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
   });
 
