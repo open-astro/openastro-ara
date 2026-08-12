@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
@@ -10,6 +11,7 @@ import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart';
 
 class _FakeWheelNotifier extends FilterWheelNotifier {
   final List<int> changeCalls = [];
+  int refreshCalls = 0;
   bool failMoves = false;
   bool failInFlight = false;
   // How long a successful move takes before the wheel reports the landing
@@ -21,6 +23,14 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   List<FilterSlot>? slotsOverride;
   @override
   Future<FilterWheelStatus?> build() async => null;
+  @override
+  Future<void> refresh([EquipmentDeviceClient<FilterWheelStatus>? client]) async {
+    refreshCalls++;
+    // No-op by design: the fake manages state via park(). The base refresh
+    // would set state to AsyncData(null) — no API client exists in tests —
+    // which the exposure controller reads as "wheel gone".
+  }
+
   @override
   Future<bool> changeFilter(int position) async {
     changeCalls.add(position); // the driver was asked
@@ -148,6 +158,47 @@ void main() {
     // as the current selection rather than being silently dropped.
     expect(container.read(exposureControllerProvider).filterSlot, 'L');
     expect(find.text('L'), findsOneWidget);
+  });
+
+  testWidgets('the reconcile poll re-reads the daemon while a move is pending',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0));
+    wheel.moveDelay = const Duration(seconds: 10); // landing arrives late
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final before = wheel.refreshCalls;
+    await tester.pump(const Duration(milliseconds: 1600)); // one reconcile tick
+    expect(wheel.refreshCalls, greaterThan(before),
+        reason: 'the picker re-reads the daemon at the fast cadence while '
+            'waiting for the landing');
+
+    // The daemon catches up — the move lands.
+    wheel.park(_wheelAt(1));
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    // Let the fake's delayed move complete so no timers outlive the test.
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('the first-launch home-to-L shows the same busy state',

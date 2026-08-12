@@ -318,6 +318,12 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
   /// driver): after this fires without a landing, the picker reverts.
   Timer? _stallTimer;
 
+  /// Fast re-read loop (1.5 s cadence) while a move is pending: the wheel's
+  /// regular live poll runs every 15 s, which made landings feel sluggish.
+  /// Forces a daemon read until the pending target is observed (or a bound).
+  Timer? _reconcileTimer;
+  int _reconcileTicks = 0;
+
   _FilterPhase _phase = _FilterPhase.idle;
 
   /// Drives the red busy pulse (repeat/reverse) and the green confirm flash.
@@ -360,8 +366,29 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
   @override
   void dispose() {
     _stallTimer?.cancel();
+    _reconcileTimer?.cancel();
     _flash.dispose();
     super.dispose();
+  }
+
+  /// Fast re-reads of the daemon (1.5 s cadence, ~40 ticks) while a move is
+  /// pending, so a landing is observed within a couple of seconds instead of
+  /// at the next 15 s live poll. Idempotent per command.
+  void _startReconcile() {
+    _reconcileTimer?.cancel();
+    _reconcileTicks = 0;
+    _reconcileTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (!mounted || _pendingTargetPosition == null) {
+        _reconcileTimer?.cancel();
+        return;
+      }
+      if (_reconcileTicks >= 40) {
+        _reconcileTimer?.cancel();
+        return;
+      }
+      _reconcileTicks++;
+      ref.read(filterWheelProvider.notifier).refresh();
+    });
   }
 
   /// Backstop for an accepted move that never reports ANY movement. The
@@ -402,6 +429,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
       // It did land — treat as a confirmed success.
       _pendingTargetPosition = null;
       _sawMove = false;
+      _reconcileTimer?.cancel();
       setState(() {
         _phase = _FilterPhase.updated;
         _flash.stop();
@@ -413,6 +441,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
       return;
     }
     // Genuinely never moved.
+    _reconcileTimer?.cancel();
     setState(() {
       _phase = _FilterPhase.idle;
       _flash.stop();
@@ -467,6 +496,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
           _pendingTargetPosition = null;
           _sawMove = false;
           _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
           setState(() {
             _phase = _FilterPhase.updated;
             _flash.stop();
@@ -479,6 +509,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
           _pendingTargetPosition = null;
           _sawMove = false;
           _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
           setState(() {
             _phase = _FilterPhase.idle;
             _flash.stop();
@@ -574,12 +605,14 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
               _pendingTargetPosition = slot.position;
               _sawMove = false;
               _startStallTimer();
+              _startReconcile();
               try {
                 final performed = await ref
                     .read(filterWheelProvider.notifier)
                     .changeFilter(slot.position);
                 if (!performed) {
                   _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
                   if (mounted) {
                     setState(() {
                       _phase = _FilterPhase.idle;
@@ -605,6 +638,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
                 }
               } catch (e) {
                 _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
                 if (mounted) {
                   setState(() {
                     _phase = _FilterPhase.idle;
