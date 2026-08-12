@@ -346,8 +346,17 @@ class _FilterDropdown extends ConsumerWidget {
             }
             return;
           }
-          // No onChanged(n) here — the follow-logic syncs filterSlot when the
-          // wheel reports its new slot (and reverts nothing if it doesn't).
+          // No onChanged(n) here for NAMED target slots — the follow-logic
+          // syncs filterSlot when the wheel reports its new slot (and reverts
+          // nothing if it doesn't). An UNNAMED target slot can never be synced
+          // by the follow-logic (it only latches named slots), so tag the
+          // picked local label instead: otherwise a capture taken after the
+          // move would be tagged with the previous filter while the wheel sits
+          // on an unnamed slot. (If this move fails in flight the tag may stay
+          // stale — accepted for this narrow unnamed-slot combination.)
+          if (slot.name.isEmpty) {
+            onChanged(n);
+          }
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(

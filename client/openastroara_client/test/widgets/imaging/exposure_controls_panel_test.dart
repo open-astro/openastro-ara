@@ -12,6 +12,10 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   final List<int> changeCalls = [];
   bool failMoves = false;
   bool failInFlight = false;
+  // What the wheel reports AFTER a move lands (default: the named _wheelAt
+  // slots). Set to an unnamed-slot list to simulate a driver that never names
+  // a position.
+  List<FilterSlot>? slotsOverride;
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
@@ -23,7 +27,19 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
       // stays put, as if the motor stalled mid-move.
       return true;
     }
-    park(_wheelAt(position)); // the move lands
+    park(FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: 'idle',
+      currentSlot: position,
+      slots: slotsOverride ??
+          const [
+            FilterSlot(position: 0, name: 'L', focusOffset: 0),
+            FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+            FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+          ],
+    ));
     return true;
   }
 
@@ -294,6 +310,52 @@ void main() {
     expect(
         find.textContaining("isn't a slot on the connected wheel"),
         findsOneWidget);
+  });
+
+  testWidgets('a pick landing on an unnamed device slot tags the local label',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    // The driver never names slot 1 — only local label 'Ha' covers it.
+    wheel.slotsOverride = const [
+      FilterSlot(position: 0, name: 'L', focusOffset: 0),
+      FilterSlot(position: 1, name: '', focusOffset: 0),
+      FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+    ];
+    wheel.park(FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: 'idle',
+      currentSlot: 0,
+      slots: wheel.slotsOverride!,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    // 'Ha' resolves by position to unnamed slot 1; the move lands, and the
+    // picker tags the local label (the follow-logic can't — the slot is
+    // unnamed), so a capture after the move isn't tagged with the previous
+    // filter.
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    expect(wheel.changeCalls, [1]);
   });
 
   testWidgets('picking a filter with no connected wheel only tags the capture',
