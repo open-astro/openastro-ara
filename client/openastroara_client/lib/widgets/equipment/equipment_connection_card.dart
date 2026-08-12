@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // AsyncValue/AsyncData
 import '../../models/discovered_device.dart';
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart';
-import '../../util/friendly_error.dart';
 import '../../state/settings/equipment_connection_state.dart';
 import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
@@ -77,7 +76,8 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
           AsyncError(:final error) => _MessageRow(
               icon: Icons.error_outline,
               color: AraColors.accentError,
-              text: friendlyError(error, action: 'read the $deviceTypeLabel'),
+              text: "Couldn't read the $deviceTypeLabel: "
+                  '${describeEquipmentError(error)}',
               onRetry: onRetry,
             ),
           _ => const Padding(
@@ -143,7 +143,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       // remembered device to reconnect — point the user at Connect… instead.
       final text = isNotFoundEquipmentError(e)
           ? 'No previous $deviceTypeLabel to reconnect — use Connect… first.'
-          : friendlyError(e, action: 'reconnect the $deviceTypeLabel');
+          : "Couldn't reconnect: ${describeEquipmentError(e)}";
       messenger.showSnackBar(SnackBar(
         content: Text(text),
         backgroundColor: AraColors.accentError,
@@ -200,7 +200,8 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
           }
         } catch (e) {
           messenger.showSnackBar(SnackBar(
-            content: Text(friendlyError(e, action: 'connect ${device.name}')),
+            content:
+                Text("Couldn't connect ${device.name}: ${describeEquipmentError(e)}"),
             backgroundColor: AraColors.accentError,
           ));
         }
@@ -219,7 +220,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text(friendlyError(e, action: 'disconnect $deviceTypeLabel')),
+        content: Text("Couldn't disconnect: ${describeEquipmentError(e)}"),
         backgroundColor: AraColors.accentError,
       ));
     }
