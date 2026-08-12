@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/camera_status.dart';
 import '../../../models/equipment_device_status.dart';
-import '../../../services/equipment_device_api.dart';
+import '../../../util/friendly_error.dart';
 import '../../../state/equipment/camera_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -281,7 +281,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't set cooler: ${describeEquipmentError(e)}"),
+          content: Text(friendlyError(e, action: 'set the cooler')),
           backgroundColor: AraColors.accentError,
         ),
       );

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/mount_status.dart';
-import '../../../services/equipment_device_api.dart';
+import '../../../util/friendly_error.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -203,7 +203,7 @@ class _MountBody extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
+          content: Text(friendlyError(e, action: verb)),
           backgroundColor: AraColors.accentError,
         ),
       );
@@ -382,7 +382,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't slew: ${describeEquipmentError(e)}"),
+          content: Text(friendlyError(e, action: 'slew the mount')),
           backgroundColor: AraColors.accentError,
         ),
       );
