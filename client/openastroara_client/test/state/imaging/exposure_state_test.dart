@@ -198,5 +198,52 @@ void main() {
       await _settle();
       expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     });
+    test('a pick made while disconnected re-syncs after reconnect', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      // Wheel parked on L → picker follows.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+
+      // Wheel goes offline; the user picks Ha while disconnected (tag only,
+      // no wheel to move).
+      wheel.park(_wheelAt(0, connected: false));
+      await _settle();
+      notifier.setFilterSlot('Ha');
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // Wheel reconnects, still physically parked on L — the picker must snap
+      // back to the truth (L) instead of keeping the stale offline pick.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    });
+
+    test('a different wheel device resets the latch too', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+
+      // A second wheel (different device id), parked at the same position 0
+      // with a different slot name — the latch must not carry over.
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw2',
+        name: 'FILTERWHEEL2',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: const [
+          FilterSlot(position: 0, name: 'UV', focusOffset: 0),
+        ],
+      ));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'UV');
+    });
   });
 }

@@ -49,8 +49,11 @@ enum FrameKind { light, dark, bias, flat }
 class ExposureController extends Notifier<ExposureParams> {
   /// The physical wheel slot whose name [state.filterSlot] last followed.
   /// Kept on the notifier so a manual picker choice survives until the wheel
-  /// actually lands on a different slot.
+  /// actually lands on a different slot. Cleared on disconnect/device change
+  /// so a reconnect at the same physical position re-syncs (a pick made while
+  /// the wheel was offline must not go stale forever).
   int? _lastSyncedSlot;
+  String? _lastDeviceId;
 
   @override
   ExposureParams build() {
@@ -62,13 +65,29 @@ class ExposureController extends Notifier<ExposureParams> {
     // choice is left alone until the wheel really moves.
     ref.listen(filterWheelProvider, (prev, next) {
       final status = next.maybeWhen(data: (s) => s, orElse: () => null);
-      if (status == null || !status.isConnected || status.isMoving) return;
+      // Disconnected: forget the latch so a reconnect at the same physical
+      // position still re-syncs — otherwise a pick made while the wheel was
+      // offline would survive a reconnect forever even though the wheel is
+      // parked somewhere else.
+      if (status == null || !status.isConnected) {
+        _lastSyncedSlot = null;
+        _lastDeviceId = null;
+        return;
+      }
+      // A different wheel (or the first sighting): the old latch belongs to
+      // the previous device — re-sync against this one.
+      if (status.deviceId != _lastDeviceId) {
+        _lastSyncedSlot = null;
+        _lastDeviceId = status.deviceId;
+      }
+      if (status.isMoving) return;
       _syncFilterToSlot(status);
     });
     // ref.listen only fires on changes — if the wheel was already parked on a
     // slot before this provider first built (e.g. another tab polled it first),
     // snap once now so the picker is truthful from the first frame.
     Future.microtask(() {
+      if (!ref.mounted) return;
       final status = ref
           .read(filterWheelProvider)
           .maybeWhen(data: (s) => s, orElse: () => null);
