@@ -152,6 +152,15 @@ void main() {
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     expect(wheel.changeCalls, [1],
         reason: 'Ha is slot 1 — picking it must command the wheel there');
+    // The controlled button must now DISPLAY Ha (it follows the state).
+    expect(
+      find.descendant(
+        of: find.byType(DropdownButton<String>),
+        matching: find.text('Ha'),
+      ),
+      findsOneWidget,
+      reason: 'the picker shows the wheel\'s new filter after a successful move',
+    );
   });
 
   testWidgets('picking the already-current slot does not re-move the wheel',

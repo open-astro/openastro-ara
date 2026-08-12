@@ -291,9 +291,11 @@ class _FilterDropdown extends ConsumerWidget {
     return InputDecorator(
       decoration: const InputDecoration(labelText: 'Filter'),
       child: DropdownButtonHideUnderline(
+        // Same shape as the sibling Frame-type picker (DropdownButtonFormField
+        // defaults): isExpanded false, isDense false — only the controlled
+        // value differs, so the two boxes render identically.
         child: DropdownButton<String>(
           value: value,
-          isExpanded: true,
           items: [
             for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
           ],
