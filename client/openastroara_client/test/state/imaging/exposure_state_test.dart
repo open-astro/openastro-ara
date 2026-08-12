@@ -13,6 +13,10 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   Future<FilterWheelStatus?> build() async => null;
 
   void park(FilterWheelStatus status) => state = AsyncData(status);
+
+  /// A transient read failure (failed poll) while the wheel stays connected.
+  void failPoll(Object error) =>
+      state = AsyncError(error, StackTrace.current);
 }
 
 ProviderContainer _container() => ProviderContainer(overrides: [
@@ -220,6 +224,29 @@ void main() {
       wheel.park(_wheelAt(0));
       await _settle();
       expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    });
+
+    test('a transient read error does not clear the latch or clobber a pick',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      wheel.park(_wheelAt(0)); // on L → filterSlot L, latch 0
+      await _settle();
+      notifier.setFilterSlot('Ha'); // manual pick while the wheel stays on L
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // A failed poll (AsyncError) is transient — the wheel never moved, so
+      // the manual pick must survive.
+      wheel.failPoll(StateError('transient read failure'));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // Next successful poll, same physical slot — still no clobber.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     });
 
     test('a different wheel device resets the latch too', () async {

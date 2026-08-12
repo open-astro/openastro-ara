@@ -64,11 +64,17 @@ class ExposureController extends Notifier<ExposureParams> {
     // in the light path. Edge-triggered on the slot position: a manual picker
     // choice is left alone until the wheel really moves.
     ref.listen(filterWheelProvider, (prev, next) {
-      final status = next.maybeWhen(data: (s) => s, orElse: () => null);
-      // Disconnected: forget the latch so a reconnect at the same physical
-      // position still re-syncs — otherwise a pick made while the wheel was
-      // offline would survive a reconnect forever even though the wheel is
-      // parked somewhere else.
+      // Only ACTUAL device states may touch the latch. AsyncLoading/AsyncError
+      // are transient (a failed poll while the wheel stays physically
+      // connected and parked) — clearing here would make the next successful
+      // poll look like a fresh connection and clobber a manual pick.
+      final data = next.asData;
+      if (data == null) return;
+      final status = data.value;
+      // Genuinely no device, or disconnected: forget the latch so a reconnect
+      // at the same physical position still re-syncs — otherwise a pick made
+      // while the wheel was offline would survive a reconnect forever even
+      // though the wheel is parked somewhere else.
       if (status == null || !status.isConnected) {
         _lastSyncedSlot = null;
         _lastDeviceId = null;
