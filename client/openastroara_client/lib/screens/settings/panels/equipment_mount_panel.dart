@@ -227,8 +227,8 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   final _ra = TextEditingController();
   final _dec = TextEditingController();
   double? _rate;
-  // ASIAir-style speed ladder: the mount's own rates when it reports
-  // several, else x-of-sidereal presets capped at the max. Never exceeds max.
+  // Slew-speed options: the mount's own rates when it reports several, else
+  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
   List<SlewRateOption> _rateOptions = const [];
 
   static const int _primary = 0; // RA / Azimuth (E/W)
@@ -395,14 +395,11 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     }
   }
 
-  // watchOS-style glass speed wheel: a tight vertical scroll with a frosted
-  // highlight capsule behind the centred row (items scroll through it), the
-  // centred rate staying live for the direction pad.
-  // Apple-HIG-style speed wheel (like the watchOS picker): a vertical scroll
-  // of the ladder with the centred option highlighted. The centred rate is the
-  // live selection — the direction pad uses it at press time.
-  // Speed buttons: one ChoiceChip per ladder rung (1x … 512x, MAX). The
-  // selected rate is what the direction pad sends at press time.
+  // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
+  // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
+  // multi-rate mounts). The selected rate is what the direction pad sends at
+  // press time; it defaults to the middle option, so a fresh connect never
+  // lurches at full speed.
   Widget _speedPicker(List<SlewRateOption> options) {
     return Wrap(
       spacing: 8,
