@@ -43,7 +43,7 @@ class ProfileActivePanel extends ConsumerWidget {
               label: 'Profiles',
               helpKey: 'profile.active.available',
               value: 'Unavailable',
-              hint: friendlyDaemonError(e),
+              hint: friendlyDaemonError(e, fallback: "Couldn't load the active profile"),
             ),
           ],
           data: (list) {

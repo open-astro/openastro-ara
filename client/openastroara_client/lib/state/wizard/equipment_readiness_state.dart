@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_readiness.dart';
@@ -208,17 +209,19 @@ class WizardEquipmentReadiness
 }
 
 /// Short user-facing gist of a read failure — never a raw DioException dump
-/// (request URL / internal addresses). Mirrors describeEquipmentError but kept
-/// local so this state file doesn't import the API layer for one string.
+/// (request URL / internal addresses / the browser's XHR onError text).
 String describeReadinessError(Object e) {
-  final s = e.toString();
-  // DioException.toString() leads with "DioException [<type>]: <message>".
-  final m = RegExp(r'^DioException \[[^\]]*\]:?\s*(.*)$').firstMatch(s);
-  if (m != null) {
-    final gist = m.group(1) ?? '';
-    return gist.split('\n').first.trim().isEmpty
-        ? 'network error'
-        : gist.split('\n').first.trim();
+  if (e is DioException) {
+    return switch (e.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.connectionError =>
+        "your rig didn't answer — check it's powered on and reachable",
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        'your rig took too long to answer — try again in a moment',
+      _ => 'the connection failed — check your rig is reachable',
+    };
   }
+  final s = e.toString();
   return s.replaceFirst('Exception: ', '').split('\n').first;
 }

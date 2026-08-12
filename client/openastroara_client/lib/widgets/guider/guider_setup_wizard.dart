@@ -152,7 +152,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     } catch (e) {
       if (mounted) {
         setState(() => _error =
-            friendlyDaemonError(e, fallback: 'Could not load guider settings'));
+            friendlyDaemonError(e, fallback: "Couldn't load the guider settings"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -285,7 +285,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     } catch (e) {
       if (mounted) {
         setState(() =>
-            _error = friendlyDaemonError(e, fallback: 'Alpaca discovery failed'));
+            _error = friendlyDaemonError(e, fallback: "Couldn't discover Alpaca devices"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -316,7 +316,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     } catch (e) {
       if (mounted) {
         setState(() =>
-            _error = friendlyDaemonError(e, fallback: 'Connect failed'));
+            _error = friendlyDaemonError(e, fallback: "Couldn't connect to the guider"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -381,7 +381,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     } catch (e) {
       if (mounted) {
         setState(() => _error = friendlyDaemonError(e,
-            fallback: 'Apply failed — Ara could not take the profile'));
+            fallback: "Couldn't apply the profile"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -427,7 +427,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     } catch (e) {
       if (mounted) {
         setState(() => _error =
-            friendlyDaemonError(e, fallback: 'Dark-library build failed'));
+            friendlyDaemonError(e, fallback: "Couldn't build the dark library"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
