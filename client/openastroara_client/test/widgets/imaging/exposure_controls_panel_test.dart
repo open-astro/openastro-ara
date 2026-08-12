@@ -210,6 +210,92 @@ void main() {
     );
   });
 
+  testWidgets('a locally-labelled filter maps to its physical slot by position',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    // Local labels use 'Ha'; the driver reports that same physical slot as
+    // 'Hα' — the two lists have diverged.
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: 'idle',
+      currentSlot: 0,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'Hα', focusOffset: 0),
+        FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+      ],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    // 'Ha' has no driver-name match, but profile slot 2 → wheel position 1:
+    // the wheel must still move there.
+    expect(wheel.changeCalls, [1],
+        reason: 'the local label resolves to its physical slot by position');
+  });
+
+  testWidgets('an unresolvable filter name on a connected wheel says so',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    // A one-slot wheel: 'Ha' maps to no physical slot at all.
+    wheel.park(FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: 'idle',
+      currentSlot: 0,
+      slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    // No silent lie: no tag, no move, and a snackbar says the name isn't on
+    // the wheel.
+    expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    expect(wheel.changeCalls, isEmpty);
+    expect(
+        find.textContaining("isn't a slot on the connected wheel"),
+        findsOneWidget);
+  });
+
   testWidgets('picking a filter with no connected wheel only tags the capture',
       (tester) async {
     final container = ProviderContainer(overrides: [

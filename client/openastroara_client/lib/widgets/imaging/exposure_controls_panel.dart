@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/filter_wheel_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
@@ -301,12 +302,30 @@ class _FilterDropdown extends ConsumerWidget {
         final wheel = ref
             .read(filterWheelProvider)
             .maybeWhen(data: (s) => s, orElse: () => null);
-        // No wheel connected, or the picked slot is already the one in the
-        // light path: nothing to move — just tag the capture.
-        final slot = wheel == null || !wheel.isConnected
-            ? null
-            : wheel.slots.where((s) => s.name == n).firstOrNull;
-        if (slot == null || slot.position == wheel!.currentSlot) {
+        // No wheel connected: nothing to move — just tag the capture (the
+        // offline-authoring case; a reconnect re-syncs the picker to the
+        // physical wheel).
+        if (wheel == null || !wheel.isConnected) {
+          onChanged(n);
+          return;
+        }
+        final slot = _resolveSlot(ref, wheel, n);
+        if (slot == null) {
+          // Connected, but the picked name maps to no physical slot (local
+          // labels and the driver's names can diverge): tagging it would tag a
+          // filter that isn't on the wheel. Say so instead of silently lying.
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("Filter '$n' isn't a slot on the connected wheel."),
+              backgroundColor: AraColors.accentError,
+            ));
+          }
+          return;
+        }
+        // currentSlot may be null (unknown/not yet reported) — treat that as
+        // "not the current slot" and command the move; the driver rejects a
+        // redundant move if one somehow slips through.
+        if (slot.position == wheel.currentSlot) {
           onChanged(n);
           return;
         }
@@ -341,5 +360,25 @@ class _FilterDropdown extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Maps a picked dropdown name to a physical wheel slot. The dropdown's
+  /// items are the profile's LOCAL labels, while the wheel reports the
+  /// DRIVER's names — two independently editable lists. Prefer an exact name
+  /// match on the driver's slots; otherwise resolve the label to its position
+  /// in the profile labels and take the wheel slot at that position. Returns
+  /// null when neither matches (no physical filter behind the picked name).
+  FilterSlot? _resolveSlot(WidgetRef ref, FilterWheelStatus wheel, String name) {
+    for (final s in wheel.slots) {
+      if (s.name == name) return s;
+    }
+    final labels = ref.read(filterWheelLabelsProvider);
+    for (var slot = 1; slot <= labels.slotCount; slot++) {
+      if (labels.labelAt(slot) != name) continue;
+      for (final s in wheel.slots) {
+        if (s.position == slot - 1) return s;
+      }
+    }
+    return null;
   }
 }
