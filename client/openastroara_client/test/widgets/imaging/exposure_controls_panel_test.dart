@@ -10,11 +10,13 @@ import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart';
 
 class _FakeWheelNotifier extends FilterWheelNotifier {
   final List<int> changeCalls = [];
+  bool failMoves = false;
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
   Future<bool> changeFilter(int position) async {
-    changeCalls.add(position);
+    changeCalls.add(position); // the driver was asked, then it failed
+    if (failMoves) throw StateError('driver rejected the move');
     return true;
   }
 
@@ -188,5 +190,40 @@ void main() {
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     expect(wheel.changeCalls, isEmpty,
         reason: 'no wheel to move — the picker only tags the capture');
+  });
+
+  testWidgets('a failed wheel move does not tag the capture and shows an error',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0)); // wheel on L
+    wheel.failMoves = true; // driver rejects the move
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    // The failed move must NOT tag the capture with a filter that isn't in
+    // the light path — the picker stays truthful to the wheel (L).
+    expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    expect(wheel.changeCalls, [1], reason: 'the move was attempted');
+    expect(find.text('driver rejected the move'), findsOneWidget,
+        reason: 'the failure surfaces as a snackbar (StateError passes through '
+            'friendlyError verbatim), not a silent drop');
   });
 }

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
+import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// Right-side controls in the Imaging tab per §25.5.1 — exposure / gain /
 /// offset / bin / filter / frame type + Take One + Live View toggle.
@@ -287,19 +289,45 @@ class _FilterDropdown extends ConsumerWidget {
       items: [
         for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
       ],
-      onChanged: (n) {
+      onChanged: (n) async {
         if (n == null) return;
-        // Tag the capture with the picked filter…
-        onChanged(n);
-        // …and, when a wheel is connected, physically move it to that slot
-        // (the dropdown is the user's filter switch — the wheel follows).
         final wheel = ref
             .read(filterWheelProvider)
             .maybeWhen(data: (s) => s, orElse: () => null);
-        if (wheel == null || !wheel.isConnected) return;
-        final slot = wheel.slots.where((s) => s.name == n).firstOrNull;
-        if (slot == null || slot.position == wheel.currentSlot) return;
-        ref.read(filterWheelProvider.notifier).changeFilter(slot.position);
+        // No wheel connected, or the picked slot is already the one in the
+        // light path: nothing to move — just tag the capture.
+        final slot = wheel == null || !wheel.isConnected
+            ? null
+            : wheel.slots.where((s) => s.name == n).firstOrNull;
+        if (slot == null || slot.position == wheel!.currentSlot) {
+          onChanged(n);
+          return;
+        }
+        // Move the wheel FIRST, and only tag the capture once the move is
+        // accepted — a failed move must not leave a filter name on a capture
+        // that went through a different filter (and the follow-logic can't
+        // self-correct it, since the wheel's slot never changed).
+        try {
+          final performed = await ref
+              .read(filterWheelProvider.notifier)
+              .changeFilter(slot.position);
+          if (!performed) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Another action is still in progress.'),
+              ));
+            }
+            return;
+          }
+          onChanged(n);
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(friendlyError(e, action: 'change the filter')),
+              backgroundColor: AraColors.accentError,
+            ));
+          }
+        }
       },
     );
   }
