@@ -265,13 +265,37 @@ class _IntFieldState extends State<_IntField> {
 /// selectable rather than being silently dropped — same stance as the §38
 /// editor's picker. When no slots are labelled at all, the control still
 /// offers the current value so the capture keeps a filter name.
-class _FilterDropdown extends ConsumerWidget {
+///
+/// Rendered as a [DropdownButtonFormField] — the same widget as the sibling
+/// Frame-type picker, so the two boxes are pixel-identical and the value
+/// renders reliably on every platform (a bare controlled [DropdownButton]
+/// showed a blank value in the web build). Truthfulness on a failed move is
+/// restored by bumping [_resetToken]: the field is recreated from the
+/// (unchanged) [value], so a tap whose move was rejected can't leave the box
+/// displaying a filter that isn't in the light path.
+class _FilterDropdown extends ConsumerStatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
   const _FilterDropdown({required this.value, required this.onChanged});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FilterDropdown> createState() => _FilterDropdownState();
+}
+
+class _FilterDropdownState extends ConsumerState<_FilterDropdown> {
+  /// Bumped whenever a commanded wheel move is rejected/failed, forcing the
+  /// FormField to rebuild from the authoritative [value].
+  int _resetToken = 0;
+
+  /// The physical position a picker-initiated move was commanded to land on,
+  /// while the wheel is still turning. Cleared once the wheel is observed
+  /// parked there (the follow-logic tags, the field follows) — or when it's
+  /// observed parked ANYWHERE ELSE (accepted but failed in flight), which
+  /// forces the reset token so the field stops showing the tapped name.
+  int? _pendingTargetPosition;
+
+  @override
+  Widget build(BuildContext context) {
     final labels = ref.watch(filterWheelLabelsProvider);
     final wheel = ref
         .watch(filterWheelProvider)
@@ -279,11 +303,24 @@ class _FilterDropdown extends ConsumerWidget {
     // The wheel is turning: show progress in the same box so the user knows
     // the picker is about to snap to the new slot (instead of looking stuck).
     final moving = wheel != null && wheel.isConnected && wheel.isMoving;
+    // Watch where a commanded move actually lands: accepted-but-never-landed
+    // (stall/fault) must not leave the field showing the tapped name.
+    final pending = _pendingTargetPosition;
+    if (pending != null && wheel != null && !moving) {
+      if (wheel.currentSlot == pending) {
+        _pendingTargetPosition = null; // landed — follow tags, field follows
+      } else {
+        _pendingTargetPosition = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _resetToken++);
+        });
+      }
+    }
     if (moving) {
       return InputDecorator(
         decoration: const InputDecoration(labelText: 'Filter'),
         child: SizedBox(
-          // Matches the button's internal 48px so the box doesn't resize
+          // Matches the field's internal height so the box doesn't resize
           // while the wheel turns.
           height: 48,
           child: Row(
@@ -301,62 +338,51 @@ class _FilterDropdown extends ConsumerWidget {
         ),
       );
     }
-    // Dedupe (keep-first): two slots labelled identically would otherwise crash
-    // DropdownButtonFormField's exactly-one-item-per-value assertion (r1 —
-    // nothing stops duplicate slot labels at entry, and a name-keyed picker
-    // only needs each name once anyway).
+    // Dedupe (keep-first): two slots labelled identically would otherwise
+    // crash the picker's exactly-one-item-per-value assertion, and a
+    // name-keyed picker only needs each name once anyway.
     final seen = <String>{};
     final names = <String>[
       for (var slot = 1; slot <= labels.slotCount; slot++)
         if (labels.labelAt(slot).isNotEmpty && seen.add(labels.labelAt(slot)))
           labels.labelAt(slot),
     ];
-    if (!names.contains(value)) names.insert(0, value);
-    // Controlled DropdownButton (not DropdownButtonFormField): the displayed
-    // value always mirrors [value] from state. FormField would show the
-    // just-tapped name even when the move fails and state deliberately stays
-    // put — leaving the picker lying about the filter in the light path.
-    return InputDecorator(
+    if (!names.contains(widget.value)) names.insert(0, widget.value);
+    return DropdownButtonFormField<String>(
+      key: ValueKey(_resetToken),
+      initialValue: widget.value,
       decoration: const InputDecoration(labelText: 'Filter'),
-      child: DropdownButtonHideUnderline(
-        // Same shape as the sibling Frame-type picker (DropdownButtonFormField
-        // defaults): isExpanded false, isDense false — only the controlled
-        // value differs, so the two boxes render identically.
-        child: DropdownButton<String>(
-          value: value,
-          items: [
-            for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
-          ],
-          onChanged: (n) async {
+      items: [
+        for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
+      ],
+      onChanged: (n) async {
         if (n == null) return;
-        final wheel = ref
+        final wheelNow = ref
             .read(filterWheelProvider)
             .maybeWhen(data: (s) => s, orElse: () => null);
         // No wheel connected: nothing to move — just tag the capture (the
-        // offline-authoring case; a reconnect re-syncs the picker to the
-        // physical wheel).
-        if (wheel == null || !wheel.isConnected) {
-          onChanged(n);
+        // offline-authoring case; a reconnect re-syncs the picker).
+        if (wheelNow == null || !wheelNow.isConnected) {
+          widget.onChanged(n);
           return;
         }
-        final slot = _resolveSlot(ref, wheel, n);
+        final slot = _resolveSlot(ref, wheelNow, n);
         if (slot == null) {
           // Connected, but the picked name maps to no physical slot (local
           // labels and the driver's names can diverge): tagging it would tag a
           // filter that isn't on the wheel. Say so instead of silently lying.
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text("Filter '$n' isn't a slot on the connected wheel."),
-              backgroundColor: AraColors.accentError,
-            ));
-          }
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Filter '$n' isn't a slot on the connected wheel."),
+            backgroundColor: AraColors.accentError,
+          ));
           return;
         }
         // currentSlot may be null (unknown/not yet reported) — treat that as
         // "not the current slot" and command the move; the driver rejects a
-        // redundant move if one somehow slips through.
-        if (slot.position == wheel.currentSlot) {
-          onChanged(n);
+        // redundant move if one slips through.
+        if (slot.position == wheelNow.currentSlot) {
+          widget.onChanged(n);
           return;
         }
         // Move the wheel, and DON'T tag optimistically: the tag lands via the
@@ -369,35 +395,37 @@ class _FilterDropdown extends ConsumerWidget {
               .read(filterWheelProvider.notifier)
               .changeFilter(slot.position);
           if (!performed) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Another action is still in progress.'),
-              ));
-            }
+            // Rebuild the field from the authoritative value (it may have
+            // shown the just-tapped name via the FormField's internal state).
+            if (mounted) setState(() => _resetToken++);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Another action is still in progress.'),
+            ));
             return;
           }
+          // Remember where the move should land; the build-time watcher above
+          // reconciles it with the wheel's actual arrival.
+          _pendingTargetPosition = slot.position;
           // No onChanged(n) here for NAMED target slots — the follow-logic
           // syncs filterSlot when the wheel reports its new slot (and reverts
           // nothing if it doesn't). An UNNAMED target slot can never be synced
           // by the follow-logic (it only latches named slots), so tag the
           // picked local label instead: otherwise a capture taken after the
           // move would be tagged with the previous filter while the wheel sits
-          // on an unnamed slot. (If this move fails in flight the tag may stay
-          // stale — accepted for this narrow unnamed-slot combination.)
+          // on an unnamed slot.
           if (slot.name.isEmpty) {
-            onChanged(n);
+            widget.onChanged(n);
           }
         } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(friendlyError(e, action: 'change the filter')),
-              backgroundColor: AraColors.accentError,
-            ));
-          }
+          if (mounted) setState(() => _resetToken++);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(friendlyError(e, action: 'change the filter')),
+            backgroundColor: AraColors.accentError,
+          ));
         }
-          },
-        ),
-      ),
+      },
     );
   }
 

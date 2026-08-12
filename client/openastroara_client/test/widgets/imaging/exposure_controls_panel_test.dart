@@ -23,8 +23,28 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
     changeCalls.add(position); // the driver was asked
     if (failMoves) throw StateError('driver rejected the move');
     if (failInFlight) {
-      // Accepted (returns true) but the wheel never reaches the target — it
-      // stays put, as if the motor stalled mid-move.
+      // Accepted (returns true) but the wheel never reaches the target: it
+      // starts turning, then stalls and reports back where it was.
+      final current = state.asData?.value;
+      final oldSlot = current?.currentSlot;
+      final slots = current?.slots ?? const [];
+      park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'moving',
+        currentSlot: null,
+        slots: slots,
+      ));
+      await Future<void>.delayed(Duration.zero);
+      park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: oldSlot,
+        slots: slots,
+      ));
       return true;
     }
     park(FilterWheelStatus(
