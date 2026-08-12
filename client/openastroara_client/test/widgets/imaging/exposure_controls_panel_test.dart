@@ -150,6 +150,36 @@ void main() {
     expect(find.text('L'), findsOneWidget);
   });
 
+  testWidgets('the first-launch home-to-L shows the same busy state',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    DropdownButtonFormField<String> field() => tester
+        .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>));
+
+    container.read(exposureControllerProvider.notifier).setHoming(true);
+    await tester.pump();
+    expect(field().onChanged, isNull, reason: 'disabled while homing to L');
+    expect(field().decoration.enabledBorder, isNotNull,
+        reason: 'busy border while homing to L');
+
+    container.read(exposureControllerProvider.notifier).setHoming(false);
+    await tester.pumpAndSettle();
+    expect(field().onChanged, isNotNull, reason: 'enabled once homed');
+  });
+
   testWidgets('the picker disables + pulses while the wheel is moving',
       (tester) async {
     final container = ProviderContainer(overrides: [

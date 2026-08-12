@@ -18,6 +18,9 @@ class ExposureParams {
   final int bin;
   final String filterSlot;
   final FrameKind frameKind;
+  /// True while the wheel is being homed to slot 0 (L) on first launch — the
+  /// picker shows busy until the wheel is OBSERVED there.
+  final bool homing;
 
   const ExposureParams({
     this.exposure = const Duration(seconds: 5),
@@ -26,6 +29,7 @@ class ExposureParams {
     this.bin = 1,
     this.filterSlot = 'L',
     this.frameKind = FrameKind.light,
+    this.homing = false,
   });
 
   ExposureParams copyWith({
@@ -35,6 +39,7 @@ class ExposureParams {
     int? bin,
     String? filterSlot,
     FrameKind? frameKind,
+    bool? homing,
   }) =>
       ExposureParams(
         exposure: exposure ?? this.exposure,
@@ -43,6 +48,7 @@ class ExposureParams {
         bin: bin ?? this.bin,
         filterSlot: filterSlot ?? this.filterSlot,
         frameKind: frameKind ?? this.frameKind,
+        homing: homing ?? this.homing,
       );
 }
 
@@ -98,8 +104,17 @@ class ExposureController extends Notifier<ExposureParams> {
             status.currentSlot != null &&
             status.currentSlot != 0) {
           _homed = true;
+          if (!state.homing) setHoming(true);
           ref.read(filterWheelProvider.notifier).changeFilter(0);
         }
+      }
+      // Homing completes once the wheel is observed on slot 0 (or the wheel
+      // goes away) — the picker drops the busy state and shows L.
+      if (state.homing &&
+          (status.currentSlot == 0 ||
+              !status.isConnected ||
+              status.deviceId != _lastDeviceId)) {
+        setHoming(false);
       }
       if (status.isMoving) return;
       _syncFilterToSlot(status);
@@ -117,7 +132,11 @@ class ExposureController extends Notifier<ExposureParams> {
         // built: home to slot 0 (L) too.
         if (!_homed && status.currentSlot != null && status.currentSlot != 0) {
           _homed = true;
+          if (!state.homing) setHoming(true);
           ref.read(filterWheelProvider.notifier).changeFilter(0);
+        }
+        if (state.homing && status.currentSlot == 0) {
+          state = state.copyWith(homing: false);
         }
         _syncFilterToSlot(status);
       }
@@ -186,6 +205,10 @@ class ExposureController extends Notifier<ExposureParams> {
   }
 
   void setFrameKind(FrameKind k) => state = state.copyWith(frameKind: k);
+
+  /// Marks the first-launch home-to-L as in progress (or done). The picker
+  /// renders busy while true, so the pre-home slot is never shown as current.
+  void setHoming(bool v) => state = state.copyWith(homing: v);
 }
 
 final exposureControllerProvider =

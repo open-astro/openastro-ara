@@ -289,6 +289,21 @@ void main() {
           reason: 'first launch moves the wheel to the default L slot');
     });
 
+    test('first-connect home shows homing until the wheel is observed at 0',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isTrue,
+          reason: 'homing the wheel to L is visible as busy');
+      // The home move completes — the wheel is observed on slot 0.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isFalse,
+          reason: 'homing clears once the wheel is on L');
+    });
+
     test('reconnect does not re-home an already-homed wheel', () async {
       container.read(exposureControllerProvider);
       final wheel = await _initWheel(container);
