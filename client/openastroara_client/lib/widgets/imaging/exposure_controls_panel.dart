@@ -310,10 +310,11 @@ class _FilterDropdown extends ConsumerWidget {
           onChanged(n);
           return;
         }
-        // Move the wheel FIRST, and only tag the capture once the move is
-        // accepted — a failed move must not leave a filter name on a capture
-        // that went through a different filter (and the follow-logic can't
-        // self-correct it, since the wheel's slot never changed).
+        // Move the wheel, and DON'T tag optimistically: the tag lands via the
+        // follow-logic only once the wheel is actually OBSERVED at the new
+        // slot. A move that's accepted (202) but fails in flight (motor
+        // stall/fault) then can't leave a stale filter name on captures — the
+        // picker stays truthful to wherever the wheel actually ends up.
         try {
           final performed = await ref
               .read(filterWheelProvider.notifier)
@@ -326,7 +327,8 @@ class _FilterDropdown extends ConsumerWidget {
             }
             return;
           }
-          onChanged(n);
+          // No onChanged(n) here — the follow-logic syncs filterSlot when the
+          // wheel reports its new slot (and reverts nothing if it doesn't).
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(

@@ -11,12 +11,19 @@ import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart';
 class _FakeWheelNotifier extends FilterWheelNotifier {
   final List<int> changeCalls = [];
   bool failMoves = false;
+  bool failInFlight = false;
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
   Future<bool> changeFilter(int position) async {
-    changeCalls.add(position); // the driver was asked, then it failed
+    changeCalls.add(position); // the driver was asked
     if (failMoves) throw StateError('driver rejected the move');
+    if (failInFlight) {
+      // Accepted (returns true) but the wheel never reaches the target — it
+      // stays put, as if the motor stalled mid-move.
+      return true;
+    }
+    park(_wheelAt(position)); // the move lands
     return true;
   }
 
@@ -160,6 +167,47 @@ void main() {
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
     expect(wheel.changeCalls, isEmpty,
         reason: 'already on Ha — nothing to move');
+  });
+
+  testWidgets('a move accepted but failing in flight leaves no stale tag',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0)); // wheel on L
+    wheel.failInFlight = true; // 202 accepted, but the motor never lands
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    // No optimistic tag: the picker stays truthful to the wheel (L) even
+    // though the move was ACCEPTED — the capture is never tagged with a
+    // filter that isn't actually in the light path.
+    expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    expect(wheel.changeCalls, [1], reason: 'the move was commanded');
+    expect(
+      find.descendant(
+        of: find.byType(DropdownButton<String>),
+        matching: find.text('L'),
+      ),
+      findsOneWidget,
+      reason: 'the picker still displays the wheel\'s actual filter',
+    );
   });
 
   testWidgets('picking a filter with no connected wheel only tags the capture',
