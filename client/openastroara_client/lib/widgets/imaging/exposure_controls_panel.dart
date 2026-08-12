@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 
@@ -287,7 +288,18 @@ class _FilterDropdown extends ConsumerWidget {
         for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
       ],
       onChanged: (n) {
-        if (n != null) onChanged(n);
+        if (n == null) return;
+        // Tag the capture with the picked filter…
+        onChanged(n);
+        // …and, when a wheel is connected, physically move it to that slot
+        // (the dropdown is the user's filter switch — the wheel follows).
+        final wheel = ref
+            .read(filterWheelProvider)
+            .maybeWhen(data: (s) => s, orElse: () => null);
+        if (wheel == null || !wheel.isConnected) return;
+        final slot = wheel.slots.where((s) => s.name == n).firstOrNull;
+        if (slot == null || slot.position == wheel.currentSlot) return;
+        ref.read(filterWheelProvider.notifier).changeFilter(slot.position);
       },
     );
   }

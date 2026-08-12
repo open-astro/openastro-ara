@@ -1,9 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart';
+
+class _FakeWheelNotifier extends FilterWheelNotifier {
+  final List<int> changeCalls = [];
+  @override
+  Future<FilterWheelStatus?> build() async => null;
+  @override
+  Future<bool> changeFilter(int position) async {
+    changeCalls.add(position);
+    return true;
+  }
+
+  void park(FilterWheelStatus status) => state = AsyncData(status);
+}
+
+FilterWheelStatus _wheelAt(int position, {bool connected = true}) =>
+    FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: connected
+          ? EquipmentConnectionState.connected
+          : EquipmentConnectionState.disconnected,
+      runtimeState: 'idle',
+      currentSlot: position,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+        FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+      ],
+    );
 
 Future<ProviderContainer> _pump(WidgetTester tester,
     {List<String>? labels}) async {
@@ -65,5 +97,96 @@ void main() {
     // as the current selection rather than being silently dropped.
     expect(container.read(exposureControllerProvider).filterSlot, 'L');
     expect(find.text('L'), findsOneWidget);
+  });
+
+  testWidgets('picking a filter also moves the connected wheel to that slot',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0)); // wheel parked on L
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    expect(wheel.changeCalls, [1],
+        reason: 'Ha is slot 1 — picking it must command the wheel there');
+  });
+
+  testWidgets('picking the already-current slot does not re-move the wheel',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(1)); // wheel already on Ha
+    await tester.pump();
+
+    // The dropdown mirrors the wheel (value = Ha); pick Ha again.
+    await tester.tap(find.text('Ha').last); // open the dropdown
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last); // select Ha from the menu
+    await tester.pumpAndSettle();
+
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    expect(wheel.changeCalls, isEmpty,
+        reason: 'already on Ha — nothing to move');
+  });
+
+  testWidgets('picking a filter with no connected wheel only tags the capture',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0, connected: false)); // wheel disconnected
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    expect(wheel.changeCalls, isEmpty,
+        reason: 'no wheel to move — the picker only tags the capture');
   });
 }
