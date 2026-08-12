@@ -13,11 +13,15 @@ import 'package:openastroara/state/settings/settings_nav.dart';
 class _FakeWheelNotifier extends FilterWheelNotifier {
   /// Positions the controller commanded (e.g. the home-to-L move).
   final List<int> changeCalls = [];
+  bool dropHome = false; // home (slot 0) is dropped by re-entrancy
+  bool failHome = false; // home (slot 0) throws a driver error
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
   Future<bool> changeFilter(int position) async {
     changeCalls.add(position);
+    if (position == 0 && dropHome) return false;
+    if (position == 0 && failHome) throw StateError('home failed');
     return true;
   }
 
@@ -302,6 +306,26 @@ void main() {
       await _settle();
       expect(container.read(exposureControllerProvider).homing, isFalse,
           reason: 'homing clears once the wheel is on L');
+    });
+
+    test('a dropped home command does not leave the picker busy', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.dropHome = true; // home (slot 0) dropped by re-entrancy
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isFalse,
+          reason: 'a dropped home must not leave the picker disabled forever');
+    });
+
+    test('a failed home command clears homing too', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.failHome = true; // home throws a driver error
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isFalse,
+          reason: 'a failed home must not leave the picker disabled forever');
     });
 
     test('reconnect does not re-home an already-homed wheel', () async {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
@@ -55,6 +57,7 @@ class ExposureParams {
 enum FrameKind { light, dark, bias, flat }
 
 class ExposureController extends Notifier<ExposureParams> {
+
   /// The physical wheel slot whose name [state.filterSlot] last followed.
   /// Kept on the notifier so a manual picker choice survives until the wheel
   /// actually lands on a different slot. Cleared on disconnect/device change
@@ -67,8 +70,14 @@ class ExposureController extends Notifier<ExposureParams> {
   /// default filter on first launch. Only the FIRST connect homes it.
   bool _homed = false;
 
+  /// Safety valve: if a home command fails (rejected / re-entrancy / driver
+  /// error) or the wheel never reports reaching slot 0, the picker must not
+  /// stay busy forever.
+  Timer? _homeTimeout;
+
   @override
   ExposureParams build() {
+    ref.onDispose(() => _homeTimeout?.cancel());
     // §25.5 follow-up: the Imaging picker follows the physical wheel. Whenever
     // the wheel is connected and parked on a slot — moved here via the §37.4
     // Filter Wheel panel's Select, a sequence, or another client — the picker
@@ -103,9 +112,7 @@ class ExposureController extends Notifier<ExposureParams> {
             !_homed &&
             status.currentSlot != null &&
             status.currentSlot != 0) {
-          _homed = true;
-          if (!state.homing) setHoming(true);
-          ref.read(filterWheelProvider.notifier).changeFilter(0);
+          _homeToSlot0();
         }
       }
       // Homing completes once the wheel is observed on slot 0 (or the wheel
@@ -131,9 +138,7 @@ class ExposureController extends Notifier<ExposureParams> {
         // First launch with the wheel already connected before this provider
         // built: home to slot 0 (L) too.
         if (!_homed && status.currentSlot != null && status.currentSlot != 0) {
-          _homed = true;
-          if (!state.homing) setHoming(true);
-          ref.read(filterWheelProvider.notifier).changeFilter(0);
+          _homeToSlot0();
         }
         if (state.homing && status.currentSlot == 0) {
           state = state.copyWith(homing: false);
@@ -209,6 +214,27 @@ class ExposureController extends Notifier<ExposureParams> {
   /// Marks the first-launch home-to-L as in progress (or done). The picker
   /// renders busy while true, so the pre-home slot is never shown as current.
   void setHoming(bool v) => state = state.copyWith(homing: v);
+
+  /// Homes the wheel to slot 0 (L) on first connect. The picker shows busy
+  /// until the wheel is OBSERVED on slot 0; if the command fails, is dropped
+  /// by re-entrancy, or the wheel never reports arriving, [homing] is cleared
+  /// so the picker can never be left disabled forever.
+  void _homeToSlot0() {
+    _homed = true;
+    if (!state.homing) setHoming(true);
+    _homeTimeout?.cancel();
+    _homeTimeout = Timer(const Duration(seconds: 20), () {
+      // The wheel never reported slot 0 (or the command was dropped) — stop
+      // showing busy; the follow-logic keeps the picker truthful to wherever
+      // the wheel actually is.
+      if (state.homing) setHoming(false);
+    });
+    ref.read(filterWheelProvider.notifier).changeFilter(0).then((ok) {
+      if (!ok && state.homing) setHoming(false); // dropped (re-entrancy)
+    }).catchError((Object e) {
+      if (state.homing) setHoming(false); // home failed — don't stay stuck
+    });
+  }
 }
 
 final exposureControllerProvider =
