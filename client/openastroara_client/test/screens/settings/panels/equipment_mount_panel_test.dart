@@ -111,6 +111,8 @@ void main() {
   testWidgets('renders live RA/Dec + tracking switch + Park', (tester) async {
     await _pump(tester, _status());
     expect(find.text('EQ6-R'), findsOneWidget);
+    expect(find.text('RA (Right Ascension)'), findsOneWidget);
+    expect(find.text('Dec (Declination)'), findsOneWidget);
     expect(find.text('05h 30m 00s'), findsOneWidget);
     expect(find.text('-12° 15′ 00″'), findsOneWidget);
     expect(find.byType(Switch), findsNWidgets(2)); // tracking + auto-connect

@@ -90,8 +90,8 @@ class _MountBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row('Right ascension', formatRaHours(s.rightAscensionHours)),
-        _row('Declination', formatDecDegrees(s.declinationDegrees)),
+        _row('RA (Right Ascension)', formatRaHours(s.rightAscensionHours)),
+        _row('Dec (Declination)', formatDecDegrees(s.declinationDegrees)),
         // The observing site from the profile (set in the wizard / Options →
         // Safety → Site) — handy next to the mount's live position.
         if (hasSite) ...[
