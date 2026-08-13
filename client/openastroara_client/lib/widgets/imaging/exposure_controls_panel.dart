@@ -386,6 +386,14 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
         _reconcileTimer?.cancel();
         return;
       }
+      // The wheel going away mid-move can't land anywhere — stop polling.
+      final w = ref
+          .read(filterWheelProvider)
+          .maybeWhen(data: (s) => s, orElse: () => null);
+      if (w == null || !w.isConnected) {
+        _reconcileTimer?.cancel();
+        return;
+      }
       _reconcileTicks++;
       ref.read(filterWheelProvider.notifier).refresh();
     });

@@ -338,6 +338,27 @@ void main() {
       expect(container.read(exposureControllerProvider).homing, isTrue);
     });
 
+    test('a wheel already at L on first connect never re-homes on reconnect',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      // First connect already at slot 0 — the home is a no-op, but the
+      // session's home decision is settled.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'already at L — nothing to home');
+
+      // Disconnect; while offline the wheel is parked elsewhere (slot 2).
+      wheel.park(_wheelAt(0, connected: false));
+      await _settle();
+      wheel.park(_wheelAt(2));
+      await _settle();
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'a reconnect must NOT re-home when the first connect was '
+              'already at L');
+    });
+
     test('a dropped home command does not leave the picker busy', () async {
       container.read(exposureControllerProvider);
       final wheel = await _initWheel(container);

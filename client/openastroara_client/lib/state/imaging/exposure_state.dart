@@ -99,6 +99,8 @@ class ExposureController extends Notifier<ExposureParams> {
       if (status == null || !status.isConnected) {
         _lastSyncedSlot = null;
         _lastDeviceId = null;
+        // A wheel going away mid-home must not leave the picker busy.
+        if (state.homing) setHoming(false);
         return;
       }
       // A different wheel (or the first sighting): the old latch belongs to
@@ -114,12 +116,15 @@ class ExposureController extends Notifier<ExposureParams> {
         // first-launch home for the whole session.
         if (status.currentSlot != null) {
           _lastDeviceId = status.deviceId;
-        }
-        if (firstConnect &&
-            !_homed &&
-            status.currentSlot != null &&
-            status.currentSlot != 0) {
-          _homeToSlot0();
+          // The first KNOWN position settles this session's home decision —
+          // whether or not an actual move is needed. Already-at-L is a no-op
+          // but still counts, so a later reconnect never force-homes.
+          if (firstConnect && !_homed) {
+            _homed = true;
+            if (status.currentSlot != 0) {
+              _homeToSlot0();
+            }
+          }
         }
       }
       // Homing completes once the wheel is observed on slot 0 (or the wheel
@@ -144,11 +149,14 @@ class ExposureController extends Notifier<ExposureParams> {
       if (status != null && status.isConnected && !status.isMoving) {
         // First launch with the wheel already connected before this provider
         // built: home to slot 0 (L) too.
-        if (!_homed && status.currentSlot != null && status.currentSlot != 0) {
-          _homeToSlot0();
+        if (status.currentSlot != null && !_homed) {
+          _homed = true;
+          if (status.currentSlot != 0) {
+            _homeToSlot0();
+          }
         }
         if (state.homing && status.currentSlot == 0) {
-          state = state.copyWith(homing: false);
+          setHoming(false);
         }
         _syncFilterToSlot(status);
       }
