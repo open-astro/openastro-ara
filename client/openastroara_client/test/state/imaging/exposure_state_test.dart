@@ -1,12 +1,76 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+
+/// A controllable stand-in for the live wheel poller: it only moves when the
+/// test says so (the real notifier's async poll cycle would clobber direct
+/// state writes).
+class _FakeWheelNotifier extends FilterWheelNotifier {
+  /// Positions the controller commanded (e.g. the home-to-L move).
+  final List<int> changeCalls = [];
+  bool dropHome = false; // home (slot 0) is dropped by re-entrancy
+  bool failHome = false; // home (slot 0) throws a driver error
+  @override
+  Future<FilterWheelStatus?> build() async => null;
+  @override
+  Future<bool> changeFilter(int position) async {
+    changeCalls.add(position);
+    if (position == 0 && dropHome) return false;
+    if (position == 0 && failHome) throw StateError('home failed');
+    return true;
+  }
+
+  void park(FilterWheelStatus status) => state = AsyncData(status);
+
+  /// A transient read failure (failed poll) while the wheel stays connected.
+  void failPoll(Object error) =>
+      state = AsyncError(error, StackTrace.current);
+}
+
+ProviderContainer _container() => ProviderContainer(overrides: [
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+
+/// Initializes the wheel provider and lets its async build complete, so a
+/// subsequent [park] is never overwritten by the pending build result.
+Future<_FakeWheelNotifier> _initWheel(ProviderContainer container) async {
+  container.read(filterWheelProvider);
+  await pumpEventQueue();
+  return container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+}
+
+Future<void> _settle() async {
+  // Let build-time microtasks (initial wheel sync) and listener callbacks run.
+  await pumpEventQueue();
+}
+
+FilterWheelStatus _wheelAt(int position, {bool connected = true}) =>
+    FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: connected
+          ? EquipmentConnectionState.connected
+          : EquipmentConnectionState.disconnected,
+      runtimeState: 'idle',
+      currentSlot: position,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'R', focusOffset: 0),
+        FilterSlot(position: 2, name: 'G', focusOffset: 0),
+        FilterSlot(position: 3, name: 'B', focusOffset: 0),
+      ],
+    );
 
 void main() {
   group('ExposureController', () {
     late ProviderContainer container;
 
-    setUp(() => container = ProviderContainer());
+    setUp(() => container = _container());
     tearDown(() => container.dispose());
 
     test('starts with sane defaults', () {
@@ -63,6 +127,293 @@ void main() {
       notifier.setFrameKind(FrameKind.dark);
       expect(container.read(exposureControllerProvider).frameKind,
           FrameKind.dark);
+    });
+
+    test('follows the physical wheel slot into filterSlot', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+
+      // Wheel parks on slot 2 (G) — the picker snaps to its name.
+      wheel.park(_wheelAt(2));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+    });
+
+    test('initial sync: wheel already parked when Imaging builds', () async {
+      final wheel = await _initWheel(container);
+      // Wheel is already on slot 3 (B) before exposureController builds.
+      wheel.park(_wheelAt(3));
+      container.read(exposureControllerProvider);
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'B');
+    });
+
+    test('a manual picker choice is not clobbered until the wheel moves',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      wheel.park(_wheelAt(2));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+
+      // Manual override (wheel still on slot 2) — survives further polls.
+      notifier.setFilterSlot('Ha');
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+      wheel.park(_wheelAt(2));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // The wheel actually moves to slot 3 (B) — the picker follows again.
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'B');
+    });
+
+    test('a disconnected wheel never touches filterSlot', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.park(_wheelAt(2, connected: false));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    });
+
+    test('an unnamed current slot leaves filterSlot alone — until a name arrives',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final unnamed = FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 1,
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 1, name: '', focusOffset: 0),
+        ],
+      );
+      wheel.park(unnamed);
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+
+      // Same position, same physical slot — but the driver now reports its
+      // name. The picker must sync even though the wheel never "moved" (the
+      // latch may only engage once a named slot was actually found).
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 1,
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+        ],
+      ));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    });
+    test('a pick made while disconnected re-syncs after reconnect', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      // Wheel parked on L → picker follows.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+
+      // Wheel goes offline; the user picks Ha while disconnected (tag only,
+      // no wheel to move).
+      wheel.park(_wheelAt(0, connected: false));
+      await _settle();
+      notifier.setFilterSlot('Ha');
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // Wheel reconnects, still physically parked on L — the picker must snap
+      // back to the truth (L) instead of keeping the stale offline pick.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    });
+
+    test('a transient read error does not clear the latch or clobber a pick',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      wheel.park(_wheelAt(0)); // on L → filterSlot L, latch 0
+      await _settle();
+      notifier.setFilterSlot('Ha'); // manual pick while the wheel stays on L
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // A failed poll (AsyncError) is transient — the wheel never moved, so
+      // the manual pick must survive.
+      wheel.failPoll(StateError('transient read failure'));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // Next successful poll, same physical slot — still no clobber.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    });
+
+    test('re-entering the Live tab re-syncs to the wheel\'s current slot',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      final notifier = container.read(exposureControllerProvider.notifier);
+
+      wheel.park(_wheelAt(2)); // on G → picker G, latch 2
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+
+      // A stale pick made while the wheel stays put — the latch keeps it
+      // alive while away from the Live tab.
+      notifier.setFilterSlot('Ha');
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+      // Entering the Live tab forces the wheel's CURRENT slot to win.
+      container.read(selectedTabIndexProvider.notifier).select(kLiveTabIndex);
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+    });
+
+    test('first connect homes the wheel to slot 0 (L)', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      // Wheel connects already parked on slot 3 (B) — first connect homes L.
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(wheel.changeCalls, [0],
+          reason: 'first launch moves the wheel to the default L slot');
+    });
+
+    test('first-connect home shows homing until the wheel is observed at 0',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isTrue,
+          reason: 'homing the wheel to L is visible as busy');
+      // The home move completes — the wheel is observed on slot 0.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isFalse,
+          reason: 'homing clears once the wheel is on L');
+    });
+
+    test('home fires once the wheel position becomes known', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      // First status: connected but the driver hasn't reported the position
+      // yet — home must NOT fire (and must not be skipped forever).
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: null,
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 3, name: 'B', focusOffset: 0),
+        ],
+      ));
+      await _settle();
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'position unknown — nothing to home yet');
+      expect(container.read(exposureControllerProvider).homing, isFalse);
+
+      // The position arrives (on slot 3 = B) — the first-connect home fires.
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(wheel.changeCalls, [0],
+          reason: 'the home must fire once the position is known, not be '
+              'silently skipped because the first sighting had no position');
+      expect(container.read(exposureControllerProvider).homing, isTrue);
+    });
+
+    test('a wheel already at L on first connect never re-homes on reconnect',
+        () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      // First connect already at slot 0 — the home is a no-op, but the
+      // session's home decision is settled.
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'already at L — nothing to home');
+
+      // Disconnect; while offline the wheel is parked elsewhere (slot 2).
+      wheel.park(_wheelAt(0, connected: false));
+      await _settle();
+      wheel.park(_wheelAt(2));
+      await _settle();
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'a reconnect must NOT re-home when the first connect was '
+              'already at L');
+    });
+
+    test('a dropped home command does not leave the picker busy', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.dropHome = true; // home (slot 0) dropped by re-entrancy
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isFalse,
+          reason: 'a dropped home must not leave the picker disabled forever');
+    });
+
+    test('a failed home command clears homing too', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.failHome = true; // home throws a driver error
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(container.read(exposureControllerProvider).homing, isFalse,
+          reason: 'a failed home must not leave the picker disabled forever');
+    });
+
+    test('reconnect does not re-home an already-homed wheel', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      wheel.park(_wheelAt(3)); // first connect -> home to 0
+      await _settle();
+      wheel.park(_wheelAt(0, connected: false)); // disconnect
+      await _settle();
+      wheel.park(_wheelAt(2)); // reconnect at 2 — already homed this session
+      await _settle();
+      expect(wheel.changeCalls, [0],
+          reason: 'only the first connect of a session homes the wheel');
+    });
+
+    test('a different wheel device resets the latch too', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+
+      wheel.park(_wheelAt(0));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+
+      // A second wheel (different device id), parked at the same position 0
+      // with a different slot name — the latch must not carry over.
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw2',
+        name: 'FILTERWHEEL2',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: const [
+          FilterSlot(position: 0, name: 'UV', focusOffset: 0),
+        ],
+      ));
+      await _settle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'UV');
     });
   });
 }

@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/filter_wheel_status.dart';
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
+import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// Right-side controls in the Imaging tab per §25.5.1 — exposure / gain /
 /// offset / bin / filter / frame type + Take One + Live View toggle.
@@ -83,6 +89,7 @@ class ExposureControlsPanel extends ConsumerWidget {
             _FilterDropdown(
               value: params.filterSlot,
               onChanged: ctrl.setFilterSlot,
+              homing: params.homing,
             ),
             DropdownButtonFormField<FrameKind>(
               initialValue: params.frameKind,
@@ -261,34 +268,428 @@ class _IntFieldState extends State<_IntField> {
 /// selectable rather than being silently dropped — same stance as the §38
 /// editor's picker. When no slots are labelled at all, the control still
 /// offers the current value so the capture keeps a filter name.
-class _FilterDropdown extends ConsumerWidget {
+///
+/// Rendered as a [DropdownButtonFormField] — the same widget as the sibling
+/// Frame-type picker, so the two boxes are pixel-identical and the value
+/// renders reliably on every platform (a bare controlled [DropdownButton]
+/// showed a blank value in the web build).
+///
+/// While a move is in flight the picker is DISABLED and its underline pulses
+/// red — instantly on the click, not when the first poll reports the wheel
+/// turning. When the wheel is observed on the commanded slot it re-enables
+/// and the underline flashes green to confirm; a move that never lands snaps
+/// the field back to the truthful value (via a keyed rebuild).
+enum _FilterPhase { idle, changing, updated }
+
+class _FilterDropdown extends ConsumerStatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
-  const _FilterDropdown({required this.value, required this.onChanged});
+  /// True while the wheel is being homed to slot 0 (L) on first launch — the
+  /// picker shows the same busy state as a picker-initiated move.
+  final bool homing;
+  const _FilterDropdown({
+    required this.value,
+    required this.onChanged,
+    this.homing = false,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FilterDropdown> createState() => _FilterDropdownState();
+}
+
+class _FilterDropdownState extends ConsumerState<_FilterDropdown>
+    with SingleTickerProviderStateMixin {
+  /// Bumped whenever a commanded wheel move is rejected/failed, forcing the
+  /// FormField to rebuild from the authoritative [value].
+  int _resetToken = 0;
+
+  /// The physical position a picker-initiated move was commanded to land on,
+  /// while the wheel is still turning. Cleared once the wheel is observed
+  /// parked there — or parked anywhere else (accepted but failed in flight).
+  int? _pendingTargetPosition;
+
+  /// True once the wheel has been SEEN turning after a commanded move — only
+  /// then may a settled-off-target status count as a failed landing. Right
+  /// after the command the wheel may still report its old idle position for a
+  /// poll or two; without this gate that would fake a failure instantly.
+  bool _sawMove = false;
+
+  /// Backstop for an accepted move that never reports ANY movement (stuck
+  /// driver): after this fires without a landing, the picker reverts.
+  Timer? _stallTimer;
+
+  /// Fast re-read loop (1.5 s cadence) while a move is pending: the wheel's
+  /// regular live poll runs every 15 s, which made landings feel sluggish.
+  /// Forces a daemon read until the pending target is observed (or a bound).
+  Timer? _reconcileTimer;
+  int _reconcileTicks = 0;
+
+  _FilterPhase _phase = _FilterPhase.idle;
+
+  /// Drives the red busy pulse (repeat/reverse) and the green confirm flash.
+  late final AnimationController _flash;
+
+  @override
+  void initState() {
+    super.initState();
+    // Created here (not as a `late final` field) so dispose() can always
+    // dispose it — a lazy creation on first use could otherwise fire during
+    // teardown and crash the vsync lookup.
+    _flash = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_FilterDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The first-launch home-to-L runs outside the picker: mirror it as a
+    // busy state so the stale pre-home slot isn't shown as if current.
+    if (widget.homing && !oldWidget.homing) {
+      setState(() {
+        _phase = _FilterPhase.changing;
+        _flash.value = 0;
+        _flash.repeat(reverse: true);
+      });
+    } else if (!widget.homing &&
+        oldWidget.homing &&
+        _phase == _FilterPhase.changing &&
+        _pendingTargetPosition == null) {
+      setState(() {
+        _phase = _FilterPhase.idle;
+        _flash.stop();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _stallTimer?.cancel();
+    _reconcileTimer?.cancel();
+    _flash.dispose();
+    super.dispose();
+  }
+
+  /// Fast re-reads of the daemon (1.5 s cadence, ~40 ticks) while a move is
+  /// pending, so a landing is observed within a couple of seconds instead of
+  /// at the next 15 s live poll. Idempotent per command.
+  void _startReconcile() {
+    _reconcileTimer?.cancel();
+    _reconcileTicks = 0;
+    _reconcileTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (!mounted || _pendingTargetPosition == null) {
+        _reconcileTimer?.cancel();
+        return;
+      }
+      if (_reconcileTicks >= 40) {
+        _reconcileTimer?.cancel();
+        return;
+      }
+      // The wheel going away mid-move can't land anywhere — stop polling.
+      final w = ref
+          .read(filterWheelProvider)
+          .maybeWhen(data: (s) => s, orElse: () => null);
+      if (w == null || !w.isConnected) {
+        _reconcileTimer?.cancel();
+        return;
+      }
+      _reconcileTicks++;
+      ref.read(filterWheelProvider.notifier).refresh();
+    });
+  }
+
+  /// Backstop for an accepted move that never reports ANY movement. The
+  /// client's live poll runs every 15 s, so a landing can legitimately take a
+  /// poll to be seen — only a command that never STARTED the wheel is an
+  /// error at 10 s; a started-but-unreported landing gets a generous hard
+  /// cap instead (the wheel panel shows the driver state meanwhile).
+  void _startStallTimer() {
+    _stallTimer?.cancel();
+    _stallTimer = Timer(const Duration(seconds: 10), () {
+      if (!mounted || _phase != _FilterPhase.changing) return;
+      if (_sawMove) {
+        // The wheel is turning; the landing poll (15 s cadence) will
+        // reconcile. Re-arm a hard backstop in case it never reports.
+        _stallTimer = Timer(const Duration(seconds: 45), _stallHard);
+      } else {
+        _stallHard();
+      }
+    });
+  }
+
+  Future<void> _stallHard() async {
+    if (!mounted || _phase != _FilterPhase.changing) return;
+    // The move may have completed without any poll observing it (the live
+    // poll runs every 15 s) — ask the daemon directly before declaring a
+    // failure, so a successful-but-unobserved move never errors.
+    try {
+      await ref.read(filterWheelProvider.notifier).refresh();
+    } catch (_) {
+      // The read failed; fall through to the failure path below.
+    }
+    if (!mounted || _phase != _FilterPhase.changing) return;
+    final wheel = ref
+        .read(filterWheelProvider)
+        .maybeWhen(data: (s) => s, orElse: () => null);
+    final pending = _pendingTargetPosition;
+    if (wheel != null && pending != null && wheel.currentSlot == pending) {
+      // It did land — treat as a confirmed success.
+      _pendingTargetPosition = null;
+      _sawMove = false;
+      _reconcileTimer?.cancel();
+      setState(() {
+        _phase = _FilterPhase.updated;
+        _flash.stop();
+        _flash.value = 0;
+        _flash.forward().whenComplete(() {
+          if (mounted && _phase == _FilterPhase.updated) {
+            setState(() => _phase = _FilterPhase.idle);
+          }
+        });
+      });
+      return;
+    }
+    // Genuinely never moved.
+    _reconcileTimer?.cancel();
+    setState(() {
+      _phase = _FilterPhase.idle;
+      _flash.stop();
+      _pendingTargetPosition = null;
+      _sawMove = false;
+      _resetToken++;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text("Couldn't change the filter - the wheel "
+          'didn\'t start moving.'),
+      backgroundColor: AraColors.accentError,
+    ));
+  }
+
+  /// The underline color while busy: a red pulse during the move, a green
+  /// pulse on a confirmed landing; null restores the theme default.
+  Color? get _blinkColor {
+    switch (_phase) {
+      case _FilterPhase.idle:
+        return null;
+      case _FilterPhase.changing:
+        return Color.lerp(AraColors.accentError, AraColors.border, _flash.value);
+      case _FilterPhase.updated:
+        return Color.lerp(
+            AraColors.accentConnected, AraColors.border, _flash.value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Reconcile a commanded move with the wheel's actual arrival, and treat
+    // wheel moves from OTHER sources (the §37.4 panel, a sequence) as busy
+    // too — the picker is disabled + red until the wheel settles.
+    ref.listen(filterWheelProvider, (prev, next) {
+      final wheel = next.maybeWhen(data: (s) => s, orElse: () => null);
+      final pending = _pendingTargetPosition;
+      if (wheel != null && wheel.isMoving) {
+        _sawMove = true;
+        if (_phase != _FilterPhase.changing) {
+          setState(() {
+            _phase = _FilterPhase.changing;
+            _flash.value = 0;
+            _flash.repeat(reverse: true);
+          });
+        }
+      } else if (pending != null && wheel != null && !wheel.isMoving) {
+        // The wheel is parked. Landed on the commanded slot — success (even
+        // if the move was too fast to observe the moving state). Settled
+        // elsewhere — only a failure if we actually SAW it move after the
+        // command; otherwise it just hasn't started yet, so keep waiting.
+        if (wheel.currentSlot == pending) {
+          _pendingTargetPosition = null;
+          _sawMove = false;
+          _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
+          setState(() {
+            _phase = _FilterPhase.updated;
+            _flash.stop();
+            _flash.value = 0;
+            _flash.forward().whenComplete(() {
+              // Only drop the confirm flash if the phase is still 'updated' —
+              // a new pick during the flash restarts the controller and its
+              // interrupted future must not clobber the new move's busy state.
+              if (mounted && _phase == _FilterPhase.updated) {
+                setState(() => _phase = _FilterPhase.idle);
+              }
+            });
+          });
+        } else if (_sawMove) {
+          _pendingTargetPosition = null;
+          _sawMove = false;
+          _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
+          setState(() {
+            _phase = _FilterPhase.idle;
+            _flash.stop();
+            _resetToken++;
+          });
+        }
+      } else if (_phase == _FilterPhase.changing && pending == null) {
+        // An external move settled (no pending of ours) — done.
+        _sawMove = false;
+        setState(() {
+          _phase = _FilterPhase.idle;
+          _flash.stop();
+        });
+      }
+    });
     final labels = ref.watch(filterWheelLabelsProvider);
-    // Dedupe (keep-first): two slots labelled identically would otherwise crash
-    // DropdownButtonFormField's exactly-one-item-per-value assertion (r1 —
-    // nothing stops duplicate slot labels at entry, and a name-keyed picker
-    // only needs each name once anyway).
+    // Dedupe (keep-first): two slots labelled identically would otherwise
+    // crash the picker's exactly-one-item-per-value assertion, and a
+    // name-keyed picker only needs each name once anyway.
     final seen = <String>{};
     final names = <String>[
       for (var slot = 1; slot <= labels.slotCount; slot++)
         if (labels.labelAt(slot).isNotEmpty && seen.add(labels.labelAt(slot)))
           labels.labelAt(slot),
     ];
-    if (!names.contains(value)) names.insert(0, value);
+    if (!names.contains(widget.value)) names.insert(0, widget.value);
+
+    final busy = _phase == _FilterPhase.changing || widget.homing;
+    final blink = _blinkColor;
+    final decoration = InputDecoration(
+      labelText: 'Filter',
+      enabledBorder: blink == null
+          ? null
+          : UnderlineInputBorder(
+              borderSide: BorderSide(color: blink, width: 2)),
+      focusedBorder: blink == null
+          ? null
+          : UnderlineInputBorder(
+              borderSide: BorderSide(color: blink, width: 2)),
+      disabledBorder: blink == null
+          ? null
+          : UnderlineInputBorder(
+              borderSide: BorderSide(color: blink, width: 2)),
+    );
+
     return DropdownButtonFormField<String>(
-      initialValue: value,
-      decoration: const InputDecoration(labelText: 'Filter'),
+      key: ValueKey(_resetToken),
+      initialValue: widget.value,
+      decoration: decoration,
       items: [
         for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
       ],
-      onChanged: (n) {
-        if (n != null) onChanged(n);
-      },
+      onChanged: busy
+          ? null // keep it disabled (showing the picked slot) until it lands
+          : (n) async {
+              if (n == null) return;
+              final wheelNow = ref
+                  .read(filterWheelProvider)
+                  .maybeWhen(data: (s) => s, orElse: () => null);
+              // No wheel connected: nothing to move — just tag the capture
+              // (the offline-authoring case; a reconnect re-syncs the picker).
+              if (wheelNow == null || !wheelNow.isConnected) {
+                widget.onChanged(n);
+                return;
+              }
+              final slot = _resolveSlot(ref, wheelNow, n);
+              if (slot == null) {
+                // Connected, but the picked name maps to no physical slot
+                // (local labels and the driver's names can diverge).
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                    "Filter '$n' isn't a slot on the connected wheel.",
+                  ),
+                  backgroundColor: AraColors.accentError,
+                ));
+                return;
+              }
+              // currentSlot may be null (unknown/not yet reported) — treat
+              // that as "not the current slot" and command the move; the
+              // driver rejects a redundant move if one slips through.
+              if (slot.position == wheelNow.currentSlot) {
+                widget.onChanged(n);
+                return;
+              }
+              // INSTANT busy feedback — the underline starts pulsing now,
+              // not when the first poll reports the wheel turning.
+              setState(() {
+                _phase = _FilterPhase.changing;
+                _flash.value = 0;
+                _flash.repeat(reverse: true);
+              });
+              _pendingTargetPosition = slot.position;
+              _sawMove = false;
+              _startStallTimer();
+              _startReconcile();
+              try {
+                final performed = await ref
+                    .read(filterWheelProvider.notifier)
+                    .changeFilter(slot.position);
+                if (!performed) {
+                  _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
+                  if (mounted) {
+                    setState(() {
+                      _phase = _FilterPhase.idle;
+                      _flash.stop();
+                      _pendingTargetPosition = null;
+                      _sawMove = false;
+                      _resetToken++;
+                    });
+                  }
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Another action is still in progress.'),
+                  ));
+                  return;
+                }
+                // No onChanged(n) here for NAMED target slots — the
+                // follow-logic syncs filterSlot when the wheel reports its new
+                // slot (and reverts nothing if it doesn't). An UNNAMED target
+                // slot can never be synced by the follow-logic (it only
+                // latches named slots), so tag the picked local label instead.
+                if (slot.name.isEmpty) {
+                  widget.onChanged(n);
+                }
+              } catch (e) {
+                _stallTimer?.cancel();
+            _reconcileTimer?.cancel();
+                if (mounted) {
+                  setState(() {
+                    _phase = _FilterPhase.idle;
+                    _flash.stop();
+                    _pendingTargetPosition = null;
+                    _sawMove = false;
+                    _resetToken++;
+                  });
+                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(friendlyError(e, action: 'change the filter')),
+                  backgroundColor: AraColors.accentError,
+                ));
+              }
+            },
     );
+  }
+
+  /// Maps a picked dropdown name to a physical wheel slot. The dropdown's
+  /// items are the profile's LOCAL labels, while the wheel reports the
+  /// DRIVER's names — two independently editable lists. Prefer an exact name
+  /// match on the driver's slots; otherwise resolve the label to its position
+  /// in the profile labels and take the wheel slot at that position. Returns
+  /// null when neither matches (no physical filter behind the picked name).
+  FilterSlot? _resolveSlot(WidgetRef ref, FilterWheelStatus wheel, String name) {
+    for (final s in wheel.slots) {
+      if (s.name == name) return s;
+    }
+    final labels = ref.read(filterWheelLabelsProvider);
+    for (var slot = 1; slot <= labels.slotCount; slot++) {
+      if (labels.labelAt(slot) != name) continue;
+      for (final s in wheel.slots) {
+        if (s.position == slot - 1) return s;
+      }
+    }
+    return null;
   }
 }
