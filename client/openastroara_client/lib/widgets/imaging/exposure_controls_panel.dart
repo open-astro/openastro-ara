@@ -443,7 +443,9 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
         _flash.stop();
         _flash.value = 0;
         _flash.forward().whenComplete(() {
-          if (mounted) setState(() => _phase = _FilterPhase.idle);
+          if (mounted && _phase == _FilterPhase.updated) {
+            setState(() => _phase = _FilterPhase.idle);
+          }
         });
       });
       return;
@@ -510,7 +512,12 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
             _flash.stop();
             _flash.value = 0;
             _flash.forward().whenComplete(() {
-              if (mounted) setState(() => _phase = _FilterPhase.idle);
+              // Only drop the confirm flash if the phase is still 'updated' —
+              // a new pick during the flash restarts the controller and its
+              // interrupted future must not clobber the new move's busy state.
+              if (mounted && _phase == _FilterPhase.updated) {
+                setState(() => _phase = _FilterPhase.idle);
+              }
             });
           });
         } else if (_sawMove) {

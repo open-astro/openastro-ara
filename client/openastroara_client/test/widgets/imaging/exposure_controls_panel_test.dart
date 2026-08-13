@@ -160,6 +160,61 @@ void main() {
     expect(find.text('L'), findsOneWidget);
   });
 
+  testWidgets('a pick during the confirm flash does not drop the busy state',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0)); // on L
+    wheel.moveDelay = const Duration(milliseconds: 400);
+    await tester.pump();
+
+    DropdownButtonFormField<String> field() => tester
+        .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>));
+
+    // First pick: long move (400 ms) so the confirm flash (600 ms) is still
+    // playing after the menu cycles through close + reopen.
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pump(const Duration(milliseconds: 50)); // busy mid-flight
+    await tester.pump(const Duration(milliseconds: 400)); // move lands -> flash
+    expect(field().onChanged, isNotNull,
+        reason: 'enabled during the confirm flash');
+
+    // Pick OIII DURING the flash — the busy state must survive the
+    // interrupted flash's whenComplete.
+    await tester.tap(find.text('Ha').last); // open (value is now Ha)
+    await tester.pump(const Duration(milliseconds: 300)); // menu fully open
+    await tester.tap(find.text('OIII').last);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(wheel.changeCalls, [1, 2], reason: 'the second pick was commanded');
+    expect(field().onChanged, isNull,
+        reason: 'the interrupted confirm flash must not drop the new busy state');
+    expect(field().decoration.enabledBorder, isNotNull,
+        reason: 'busy border stays while the new move is in flight');
+
+    // Let everything settle and finish the pending timers.
+    await tester.pump(const Duration(milliseconds: 500)); // second move lands
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).filterSlot, 'OIII');
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('the reconcile poll re-reads the daemon while a move is pending',
       (tester) async {
     final container = ProviderContainer(overrides: [
@@ -548,7 +603,7 @@ void main() {
     final wheel = container.read(filterWheelProvider.notifier)
         as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // on L
-    wheel.moveDelay = const Duration(milliseconds: 100);
+    wheel.moveDelay = const Duration(milliseconds: 400);
     await tester.pump();
 
     DropdownButtonFormField<String> field() => tester
