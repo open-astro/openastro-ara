@@ -6,6 +6,7 @@ import '../../../models/mount_status.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/site_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/slew_rates.dart';
 import '../../../widgets/help_icon.dart';
@@ -84,11 +85,19 @@ class _MountBody extends ConsumerWidget {
       );
     }
     final caps = s.capabilities;
+    final site = ref.watch(siteSettingsProvider);
+    final hasSite = site.latitudeDeg != 0 || site.longitudeDeg != 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _row('Right ascension', formatRaHours(s.rightAscensionHours)),
         _row('Declination', formatDecDegrees(s.declinationDegrees)),
+        // The observing site from the profile (set in the wizard / Options →
+        // Safety → Site) — handy next to the mount's live position.
+        if (hasSite) ...[
+          _row('Latitude', _formatLatitude(site.latitudeDeg)),
+          _row('Longitude', _formatLongitude(site.longitudeDeg)),
+        ],
         _row('Parked', s.parked ? 'Yes' : 'No'),
         _row('At home', s.atHome ? 'Yes' : 'No'),
         if (s.isBusy)
@@ -176,6 +185,12 @@ class _MountBody extends ConsumerWidget {
       ],
     );
   }
+
+  static String _formatLatitude(double v) =>
+      '${v.abs().toStringAsFixed(2)}° ${v >= 0 ? 'N' : 'S'}';
+
+  static String _formatLongitude(double v) =>
+      '${v.abs().toStringAsFixed(2)}° ${v >= 0 ? 'E' : 'W'}';
 
   Widget _row(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 2),
