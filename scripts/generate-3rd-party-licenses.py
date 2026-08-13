@@ -191,7 +191,7 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
     "flutter_secure_storage": {
-        "version": "10.3.1",
+        "version": "11.0.0",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 German Saprykin",
     },
