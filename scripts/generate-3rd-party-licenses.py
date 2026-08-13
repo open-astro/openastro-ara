@@ -227,7 +227,7 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2016, the Dart project authors",
     },
     "webview_all": {
-        "version": "1.2.1",
+        "version": "1.3.5",
         "license": "MIT",
         "copyright": "Copyright 2021-2026 Abandoft",
     },
