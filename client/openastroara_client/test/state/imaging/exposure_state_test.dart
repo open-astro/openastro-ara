@@ -308,6 +308,36 @@ void main() {
           reason: 'homing clears once the wheel is on L');
     });
 
+    test('home fires once the wheel position becomes known', () async {
+      container.read(exposureControllerProvider);
+      final wheel = await _initWheel(container);
+      // First status: connected but the driver hasn't reported the position
+      // yet — home must NOT fire (and must not be skipped forever).
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: null,
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 3, name: 'B', focusOffset: 0),
+        ],
+      ));
+      await _settle();
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'position unknown — nothing to home yet');
+      expect(container.read(exposureControllerProvider).homing, isFalse);
+
+      // The position arrives (on slot 3 = B) — the first-connect home fires.
+      wheel.park(_wheelAt(3));
+      await _settle();
+      expect(wheel.changeCalls, [0],
+          reason: 'the home must fire once the position is known, not be '
+              'silently skipped because the first sighting had no position');
+      expect(container.read(exposureControllerProvider).homing, isTrue);
+    });
+
     test('a dropped home command does not leave the picker busy', () async {
       container.read(exposureControllerProvider);
       final wheel = await _initWheel(container);

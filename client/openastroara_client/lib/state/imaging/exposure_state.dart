@@ -107,7 +107,14 @@ class ExposureController extends Notifier<ExposureParams> {
       if (status.deviceId != _lastDeviceId) {
         final firstConnect = _lastDeviceId == null;
         _lastSyncedSlot = null;
-        _lastDeviceId = status.deviceId;
+        // Only latch the device once its position is KNOWN — drivers often
+        // report connected with currentSlot null for a poll or two before the
+        // position arrives. Latching early would make firstConnect false on
+        // the poll that DOES know the position, silently skipping the
+        // first-launch home for the whole session.
+        if (status.currentSlot != null) {
+          _lastDeviceId = status.deviceId;
+        }
         if (firstConnect &&
             !_homed &&
             status.currentSlot != null &&
