@@ -59,7 +59,6 @@ class PolarAlignPanel extends ConsumerStatefulWidget {
 }
 
 class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
-  bool _expanded = false;
   bool _busy = false;
   String? _status;
   double _toleranceArcmin = 1.0;
@@ -110,6 +109,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         live.phase == PolarAlignStates.adjusting ||
         live.phase == PolarAlignStates.paused;
 
+    // Always-on panel: the live bullseye + Az/Alt/Total readout stay visible
+    // on the page (like the equipment chips) instead of hiding behind a
+    // collapse — polar alignment is a hands-on, eyes-on process.
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -119,32 +121,26 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(Icons.adjust, size: 18, color: active ? color : AraColors.textSecondary),
-                  const SizedBox(width: 8),
-                  const Text('Polar Align', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  Text(
-                    _headerSummary(live),
-                    key: const Key('polar-align-header-summary'),
-                    style: TextStyle(color: active ? color : AraColors.textSecondary, fontSize: 12),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 18),
-                ],
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: Row(
+              children: [
+                Icon(Icons.adjust, size: 18, color: active ? color : AraColors.textSecondary),
+                const SizedBox(width: 8),
+                const Text('Polar Align', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text(
+                  _headerSummary(live),
+                  key: const Key('polar-align-header-summary'),
+                  style: TextStyle(color: active ? color : AraColors.textSecondary, fontSize: 12),
+                ),
+              ],
             ),
           ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: _body(live, api == null, color),
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: _body(live, api == null, color),
+          ),
         ],
       ),
     );
