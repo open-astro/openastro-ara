@@ -63,7 +63,8 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status) async {
+Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status,
+    {bool settle = true}) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -75,7 +76,7 @@ Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status) async {
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentFilterWheelPanel())),
   ));
-  await tester.pumpAndSettle();
+  if (settle) await tester.pumpAndSettle();
   return api;
 }
 
@@ -85,11 +86,11 @@ void main() {
     expect(find.text('EFW'), findsOneWidget);
     expect(find.text('L'), findsWidgets);
     expect(find.text('Hα'), findsWidgets);
-    // Focus offset is relabelled "focus offset" and shown because Hα has a non-zero offset.
+    // Focus offset is shown because Hα has a non-zero offset.
     expect(find.text('focus offset 12'), findsOneWidget);
-    // Slot 0 is active → its button reads "Active"; slot 1 → "Select".
-    expect(find.widgetWithText(TextButton, 'Active'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Select'), findsOneWidget);
+    // Active slot gets a green check; the selectable row a chevron.
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
   });
 
   testWidgets('shows the driver slot numbers (0-indexed)', (tester) async {
@@ -127,21 +128,43 @@ void main() {
     expect(find.text('Slot labels (for sequences)'), findsOneWidget);
   });
 
-  testWidgets('selecting a slot sends the change command', (tester) async {
+  testWidgets('tapping a row sends the change command', (tester) async {
     final api = await _pump(tester, _status(currentSlot: 0));
-    await tester.tap(find.widgetWithText(TextButton, 'Select'));
-    await tester.pumpAndSettle();
+    // The whole row is the tap target — no far-right button to aim at.
+    await tester.tap(find.text('Hα'));
+    await tester.pump(const Duration(milliseconds: 50));
     expect(api.calls, contains('command:change:1'));
+    // Let the backstop timers clear so nothing outlives the test.
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pump();
   });
 
-  testWidgets('a moving wheel disables the slot Select buttons', (tester) async {
-    await _pump(tester,
-        _status(currentSlot: null, runtimeState: 'moving'));
-    final selects = tester
-        .widgetList<TextButton>(find.widgetWithText(TextButton, 'Select'))
-        .toList();
-    expect(selects, isNotEmpty);
-    expect(selects.every((b) => b.onPressed == null), isTrue);
+  testWidgets('selecting shows an instant spinner on the pending row',
+      (tester) async {
+    final api = await _pump(tester, _status(currentSlot: 0));
+    await tester.tap(find.text('Hα'));
+    await tester.pump(); // one frame — before any poll reports the move
+    expect(find.byType(CircularProgressIndicator), findsWidgets,
+        reason: 'instant busy feedback, not waiting for the live poll');
+    expect(api.calls, contains('command:change:1'));
+    await tester.pump(const Duration(seconds: 11)); // stall backstop clears
+    await tester.pump();
+  });
+
+  testWidgets('a moving wheel is not selectable', (tester) async {
+    final api = await _pump(
+        tester, _status(currentSlot: null, runtimeState: 'moving'),
+        settle: false);
+    // Let the async status read land, then render the slot rows.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Hα'), findsOneWidget, reason: 'slots render while moving');
+    await tester.tap(find.text('Hα'));
+    await tester.pump();
+    expect(api.calls.where((c) => c.startsWith('command:change')), isEmpty,
+        reason: 'rows are disabled while the wheel is moving');
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pump();
   });
 
   testWidgets('no device connected shows the empty state + Connect…',
