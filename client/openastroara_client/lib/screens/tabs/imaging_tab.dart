@@ -214,6 +214,7 @@ class ImagingTab extends ConsumerWidget {
   /// Cancel the in-flight capture — abort the exposure on the daemon, then
   /// drop the capture state back to idle.
   Future<void> _cancelCapture(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
     final progress = ref.read(captureProgressProvider.notifier);
     final server = ref.read(activeServerProvider);
     if (server == null) {
@@ -224,8 +225,19 @@ class ImagingTab extends ConsumerWidget {
       await CameraExposureApi(server).abort();
       progress.reset();
     } catch (e) {
-      // The failed card renders the reason — no separate SnackBar needed.
-      progress.fail(friendlyError(e, action: 'abort the capture'));
+      // The abort POST failed. A lost response is NOT a successful abort —
+      // the exposure may still be running and its frame will land, so do NOT
+      // fail the card or bump the generation here: that would orphan the
+      // frame (the poll loop's complete() would no-op and lastFrame.set would
+      // be skipped). Keep tracking the capture and tell the user the cancel
+      // didn't go through; the card resolves with the truth (done or timeout).
+      if (!progress.isActive) return; // already reset/terminal (e.g. a
+      // double-tap race where the first abort won) — nothing to resurrect.
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(friendlyError(e, action: 'abort the capture')),
+        backgroundColor: AraColors.accentError,
+      ));
     }
   }
 }

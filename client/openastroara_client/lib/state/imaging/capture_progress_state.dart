@@ -243,6 +243,10 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   /// a `_takeOne` poll loop carries so its late complete()/fail() no-op.
   int get currentGeneration => state.generation;
 
+  /// True while a capture cycle is active (exposing/downloading) — used by the
+  /// cancel path to tell "a capture is still tracked" from "already idle".
+  bool get isActive => state.isActive;
+
   /// The frame was registered in the catalog — the capture landed. Measures
   /// how long the post-exposure processing took (download → FITS → catalog)
   /// and folds it into the rolling estimate used for "ready in". No-ops if
