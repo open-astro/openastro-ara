@@ -5,7 +5,9 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/mount_status.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/mount_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/site_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/slew_rates.dart';
 import '../../../widgets/help_icon.dart';
@@ -16,11 +18,34 @@ import '../../../widgets/settings/settings_row.dart';
 /// §37.5 Mount panel. Shows the connected mount's live RA/Dec + tracking/park
 /// state with tracking, park/unpark, and abort-slew controls (each gated on the
 /// device's capabilities) via the shared connection card.
-class EquipmentMountPanel extends ConsumerWidget {
+class EquipmentMountPanel extends ConsumerStatefulWidget {
   const EquipmentMountPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EquipmentMountPanel> createState() => _EquipmentMountPanelState();
+}
+
+class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
+  @override
+  void initState() {
+    super.initState();
+    // Hydrate the profile's site (lat/long rows) on mount — the same explicit
+    // round-trip pattern the Safety → Site panel uses (§37.12).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateSite());
+  }
+
+  Future<void> _hydrateSite() async {
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    try {
+      await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
+    } catch (_) {
+      // Offline / bad response — keep the defaults; the rows stay hidden.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final connection = ref.watch(equipmentConnectionProvider);
     final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(mountProvider);
@@ -84,11 +109,19 @@ class _MountBody extends ConsumerWidget {
       );
     }
     final caps = s.capabilities;
+    final site = ref.watch(siteSettingsProvider);
+    final hasSite = site.latitudeDeg != 0 || site.longitudeDeg != 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row('Right ascension', formatRaHours(s.rightAscensionHours)),
-        _row('Declination', formatDecDegrees(s.declinationDegrees)),
+        _row('RA (Right Ascension)', formatRaHours(s.rightAscensionHours)),
+        _row('Dec (Declination)', formatDecDegrees(s.declinationDegrees)),
+        // The observing site from the profile (set in the wizard / Options →
+        // Safety → Site) — handy next to the mount's live position.
+        if (hasSite) ...[
+          _row('Latitude', _formatLatitude(site.latitudeDeg)),
+          _row('Longitude', _formatLongitude(site.longitudeDeg)),
+        ],
         _row('Parked', s.parked ? 'Yes' : 'No'),
         _row('At home', s.atHome ? 'Yes' : 'No'),
         if (s.isBusy)
@@ -176,6 +209,12 @@ class _MountBody extends ConsumerWidget {
       ],
     );
   }
+
+  static String _formatLatitude(double v) =>
+      '${v.abs().toStringAsFixed(2)}° ${v >= 0 ? 'N' : 'S'}';
+
+  static String _formatLongitude(double v) =>
+      '${v.abs().toStringAsFixed(2)}° ${v >= 0 ? 'E' : 'W'}';
 
   Widget _row(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 2),

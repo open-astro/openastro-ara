@@ -8,9 +8,12 @@ import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_mount_panel.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -21,6 +24,20 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
   Future<void> add(AraServer server) async {}
+}
+
+class _FixedSite extends SiteSettingsNotifier {
+  _FixedSite(this._site);
+  final SiteSettings _site;
+  @override
+  SiteSettings build() => _site;
+}
+
+class _FakeProfileApi extends ProfileApi {
+  _FakeProfileApi() : super(const AraServer(hostname: 'h', port: 5555));
+  @override
+  Future<SiteSettings> getSiteSettings() async =>
+      const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408);
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
@@ -81,7 +98,8 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeMountApi> _pump(WidgetTester tester, MountStatus? status) async {
+Future<_FakeMountApi> _pump(WidgetTester tester, MountStatus? status,
+    {SiteSettings? site}) async {
   await _wideSurface(tester);
   final api = _FakeMountApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -90,6 +108,7 @@ Future<_FakeMountApi> _pump(WidgetTester tester, MountStatus? status) async {
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       mountApiFactoryProvider.overrideWithValue((_) => api),
+      if (site != null) siteSettingsProvider.overrideWith(() => _FixedSite(site)),
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
   ));
@@ -101,11 +120,58 @@ void main() {
   testWidgets('renders live RA/Dec + tracking switch + Park', (tester) async {
     await _pump(tester, _status());
     expect(find.text('EQ6-R'), findsOneWidget);
+    expect(find.text('RA (Right Ascension)'), findsOneWidget);
+    expect(find.text('Dec (Declination)'), findsOneWidget);
     expect(find.text('05h 30m 00s'), findsOneWidget);
     expect(find.text('-12° 15′ 00″'), findsOneWidget);
     expect(find.byType(Switch), findsNWidgets(2)); // tracking + auto-connect
     expect(find.widgetWithText(OutlinedButton, 'Park'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Stop'), findsOneWidget);
+  });
+
+  testWidgets('shows the observing site lat/long below Declination when set',
+      (tester) async {
+    await _pump(tester, _status(),
+        site: const SiteSettings(
+            latitudeDeg: 12.5989, longitudeDeg: -75.8408));
+    expect(find.text('Latitude'), findsOneWidget);
+    expect(find.text('12.60° N'), findsOneWidget);
+    expect(find.text('Longitude'), findsOneWidget);
+    expect(find.text('75.84° W'), findsOneWidget);
+    // They sit between Declination and Parked.
+    final decY = tester.getTopLeft(find.text('-12° 15′ 00″')).dy;
+    final latY = tester.getTopLeft(find.text('12.60° N')).dy;
+    final parkedY = tester.getTopLeft(find.text('Parked')).dy;
+    expect(latY, greaterThan(decY));
+    expect(parkedY, greaterThan(latY));
+  });
+
+  testWidgets('hides lat/long when the profile has no site configured',
+      (tester) async {
+    await _pump(tester, _status());
+    expect(find.text('Latitude'), findsNothing);
+    expect(find.text('Longitude'), findsNothing);
+  });
+
+  testWidgets('hydrates the site on mount and shows lat/long', (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(_status());
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(
+            const [AraServer(hostname: 'h', port: 5555)])),
+        mountApiFactoryProvider.overrideWithValue((_) => api),
+        profileApiProvider.overrideWithValue(_FakeProfileApi()),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+    ));
+    await tester.pumpAndSettle();
+    // The panel hydrated the profile's site from the daemon (not overridden).
+    expect(find.text('Latitude'), findsOneWidget);
+    expect(find.text('12.60° N'), findsOneWidget);
+    expect(find.text('Longitude'), findsOneWidget);
+    expect(find.text('75.84° W'), findsOneWidget);
   });
 
   testWidgets('toggling tracking sends the tracking command', (tester) async {
