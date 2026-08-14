@@ -52,7 +52,7 @@ void main() {
 
     test('complete() lands the done phase with the frame id', () {
       n.beginExposing(const Duration(seconds: 3));
-      n.complete('abc');
+      n.complete('abc', generation: n.state.generation);
       final p = container.read(captureProgressProvider);
       expect(p.phase, CapturePhase.done);
       expect(p.frameId, 'abc');
@@ -63,7 +63,7 @@ void main() {
         n.beginExposing(const Duration(seconds: 3));
         n.updateExposureProgress(100);
         async.elapse(kExposingMinVisible); // → downloading
-        n.complete('abc');
+        n.complete('abc', generation: n.state.generation);
         async.elapse(kDownloadingMinVisible); // → done (rolling measured)
         final p = container.read(captureProgressProvider);
         expect(p.phase, CapturePhase.done);
@@ -78,7 +78,7 @@ void main() {
         n.beginExposing(const Duration(seconds: 3));
         n.updateExposureProgress(100);
         async.elapse(kExposingMinVisible);
-        n.complete('def');
+        n.complete('def', generation: n.state.generation);
         async.elapse(kDownloadingMinVisible);
         expect(container.read(captureProgressProvider).rollingDownloadMs,
             isNotNull);
@@ -93,7 +93,7 @@ void main() {
         // Seed a 2s download estimate via a complete/reset cycle.
         n.updateExposureProgress(100);
         async.elapse(kExposingMinVisible);
-        n.complete('abc');
+        n.complete('abc', generation: n.state.generation);
         async.elapse(kDownloadingMinVisible);
         n.reset();
         // Fake the rolling estimate to a known 2000ms.
@@ -116,7 +116,7 @@ void main() {
 
     test('fail() lands the failed phase with the reason', () {
       n.beginExposing(const Duration(seconds: 3));
-      n.fail('boom');
+      n.fail('boom', generation: n.state.generation);
       final p = container.read(captureProgressProvider);
       expect(p.phase, CapturePhase.failed);
       expect(p.error, 'boom');
@@ -132,7 +132,7 @@ void main() {
         n.updateExposureProgress(100);
         // The capture fails before the hold fires; the user hits Retry
         // immediately.
-        n.fail('boom');
+        n.fail('boom', generation: n.state.generation);
         n.beginExposing(const Duration(seconds: 10));
         expect(container.read(captureProgressProvider).phase,
             CapturePhase.exposing);
@@ -154,6 +154,50 @@ void main() {
         expect(container.read(captureProgressProvider).phase,
             CapturePhase.exposing);
       });
+    });
+
+    test('a stale cycle\'s fail() after cancel is a no-op (no resurrection)', () {
+      n.beginExposing(const Duration(seconds: 3));
+      final staleGen = n.state.generation;
+      n.reset(); // user hit Cancel — the old poll loop is now stale
+      // The old loop eventually times out and reports failure — must not
+      // resurrect a card the user already dismissed.
+      n.fail('Capture timed out.', generation: staleGen);
+      expect(container.read(captureProgressProvider).phase, CapturePhase.idle);
+      expect(container.read(captureProgressProvider).error, isNull);
+    });
+
+    test('a stale cycle\'s complete() cannot clobber a newer capture', () {
+      fakeAsync((async) {
+        // Capture 1 starts; the user cancels, then immediately starts
+        // capture 2.
+        n.beginExposing(const Duration(seconds: 10));
+        final staleGen = n.state.generation;
+        n.reset();
+        n.beginExposing(const Duration(seconds: 30));
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing);
+        // Capture 1's frame registers late — the stale loop calls complete.
+        n.complete('old-frame', generation: staleGen);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing,
+            reason: 'the new capture\'s card is untouched');
+        expect(container.read(captureProgressProvider).frameId, isNull);
+        // The current cycle still completes normally.
+        n.complete('new-frame', generation: n.state.generation);
+        async.elapse(kDownloadingMinVisible);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.done);
+        expect(container.read(captureProgressProvider).frameId, 'new-frame');
+      });
+    });
+
+    test('complete() with a matching generation still lands done', () {
+      n.beginExposing(const Duration(seconds: 3));
+      n.complete('abc', generation: n.state.generation);
+      final p = container.read(captureProgressProvider);
+      expect(p.phase, CapturePhase.done);
+      expect(p.frameId, 'abc');
     });
   });
 }

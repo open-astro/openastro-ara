@@ -34,6 +34,11 @@ class CaptureProgress {
   /// (download → FITS → catalog) — measured per capture and carried across
   /// captures so the "ready in" estimate is grounded in this rig's real speed.
   final int? rollingDownloadMs;
+  /// Identity of the current capture cycle. Bumped on every `beginExposing`
+  /// and `reset()`; `complete()`/`fail()` from a stale `_takeOne` poll loop
+  /// (e.g. after a Cancel) no-op when their generation no longer matches, so
+  /// a superseded cycle can't clobber a newer capture's card.
+  final int generation;
 
   const CaptureProgress({
     this.phase = CapturePhase.idle,
@@ -44,6 +49,7 @@ class CaptureProgress {
     this.exposureEndedAt,
     this.error,
     this.rollingDownloadMs,
+    this.generation = 0,
   });
 
   bool get isActive => phase != CapturePhase.idle;
@@ -118,6 +124,7 @@ class CaptureProgress {
     DateTime? exposureEndedAt,
     String? error,
     int? rollingDownloadMs,
+    int? generation,
   }) =>
       CaptureProgress(
         phase: phase ?? this.phase,
@@ -129,6 +136,7 @@ class CaptureProgress {
         exposureEndedAt: exposureEndedAt ?? this.exposureEndedAt,
         error: error ?? this.error,
         rollingDownloadMs: rollingDownloadMs ?? this.rollingDownloadMs,
+        generation: generation ?? this.generation,
       );
 }
 
@@ -175,6 +183,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
       exposureProgressPct: 0,
       startedAt: DateTime.now(),
       rollingDownloadMs: state.rollingDownloadMs,
+      generation: state.generation + 1,
     );
   }
 
@@ -209,10 +218,21 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     );
   }
 
+  /// True while [generation] is still the notifier's current cycle. A
+  /// cancelled or superseded cycle (reset/beginExposing happened after) is
+  /// stale — its late complete()/fail() calls must not touch the card.
+  bool isCurrent(int generation) => state.generation == generation;
+
+  /// The generation of the cycle `beginExposing` just started — the identity
+  /// a `_takeOne` poll loop carries so its late complete()/fail() no-op.
+  int get currentGeneration => state.generation;
+
   /// The frame was registered in the catalog — the capture landed. Measures
   /// how long the post-exposure processing took (download → FITS → catalog)
-  /// and folds it into the rolling estimate used for "ready in".
-  void complete(String frameId) {
+  /// and folds it into the rolling estimate used for "ready in". No-ops if
+  /// [generation] is stale (the cycle was cancelled or superseded).
+  void complete(String frameId, {required int generation}) {
+    if (!isCurrent(generation)) return;
     // Hold the downloading phase visible at least kDownloadingMinVisible even
     // when the frame registered in a few hundred ms.
     final ended = state.exposureEndedAt;
@@ -222,13 +242,14 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
       _downloadHold?.cancel();
       _downloadHold = Timer(
           kDownloadingMinVisible - DateTime.now().difference(ended),
-          () => _finishComplete(frameId));
+          () => _finishComplete(frameId, generation));
       return;
     }
-    _finishComplete(frameId);
+    _finishComplete(frameId, generation);
   }
 
-  void _finishComplete(String frameId) {
+  void _finishComplete(String frameId, int generation) {
+    if (!isCurrent(generation)) return;
     int? updatedRolling;
     final ended = state.exposureEndedAt;
     if (ended != null) {
@@ -248,7 +269,10 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     _scheduleReset(doneVisible);
   }
 
-  void fail(String error) {
+  void fail(String error, {int? generation}) {
+    // A stale cycle's late failure must not resurrect a card the user
+    // already dismissed (cancel) or clobber a newer capture's progress.
+    if (generation != null && !isCurrent(generation)) return;
     // Terminal state — the phase is leaving active, so any pending hold
     // timers are stale and must not fire against a later cycle.
     _exposeHold?.cancel();
@@ -270,6 +294,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     _resetTimer?.cancel();
     state = CaptureProgress(
       rollingDownloadMs: state.rollingDownloadMs,
+      generation: state.generation + 1,
     );
   }
 }

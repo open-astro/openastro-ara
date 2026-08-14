@@ -154,13 +154,18 @@ class ImagingTab extends ConsumerWidget {
     final lastFrame = ref.read(lastCapturedFrameIdProvider.notifier);
     final solve = ref.read(solveResultProvider.notifier);
     progress.beginExposing(params.exposure);
+    // Identity of this capture cycle — a Cancel (reset) or a newer Take One
+    // bumps the generation, so this loop's late complete()/fail() no-op.
+    final generation = progress.currentGeneration;
     // Phase 1 — the exposure POST. A failure here means the shot never
     // started; the user should re-shoot.
     final String frameId;
     try {
       frameId = await CameraExposureApi(server).takeOne(params);
     } catch (e) {
-      progress.fail(friendlyError(e, action: 'take that exposure'));
+      progress.fail(
+          friendlyError(e, action: 'take that exposure'),
+          generation: generation);
       return;
     }
     // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
@@ -185,19 +190,22 @@ class ImagingTab extends ConsumerWidget {
         await Future<void>.delayed(const Duration(milliseconds: 500));
       }
     } catch (e) {
-      progress.fail(friendlyError(e, action: 'confirm the frame arrived'));
+      progress.fail(friendlyError(e, action: 'confirm the frame arrived'),
+          generation: generation);
       return;
     }
     if (landed) {
-      progress.complete(frameId);
-      if (!context.mounted) return;
+      progress.complete(frameId, generation: generation);
+      // A stale cycle (cancelled or superseded while this loop polled) must
+      // not repoint the viewer at its frame or clear the new cycle's solve.
+      if (!context.mounted || !progress.isCurrent(generation)) return;
       lastFrame.set(frameId);
       // A new frame invalidates any previous solve result shown in the panel.
       solve.clear();
       // Force a re-fetch in case the same id was shown before.
       ref.invalidate(framePreviewProvider(frameId));
     } else {
-      progress.fail('Capture timed out.');
+      progress.fail('Capture timed out.', generation: generation);
     }
     // The notifier owns the terminal-state auto-clear (done ~1.8s, failed
     // ~6s) — nothing to do here.

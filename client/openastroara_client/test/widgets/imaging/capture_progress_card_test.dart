@@ -62,7 +62,7 @@ void main() {
     n.beginExposing(const Duration(seconds: 3));
     n.updateExposureProgress(100);
     await tester.pump(kExposingMinVisible); // → downloading
-    n.complete('abc');
+    n.complete('abc', generation: n.currentGeneration);
     await tester.pump(kDownloadingMinVisible); // → done (rolling measured)
     n.reset();
     // Second capture: 10s exposure, 50% done → 5s left + download estimate.
@@ -155,7 +155,7 @@ void main() {
     addTearDown(container.dispose);
     final n = container.read(captureProgressProvider.notifier);
     n.beginExposing(const Duration(seconds: 3));
-    n.complete('abc');
+    n.complete('abc', generation: n.currentGeneration);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: Scaffold(body: CaptureProgressCard())),
