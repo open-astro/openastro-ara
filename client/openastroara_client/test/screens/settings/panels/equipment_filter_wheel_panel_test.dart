@@ -151,6 +151,31 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('a stalled command clears the busy UI (spinner + re-enable)',
+      (tester) async {
+    final api = await _pump(tester, _status(currentSlot: 0));
+    await tester.tap(find.text('Hα'));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(CircularProgressIndicator), findsWidgets,
+        reason: 'busy spinner while the command is in flight');
+
+    // The fake never reports the wheel moving or landing — the 10 s stall
+    // fires, takes one fresh look, then clears AND rebuilds.
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsNothing,
+        reason: 'the spinner must clear after a stalled command');
+    expect(api.calls, contains('command:change:1'));
+
+    // The list is re-enabled: tapping again issues a fresh command.
+    await tester.tap(find.text('Hα'));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(api.calls.where((c) => c.startsWith('command:change')).length, 2,
+        reason: 'rows re-enable after the stall clears');
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pump();
+  });
+
   testWidgets('a moving wheel is not selectable', (tester) async {
     final api = await _pump(
         tester, _status(currentSlot: null, runtimeState: 'moving'),

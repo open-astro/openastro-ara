@@ -155,23 +155,32 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
   /// errors; a started one re-arms the long cap.
   void _startStall() {
     _stallTimer?.cancel();
+    // All paths clear via setState so the row spinner + disabled list actually
+    // rebuild — clearing the fields alone would leave the busy UI frozen until
+    // some unrelated provider update happens.
     _stallTimer = Timer(const Duration(seconds: 10), () {
       if (!mounted || _pendingTarget == null) return;
       if (_sawMove) {
-        _stallTimer = Timer(const Duration(seconds: 45), _clearPending);
+        _stallTimer = Timer(const Duration(seconds: 45), _clearPendingUi);
       } else {
         // Maybe it started but we haven't SEEN it yet — one more fast look
         // before declaring the command dead.
         ref.read(filterWheelProvider.notifier).refresh().then((_) {
           if (!mounted || _pendingTarget == null) return;
           if (_sawMove) {
-            _stallTimer = Timer(const Duration(seconds: 45), _clearPending);
+            _stallTimer = Timer(const Duration(seconds: 45), _clearPendingUi);
           } else {
-            _clearPending();
+            _clearPendingUi();
           }
         });
       }
     });
+  }
+
+  /// [_clearPending] + a rebuild — see [_startStall].
+  void _clearPendingUi() {
+    if (!mounted) return;
+    setState(_clearPending);
   }
 
   @override
