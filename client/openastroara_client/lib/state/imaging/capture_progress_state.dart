@@ -1,0 +1,269 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../equipment/camera_state.dart';
+
+/// Capture lifecycle for the Imaging tab's "Take One" — from the exposure
+/// POST through the daemon's background pipeline (expose → download → FITS →
+/// catalog) to the frame landing. Drives the progress UI: the exposing phase
+/// tracks the camera's own `exposure_progress_pct`, the downloading phase
+/// covers the post-exposure window until the frame is registered.
+enum CapturePhase { idle, exposing, downloading, done, failed }
+
+/// How long each phase is guaranteed visible even on a very fast rig, so the
+/// exposing → downloading → ready sequence never flashes by unseen.
+const Duration kExposingMinVisible = Duration(milliseconds: 500);
+const Duration kDownloadingMinVisible = Duration(milliseconds: 800);
+
+/// The download estimate used before the first capture has been measured —
+/// rigs vary wildly (sub-second locally, 10-30s on a slow bridge), so a
+/// middle ground keeps "ready in" honest from the very first shot.
+const Duration kDefaultDownloadEstimate = Duration(seconds: 2);
+
+class CaptureProgress {
+  final CapturePhase phase;
+  final String? frameId;
+  final Duration requestedExposure;
+  /// 0..100 from the daemon's camera runtime while exposing (null = unknown).
+  final double? exposureProgressPct;
+  final DateTime? startedAt;
+  final DateTime? exposureEndedAt;
+  final String? error;
+  /// Rolling average (ms) of how long post-exposure processing takes
+  /// (download → FITS → catalog) — measured per capture and carried across
+  /// captures so the "ready in" estimate is grounded in this rig's real speed.
+  final int? rollingDownloadMs;
+
+  const CaptureProgress({
+    this.phase = CapturePhase.idle,
+    this.frameId,
+    this.requestedExposure = Duration.zero,
+    this.exposureProgressPct,
+    this.startedAt,
+    this.exposureEndedAt,
+    this.error,
+    this.rollingDownloadMs,
+  });
+
+  bool get isActive => phase != CapturePhase.idle;
+
+  /// The progress to DISPLAY: the daemon's real percentage when it has one,
+  /// otherwise a local elapsed-time estimate (elapsed / requested × 100,
+  /// capped at 99 so the bar visibly completes only when the daemon confirms)
+  /// — the daemon's equipment poll is slow (15 s), so a short exposure would
+  /// otherwise sit at 0% the whole time.
+  double? get displayProgressPct {
+    if (phase != CapturePhase.exposing) return null;
+    final pct = exposureProgressPct;
+    if (pct != null) return pct;
+    final started = startedAt;
+    if (started == null || requestedExposure == Duration.zero) return 0;
+    final elapsed = DateTime.now().difference(started);
+    final frac = elapsed.inMilliseconds / requestedExposure.inMilliseconds;
+    return (frac * 100).clamp(0.0, 99.0);
+  }
+
+  /// Seconds left in the exposure, derived from the daemon's progress
+  /// percentage (falls back to the display estimate). Null when not exposing.
+  Duration? get exposureRemaining {
+    if (phase != CapturePhase.exposing) return null;
+    final pct = displayProgressPct;
+    if (pct == null) return null;
+    final done = pct / 100.0;
+    return requestedExposure * (1 - done);
+  }
+
+  /// Seconds elapsed in the download phase (exposure done → frame registered).
+  Duration? get downloadElapsed {
+    if (phase != CapturePhase.downloading) return null;
+    final end = exposureEndedAt;
+    if (end == null) return null;
+    return DateTime.now().difference(end);
+  }
+
+  /// The rig's typical post-exposure processing time (rolling average). Null
+  /// until the first capture has been measured.
+  Duration? get downloadEstimate => rollingDownloadMs == null
+      ? null
+      : Duration(milliseconds: rollingDownloadMs!);
+
+  /// Estimated seconds until the frame is on screen. During exposing it's the
+  /// exposure remaining + the download estimate; during downloading it's the
+  /// estimate minus what has already elapsed. Falls back to
+  /// [kDefaultDownloadEstimate] before the first capture has been measured.
+  Duration? get timeToDisplay {
+    final est = downloadEstimate ?? kDefaultDownloadEstimate;
+    switch (phase) {
+      case CapturePhase.exposing:
+        final remaining = exposureRemaining;
+        if (remaining == null) return null;
+        return remaining + est;
+      case CapturePhase.downloading:
+        final elapsed = downloadElapsed;
+        if (elapsed == null || elapsed >= est) return Duration.zero;
+        return est - elapsed;
+      default:
+        return null;
+    }
+  }
+
+  CaptureProgress copyWith({
+    CapturePhase? phase,
+    String? frameId,
+    Duration? requestedExposure,
+    double? exposureProgressPct,
+    bool clearProgressPct = false,
+    DateTime? startedAt,
+    DateTime? exposureEndedAt,
+    String? error,
+    int? rollingDownloadMs,
+  }) =>
+      CaptureProgress(
+        phase: phase ?? this.phase,
+        frameId: frameId ?? this.frameId,
+        requestedExposure: requestedExposure ?? this.requestedExposure,
+        exposureProgressPct:
+            clearProgressPct ? null : (exposureProgressPct ?? this.exposureProgressPct),
+        startedAt: startedAt ?? this.startedAt,
+        exposureEndedAt: exposureEndedAt ?? this.exposureEndedAt,
+        error: error ?? this.error,
+        rollingDownloadMs: rollingDownloadMs ?? this.rollingDownloadMs,
+      );
+}
+
+class CaptureProgressNotifier extends Notifier<CaptureProgress> {
+  Timer? _exposeHold;
+  Timer? _downloadHold;
+  Timer? _resetTimer;
+
+  /// How long the terminal states stay on screen: done flashes briefly,
+  /// failed lingers long enough to read the reason and hit Retry.
+  static const Duration doneVisible = Duration(milliseconds: 1800);
+  static const Duration failedVisible = Duration(seconds: 6);
+
+  @override
+  CaptureProgress build() {
+    ref.onDispose(() {
+      _exposeHold?.cancel();
+      _downloadHold?.cancel();
+      _resetTimer?.cancel();
+    });
+    // Drive the exposing phase from the camera's own exposure progress —
+    // no extra polling needed; the equipment status already refreshes it.
+    ref.listen(cameraStatusProvider, (prev, next) {
+      final cam = next.maybeWhen(data: (s) => s, orElse: () => null);
+      updateExposureProgress(cam?.exposureProgressPct);
+    });
+    return const CaptureProgress();
+  }
+
+  /// Take One accepted (or about to POST) — the camera starts exposing.
+  /// Carries the rolling download estimate across captures so "ready in"
+  /// is grounded from the very start.
+  void beginExposing(Duration exposure) {
+    _resetTimer?.cancel();
+    state = CaptureProgress(
+      phase: CapturePhase.exposing,
+      requestedExposure: exposure,
+      exposureProgressPct: 0,
+      startedAt: DateTime.now(),
+      rollingDownloadMs: state.rollingDownloadMs,
+    );
+  }
+
+  /// Feed the camera's exposure progress (0..100) into the exposing phase.
+  /// At 100% the phase moves to [CapturePhase.downloading] (the daemon is now
+  /// downloading + writing the FITS), but only after the exposing phase has
+  /// been visible at least [kExposingMinVisible] — a fast rig would otherwise
+  /// jump straight to done with nothing on screen. Ignored outside exposing.
+  void updateExposureProgress(double? pct) {
+    if (state.phase != CapturePhase.exposing) return;
+    if (pct != null && pct >= 100) {
+      final started = state.startedAt ?? DateTime.now();
+      final elapsed = DateTime.now().difference(started);
+      if (elapsed < kExposingMinVisible) {
+        _exposeHold?.cancel();
+        _exposeHold = Timer(kExposingMinVisible - elapsed, () {
+          if (state.phase == CapturePhase.exposing) _enterDownloading();
+        });
+      } else {
+        _enterDownloading();
+      }
+    } else {
+      state = state.copyWith(exposureProgressPct: pct);
+    }
+  }
+
+  void _enterDownloading() {
+    state = state.copyWith(
+      phase: CapturePhase.downloading,
+      exposureProgressPct: 100,
+      exposureEndedAt: DateTime.now(),
+    );
+  }
+
+  /// The frame was registered in the catalog — the capture landed. Measures
+  /// how long the post-exposure processing took (download → FITS → catalog)
+  /// and folds it into the rolling estimate used for "ready in".
+  void complete(String frameId) {
+    // Hold the downloading phase visible at least kDownloadingMinVisible even
+    // when the frame registered in a few hundred ms.
+    final ended = state.exposureEndedAt;
+    if (ended != null &&
+        state.phase == CapturePhase.downloading &&
+        DateTime.now().difference(ended) < kDownloadingMinVisible) {
+      _downloadHold?.cancel();
+      _downloadHold = Timer(
+          kDownloadingMinVisible - DateTime.now().difference(ended),
+          () => _finishComplete(frameId));
+      return;
+    }
+    _finishComplete(frameId);
+  }
+
+  void _finishComplete(String frameId) {
+    int? updatedRolling;
+    final ended = state.exposureEndedAt;
+    if (ended != null) {
+      final measured = DateTime.now().difference(ended).inMilliseconds;
+      final prev = state.rollingDownloadMs;
+      // EMA-ish (α ≈ 0.25): the estimate tracks the rig's real speed without
+      // bouncing wildly on one slow/fast capture.
+      updatedRolling = prev == null
+          ? measured
+          : ((prev * 3) + measured) ~/ 4;
+    }
+    state = state.copyWith(
+      phase: CapturePhase.done,
+      frameId: frameId,
+      rollingDownloadMs: updatedRolling ?? state.rollingDownloadMs,
+    );
+    _scheduleReset(doneVisible);
+  }
+
+  void fail(String error) {
+    state = state.copyWith(phase: CapturePhase.failed, error: error);
+    _scheduleReset(failedVisible);
+  }
+
+  /// Auto-clear the terminal card after [after] — the notifier owns the
+  /// lifecycle so the Imaging tab doesn't have to.
+  void _scheduleReset(Duration after) {
+    _resetTimer?.cancel();
+    _resetTimer = Timer(after, reset);
+  }
+
+  void reset() {
+    _exposeHold?.cancel();
+    _downloadHold?.cancel();
+    _resetTimer?.cancel();
+    state = CaptureProgress(
+      rollingDownloadMs: state.rollingDownloadMs,
+    );
+  }
+}
+
+final captureProgressProvider =
+    NotifierProvider<CaptureProgressNotifier, CaptureProgress>(
+        CaptureProgressNotifier.new);

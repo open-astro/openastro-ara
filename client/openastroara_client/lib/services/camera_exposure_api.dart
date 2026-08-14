@@ -41,4 +41,10 @@ class CameraExposureApi {
     }
     return frameId;
   }
+
+  /// Abort the in-flight exposure (`POST /exposure/abort`). The daemon stops
+  /// the camera; the capture never lands.
+  Future<void> abort() async {
+    await _dio.post<void>('/api/v1/equipment/camera/exposure/abort');
+  }
 }
