@@ -1,0 +1,28 @@
+# Auto-apply the `safe-to-review` trust label to PRs opened by trusted
+# authors, so the Claude review bot (gated on that label for fork PRs)
+# runs without a maintainer having to label each PR by hand.
+#
+# pull_request_target runs in the base-repo context with a token that can
+# write labels on fork PRs. No code from the PR is checked out or executed,
+# so the elevated context is safe here. The author login comes from the
+# event payload and cannot be spoofed by the PR contents.
+name: Label trusted authors
+
+on:
+  pull_request_target:  # zizmor: ignore[dangerous-triggers] -- no PR code is checked out or executed; label write only, gated on author allowlist
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  label:
+    if: contains(fromJSON('["zeroastroboy"]'), github.event.pull_request.user.login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Add safe-to-review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr edit "$PR_URL" --add-label safe-to-review
