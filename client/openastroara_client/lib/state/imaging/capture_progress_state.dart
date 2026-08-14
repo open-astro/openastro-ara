@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../equipment/camera_state.dart';
@@ -69,7 +71,7 @@ class CaptureProgress {
     }
     final started = startedAt;
     if (started == null || requestedExposure == Duration.zero) return 0;
-    final elapsed = DateTime.now().difference(started);
+    final elapsed = clock.now().difference(started);
     final frac = elapsed.inMilliseconds / requestedExposure.inMilliseconds;
     return (frac * 100).clamp(0.0, 99.0);
   }
@@ -89,7 +91,7 @@ class CaptureProgress {
     if (phase != CapturePhase.downloading) return null;
     final end = exposureEndedAt;
     if (end == null) return null;
-    return DateTime.now().difference(end);
+    return clock.now().difference(end);
   }
 
   /// The rig's typical post-exposure processing time (rolling average). Null
@@ -184,8 +186,12 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     state = CaptureProgress(
       phase: CapturePhase.exposing,
       requestedExposure: exposure,
-      exposureProgressPct: 0,
-      startedAt: DateTime.now(),
+      // Seed null, not 0 — 0 is indistinguishable from a real daemon report
+      // and would freeze the bar at 0% until the first poll lands; null
+      // engages the elapsed-time fallback in displayProgressPct so a short
+      // exposure still shows motion on a slow equipment poll.
+      exposureProgressPct: null,
+      startedAt: clock.now(),
       rollingDownloadMs: state.rollingDownloadMs,
       generation: state.generation + 1,
     );
@@ -199,8 +205,8 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   void updateExposureProgress(double? pct) {
     if (state.phase != CapturePhase.exposing) return;
     if (pct != null && pct >= 100) {
-      final started = state.startedAt ?? DateTime.now();
-      final elapsed = DateTime.now().difference(started);
+      final started = state.startedAt ?? clock.now();
+      final elapsed = clock.now().difference(started);
       if (elapsed < kExposingMinVisible) {
         _exposeHold?.cancel();
         _exposeHold = Timer(kExposingMinVisible - elapsed, () {
@@ -210,7 +216,13 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
         _enterDownloading();
       }
     } else {
-      state = state.copyWith(exposureProgressPct: pct);
+      // A null update (the daemon not yet reporting a fresh percentage)
+      // must clear the stored value, not keep the previous one — otherwise
+      // the elapsed-time fallback in displayProgressPct stays dead code.
+      state = state.copyWith(
+        exposureProgressPct: pct,
+        clearProgressPct: pct == null,
+      );
     }
   }
 
@@ -218,7 +230,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     state = state.copyWith(
       phase: CapturePhase.downloading,
       exposureProgressPct: 100,
-      exposureEndedAt: DateTime.now(),
+      exposureEndedAt: clock.now(),
     );
   }
 
@@ -242,10 +254,10 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     final ended = state.exposureEndedAt;
     if (ended != null &&
         state.phase == CapturePhase.downloading &&
-        DateTime.now().difference(ended) < kDownloadingMinVisible) {
+        clock.now().difference(ended) < kDownloadingMinVisible) {
       _downloadHold?.cancel();
       _downloadHold = Timer(
-          kDownloadingMinVisible - DateTime.now().difference(ended),
+          kDownloadingMinVisible - clock.now().difference(ended),
           () => _finishComplete(frameId, generation));
       return;
     }
@@ -257,7 +269,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     int? updatedRolling;
     final ended = state.exposureEndedAt;
     if (ended != null) {
-      final measured = DateTime.now().difference(ended).inMilliseconds;
+      final measured = clock.now().difference(ended).inMilliseconds;
       final prev = state.rollingDownloadMs;
       // EMA-ish (α ≈ 0.25): the estimate tracks the rig's real speed without
       // bouncing wildly on one slow/fast capture.

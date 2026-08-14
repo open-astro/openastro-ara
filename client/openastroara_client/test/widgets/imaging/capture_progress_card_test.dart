@@ -21,12 +21,13 @@ void main() {
     addTearDown(container.dispose);
     final n = container.read(captureProgressProvider.notifier);
     n.beginExposing(const Duration(seconds: 10));
-    n.updateExposureProgress(25); // 25% → 7.5s left
-
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: Scaffold(body: CaptureProgressCard())),
     ));
+    // The daemon then reports 25% — driving the bar and the remaining time.
+    n.updateExposureProgress(25);
+    await tester.pump();
 
     expect(find.text('Exposing 10s… 25%'), findsOneWidget);
     // 7.5s left + the 2s default download estimate → ready in ~9.5s.

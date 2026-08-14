@@ -27,7 +27,9 @@ void main() {
       final p = container.read(captureProgressProvider);
       expect(p.phase, CapturePhase.exposing);
       expect(p.requestedExposure, const Duration(seconds: 5));
-      expect(p.exposureProgressPct, 0);
+      expect(p.exposureProgressPct, isNull,
+          reason: 'null seeds the elapsed-time fallback until the daemon '
+              'reports a real percentage');
       expect(p.startedAt, isNotNull);
     });
 
@@ -235,6 +237,29 @@ void main() {
       expect(p.timeToDisplay,
           const Duration(seconds: 10) + kDefaultDownloadEstimate);
     });
+
+    test(
+        'displayProgressPct falls back to elapsed time before the daemon '
+        'reports — a slow poll must not freeze the bar at 0%', () {
+      fakeAsync((async) {
+        n.beginExposing(const Duration(seconds: 4));
+        // No daemon update yet (equipment poll every ~15s): the elapsed-time
+        // estimate must drive the bar.
+        async.elapse(const Duration(milliseconds: 2000));
+        final p = container.read(captureProgressProvider);
+        expect(p.exposureProgressPct, isNull);
+        expect(p.displayProgressPct, closeTo(50, 0.5));
+        expect(p.exposureRemaining!.inMilliseconds, closeTo(2000, 60));
+        // A null update must clear the stored value, not absorb it.
+        n.updateExposureProgress(null);
+        expect(container.read(captureProgressProvider).exposureProgressPct,
+            isNull);
+        // And the fallback survives the null update.
+        async.elapse(const Duration(milliseconds: 1000));
+        expect(container.read(captureProgressProvider).displayProgressPct,
+            closeTo(75, 0.5));
+      });
+    });
   });
 }
 
@@ -244,4 +269,3 @@ extension on CaptureProgressNotifier {
     state = state.copyWith(rollingDownloadMs: ms);
   }
 }
-
