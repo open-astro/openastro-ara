@@ -162,6 +162,12 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   /// Carries the rolling download estimate across captures so "ready in"
   /// is grounded from the very start.
   void beginExposing(Duration exposure) {
+    // A fresh cycle must not inherit hold timers from the previous one — a
+    // stale expose-hold (armed when the daemon reported 100% within the
+    // min-visible window) would fire against the new cycle's state and force
+    // it straight into downloading before it has actually progressed.
+    _exposeHold?.cancel();
+    _downloadHold?.cancel();
     _resetTimer?.cancel();
     state = CaptureProgress(
       phase: CapturePhase.exposing,
@@ -243,6 +249,10 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   }
 
   void fail(String error) {
+    // Terminal state — the phase is leaving active, so any pending hold
+    // timers are stale and must not fire against a later cycle.
+    _exposeHold?.cancel();
+    _downloadHold?.cancel();
     state = state.copyWith(phase: CapturePhase.failed, error: error);
     _scheduleReset(failedVisible);
   }

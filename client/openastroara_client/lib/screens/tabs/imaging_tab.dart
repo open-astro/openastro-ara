@@ -174,9 +174,10 @@ class ImagingTab extends ConsumerWidget {
     var landed = false;
     try {
       while (DateTime.now().isBefore(deadline)) {
-        // Bail if the user navigated away mid-capture — stop polling and
-        // don't touch a detached scaffold.
-        if (!context.mounted) return;
+        // Keep polling even if the user navigated away — the capture runs on
+        // the daemon regardless, and the notifier is root-scoped, so it must
+        // still reach a terminal state (done/failed) to schedule its own
+        // auto-clear. Only the UI side-effects below need the mounted guard.
         if (await api.isRegistered(frameId)) {
           landed = true;
           break;
@@ -187,10 +188,9 @@ class ImagingTab extends ConsumerWidget {
       progress.fail(friendlyError(e, action: 'confirm the frame arrived'));
       return;
     }
-    // The widget can unmount during the final delay, after the loop exits.
-    if (!context.mounted) return;
     if (landed) {
       progress.complete(frameId);
+      if (!context.mounted) return;
       lastFrame.set(frameId);
       // A new frame invalidates any previous solve result shown in the panel.
       solve.clear();
@@ -206,7 +206,6 @@ class ImagingTab extends ConsumerWidget {
   /// Cancel the in-flight capture — abort the exposure on the daemon, then
   /// drop the capture state back to idle.
   Future<void> _cancelCapture(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     final progress = ref.read(captureProgressProvider.notifier);
     final server = ref.read(activeServerProvider);
     if (server == null) {
@@ -217,14 +216,8 @@ class ImagingTab extends ConsumerWidget {
       await CameraExposureApi(server).abort();
       progress.reset();
     } catch (e) {
-      if (!context.mounted) return;
+      // The failed card renders the reason — no separate SnackBar needed.
       progress.fail(friendlyError(e, action: 'abort the capture'));
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(friendlyError(e, action: 'abort the capture')),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
     }
   }
 }

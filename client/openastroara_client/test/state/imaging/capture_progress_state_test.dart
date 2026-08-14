@@ -121,6 +121,40 @@ void main() {
       expect(p.phase, CapturePhase.failed);
       expect(p.error, 'boom');
     });
+
+    test(
+        'a stale expose-hold timer is cancelled on retry and cannot force '
+        'the new cycle into downloading', () {
+      fakeAsync((async) {
+        // Cycle 1: the daemon reports 100% within the min-visible window, so
+        // an expose-hold is armed to flip to downloading shortly.
+        n.beginExposing(const Duration(seconds: 10));
+        n.updateExposureProgress(100);
+        // The capture fails before the hold fires; the user hits Retry
+        // immediately.
+        n.fail('boom');
+        n.beginExposing(const Duration(seconds: 10));
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing);
+        // The old hold would have fired by now — the new cycle must still be
+        // exposing, not forced into downloading.
+        async.elapse(kExposingMinVisible);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing);
+      });
+    });
+
+    test('a stale expose-hold does not survive a reset + beginExposing', () {
+      fakeAsync((async) {
+        n.beginExposing(const Duration(seconds: 10));
+        n.updateExposureProgress(100); // arms the expose-hold
+        n.reset();
+        n.beginExposing(const Duration(seconds: 10));
+        async.elapse(kExposingMinVisible);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing);
+      });
+    });
   });
 }
 
