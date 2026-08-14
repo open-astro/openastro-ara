@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/server.dart';
 import '../models/ws_event.dart';
@@ -31,10 +32,14 @@ class WsSocket {
 typedef WsConnector = WsSocket Function(Uri url, Map<String, String> headers);
 
 WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
-  // IOWebSocketChannel (dart:io) so the X-Ara-WS-Version header can be set —
-  // browser WebSocket can't set request headers, so web support is a follow-up
-  // (the server would add a query-param version fallback).
-  final channel = IOWebSocketChannel.connect(url, headers: headers);
+  // Cross-platform dial: native uses IOWebSocketChannel (dart:io) so the
+  // X-Ara-WS-Version header can be set; browsers cannot set WebSocket request
+  // headers, so on web we use the universal WebSocketChannel.connect — the
+  // daemon's documented web fallback already carries the version in the URL's
+  // ?ws_version= query (ResolveRequestedWsVersion: header wins, else query).
+  final WebSocketChannel channel = kIsWeb
+      ? WebSocketChannel.connect(url)
+      : IOWebSocketChannel.connect(url, headers: headers);
   return WsSocket(
     stream: channel.stream,
     send: (m) => channel.sink.add(m),
