@@ -1,37 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/server.dart';
-import 'package:openastroara/services/profile_api.dart';
-import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
-
-class _FakeApi extends ProfileApi {
-  _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
-  @override
-  Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408);
-}
 
 void main() {
   group('SiteSettingsNotifier', () {
     late ProviderContainer container;
     setUp(() => container = ProviderContainer());
     tearDown(() => container.dispose());
-
-    test('self-hydrates from the daemon when a server is present', () async {
-      final c = ProviderContainer(overrides: [
-        profileApiProvider.overrideWithValue(_FakeApi()),
-      ]);
-      addTearDown(c.dispose);
-      // Build the provider (schedules the hydration microtask), then let it
-      // land.
-      c.read(siteSettingsProvider);
-      await pumpEventQueue();
-      final s = c.read(siteSettingsProvider);
-      expect(s.latitudeDeg, 12.5989);
-      expect(s.longitudeDeg, -75.8408);
-      expect(s.siteName, 'Backyard'); // default for the unmapped fields
-    });
 
     test('defaults match playbook §37.12', () {
       final s = container.read(siteSettingsProvider);

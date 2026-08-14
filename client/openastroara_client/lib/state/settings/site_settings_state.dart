@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'settings_sync_mixin.dart';
 
-import '../profile_management_state.dart';
 import '../../services/profile_api.dart';
 
 /// §37.12 Site preferences — location + horizon + observing conditions.
@@ -104,25 +103,7 @@ class SiteSettings {
 class SiteSettingsNotifier extends Notifier<SiteSettings>
     with SettingsSyncMixin<SiteSettings> {
   @override
-  SiteSettings build() {
-    // Self-hydrate whenever the active server changes — the profile's site
-    // (set in the wizard / Options → Safety → Site) must be visible to ANY
-    // consumer (the Mount panel's lat/long rows, Tonight's Sky, the Site
-    // panel) without waiting for a specific screen to trigger the fetch.
-    final api = ref.watch(profileApiProvider);
-    if (api != null) {
-      // Wrapped like the filter-wheel labels' hydration: a transient failure
-      // (offline, bad response) keeps the defaults instead of crashing.
-      Future.microtask(() async {
-        try {
-          await hydrateFromServer(api);
-        } catch (_) {
-          // Keep defaults; the panel re-hydrates on the next server change.
-        }
-      });
-    }
-    return const SiteSettings();
-  }
+  SiteSettings build() => const SiteSettings();
 
   void setSiteName(String s) {
     final v = s.trim();

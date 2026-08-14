@@ -8,8 +8,10 @@ import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_mount_panel.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
@@ -29,6 +31,13 @@ class _FixedSite extends SiteSettingsNotifier {
   final SiteSettings _site;
   @override
   SiteSettings build() => _site;
+}
+
+class _FakeProfileApi extends ProfileApi {
+  _FakeProfileApi() : super(const AraServer(hostname: 'h', port: 5555));
+  @override
+  Future<SiteSettings> getSiteSettings() async =>
+      const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408);
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
@@ -142,6 +151,27 @@ void main() {
     await _pump(tester, _status());
     expect(find.text('Latitude'), findsNothing);
     expect(find.text('Longitude'), findsNothing);
+  });
+
+  testWidgets('hydrates the site on mount and shows lat/long', (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(_status());
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(
+            const [AraServer(hostname: 'h', port: 5555)])),
+        mountApiFactoryProvider.overrideWithValue((_) => api),
+        profileApiProvider.overrideWithValue(_FakeProfileApi()),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+    ));
+    await tester.pumpAndSettle();
+    // The panel hydrated the profile's site from the daemon (not overridden).
+    expect(find.text('Latitude'), findsOneWidget);
+    expect(find.text('12.60° N'), findsOneWidget);
+    expect(find.text('Longitude'), findsOneWidget);
+    expect(find.text('75.84° W'), findsOneWidget);
   });
 
   testWidgets('toggling tracking sends the tracking command', (tester) async {
