@@ -32,7 +32,13 @@ class ImagingTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final liveViewOn = ref.watch(liveViewControllerProvider);
-    final exposing = ref.watch(captureProgressProvider).isActive;
+    // Gate the main Take One button on an ACTIVE capture only (exposing /
+    // downloading). The terminal display windows (done/failed) must not keep
+    // it disabled — Retry covers the failed card, and the user may want to
+    // tweak settings and re-shoot immediately after a result.
+    final phase = ref.watch(captureProgressProvider).phase;
+    final exposing = phase == CapturePhase.exposing ||
+        phase == CapturePhase.downloading;
     return Row(
       // Stretch, not the default center: the rail Container shrink-wraps its
       // content and would otherwise float vertically centered in the row.

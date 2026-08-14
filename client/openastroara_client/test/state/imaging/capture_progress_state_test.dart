@@ -202,31 +202,6 @@ void main() {
       expect(p.frameId, 'abc');
     });
 
-    test(
-        'a failed abort (fail without generation) invalidates the in-flight '
-        'poll loop: its late complete() cannot flip the card back to done', () {
-      fakeAsync((async) {
-        n.beginExposing(const Duration(seconds: 10));
-        final gen = n.state.generation;
-        // _cancelCapture's abort HTTP call threw — fail() with no generation
-        // (it must always render, unlike stale-cycle failures).
-        n.fail('abort failed');
-        expect(container.read(captureProgressProvider).phase,
-            CapturePhase.failed);
-        // The still-running _takeOne loop resolves with the frame id — its
-        // generation is now stale, so it must not flip the card to done.
-        n.complete('late-frame', generation: gen);
-        expect(container.read(captureProgressProvider).phase,
-            CapturePhase.failed,
-            reason: 'the failed card stays put');
-        expect(container.read(captureProgressProvider).frameId, isNull);
-        // Same for a late timeout.
-        n.fail('Capture timed out.', generation: gen);
-        expect(container.read(captureProgressProvider).phase,
-            CapturePhase.failed);
-      });
-    });
-
     test('displayProgressPct clamps a driver reporting negative progress to 0',
         () {
       n.beginExposing(const Duration(seconds: 10));

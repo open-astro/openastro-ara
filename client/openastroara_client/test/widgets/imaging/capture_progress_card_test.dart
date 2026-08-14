@@ -135,7 +135,7 @@ void main() {
     addTearDown(container.dispose);
     final n = container.read(captureProgressProvider.notifier);
     n.beginExposing(const Duration(seconds: 3));
-    n.fail('boom');
+    n.fail('boom', generation: n.currentGeneration);
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -163,7 +163,7 @@ void main() {
     ));
     expect(find.text('Frame ready'), findsOneWidget);
 
-    n.fail('boom');
+    n.fail('boom', generation: n.currentGeneration);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: Scaffold(body: CaptureProgressCard())),
