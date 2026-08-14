@@ -149,7 +149,10 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
 
   /// Backstop: a command that never starts the wheel errors at 10 s; a
   /// started-but-unreported landing gets a hard cap before the spinner
-  /// clears.
+  /// clears. Re-checks [_sawMove] at the 10 s mark — a slow driver may not
+  /// have reported `moving` yet (the 1.5 s reconcile + the daemon's own poll
+  /// cadence gate that transition), so only a genuinely-never-started move
+  /// errors; a started one re-arms the long cap.
   void _startStall() {
     _stallTimer?.cancel();
     _stallTimer = Timer(const Duration(seconds: 10), () {
@@ -157,7 +160,16 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
       if (_sawMove) {
         _stallTimer = Timer(const Duration(seconds: 45), _clearPending);
       } else {
-        _clearPending();
+        // Maybe it started but we haven't SEEN it yet — one more fast look
+        // before declaring the command dead.
+        ref.read(filterWheelProvider.notifier).refresh().then((_) {
+          if (!mounted || _pendingTarget == null) return;
+          if (_sawMove) {
+            _stallTimer = Timer(const Duration(seconds: 45), _clearPending);
+          } else {
+            _clearPending();
+          }
+        });
       }
     });
   }
@@ -308,8 +320,13 @@ class _SlotRow extends StatelessWidget {
     // slot reads consistently in both places.
     final name = slot.name.isEmpty ? 'Slot ${slot.position}' : slot.name;
     final selectable = !busy && !isCurrent;
+    // transparent (not null): Material's canvas default would paint the
+    // theme's canvasColor (#1A1A1A) instead of blending into the card's
+    // bgPanel (#262626) behind every non-pending row.
     return Material(
-      color: pending ? AraColors.accentConnected.withValues(alpha: 0.08) : null,
+      color: pending
+          ? AraColors.accentConnected.withValues(alpha: 0.08)
+          : Colors.transparent,
       child: InkWell(
         onTap: selectable ? onSelect : null,
         borderRadius: BorderRadius.circular(8),
