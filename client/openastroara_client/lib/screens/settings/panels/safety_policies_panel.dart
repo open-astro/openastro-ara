@@ -94,7 +94,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Re-arm failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, action: 're-arm safety'))));
     }
   }
 

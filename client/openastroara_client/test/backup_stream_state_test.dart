@@ -191,7 +191,7 @@ void main() {
     expect(fake.acked, isEmpty, reason: 'a sha mismatch must never ack');
     final state = container.read(backupStreamProvider);
     expect(state.syncedThisSession, 0);
-    expect(state.problem, contains('checksum'),
+    expect(state.problem, contains('back up that entry'),
         reason: 'a persistently failing frame must be visible, not silently retried');
   });
 

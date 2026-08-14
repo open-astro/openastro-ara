@@ -411,7 +411,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // bounds the pass when the failure is systemic (full/read-only
           // disk hits every entry); the next tick retries.
           failuresThisPass++;
-          state = state.copyWith(problem: 'Backup of ${entry.id} failing: $error');
+          state = state.copyWith(
+            problem: 'Backup of ${entry.id} failing: '
+                '${friendlyError(error, action: 'back up that entry')}');
           // Failed attempts still moved bytes over the link (a checksum
           // mismatch is a full discarded transfer) — the cap must hold on
           // exactly the flaky links that produce failures, so pace the full
@@ -464,7 +466,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     } catch (e) {
       // Transient transport trouble: surface it, keep the loop; the next
       // tick retries.
-      state = state.copyWith(problem: 'Backup stream hiccup: $e');
+      state = state.copyWith(
+          problem: 'Backup stream hiccup: '
+              '${friendlyError(e, action: 'keep the backup stream going')}');
     } finally {
       _polling = false;
     }

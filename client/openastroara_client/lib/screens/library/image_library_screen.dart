@@ -632,7 +632,7 @@ class _SessionHeader extends ConsumerWidget {
           if (!context.mounted) return;
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('Resume failed: $e')));
+          ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'resume the sequence'))));
         }
     }
   }

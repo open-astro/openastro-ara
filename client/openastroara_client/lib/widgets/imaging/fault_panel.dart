@@ -6,6 +6,7 @@ import '../../state/faults/fault_feed_state.dart';
 import '../../state/faults/faults_state.dart';
 import '../../theme/ara_colors.dart';
 import '../status_indicator.dart';
+import '../../util/friendly_error.dart';
 
 /// §42.6 fault feed per playbook §42 — renders inline below the diagnostic
 /// panel. Collapsed by default: the header rolls up the LIVE standing-fault
@@ -91,7 +92,7 @@ class _FaultHistoryList extends ConsumerWidget {
                   child: CircularProgressIndicator(strokeWidth: 2)))),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(12),
-        child: Text('Fault history unavailable: $e',
+        child: Text(friendlyError(e, action: 'load the fault history'),
             style: Theme.of(context)
                 .textTheme
                 .bodySmall

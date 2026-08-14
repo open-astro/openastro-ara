@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/time_sync_api.dart';
 import '../../state/time_sync_state.dart';
 import 'settings_row.dart';
+import '../../util/friendly_error.dart';
 
 /// §31.1 waterfall steps 4 + 5, surfaced in the Site panel: the daemon's
 /// time-sync status, the "plug a USB GPS into the Pi" guidance with Retry
@@ -147,7 +148,7 @@ class TimeSyncSection extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Time push failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'push the time'))));
     }
     ref.invalidate(timeSyncStatusProvider);
   }
@@ -268,7 +269,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
       if (!mounted) return;
       setState(() {
         _applying = false;
-        _error = 'Push failed: $e';
+        _error = friendlyError(e, action: 'push the time');
       });
     }
   }

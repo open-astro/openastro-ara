@@ -13,6 +13,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
 
 /// §37.4 Filter Wheel panel. Shows the connected wheel's live slots (the device's
 /// own names + focus offsets) with a per-slot select, via the shared connection
@@ -401,7 +402,7 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Slot labels not saved: $e')));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'save the slot labels'))));
     }
   }
 }

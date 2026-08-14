@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// §45.10 dynamic bullseye zoom: the outer ring's radius in arcminutes for the
 /// current total error — ~5° while far off, 30′ once under 1°, 5′ once under
@@ -94,7 +95,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     try {
       await op();
     } catch (e) {
-      if (mounted) setState(() => _status = '$label failed: $e');
+      if (mounted) {
+        setState(() => _status =
+            friendlyError(e, action: label.toLowerCase()));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
