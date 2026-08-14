@@ -91,6 +91,25 @@ void main() {
   });
 
   group('PolarAlignPanel', () {
+    testWidgets('the live readout is always visible (no collapse)',
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        azErrorArcmin: 14.2,
+        altErrorArcmin: -6.5,
+        totalErrorArcmin: 15.6,
+      )));
+      await tester.pumpAndSettle();
+      // No tap to expand: the bullseye + Az/Alt/Total readout are on the page.
+      expect(find.byKey(const Key('polar-align-readout')), findsOneWidget);
+      expect(find.textContaining('Az: +14.2′'), findsOneWidget);
+      expect(find.textContaining('Alt: −6.5′'), findsOneWidget);
+      expect(find.textContaining('Total: +15.6′'), findsOneWidget);
+      expect(find.byType(CustomPaint), findsWidgets); // the bullseye
+    });
+
+
     testWidgets('idle shows Start and posts start', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));
