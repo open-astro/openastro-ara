@@ -62,7 +62,11 @@ class CaptureProgress {
   double? get displayProgressPct {
     if (phase != CapturePhase.exposing) return null;
     final pct = exposureProgressPct;
-    if (pct != null) return pct;
+    if (pct != null) {
+      // Defensive clamp — a driver reporting >100 would otherwise produce a
+      // negative exposureRemaining/timeToDisplay ("~-0.5 s left").
+      return pct.clamp(0.0, 100.0).toDouble();
+    }
     final started = startedAt;
     if (started == null || requestedExposure == Duration.zero) return 0;
     final elapsed = DateTime.now().difference(started);
@@ -274,10 +278,17 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     // already dismissed (cancel) or clobber a newer capture's progress.
     if (generation != null && !isCurrent(generation)) return;
     // Terminal state — the phase is leaving active, so any pending hold
-    // timers are stale and must not fire against a later cycle.
+    // timers are stale and must not fire against a later cycle. Bumping the
+    // generation ALSO invalidates any still-running _takeOne poll loop: a
+    // failed abort (fail without a generation) must not let that loop's late
+    // complete()/fail() flip this card back or drop a frame silently.
     _exposeHold?.cancel();
     _downloadHold?.cancel();
-    state = state.copyWith(phase: CapturePhase.failed, error: error);
+    state = state.copyWith(
+      phase: CapturePhase.failed,
+      error: error,
+      generation: state.generation + 1,
+    );
     _scheduleReset(failedVisible);
   }
 
