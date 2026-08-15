@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/camera_exposure_api.dart';
 import '../../services/frames_api.dart';
+import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
@@ -11,6 +12,7 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../widgets/imaging/diagnostic_panel.dart';
+import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/fault_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
@@ -30,7 +32,11 @@ class ImagingTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final liveViewOn = ref.watch(liveViewControllerProvider);
-    final exposing = ref.watch(captureInProgressProvider);
+    // Gate the main Take One button on an ACTIVE capture only (exposing /
+    // downloading). The terminal display windows (done/failed) must not keep
+    // it disabled — Retry covers the failed card, and the user may want to
+    // tweak settings and re-shoot immediately after a result.
+    final exposing = ref.watch(captureProgressProvider).isCapturing;
     return Row(
       // Stretch, not the default center: the rail Container shrink-wraps its
       // content and would otherwise float vertically centered in the row.
@@ -69,6 +75,10 @@ class ImagingTab extends ConsumerWidget {
                   onLiveViewToggle: (v) {
                     _toggleLiveView(context, ref, v);
                   },
+                ),
+                CaptureProgressCard(
+                  onRetry: () => _takeOne(context, ref),
+                  onCancel: () => _cancelCapture(context, ref),
                 ),
                 const SolvePanel(),
                 const GuidingPanel(),
@@ -144,87 +154,100 @@ class ImagingTab extends ConsumerWidget {
     final params = ref.read(exposureControllerProvider);
     // Notifier handles, captured before any await so the finally-reset and the
     // result update don't go through WidgetRef after a possible unmount.
-    final progress = ref.read(captureInProgressProvider.notifier);
+    final progress = ref.read(captureProgressProvider.notifier);
     final lastFrame = ref.read(lastCapturedFrameIdProvider.notifier);
     final solve = ref.read(solveResultProvider.notifier);
-    progress.set(true);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Exposing ${params.exposure.inMilliseconds / 1000.0}s…'),
-      ),
-    );
+    progress.beginExposing(params.exposure);
+    // Identity of this capture cycle — a Cancel (reset) or a newer Take One
+    // bumps the generation, so this loop's late complete()/fail() no-op.
+    final generation = progress.currentGeneration;
+    // Phase 1 — the exposure POST. A failure here means the shot never
+    // started; the user should re-shoot.
+    final String frameId;
     try {
-      // Phase 1 — the exposure POST. A failure here means the shot never
-      // started; the user should re-shoot.
-      final String frameId;
-      try {
-        frameId = await CameraExposureApi(server).takeOne(params);
-      } catch (e) {
-        if (context.mounted) {
-          messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(friendlyError(e, action: 'take that exposure')),
-            ),
-          );
+      frameId = await CameraExposureApi(server).takeOne(params);
+    } catch (e) {
+      progress.fail(
+          friendlyError(e, action: 'take that exposure'),
+          generation: generation);
+      return;
+    }
+    // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
+    // runs in the background. Poll the catalog until the frame is registered.
+    // A failure here means the exposure was accepted but we couldn't confirm
+    // it landed — distinct remedy (retry the preview, don't re-shoot).
+    final api = FramesApi(server);
+    final deadline = DateTime.now().add(
+      params.exposure + const Duration(seconds: 20),
+    );
+    var landed = false;
+    try {
+      while (DateTime.now().isBefore(deadline)) {
+        // Keep polling even if the user navigated away — the capture runs on
+        // the daemon regardless, and the notifier is root-scoped, so it must
+        // still reach a terminal state (done/failed) to schedule its own
+        // auto-clear. Only the UI side-effects below need the mounted guard.
+        // A stale generation, though, means this cycle was cancelled or
+        // superseded — its complete()/fail() would no-op anyway, so stop
+        // polling instead of hitting the catalog until the full deadline
+        // (rapid Cancel → Retry would otherwise stack several dead loops).
+        if (!progress.isCurrent(generation)) return;
+        if (await api.isRegistered(frameId)) {
+          landed = true;
+          break;
         }
-        return;
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
-      // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
-      // runs in the background. Poll the catalog until the frame is registered.
-      // A failure here means the exposure was accepted but we couldn't confirm
-      // it landed — distinct remedy (retry the preview, don't re-shoot).
-      final api = FramesApi(server);
-      final deadline = DateTime.now().add(
-        params.exposure + const Duration(seconds: 20),
-      );
-      var landed = false;
-      try {
-        while (DateTime.now().isBefore(deadline)) {
-          // Bail if the user navigated away mid-capture — stop polling and
-          // don't touch a detached scaffold.
-          if (!context.mounted) return;
-          if (await api.isRegistered(frameId)) {
-            landed = true;
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 500));
-        }
-      } catch (e) {
-        if (context.mounted) {
-          messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                friendlyError(e, action: 'confirm the frame arrived'),
-              ),
-            ),
-          );
-        }
-        return;
-      }
-      // The widget can unmount during the final delay, after the loop exits.
+    } catch (e) {
+      progress.fail(friendlyError(e, action: 'confirm the frame arrived'),
+          generation: generation);
+      return;
+    }
+    if (landed) {
+      progress.complete(frameId, generation: generation);
+      // A stale cycle (cancelled or superseded while this loop polled) must
+      // not repoint the viewer at its frame or clear the new cycle's solve.
+      if (!context.mounted || !progress.isCurrent(generation)) return;
+      lastFrame.set(frameId);
+      // A new frame invalidates any previous solve result shown in the panel.
+      solve.clear();
+      // Force a re-fetch in case the same id was shown before.
+      ref.invalidate(framePreviewProvider(frameId));
+    } else {
+      progress.fail('Capture timed out.', generation: generation);
+    }
+    // The notifier owns the terminal-state auto-clear (done ~1.8s, failed
+    // ~6s) — nothing to do here.
+  }
+
+  /// Cancel the in-flight capture — abort the exposure on the daemon, then
+  /// drop the capture state back to idle.
+  Future<void> _cancelCapture(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final progress = ref.read(captureProgressProvider.notifier);
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
+      progress.reset();
+      return;
+    }
+    try {
+      await CameraExposureApi(server).abort();
+      progress.reset();
+    } catch (e) {
+      // The abort POST failed. A lost response is NOT a successful abort —
+      // the exposure may still be running and its frame will land, so do NOT
+      // fail the card or bump the generation here: that would orphan the
+      // frame (the poll loop's complete() would no-op and lastFrame.set would
+      // be skipped). Keep tracking the capture and tell the user the cancel
+      // didn't go through; the card resolves with the truth (done or timeout).
+      if (!progress.isCapturing) return; // already reset or resolved (a
+      // double-tap race where the first abort won, or the capture finished
+      // while the abort was in flight) — nothing to warn about.
       if (!context.mounted) return;
-      // Replace the "Exposing…" snackbar rather than queueing behind it.
-      messenger.hideCurrentSnackBar();
-      if (landed) {
-        lastFrame.set(frameId);
-        // A new frame invalidates any previous solve result shown in the panel.
-        solve.clear();
-        // Force a re-fetch in case the same id was shown before.
-        ref.invalidate(framePreviewProvider(frameId));
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Frame captured.')),
-        );
-      } else {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Capture timed out.')),
-        );
-      }
-    } finally {
-      // Direct call on the captured notifier — safe even if the widget
-      // unmounted (the notifier lives in the ProviderContainer).
-      progress.set(false);
+      messenger.showSnackBar(SnackBar(
+        content: Text(friendlyError(e, action: 'abort the capture')),
+        backgroundColor: AraColors.accentError,
+      ));
     }
   }
 }
