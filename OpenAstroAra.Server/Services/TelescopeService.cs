@@ -42,11 +42,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly TelescopeStateDto IdleRuntime = new("idle", null, null, false, false, false, null, null);
 
-    // §57.9 — the target row is the mount's own TargetRA/TargetDec read, EXCEPT after a
-    // FindHome/Park, which are not target commands: the mount keeps the stale goto destination
-    // in its registers and would repaint it forever. Latch set by Home/Park, cleared by the
-    // next slew/sync (or connect) so a fresh target command takes over.
-    private bool _targetCleared;
+    // §57.9 — masks the mount's TargetRA/TargetDec read after a FindHome/Park until a new
+    // target command (Ara's or an external one) takes over; see TargetDisplayLatch.
+    // Internal for tests, like SlewWatch.
+    internal TargetDisplayLatch TargetLatch { get; } = new();
 
     private readonly ILogger<TelescopeService> _logger;
     private readonly EquipmentEventPublisher? _events;
@@ -158,7 +157,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         NoteMountCommand(w => w.NoteMotionCommanded());
         lock (_gate) {
             // §57.9 — a goto or sync re-arms the target display (a Home/Park may have cleared it).
-            _targetCleared = false;
+            TargetLatch.NoteTargetCommand();
             if (!sync) {
                 // §57.8 — the upcoming slew_started event carries the commanded target (a sync
                 // moves nothing, so it never opens a slew episode).
@@ -175,7 +174,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // unused by the park itself — the param is kept only for the interface contract.
         _ = request;
         var client = RequireConnectedClient();
-        lock (_gate) { _targetCleared = true; } // §57.9 — parking isn't a target command
+        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
         NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
             // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
@@ -196,7 +195,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient();
-        lock (_gate) { _targetCleared = true; } // §57.9 — homing isn't a target command
+        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
         // FindHome blocks until the mount reaches its home switch; run it off the request
         // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
         // AtHome when it settles. The panel gates this on CanFindHome.
@@ -407,7 +406,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             DiscoveredDeviceDto? watchedDevice = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = _targetCleared
+                    // §57.9 — mask the stale post-Park/Home target; the latch self-releases
+                    // when the registers change (an external goto/sync wrote a new target).
+                    _runtime = TargetLatch.Observe(runtime.TargetRightAscensionHours, runtime.TargetDeclinationDegrees)
                         ? runtime with { TargetRightAscensionHours = null, TargetDeclinationDegrees = null }
                         : runtime;
                     if (caps is not null) {
@@ -744,7 +745,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
-                    _targetCleared = false;     // §57.9 — a fresh session trusts the mount's own target registers again
+                    TargetLatch.Reset();        // §57.9 — a fresh session trusts the mount's own target registers again
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
