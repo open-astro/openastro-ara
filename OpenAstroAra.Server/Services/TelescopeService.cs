@@ -744,6 +744,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
+                    _targetCleared = false;     // §57.9 — a fresh session trusts the mount's own target registers again
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
