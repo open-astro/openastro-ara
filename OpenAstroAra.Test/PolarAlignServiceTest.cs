@@ -977,13 +977,17 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB);
             var log = new RecordingLog();
             var mount = NewMount();
-            using var svc = NewService(guider, solver, mount, log: log);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, mount, ws, log: log);
 
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            // Wait for the first LIVE iteration (not just the seed) so the row's iteration count is real.
+            // Wait for the first LIVE iteration (not just the seed) so the row's iteration count is
+            // real. The signal must be the second progress EVENT (seed publishes iteration 0, the
+            // live loop publishes after recording its count) — LastFrameId flips to "live-1" at
+            // capture time, BEFORE the solve bumps the counter, so polling it races Complete.
             using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
-                while ((await svc.GetStatusAsync(cts.Token).ConfigureAwait(false)).LastFrameId?.StartsWith("live-", StringComparison.Ordinal) != true) {
+                while (ws.Count(WsEventCatalog.PolarAlignProgress) < 2) {
                     await Task.Delay(25, cts.Token).ConfigureAwait(false);
                 }
             }

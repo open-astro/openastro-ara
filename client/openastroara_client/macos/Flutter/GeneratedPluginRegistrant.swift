@@ -10,7 +10,7 @@ import file_picker
 import flutter_secure_storage_darwin
 import package_info_plus
 import url_launcher_macos
-import webview_flutter_wkwebview
+import webview_all_wkwebview
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))

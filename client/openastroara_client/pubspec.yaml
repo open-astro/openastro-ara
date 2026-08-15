@@ -1,8 +1,7 @@
 name: openastroara
 description: "OpenAstro Ara client for Windows, iOS, Linux, macOS, and Android."
 publish_to: 'none'
-
-version: 0.0.1+26
+version: 0.0.1+34
 
 environment:
   sdk: ^3.12.0
@@ -30,6 +29,7 @@ dependencies:
   file_picker: ^12.0.0-beta.7
   fl_chart: ^1.1.1
   collection: ^1.19.1
+  clock: ^1.1.1
   # Worldwide lat/long → IANA timezone mapping (pure Dart, offline). The IANA
   # NAME is DST-policy-proof (rule changes land in the OS tz database), but the
   # package's embedded boundary snapshot can age — see PORT_TODO if legislatures
