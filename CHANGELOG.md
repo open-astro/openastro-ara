@@ -44,6 +44,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **Photos-style Image Library.** Session sections with lazy thumbnail grids (off-screen tiles never fetch), overflow-menu session actions, inline debounced search, double-click zoom in the frame viewer, and session-scoped stretch-palette memory.
 
 ### Changed
+- **Mount panel shows the slew target.** The Settings → Mount panel now displays **Target RA / Target Dec** below the live position — the destination of the last GoTo/Sync, read back from the mount's own `TargetRightAscension`/`TargetDeclination` bookkeeping (null → "—"). Find Home and Park clear it (they're not target commands; the mount's registers keep the stale goto destination, so the daemon overrides the read after those commands until the next slew/sync). External slews (ASIAIR app, handset) still show, since the mount read remains the source otherwise.
 - **Polar Align is always on the page.** The Imaging-tab Polar Align panel no longer hides its bullseye + Az/Alt/Total readout behind a collapse — the live data and knob hints stay visible like the equipment chips, so polar alignment reads at a glance while you're at the mount.
 - **Mount panel shows your observing site.** Options → Mount → Connection now lists **Latitude / Longitude** below Declination — the site you set in the profile wizard (Profile Basics) or Options → Safety → Site — so the rig's live RA/Dec reads next to where it's pointed on Earth.
 

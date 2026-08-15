@@ -213,7 +213,11 @@ public sealed record TelescopeStateDto(
     double? DeclinationDegrees,
     bool Tracking,
     bool Parked,
-    bool AtHome);
+    bool AtHome,
+    // §57.9 — the destination of the last equatorial slew/sync, read back from the mount's
+    // own TargetRA/TargetDec bookkeeping (null when the mount can't report it or none set yet).
+    double? TargetRightAscensionHours = null,
+    double? TargetDeclinationDegrees = null);
 
 public sealed record SlewRequestDto(
     double RightAscensionHours,
