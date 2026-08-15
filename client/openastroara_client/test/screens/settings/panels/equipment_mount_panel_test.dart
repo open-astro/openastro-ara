@@ -70,6 +70,8 @@ MountStatus _status({
   bool tracking = false,
   bool parked = false,
   String runtimeState = 'idle',
+  double? targetRaHours,
+  double? targetDecDegrees,
 }) =>
     MountStatus(
       deviceId: 'mount-0',
@@ -88,6 +90,8 @@ MountStatus _status({
       runtimeState: runtimeState,
       rightAscensionHours: 5.5,
       declinationDegrees: -12.25,
+      targetRightAscensionHours: targetRaHours,
+      targetDeclinationDegrees: targetDecDegrees,
       tracking: tracking,
       parked: parked,
       atHome: false,
@@ -127,6 +131,24 @@ void main() {
     expect(find.byType(Switch), findsNWidgets(2)); // tracking + auto-connect
     expect(find.widgetWithText(OutlinedButton, 'Park'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Stop'), findsOneWidget);
+  });
+
+  testWidgets('shows the slew target rows (— when the mount has none)',
+      (tester) async {
+    await _pump(tester, _status());
+    expect(find.text('Target RA'), findsOneWidget);
+    expect(find.text('Target Dec'), findsOneWidget);
+    expect(find.text('—'), findsNWidgets(2));
+  });
+
+  testWidgets('formats a commanded target from the mount bookkeeping',
+      (tester) async {
+    await _pump(tester, _status(
+      targetRaHours: 10.5,
+      targetDecDegrees: 55,
+    ));
+    expect(find.text('10h 30m 00s'), findsOneWidget);
+    expect(find.text('+55° 00′ 00″'), findsOneWidget);
   });
 
   testWidgets('shows the observing site lat/long below Declination when set',

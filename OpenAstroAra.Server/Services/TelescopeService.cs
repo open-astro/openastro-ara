@@ -40,7 +40,12 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
-    private static readonly TelescopeStateDto IdleRuntime = new("idle", null, null, false, false, false);
+    private static readonly TelescopeStateDto IdleRuntime = new("idle", null, null, false, false, false, null, null);
+
+    // §57.9 — masks the mount's TargetRA/TargetDec read after a FindHome/Park until a new
+    // target command (Ara's or an external one) takes over; see TargetDisplayLatch.
+    // Internal for tests, like SlewWatch.
+    internal TargetDisplayLatch TargetLatch { get; } = new();
 
     private readonly ILogger<TelescopeService> _logger;
     private readonly EquipmentEventPublisher? _events;
@@ -150,10 +155,12 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
         NoteMountCommand(w => w.NoteMotionCommanded());
-        if (!sync) {
-            // §57.8 — the upcoming slew_started event carries the commanded target (a sync moves
-            // nothing, so it never opens a slew episode).
-            lock (_gate) {
+        lock (_gate) {
+            // §57.9 — a goto or sync re-arms the target display (a Home/Park may have cleared it).
+            TargetLatch.NoteTargetCommand();
+            if (!sync) {
+                // §57.8 — the upcoming slew_started event carries the commanded target (a sync
+                // moves nothing, so it never opens a slew episode).
                 SlewWatch.NoteSlewTarget(ra, dec);
             }
         }
@@ -167,6 +174,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // unused by the park itself — the param is kept only for the interface contract.
         _ = request;
         var client = RequireConnectedClient();
+        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
         NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
             // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
@@ -187,6 +195,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient();
+        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
         // FindHome blocks until the mount reaches its home switch; run it off the request
         // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
         // AtHome when it settles. The panel gates this on CanFindHome.
@@ -397,7 +406,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             DiscoveredDeviceDto? watchedDevice = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = runtime;
+                    // §57.9 — mask the stale post-Park/Home target; the latch self-releases
+                    // when the registers change (an external goto/sync wrote a new target).
+                    _runtime = TargetLatch.Observe(runtime.TargetRightAscensionHours, runtime.TargetDeclinationDegrees)
+                        ? runtime with { TargetRightAscensionHours = null, TargetDeclinationDegrees = null }
+                        : runtime;
                     if (caps is not null) {
                         _capabilities = caps;
                     }
@@ -524,6 +537,14 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { ra = c.RightAscension; } catch (Exception) { ra = null; }
         double? dec;
         try { dec = c.Declination; } catch (Exception) { dec = null; }
+        // §57.9 — the slew/sync destination, read back from the mount's own target registers.
+        // Same per-field best-effort boundary as RA/Dec: a mount that throws
+        // PropertyNotImplemented (or InvalidOperationException before the first target is set)
+        // simply reports null rather than failing the whole runtime read.
+        double? targetRa;
+        try { targetRa = c.TargetRightAscension; } catch (Exception) { targetRa = null; }
+        double? targetDec;
+        try { targetDec = c.TargetDeclination; } catch (Exception) { targetDec = null; }
         bool tracking;
         try { tracking = c.Tracking; } catch (Exception) { tracking = false; }
         bool parked;
@@ -535,7 +556,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // the shared helper so the precedence (incl. the parked-over-slewing
         // contradiction guard) is unit-tested in one place.
         var state = ResolveRuntimeState(slewing, parked, tracking);
-        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome);
+        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, targetRa, targetDec);
     }
 
     /// <summary>
@@ -724,6 +745,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
+                    TargetLatch.Reset();        // §57.9 — a fresh session trusts the mount's own target registers again
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }

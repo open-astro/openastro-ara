@@ -201,6 +201,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var targetRa = target.RA;
         var targetDec = target.Dec;
         lock (_gate) {
+            TargetLatch.NoteTargetCommand(); // §57.9 — a goto re-arms the target display
             SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
         }
         return SlewCoreAsync();

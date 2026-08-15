@@ -1,7 +1,7 @@
 name: openastroara
 description: "OpenAstro Ara client for Windows, iOS, Linux, macOS, and Android."
 publish_to: 'none'
-version: 0.0.1+34
+version: 0.0.1+35
 
 environment:
   sdk: ^3.12.0

@@ -116,6 +116,10 @@ class _MountBody extends ConsumerWidget {
       children: [
         _row('RA (Right Ascension)', formatRaHours(s.rightAscensionHours)),
         _row('Dec (Declination)', formatDecDegrees(s.declinationDegrees)),
+        // Where the last slew/sync was aimed — the mount's own target
+        // bookkeeping (— when none set or the mount can't report it).
+        _row('Target RA', formatRaHours(s.targetRightAscensionHours)),
+        _row('Target Dec', formatDecDegrees(s.targetDeclinationDegrees)),
         // The observing site from the profile (set in the wizard / Options →
         // Safety → Site) — handy next to the mount's live position.
         if (hasSite) ...[

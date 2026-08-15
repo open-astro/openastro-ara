@@ -88,6 +88,11 @@ class MountStatus extends EquipmentDeviceStatus {
   final String runtimeState;
   final double? rightAscensionHours;
   final double? declinationDegrees;
+  /// The destination of the last equatorial slew/sync — the mount's own
+  /// TargetRA/TargetDec bookkeeping (null when the mount can't report it or
+  /// no target has been commanded yet).
+  final double? targetRightAscensionHours;
+  final double? targetDeclinationDegrees;
   final bool tracking;
   final bool parked;
   final bool atHome;
@@ -100,6 +105,8 @@ class MountStatus extends EquipmentDeviceStatus {
     required this.runtimeState,
     required this.rightAscensionHours,
     required this.declinationDegrees,
+    this.targetRightAscensionHours,
+    this.targetDeclinationDegrees,
     required this.tracking,
     required this.parked,
     required this.atHome,
@@ -122,6 +129,10 @@ class MountStatus extends EquipmentDeviceStatus {
       runtimeState: r['state'] as String? ?? '',
       rightAscensionHours: (r['right_ascension_hours'] as num?)?.toDouble(),
       declinationDegrees: (r['declination_degrees'] as num?)?.toDouble(),
+      targetRightAscensionHours:
+          (r['target_right_ascension_hours'] as num?)?.toDouble(),
+      targetDeclinationDegrees:
+          (r['target_declination_degrees'] as num?)?.toDouble(),
       tracking: r['tracking'] as bool? ?? false,
       parked: r['parked'] as bool? ?? false,
       atHome: r['at_home'] as bool? ?? false,
@@ -139,13 +150,17 @@ class MountStatus extends EquipmentDeviceStatus {
           other.runtimeState == runtimeState &&
           other.rightAscensionHours == rightAscensionHours &&
           other.declinationDegrees == declinationDegrees &&
+          other.targetRightAscensionHours == targetRightAscensionHours &&
+          other.targetDeclinationDegrees == targetDeclinationDegrees &&
           other.tracking == tracking &&
           other.parked == parked &&
           other.atHome == atHome);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, rightAscensionHours, declinationDegrees, tracking, parked, atHome);
+      runtimeState, rightAscensionHours, declinationDegrees,
+      targetRightAscensionHours, targetDeclinationDegrees, tracking, parked,
+      atHome);
 }
 
 /// Format right ascension (decimal hours, [0, 24)) as `HHh MMm SSs`. Clamped to
