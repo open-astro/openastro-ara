@@ -718,7 +718,7 @@ class _SessionFramesGrid extends ConsumerWidget {
         child: Padding(
           padding: _padding,
           child: Text(
-            'Frames unavailable: $e',
+            friendlyError(e, action: 'load the frames'),
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),

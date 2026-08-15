@@ -38,7 +38,7 @@ class TimeSyncSection extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Could not read the server clock state: $e',
+                friendlyError(e, action: 'read the server clock state'),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ),
