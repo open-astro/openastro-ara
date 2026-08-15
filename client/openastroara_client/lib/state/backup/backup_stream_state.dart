@@ -411,9 +411,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // bounds the pass when the failure is systemic (full/read-only
           // disk hits every entry); the next tick retries.
           failuresThisPass++;
+          // A String error is our own already-readable description
+          // ("checksum mismatch") — show it verbatim; friendlyError would
+          // flatten it to a generic sentence and lose the cause.
           state = state.copyWith(
             problem: 'Backup of ${entry.id} failing: '
-                '${friendlyError(error, action: 'back up that entry')}');
+                '${error is String ? error : friendlyError(error, action: 'back up that entry')}');
           // Failed attempts still moved bytes over the link (a checksum
           // mismatch is a full discarded transfer) — the cap must hold on
           // exactly the flaky links that produce failures, so pace the full
@@ -491,9 +494,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
 
   /// Pull + verify + store one frame. Returns (null, downloadTime) on
   /// success — downloadTime spans only the network transfer, for §44.4
-  /// pacing/measurement — else a short error description (checksum mismatch,
-  /// disk trouble, transport error); the caller decides whether to retry.
-  Future<(String?, Duration?)> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
+  /// pacing/measurement — else the failure: a `String` description for
+  /// checksum mismatch, or the caught exception (disk trouble, transport
+  /// error) so the caller can render it; the caller decides whether to retry.
+  Future<(Object?, Duration?)> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
     try {
       // Stopwatch, not DateTime.now(): Windows' wall clock ticks ~1-16 ms,
       // coarse enough to read a fast transfer as zero elapsed.
@@ -538,7 +542,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // frames endpoint, which is not slot-gated — only queue()/ack() can
       // lose the slot, and those throw outside this method.
       debugPrint('backup-stream pull failed for ${entry.id}: $e');
-      return ('$e', null);
+      return (e, null);
     }
   }
 
