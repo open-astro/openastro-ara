@@ -187,6 +187,11 @@ class ImagingTab extends ConsumerWidget {
         // the daemon regardless, and the notifier is root-scoped, so it must
         // still reach a terminal state (done/failed) to schedule its own
         // auto-clear. Only the UI side-effects below need the mounted guard.
+        // A stale generation, though, means this cycle was cancelled or
+        // superseded — its complete()/fail() would no-op anyway, so stop
+        // polling instead of hitting the catalog until the full deadline
+        // (rapid Cancel → Retry would otherwise stack several dead loops).
+        if (!progress.isCurrent(generation)) return;
         if (await api.isRegistered(frameId)) {
           landed = true;
           break;

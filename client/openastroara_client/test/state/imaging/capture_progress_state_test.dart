@@ -258,6 +258,81 @@ void main() {
             closeTo(75, 0.5));
       });
     });
+
+    test(
+        'the local exposure clock enters downloading when the daemon never '
+        'reports 100% — the rolling estimate still gets measured', () {
+      // Regression: the exposing → downloading transition was gated solely on
+      // the daemon's exposure_progress_pct reaching 100, which rides the 15 s
+      // equipment poll. For any exposure shorter than that cadence the frame
+      // (confirmed by the fast catalog poll) landed while still "exposing" —
+      // the card skipped the downloading phase and rollingDownloadMs was
+      // never learned.
+      fakeAsync((async) {
+        n.beginExposing(const Duration(seconds: 3));
+        async.elapse(const Duration(seconds: 3));
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing,
+            reason: 'the clock pads for POST → shutter latency');
+        async.elapse(kExposureClockPad);
+        final p = container.read(captureProgressProvider);
+        expect(p.phase, CapturePhase.downloading);
+        expect(p.exposureEndedAt, isNotNull);
+        // The frame lands 1s later: the download time is measured.
+        async.elapse(const Duration(seconds: 1));
+        n.complete('f1', generation: n.state.generation);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.done);
+        expect(container.read(captureProgressProvider).rollingDownloadMs,
+            closeTo(1000, 60));
+      });
+    });
+
+    test('a sub-min-visible exposure still shows the exposing phase', () {
+      fakeAsync((async) {
+        n.beginExposing(const Duration(milliseconds: 100));
+        async.elapse(const Duration(milliseconds: 100) + kExposureClockPad);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing,
+            reason: 'the clock never fires before kExposingMinVisible');
+        async.elapse(kExposingMinVisible);
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.downloading);
+      });
+    });
+
+    test('a cancelled cycle\'s exposure clock cannot fire into the next one',
+        () {
+      fakeAsync((async) {
+        n.beginExposing(const Duration(seconds: 2));
+        async.elapse(const Duration(seconds: 1));
+        n.reset(); // Cancel.
+        n.beginExposing(const Duration(seconds: 30));
+        // Past the OLD cycle's 2s+pad deadline: the new 30s exposure must
+        // still be exposing.
+        async.elapse(const Duration(seconds: 3));
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.exposing);
+      });
+    });
+
+    test('a daemon 100% report beating the clock wins without a double '
+        'transition', () {
+      fakeAsync((async) {
+        n.beginExposing(const Duration(seconds: 5));
+        async.elapse(const Duration(seconds: 4));
+        n.updateExposureProgress(100); // → downloading (past min-visible)
+        expect(container.read(captureProgressProvider).phase,
+            CapturePhase.downloading);
+        final endedAt =
+            container.read(captureProgressProvider).exposureEndedAt;
+        // Past the local clock's 5s+pad deadline: exposureEndedAt must not
+        // be overwritten by a second transition.
+        async.elapse(const Duration(seconds: 2));
+        expect(container.read(captureProgressProvider).exposureEndedAt,
+            endedAt);
+      });
+    });
   });
 }
 

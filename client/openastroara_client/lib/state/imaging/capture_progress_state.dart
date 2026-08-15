@@ -23,6 +23,12 @@ const Duration kDownloadingMinVisible = Duration(milliseconds: 800);
 /// middle ground keeps "ready in" honest from the very first shot.
 const Duration kDefaultDownloadEstimate = Duration(seconds: 2);
 
+/// Slack added to the local exposure clock (see [CaptureProgressNotifier
+/// .beginExposing]) before it declares the exposure over on its own — absorbs
+/// the POST → shutter-open latency so the card doesn't claim "Downloading" a
+/// beat before the shutter actually closes.
+const Duration kExposureClockPad = Duration(milliseconds: 250);
+
 class CaptureProgress {
   final CapturePhase phase;
   final String? frameId;
@@ -66,8 +72,9 @@ class CaptureProgress {
 
   /// The progress to DISPLAY: the daemon's real percentage when it has one,
   /// otherwise a local elapsed-time estimate (elapsed / requested × 100,
-  /// capped at 99 so the bar visibly completes only when the daemon confirms)
-  /// — the daemon's equipment poll is slow (15 s), so a short exposure would
+  /// capped at 99 — the bar completes only when the daemon confirms 100% or
+  /// the notifier's local exposure clock declares the exposure over) — the
+  /// daemon's equipment poll is slow (15 s), so a short exposure would
   /// otherwise sit at 0% the whole time.
   double? get displayProgressPct {
     if (phase != CapturePhase.exposing) return null;
@@ -158,6 +165,14 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   Timer? _exposeHold;
   Timer? _downloadHold;
   Timer? _resetTimer;
+  /// Local exposing → downloading fallback: fires when the requested exposure
+  /// (+ [kExposureClockPad]) has elapsed on the client clock. The daemon's
+  /// `exposure_progress_pct` rides the 15 s equipment poll, so for any
+  /// exposure shorter than that cadence the 100% reading usually never
+  /// arrives before the frame lands — without this clock the card would skip
+  /// the downloading phase and the rolling download estimate would never be
+  /// measured. A real 100% report beating the clock cancels it.
+  Timer? _exposureClock;
 
   /// How long the terminal states stay on screen: done flashes briefly,
   /// failed lingers long enough to read the reason and hit Retry.
@@ -170,6 +185,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
       _exposeHold?.cancel();
       _downloadHold?.cancel();
       _resetTimer?.cancel();
+      _exposureClock?.cancel();
     });
     // Drive the exposing phase from the camera's own exposure progress —
     // no extra polling needed; the equipment status already refreshes it.
@@ -191,6 +207,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     _exposeHold?.cancel();
     _downloadHold?.cancel();
     _resetTimer?.cancel();
+    _exposureClock?.cancel();
     state = CaptureProgress(
       phase: CapturePhase.exposing,
       requestedExposure: exposure,
@@ -203,6 +220,20 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
       rollingDownloadMs: state.rollingDownloadMs,
       generation: state.generation + 1,
     );
+    // Local exposing → downloading fallback (see _exposureClock's doc): once
+    // the requested exposure has elapsed on the client clock, move on rather
+    // than wait for the slow equipment poll to report 100%. Never earlier
+    // than kExposingMinVisible so a sub-second exposure still shows its
+    // phase. Generation-guarded: a cancel/retry after arming makes it a
+    // no-op even though beginExposing/reset also cancel it explicitly.
+    final gen = state.generation;
+    var wait = exposure + kExposureClockPad;
+    if (wait < kExposingMinVisible) wait = kExposingMinVisible;
+    _exposureClock = Timer(wait, () {
+      if (state.phase == CapturePhase.exposing && state.generation == gen) {
+        _enterDownloading();
+      }
+    });
   }
 
   /// Feed the camera's exposure progress (0..100) into the exposing phase.
@@ -235,6 +266,9 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   }
 
   void _enterDownloading() {
+    // Whichever signal won (daemon 100% or the local exposure clock), the
+    // other must not fire a second transition.
+    _exposureClock?.cancel();
     state = state.copyWith(
       phase: CapturePhase.downloading,
       exposureProgressPct: 100,
@@ -309,6 +343,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     // generation ALSO invalidates any still-running _takeOne poll loop.
     _exposeHold?.cancel();
     _downloadHold?.cancel();
+    _exposureClock?.cancel();
     state = state.copyWith(
       phase: CapturePhase.failed,
       error: error,
@@ -328,6 +363,7 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     _exposeHold?.cancel();
     _downloadHold?.cancel();
     _resetTimer?.cancel();
+    _exposureClock?.cancel();
     state = CaptureProgress(
       rollingDownloadMs: state.rollingDownloadMs,
       generation: state.generation + 1,

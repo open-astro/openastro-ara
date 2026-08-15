@@ -35,6 +35,11 @@ void main() {
     final bar = tester.widget<LinearProgressIndicator>(
         find.byType(LinearProgressIndicator));
     expect(bar.value, closeTo(0.25, 1e-9));
+
+    // The local exposure clock is still armed (the capture never finishes in
+    // this test) — settle it before the pending-timer leak check.
+    n.reset();
+    await tester.pump();
   });
 
   testWidgets('downloading shows the spinner and elapsed', (tester) async {
@@ -78,6 +83,11 @@ void main() {
 
     expect(find.textContaining('~5.0 s left'), findsOneWidget);
     expect(find.textContaining('ready in ~7.0 s'), findsOneWidget);
+
+    // The local exposure clock is still armed (the capture never finishes in
+    // this test) — settle it before the pending-timer leak check.
+    n.reset();
+    await tester.pump();
   });
 
   testWidgets('Cancel shows while exposing and fires the callback',
