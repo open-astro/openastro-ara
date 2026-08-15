@@ -56,6 +56,14 @@ class CaptureProgress {
 
   bool get isActive => phase != CapturePhase.idle;
 
+  /// True only while the capture itself is still running (exposing /
+  /// downloading) — unlike [isActive], the terminal display windows
+  /// (done/failed) don't count. Gates the Take One button and the
+  /// abort-failure path, both of which care about "still capturing",
+  /// not "a card is on screen".
+  bool get isCapturing =>
+      phase == CapturePhase.exposing || phase == CapturePhase.downloading;
+
   /// The progress to DISPLAY: the daemon's real percentage when it has one,
   /// otherwise a local elapsed-time estimate (elapsed / requested × 100,
   /// capped at 99 so the bar visibly completes only when the daemon confirms)
@@ -243,9 +251,12 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   /// a `_takeOne` poll loop carries so its late complete()/fail() no-op.
   int get currentGeneration => state.generation;
 
-  /// True while a capture cycle is active (exposing/downloading) — used by the
-  /// cancel path to tell "a capture is still tracked" from "already idle".
-  bool get isActive => state.isActive;
+  /// True only while the capture is still running (exposing/downloading) —
+  /// used by the cancel path to tell "a capture is still tracked" from
+  /// "already idle or resolved". Terminal phases (done/failed) return false:
+  /// an abort that loses the race against a finishing capture must not
+  /// surface an error over a card that already resolved.
+  bool get isCapturing => state.isCapturing;
 
   /// The frame was registered in the catalog — the capture landed. Measures
   /// how long the post-exposure processing took (download → FITS → catalog)

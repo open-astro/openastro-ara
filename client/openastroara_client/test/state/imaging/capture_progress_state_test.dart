@@ -52,6 +52,29 @@ void main() {
       });
     });
 
+    test(
+        'isCapturing covers only the running phases — terminal display '
+        'windows return false', () {
+      // Regression: the abort-failure path guards on "still capturing". When
+      // Cancel loses the race against a finishing capture, the card is in a
+      // terminal phase (done/failed) and the guard must short-circuit — the
+      // old isActive-based check stayed true and surfaced a bogus "couldn't
+      // abort" error right after a successful shot.
+      expect(n.isCapturing, isFalse, reason: 'idle');
+      n.beginExposing(const Duration(seconds: 3));
+      expect(n.isCapturing, isTrue, reason: 'exposing');
+      n.complete('abc', generation: n.state.generation);
+      final p = container.read(captureProgressProvider);
+      expect(p.phase, CapturePhase.done);
+      expect(p.isActive, isTrue, reason: 'the done card is still displayed');
+      expect(n.isCapturing, isFalse,
+          reason: 'done is a display window, not a running capture');
+      n.beginExposing(const Duration(seconds: 3));
+      n.fail('boom', generation: n.state.generation);
+      expect(n.isCapturing, isFalse,
+          reason: 'failed is a display window, not a running capture');
+    });
+
     test('complete() lands the done phase with the frame id', () {
       n.beginExposing(const Duration(seconds: 3));
       n.complete('abc', generation: n.state.generation);

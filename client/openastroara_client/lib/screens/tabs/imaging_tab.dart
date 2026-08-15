@@ -36,9 +36,7 @@ class ImagingTab extends ConsumerWidget {
     // downloading). The terminal display windows (done/failed) must not keep
     // it disabled — Retry covers the failed card, and the user may want to
     // tweak settings and re-shoot immediately after a result.
-    final phase = ref.watch(captureProgressProvider).phase;
-    final exposing = phase == CapturePhase.exposing ||
-        phase == CapturePhase.downloading;
+    final exposing = ref.watch(captureProgressProvider).isCapturing;
     return Row(
       // Stretch, not the default center: the rail Container shrink-wraps its
       // content and would otherwise float vertically centered in the row.
@@ -237,8 +235,9 @@ class ImagingTab extends ConsumerWidget {
       // frame (the poll loop's complete() would no-op and lastFrame.set would
       // be skipped). Keep tracking the capture and tell the user the cancel
       // didn't go through; the card resolves with the truth (done or timeout).
-      if (!progress.isActive) return; // already reset/terminal (e.g. a
-      // double-tap race where the first abort won) — nothing to resurrect.
+      if (!progress.isCapturing) return; // already reset or resolved (a
+      // double-tap race where the first abort won, or the capture finished
+      // while the abort was in flight) — nothing to warn about.
       if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(
         content: Text(friendlyError(e, action: 'abort the capture')),
