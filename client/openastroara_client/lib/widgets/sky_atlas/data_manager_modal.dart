@@ -249,7 +249,7 @@ class _PackageRow extends ConsumerWidget {
   Future<void> _download(BuildContext context, WidgetRef ref) => _guarded(
     context,
     () => ref.read(dataManagerPackagesProvider.notifier).download(package.id),
-    'Download failed',
+    'download the catalog',
   );
 
   Future<void> _cancel(
@@ -259,7 +259,7 @@ class _PackageRow extends ConsumerWidget {
   ) => _guarded(
     context,
     () => ref.read(dataManagerPackagesProvider.notifier).cancel(downloadId),
-    'Cancel failed',
+    'cancel the download',
   );
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
@@ -295,7 +295,7 @@ class _PackageRow extends ConsumerWidget {
     await _guarded(
       context,
       () => ref.read(dataManagerPackagesProvider.notifier).delete(package.id),
-      'Remove failed',
+      'remove the catalog',
     );
   }
 
@@ -303,17 +303,18 @@ class _PackageRow extends ConsumerWidget {
   // already-installed package, or a transport error — the failure isn't in provider state).
   Future<void> _guarded(
     BuildContext context,
-    Future<void> Function() action,
-    String label,
+    Future<void> Function() op,
+    // Verb phrase completing "Couldn't <action>", e.g. 'download the catalog'.
+    String action,
   ) async {
     try {
-      await action();
+      await op();
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(
-            content: Text(friendlyError(e, action: label.toLowerCase()))));
+        ).showSnackBar(
+            SnackBar(content: Text(friendlyError(e, action: action))));
       }
     }
   }
