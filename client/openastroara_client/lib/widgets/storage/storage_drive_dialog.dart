@@ -6,6 +6,7 @@ import '../../services/storage_space_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/storage_settings_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// §29.1.1/§29.1.3 — "choose a disk for your frames", after the Time Machine
 /// model: one list of disks, select, confirm. Erasing (for disks ARA can't use
@@ -148,8 +149,9 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
               height: 140, child: Center(child: CircularProgressIndicator())),
           error: (e, _) => SizedBox(
             height: 140,
-            child: Center(child: Text('Could not read the server\'s disks.\n$e',
-                textAlign: TextAlign.center)),
+            child: Center(
+                child: Text(friendlyError(e, action: "read the server's disks"),
+                    textAlign: TextAlign.center)),
           ),
           data: (all) {
             final disks = all.where((d) => !d.isSystemDisk).toList();

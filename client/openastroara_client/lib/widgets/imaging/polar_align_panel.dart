@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// §45.10 dynamic bullseye zoom: the outer ring's radius in arcminutes for the
 /// current total error — ~5° while far off, 30′ once under 1°, 5′ once under
@@ -86,7 +87,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     }
   }
 
-  Future<void> _run(String label, Future<void> Function() op) async {
+  // [action] is a verb phrase completing "Couldn't <action>".
+  Future<void> _run(String action, Future<void> Function() op) async {
     setState(() {
       _busy = true;
       _status = null;
@@ -94,7 +96,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     try {
       await op();
     } catch (e) {
-      if (mounted) setState(() => _status = '$label failed: $e');
+      if (mounted) {
+        setState(() => _status = friendlyError(e, action: action));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -211,7 +215,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           key: const Key('polar-align-start'),
           onPressed: _busy
               ? null
-              : () => _run('Start', () async {
+              : () => _run('start polar alignment', () async {
                     final api = ref.read(polarAlignApiProvider);
                     if (api != null) await api.start();
                   }),
@@ -308,7 +312,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               key: const Key('polar-align-done'),
               onPressed: _busy || !inTolerance
                   ? null
-                  : () => _run('Done', () async {
+                  : () => _run('complete polar alignment', () async {
                         final api = ref.read(polarAlignApiProvider);
                         if (api != null) await api.complete();
                       }),
@@ -327,7 +331,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  void _abort() => _run('Abort', () async {
+  void _abort() => _run('abort polar alignment', () async {
         final api = ref.read(polarAlignApiProvider);
         if (api != null) await api.stop();
       });

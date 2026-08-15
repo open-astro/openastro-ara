@@ -79,7 +79,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       if (!mounted) return;
       setState(
         () => _lastError = siteSaved
-            ? 'Site preferences saved, but the horizon skyline failed: $e'
+            ? 'Site preferences saved, but the horizon skyline was not. '
+                '${friendlyError(e, action: 'save the horizon skyline')}'
             : friendlyError(e, action: 'save that'),
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));

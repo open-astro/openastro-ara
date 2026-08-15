@@ -148,7 +148,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                 } on Exception catch (e) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Export failed: $e')));
+                                        SnackBar(content: Text(friendlyError(e, action: 'export those frames'))));
                                   }
                                   return (const <int>[], '', 0);
                                 }
@@ -168,7 +168,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content:
-                                              Text("Couldn't save: $e")));
+                                              Text(friendlyError(e, action: 'save that'))));
                                 }
                                 return;
                               }

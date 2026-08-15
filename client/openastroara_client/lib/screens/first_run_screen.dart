@@ -8,6 +8,7 @@ import '../services/server_api.dart';
 import '../state/launch_gate_state.dart';
 import '../state/saved_server_state.dart';
 import '../state/server_state.dart';
+import '../util/friendly_error.dart';
 import '../widgets/plan_offline_button.dart';
 
 /// Phase 11 first-run screen — server discovery + selection + handshake.
@@ -224,7 +225,7 @@ class _HandshakePanel extends StatelessWidget {
           error: (e, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Connection failed: ${server.baseUrl}',
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            Text('$e', style: Theme.of(context).textTheme.bodySmall),
+            Text(friendlyError(e), style: Theme.of(context).textTheme.bodySmall),
           ]),
         ),
       ),

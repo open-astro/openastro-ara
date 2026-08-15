@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/equipment/mount_state.dart';
 import '../state/sequencer/sequence_list_state.dart';
 import '../state/ws/ws_providers.dart';
+import '../util/friendly_error.dart';
 import '../theme/ara_colors.dart';
 
 /// §57.8 telescope slew lifecycle WS tokens (mirrors `WsEventCatalog`).
@@ -290,7 +291,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Sequence action failed: $e')),
+        SnackBar(content: Text(friendlyError(e, action: 'do that sequence action'))),
       );
     }
   }
