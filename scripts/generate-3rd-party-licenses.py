@@ -158,6 +158,11 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2015, the Dart project authors",
     },
+    "clock": {
+        "version": "1.1.2",
+        "license": "BSD-3-Clause",
+        "copyright": "Copyright 2014, the Dart project authors",
+    },
     "crypto": {
         "version": "3.0.7",
         "license": "BSD-3-Clause",

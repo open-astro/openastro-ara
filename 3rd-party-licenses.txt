@@ -69,10 +69,10 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (115 packages):
+License summary (116 packages):
     MIT: 78 packages
     Apache-2.0: 19 packages
-    BSD-3-Clause: 8 packages
+    BSD-3-Clause: 9 packages
     Microsoft .NET Library License: 5 packages
     LGPL-2.1: 3 packages
     BSD-2-Clause: 1 package
@@ -837,7 +837,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/novotnyllc/Zeroconf
 
 
-CLIENT — WILMA direct runtime pub packages (17 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
+CLIENT — WILMA direct runtime pub packages (18 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
 ===========================================================================================================================
 
 ------------------------------------------------------------------------
@@ -845,6 +845,12 @@ Package:        audioplayers 6.8.1
 Copyright:      Copyright (c) 2017 Luan Nico and the Blue Fire team
 License:        MIT
 License source: https://pub.dev/packages/audioplayers/license
+
+------------------------------------------------------------------------
+Package:        clock 1.1.2
+Copyright:      Copyright 2014, the Dart project authors
+License:        BSD-3-Clause
+License source: https://pub.dev/packages/clock/license
 
 ------------------------------------------------------------------------
 Package:        collection 1.19.1
