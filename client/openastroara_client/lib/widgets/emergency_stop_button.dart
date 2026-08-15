@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/server_api.dart';
 import '../state/saved_server_state.dart';
+import '../util/friendly_error.dart';
 import '../state/ws/client_session_state.dart';
 
 /// §35.3 — the persistent big red button, always visible in the bottom
@@ -69,8 +70,10 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         duration: const Duration(seconds: 10),
-        content: Text('Emergency stop failed — the rig did not respond: '
-            'be reached ($e). Check your rig manually.'),
+        content: Text(
+            'EMERGENCY STOP FAILED — '
+            '${friendlyError(e, action: 'reach the rig')} '
+            'Check your rig manually.'),
       ));
     } finally {
       if (mounted) setState(() => _inFlight = false);

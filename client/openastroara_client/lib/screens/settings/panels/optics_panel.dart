@@ -142,7 +142,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       }
     } catch (e) {
       // Set the field without its own setState; the finally's setState rebuilds with it.
-      _lastError = 'Could not read the camera: $e';
+      _lastError = friendlyError(e, action: 'read the camera');
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _refreshing = false);

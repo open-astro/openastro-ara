@@ -10,6 +10,7 @@ import '../../../models/server.dart';
 import '../../../services/equipment_discovery_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../util/friendly_error.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
@@ -138,7 +139,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       if (!mounted) return;
       setState(() {
         _ok = false;
-        _result = '$e';
+        _result = friendlyError(e, action: 'look for equipment');
       });
       _setValid(_skipped);
     } finally {

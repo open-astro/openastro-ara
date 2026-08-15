@@ -12,6 +12,7 @@ import '../../widgets/stats/overview_section.dart';
 import '../../widgets/stats/targets_section.dart';
 import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
+import '../../util/friendly_error.dart';
 
 /// Stats dashboard per playbook §50. The Overview, Targets, Best Frames, and
 /// Achievements sections are wired to the live daemon (`/api/v1/stats/*`); the
@@ -109,7 +110,8 @@ class StatsDashboardScreen extends ConsumerWidget {
     } on Exception catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Export failed: $e')));
+          .showSnackBar(SnackBar(
+              content: Text(friendlyError(e, action: 'export the stats'))));
       return;
     }
     if (!context.mounted) return;

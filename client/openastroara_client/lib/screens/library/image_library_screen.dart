@@ -632,7 +632,7 @@ class _SessionHeader extends ConsumerWidget {
           if (!context.mounted) return;
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('Resume failed: $e')));
+          ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'resume the sequence'))));
         }
     }
   }
@@ -718,7 +718,7 @@ class _SessionFramesGrid extends ConsumerWidget {
         child: Padding(
           padding: _padding,
           child: Text(
-            'Frames unavailable: $e',
+            friendlyError(e, action: 'load the frames'),
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
