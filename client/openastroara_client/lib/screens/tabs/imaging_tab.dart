@@ -70,6 +70,12 @@ class ImagingTab extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Capture progress sits at the very top — the in-flight
+                // exposure's status is the first thing the eye lands on.
+                CaptureProgressCard(
+                  onRetry: () => _takeOne(context, ref),
+                  onCancel: () => _cancelCapture(context, ref),
+                ),
                 ExposureControlsPanel(
                   liveViewOn: liveViewOn,
                   onTakeOne: exposing ? null : () => _takeOne(context, ref),
@@ -81,11 +87,8 @@ class ImagingTab extends ConsumerWidget {
                 // border as the separator — plate-solve the frame you just
                 // took without scrolling.
                 const SolvePanel(),
+                // Separation before the cooling target section.
                 const _RailGap(),
-                CaptureProgressCard(
-                  onRetry: () => _takeOne(context, ref),
-                  onCancel: () => _cancelCapture(context, ref),
-                ),
                 // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) +
                 // custom target + fan, shared with Settings → Camera. Hidden
                 // entirely when no camera with a cooler is connected.
