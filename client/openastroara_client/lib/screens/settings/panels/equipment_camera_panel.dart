@@ -122,35 +122,42 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           if (caps.maxOffset > caps.minOffset)
             _row('Offset range', '${caps.minOffset}–${caps.maxOffset}'),
           _row('Max binning', '${caps.maxBinX}×${caps.maxBinY}'),
-          // §25.5.5 — readout-mode picker (driver-defined list; select by index).
+          // §25.5.5 — readout-mode picker (driver-defined list; select by
+          // index) as chips, matching the cooler preset chips.
           if (caps.readoutModes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Readout mode'),
-                  HelpIcon(helpKey: 'eq.camera.readout_mode', device: s.name),
-                  const Spacer(),
-                  DropdownButton<int>(
-                    value: _readoutIndex(caps.readoutModes, s.readoutMode),
-                    items: [
+                  Row(
+                    children: [
+                      const Text('Readout mode'),
+                      HelpIcon(
+                          helpKey: 'eq.camera.readout_mode', device: s.name),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
                       for (var i = 0; i < caps.readoutModes.length; i++)
-                        DropdownMenuItem(
-                          value: i,
-                          child: Text(caps.readoutModes[i]),
+                        ChoiceChip(
+                          label: Text(caps.readoutModes[i]),
+                          selected:
+                              _readoutIndex(caps.readoutModes, s.readoutMode) ==
+                                  i,
+                          onSelected: s.isBusy
+                              ? null
+                              : (_) => _run(() => ref
+                                  .read(cameraStatusProvider.notifier)
+                                  .setReadoutMode(i)),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                     ],
-                    onChanged: s.isBusy
-                        ? null
-                        : (i) {
-                            if (i != null) {
-                              _run(
-                                () => ref
-                                    .read(cameraStatusProvider.notifier)
-                                    .setReadoutMode(i),
-                              );
-                            }
-                          },
                   ),
                 ],
               ),

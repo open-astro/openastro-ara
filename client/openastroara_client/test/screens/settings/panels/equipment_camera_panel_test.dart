@@ -54,6 +54,7 @@ CameraStatus _status({
   bool? hasCooler,
   bool coolerOn = false,
   String runtimeState = 'idle',
+  String? readoutMode,
   int? fanSpeed,
   int? fanMaxSpeed,
 }) =>
@@ -78,8 +79,10 @@ CameraStatus _status({
         minExposureSec: 0.0001,
         maxExposureSec: 3600,
         bayerPattern: 'RGGB',
+        readoutModes: const ['HCG', 'Low noise', 'High speed'],
       ),
       runtimeState: runtimeState,
+      readoutMode: readoutMode,
       fanSpeed: fanSpeed,
       fanMaxSpeed: fanMaxSpeed,
       ccdTemperature: -9.8,
@@ -127,6 +130,20 @@ void main() {
     expect(find.text('Colour (RGGB)'), findsOneWidget);
     expect(find.text('0–500'), findsOneWidget); // gain range
     expect(find.byType(Switch), findsNWidgets(2)); // cooler + auto-connect
+  });
+
+  testWidgets('readout mode is a chip row and tapping it sends the command',
+      (tester) async {
+    final api = await _pump(tester, _status(readoutMode: 'HCG'));
+    expect(find.text('Readout mode'), findsOneWidget);
+    expect(find.text('HCG'), findsOneWidget);
+    expect(find.text('Low noise'), findsOneWidget);
+    expect(find.text('High speed'), findsOneWidget);
+    // Select 'Low noise' (index 1) — the chip sends mode_index.
+    await tester.tap(find.text('Low noise'));
+    await tester.pumpAndSettle();
+    expect(api.calls,
+        contains('command:readoutmode:enabled=null:target=null:fan=null'));
   });
 
   testWidgets('shows the cooling-fan toggle when the camera reports a fan',
