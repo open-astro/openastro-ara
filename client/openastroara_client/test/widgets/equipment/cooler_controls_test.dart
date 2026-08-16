@@ -114,18 +114,19 @@ void main() {
     await _pump(tester, _status(coolerOn: true, coolerSetpointC: -5, fanMaxSpeed: 1));
     expect(find.text('Cooler'), findsOneWidget);
     // Presets −10 / −5 / 0 / +5.
-    expect(find.text('-10 °C'), findsOneWidget);
-    expect(find.text('-5 °C'), findsOneWidget);
-    expect(find.text('0 °C'), findsOneWidget);
-    expect(find.text('+5 °C'), findsOneWidget);
-    expect(find.text('+10 °C'), findsOneWidget);
+    expect(find.text('-10'), findsOneWidget);
+    expect(find.text('-5'), findsOneWidget);
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('+5'), findsOneWidget);
+    expect(find.text('+10'), findsOneWidget);
+    expect(find.text('Target temperature (°C)'), findsOneWidget);
     expect(find.text('Custom (°C)'), findsOneWidget);
     expect(find.text('Cooling fan'), findsOneWidget);
   });
 
   testWidgets('tapping a preset turns cooling on at that target', (tester) async {
     final api = await _pump(tester, _status());
-    await tester.tap(find.text('-10 °C'));
+    await tester.tap(find.text('-10'));
     await tester.pumpAndSettle();
     expect(api.calls,
         contains('command:cooler:enabled=true:target=-10.0:fan=null'));
@@ -161,9 +162,10 @@ void main() {
       compact: true,
     );
     expect(find.text('Cooling target'), findsOneWidget);
-    expect(find.text('-10 °C'), findsOneWidget);
-    expect(find.text('+5 °C'), findsOneWidget);
+    expect(find.text('-10'), findsOneWidget);
+    expect(find.text('+5'), findsOneWidget);
     expect(find.text('Custom (°C)'), findsOneWidget);
+    expect(find.text('Target temperature (°C)'), findsOneWidget);
     // Only the sensor-temp readout — the other readouts and on/off toggles
     // stay in Settings → Camera.
     expect(find.text('Sensor temperature'), findsOneWidget);
@@ -174,7 +176,7 @@ void main() {
     expect(find.byType(Switch), findsNothing);
     // The presets still arm cooling at that target.
     final api = await _pump(tester, _status(), compact: true);
-    await tester.tap(find.text('-10 °C'));
+    await tester.tap(find.text('-10'));
     await tester.pumpAndSettle();
     expect(api.calls,
         contains('command:cooler:enabled=true:target=-10.0:fan=null'));

@@ -33,6 +33,24 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   static const List<int> presets = [-10, -5, 0, 5, 10];
   final TextEditingController _target = TextEditingController();
 
+  /// One-liner compact chip for the target presets (the °C unit lives in the
+  /// section label so the chips stay short enough to sit on a single line in
+  /// the narrow Imaging rail).
+  static Widget _presetChip(
+    int p,
+    bool selected,
+    VoidCallback onSelected,
+  ) =>
+      ChoiceChip(
+        label: Text(p <= 0 ? '$p' : '+$p'),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        labelStyle: const TextStyle(fontSize: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      );
+
   @override
   void dispose() {
     _target.dispose();
@@ -60,15 +78,27 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
           const SettingsSectionHeader('Cooling target'),
           _row('Sensor temperature',
               s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+          const Padding(
+            padding: EdgeInsets.only(top: 8, bottom: 4),
+            child: Text(
+              'Target temperature (°C)',
+              style: TextStyle(
+                fontSize: 12,
+                color: AraColors.textSecondary,
+              ),
+            ),
+          ),
+          // Quick presets — one tap arms cooling at that set-point. Compact so
+          // all five sit on a single line in the narrow rail.
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 6,
+            runSpacing: 6,
             children: [
               for (final p in presets)
-                ChoiceChip(
-                  label: Text(p <= 0 ? '$p °C' : '+$p °C'),
-                  selected: s.coolerOn && (s.coolerSetpointC ?? 999) == p,
-                  onSelected: (_) => _setTarget(p.toDouble()),
+                _presetChip(
+                  p,
+                  s.coolerOn && (s.coolerSetpointC ?? 999) == p,
+                  () => _setTarget(p.toDouble()),
                 ),
             ],
           ),
@@ -132,7 +162,7 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
           const Padding(
             padding: EdgeInsets.only(top: 8, bottom: 4),
             child: Text(
-              'Target temperature',
+              'Target temperature (°C)',
               style: TextStyle(
                 fontSize: 12,
                 color: AraColors.textSecondary,
@@ -141,14 +171,14 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
           ),
           // Quick presets — one tap arms cooling at that set-point.
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 6,
+            runSpacing: 6,
             children: [
               for (final p in presets)
-                ChoiceChip(
-                  label: Text(p <= 0 ? '$p °C' : '+$p °C'),
-                  selected: s.coolerOn && (s.coolerSetpointC ?? 999) == p,
-                  onSelected: (_) => _setTarget(p.toDouble()),
+                _presetChip(
+                  p,
+                  s.coolerOn && (s.coolerSetpointC ?? 999) == p,
+                  () => _setTarget(p.toDouble()),
                 ),
             ],
           ),
