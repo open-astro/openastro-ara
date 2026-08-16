@@ -51,8 +51,6 @@ CameraStatus _status({
   bool? hasCooler,
   bool coolerOn = false,
   double? coolerSetpointC,
-  int? fanSpeed,
-  int? fanMaxSpeed,
 }) =>
     CameraStatus(
       deviceId: 'cam-0',
@@ -82,8 +80,6 @@ CameraStatus _status({
       coolerOn: coolerOn,
       exposureProgressPct: null,
       coolerSetpointC: coolerSetpointC,
-      fanSpeed: fanSpeed,
-      fanMaxSpeed: fanMaxSpeed,
     );
 
 Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
@@ -109,9 +105,9 @@ Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
 }
 
 void main() {
-  testWidgets('renders the cooler switch, presets, custom field and fan',
+  testWidgets('renders the cooler switch, presets and custom field',
       (tester) async {
-    await _pump(tester, _status(coolerOn: true, coolerSetpointC: -5, fanMaxSpeed: 1));
+    await _pump(tester, _status(coolerOn: true, coolerSetpointC: -5));
     expect(find.text('Cooler'), findsOneWidget);
     // Presets −10 / −5 / 0 / +5.
     expect(find.text('-10'), findsOneWidget);
@@ -121,7 +117,6 @@ void main() {
     expect(find.text('+10'), findsOneWidget);
     expect(find.text('Target temperature (°C)'), findsOneWidget);
     expect(find.text('Custom (°C)'), findsOneWidget);
-    expect(find.text('Cooling fan'), findsOneWidget);
   });
 
   testWidgets('tapping a preset turns cooling on at that target', (tester) async {
@@ -142,23 +137,12 @@ void main() {
         contains('command:cooler:enabled=true:target=-7.5:fan=null'));
   });
 
-  testWidgets('the fan switch sends 0/max', (tester) async {
-    final api = await _pump(tester, _status(fanSpeed: 1, fanMaxSpeed: 1));
-    final fan = find.descendant(
-      of: find.byType(CoolerControls),
-      matching: find.byType(Switch),
-    ).at(1);
-    await tester.tap(fan);
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('command:fan:enabled=null:target=null:fan=0'));
-  });
-
   testWidgets(
       'compact (Imaging tab) shows only the target picker — no toggles or '
       'readouts', (tester) async {
     await _pump(
       tester,
-      _status(coolerOn: true, coolerSetpointC: -5, fanMaxSpeed: 1),
+      _status(coolerOn: true, coolerSetpointC: -5),
       compact: true,
     );
     expect(find.text('Cooling target'), findsOneWidget);
@@ -172,7 +156,6 @@ void main() {
     expect(find.text('17.9 °C'), findsOneWidget);
     expect(find.text('Cooler power'), findsNothing);
     expect(find.text('Cooling to'), findsNothing);
-    expect(find.text('Cooling fan'), findsNothing);
     expect(find.byType(Switch), findsNothing);
     // The presets still arm cooling at that target.
     final api = await _pump(tester, _status(), compact: true);

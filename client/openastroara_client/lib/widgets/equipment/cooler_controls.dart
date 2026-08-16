@@ -217,26 +217,6 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
             ],
           ),
         ],
-        // Vendor cooling fan — only when the camera/bridge reports one.
-        if (s.fanMaxSpeed != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    s.fanMaxSpeed! > 1
-                        ? 'Cooling fan · ${s.fanSpeed ?? 0}/${s.fanMaxSpeed}'
-                        : 'Cooling fan',
-                  ),
-                ),
-                Switch(
-                  value: (s.fanSpeed ?? 0) > 0,
-                  onChanged: (on) => _setFan(on ? s.fanMaxSpeed! : 0),
-                ),
-              ],
-            ),
-          ),
         const SizedBox(height: 4),
       ],
     );
@@ -272,9 +252,6 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
     }
     await _setTarget(t);
   }
-
-  Future<void> _setFan(int speed) =>
-      _run(() => ref.read(cameraStatusProvider.notifier).setFan(speed));
 
   /// Runs the action and surfaces failures as a toast. The notifier returns
   /// false for a re-entrancy guard, but THROWS on a rejected command (e.g. the

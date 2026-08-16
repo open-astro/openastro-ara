@@ -101,27 +101,6 @@ public static partial class EquipmentEndpoints {
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
         });
-        // Vendor cooling-fan control (bridge /fan extension; not in the ASCOM
-        // Camera interface). GET returns current speed + max, or 404 when the
-        // camera/bridge has no fan support; POST sets the speed (0 = off).
-        camera.MapGet("/fan", async (ICameraService svc, CancellationToken ct) => {
-            try {
-                return await svc.GetFanAsync(ct) is CameraFanDto fan
-                    ? Results.Ok(fan)
-                    : Results.NotFound();
-            } catch (System.InvalidOperationException ex) {
-                // Not connected — 409 like the sibling camera commands.
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            }
-        });
-        camera.MapPost("/fan", async ([FromBody] CameraFanRequestDto request, ICameraService svc, CancellationToken ct) => {
-            try {
-                await svc.SetFanAsync(request.FanSpeed, ct);
-                return Results.Accepted();
-            } catch (System.InvalidOperationException ex) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            }
-        });
         // §25.5.5 — readout-mode selection (index into caps.readout_modes, driver order).
         camera.MapPost("/readoutmode", async ([FromBody] CameraReadoutModeRequestDto request, ICameraService svc, CancellationToken ct) => {
             try {

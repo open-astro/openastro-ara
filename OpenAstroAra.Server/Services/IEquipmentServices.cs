@@ -39,11 +39,6 @@ public interface ICameraService {
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task AbortExposureAsync(CancellationToken ct);
     Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
-    /// <summary>Vendor cooling-fan read (bridge <c>/fan</c> extension): current
-    /// speed + max, or null when the camera/bridge has no fan support.</summary>
-    Task<CameraFanDto?> GetFanAsync(CancellationToken ct);
-    /// <summary>Vendor cooling-fan control: 0 = off, [1, max] = speed.</summary>
-    Task SetFanAsync(int fanSpeed, CancellationToken ct);
     // §25.5.5 — select a readout mode by index into CameraCapabilitiesDto.ReadoutModes.
     Task SetReadoutModeAsync(int modeIndex, CancellationToken ct);
     // §64 Live View: a short-exposure render loop for framing/focus (no catalog write).

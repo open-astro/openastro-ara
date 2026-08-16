@@ -65,8 +65,6 @@ public sealed class PlaceholderCameraService : ICameraService {
     }
     public Task AbortExposureAsync(CancellationToken ct) => Task.CompletedTask;
     public Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
-    public Task<CameraFanDto?> GetFanAsync(CancellationToken ct) => Task.FromResult<CameraFanDto?>(null);
-    public Task SetFanAsync(int fanSpeed, CancellationToken ct) => Task.CompletedTask;
     public Task SetReadoutModeAsync(int modeIndex, CancellationToken ct) => Task.CompletedTask;
     public Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) => Task.CompletedTask;
     public Task StopLiveViewAsync() => Task.CompletedTask;

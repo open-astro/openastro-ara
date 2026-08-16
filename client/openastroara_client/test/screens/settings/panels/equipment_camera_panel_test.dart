@@ -55,8 +55,6 @@ CameraStatus _status({
   bool coolerOn = false,
   String runtimeState = 'idle',
   String? readoutMode,
-  int? fanSpeed,
-  int? fanMaxSpeed,
 }) =>
     CameraStatus(
       deviceId: 'cam-0',
@@ -83,8 +81,6 @@ CameraStatus _status({
       ),
       runtimeState: runtimeState,
       readoutMode: readoutMode,
-      fanSpeed: fanSpeed,
-      fanMaxSpeed: fanMaxSpeed,
       ccdTemperature: -9.8,
       coolerPowerPct: 42,
       coolerOn: coolerOn,
@@ -144,29 +140,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.calls,
         contains('command:readoutmode:enabled=null:target=null:fan=null'));
-  });
-
-  testWidgets('shows the cooling-fan toggle when the camera reports a fan',
-      (tester) async {
-    final api = await _pump(tester, _status(fanSpeed: 1, fanMaxSpeed: 1));
-    expect(find.text('Cooling fan'), findsOneWidget);
-    expect(find.byType(Switch), findsNWidgets(3)); // cooler + fan + auto-connect
-    await tester.tap(_coolerSwitch(1)); // cooler(0) fan(1)
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('command:fan:enabled=null:target=null:fan=0'));
-  });
-
-  testWidgets('hides the fan toggle when the camera has no fan support',
-      (tester) async {
-    await _pump(tester, _status());
-    expect(find.text('Cooling fan'), findsNothing);
-  });
-
-  testWidgets('fan toggle on sends the max speed', (tester) async {
-    final api = await _pump(tester, _status(fanSpeed: 0, fanMaxSpeed: 3));
-    await tester.tap(_coolerSwitch(1)); // cooler(0) fan(1)
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('command:fan:enabled=null:target=null:fan=3'));
   });
 
   testWidgets('Set target sends the cooler command (enabled + target)',
