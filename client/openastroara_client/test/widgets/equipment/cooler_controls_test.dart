@@ -163,8 +163,10 @@ void main() {
     expect(find.text('-10 °C'), findsOneWidget);
     expect(find.text('+5 °C'), findsOneWidget);
     expect(find.text('Custom (°C)'), findsOneWidget);
-    // No readouts, no on/off toggles.
-    expect(find.text('Sensor temperature'), findsNothing);
+    // Only the sensor-temp readout — the other readouts and on/off toggles
+    // stay in Settings → Camera.
+    expect(find.text('Sensor temperature'), findsOneWidget);
+    expect(find.text('17.9 °C'), findsOneWidget);
     expect(find.text('Cooler power'), findsNothing);
     expect(find.text('Cooling to'), findsNothing);
     expect(find.text('Cooling fan'), findsNothing);

@@ -58,6 +58,8 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SettingsSectionHeader('Cooling target'),
+          _row('Sensor temperature',
+              s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
