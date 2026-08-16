@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/camera_status.dart';
@@ -10,6 +9,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
+import '../../../widgets/equipment/cooler_controls.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -64,11 +64,9 @@ class _CameraBody extends ConsumerStatefulWidget {
 
 class _CameraBodyState extends ConsumerState<_CameraBody> {
   // The cooler target the user is setting (their intent, not a live mirror).
-  late final TextEditingController _target = TextEditingController(text: '-10');
 
   @override
   void dispose() {
-    _target.dispose();
     super.dispose();
   }
 
@@ -111,82 +109,12 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               style: const TextStyle(color: AraColors.accentBusy),
             ),
           ),
-        // §25.5.5 — the on/off Switch needs only a cooler (has_cooler); the TEC
-        // set-point additionally needs temperature regulation. A "dumb" on/off
-        // cooler (CoolerOn implemented, CanSetCCDTemperature=false) gets the
-        // Switch alone instead of no cooler UI at all.
-        if (caps?.hasCooler ?? false) ...[
-          Row(
-            children: [
-              const Text('Cooler'),
-              HelpIcon(helpKey: 'eq.camera.cooler', device: s.name),
-              const Spacer(),
-              Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
-            ],
-          ),
-          if (caps?.canSetTemperature ?? false)
-            Row(
-              children: [
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: _target,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      signed: true,
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^-?[0-9]*\.?[0-9]*$'),
-                      ),
-                    ],
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Target (°C)',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () => _setTarget(),
-                  child: const Text('Set target'),
-                ),
-                HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
-              ],
-            ),
-        ],
-        // A camera with no cooler at all (has_cooler=false — CoolerOn not
-        // implemented) gets an explicit muted row instead of an absent section:
-        // absence reads as "missing UI", the row reads as "no cooling".
-        if (caps != null && !caps.hasCooler)
-          Row(
-            children: [
-              const Text('Cooler'),
-              const Spacer(),
-              Text(
-                'Does not support cooling',
-                style: const TextStyle(color: AraColors.textDisabled),
-              ),
-            ],
-          ),
-        // Vendor cooling fan — shown only when the camera/bridge reports one
-        // (fan_max_speed != null). Toggles 0 (off) / max (full speed).
-        if (s.fanMaxSpeed != null)
-          Row(
-            children: [
-              const Text('Cooling fan'),
-              const Spacer(),
-              Switch(
-                value: (s.fanSpeed ?? 0) > 0,
-                onChanged: (on) => _setFan(on ? s.fanMaxSpeed! : 0),
-              ),
-              if (s.fanMaxSpeed! > 1)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text('${s.fanSpeed ?? 0}/${s.fanMaxSpeed}'),
-                ),
-            ],
-          ),
+        // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom
+        // target + the cooling-fan toggle, shared with the Imaging tab. The
+        // daemon owns the safety interlock (cooler on → fan auto-starts;
+        // cooler off → fan stops; fan-off while cooling is refused).
+        if (caps?.hasCooler ?? false) const CoolerControls(),
+
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
           _row('Sensor', '${caps.sensorWidth} × ${caps.sensorHeight}'),
@@ -253,34 +181,6 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
       ],
     ),
   );
-
-  // The Switch only toggles the cooler. CoolerOn and the set-point are
-  // independent ASCOM properties, so toggling never carries a (possibly stale)
-  // target — that's the "Set target" button's job.
-  Future<void> _setCooler(bool on) =>
-      _run(() => ref.read(cameraStatusProvider.notifier).setCooler(on));
-
-  Future<void> _setFan(int speed) =>
-      _run(() => ref.read(cameraStatusProvider.notifier).setFan(speed));
-
-  Future<void> _setTarget() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final t = _parseTarget();
-    if (t == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Enter a target temperature.')),
-      );
-      return;
-    }
-    // Setting a target turns the cooler on.
-    await _run(
-      () => ref
-          .read(cameraStatusProvider.notifier)
-          .setCooler(true, targetTemperatureC: t),
-    );
-  }
-
-  double? _parseTarget() => double.tryParse(_target.text.trim());
 
   /// The dropdown's selected index: the runtime's current mode name located in
   /// the caps list (null → no selection shown, e.g. daemon didn't report one).

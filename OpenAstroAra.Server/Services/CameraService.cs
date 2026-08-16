@@ -280,6 +280,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         RefreshCacheOnce();
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Cooler boundary: the auto-fan and fan-off best-effort catches must never fail the cooler write (the user asked to change cooling); a fan failure is logged, a cooler-write failure maps to a clean 409. CA1031's log-and-recover boundary applies.")]
     public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
         var client = RequireConnectedClient();
         // §25.5.5 — capability gates BEFORE any device write: a camera without a
@@ -335,6 +337,25 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // refuses the write). Surface a clean message instead of a 500.
             throw new InvalidOperationException(
                 $"the camera rejected the cooler write ({ex.GetType().Name}) — it may not support cooling", ex);
+        }
+        // §25.5.6 — disabling the cooler stops the fan too. MUST run AFTER the
+        // TEC write: the bridge refuses fan-off while the TEC is enabled (the
+        // same safety rule), so stopping the fan first would be rejected.
+        if (!enabled && (_runtime.FanSpeed ?? 0) > 0 && _runtime.FanMaxSpeed is not null) {
+            try {
+                var (fanBase, fanDevice) = RequireConnectedDeviceAddress();
+                using var fanOff = new HttpRequestMessage(HttpMethod.Put,
+                    new Uri(fanBase, $"api/v1/camera/{fanDevice}/fan"));
+                fanOff.Content = new FormUrlEncodedContent(new[] {
+                    new KeyValuePair<string, string>("FanSpeed", "0"),
+                });
+                using var fanOffResponse = await ImageBytesHttp.SendAsync(fanOff, ct).ConfigureAwait(false);
+                fanOffResponse.EnsureSuccessStatusCode();
+            } catch (Exception ex) {
+                // Best-effort: a fan-stop failure must not fail the cooler-off
+                // (the user asked to stop cooling; the fan can be stopped after).
+                LogFanStopFailed(ex);
+            }
         }
         RefreshCacheOnce();
     }
@@ -616,6 +637,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Direct ImageBytes download failed for {FrameId} — falling back to the client library's ImageArray.")]
     private partial void LogImageBytesFallback(Exception ex, Guid frameId);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Camera: failed to stop the cooling fan after the cooler was disabled")]
+    private partial void LogFanStopFailed(Exception ex);
 
     // Decode/convert runs fused inside the download window (the direct
     // ImageBytes path transposes as it decodes) — one honest number.

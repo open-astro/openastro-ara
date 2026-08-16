@@ -7,6 +7,7 @@ import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_camera_panel.dart';
+import 'package:openastroara/widgets/equipment/cooler_controls.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
@@ -92,6 +93,14 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+
+/// Switches inside the shared CoolerControls widget (cooler first, then fan),
+/// independent of the panel's own auto-connect switch.
+Finder _coolerSwitch(int index) => find.descendant(
+      of: find.byType(CoolerControls),
+      matching: find.byType(Switch),
+    ).at(index);
+
 Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus? status) async {
   await _wideSurface(tester);
   final api = _FakeCameraApi(status);
@@ -125,7 +134,7 @@ void main() {
     final api = await _pump(tester, _status(fanSpeed: 1, fanMaxSpeed: 1));
     expect(find.text('Cooling fan'), findsOneWidget);
     expect(find.byType(Switch), findsNWidgets(3)); // cooler + fan + auto-connect
-    await tester.tap(find.byType(Switch).at(1)); // cooler(0) fan(1) auto-connect(2)
+    await tester.tap(_coolerSwitch(1)); // cooler(0) fan(1)
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:fan:enabled=null:target=null:fan=0'));
   });
@@ -138,7 +147,7 @@ void main() {
 
   testWidgets('fan toggle on sends the max speed', (tester) async {
     final api = await _pump(tester, _status(fanSpeed: 0, fanMaxSpeed: 3));
-    await tester.tap(find.byType(Switch).at(1)); // cooler(0) fan(1) auto-connect(2)
+    await tester.tap(_coolerSwitch(1)); // cooler(0) fan(1)
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:fan:enabled=null:target=null:fan=3'));
   });
@@ -147,7 +156,7 @@ void main() {
       (tester) async {
     final api = await _pump(tester, _status());
     await tester.enterText(find.byType(TextField), '-15');
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Set target'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Set'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:cooler:enabled=true:target=-15.0:fan=null'));
   });
@@ -155,7 +164,7 @@ void main() {
   testWidgets('toggling the cooler Switch sends enabled only (no set-point)',
       (tester) async {
     final api = await _pump(tester, _status());
-    await tester.tap(find.byType(Switch).first); // cooler switch (not auto-connect)
+    await tester.tap(_coolerSwitch(0)); // the cooler switch inside CoolerControls
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
@@ -163,8 +172,10 @@ void main() {
   testWidgets('no cooler control when the camera cannot set temperature',
       (tester) async {
     await _pump(tester, _status(canSetTemperature: false));
-    expect(find.widgetWithText(OutlinedButton, 'Set target'), findsNothing);
-    // Only the auto-connect switch remains.
+    expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
+    expect(find.text('Custom (°C)'), findsNothing);
+    // hasCooler defaults to canSetTemperature=false → the cooler section
+    // hides entirely; only the auto-connect switch remains.
     expect(find.byType(Switch), findsOneWidget);
   });
 
@@ -176,10 +187,10 @@ void main() {
     final api =
         await _pump(tester, _status(canSetTemperature: false, hasCooler: true));
     expect(find.byType(Switch), findsNWidgets(2));
-    expect(find.widgetWithText(OutlinedButton, 'Set target'), findsNothing);
-    expect(find.text('Target (°C)'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
+    expect(find.text('Custom (°C)'), findsNothing);
     // And the switch actually drives the cooler (never a set-point).
-    await tester.tap(find.byType(Switch).first);
+    await tester.tap(_coolerSwitch(0));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });

@@ -12,6 +12,7 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../widgets/imaging/diagnostic_panel.dart';
+import '../../widgets/equipment/cooler_controls.dart';
 import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/fault_panel.dart';
@@ -80,6 +81,10 @@ class ImagingTab extends ConsumerWidget {
                   onRetry: () => _takeOne(context, ref),
                   onCancel: () => _cancelCapture(context, ref),
                 ),
+                // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) +
+                // custom target + fan, shared with Settings → Camera. Hidden
+                // entirely when no camera with a cooler is connected.
+                const CoolerControls(),
                 const SolvePanel(),
                 const GuidingPanel(),
                 const HistogramStrip(),
