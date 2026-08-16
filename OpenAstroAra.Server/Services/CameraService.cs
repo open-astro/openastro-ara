@@ -80,9 +80,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private CameraCapabilitiesDto? _capabilities;
     private CameraStateDto _runtime = IdleRuntime;
 
-    // §25.5.6 — cached fan-max speed (static per connected camera; read once
-    // from /fanmaxspeed, then reused by GetFanAsync/RefreshPass).
+    // §25.5.6 — last-known-good fan state + whether the /fan route has ever
+    // answered. The interlocks are safety-relevant, so a transient read miss
+    // must NOT blank these: RefreshPass preserves them across a blip (a fan
+    // camera never loses its interlock on one bad poll) and only a confirmed
+    // "no fan" (a clean 404/1025) or a camera swap resets them.
+    private int? _fanSpeed;
     private int? _fanMaxSpeed;
+    private bool _fanSupportKnown;
     private int _refreshing;
     private int _refreshPending;
     private long _connectGeneration;
@@ -284,6 +289,27 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         RefreshCacheOnce();
     }
 
+    /// <summary>
+    /// §25.5.6 fan/cooler interlock decision — the safety heart of the feature,
+    /// extracted as a pure function for direct unit testing:
+    ///  * [FanInterlockVerdict.AutoStartFan] — the camera HAS a fan and it's
+    ///    off: it must be started (to max) before the TEC engages, else refuse.
+    ///  * [FanInterlockVerdict.FanAlreadyOn] — fan present and running: proceed.
+    ///  * [FanInterlockVerdict.NoFanNeeded] — the fan route cleanly answered
+    ///    "no fan" (a 404/1025): the camera cools with passive heat sinking.
+    ///  * [FanInterlockVerdict.UnknownFailClosed] — the fan state has NOT been
+    ///    established (initial connect, or every probe so far hit a transient
+    ///    failure): fail CLOSED — refuse the cooler until we know. Deciding on
+    ///    unknown data is how the TEC gets enabled without a running fan.
+    /// </summary>
+    internal enum FanInterlockVerdict { AutoStartFan, FanAlreadyOn, NoFanNeeded, UnknownFailClosed }
+
+    internal static FanInterlockVerdict FanInterlock(
+        int? fanSpeed, int? fanMax, bool fanSupportKnown) =>
+        fanMax is int
+            ? ((fanSpeed ?? 0) > 0 ? FanInterlockVerdict.FanAlreadyOn : FanInterlockVerdict.AutoStartFan)
+            : (fanSupportKnown ? FanInterlockVerdict.NoFanNeeded : FanInterlockVerdict.UnknownFailClosed);
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cooler boundary: the auto-fan and fan-off best-effort catches must never fail the cooler write (the user asked to change cooling); a fan failure is logged, a cooler-write failure maps to a clean 409. CA1031's log-and-recover boundary applies.")]
     public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
@@ -313,22 +339,35 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // _runtime is written under _gate — snapshot the fields there too.
         int? fanSpeed;
         int? fanMax;
+        bool fanSupportKnown;
         lock (_gate) {
             fanSpeed = _runtime.FanSpeed;
             fanMax = _runtime.FanMaxSpeed;
+            fanSupportKnown = _fanSupportKnown;
         }
-        if (enabled && (fanSpeed ?? 0) == 0 && fanMax is int fanMaxSpeed) {
-            try {
-                var (fanBase, fanDevice) = RequireConnectedDeviceAddress();
-                await PutFanAsync(fanBase, fanDevice, fanMaxSpeed, ct).ConfigureAwait(false);
-            } catch (Exception ex) {
-                // Never cool without the fan — refuse the cooler rather than
-                // risking the TEC. PutFanAsync inspects the Alpaca ErrorNumber
-                // envelope, so a silently-rejected fan write can't slip through.
-                // (The write may still have raced the fan-up; the runtime refresh
-                // will reconcile and the user can retry.)
-                throw new InvalidOperationException(
-                    "could not start the cooling fan — cooling requires the fan to vent the TEC heat sink", ex);
+        var interlock = FanInterlock(fanSpeed, fanMax, fanSupportKnown);
+        if (enabled) {
+            switch (interlock) {
+                case FanInterlockVerdict.AutoStartFan:
+                    try {
+                        var (fanBase, fanDevice) = RequireConnectedDeviceAddress();
+                        await PutFanAsync(fanBase, fanDevice, fanMax!.Value, ct).ConfigureAwait(false);
+                    } catch (Exception ex) {
+                        // Never cool without the fan — refuse the cooler rather
+                        // than risking the TEC. PutFanAsync inspects the Alpaca
+                        // ErrorNumber envelope, so a silently-rejected fan write
+                        // can't slip through. (The write may still have raced the
+                        // fan-up; the runtime refresh reconciles, user can retry.)
+                        throw new InvalidOperationException(
+                            "could not start the cooling fan — cooling requires the fan to vent the TEC heat sink", ex);
+                    }
+                    break;
+                case FanInterlockVerdict.UnknownFailClosed:
+                    // The fan state has not been established (first seconds after
+                    // connect, or every probe so far failed transiently). Decide
+                    // on nothing: refuse rather than risk the TEC without a fan.
+                    throw new InvalidOperationException(
+                        "the camera's fan state is not yet known — try again in a moment");
             }
         }
         try {
@@ -397,6 +436,54 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         var (baseAddress, deviceNumber) = RequireConnectedDeviceAddress();
         await PutFanAsync(baseAddress, deviceNumber, fanSpeed, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Tri-state result of probing the vendor fan route: supported (we read a
+    /// speed), confirmed-none (the route cleanly answered 404/1025 — this camera
+    /// has no controllable fan), or unknown (a transient transport failure —
+    /// retry next tick; the interlock must NOT decide on this).
+    /// </summary>
+    internal enum FanProbeResult { Unknown, None, Supported }
+
+    internal readonly record struct FanProbe(FanProbeResult Result, int? Speed, int? Max);
+
+    /// <summary>Best-effort fan probe (see [FanProbeResult]).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort vendor probe boundary: a transient failure yields Unknown (the refresh keeps the last-known-good) rather than failing the poll. CA1031's log-and-recover boundary applies.")]
+    internal static async Task<FanProbe> ProbeFanAsync(Uri baseAddress, int deviceNumber, CancellationToken ct) {
+        try {
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
+            using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound || (int)response.StatusCode == 1025) {
+                return new FanProbe(FanProbeResult.None, null, null);
+            }
+            response.EnsureSuccessStatusCode();
+            using var json = System.Text.Json.JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            if (json.RootElement.TryGetProperty("ErrorNumber", out var err) && err.GetInt32() != 0) {
+                return new FanProbe(FanProbeResult.None, null, null);
+            }
+            var speed = json.RootElement.TryGetProperty("Value", out var v) ? v.GetInt32() : (int?)null;
+            if (speed is null) return new FanProbe(FanProbeResult.None, null, null);
+            int? max = null;
+            try {
+                using var maxRequest = new HttpRequestMessage(HttpMethod.Get,
+                    new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fanmaxspeed"));
+                using var maxResponse = await ImageBytesHttp.SendAsync(maxRequest, ct).ConfigureAwait(false);
+                if (maxResponse.IsSuccessStatusCode) {
+                    using var maxJson = System.Text.Json.JsonDocument.Parse(
+                        await maxResponse.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                    max = maxJson.RootElement.TryGetProperty("Value", out var mv) ? mv.GetInt32() : null;
+                }
+            } catch {
+                // max is best-effort; default to 1 when it fails
+            }
+            return new FanProbe(FanProbeResult.Supported, speed, Math.Max(1, max ?? 1));
+        } catch {
+            return new FanProbe(FanProbeResult.Unknown, null, null);
+        }
     }
 
     /// <summary>
@@ -1531,13 +1618,34 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 fanBaseAddress = _deviceBaseAddress;
                 fanDeviceNumber = _deviceNumber;
             }
-            if (fanBaseAddress is not null) {
-                var fanSpeed = ReadFanAsync(fanBaseAddress, fanDeviceNumber, CancellationToken.None)
+            // §25.5.6 — vendor fan probe. Gated on the camera having a cooler
+            // (only cooled cameras can carry a heat-sink fan), and tri-state:
+            // supported / confirmed-none / transient-miss. A transient miss
+            // preserves the last-known-good values rather than blanking them —
+            // the interlock in SetCoolerAsync must never be silently skipped by
+            // one flaky poll.
+            if (fanBaseAddress is not null && _capabilities?.HasCooler != false) {
+                var probe = ProbeFanAsync(fanBaseAddress, fanDeviceNumber, CancellationToken.None)
                     .GetAwaiter().GetResult();
-                if (fanSpeed is not null) {
-                    var fanMax = ReadFanMaxAsync(fanBaseAddress, fanDeviceNumber, CancellationToken.None)
-                        .GetAwaiter().GetResult() ?? 1;
-                    runtime = runtime with { FanSpeed = fanSpeed, FanMaxSpeed = Math.Max(1, fanMax) };
+                lock (_gate) {
+                    switch (probe.Result) {
+                        case FanProbeResult.Supported:
+                            _fanSpeed = probe.Speed;
+                            _fanMaxSpeed = Math.Max(1, probe.Max ?? 1);
+                            _fanSupportKnown = true;
+                            runtime = runtime with { FanSpeed = _fanSpeed, FanMaxSpeed = _fanMaxSpeed };
+                            break;
+                        case FanProbeResult.None:
+                            _fanSupportKnown = true;
+                            runtime = runtime with { FanSpeed = null, FanMaxSpeed = null };
+                            break;
+                        case FanProbeResult.Unknown:
+                            // Transient miss — keep the last-known-good (both stay
+                            // null until the first success, which is the fail-closed
+                            // window covered by FanInterlockVerdict.UnknownFailClosed).
+                            runtime = runtime with { FanSpeed = _fanSpeed, FanMaxSpeed = _fanMaxSpeed };
+                            break;
+                    }
                 }
             }
             var caps = needCaps ? ReadCapabilities(client) : null;
@@ -1863,6 +1971,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                     _deviceNumber = device.AlpacaDeviceNumber;
                     _capabilities = null;   // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
+                    // Fan state is per-device — never carry a prior camera's
+                    // fan support/speed into the new one.
+                    _fanSpeed = null;
+                    _fanMaxSpeed = null;
+                    _fanSupportKnown = false;
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
                     _coolingDrift.Reset();  // §42.2 — no drift accumulation carries across sessions
                     SetState(EquipmentConnectionState.Connected);
