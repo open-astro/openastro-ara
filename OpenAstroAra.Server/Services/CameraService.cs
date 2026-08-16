@@ -79,6 +79,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
     private CameraStateDto _runtime = IdleRuntime;
+
+    // §25.5.6 — cached fan-max speed (static per connected camera; read once
+    // from /fanmaxspeed, then reused by GetFanAsync/RefreshPass).
+    private int? _fanMaxSpeed;
     private int _refreshing;
     private int _refreshPending;
     private long _connectGeneration;
@@ -306,20 +310,23 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // TEC overheat its heat sink — auto-enable the fan (to max) first. The
         // runtime's FanSpeed reflects the last refresh; a camera with no fan
         // support reports null and is untouched (it has no heat-sink fan to run).
-        if (enabled && (_runtime.FanSpeed ?? 0) == 0 && _runtime.FanMaxSpeed is int fanMax) {
+        // _runtime is written under _gate — snapshot the fields there too.
+        int? fanSpeed;
+        int? fanMax;
+        lock (_gate) {
+            fanSpeed = _runtime.FanSpeed;
+            fanMax = _runtime.FanMaxSpeed;
+        }
+        if (enabled && (fanSpeed ?? 0) == 0 && fanMax is int fanMaxSpeed) {
             try {
                 var (fanBase, fanDevice) = RequireConnectedDeviceAddress();
-                using var fanRequest = new HttpRequestMessage(HttpMethod.Put,
-                    new Uri(fanBase, $"api/v1/camera/{fanDevice}/fan"));
-                fanRequest.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("FanSpeed", fanMax.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                });
-                using var fanResponse = await ImageBytesHttp.SendAsync(fanRequest, ct).ConfigureAwait(false);
-                fanResponse.EnsureSuccessStatusCode();
+                await PutFanAsync(fanBase, fanDevice, fanMaxSpeed, ct).ConfigureAwait(false);
             } catch (Exception ex) {
                 // Never cool without the fan — refuse the cooler rather than
-                // risking the TEC. (The write may still have raced the fan-up;
-                // the runtime refresh will reconcile and the user can retry.)
+                // risking the TEC. PutFanAsync inspects the Alpaca ErrorNumber
+                // envelope, so a silently-rejected fan write can't slip through.
+                // (The write may still have raced the fan-up; the runtime refresh
+                // will reconcile and the user can retry.)
                 throw new InvalidOperationException(
                     "could not start the cooling fan — cooling requires the fan to vent the TEC heat sink", ex);
             }
@@ -341,16 +348,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // §25.5.6 — disabling the cooler stops the fan too. MUST run AFTER the
         // TEC write: the bridge refuses fan-off while the TEC is enabled (the
         // same safety rule), so stopping the fan first would be rejected.
-        if (!enabled && (_runtime.FanSpeed ?? 0) > 0 && _runtime.FanMaxSpeed is not null) {
+        if (!enabled && (fanSpeed ?? 0) > 0 && fanMax is not null) {
             try {
                 var (fanBase, fanDevice) = RequireConnectedDeviceAddress();
-                using var fanOff = new HttpRequestMessage(HttpMethod.Put,
-                    new Uri(fanBase, $"api/v1/camera/{fanDevice}/fan"));
-                fanOff.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("FanSpeed", "0"),
-                });
-                using var fanOffResponse = await ImageBytesHttp.SendAsync(fanOff, ct).ConfigureAwait(false);
-                fanOffResponse.EnsureSuccessStatusCode();
+                await PutFanAsync(fanBase, fanDevice, 0, ct).ConfigureAwait(false);
             } catch (Exception ex) {
                 // Best-effort: a fan-stop failure must not fail the cooler-off
                 // (the user asked to stop cooling; the fan can be stopped after).
@@ -369,8 +370,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         (Uri baseAddress, int deviceNumber) = RequireConnectedDeviceAddress();
         var speed = await ReadFanAsync(baseAddress, deviceNumber, ct).ConfigureAwait(false);
         if (speed is null) return null;
-        var max = await ReadFanMaxAsync(baseAddress, deviceNumber, ct).ConfigureAwait(false) ?? 1;
-        return new CameraFanDto(speed.Value, Math.Max(1, max));
+        // The max fan speed is static per connected camera — read once and
+        // cache it rather than round-tripping /fanmaxspeed on every request.
+        int? max;
+        lock (_gate) { max = _fanMaxSpeed; }
+        if (max is null) {
+            max = await ReadFanMaxAsync(baseAddress, deviceNumber, ct).ConfigureAwait(false) ?? 1;
+            lock (_gate) { _fanMaxSpeed = max; }
+        }
+        return new CameraFanDto(speed.Value, Math.Max(1, max.Value));
     }
 
     /// <summary>Vendor cooling-fan control: 0 = off, [1, max] = speed.</summary>
@@ -379,25 +387,46 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // vents it — cooling with the fan off overheats the hot side and can
         // damage the camera. Refuse fan-off while the cooler is running (the
         // runtime's CoolerOn is the authoritative TEC state; the set-point is
-        // what drives it on the daemon's cooler path).
-        if (fanSpeed == 0 && _runtime.CoolerOn) {
+        // what drives it on the daemon's cooler path). _runtime is written
+        // under _gate — snapshot the field there too.
+        bool coolerOn;
+        lock (_gate) { coolerOn = _runtime.CoolerOn; }
+        if (fanSpeed == 0 && coolerOn) {
             throw new InvalidOperationException(
                 "turn the cooler off before stopping the fan — cooling with the fan off can damage the camera");
         }
         var (baseAddress, deviceNumber) = RequireConnectedDeviceAddress();
+        await PutFanAsync(baseAddress, deviceNumber, fanSpeed, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Vendor fan-speed write that inspects the Alpaca JSON envelope: devices
+    /// report failures via an HTTP-200 body with a non-zero <c>ErrorNumber</c>
+    /// (never the HTTP status line — a status-only check would let a rejected
+    /// write pass as success). Throws on an Alpaca-level rejection, which is
+    /// what the fan interlock relies on: "fan is now running" must be true
+    /// before the TEC is ever enabled.
+    /// </summary>
+    private static async Task PutFanAsync(Uri baseAddress, int deviceNumber, int speed, CancellationToken ct) {
         using var request = new HttpRequestMessage(HttpMethod.Put,
             new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
         request.Content = new FormUrlEncodedContent(new[] {
-            new KeyValuePair<string, string>("FanSpeed", fanSpeed.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new KeyValuePair<string, string>("FanSpeed", speed.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         });
         using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
-        // A 1025 (not implemented) surfaces as a clean refusal; anything else non-2xx
-        // rethrows so the caller can surface it (the endpoint maps it to a 409/500).
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound ||
-            (int)response.StatusCode == 1025) {
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) {
             throw new InvalidOperationException("this camera does not support fan control");
         }
         response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var json = System.Text.Json.JsonDocument.Parse(body);
+        if (json.RootElement.TryGetProperty("ErrorNumber", out var err) && err.GetInt32() != 0) {
+            var message = json.RootElement.TryGetProperty("ErrorMessage", out var em)
+                ? em.GetString()
+                : null;
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(message) ? "the camera rejected the fan command" : message);
+        }
     }
 
     /// <summary>Best-effort fan-speed read: null on unsupported/transient failure.</summary>

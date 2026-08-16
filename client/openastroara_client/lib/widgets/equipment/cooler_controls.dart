@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/equipment_device_api.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../theme/ara_colors.dart';
 import '../settings/settings_row.dart';
@@ -251,17 +252,14 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
         ),
       );
 
-  Future<void> _setCooler(bool on) async {
-    final ok = await ref.read(cameraStatusProvider.notifier).setCooler(on);
-    if (!ok && mounted) _toast('Another action is still in progress.');
-  }
+  Future<void> _setCooler(bool on) =>
+      _run(() => ref.read(cameraStatusProvider.notifier).setCooler(on));
 
   Future<void> _setTarget(double celsius) async {
     // Setting a target turns the cooler on (daemon auto-starts the fan).
-    final ok = await ref
+    await _run(() => ref
         .read(cameraStatusProvider.notifier)
-        .setCooler(true, targetTemperatureC: celsius);
-    if (!ok && mounted) _toast('Another action is still in progress.');
+        .setCooler(true, targetTemperatureC: celsius));
   }
 
   Future<void> _setCustomTarget() async {
@@ -273,9 +271,23 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
     await _setTarget(t);
   }
 
-  Future<void> _setFan(int speed) async {
-    final ok = await ref.read(cameraStatusProvider.notifier).setFan(speed);
-    if (!ok && mounted) _toast('Another action is still in progress.');
+  Future<void> _setFan(int speed) =>
+      _run(() => ref.read(cameraStatusProvider.notifier).setFan(speed));
+
+  /// Runs the action and surfaces failures as a toast. The notifier returns
+  /// false for a re-entrancy guard, but THROWS on a rejected command (e.g. the
+  /// daemon's "turn the cooler off before stopping the fan" 409) — so the
+  /// try/catch here is what turns a server rejection into a friendly message
+  /// instead of an unhandled exception.
+  Future<void> _run(Future<bool> Function() action) async {
+    try {
+      final ok = await action();
+      if (!ok) {
+        _toast('Another action is still in progress.');
+      }
+    } catch (e) {
+      _toast("Couldn't change that: ${describeEquipmentError(e)}");
+    }
   }
 
   void _toast(String message) {
