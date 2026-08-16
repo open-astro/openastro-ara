@@ -35,8 +35,12 @@ class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
   @override
   Future<void> disconnect() async => calls.add('disconnect');
   @override
-  Future<void> command(String subpath, [Map<String, dynamic>? body]) async => calls.add(
-      'command:$subpath:enabled=${body?['enabled']}:target=${body?['target_temperature_c']}');
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
+    final enabled = body?['enabled'];
+    final target = body?['target_temperature_c'];
+    final fanSpeed = body?['fan_speed'];
+    calls.add('command:$subpath:enabled=$enabled:target=$target:fan=$fanSpeed');
+  }
   @override
   void close() {}
 }
@@ -49,6 +53,8 @@ CameraStatus _status({
   bool? hasCooler,
   bool coolerOn = false,
   String runtimeState = 'idle',
+  int? fanSpeed,
+  int? fanMaxSpeed,
 }) =>
     CameraStatus(
       deviceId: 'cam-0',
@@ -73,6 +79,8 @@ CameraStatus _status({
         bayerPattern: 'RGGB',
       ),
       runtimeState: runtimeState,
+      fanSpeed: fanSpeed,
+      fanMaxSpeed: fanMaxSpeed,
       ccdTemperature: -9.8,
       coolerPowerPct: 42,
       coolerOn: coolerOn,
@@ -112,13 +120,36 @@ void main() {
     expect(find.byType(Switch), findsNWidgets(2)); // cooler + auto-connect
   });
 
+  testWidgets('shows the cooling-fan toggle when the camera reports a fan',
+      (tester) async {
+    final api = await _pump(tester, _status(fanSpeed: 1, fanMaxSpeed: 1));
+    expect(find.text('Cooling fan'), findsOneWidget);
+    expect(find.byType(Switch), findsNWidgets(3)); // cooler + fan + auto-connect
+    await tester.tap(find.byType(Switch).at(1)); // cooler(0) fan(1) auto-connect(2)
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:fan:enabled=null:target=null:fan=0'));
+  });
+
+  testWidgets('hides the fan toggle when the camera has no fan support',
+      (tester) async {
+    await _pump(tester, _status());
+    expect(find.text('Cooling fan'), findsNothing);
+  });
+
+  testWidgets('fan toggle on sends the max speed', (tester) async {
+    final api = await _pump(tester, _status(fanSpeed: 0, fanMaxSpeed: 3));
+    await tester.tap(find.byType(Switch).at(1)); // cooler(0) fan(1) auto-connect(2)
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:fan:enabled=null:target=null:fan=3'));
+  });
+
   testWidgets('Set target sends the cooler command (enabled + target)',
       (tester) async {
     final api = await _pump(tester, _status());
     await tester.enterText(find.byType(TextField), '-15');
     await tester.tap(find.widgetWithText(OutlinedButton, 'Set target'));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('command:cooler:enabled=true:target=-15.0'));
+    expect(api.calls, contains('command:cooler:enabled=true:target=-15.0:fan=null'));
   });
 
   testWidgets('toggling the cooler Switch sends enabled only (no set-point)',
@@ -126,7 +157,7 @@ void main() {
     final api = await _pump(tester, _status());
     await tester.tap(find.byType(Switch).first); // cooler switch (not auto-connect)
     await tester.pumpAndSettle();
-    expect(api.calls, contains('command:cooler:enabled=true:target=null'));
+    expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
 
   testWidgets('no cooler control when the camera cannot set temperature',
@@ -150,7 +181,7 @@ void main() {
     // And the switch actually drives the cooler (never a set-point).
     await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
-    expect(api.calls, contains('command:cooler:enabled=true:target=null'));
+    expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
 
   testWidgets('no device connected shows the empty state + Connect…',

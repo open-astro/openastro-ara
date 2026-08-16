@@ -125,7 +125,12 @@ public sealed record CameraStateDto(
     double? CoolerSetpointC = null,
     // §25.5.5 — the CURRENT readout mode's display name (from the driver's ReadoutModes list);
     // null when the camera has no readout-mode support.
-    string? ReadoutMode = null);
+    string? ReadoutMode = null,
+    // Vendor cooling-fan state (bridge /fan extension): current speed (0 = off) +
+    // the max. Null when the camera/bridge has no fan support — the panel hides
+    // the fan control entirely in that case.
+    int? FanSpeed = null,
+    int? FanMaxSpeed = null);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
@@ -160,6 +165,15 @@ public sealed record LiveViewStatusDto(
 // only writes SetCCDTemperature when a target is supplied (a pure on/off toggle
 // sends null). TargetTemperatureC is likewise ignored when Enabled is false.
 public sealed record CameraCoolerRequestDto(bool Enabled, double? TargetTemperatureC = null);
+
+/// <summary>Vendor cooling-fan state — current speed (0 = off) + the maximum
+/// (the bridge's <c>/api/v1/camera/{{n}}/fan</c> extension; the ASCOM Camera
+/// interface has no fan member). Null fan = the camera/bridge doesn't support
+/// it.</summary>
+public sealed record CameraFanDto(int FanSpeed, int MaxFanSpeed);
+
+/// <summary>Set the cooling fan speed: 0 = off, [1, MaxFanSpeed] = speed.</summary>
+public sealed record CameraFanRequestDto(int FanSpeed);
 
 /// <summary>POST /camera/readoutmode — select a readout mode by index into
 /// <see cref="CameraCapabilitiesDto.ReadoutModes"/> (driver order).</summary>

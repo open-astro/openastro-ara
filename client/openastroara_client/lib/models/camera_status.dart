@@ -159,6 +159,10 @@ class CameraStatus extends EquipmentDeviceStatus {
   // and the current readout-mode display name (null: no readout-mode support).
   final double? coolerSetpointC;
   final String? readoutMode;
+  /// Vendor cooling-fan state: current speed (0 = off) + max. Null when the
+  /// camera/bridge has no fan support — the panel hides the fan control.
+  final int? fanSpeed;
+  final int? fanMaxSpeed;
 
   CameraStatus({
     required this.deviceId,
@@ -172,6 +176,8 @@ class CameraStatus extends EquipmentDeviceStatus {
     required this.exposureProgressPct,
     this.coolerSetpointC,
     this.readoutMode,
+    this.fanSpeed,
+    this.fanMaxSpeed,
   });
 
   bool get isExposing => runtimeState == 'exposing' || runtimeState == 'downloading';
@@ -196,6 +202,8 @@ class CameraStatus extends EquipmentDeviceStatus {
       exposureProgressPct: (r['exposure_progress_pct'] as num?)?.toDouble(),
       coolerSetpointC: (r['cooler_setpoint_c'] as num?)?.toDouble(),
       readoutMode: r['readout_mode'] as String?,
+      fanSpeed: (r['fan_speed'] as num?)?.toInt(),
+      fanMaxSpeed: (r['fan_max_speed'] as num?)?.toInt(),
     );
   }
 
@@ -211,9 +219,12 @@ class CameraStatus extends EquipmentDeviceStatus {
           other.ccdTemperature == ccdTemperature &&
           other.coolerPowerPct == coolerPowerPct &&
           other.coolerOn == coolerOn &&
-          other.exposureProgressPct == exposureProgressPct);
+          other.exposureProgressPct == exposureProgressPct &&
+          other.fanSpeed == fanSpeed &&
+          other.fanMaxSpeed == fanMaxSpeed);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct);
+      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
+      fanSpeed, fanMaxSpeed);
 }

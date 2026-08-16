@@ -169,6 +169,24 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               ),
             ],
           ),
+        // Vendor cooling fan — shown only when the camera/bridge reports one
+        // (fan_max_speed != null). Toggles 0 (off) / max (full speed).
+        if (s.fanMaxSpeed != null)
+          Row(
+            children: [
+              const Text('Cooling fan'),
+              const Spacer(),
+              Switch(
+                value: (s.fanSpeed ?? 0) > 0,
+                onChanged: (on) => _setFan(on ? s.fanMaxSpeed! : 0),
+              ),
+              if (s.fanMaxSpeed! > 1)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text('${s.fanSpeed ?? 0}/${s.fanMaxSpeed}'),
+                ),
+            ],
+          ),
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
           _row('Sensor', '${caps.sensorWidth} × ${caps.sensorHeight}'),
@@ -241,6 +259,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
   // target — that's the "Set target" button's job.
   Future<void> _setCooler(bool on) =>
       _run(() => ref.read(cameraStatusProvider.notifier).setCooler(on));
+
+  Future<void> _setFan(int speed) =>
+      _run(() => ref.read(cameraStatusProvider.notifier).setFan(speed));
 
   Future<void> _setTarget() async {
     final messenger = ScaffoldMessenger.of(context);

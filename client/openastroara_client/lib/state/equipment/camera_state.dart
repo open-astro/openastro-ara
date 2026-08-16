@@ -59,6 +59,11 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
   Future<bool> setReadoutMode(int modeIndex) => performAction(
     (api) => api.command('readoutmode', {'mode_index': modeIndex}),
   );
+
+  /// Vendor cooling-fan control: 0 = off, [1, max] = speed. Only meaningful when
+  /// the camera reports a fan (fanMaxSpeed != null).
+  Future<bool> setFan(int fanSpeed) =>
+      performAction((api) => api.command('fan', {'fan_speed': fanSpeed}));
 }
 
 final cameraStatusProvider =

@@ -318,6 +318,86 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     }
 
     /// <summary>
+    /// Vendor cooling-fan read (bridge <c>/api/v1/camera/{{n}}/fan</c> — the ASCOM
+    /// Camera interface has no fan member). Returns null when the camera/bridge
+    /// has no fan support (Alpaca 1025 "not implemented" / HTTP 404).
+    /// </summary>
+    public async Task<CameraFanDto?> GetFanAsync(CancellationToken ct) {
+        (Uri baseAddress, int deviceNumber) = RequireConnectedDeviceAddress();
+        var speed = await ReadFanAsync(baseAddress, deviceNumber, ct).ConfigureAwait(false);
+        if (speed is null) return null;
+        var max = await ReadFanMaxAsync(baseAddress, deviceNumber, ct).ConfigureAwait(false) ?? 1;
+        return new CameraFanDto(speed.Value, Math.Max(1, max));
+    }
+
+    /// <summary>Vendor cooling-fan control: 0 = off, [1, max] = speed.</summary>
+    public async Task SetFanAsync(int fanSpeed, CancellationToken ct) {
+        var (baseAddress, deviceNumber) = RequireConnectedDeviceAddress();
+        using var request = new HttpRequestMessage(HttpMethod.Put,
+            new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
+        request.Content = new FormUrlEncodedContent(new[] {
+            new KeyValuePair<string, string>("FanSpeed", fanSpeed.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        });
+        using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
+        // A 1025 (not implemented) surfaces as a clean refusal; anything else non-2xx
+        // rethrows so the caller can surface it (the endpoint maps it to a 409/500).
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound ||
+            (int)response.StatusCode == 1025) {
+            throw new InvalidOperationException("this camera does not support fan control");
+        }
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Best-effort fan-speed read: null on unsupported/transient failure.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort vendor read boundary: an unsupported/transiently-failing fan route must yield null (no fan UI) rather than fail the whole runtime refresh. CA1031's log-and-recover boundary applies.")]
+    private static async Task<int?> ReadFanAsync(Uri baseAddress, int deviceNumber, CancellationToken ct) {
+        try {
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
+            using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound || (int)response.StatusCode == 1025) {
+                return null;
+            }
+            response.EnsureSuccessStatusCode();
+            using var json = System.Text.Json.JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            if (json.RootElement.TryGetProperty("ErrorNumber", out var err) && err.GetInt32() != 0) {
+                return null;
+            }
+            return json.RootElement.TryGetProperty("Value", out var v) ? v.GetInt32() : null;
+        } catch {
+            return null;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort vendor read boundary, same as ReadFanAsync: failure yields null (max defaults to 1) rather than failing the refresh. CA1031's log-and-recover boundary applies.")]
+    private static async Task<int?> ReadFanMaxAsync(Uri baseAddress, int deviceNumber, CancellationToken ct) {
+        try {
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fanmaxspeed"));
+            using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            using var json = System.Text.Json.JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            return json.RootElement.TryGetProperty("Value", out var v) ? v.GetInt32() : null;
+        } catch {
+            return null;
+        }
+    }
+
+    private (Uri BaseAddress, int DeviceNumber) RequireConnectedDeviceAddress() {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_state != EquipmentConnectionState.Connected || _deviceBaseAddress is null) {
+                throw new InvalidOperationException("camera is not connected");
+            }
+            return (_deviceBaseAddress, _deviceNumber);
+        }
+    }
+
+    /// <summary>
     /// §25.5.5 cooler capability gate: returns the human-readable refusal reason
     /// when the request cannot be honored, else null. A camera without a cooler
     /// (HasCooler=false) can't be toggled at all; a camera without TEC
@@ -1357,6 +1437,24 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
+            // Vendor cooling-fan state — best-effort blocking read on the refresh
+            // thread (a ~ms localhost GET to the bridge; null when unsupported).
+            // Snapshot the address under the gate like the client snapshot above.
+            Uri? fanBaseAddress;
+            int fanDeviceNumber;
+            lock (_gate) {
+                fanBaseAddress = _deviceBaseAddress;
+                fanDeviceNumber = _deviceNumber;
+            }
+            if (fanBaseAddress is not null) {
+                var fanSpeed = ReadFanAsync(fanBaseAddress, fanDeviceNumber, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                if (fanSpeed is not null) {
+                    var fanMax = ReadFanMaxAsync(fanBaseAddress, fanDeviceNumber, CancellationToken.None)
+                        .GetAwaiter().GetResult() ?? 1;
+                    runtime = runtime with { FanSpeed = fanSpeed, FanMaxSpeed = Math.Max(1, fanMax) };
+                }
+            }
             var caps = needCaps ? ReadCapabilities(client) : null;
             var capsCommitted = false;
             var driftVerdict = CoolingDriftVerdict.Idle;
