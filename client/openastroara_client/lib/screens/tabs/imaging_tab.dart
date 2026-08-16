@@ -70,18 +70,18 @@ class ImagingTab extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Capture progress sits at the very top — the in-flight
-                // exposure's status is the first thing the eye lands on.
-                CaptureProgressCard(
-                  onRetry: () => _takeOne(context, ref),
-                  onCancel: () => _cancelCapture(context, ref),
-                ),
                 ExposureControlsPanel(
                   liveViewOn: liveViewOn,
                   onTakeOne: exposing ? null : () => _takeOne(context, ref),
                   onLiveViewToggle: (v) {
                     _toggleLiveView(context, ref, v);
                   },
+                ),
+                // In-flight capture status right under Take One (hidden when
+                // idle).
+                CaptureProgressCard(
+                  onRetry: () => _takeOne(context, ref),
+                  onCancel: () => _cancelCapture(context, ref),
                 ),
                 // Solve sits directly under Take One with the panel's top
                 // border as the separator — plate-solve the frame you just
