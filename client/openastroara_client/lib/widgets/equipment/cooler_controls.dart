@@ -170,49 +170,51 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
               ),
             ),
           ),
-          // Quick presets — one tap arms cooling at that set-point.
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          // Quick presets + the custom field on ONE line — the presets wrap
+          // (Expanded) while the custom input stays pinned at the end.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final p in presets)
-                _presetChip(
-                  p,
-                  s.coolerOn && (s.coolerSetpointC ?? 999) == p,
-                  () => _setTarget(p.toDouble()),
-                ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: _target,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      signed: true,
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^-?[0-9]*\.?[0-9]*$'),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final p in presets)
+                      _presetChip(
+                        p,
+                        s.coolerOn && (s.coolerSetpointC ?? 999) == p,
+                        () => _setTarget(p.toDouble()),
                       ),
-                    ],
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Custom (°C)',
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 104,
+                child: TextField(
+                  controller: _target,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^-?[0-9]*\.?[0-9]*$'),
                     ),
+                  ],
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Custom (°C)',
                   ),
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () => _setCustomTarget(),
-                  child: const Text('Set'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () => _setCustomTarget(),
+                child: const Text('Set'),
+              ),
+            ],
           ),
         ],
         // Vendor cooling fan — only when the camera/bridge reports one.
