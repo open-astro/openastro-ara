@@ -7,7 +7,7 @@ import '../../theme/ara_colors.dart';
 import '../settings/settings_row.dart';
 
 /// Reusable cooler control block for both the Settings → Camera panel and the
-/// Imaging tab — the on/off switch, quick target presets (−10/−5/0/+5 °C), a
+/// Imaging tab — the on/off switch, quick target presets (−10/−5/0/+5/+10 °C), a
 /// custom target field, and (when the camera reports a fan) the cooling-fan
 /// toggle.
 ///
@@ -30,7 +30,7 @@ class CoolerControls extends ConsumerStatefulWidget {
 }
 
 class _CoolerControlsState extends ConsumerState<CoolerControls> {
-  static const List<int> presets = [-10, -5, 0, 5];
+  static const List<int> presets = [-10, -5, 0, 5, 10];
   final TextEditingController _target = TextEditingController();
 
   @override

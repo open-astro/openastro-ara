@@ -118,6 +118,7 @@ void main() {
     expect(find.text('-5 °C'), findsOneWidget);
     expect(find.text('0 °C'), findsOneWidget);
     expect(find.text('+5 °C'), findsOneWidget);
+    expect(find.text('+10 °C'), findsOneWidget);
     expect(find.text('Custom (°C)'), findsOneWidget);
     expect(find.text('Cooling fan'), findsOneWidget);
   });
