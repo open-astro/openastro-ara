@@ -10,6 +10,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
+import '../../../widgets/equipment/fan_switch_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -154,6 +155,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
                 HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
               ],
             ),
+          // Cooling fan — exposed via the bridge's ToupTek Thermal Switch
+          // device (a "Fan" port); hidden when none is connected.
+          const FanSwitchRow(),
         ],
         // A camera with no cooler at all (has_cooler=false — CoolerOn not
         // implemented) gets an explicit muted row instead of an absent section:
