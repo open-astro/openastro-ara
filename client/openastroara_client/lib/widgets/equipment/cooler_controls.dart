@@ -191,7 +191,7 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
               ),
               const SizedBox(width: 8),
               SizedBox(
-                width: 104,
+                width: 130, // app-standard field width (matches the other panels)
                 child: TextField(
                   controller: _target,
                   keyboardType: const TextInputType.numberWithOptions(
