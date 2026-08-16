@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/switch_device.dart';
 import '../../services/equipment_device_api.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/switch_state.dart';
 import '../../theme/ara_colors.dart';
 import '../settings/settings_row.dart';
 
@@ -60,6 +62,27 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
 
   @override
   Widget build(BuildContext context) {
+    // §25.5.6 — the fan must follow the cooler (it vents the TEC's heat sink):
+    // when the cooler turns on/off, keep the bridge's Thermal-Switch Fan port
+    // in sync (on → fan on, off → fan off). This lives here (not just in the
+    // fan row) so arming cooling from either the Imaging tab or the settings
+    // panel keeps the fan consistent.
+    ref.listen(cameraStatusProvider, (prev, next) {
+      final prevCooler = prev?.maybeWhen(data: (v) => v?.coolerOn ?? false, orElse: () => false) ?? false;
+      final nextCooler = next.maybeWhen(data: (v) => v?.coolerOn ?? false, orElse: () => false);
+      if (prevCooler != nextCooler) {
+        final fan = _findFanPort(
+            ref.read(switchListProvider).maybeWhen(data: (v) => v, orElse: () => const <SwitchDevice>[]));
+        if (fan != null) {
+          ref.read(switchListProvider.notifier).setValue(
+                deviceId: fan.device.deviceId,
+                portId: fan.port.id,
+                value: nextCooler ? 1.0 : 0.0,
+              );
+        }
+      }
+    });
+
     final s = ref.watch(cameraStatusProvider).maybeWhen(
           data: (v) => v,
           orElse: () => null,
@@ -220,6 +243,20 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
         const SizedBox(height: 4),
       ],
     );
+  }
+
+  /// The first connected switch device exposing a writable "Fan" port, or null.
+  static ({SwitchDevice device, SwitchPort port})? _findFanPort(
+      List<SwitchDevice> switches) {
+    for (final device in switches) {
+      if (!device.isConnected) continue;
+      for (final port in device.ports) {
+        if (port.name == 'Fan' && port.canWrite) {
+          return (device: device, port: port);
+        }
+      }
+    }
+    return null;
   }
 
   /// Label/value row matching the app's panel row rhythm (2 pt vertical
