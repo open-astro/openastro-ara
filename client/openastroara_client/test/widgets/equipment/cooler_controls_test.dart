@@ -86,7 +86,8 @@ CameraStatus _status({
       fanMaxSpeed: fanMaxSpeed,
     );
 
-Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status) async {
+Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
+    {bool compact = false}) async {
   final api = _FakeCameraApi(status);
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -95,8 +96,12 @@ Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status) async {
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
     ],
-    child: const MaterialApp(
-      home: Scaffold(body: SingleChildScrollView(child: CoolerControls())),
+    child: MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: CoolerControls(compact: compact),
+        ),
+      ),
     ),
   ));
   await tester.pumpAndSettle();
@@ -144,6 +149,32 @@ void main() {
     await tester.tap(fan);
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:fan:enabled=null:target=null:fan=0'));
+  });
+
+  testWidgets(
+      'compact (Imaging tab) shows only the target picker — no toggles or '
+      'readouts', (tester) async {
+    await _pump(
+      tester,
+      _status(coolerOn: true, coolerSetpointC: -5, fanMaxSpeed: 1),
+      compact: true,
+    );
+    expect(find.text('Cooling target'), findsOneWidget);
+    expect(find.text('-10 °C'), findsOneWidget);
+    expect(find.text('+5 °C'), findsOneWidget);
+    expect(find.text('Custom (°C)'), findsOneWidget);
+    // No readouts, no on/off toggles.
+    expect(find.text('Sensor temperature'), findsNothing);
+    expect(find.text('Cooler power'), findsNothing);
+    expect(find.text('Cooling to'), findsNothing);
+    expect(find.text('Cooling fan'), findsNothing);
+    expect(find.byType(Switch), findsNothing);
+    // The presets still arm cooling at that target.
+    final api = await _pump(tester, _status(), compact: true);
+    await tester.tap(find.text('-10 °C'));
+    await tester.pumpAndSettle();
+    expect(api.calls,
+        contains('command:cooler:enabled=true:target=-10.0:fan=null'));
   });
 
   testWidgets('hides entirely when the camera has no cooler', (tester) async {

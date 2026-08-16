@@ -84,7 +84,7 @@ class ImagingTab extends ConsumerWidget {
                 // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) +
                 // custom target + fan, shared with Settings → Camera. Hidden
                 // entirely when no camera with a cooler is connected.
-                const CoolerControls(),
+                const CoolerControls(compact: true),
                 const _RailGap(),
                 const SolvePanel(),
                 const _RailGap(),

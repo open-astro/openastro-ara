@@ -18,7 +18,12 @@ import '../settings/settings_row.dart';
 /// the fan; stopping the fan while cooling is refused. This widget just sends
 /// the commands — the daemon owns the interlock.
 class CoolerControls extends ConsumerStatefulWidget {
-  const CoolerControls({super.key});
+  /// [compact] renders only the target picker (presets + custom field) — used
+  /// by the Imaging tab, where the readouts and on/off toggles live in
+  /// Settings → Camera instead.
+  const CoolerControls({super.key, this.compact = false});
+
+  final bool compact;
 
   @override
   ConsumerState<CoolerControls> createState() => _CoolerControlsState();
@@ -45,11 +50,67 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
     if (caps == null) return const SizedBox.shrink();
     if (!caps.hasCooler) return const SizedBox.shrink();
 
+    if (widget.compact) {
+      // Imaging tab: only the target picker — the readouts and on/off toggles
+      // stay in Settings → Camera.
+      if (!caps.canSetTemperature) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SettingsSectionHeader('Cooling target'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final p in presets)
+                ChoiceChip(
+                  label: Text(p <= 0 ? '$p °C' : '+$p °C'),
+                  selected: s.coolerOn && (s.coolerSetpointC ?? 999) == p,
+                  onSelected: (_) => _setTarget(p.toDouble()),
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 130,
+                  child: TextField(
+                    controller: _target,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: true,
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^-?[0-9]*\.?[0-9]*$'),
+                      ),
+                    ],
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'Custom (°C)',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () => _setCustomTarget(),
+                  child: const Text('Set'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SettingsSectionHeader('Cooling'),
-        _row('CCD temperature',
+        _row('Sensor temperature',
             s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
         if (s.coolerPowerPct != null)
           _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
