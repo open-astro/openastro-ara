@@ -77,6 +77,11 @@ class ImagingTab extends ConsumerWidget {
                     _toggleLiveView(context, ref, v);
                   },
                 ),
+                // Solve sits directly under Take One with the panel's top
+                // border as the separator — plate-solve the frame you just
+                // took without scrolling.
+                const SolvePanel(),
+                const _RailGap(),
                 CaptureProgressCard(
                   onRetry: () => _takeOne(context, ref),
                   onCancel: () => _cancelCapture(context, ref),
@@ -90,8 +95,6 @@ class ImagingTab extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: CoolerControls(compact: true),
                 ),
-                const _RailGap(),
-                const SolvePanel(),
                 const _RailGap(),
                 const GuidingPanel(),
                 const _RailGap(),
