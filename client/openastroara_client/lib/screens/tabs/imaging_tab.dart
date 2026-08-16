@@ -85,10 +85,15 @@ class ImagingTab extends ConsumerWidget {
                 // custom target + fan, shared with Settings → Camera. Hidden
                 // entirely when no camera with a cooler is connected.
                 const CoolerControls(),
+                const _RailGap(),
                 const SolvePanel(),
+                const _RailGap(),
                 const GuidingPanel(),
+                const _RailGap(),
                 const HistogramStrip(),
+                const _RailGap(),
                 const DiagnosticPanel(),
+                const _RailGap(),
                 const FaultPanel(),
               ],
             ),
@@ -255,6 +260,15 @@ class ImagingTab extends ConsumerWidget {
       ));
     }
   }
+}
+
+/// Consistent vertical breathing room between the right-rail sections
+/// (HIG spacing grid — sections never sit flush against each other).
+class _RailGap extends StatelessWidget {
+  const _RailGap();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(height: 12);
 }
 
 class _ImagingHeader extends ConsumerWidget {

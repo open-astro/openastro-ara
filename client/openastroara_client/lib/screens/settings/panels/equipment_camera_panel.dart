@@ -87,18 +87,6 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row(
-          'CCD temperature',
-          s.ccdTemperature == null
-              ? '—'
-              : '${s.ccdTemperature!.toStringAsFixed(1)} °C',
-        ),
-        if (s.coolerPowerPct != null)
-          _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
-        // §25.5.5 — the target the TEC is cooling TO (read back from the daemon),
-        // so "cooling to −10 °C" is visible next to the actual sensor temperature.
-        if (s.coolerOn && s.coolerSetpointC != null)
-          _row('Cooling to', '${s.coolerSetpointC!.toStringAsFixed(1)} °C'),
         if (s.isExposing)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),

@@ -3,16 +3,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/equipment/camera_state.dart';
+import '../../theme/ara_colors.dart';
+import '../settings/settings_row.dart';
 
 /// Reusable cooler control block for both the Settings → Camera panel and the
-/// Imaging tab: the on/off switch, quick target presets (−10/−5/0/+5 °C), a
+/// Imaging tab — the on/off switch, quick target presets (−10/−5/0/+5 °C), a
 /// custom target field, and (when the camera reports a fan) the cooling-fan
 /// toggle.
 ///
-/// Safety rules are enforced by the daemon and reflected here via the status:
-/// turning the cooler ON auto-starts the fan; turning it OFF stops the fan;
-/// stopping the fan while cooling is refused. This widget just sends the
-/// commands — the daemon owns the interlock.
+/// Layout follows the app's shared section pattern (a [SettingsSectionHeader]
+/// + the 8pt spacing grid) so the block reads identically wherever it's
+/// embedded. Safety rules are enforced by the daemon and reflected here via
+/// the status: turning the cooler ON auto-starts the fan; turning it OFF stops
+/// the fan; stopping the fan while cooling is refused. This widget just sends
+/// the commands — the daemon owns the interlock.
 class CoolerControls extends ConsumerStatefulWidget {
   const CoolerControls({super.key});
 
@@ -33,9 +37,9 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(cameraStatusProvider).maybeWhen(
-      data: (v) => v,
-      orElse: () => null,
-    );
+          data: (v) => v,
+          orElse: () => null,
+        );
     if (s == null) return const SizedBox.shrink();
     final caps = s.capabilities;
     if (caps == null) return const SizedBox.shrink();
@@ -44,16 +48,38 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Text('Cooler'),
-            const Spacer(),
-            Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
-          ],
+        const SettingsSectionHeader('Cooling'),
+        _row('CCD temperature',
+            s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+        if (s.coolerPowerPct != null)
+          _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
+        if (s.coolerOn && s.coolerSetpointC != null)
+          _row('Cooling to', '${s.coolerSetpointC!.toStringAsFixed(1)} °C'),
+        // Cooler on/off.
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              const Expanded(child: Text('Cooler')),
+              Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
+            ],
+          ),
         ),
         if (caps.canSetTemperature) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 8, bottom: 4),
+            child: Text(
+              'Target temperature',
+              style: TextStyle(
+                fontSize: 12,
+                color: AraColors.textSecondary,
+              ),
+            ),
+          ),
+          // Quick presets — one tap arms cooling at that set-point.
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
               for (final p in presets)
                 ChoiceChip(
@@ -63,55 +89,74 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
                 ),
             ],
           ),
-          Row(
-            children: [
-              SizedBox(
-                width: 130,
-                child: TextField(
-                  controller: _target,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    signed: true,
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'^-?[0-9]*\.?[0-9]*$'),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 130,
+                  child: TextField(
+                    controller: _target,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: true,
+                      decimal: true,
                     ),
-                  ],
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    labelText: 'Custom (°C)',
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^-?[0-9]*\.?[0-9]*$'),
+                      ),
+                    ],
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'Custom (°C)',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: () => _setCustomTarget(),
-                child: const Text('Set'),
-              ),
-            ],
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () => _setCustomTarget(),
+                  child: const Text('Set'),
+                ),
+              ],
+            ),
           ),
         ],
         // Vendor cooling fan — only when the camera/bridge reports one.
         if (s.fanMaxSpeed != null)
-          Row(
-            children: [
-              const Text('Cooling fan'),
-              const Spacer(),
-              Switch(
-                value: (s.fanSpeed ?? 0) > 0,
-                onChanged: (on) => _setFan(on ? s.fanMaxSpeed! : 0),
-              ),
-              if (s.fanMaxSpeed! > 1)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text('${s.fanSpeed ?? 0}/${s.fanMaxSpeed}'),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    s.fanMaxSpeed! > 1
+                        ? 'Cooling fan · ${s.fanSpeed ?? 0}/${s.fanMaxSpeed}'
+                        : 'Cooling fan',
+                  ),
                 ),
-            ],
+                Switch(
+                  value: (s.fanSpeed ?? 0) > 0,
+                  onChanged: (on) => _setFan(on ? s.fanMaxSpeed! : 0),
+                ),
+              ],
+            ),
           ),
+        const SizedBox(height: 4),
       ],
     );
   }
+
+  /// Label/value row matching the app's panel row rhythm (2 pt vertical
+  /// padding, label left / value right).
+  static Widget _row(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Expanded(child: Text(label)),
+            Text(value),
+          ],
+        ),
+      );
 
   Future<void> _setCooler(bool on) async {
     final ok = await ref.read(cameraStatusProvider.notifier).setCooler(on);
