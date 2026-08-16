@@ -84,10 +84,23 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // answered. The interlocks are safety-relevant, so a transient read miss
     // must NOT blank these: RefreshPass preserves them across a blip (a fan
     // camera never loses its interlock on one bad poll) and only a confirmed
-    // "no fan" (a clean 404/1025) or a camera swap resets them.
+    // "no fan" (a clean 404/1025), a bounded run of transient misses (see
+    // _fanProbeMisses), or a camera swap resets them.
     private int? _fanSpeed;
     private int? _fanMaxSpeed;
     private bool _fanSupportKnown;
+    // Consecutive transient fan-probe misses. The fail-closed interlock must
+    // not strand a camera whose /fan route never answers cleanly (arbitrary
+    // ASCOM Alpaca servers may respond oddly to the vendor route): after
+    // FanProbeMissLimit misses we settle as "no fan" so cooling works exactly
+    // as it did before this feature.
+    private int _fanProbeMisses;
+    private const int FanProbeMissLimit = 3;
+
+    // §25.5.6 — serializes cooler/fan writes so a concurrent fan-off can't
+    // slip between the interlock snapshot and the TEC write (review: two
+    // callers racing the "never cool without the fan" guard).
+    private readonly SemaphoreSlim _fanCoolerGate = new(1, 1);
     private int _refreshing;
     private int _refreshPending;
     private long _connectGeneration;
@@ -310,9 +323,22 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             ? ((fanSpeed ?? 0) > 0 ? FanInterlockVerdict.FanAlreadyOn : FanInterlockVerdict.AutoStartFan)
             : (fanSupportKnown ? FanInterlockVerdict.NoFanNeeded : FanInterlockVerdict.UnknownFailClosed);
 
+    public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
+        // Serialize cooler/fan writes: a concurrent SetFanAsync must not slip
+        // between this method's interlock snapshot and the TEC write (that race
+        // would produce exactly the "cooler on, fan off" state the interlock
+        // exists to prevent).
+        await _fanCoolerGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            await SetCoolerCoreAsync(enabled, targetTemperatureC, ct).ConfigureAwait(false);
+        } finally {
+            _fanCoolerGate.Release();
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cooler boundary: the auto-fan and fan-off best-effort catches must never fail the cooler write (the user asked to change cooling); a fan failure is logged, a cooler-write failure maps to a clean 409. CA1031's log-and-recover boundary applies.")]
-    public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
+    private async Task SetCoolerCoreAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
         var client = RequireConnectedClient();
         // §25.5.5 — capability gates BEFORE any device write: a camera without a
         // cooler (CoolerOn not implemented) or without TEC set-point regulation
@@ -422,20 +448,37 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     /// <summary>Vendor cooling-fan control: 0 = off, [1, max] = speed.</summary>
     public async Task SetFanAsync(int fanSpeed, CancellationToken ct) {
-        // §25.5.6 safety: the TEC dumps heat into the heat sink and the fan
-        // vents it — cooling with the fan off overheats the hot side and can
-        // damage the camera. Refuse fan-off while the cooler is running (the
-        // runtime's CoolerOn is the authoritative TEC state; the set-point is
-        // what drives it on the daemon's cooler path). _runtime is written
-        // under _gate — snapshot the field there too.
-        bool coolerOn;
-        lock (_gate) { coolerOn = _runtime.CoolerOn; }
-        if (fanSpeed == 0 && coolerOn) {
-            throw new InvalidOperationException(
-                "turn the cooler off before stopping the fan — cooling with the fan off can damage the camera");
+        // Serialize with SetCoolerAsync (see the gate comment there).
+        await _fanCoolerGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            // §25.5.6 safety: the TEC dumps heat into the heat sink and the fan
+            // vents it — cooling with the fan off overheats the hot side and can
+            // damage the camera. Refuse fan-off while the cooler is running (the
+            // runtime's CoolerOn is the authoritative TEC state; the set-point is
+            // what drives it on the daemon's cooler path). _runtime is written
+            // under _gate — snapshot the field there too.
+            bool coolerOn;
+            int? fanMax;
+            lock (_gate) {
+                coolerOn = _runtime.CoolerOn;
+                fanMax = _runtime.FanMaxSpeed;
+            }
+            if (fanSpeed == 0 && coolerOn) {
+                throw new InvalidOperationException(
+                    "turn the cooler off before stopping the fan — cooling with the fan off can damage the camera");
+            }
+            // Defensive range bound: this is a direct hardware write — clamp a
+            // buggy/other client's out-of-range value to [0, max] (0 = off).
+            if (fanMax is int max && max > 0 && fanSpeed > max) {
+                fanSpeed = max;
+            } else if (fanSpeed < 0) {
+                fanSpeed = 0;
+            }
+            var (baseAddress, deviceNumber) = RequireConnectedDeviceAddress();
+            await PutFanAsync(baseAddress, deviceNumber, fanSpeed, ct).ConfigureAwait(false);
+        } finally {
+            _fanCoolerGate.Release();
         }
-        var (baseAddress, deviceNumber) = RequireConnectedDeviceAddress();
-        await PutFanAsync(baseAddress, deviceNumber, fanSpeed, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -456,7 +499,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
             using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound || (int)response.StatusCode == 1025) {
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound) {
                 return new FanProbe(FanProbeResult.None, null, null);
             }
             response.EnsureSuccessStatusCode();
@@ -524,7 +567,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
             using var response = await ImageBytesHttp.SendAsync(request, ct).ConfigureAwait(false);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound || (int)response.StatusCode == 1025) {
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound) {
                 return null;
             }
             response.EnsureSuccessStatusCode();
@@ -1625,7 +1668,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // the interlock in SetCoolerAsync must never be silently skipped by
             // one flaky poll.
             if (fanBaseAddress is not null && _capabilities?.HasCooler != false) {
-                var probe = ProbeFanAsync(fanBaseAddress, fanDeviceNumber, CancellationToken.None)
+                // Bounded probe: a hung bridge must not stall the 2s refresh
+                // tick for the ImageBytesHttp client's 120s download timeout.
+                using var probeTimeout = new CancellationTokenSource();
+                probeTimeout.CancelAfter(TimeSpan.FromSeconds(2));
+                var probe = ProbeFanAsync(fanBaseAddress, fanDeviceNumber, probeTimeout.Token)
                     .GetAwaiter().GetResult();
                 lock (_gate) {
                     switch (probe.Result) {
@@ -1633,17 +1680,28 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                             _fanSpeed = probe.Speed;
                             _fanMaxSpeed = Math.Max(1, probe.Max ?? 1);
                             _fanSupportKnown = true;
+                            _fanProbeMisses = 0;
                             runtime = runtime with { FanSpeed = _fanSpeed, FanMaxSpeed = _fanMaxSpeed };
                             break;
                         case FanProbeResult.None:
                             _fanSupportKnown = true;
+                            _fanProbeMisses = 0;
                             runtime = runtime with { FanSpeed = null, FanMaxSpeed = null };
                             break;
                         case FanProbeResult.Unknown:
                             // Transient miss — keep the last-known-good (both stay
                             // null until the first success, which is the fail-closed
                             // window covered by FanInterlockVerdict.UnknownFailClosed).
-                            runtime = runtime with { FanSpeed = _fanSpeed, FanMaxSpeed = _fanMaxSpeed };
+                            // After a bounded run of misses, settle as "no fan" so
+                            // arbitrary Alpaca servers (that answer the vendor route
+                            // oddly) don't get cooling refused forever.
+                            if (++_fanProbeMisses >= FanProbeMissLimit) {
+                                _fanSupportKnown = true;
+                                _fanProbeMisses = 0;
+                                runtime = runtime with { FanSpeed = null, FanMaxSpeed = null };
+                            } else {
+                                runtime = runtime with { FanSpeed = _fanSpeed, FanMaxSpeed = _fanMaxSpeed };
+                            }
                             break;
                     }
                 }
@@ -2155,6 +2213,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _deviceBaseAddress = null;
         }
         _refreshTimer.Dispose();
+        _fanCoolerGate.Dispose();
         // Stop accepting analysis jobs and let the worker drain what it holds; analysis
         // pending at shutdown is acceptable loss (the frames themselves are safe on disk).
         _analysisQueue.Writer.TryComplete();
