@@ -302,7 +302,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't set cooler: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't change that: ${describeEquipmentError(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

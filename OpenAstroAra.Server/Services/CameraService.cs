@@ -300,6 +300,28 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         lock (_gate) {
             _coolingDrift.Reset();
         }
+        // §25.5.6 safety: enabling the cooler while the fan is off would let the
+        // TEC overheat its heat sink — auto-enable the fan (to max) first. The
+        // runtime's FanSpeed reflects the last refresh; a camera with no fan
+        // support reports null and is untouched (it has no heat-sink fan to run).
+        if (enabled && (_runtime.FanSpeed ?? 0) == 0 && _runtime.FanMaxSpeed is int fanMax) {
+            try {
+                var (fanBase, fanDevice) = RequireConnectedDeviceAddress();
+                using var fanRequest = new HttpRequestMessage(HttpMethod.Put,
+                    new Uri(fanBase, $"api/v1/camera/{fanDevice}/fan"));
+                fanRequest.Content = new FormUrlEncodedContent(new[] {
+                    new KeyValuePair<string, string>("FanSpeed", fanMax.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                });
+                using var fanResponse = await ImageBytesHttp.SendAsync(fanRequest, ct).ConfigureAwait(false);
+                fanResponse.EnsureSuccessStatusCode();
+            } catch (Exception ex) {
+                // Never cool without the fan — refuse the cooler rather than
+                // risking the TEC. (The write may still have raced the fan-up;
+                // the runtime refresh will reconcile and the user can retry.)
+                throw new InvalidOperationException(
+                    "could not start the cooling fan — cooling requires the fan to vent the TEC heat sink", ex);
+            }
+        }
         try {
             await Task.Run(() => {
                 if (targetTemperatureC is double target) {
@@ -332,6 +354,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     /// <summary>Vendor cooling-fan control: 0 = off, [1, max] = speed.</summary>
     public async Task SetFanAsync(int fanSpeed, CancellationToken ct) {
+        // §25.5.6 safety: the TEC dumps heat into the heat sink and the fan
+        // vents it — cooling with the fan off overheats the hot side and can
+        // damage the camera. Refuse fan-off while the cooler is running (the
+        // runtime's CoolerOn is the authoritative TEC state; the set-point is
+        // what drives it on the daemon's cooler path).
+        if (fanSpeed == 0 && _runtime.CoolerOn) {
+            throw new InvalidOperationException(
+                "turn the cooler off before stopping the fan — cooling with the fan off can damage the camera");
+        }
         var (baseAddress, deviceNumber) = RequireConnectedDeviceAddress();
         using var request = new HttpRequestMessage(HttpMethod.Put,
             new Uri(baseAddress, $"api/v1/camera/{deviceNumber}/fan"));
