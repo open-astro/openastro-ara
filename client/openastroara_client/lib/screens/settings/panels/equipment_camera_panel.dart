@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/camera_status.dart';
@@ -10,6 +9,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
+import '../../../widgets/equipment/cooler_controls.dart';
 import '../../../widgets/equipment/fan_switch_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -65,11 +65,9 @@ class _CameraBody extends ConsumerStatefulWidget {
 
 class _CameraBodyState extends ConsumerState<_CameraBody> {
   // The cooler target the user is setting (their intent, not a live mirror).
-  late final TextEditingController _target = TextEditingController(text: '-10');
 
   @override
   void dispose() {
-    _target.dispose();
     super.dispose();
   }
 
@@ -90,18 +88,6 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row(
-          'CCD temperature',
-          s.ccdTemperature == null
-              ? '—'
-              : '${s.ccdTemperature!.toStringAsFixed(1)} °C',
-        ),
-        if (s.coolerPowerPct != null)
-          _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
-        // §25.5.5 — the target the TEC is cooling TO (read back from the daemon),
-        // so "cooling to −10 °C" is visible next to the actual sensor temperature.
-        if (s.coolerOn && s.coolerSetpointC != null)
-          _row('Cooling to', '${s.coolerSetpointC!.toStringAsFixed(1)} °C'),
         if (s.isExposing)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -112,67 +98,18 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               style: const TextStyle(color: AraColors.accentBusy),
             ),
           ),
-        // §25.5.5 — the on/off Switch needs only a cooler (has_cooler); the TEC
-        // set-point additionally needs temperature regulation. A "dumb" on/off
-        // cooler (CoolerOn implemented, CanSetCCDTemperature=false) gets the
-        // Switch alone instead of no cooler UI at all.
-        if (caps?.hasCooler ?? false) ...[
-          Row(
-            children: [
-              const Text('Cooler'),
-              HelpIcon(helpKey: 'eq.camera.cooler', device: s.name),
-              const Spacer(),
-              Switch(value: s.coolerOn, onChanged: (v) => _setCooler(v)),
-            ],
-          ),
-          if (caps?.canSetTemperature ?? false)
-            Row(
-              children: [
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: _target,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      signed: true,
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^-?[0-9]*\.?[0-9]*$'),
-                      ),
-                    ],
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Target (°C)',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () => _setTarget(),
-                  child: const Text('Set target'),
-                ),
-                HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
-              ],
-            ),
-          // Cooling fan — exposed via the bridge's ToupTek Thermal Switch
-          // device (a "Fan" port); hidden when none is connected.
-          const FanSwitchRow(),
-        ],
-        // A camera with no cooler at all (has_cooler=false — CoolerOn not
-        // implemented) gets an explicit muted row instead of an absent section:
-        // absence reads as "missing UI", the row reads as "no cooling".
-        if (caps != null && !caps.hasCooler)
-          Row(
-            children: [
-              const Text('Cooler'),
-              const Spacer(),
-              Text(
-                'Does not support cooling',
-                style: const TextStyle(color: AraColors.textDisabled),
-              ),
-            ],
-          ),
+        // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom
+        // target, shared with the Imaging tab. The cooling-fan sync is
+        // client-side (setCooler syncs the Thermal-Switch Fan port).
+        // Always built: CoolerControls itself renders the sensor-temperature
+        // row + a "Does not support cooling" note for uncooled cameras.
+        const CoolerControls(),
+        // Cooling fan — exposed via the bridge's ToupTek Thermal Switch
+        // device (a "Fan" port); hidden when none is connected. Turning the
+        // fan off while the TEC is cooling is refused (it vents the heat
+        // sink), closing the manual fan-off gap left by #964.
+        const FanSwitchRow(),
+
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
           _row('Sensor', '${caps.sensorWidth} × ${caps.sensorHeight}'),
@@ -192,35 +129,42 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           if (caps.maxOffset > caps.minOffset)
             _row('Offset range', '${caps.minOffset}–${caps.maxOffset}'),
           _row('Max binning', '${caps.maxBinX}×${caps.maxBinY}'),
-          // §25.5.5 — readout-mode picker (driver-defined list; select by index).
+          // §25.5.5 — readout-mode picker (driver-defined list; select by
+          // index) as chips, matching the cooler preset chips.
           if (caps.readoutModes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Readout mode'),
-                  HelpIcon(helpKey: 'eq.camera.readout_mode', device: s.name),
-                  const Spacer(),
-                  DropdownButton<int>(
-                    value: _readoutIndex(caps.readoutModes, s.readoutMode),
-                    items: [
+                  Row(
+                    children: [
+                      const Text('Readout mode'),
+                      HelpIcon(
+                          helpKey: 'eq.camera.readout_mode', device: s.name),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
                       for (var i = 0; i < caps.readoutModes.length; i++)
-                        DropdownMenuItem(
-                          value: i,
-                          child: Text(caps.readoutModes[i]),
+                        ChoiceChip(
+                          label: Text(caps.readoutModes[i]),
+                          selected:
+                              _readoutIndex(caps.readoutModes, s.readoutMode) ==
+                                  i,
+                          onSelected: s.isBusy
+                              ? null
+                              : (_) => _run(() => ref
+                                  .read(cameraStatusProvider.notifier)
+                                  .setReadoutMode(i)),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                     ],
-                    onChanged: s.isBusy
-                        ? null
-                        : (i) {
-                            if (i != null) {
-                              _run(
-                                () => ref
-                                    .read(cameraStatusProvider.notifier)
-                                    .setReadoutMode(i),
-                              );
-                            }
-                          },
                   ),
                 ],
               ),
@@ -239,31 +183,6 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
       ],
     ),
   );
-
-  // The Switch only toggles the cooler. CoolerOn and the set-point are
-  // independent ASCOM properties, so toggling never carries a (possibly stale)
-  // target — that's the "Set target" button's job.
-  Future<void> _setCooler(bool on) =>
-      _run(() => ref.read(cameraStatusProvider.notifier).setCooler(on));
-
-  Future<void> _setTarget() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final t = _parseTarget();
-    if (t == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Enter a target temperature.')),
-      );
-      return;
-    }
-    // Setting a target turns the cooler on.
-    await _run(
-      () => ref
-          .read(cameraStatusProvider.notifier)
-          .setCooler(true, targetTemperatureC: t),
-    );
-  }
-
-  double? _parseTarget() => double.tryParse(_target.text.trim());
 
   /// The dropdown's selected index: the runtime's current mode name located in
   /// the caps list (null → no selection shown, e.g. daemon didn't report one).
@@ -285,7 +204,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't set cooler: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't change that: ${describeEquipmentError(e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

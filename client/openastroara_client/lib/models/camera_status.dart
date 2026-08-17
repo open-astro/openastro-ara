@@ -159,7 +159,6 @@ class CameraStatus extends EquipmentDeviceStatus {
   // and the current readout-mode display name (null: no readout-mode support).
   final double? coolerSetpointC;
   final String? readoutMode;
-
   CameraStatus({
     required this.deviceId,
     required this.name,
@@ -211,9 +210,12 @@ class CameraStatus extends EquipmentDeviceStatus {
           other.ccdTemperature == ccdTemperature &&
           other.coolerPowerPct == coolerPowerPct &&
           other.coolerOn == coolerOn &&
-          other.exposureProgressPct == exposureProgressPct);
+          other.exposureProgressPct == exposureProgressPct &&
+          other.coolerSetpointC == coolerSetpointC &&
+          other.readoutMode == readoutMode);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct);
+      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
+      coolerSetpointC, readoutMode);
 }

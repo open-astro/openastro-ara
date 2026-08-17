@@ -12,6 +12,7 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../widgets/imaging/diagnostic_panel.dart';
+import '../../widgets/equipment/cooler_controls.dart';
 import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/fault_panel.dart';
@@ -76,14 +77,34 @@ class ImagingTab extends ConsumerWidget {
                     _toggleLiveView(context, ref, v);
                   },
                 ),
+                // In-flight capture status right under Take One (hidden when
+                // idle).
                 CaptureProgressCard(
                   onRetry: () => _takeOne(context, ref),
                   onCancel: () => _cancelCapture(context, ref),
                 ),
+                // Solve sits directly under Take One with the panel's top
+                // border as the separator — plate-solve the frame you just
+                // took without scrolling.
                 const SolvePanel(),
+                // Separation before the cooling target section.
+                const _RailGap(),
+                // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) +
+                // custom target + fan, shared with Settings → Camera. Hidden
+                // entirely when no camera with a cooler is connected.
+                // Rail sections carry their own horizontal 12 padding (the
+                // rail Container itself is unpadded).
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: CoolerControls(compact: true),
+                ),
+                const _RailGap(),
                 const GuidingPanel(),
+                const _RailGap(),
                 const HistogramStrip(),
+                const _RailGap(),
                 const DiagnosticPanel(),
+                const _RailGap(),
                 const FaultPanel(),
               ],
             ),
@@ -250,6 +271,15 @@ class ImagingTab extends ConsumerWidget {
       ));
     }
   }
+}
+
+/// Consistent vertical breathing room between the right-rail sections
+/// (HIG spacing grid — sections never sit flush against each other).
+class _RailGap extends StatelessWidget {
+  const _RailGap();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(height: 12);
 }
 
 class _ImagingHeader extends ConsumerWidget {

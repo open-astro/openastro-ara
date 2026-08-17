@@ -7,6 +7,7 @@ import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_camera_panel.dart';
+import 'package:openastroara/widgets/equipment/cooler_controls.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
@@ -35,8 +36,12 @@ class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
   @override
   Future<void> disconnect() async => calls.add('disconnect');
   @override
-  Future<void> command(String subpath, [Map<String, dynamic>? body]) async => calls.add(
-      'command:$subpath:enabled=${body?['enabled']}:target=${body?['target_temperature_c']}');
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
+    final enabled = body?['enabled'];
+    final target = body?['target_temperature_c'];
+    final fanSpeed = body?['fan_speed'];
+    calls.add('command:$subpath:enabled=$enabled:target=$target:fan=$fanSpeed');
+  }
   @override
   void close() {}
 }
@@ -49,6 +54,7 @@ CameraStatus _status({
   bool? hasCooler,
   bool coolerOn = false,
   String runtimeState = 'idle',
+  String? readoutMode,
 }) =>
     CameraStatus(
       deviceId: 'cam-0',
@@ -71,8 +77,10 @@ CameraStatus _status({
         minExposureSec: 0.0001,
         maxExposureSec: 3600,
         bayerPattern: 'RGGB',
+        readoutModes: const ['HCG', 'Low noise', 'High speed'],
       ),
       runtimeState: runtimeState,
+      readoutMode: readoutMode,
       ccdTemperature: -9.8,
       coolerPowerPct: 42,
       coolerOn: coolerOn,
@@ -83,6 +91,14 @@ Future<void> _wideSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1200, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
+
+
+/// Switches inside the shared CoolerControls widget (cooler first, then fan),
+/// independent of the panel's own auto-connect switch.
+Finder _coolerSwitch(int index) => find.descendant(
+      of: find.byType(CoolerControls),
+      matching: find.byType(Switch),
+    ).at(index);
 
 Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus? status) async {
   await _wideSurface(tester);
@@ -112,29 +128,50 @@ void main() {
     expect(find.byType(Switch), findsNWidgets(2)); // cooler + auto-connect
   });
 
+  testWidgets('readout mode is a chip row and tapping it sends the command',
+      (tester) async {
+    final api = await _pump(tester, _status(readoutMode: 'HCG'));
+    expect(find.text('Readout mode'), findsOneWidget);
+    expect(find.text('HCG'), findsOneWidget);
+    expect(find.text('Low noise'), findsOneWidget);
+    expect(find.text('High speed'), findsOneWidget);
+    // Select 'Low noise' (index 1) — the chip sends mode_index.
+    await tester.tap(find.text('Low noise'));
+    await tester.pumpAndSettle();
+    expect(api.calls,
+        contains('command:readoutmode:enabled=null:target=null:fan=null'));
+  });
+
   testWidgets('Set target sends the cooler command (enabled + target)',
       (tester) async {
     final api = await _pump(tester, _status());
     await tester.enterText(find.byType(TextField), '-15');
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Set target'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Set'));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('command:cooler:enabled=true:target=-15.0'));
+    expect(api.calls, contains('command:cooler:enabled=true:target=-15.0:fan=null'));
   });
 
   testWidgets('toggling the cooler Switch sends enabled only (no set-point)',
       (tester) async {
     final api = await _pump(tester, _status());
-    await tester.tap(find.byType(Switch).first); // cooler switch (not auto-connect)
+    await tester.tap(_coolerSwitch(0)); // the cooler switch inside CoolerControls
     await tester.pumpAndSettle();
-    expect(api.calls, contains('command:cooler:enabled=true:target=null'));
+    expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
 
   testWidgets('no cooler control when the camera cannot set temperature',
       (tester) async {
     await _pump(tester, _status(canSetTemperature: false));
-    expect(find.widgetWithText(OutlinedButton, 'Set target'), findsNothing);
-    // Only the auto-connect switch remains.
+    expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
+    expect(find.text('Custom (°C)'), findsNothing);
+    // hasCooler defaults to canSetTemperature=false → no cooler toggle; only
+    // the auto-connect switch remains.
     expect(find.byType(Switch), findsOneWidget);
+    // But the sensor-temperature readout + no-cooling note still render —
+    // many uncooled cameras report a valid sensor temperature.
+    expect(find.text('Sensor temperature'), findsOneWidget);
+    expect(find.text('-9.8 °C'), findsOneWidget);
+    expect(find.text('Does not support cooling'), findsOneWidget);
   });
 
   testWidgets(
@@ -145,12 +182,12 @@ void main() {
     final api =
         await _pump(tester, _status(canSetTemperature: false, hasCooler: true));
     expect(find.byType(Switch), findsNWidgets(2));
-    expect(find.widgetWithText(OutlinedButton, 'Set target'), findsNothing);
-    expect(find.text('Target (°C)'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
+    expect(find.text('Custom (°C)'), findsNothing);
     // And the switch actually drives the cooler (never a set-point).
-    await tester.tap(find.byType(Switch).first);
+    await tester.tap(_coolerSwitch(0));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('command:cooler:enabled=true:target=null'));
+    expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
 
   testWidgets('no device connected shows the empty state + Connect…',

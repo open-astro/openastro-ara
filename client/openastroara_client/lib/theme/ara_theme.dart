@@ -13,6 +13,10 @@ ThemeData buildAraTheme() {
     secondary: AraColors.accentInfo,
     error: AraColors.accentError,
     outline: AraColors.border,
+    // ChoiceChips/outlined controls key off outlineVariant — pin it to the app
+    // border token so every control's border matches (M3's default outlineVariant
+    // is a bluish gray that clashes with the app's neutral borders).
+    outlineVariant: AraColors.border,
     onSurface: AraColors.textPrimary,
     onSurfaceVariant: AraColors.textSecondary,
   );
