@@ -12,7 +12,9 @@ import '../../state/equipment/switch_state.dart';
 ///
 /// Hidden entirely when no connected switch has a "Fan" port. Safety: turning
 /// the fan off while the TEC is cooling is refused — the fan vents the TEC's
-/// heat sink, and cooling with the fan off can damage the camera.
+/// heat sink, and cooling with the fan off can damage the camera. The check
+/// fails CLOSED: an unknown cooler state (camera status still loading, or a
+/// failed read) also refuses fan-off rather than assuming "not cooling".
 class FanSwitchRow extends ConsumerWidget {
   const FanSwitchRow({super.key});
 
@@ -29,11 +31,12 @@ class FanSwitchRow extends ConsumerWidget {
     // PWM/value fan port would be silently forced to full on/off otherwise.
     if (fan == null || !fan.port.isBoolean) return const SizedBox.shrink();
 
-    final camera = ref.watch(cameraStatusProvider).maybeWhen(
-        data: (v) => v,
-        orElse: () => null,
-      );
-    final cooling = camera?.coolerOn ?? false;
+    // Label only — the safety refusal in _toggle() re-reads the state and
+    // fails CLOSED on unknown; here an unknown state just drops the hint.
+    final cooling = ref.watch(cameraStatusProvider).maybeWhen(
+          data: (v) => v?.coolerOn ?? false,
+          orElse: () => false,
+        );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -62,16 +65,23 @@ class FanSwitchRow extends ConsumerWidget {
     bool on,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final cooling = ref
-          .read(cameraStatusProvider)
-          .maybeWhen(data: (v) => v?.coolerOn ?? false, orElse: () => false);
-    if (!on && cooling) {
+    // Hardware-damage interlock — fail CLOSED. Tri-state: true/false only
+    // when the camera status actually resolved (data); null = loading/error =
+    // "cooler state unknown". A no-camera data state (v == null) reads as not
+    // cooling: with no camera connected there is no TEC this client started.
+    final bool? coolerOn = ref
+        .read(cameraStatusProvider)
+        .maybeWhen(data: (v) => v?.coolerOn ?? false, orElse: () => null);
+    if (!on && coolerOn != false) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-              "Turn the cooler off before stopping the fan — cooling with "
-              'the fan off can damage the camera.'),
-          backgroundColor: Color(0xFFB3261E),
+        SnackBar(
+          content: Text(coolerOn == true
+              ? 'Turn the cooler off before stopping the fan — cooling with '
+                  'the fan off can damage the camera.'
+              : "The camera's cooler state is unknown — not stopping the fan "
+                  'while the TEC may be cooling. Check the camera connection '
+                  'and try again.'),
+          backgroundColor: const Color(0xFFB3261E),
         ),
       );
       return;

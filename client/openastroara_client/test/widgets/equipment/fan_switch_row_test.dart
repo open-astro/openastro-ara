@@ -69,6 +69,7 @@ Future<_FakeSwitchClient> _pump(
   List<SwitchDevice>? switches,
   CameraStatus? camera,
   _FakeSwitchClient? switchClient,
+  bool cameraFails = false,
 }) async {
   final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
   await tester.pumpWidget(ProviderScope(
@@ -76,8 +77,9 @@ Future<_FakeSwitchClient> _pump(
       switchApiProvider.overrideWithValue(fake),
       switchListProvider.overrideWith(
           () => _SwitchListNotifierForTest(fake)),
-      cameraStatusProvider.overrideWith(
-          () => _FixedCameraNotifier(camera)),
+      cameraStatusProvider.overrideWith(() => cameraFails
+          ? _ErrorCameraNotifier()
+          : _FixedCameraNotifier(camera)),
     ],
     child: const MaterialApp(
       home: Scaffold(body: SingleChildScrollView(child: FanSwitchRow())),
@@ -135,6 +137,20 @@ void main() {
     expect(find.textContaining("Couldn't set the fan"), findsOneWidget);
   });
 
+  testWidgets(
+      'refuses fan-off when the cooler state is unknown (camera read failed) '
+      '— the interlock fails closed', (tester) async {
+    final fake = await _pump(
+      tester,
+      switches: [_fanDevice(value: 1.0)],
+      cameraFails: true,
+    );
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('cooler state is unknown'), findsOneWidget);
+    expect(fake.calls, isEmpty); // no write went through
+  });
+
   testWidgets('refuses fan-off while the cooler is cooling', (tester) async {
     await _pump(
       tester,
@@ -167,6 +183,14 @@ class _FixedCameraNotifier extends CameraStatusNotifier {
   final CameraStatus? _status;
   @override
   Future<CameraStatus?> build() async => _status;
+}
+
+/// Camera status stuck in AsyncError — the "cooler state unknown" case the
+/// fan-off interlock must fail closed on.
+class _ErrorCameraNotifier extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async =>
+      throw Exception('camera read failed');
 }
 
 class _SwitchListNotifierForTest extends SwitchListNotifier {
