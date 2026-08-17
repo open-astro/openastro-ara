@@ -95,10 +95,14 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
     // this sync always agree on which device is the cooling fan.
     final fan = findThermalSwitchFanPort(switches);
     if (fan == null) return;
+    // Write the port's own bounds, not a literal 1/0: on a PWM fan port
+    // (range 0–100) a hard-coded 1.0 would set ~1% speed — nearly off —
+    // while the TEC cools. max = full fan, min = off, and for a boolean
+    // port they're exactly 1/0. Matches _PortRow's boolean toggle.
     final written = await ref.read(switchListProvider.notifier).setValue(
           deviceId: fan.device.deviceId,
           portId: fan.port.id,
-          value: cooling ? 1.0 : 0.0,
+          value: cooling ? fan.port.max : fan.port.min,
         );
     if (!written) {
       // The switch's own re-entrancy guard dropped the write (another
@@ -149,6 +153,11 @@ Future<bool?> coolerOnTriState(Future<CameraStatus?> status) async {
 /// port must refuse the same way. Returns `null` when turning the fan off is
 /// allowed (cooler known off), else the user-facing refusal message. Fails
 /// CLOSED: an unknown cooler state also refuses.
+///
+/// ACCEPTED LIMITATION: a resolved no-camera status allows fan-off, but a TEC
+/// started by a DIFFERENT client (another Alpaca app, a previous session)
+/// while this client has no camera connected is invisible to this check —
+/// only a daemon-side interlock could cover that, and none ships yet.
 String? fanOffRefusal(bool? coolerOn) {
   if (coolerOn == false) return null;
   return coolerOn == true
