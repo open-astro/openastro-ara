@@ -229,6 +229,28 @@ void main() {
     expect(api.calls, contains('setValue:sw-1:0=0.0'));
   });
 
+  testWidgets(
+      'refuses dragging a PWM Fan slider to its true off (min != 0) while '
+      'cooling — the interlock is range-aware, not a fixed 0.5 threshold',
+      (tester) async {
+    final pwmThermal = SwitchDevice(
+      deviceId: 'sw-1',
+      alpacaDeviceNumber: 1,
+      name: 'ToupTek Thermal Switch',
+      connectionState: SwitchConnectionState.connected,
+      ports: [
+        SwitchPort(
+            id: 0, name: 'Fan', value: 50, min: 10, max: 100, canWrite: true),
+      ],
+    );
+    final api =
+        await _pump(tester, [pwmThermal], camera: _camera(coolerOn: true));
+    await tester.drag(find.byType(Slider), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('damage the camera'), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
+  });
+
   testWidgets('allows a Thermal-Switch fan-off once the cooler is off',
       (tester) async {
     final api = await _pump(tester, [thermalSwitch()],

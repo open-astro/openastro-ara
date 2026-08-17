@@ -50,7 +50,9 @@ class FanSwitchRow extends ConsumerWidget {
             ),
           ),
           Switch(
-            value: fan.port.value > 0,
+            // Same boolean-state threshold as _PortRow's toggle, so the two
+            // renderings of this port can never disagree.
+            value: fan.port.value >= 0.5,
             onChanged: (on) => _toggle(context, ref, fan, on),
           ),
         ],

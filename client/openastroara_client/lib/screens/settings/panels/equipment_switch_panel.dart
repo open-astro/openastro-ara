@@ -360,7 +360,11 @@ class _PortRowState extends ConsumerState<_PortRow> {
     // §25.5.6 fan-off interlock — the Thermal-Switch Fan port is also
     // reachable from this generic panel, so it must refuse a fan-off while
     // the camera TEC is (or may be) cooling exactly like FanSwitchRow does.
-    if (value < 0.5 && isThermalSwitchFanPort(widget.device, widget.port)) {
+    // Range-aware: "off" is the port's own minimum (0 for a boolean port,
+    // the true idle stop for a PWM slider whose min isn't 0) — a fixed 0.5
+    // threshold would let a min=10 PWM slider reach "off" unchecked.
+    if (value <= widget.port.min &&
+        isThermalSwitchFanPort(widget.device, widget.port)) {
       final refusal = fanOffRefusal(
           await coolerOnTriState(ref.read(cameraStatusProvider.future)));
       if (refusal != null) {
