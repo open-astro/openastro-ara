@@ -59,6 +59,33 @@ void main() {
     expect(preConnect.capabilities, isNull);
   });
 
+  test('equality includes coolerSetpointC and readoutMode', () {
+    CameraStatus st(double? setpoint, String? mode) => CameraStatus.fromJson({
+          'device_id': 'cam-0',
+          'name': 'ASI2600',
+          'state': 'connected',
+          'capabilities': null,
+          'runtime': {
+            'state': 'idle',
+            'ccd_temperature': 20.0,
+            'cooler_power_pct': null,
+            'cooler_on': setpoint != null,
+            'cooler_setpoint_c': setpoint,
+            'readout_mode': mode,
+          },
+        });
+    final a = st(-10, 'HCG');
+    final b = st(-10, 'HCG');
+    final diffSetpoint = st(-5, 'HCG');
+    final diffMode = st(-10, 'Low noise');
+    expect(a, equals(b));
+    expect(a, isNot(equals(diffSetpoint)));
+    expect(a, isNot(equals(diffMode)));
+    expect(a.hashCode, b.hashCode);
+    expect(a.hashCode, isNot(diffSetpoint.hashCode));
+    expect(a.hashCode, isNot(diffMode.hashCode));
+  });
+
   test('§25.5.5 has_cooler parses independently of can_set_temperature', () {
     // The dumb-cooler shape: on/off cooler, no TEC regulation.
     final dumb = CameraStatus.fromJson(const {

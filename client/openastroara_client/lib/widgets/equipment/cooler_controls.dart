@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/equipment_device_api.dart';
 import '../../state/equipment/camera_state.dart';
+import '../help_icon.dart';
 import '../../theme/ara_colors.dart';
 import '../settings/settings_row.dart';
 
@@ -81,14 +82,20 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
           const SettingsSectionHeader('Cooling target'),
           _row('Sensor temperature',
               s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
-          const Padding(
-            padding: EdgeInsets.only(top: 8, bottom: 4),
-            child: Text(
-              'Target temperature (°C)',
-              style: TextStyle(
-                fontSize: 12,
-                color: AraColors.textSecondary,
-              ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Row(
+              children: [
+                const Text(
+                  'Target temperature (°C)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AraColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
+              ],
             ),
           ),
           // Quick presets — one tap arms cooling at that set-point. Compact so
@@ -162,14 +169,20 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
           ),
         ),
         if (caps.canSetTemperature) ...[
-          const Padding(
-            padding: EdgeInsets.only(top: 8, bottom: 4),
-            child: Text(
-              'Target temperature (°C)',
-              style: TextStyle(
-                fontSize: 12,
-                color: AraColors.textSecondary,
-              ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Row(
+              children: [
+                const Text(
+                  'Target temperature (°C)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AraColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                HelpIcon(helpKey: 'eq.camera.cooler_target', device: s.name),
+              ],
             ),
           ),
           // Quick presets + the custom field on ONE line — the presets wrap

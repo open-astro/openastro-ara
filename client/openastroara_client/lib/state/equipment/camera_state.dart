@@ -79,13 +79,25 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
     }
     for (final device in switches) {
       if (!device.isConnected) continue;
+      // Scope to the bridge's ToupTek Thermal Switch (the camera's heat-sink
+      // fan): don't actuate an unrelated switch that happens to have a port
+      // literally named "Fan".
+      if (!device.name.contains('Thermal Switch')) continue;
       for (final port in device.ports) {
         if (port.name == 'Fan' && port.canWrite) {
-          await ref.read(switchListProvider.notifier).setValue(
+          final written = await ref.read(switchListProvider.notifier).setValue(
                 deviceId: device.deviceId,
                 portId: port.id,
                 value: cooling ? 1.0 : 0.0,
               );
+          if (!written) {
+            // The switch's own re-entrancy guard dropped the write (another
+            // switch action in flight) — a silently-missed fan sync is exactly
+            // the safety-relevant gap the interlock exists to prevent.
+            throw StateError(
+                'could not sync the cooling fan with the cooler — the switch '
+                'is busy; check the fan before relying on cooling');
+          }
           return;
         }
       }
