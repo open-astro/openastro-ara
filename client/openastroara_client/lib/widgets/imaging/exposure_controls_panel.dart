@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
+import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
@@ -71,11 +72,8 @@ class ExposureControlsPanel extends ConsumerWidget {
               max: 200,
               onChanged: ctrl.setOffset,
             ),
-            _IntField(
-              label: 'Bin',
+            _BinDropdown(
               value: params.bin,
-              min: 1,
-              max: 8,
               onChanged: ctrl.setBin,
             ),
           ),
@@ -259,6 +257,52 @@ class _IntFieldState extends State<_IntField> {
       decoration: InputDecoration(labelText: widget.label),
       keyboardType: TextInputType.number,
       onSubmitted: _commit,
+    );
+  }
+}
+
+/// Binning for manual captures, as a dropdown of the camera's supported
+/// symmetric modes (1x1, 2x2, …). Option A — client-only: the list is derived
+/// from the capabilities' bin range so it works with any daemon (the daemon
+/// already guarantees both axes accept every value up to max). When no camera is
+/// connected (or its caps are absent) it falls back to 1..8, matching the
+/// numeric field it replaces.
+///
+/// The payload always carries the same value for binX and binY, so only the
+/// symmetric modes both axes support are offered: the span
+/// [max(minBinX, minBinY) .. min(maxBinX, maxBinY)]. A stored bin outside that
+/// span (a camera swap after a sequence seeded a higher value) is clamped for
+/// display so it can never crash the picker's exactly-one-item-per-value.
+class _BinDropdown extends ConsumerWidget {
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _BinDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final caps = switch (ref.watch(cameraStatusProvider)) {
+      AsyncData(:final value) => value?.capabilities,
+      _ => null,
+    };
+    var lo = 1;
+    var hi = 8;
+    if (caps != null && caps.maxBinX > 0 && caps.maxBinY > 0) {
+      lo = caps.minBinX > caps.minBinY ? caps.minBinX : caps.minBinY;
+      hi = caps.maxBinX < caps.maxBinY ? caps.maxBinX : caps.maxBinY;
+      if (lo < 1) lo = 1;
+    }
+    if (hi < lo) hi = lo;
+    final shown = value.clamp(lo, hi);
+    return DropdownButtonFormField<int>(
+      initialValue: shown,
+      decoration: const InputDecoration(labelText: 'Bin'),
+      items: [
+        for (var b = lo; b <= hi; b++)
+          DropdownMenuItem(value: b, child: Text('${b}x$b')),
+      ],
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
     );
   }
 }

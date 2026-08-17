@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
+import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
@@ -99,12 +101,18 @@ FilterWheelStatus _wheelAt(int position, {bool connected = true}) =>
     );
 
 Future<ProviderContainer> _pump(WidgetTester tester,
-    {List<String>? labels}) async {
+    {List<String>? labels, CameraStatus? cameraStatus, int initialBin = 1}) async {
   final container = ProviderContainer(overrides: [
     if (labels != null)
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new)
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+    cameraStatusProvider.overrideWith(() => _FixedCameraStatus(cameraStatus)),
+    exposureControllerProvider.overrideWith(() => _FixedExposure(initialBin)),
   ]);
   if (labels != null) _FixedLabels.labels = labels;
+  // Resolve the camera status before the first frame: the dropdown's
+  // `initialValue` is only honored at first build, so it must already see the
+  // camera's real bin range rather than a loading-state fallback.
+  await container.read(cameraStatusProvider.future);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
@@ -118,6 +126,34 @@ class _FixedLabels extends FilterWheelLabelsNotifier {
   @override
   FilterWheelLabels build() => FilterWheelLabels(labels: labels);
 }
+
+class _FixedCameraStatus extends CameraStatusNotifier {
+  final CameraStatus? status;
+  _FixedCameraStatus(this.status);
+  @override
+  Future<CameraStatus?> build() async => status;
+}
+
+class _FixedExposure extends ExposureController {
+  final int initialBin;
+  _FixedExposure(this.initialBin);
+  @override
+  ExposureParams build() => ExposureParams(bin: initialBin);
+}
+
+/// A connected camera whose (symmetric) bin range tops out at [max].
+CameraStatus _cameraWithMaxBin(int max) => CameraStatus.fromJson({
+      'state': 'connected',
+      'capabilities': {
+        'sensor_width': 100,
+        'sensor_height': 100,
+        'min_bin_x': 1,
+        'max_bin_x': max,
+        'min_bin_y': 1,
+        'max_bin_y': max,
+      },
+      'runtime': {'state': 'idle'},
+    });
 
 void main() {
   testWidgets('PR #71: the filter picker exists and drives filterSlot',
@@ -707,5 +743,45 @@ void main() {
       findsOneWidget,
       reason: 'the picker shows the wheel\'s actual filter after a failed move',
     );
+  });
+
+  testWidgets(
+      'Option A: bin renders as a symmetric dropdown from the camera range',
+      (tester) async {
+    final container = await _pump(tester, cameraStatus: _cameraWithMaxBin(4));
+    expect(find.text('Bin'), findsOneWidget);
+    // Default bin 1 is shown as 1x1 and the camera's max (4) is the cap.
+    expect(find.text('1x1'), findsOneWidget);
+    await tester.tap(find.text('1x1').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3x3').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).bin, 3);
+    // 5x5 is beyond the camera's 4x4 cap and must not be offered.
+    expect(find.text('5x5'), findsNothing);
+  });
+
+  testWidgets('Option A: bin dropdown falls back to 1..8 with no camera',
+      (tester) async {
+    final container = await _pump(tester); // no camera connected
+    expect(find.text('1x1'), findsOneWidget);
+    await tester.tap(find.text('1x1').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8x8').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).bin, 8);
+    // Beyond the fallback cap nothing is offered.
+    expect(find.text('9x9'), findsNothing);
+  });
+
+  testWidgets(
+      'Option A: an out-of-range stored bin clamps to a valid selection',
+      (tester) async {
+    // Camera caps at 2x2 but the stored bin is 8 (e.g. a camera swap) — the
+    // picker must clamp rather than crash on a value with no matching item.
+    await _pump(tester, cameraStatus: _cameraWithMaxBin(2), initialBin: 8);
+    expect(tester.takeException(), isNull);
+    expect(find.text('2x2'), findsOneWidget);
+    expect(find.text('8x8'), findsNothing);
   });
 }
