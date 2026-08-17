@@ -98,9 +98,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
             ),
           ),
         // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom
-        // target + the cooling-fan toggle, shared with the Imaging tab. The
-        // daemon owns the safety interlock (cooler on → fan auto-starts;
-        // cooler off → fan stops; fan-off while cooling is refused).
+        // target, shared with the Imaging tab. The cooling-fan sync is
+        // client-side (setCooler syncs the Thermal-Switch Fan port); a manual
+        // fan-off from the Switches panel while cooling is NOT blocked here.
         if (caps?.hasCooler ?? false) const CoolerControls(),
 
         const Divider(height: 20, color: AraColors.border),

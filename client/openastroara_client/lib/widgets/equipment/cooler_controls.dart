@@ -18,9 +18,9 @@ import '../settings/settings_row.dart';
 /// embedded. The cooling-fan coordination is CLIENT-side (this PR ships no
 /// daemon changes): `CameraStatusNotifier.setCooler` syncs the bridge's
 /// Thermal-Switch Fan port after the cooler command (on → fan on, off → fan
-/// off) and surfaces a sync failure. Note the limits: a manual fan-off from
-/// the Switches panel while the cooler is running is NOT blocked here — that
-/// refusal lives in the fan toggle (see FanSwitchRow).
+/// off) and surfaces a sync failure. Note the limit: a manual fan-off from
+/// the Switches panel while the cooler is running is NOT blocked — this PR
+/// ships no daemon guard and no switch-panel interlock for that path.
 class CoolerControls extends ConsumerStatefulWidget {
   /// [compact] renders only the target picker (presets + custom field) — used
   /// by the Imaging tab, where the readouts and on/off toggles live in
@@ -271,10 +271,9 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   }
 
   /// Runs the action and surfaces failures as a toast. The notifier returns
-  /// false for a re-entrancy guard, but THROWS on a rejected command (e.g. the
-  /// daemon's "turn the cooler off before stopping the fan" 409) — so the
-  /// try/catch here is what turns a server rejection into a friendly message
-  /// instead of an unhandled exception.
+  /// false for a re-entrancy guard, but THROWS on a rejected command (e.g. a
+  /// cooler or fan-sync rejection) — so the try/catch here turns it into a
+  /// friendly message instead of an unhandled exception.
   Future<void> _run(Future<bool> Function() action) async {
     try {
       final ok = await action();
