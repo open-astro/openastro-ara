@@ -94,6 +94,23 @@ void main() {
     expect(find.text('Cooling fan'), findsNothing);
   });
 
+  testWidgets(
+      'ignores a Fan port on a non-Thermal-Switch device (same scoping as '
+      'the cooler auto-sync)', (tester) async {
+    final relayBox = SwitchDevice(
+      deviceId: 'switch-9',
+      alpacaDeviceNumber: 9,
+      name: 'Generic Relay Box',
+      connectionState: SwitchConnectionState.connected,
+      ports: [
+        SwitchPort(id: 0, name: 'Fan', value: 1, min: 0, max: 1, canWrite: true),
+      ],
+    );
+    await _pump(tester, switches: [relayBox]);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.text('Cooling fan'), findsNothing);
+  });
+
   testWidgets('shows the fan switch from the thermal-switch Fan port',
       (tester) async {
     await _pump(tester, switches: [_fanDevice(value: 1.0)]);

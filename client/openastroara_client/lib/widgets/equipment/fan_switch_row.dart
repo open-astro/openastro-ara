@@ -22,7 +22,9 @@ class FanSwitchRow extends ConsumerWidget {
         data: (v) => v,
         orElse: () => const <SwitchDevice>[],
       );
-    final fan = _findFanPort(switches);
+    // Shared lookup with CameraStatusNotifier's cooler auto-sync — the row
+    // must interlock the exact device the sync actuates.
+    final fan = findThermalSwitchFanPort(switches);
     // Only a boolean (on/off, range [0,1]) Fan port renders as a toggle — a
     // PWM/value fan port would be silently forced to full on/off otherwise.
     if (fan == null || !fan.port.isBoolean) return const SizedBox.shrink();
@@ -100,19 +102,5 @@ class FanSwitchRow extends ConsumerWidget {
         ),
       );
     }
-  }
-
-  /// The first connected switch device that exposes a "Fan" port, or null.
-  static ({SwitchDevice device, SwitchPort port})? _findFanPort(
-      List<SwitchDevice> switches) {
-    for (final device in switches) {
-      if (!device.isConnected) continue;
-      for (final port in device.ports) {
-        if (port.name == 'Fan' && port.canWrite) {
-          return (device: device, port: port);
-        }
-      }
-    }
-    return null;
   }
 }

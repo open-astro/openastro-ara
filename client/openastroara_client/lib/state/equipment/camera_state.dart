@@ -89,34 +89,28 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
       // still surfaced.
       return;
     }
-    for (final device in switches) {
-      if (!device.isConnected) continue;
-      // Scope to the bridge's ToupTek Thermal Switch (the camera's heat-sink
-      // fan): don't actuate an unrelated switch that happens to have a port
-      // literally named "Fan".
-      if (!device.name.contains('Thermal Switch')) continue;
-      for (final port in device.ports) {
-        if (port.name == 'Fan' && port.canWrite) {
-          final written = await ref.read(switchListProvider.notifier).setValue(
-                deviceId: device.deviceId,
-                portId: port.id,
-                value: cooling ? 1.0 : 0.0,
-              );
-          if (!written) {
-            // The switch's own re-entrancy guard dropped the write (another
-            // switch action in flight) — a silently-missed fan sync is exactly
-            // the safety-relevant gap the interlock exists to prevent. The
-            // message states the cooler DID change so the toast isn't read as
-            // a full failure.
-            // Plain Exception, not StateError: describeEquipmentError strips
-            // "Exception: " but StateError's "Bad state:" prefix would leak.
-            throw Exception(
-                'the cooler is ${cooling ? "on" : "off"}, but the cooling fan '
-                'could not be synced (the switch is busy) — check the fan');
-          }
-          return;
-        }
-      }
+    // Shared lookup with FanSwitchRow (findThermalSwitchFanPort): scoped to
+    // the bridge's ToupTek Thermal Switch so an unrelated switch with a port
+    // literally named "Fan" is never actuated, and so the row's interlock and
+    // this sync always agree on which device is the cooling fan.
+    final fan = findThermalSwitchFanPort(switches);
+    if (fan == null) return;
+    final written = await ref.read(switchListProvider.notifier).setValue(
+          deviceId: fan.device.deviceId,
+          portId: fan.port.id,
+          value: cooling ? 1.0 : 0.0,
+        );
+    if (!written) {
+      // The switch's own re-entrancy guard dropped the write (another
+      // switch action in flight) — a silently-missed fan sync is exactly
+      // the safety-relevant gap the interlock exists to prevent. The
+      // message states the cooler DID change so the toast isn't read as
+      // a full failure.
+      // Plain Exception, not StateError: describeEquipmentError strips
+      // "Exception: " but StateError's "Bad state:" prefix would leak.
+      throw Exception(
+          'the cooler is ${cooling ? "on" : "off"}, but the cooling fan '
+          'could not be synced (the switch is busy) — check the fan');
     }
   }
 
