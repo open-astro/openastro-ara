@@ -10,6 +10,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/cooler_controls.dart';
+import '../../../widgets/equipment/fan_switch_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -99,11 +100,15 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           ),
         // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom
         // target, shared with the Imaging tab. The cooling-fan sync is
-        // client-side (setCooler syncs the Thermal-Switch Fan port); a manual
-        // fan-off from the Switches panel while cooling is NOT blocked here.
+        // client-side (setCooler syncs the Thermal-Switch Fan port).
         // Always built: CoolerControls itself renders the sensor-temperature
         // row + a "Does not support cooling" note for uncooled cameras.
         const CoolerControls(),
+        // Cooling fan — exposed via the bridge's ToupTek Thermal Switch
+        // device (a "Fan" port); hidden when none is connected. Turning the
+        // fan off while the TEC is cooling is refused (it vents the heat
+        // sink), closing the manual fan-off gap left by #964.
+        const FanSwitchRow(),
 
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[

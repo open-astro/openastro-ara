@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/screens/settings/panels/equipment_switch_panel.dart';
@@ -57,7 +60,29 @@ SwitchDevice _device(List<SwitchPort> ports,
       ports: ports,
     );
 
-Future<_FakeSwitchApi> _pump(WidgetTester tester, List<SwitchDevice> devices) async {
+/// Minimal connected camera with the given cooler state (for the fan-off
+/// interlock tests).
+CameraStatus _camera({required bool coolerOn}) => CameraStatus(
+      deviceId: 'cam-2',
+      name: 'ATR2600M',
+      connectionState: EquipmentConnectionState.connected,
+      capabilities: null,
+      runtimeState: 'idle',
+      ccdTemperature: 17.9,
+      coolerPowerPct: 0,
+      coolerOn: coolerOn,
+      exposureProgressPct: null,
+    );
+
+class _FixedCameraNotifier extends CameraStatusNotifier {
+  _FixedCameraNotifier(this._status);
+  final CameraStatus? _status;
+  @override
+  Future<CameraStatus?> build() async => _status;
+}
+
+Future<_FakeSwitchApi> _pump(WidgetTester tester, List<SwitchDevice> devices,
+    {CameraStatus? camera}) async {
   final api = _FakeSwitchApi(devices);
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -65,6 +90,7 @@ Future<_FakeSwitchApi> _pump(WidgetTester tester, List<SwitchDevice> devices) as
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       switchApiFactoryProvider.overrideWithValue((_) => api),
+      cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
   ));
@@ -167,6 +193,72 @@ void main() {
         of: find.byType(Card), matching: find.byType(Switch)));
     await tester.pumpAndSettle();
     expect(api.calls, contains('setValue:sw-0:0=1.0'));
+  });
+
+  // §25.5.6 — the fan-off interlock must also cover this generic panel, not
+  // just the FanSwitchRow in Settings → Camera (both reach the same port).
+  SwitchDevice thermalSwitch({double fanValue = 1.0}) => SwitchDevice(
+        deviceId: 'sw-1',
+        alpacaDeviceNumber: 1,
+        name: 'ToupTek Thermal Switch',
+        connectionState: SwitchConnectionState.connected,
+        ports: [
+          SwitchPort(
+              id: 0, name: 'Fan', value: fanValue, min: 0, max: 1, canWrite: true),
+        ],
+      );
+
+  testWidgets('refuses a Thermal-Switch fan-off while the cooler is cooling',
+      (tester) async {
+    final api = await _pump(tester, [thermalSwitch()],
+        camera: _camera(coolerOn: true));
+    await tester.tap(find.descendant(
+        of: find.byType(Card), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('damage the camera'), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
+  });
+
+  testWidgets(
+      'allows a Thermal-Switch fan-off with no camera connected '
+      '(resolved-null status = no TEC this client started)', (tester) async {
+    final api = await _pump(tester, [thermalSwitch()]);
+    await tester.tap(find.descendant(
+        of: find.byType(Card), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('setValue:sw-1:0=0.0'));
+  });
+
+  testWidgets(
+      'refuses dragging a PWM Fan slider to its true off (min != 0) while '
+      'cooling — the interlock is range-aware, not a fixed 0.5 threshold',
+      (tester) async {
+    final pwmThermal = SwitchDevice(
+      deviceId: 'sw-1',
+      alpacaDeviceNumber: 1,
+      name: 'ToupTek Thermal Switch',
+      connectionState: SwitchConnectionState.connected,
+      ports: [
+        SwitchPort(
+            id: 0, name: 'Fan', value: 50, min: 10, max: 100, canWrite: true),
+      ],
+    );
+    final api =
+        await _pump(tester, [pwmThermal], camera: _camera(coolerOn: true));
+    await tester.drag(find.byType(Slider), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('damage the camera'), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
+  });
+
+  testWidgets('allows a Thermal-Switch fan-off once the cooler is off',
+      (tester) async {
+    final api = await _pump(tester, [thermalSwitch()],
+        camera: _camera(coolerOn: false));
+    await tester.tap(find.descendant(
+        of: find.byType(Card), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('setValue:sw-1:0=0.0'));
   });
 
   testWidgets('a writable port with degenerate bounds (min==max) shows no slider', (tester) async {

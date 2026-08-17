@@ -150,3 +150,33 @@ class SwitchDevice {
         Object.hashAll(ports),
       );
 }
+
+/// The camera's cooling fan as exposed by the bridge: the first *connected*
+/// device whose name marks it as the ToupTek **Thermal Switch** with a
+/// writable "Fan" port, or null.
+///
+/// The single source of truth for "which switch port is the cooling fan" —
+/// shared by the Settings fan toggle (FanSwitchRow) and the cooler auto-sync
+/// (CameraStatusNotifier), so the interlock and the sync can never disagree
+/// about the device. The device-name scoping keeps an unrelated switch that
+/// happens to have a port literally named "Fan" from being actuated (or
+/// blocked) by camera cooling.
+({SwitchDevice device, SwitchPort port})? findThermalSwitchFanPort(
+    List<SwitchDevice> switches) {
+  for (final device in switches) {
+    if (!device.isConnected) continue;
+    for (final port in device.ports) {
+      if (isThermalSwitchFanPort(device, port) && port.canWrite) {
+        return (device: device, port: port);
+      }
+    }
+  }
+  return null;
+}
+
+/// Whether [port] on [device] is the camera's cooling fan — the same
+/// device/port identification [findThermalSwitchFanPort] uses, exposed so the
+/// generic Switches panel can apply the fan-off interlock to the exact port
+/// the camera code actuates.
+bool isThermalSwitchFanPort(SwitchDevice device, SwitchPort port) =>
+    device.name.contains('Thermal Switch') && port.name == 'Fan';

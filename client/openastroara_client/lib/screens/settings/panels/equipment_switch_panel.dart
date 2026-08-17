@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/switch_device.dart';
 import '../../../services/equipment_device_api.dart'
     show isNotFoundEquipmentError;
+import '../../../state/equipment/camera_state.dart';
 import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
@@ -256,7 +257,7 @@ class _SwitchCard extends ConsumerWidget {
             const Divider(height: 20, color: AraColors.border),
             if (device.isConnected && device.ports.isNotEmpty)
               for (final p in device.ports)
-                _PortRow(deviceId: device.deviceId, port: p)
+                _PortRow(device: device, port: p)
             else
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -334,9 +335,9 @@ class _SwitchCard extends ConsumerWidget {
 /// A single port. Boolean writable → a toggle; value writable → a slider;
 /// read-only → the value as text.
 class _PortRow extends ConsumerStatefulWidget {
-  final String deviceId;
+  final SwitchDevice device;
   final SwitchPort port;
-  const _PortRow({required this.deviceId, required this.port});
+  const _PortRow({required this.device, required this.port});
 
   @override
   ConsumerState<_PortRow> createState() => _PortRowState();
@@ -356,11 +357,32 @@ class _PortRowState extends ConsumerState<_PortRow> {
 
   Future<void> _write(double value) async {
     final messenger = ScaffoldMessenger.of(context);
+    // §25.5.6 fan-off interlock — the Thermal-Switch Fan port is also
+    // reachable from this generic panel, so it must refuse a fan-off while
+    // the camera TEC is (or may be) cooling exactly like FanSwitchRow does.
+    // Range-aware: "off" is the port's own minimum (0 for a boolean port,
+    // the true idle stop for a PWM slider whose min isn't 0) — a fixed 0.5
+    // threshold would let a min=10 PWM slider reach "off" unchecked.
+    if (value <= widget.port.min &&
+        isThermalSwitchFanPort(widget.device, widget.port)) {
+      final refusal = fanOffRefusal(
+          await coolerOnTriState(ref.read(cameraStatusProvider.future)));
+      if (refusal != null) {
+        if (mounted) setState(() => _dragValue = null);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(refusal),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
+        return;
+      }
+    }
     try {
       await ref
           .read(switchListProvider.notifier)
           .setValue(
-            deviceId: widget.deviceId,
+            deviceId: widget.device.deviceId,
             portId: widget.port.id,
             value: value,
           );

@@ -89,34 +89,32 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
       // still surfaced.
       return;
     }
-    for (final device in switches) {
-      if (!device.isConnected) continue;
-      // Scope to the bridge's ToupTek Thermal Switch (the camera's heat-sink
-      // fan): don't actuate an unrelated switch that happens to have a port
-      // literally named "Fan".
-      if (!device.name.contains('Thermal Switch')) continue;
-      for (final port in device.ports) {
-        if (port.name == 'Fan' && port.canWrite) {
-          final written = await ref.read(switchListProvider.notifier).setValue(
-                deviceId: device.deviceId,
-                portId: port.id,
-                value: cooling ? 1.0 : 0.0,
-              );
-          if (!written) {
-            // The switch's own re-entrancy guard dropped the write (another
-            // switch action in flight) — a silently-missed fan sync is exactly
-            // the safety-relevant gap the interlock exists to prevent. The
-            // message states the cooler DID change so the toast isn't read as
-            // a full failure.
-            // Plain Exception, not StateError: describeEquipmentError strips
-            // "Exception: " but StateError's "Bad state:" prefix would leak.
-            throw Exception(
-                'the cooler is ${cooling ? "on" : "off"}, but the cooling fan '
-                'could not be synced (the switch is busy) — check the fan');
-          }
-          return;
-        }
-      }
+    // Shared lookup with FanSwitchRow (findThermalSwitchFanPort): scoped to
+    // the bridge's ToupTek Thermal Switch so an unrelated switch with a port
+    // literally named "Fan" is never actuated, and so the row's interlock and
+    // this sync always agree on which device is the cooling fan.
+    final fan = findThermalSwitchFanPort(switches);
+    if (fan == null) return;
+    // Write the port's own bounds, not a literal 1/0: on a PWM fan port
+    // (range 0–100) a hard-coded 1.0 would set ~1% speed — nearly off —
+    // while the TEC cools. max = full fan, min = off, and for a boolean
+    // port they're exactly 1/0. Matches _PortRow's boolean toggle.
+    final written = await ref.read(switchListProvider.notifier).setValue(
+          deviceId: fan.device.deviceId,
+          portId: fan.port.id,
+          value: cooling ? fan.port.max : fan.port.min,
+        );
+    if (!written) {
+      // The switch's own re-entrancy guard dropped the write (another
+      // switch action in flight) — a silently-missed fan sync is exactly
+      // the safety-relevant gap the interlock exists to prevent. The
+      // message states the cooler DID change so the toast isn't read as
+      // a full failure.
+      // Plain Exception, not StateError: describeEquipmentError strips
+      // "Exception: " but StateError's "Bad state:" prefix would leak.
+      throw Exception(
+          'the cooler is ${cooling ? "on" : "off"}, but the cooling fan '
+          'could not be synced (the switch is busy) — check the fan');
     }
   }
 
@@ -131,3 +129,40 @@ final cameraStatusProvider =
     AsyncNotifierProvider<CameraStatusNotifier, CameraStatus?>(
       CameraStatusNotifier.new,
     );
+
+/// Tri-state cooler flag for the fan-off interlock: `true`/`false` only when
+/// the camera status actually RESOLVED (a no-camera state reads as not
+/// cooling — no camera connected means no TEC this client started); `null`
+/// when it can't be determined, i.e. "cooler state unknown". Awaits the
+/// status (pass `ref.read(cameraStatusProvider.future)`) rather than peeking
+/// at the AsyncValue, so a merely-uninitialized provider resolves instead of
+/// reading as unknown — but BOUNDED: Riverpod 3 auto-retries a failing
+/// provider with backoff and `.future` stays pending across retries, so an
+/// unreachable camera would otherwise hang the interlock forever.
+Future<bool?> coolerOnTriState(Future<CameraStatus?> status) async {
+  try {
+    final s = await status.timeout(const Duration(seconds: 2));
+    return s?.coolerOn ?? false;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// §25.5.6 fan-off interlock, shared by [FanSwitchRow] in Settings → Camera
+/// and the generic Switches panel — every UI path to the Thermal-Switch Fan
+/// port must refuse the same way. Returns `null` when turning the fan off is
+/// allowed (cooler known off), else the user-facing refusal message. Fails
+/// CLOSED: an unknown cooler state also refuses.
+///
+/// ACCEPTED LIMITATION: a resolved no-camera status allows fan-off, but a TEC
+/// started by a DIFFERENT client (another Alpaca app, a previous session)
+/// while this client has no camera connected is invisible to this check —
+/// only a daemon-side interlock could cover that, and none ships yet.
+String? fanOffRefusal(bool? coolerOn) {
+  if (coolerOn == false) return null;
+  return coolerOn == true
+      ? 'Turn the cooler off before stopping the fan — cooling with the fan '
+          'off can damage the camera.'
+      : "The camera's cooler state is unknown — not stopping the fan while "
+          'the TEC may be cooling. Check the camera connection and try again.';
+}
