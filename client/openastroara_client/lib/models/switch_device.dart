@@ -165,12 +165,18 @@ class SwitchDevice {
     List<SwitchDevice> switches) {
   for (final device in switches) {
     if (!device.isConnected) continue;
-    if (!device.name.contains('Thermal Switch')) continue;
     for (final port in device.ports) {
-      if (port.name == 'Fan' && port.canWrite) {
+      if (isThermalSwitchFanPort(device, port) && port.canWrite) {
         return (device: device, port: port);
       }
     }
   }
   return null;
 }
+
+/// Whether [port] on [device] is the camera's cooling fan — the same
+/// device/port identification [findThermalSwitchFanPort] uses, exposed so the
+/// generic Switches panel can apply the fan-off interlock to the exact port
+/// the camera code actuates.
+bool isThermalSwitchFanPort(SwitchDevice device, SwitchPort port) =>
+    device.name.contains('Thermal Switch') && port.name == 'Fan';

@@ -65,23 +65,17 @@ class FanSwitchRow extends ConsumerWidget {
     bool on,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    // Hardware-damage interlock — fail CLOSED. Tri-state: true/false only
-    // when the camera status actually resolved (data); null = loading/error =
-    // "cooler state unknown". A no-camera data state (v == null) reads as not
-    // cooling: with no camera connected there is no TEC this client started.
-    final bool? coolerOn = ref
-        .read(cameraStatusProvider)
-        .maybeWhen(data: (v) => v?.coolerOn ?? false, orElse: () => null);
-    if (!on && coolerOn != false) {
+    // Hardware-damage interlock — shared with the generic Switches panel
+    // (fanOffRefusal), fails CLOSED on an unknown cooler state.
+    final refusal = on
+        ? null
+        : fanOffRefusal(
+            await coolerOnTriState(ref.read(cameraStatusProvider.future)));
+    if (refusal != null) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(coolerOn == true
-              ? 'Turn the cooler off before stopping the fan — cooling with '
-                  'the fan off can damage the camera.'
-              : "The camera's cooler state is unknown — not stopping the fan "
-                  'while the TEC may be cooling. Check the camera connection '
-                  'and try again.'),
-          backgroundColor: const Color(0xFFB3261E),
+          content: Text(refusal),
+          backgroundColor: AraColors.accentError,
         ),
       );
       return;

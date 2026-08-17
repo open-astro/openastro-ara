@@ -125,3 +125,35 @@ final cameraStatusProvider =
     AsyncNotifierProvider<CameraStatusNotifier, CameraStatus?>(
       CameraStatusNotifier.new,
     );
+
+/// Tri-state cooler flag for the fan-off interlock: `true`/`false` only when
+/// the camera status actually RESOLVED (a no-camera state reads as not
+/// cooling — no camera connected means no TEC this client started); `null`
+/// when it can't be determined, i.e. "cooler state unknown". Awaits the
+/// status (pass `ref.read(cameraStatusProvider.future)`) rather than peeking
+/// at the AsyncValue, so a merely-uninitialized provider resolves instead of
+/// reading as unknown — but BOUNDED: Riverpod 3 auto-retries a failing
+/// provider with backoff and `.future` stays pending across retries, so an
+/// unreachable camera would otherwise hang the interlock forever.
+Future<bool?> coolerOnTriState(Future<CameraStatus?> status) async {
+  try {
+    final s = await status.timeout(const Duration(seconds: 2));
+    return s?.coolerOn ?? false;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// §25.5.6 fan-off interlock, shared by [FanSwitchRow] in Settings → Camera
+/// and the generic Switches panel — every UI path to the Thermal-Switch Fan
+/// port must refuse the same way. Returns `null` when turning the fan off is
+/// allowed (cooler known off), else the user-facing refusal message. Fails
+/// CLOSED: an unknown cooler state also refuses.
+String? fanOffRefusal(bool? coolerOn) {
+  if (coolerOn == false) return null;
+  return coolerOn == true
+      ? 'Turn the cooler off before stopping the fan — cooling with the fan '
+          'off can damage the camera.'
+      : "The camera's cooler state is unknown — not stopping the fan while "
+          'the TEC may be cooling. Check the camera connection and try again.';
+}

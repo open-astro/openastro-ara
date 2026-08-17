@@ -73,6 +73,10 @@ Future<_FakeSwitchClient> _pump(
 }) async {
   final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
   await tester.pumpWidget(ProviderScope(
+    // No auto-retry: the erroring camera notifier must settle in AsyncError
+    // (so provider.future completes with the error) instead of Riverpod 3's
+    // default backoff retry leaving timers pending in the test.
+    retry: (retryCount, error) => null,
     overrides: [
       switchApiProvider.overrideWithValue(fake),
       switchListProvider.overrideWith(
