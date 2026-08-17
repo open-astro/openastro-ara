@@ -215,5 +215,6 @@ class CameraStatus extends EquipmentDeviceStatus {
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct);
+      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
+      coolerSetpointC, readoutMode);
 }
