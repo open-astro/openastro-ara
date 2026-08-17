@@ -15,10 +15,12 @@ import '../settings/settings_row.dart';
 ///
 /// Layout follows the app's shared section pattern (a [SettingsSectionHeader]
 /// + the 8pt spacing grid) so the block reads identically wherever it's
-/// embedded. Safety rules are enforced by the daemon and reflected here via
-/// the status: turning the cooler ON auto-starts the fan; turning it OFF stops
-/// the fan; stopping the fan while cooling is refused. This widget just sends
-/// the commands — the daemon owns the interlock.
+/// embedded. The cooling-fan coordination is CLIENT-side (this PR ships no
+/// daemon changes): `CameraStatusNotifier.setCooler` syncs the bridge's
+/// Thermal-Switch Fan port after the cooler command (on → fan on, off → fan
+/// off) and surfaces a sync failure. Note the limits: a manual fan-off from
+/// the Switches panel while the cooler is running is NOT blocked here — that
+/// refusal lives in the fan toggle (see FanSwitchRow).
 class CoolerControls extends ConsumerStatefulWidget {
   /// [compact] renders only the target picker (presets + custom field) — used
   /// by the Imaging tab, where the readouts and on/off toggles live in

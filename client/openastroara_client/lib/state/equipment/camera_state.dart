@@ -49,21 +49,27 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
       ref.read(cameraStatusApiProvider);
 
   /// Turn the cooler on/off and, when on, set the target CCD temperature (°C).
-  Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) =>
-      performAction((api) async {
-        await api.command('cooler', {
+  Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) async {
+    // §25.5.6 — the cooling fan must follow the cooler (it vents the TEC's
+    // heat sink). Centralized HERE (the single cooler entry point both
+    // panels use) so the fan write happens exactly once per transition — a
+    // widget-level listener would fire once per mounted CoolerControls
+    // (Settings + Imaging are both alive in the tab IndexedStack) and
+    // duplicate the hardware write.
+    //
+    // Order matters: run the cooler command + let performAction refresh the
+    // status FIRST, so the UI reflects the (committed) cooler change even if
+    // the fan sync then fails. A sync failure throws AFTER the cooler is on —
+    // the caller's toast must read as "cooler changed, fan sync failed", not
+    // "nothing happened".
+    final performed = await performAction((api) => api.command('cooler', {
           'enabled': enabled,
           'target_temperature_c': targetTemperatureC,
-        });
-        // §25.5.6 — the cooling fan must follow the cooler (it vents the TEC's
-        // heat sink). Centralized HERE (the single cooler entry point both
-        // panels use) so the fan write happens exactly once per transition —
-        // a widget-level listener would fire once per mounted CoolerControls
-        // (Settings + Imaging are both alive in the tab IndexedStack) and
-        // duplicate the hardware write. A failed fan-sync propagates through
-        // performAction, so the caller's error handling surfaces it.
-        await _syncFanPort(enabled);
-      });
+        }));
+    if (!performed) return false;
+    await _syncFanPort(enabled);
+    return true;
+  }
 
   /// Sets the bridge's ToupTek Thermal-Switch Fan port to match the cooler
   /// state (on → fan on, off → fan off). No-op when no connected switch
@@ -93,10 +99,12 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
           if (!written) {
             // The switch's own re-entrancy guard dropped the write (another
             // switch action in flight) — a silently-missed fan sync is exactly
-            // the safety-relevant gap the interlock exists to prevent.
+            // the safety-relevant gap the interlock exists to prevent. The
+            // message states the cooler DID change so the toast isn't read as
+            // a full failure.
             throw StateError(
-                'could not sync the cooling fan with the cooler — the switch '
-                'is busy; check the fan before relying on cooling');
+                'the cooler is ${cooling ? "on" : "off"}, but the cooling fan '
+                'could not be synced (the switch is busy) — check the fan');
           }
           return;
         }
