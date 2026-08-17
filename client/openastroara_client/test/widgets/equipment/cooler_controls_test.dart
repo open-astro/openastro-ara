@@ -234,9 +234,13 @@ void main() {
     expect(sw.calls, contains('setValue:switch-5:1:0.0'));
   });
 
-  testWidgets('hides entirely when the camera has no cooler', (tester) async {
+  testWidgets(
+      'uncooled camera still shows the sensor temperature + a no-cooling note',
+      (tester) async {
     await _pump(tester, _status(hasCooler: false));
-    expect(find.text('Cooler'), findsNothing);
-    expect(find.text('Cooling fan'), findsNothing);
+    expect(find.text('Sensor temperature'), findsOneWidget);
+    expect(find.text('17.9 °C'), findsOneWidget);
+    expect(find.text('Does not support cooling'), findsOneWidget);
+    expect(find.byType(Switch), findsNothing);
   });
 }

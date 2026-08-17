@@ -72,7 +72,28 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
     if (s == null) return const SizedBox.shrink();
     final caps = s.capabilities;
     if (caps == null) return const SizedBox.shrink();
-    if (!caps.hasCooler) return const SizedBox.shrink();
+    // An uncooled camera (has_cooler false) still reports a sensor
+    // temperature — show the "Sensor temperature" row plus a clear "no
+    // cooling" note rather than an empty panel (regression: the readout was
+    // once unconditional).
+    if (!caps.hasCooler) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row('Sensor temperature',
+              s.ccdTemperature == null
+                  ? '—'
+                  : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'Does not support cooling',
+              style: TextStyle(fontSize: 13, color: AraColors.textSecondary),
+            ),
+          ),
+        ],
+      );
+    }
 
     if (widget.compact) {
       // Imaging tab: only the target picker — the readouts and on/off toggles
@@ -109,7 +130,7 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
               for (final p in presets)
                 _presetChip(
                   p,
-                  s.coolerOn && (s.coolerSetpointC ?? 999) == p,
+                  s.coolerOn && ((s.coolerSetpointC ?? 999) - p).abs() < 0.001,
                   () => _setTarget(p.toDouble()),
                 ),
             ],
@@ -200,7 +221,7 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
                     for (final p in presets)
                       _presetChip(
                         p,
-                        s.coolerOn && (s.coolerSetpointC ?? 999) == p,
+                        s.coolerOn && ((s.coolerSetpointC ?? 999) - p).abs() < 0.001,
                         () => _setTarget(p.toDouble()),
                       ),
                   ],

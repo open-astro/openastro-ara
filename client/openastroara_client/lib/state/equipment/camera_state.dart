@@ -80,8 +80,13 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
     final List<SwitchDevice> switches;
     try {
       switches = await ref.read(switchListProvider.future);
-    } catch (_) {
-      return; // no switch list available — nothing to sync
+    } catch (e) {
+      // A genuine read failure (not an empty list — that resolves fine) means
+      // we can't confirm the fan state; surface it rather than silently
+      // leaving the fan unsynced.
+      throw Exception(
+          'could not read the switch state to sync the cooling fan — check '
+          'the switches and the fan ($e)');
     }
     for (final device in switches) {
       if (!device.isConnected) continue;
@@ -102,7 +107,9 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
             // the safety-relevant gap the interlock exists to prevent. The
             // message states the cooler DID change so the toast isn't read as
             // a full failure.
-            throw StateError(
+            // Plain Exception, not StateError: describeEquipmentError strips
+            // "Exception: " but StateError's "Bad state:" prefix would leak.
+            throw Exception(
                 'the cooler is ${cooling ? "on" : "off"}, but the cooling fan '
                 'could not be synced (the switch is busy) — check the fan');
           }
