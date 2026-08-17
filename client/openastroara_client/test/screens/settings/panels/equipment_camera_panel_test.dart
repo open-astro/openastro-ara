@@ -164,9 +164,14 @@ void main() {
     await _pump(tester, _status(canSetTemperature: false));
     expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
     expect(find.text('Custom (°C)'), findsNothing);
-    // hasCooler defaults to canSetTemperature=false → the cooler section
-    // hides entirely; only the auto-connect switch remains.
+    // hasCooler defaults to canSetTemperature=false → no cooler toggle; only
+    // the auto-connect switch remains.
     expect(find.byType(Switch), findsOneWidget);
+    // But the sensor-temperature readout + no-cooling note still render —
+    // many uncooled cameras report a valid sensor temperature.
+    expect(find.text('Sensor temperature'), findsOneWidget);
+    expect(find.text('-9.8 °C'), findsOneWidget);
+    expect(find.text('Does not support cooling'), findsOneWidget);
   });
 
   testWidgets(

@@ -101,7 +101,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
         // target, shared with the Imaging tab. The cooling-fan sync is
         // client-side (setCooler syncs the Thermal-Switch Fan port); a manual
         // fan-off from the Switches panel while cooling is NOT blocked here.
-        if (caps?.hasCooler ?? false) const CoolerControls(),
+        // Always built: CoolerControls itself renders the sensor-temperature
+        // row + a "Does not support cooling" note for uncooled cameras.
+        const CoolerControls(),
 
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[

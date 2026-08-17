@@ -80,13 +80,14 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
     final List<SwitchDevice> switches;
     try {
       switches = await ref.read(switchListProvider.future);
-    } catch (e) {
-      // A genuine read failure (not an empty list — that resolves fine) means
-      // we can't confirm the fan state; surface it rather than silently
-      // leaving the fan unsynced.
-      throw Exception(
-          'could not read the switch state to sync the cooling fan — check '
-          'the switches and the fan ($e)');
+    } catch (_) {
+      // At this point we don't yet know whether a fan-capable switch even
+      // exists — most rigs have none, and the switch list comes from a
+      // separate endpoint that can fail for reasons unrelated to cooling.
+      // Treat a list-read failure like "no matching device" (a no-op) rather
+      // than alarming every cooler toggle; a real fan write failure below is
+      // still surfaced.
+      return;
     }
     for (final device in switches) {
       if (!device.isConnected) continue;

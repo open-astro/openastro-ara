@@ -60,6 +60,14 @@ class _FixedSwitchListNotifier extends SwitchListNotifier {
   Future<List<SwitchDevice>> build() async => _client.devices;
 }
 
+/// Simulates the switch endpoint being unreachable (a transient daemon
+/// hiccup) — `switchListProvider.future` then completes with an error.
+class _FailingSwitchListNotifier extends SwitchListNotifier {
+  @override
+  Future<List<SwitchDevice>> build() async =>
+      throw Exception('switch endpoint unreachable');
+}
+
 SwitchDevice _fanDevice({double value = 0.0}) => SwitchDevice(
       deviceId: 'switch-5',
       alpacaDeviceNumber: 5,
@@ -131,7 +139,9 @@ CameraStatus _status({
     );
 
 Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
-    {bool compact = false, _FakeSwitchClient? switchClient}) async {
+    {bool compact = false,
+    _FakeSwitchClient? switchClient,
+    bool switchListFails = false}) async {
   final api = _FakeCameraApi(status);
   final sw = switchClient ?? _FakeSwitchClient(const []);
   await tester.pumpWidget(ProviderScope(
@@ -141,7 +151,9 @@ Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
       switchApiProvider.overrideWithValue(sw),
-      switchListProvider.overrideWith(() => _FixedSwitchListNotifier(sw)),
+      switchListProvider.overrideWith(() => switchListFails
+          ? _FailingSwitchListNotifier()
+          : _FixedSwitchListNotifier(sw)),
     ],
     child: MaterialApp(
       home: Scaffold(
@@ -242,5 +254,27 @@ void main() {
     expect(find.text('17.9 °C'), findsOneWidget);
     expect(find.text('Does not support cooling'), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
+  });
+
+  testWidgets('compact (Imaging tab) collapses entirely for an uncooled camera',
+      (tester) async {
+    await _pump(tester, _status(hasCooler: false), compact: true);
+    expect(find.text('Cooling target'), findsNothing);
+    expect(find.text('Sensor temperature'), findsNothing);
+    expect(find.text('Does not support cooling'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets(
+      'a switch-list read failure does not alarm the cooler toggle — the '
+      'cooler command succeeds and the fan sync is a no-op', (tester) async {
+    final api = await _pump(tester, _status(coolerOn: false),
+        switchListFails: true);
+    await tester.tap(find.byType(Switch).first); // cooler switch
+    await tester.pumpAndSettle();
+    expect(api.calls,
+        contains('command:cooler:enabled=true:target=null:fan=null'));
+    expect(find.textContaining("Couldn't change that"), findsNothing);
+    expect(find.textContaining('could not read the switch state'), findsNothing);
   });
 }

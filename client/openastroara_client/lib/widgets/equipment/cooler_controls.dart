@@ -73,10 +73,13 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
     final caps = s.capabilities;
     if (caps == null) return const SizedBox.shrink();
     // An uncooled camera (has_cooler false) still reports a sensor
-    // temperature — show the "Sensor temperature" row plus a clear "no
-    // cooling" note rather than an empty panel (regression: the readout was
-    // once unconditional).
+    // temperature — in the Settings panel, show the "Sensor temperature" row
+    // plus a clear "no cooling" note rather than an empty panel (regression:
+    // the readout was once unconditional). The compact Imaging rail instead
+    // collapses entirely: its readouts live in Settings, and a header-less
+    // stub would break the rail's section rhythm.
     if (!caps.hasCooler) {
+      if (widget.compact) return const SizedBox.shrink();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
