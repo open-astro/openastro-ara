@@ -72,7 +72,7 @@ Future<_FakeSwitchClient> _pump(
     overrides: [
       switchApiProvider.overrideWithValue(fake),
       switchListProvider.overrideWith(
-          () => SwitchListNotifierForTest(fake)),
+          () => _SwitchListNotifierForTest(fake)),
       cameraStatusProvider.overrideWith(
           () => _FixedCameraNotifier(camera)),
     ],
@@ -140,8 +140,8 @@ class _FixedCameraNotifier extends CameraStatusNotifier {
   Future<CameraStatus?> build() async => _status;
 }
 
-class SwitchListNotifierForTest extends SwitchListNotifier {
-  SwitchListNotifierForTest(this.client);
+class _SwitchListNotifierForTest extends SwitchListNotifier {
+  _SwitchListNotifierForTest(this.client);
   final _FakeSwitchClient client;
   @override
   Future<List<SwitchDevice>> build() async => client.devices;
