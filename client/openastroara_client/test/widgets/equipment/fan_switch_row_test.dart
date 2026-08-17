@@ -12,8 +12,9 @@ import 'package:openastroara/widgets/equipment/fan_switch_row.dart';
 
 class _FakeSwitchClient implements SwitchClient {
   final List<SwitchDevice> devices;
-  _FakeSwitchClient(this.devices);
+  _FakeSwitchClient(this.devices, {this.throwOnSet = false});
   final List<String> calls = [];
+  final bool throwOnSet;
   @override
   Future<List<SwitchDevice>> getAll() async => devices;
   @override
@@ -30,6 +31,7 @@ class _FakeSwitchClient implements SwitchClient {
     required int portId,
     required double value,
   }) async {
+    if (throwOnSet) throw Exception('device rejected the write');
     calls.add('setValue:$deviceId:$portId:$value');
   }
 
@@ -66,8 +68,9 @@ Future<_FakeSwitchClient> _pump(
   WidgetTester tester, {
   List<SwitchDevice>? switches,
   CameraStatus? camera,
+  _FakeSwitchClient? switchClient,
 }) async {
-  final fake = _FakeSwitchClient(switches ?? const []);
+  final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
   await tester.pumpWidget(ProviderScope(
     overrides: [
       switchApiProvider.overrideWithValue(fake),
@@ -104,6 +107,15 @@ void main() {
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(fake.calls, contains('setValue:switch-5:1:0.0'));
+  });
+
+  testWidgets('a failed fan write surfaces a snackbar (no silent swallow)',
+      (tester) async {
+    final sw = _FakeSwitchClient([_fanDevice(value: 1.0)], throwOnSet: true);
+    await _pump(tester, switches: sw.devices, switchClient: sw);
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.textContaining("Couldn't set the fan"), findsOneWidget);
   });
 
   testWidgets('refuses fan-off while the cooler is cooling', (tester) async {

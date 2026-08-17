@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/switch_device.dart';
+import '../../services/equipment_device_api.dart';
+import '../../theme/ara_colors.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/switch_state.dart';
 
@@ -21,7 +23,9 @@ class FanSwitchRow extends ConsumerWidget {
         orElse: () => const <SwitchDevice>[],
       );
     final fan = _findFanPort(switches);
-    if (fan == null) return const SizedBox.shrink();
+    // Only a boolean (on/off, range [0,1]) Fan port renders as a toggle — a
+    // PWM/value fan port would be silently forced to full on/off otherwise.
+    if (fan == null || !fan.port.isBoolean) return const SizedBox.shrink();
 
     final camera = ref.watch(cameraStatusProvider).maybeWhen(
         data: (v) => v,
@@ -70,16 +74,30 @@ class FanSwitchRow extends ConsumerWidget {
       );
       return;
     }
-    final ok = await ref
-        .read(switchListProvider.notifier)
-        .setValue(
-          deviceId: fan.device.deviceId,
-          portId: fan.port.id,
-          value: on ? 1.0 : 0.0,
+    try {
+      final ok = await ref
+          .read(switchListProvider.notifier)
+          .setValue(
+            deviceId: fan.device.deviceId,
+            portId: fan.port.id,
+            value: on ? 1.0 : 0.0,
+          );
+      if (!ok && context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+              content: Text('Another switch action is in progress.')),
         );
-    if (!ok && context.mounted) {
+      }
+    } catch (e) {
+      // A failed switch write must surface (mirror EquipmentSwitchPanel's
+      // _PortRow) — otherwise the fire-and-forget onChanged swallows it and
+      // the tap silently fails to flip.
+      if (!context.mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Another switch action is in progress.')),
+        SnackBar(
+          content: Text("Couldn't set the fan: ${describeEquipmentError(e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
       );
     }
   }
