@@ -271,8 +271,10 @@ class _IntFieldState extends State<_IntField> {
 /// The payload always carries the same value for binX and binY, so only the
 /// symmetric modes both axes support are offered: the span
 /// [max(minBinX, minBinY) .. min(maxBinX, maxBinY)]. A stored bin outside that
-/// span (a camera swap after a sequence seeded a higher value) is clamped for
-/// display so it can never crash the picker's exactly-one-item-per-value.
+/// span (a camera swap after a sequence seeded a higher value) is clamped —
+/// and the clamp is WRITTEN BACK to [ExposureParams.bin] (post-frame), not
+/// just rendered: the raw stored value is what a capture submits, so a
+/// display-only clamp would still fire an exposure with an invalid bin.
 class _BinDropdown extends ConsumerWidget {
   final int value;
   final ValueChanged<int> onChanged;
@@ -287,13 +289,28 @@ class _BinDropdown extends ConsumerWidget {
     var lo = 1;
     var hi = 8;
     if (caps != null && caps.maxBinX > 0 && caps.maxBinY > 0) {
-      lo = caps.minBinX > caps.minBinY ? caps.minBinX : caps.minBinY;
-      hi = caps.maxBinX < caps.maxBinY ? caps.maxBinX : caps.maxBinY;
-      if (lo < 1) lo = 1;
+      final l = caps.minBinX > caps.minBinY ? caps.minBinX : caps.minBinY;
+      final h = caps.maxBinX < caps.maxBinY ? caps.maxBinX : caps.maxBinY;
+      // A malformed capability report (min above max) keeps the 1..8
+      // fallback instead of silently collapsing the range to one entry.
+      if (l <= h) {
+        lo = l < 1 ? 1 : l;
+        hi = h < lo ? lo : h;
+      }
     }
-    if (hi < lo) hi = lo;
     final shown = value.clamp(lo, hi);
+    if (shown != value) {
+      // Correct the state, not just the pixels (see class doc). Post-frame:
+      // notifying the exposure controller mid-build is illegal. `shown` is
+      // in-range, so this fires at most once — no rebuild loop.
+      WidgetsBinding.instance.addPostFrameCallback((_) => onChanged(shown));
+    }
     return DropdownButtonFormField<int>(
+      // FormField reads initialValue in initState only — remount when the
+      // range changes so capabilities arriving after the first build (the
+      // provider starts AsyncLoading) can't leave a selection outside the
+      // new items list (the exactly-one-item-per-value crash).
+      key: ValueKey('bin-$lo-$hi'),
       initialValue: shown,
       decoration: const InputDecoration(labelText: 'Bin'),
       items: [

@@ -101,7 +101,10 @@ FilterWheelStatus _wheelAt(int position, {bool connected = true}) =>
     );
 
 Future<ProviderContainer> _pump(WidgetTester tester,
-    {List<String>? labels, CameraStatus? cameraStatus, int initialBin = 1}) async {
+    {List<String>? labels,
+    CameraStatus? cameraStatus,
+    int initialBin = 1,
+    bool awaitCamera = true}) async {
   final container = ProviderContainer(overrides: [
     if (labels != null)
       filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
@@ -109,10 +112,11 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     exposureControllerProvider.overrideWith(() => _FixedExposure(initialBin)),
   ]);
   if (labels != null) _FixedLabels.labels = labels;
-  // Resolve the camera status before the first frame: the dropdown's
-  // `initialValue` is only honored at first build, so it must already see the
-  // camera's real bin range rather than a loading-state fallback.
-  await container.read(cameraStatusProvider.future);
+  // Resolve the camera status before the first frame so the dropdown's first
+  // build already sees the camera's real bin range. Pass awaitCamera: false
+  // to model the real mount order (provider still loading at first build,
+  // capabilities arriving on a later frame).
+  if (awaitCamera) await container.read(cameraStatusProvider.future);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
@@ -775,13 +779,56 @@ void main() {
   });
 
   testWidgets(
-      'Option A: an out-of-range stored bin clamps to a valid selection',
-      (tester) async {
+      'Option A: an out-of-range stored bin clamps to a valid selection '
+      'AND the clamp is written back to state', (tester) async {
     // Camera caps at 2x2 but the stored bin is 8 (e.g. a camera swap) — the
     // picker must clamp rather than crash on a value with no matching item.
-    await _pump(tester, cameraStatus: _cameraWithMaxBin(2), initialBin: 8);
+    final container =
+        await _pump(tester, cameraStatus: _cameraWithMaxBin(2), initialBin: 8);
     expect(tester.takeException(), isNull);
     expect(find.text('2x2'), findsOneWidget);
     expect(find.text('8x8'), findsNothing);
+    // The correction must reach ExposureParams.bin — a display-only clamp
+    // would still submit bin 8 on capture.
+    await tester.pump(); // post-frame write-back
+    expect(container.read(exposureControllerProvider).bin, 2);
+  });
+
+  testWidgets(
+      'Option A: capabilities arriving after the first build re-clamp the '
+      'selection (no exactly-one-item-per-value crash)', (tester) async {
+    // Real mount order: the camera provider is still loading on the first
+    // frame (dropdown shows the 1..8 fallback with the stored bin 8), then
+    // the capabilities resolve and narrow the range to 2.
+    final container = await _pump(tester,
+        cameraStatus: _cameraWithMaxBin(2), initialBin: 8, awaitCamera: false);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('2x2'), findsOneWidget);
+    expect(find.text('8x8'), findsNothing);
+    expect(container.read(exposureControllerProvider).bin, 2);
+  });
+
+  testWidgets(
+      'Option A: malformed bin capabilities (min above max) keep the 1..8 '
+      'fallback', (tester) async {
+    final broken = CameraStatus.fromJson({
+      'state': 'connected',
+      'capabilities': {
+        'sensor_width': 100,
+        'sensor_height': 100,
+        'min_bin_x': 6,
+        'max_bin_x': 2,
+        'min_bin_y': 6,
+        'max_bin_y': 2,
+      },
+      'runtime': {'state': 'idle'},
+    });
+    await _pump(tester, cameraStatus: broken);
+    expect(tester.takeException(), isNull);
+    expect(find.text('1x1'), findsOneWidget);
+    await tester.tap(find.text('1x1').last);
+    await tester.pumpAndSettle();
+    expect(find.text('8x8'), findsOneWidget); // full fallback range offered
   });
 }
