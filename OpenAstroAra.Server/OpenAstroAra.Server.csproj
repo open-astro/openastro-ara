@@ -66,8 +66,8 @@
          Remove when Microsoft.AspNetCore.OpenApi ships on the patched lib. 3.x is a
          breaking major (IOpenApiMediaType.Example is read-only) the AspNetCore.OpenApi
          10.0.x source generator cannot compile against — keep 2.7.x. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="[2.11.0]" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.18" />
+    <PackageReference Include="Microsoft.OpenApi" Version="[2.12.0]" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.20" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): pin the patched native SQLite lib
@@ -94,9 +94,9 @@
          mDNSResponder/Avahi on :5353 via the library's socket-reuse handling. -->
     <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <!-- Phase 6: ASCOM Alpaca for cross-platform equipment discovery + typed proxies per §6.2 / §52 -->
-    <PackageReference Include="ASCOM.Alpaca.Components" Version="3.1.0" />
-    <PackageReference Include="ASCOM.Alpaca.Device" Version="3.1.0" />
-    <PackageReference Include="ASCOM.Tools" Version="3.1.0" />
+    <PackageReference Include="ASCOM.Alpaca.Components" Version="4.0.0" />
+    <PackageReference Include="ASCOM.Alpaca.Device" Version="4.0.0" />
+    <PackageReference Include="ASCOM.Tools" Version="4.0.0" />
   </ItemGroup>
 
   <ItemGroup>
