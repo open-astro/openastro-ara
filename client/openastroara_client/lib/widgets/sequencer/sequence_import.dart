@@ -95,14 +95,14 @@ String _messageFor(NinaFileError error) => switch (error) {
 /// Returns true only when a sequence was actually imported, so the caller can
 /// keep the Load dialog open on a cancel/error (and close it only on success).
 Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
-  final picked = await FilePicker.pickFiles(
+  final picked = await FilePicker.pickFile(
     type: FileType.custom,
     allowedExtensions: ['json'],
   );
   // `path` is populated on desktop/mobile (ARA's targets); Flutter Web surfaces
   // file content via `bytes` instead, so a `bytes` path would be needed before
   // web is supported (a null path here reads as a cancel).
-  final path = picked?.files.single.path;
+  final path = picked?.path;
   if (path == null) return false; // cancelled
 
   final read = await readNinaSequenceFile(path);
