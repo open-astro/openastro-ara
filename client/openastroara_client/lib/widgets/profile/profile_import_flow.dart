@@ -34,9 +34,9 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   // can throw (e.g. a macOS sandbox / denied-permission PlatformException), not
   // just return null — catch it so it can't become a silent unhandled rejection
   // under unawaited().
-  final FilePickerResult? picked;
+  final PlatformFile? picked;
   try {
-    picked = await FilePicker.pickFiles(
+    picked = await FilePicker.pickFile(
       type: FileType.any,
       dialogTitle: 'Choose a shared profile file',
     );
@@ -47,10 +47,10 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
         backgroundColor: AraColors.accentError));
     return;
   }
-  if (picked == null || picked.files.isEmpty) return; // user cancelled
-  final file = picked.files.single;
+  if (picked == null) return; // user cancelled
+  final file = picked;
   const maxShareBytes = 1024 * 1024; // 1 MB ceiling — shares are a few KB
-  if (file.size > maxShareBytes) {
+  if (await file.length() > maxShareBytes) {
     messenger.showSnackBar(const SnackBar(
         content: Text("That file is too large to be a profile share."),
         backgroundColor: AraColors.accentError));

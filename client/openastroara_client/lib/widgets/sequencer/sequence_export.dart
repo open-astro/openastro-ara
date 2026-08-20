@@ -66,7 +66,7 @@ Future<void> exportSequence(
   }
 
   if (!context.mounted) return;
-  String? saved;
+  Uri? saved;
   try {
     saved = await FilePicker.saveFile(
       dialogTitle: 'Export sequence for NINA',
@@ -91,7 +91,8 @@ Future<void> exportSequence(
 
   // Confirm with the saved filename (the user chose the folder, so the basename
   // is enough and avoids a very long path overflowing the SnackBar).
-  final fileName = saved.split(RegExp(r'[/\\]')).last;
+  final fileName =
+      saved.pathSegments.isNotEmpty ? saved.pathSegments.last : saved.toString();
   messenger.showSnackBar(SnackBar(
     content: Text('Exported "$exportName" → $fileName'),
     duration: const Duration(seconds: 4),

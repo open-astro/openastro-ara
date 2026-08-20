@@ -169,11 +169,11 @@ class _ProfileListView extends ConsumerWidget {
     if (!context.mounted) return;
     // Pretty-print so a shared file is human-readable. The manifest is already
     // stripped of paths / secrets / location / network by the daemon. saveFile
-    // writes the bytes itself on the desktop targets and returns the saved path
-    // (null if the user cancels).
+    // writes the bytes itself on the desktop targets and returns the saved
+    // location as a Uri (null if the user cancels).
     final jsonBytes = Uint8List.fromList(
         utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)));
-    final String? saved;
+    final Uri? saved;
     try {
       saved = await FilePicker.saveFile(
         dialogTitle: 'Save profile share',
