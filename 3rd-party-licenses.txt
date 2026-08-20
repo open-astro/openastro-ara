@@ -104,21 +104,21 @@ License source: http://accord-framework.net/license.txt (Accord.NET framework li
 Project:        http://accord-framework.net/
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Alpaca.Components 3.1.0
+Package:        ASCOM.Alpaca.Components 4.0.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Alpaca.Device 3.1.0
+Package:        ASCOM.Alpaca.Device 4.0.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Common.Components 3.1.0
+Package:        ASCOM.Common.Components 4.0.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
@@ -126,15 +126,15 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://ascom-standards.org/
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Exception.Library 7.0.1
+Package:        ASCOM.Exception.Library 7.1.2
 Authors:        The ASCOM Initiative
-Copyright:      (c) ASCOM Initiative 2024
+Copyright:      (c) ASCOM Initiative 2025
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://ascom-standards.org/
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Tools 3.1.0
+Package:        ASCOM.Tools 4.0.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
@@ -315,7 +315,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.OpenApi 2.11.0
+Package:        Microsoft.OpenApi 2.12.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -610,7 +610,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.16.18
+Package:        Scalar.AspNetCore 2.16.20
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
