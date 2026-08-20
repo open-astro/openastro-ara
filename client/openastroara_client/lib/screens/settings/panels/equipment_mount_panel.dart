@@ -78,6 +78,11 @@ class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
           value: connection.autoConnect(EquipmentDeviceType.mount),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.mount, v),
         ),
+        // The press-and-hold direction pad sits between Auto-connect and the
+        // Manual control section — shown whenever the mount can MoveAxis,
+        // independent of GoTo (canSlew) capability.
+        if (mount != null && (mount.capabilities?.canMoveAxis ?? false))
+          _ManualMovePad(status: mount),
         if (mount != null &&
             ((mount.capabilities?.canSlew ?? false) ||
                 (mount.capabilities?.canMoveAxis ?? false))) ...[
@@ -269,52 +274,6 @@ class _ManualControl extends ConsumerStatefulWidget {
 class _ManualControlState extends ConsumerState<_ManualControl> {
   final _ra = TextEditingController();
   final _dec = TextEditingController();
-  double? _rate;
-  // Slew-speed options: the mount's own rates when it reports several, else
-  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
-  List<SlewRateOption> _rateOptions = const [];
-
-  static const int _primary = 0; // RA / Azimuth (E/W)
-  static const int _secondary = 1; // Dec / Altitude (N/S)
-
-  @override
-  void initState() {
-    super.initState();
-    _rateOptions = buildSlewRateOptions(
-      widget.status.capabilities?.axisRatesDegPerSec ?? const [],
-    );
-    _rate = _defaultRate(_rateOptions);
-  }
-
-  @override
-  void didUpdateWidget(_ManualControl old) {
-    super.didUpdateWidget(old);
-    // If the panel rebuilds for a mount with a different rate set (e.g. disconnect
-    // then reconnect to different hardware), re-seed _rate — otherwise it holds the
-    // old mount's value: no chip shows selected and a nudge sends a stale rate the
-    // new driver may reject or clamp with no feedback.
-    final oldRates =
-        old.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
-    final newRates =
-        widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
-    if (!_sameRates(oldRates, newRates)) {
-      _rateOptions = buildSlewRateOptions(newRates);
-      _rate = _defaultRate(_rateOptions);
-    }
-  }
-
-  // Default to a middle rate — a usable nudge without lurching at full speed.
-  static double? _defaultRate(List<SlewRateOption> options) => options.isEmpty
-      ? null
-      : options[(options.length - 1) ~/ 2].rateDegPerSec;
-
-  static bool _sameRates(List<double> a, List<double> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
 
   @override
   void dispose() {
@@ -325,41 +284,11 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
 
   @override
   Widget build(BuildContext context) {
-    final caps = widget.status.capabilities;
     final busy = widget.status.isBusy;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (caps?.canSlew ?? false) _goTo(busy),
-        if (caps?.canMoveAxis ?? false) ...[
-          const SizedBox(height: 16),
-          if (_rateOptions.isNotEmpty)
-            _speedPicker(_rateOptions)
-          else
-            const Text(
-              'This mount reports no manual slew rates.',
-              style: TextStyle(color: AraColors.textSecondary),
-            ),
-          const SizedBox(height: 10),
-          _directionPad(disabled: busy || _rate == null),
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    'Hold a direction to move; release to stop. Centre stops all motion.',
-                    style: TextStyle(
-                      color: AraColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                HelpIcon(helpKey: 'eq.mount.manual_move'),
-              ],
-            ),
-          ),
-        ],
+        if (widget.status.capabilities?.canSlew ?? false) _goTo(busy),
       ],
     );
   }
@@ -406,6 +335,8 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     );
   }
 
+
+
   Future<void> _dispatchGoTo() async {
     final messenger = ScaffoldMessenger.of(context);
     final ra = double.tryParse(_ra.text.trim());
@@ -438,6 +369,107 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     }
   }
 
+}
+
+
+/// §37.5 manual move: a press-and-hold 8-way direction pad with a speed
+/// picker. Primary axis = RA/Az (E/W), secondary = Dec/Alt (N/S); corners
+/// drive both. Gated on the mount's canMoveAxis and rendered between
+/// Auto-connect on boot and the Manual control section — available right
+/// after connect, independent of the GoTo (canSlew) capability.
+class _ManualMovePad extends ConsumerStatefulWidget {
+  final MountStatus status;
+  const _ManualMovePad({required this.status});
+
+  @override
+  ConsumerState<_ManualMovePad> createState() => _ManualMovePadState();
+}
+
+class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
+  double? _rate;
+  // Slew-speed options: the mount's own rates when it reports several, else
+  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
+  List<SlewRateOption> _rateOptions = const [];
+
+  static const int _primary = 0; // RA / Azimuth (E/W)
+  static const int _secondary = 1; // Dec / Altitude (N/S)
+
+  @override
+  void initState() {
+    super.initState();
+    _rateOptions = buildSlewRateOptions(
+      widget.status.capabilities?.axisRatesDegPerSec ?? const [],
+    );
+    _rate = _defaultRate(_rateOptions);
+  }
+
+  @override
+  void didUpdateWidget(_ManualMovePad old) {
+    super.didUpdateWidget(old);
+    // If the panel rebuilds for a mount with a different rate set (e.g. disconnect
+    // then reconnect to different hardware), re-seed _rate — otherwise it holds the
+    // old mount's value: no chip shows selected and a nudge sends a stale rate the
+    // new driver may reject or clamp with no feedback.
+    final oldRates =
+        old.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
+    final newRates =
+        widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
+    if (!_sameRates(oldRates, newRates)) {
+      _rateOptions = buildSlewRateOptions(newRates);
+      _rate = _defaultRate(_rateOptions);
+    }
+  }
+
+  // Default to a middle rate — a usable nudge without lurching at full speed.
+  static double? _defaultRate(List<SlewRateOption> options) => options.isEmpty
+      ? null
+      : options[(options.length - 1) ~/ 2].rateDegPerSec;
+
+  static bool _sameRates(List<double> a, List<double> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = widget.status.isBusy;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_rateOptions.isNotEmpty)
+          _speedPicker(_rateOptions)
+        else
+          const Text(
+            'This mount reports no manual slew rates.',
+            style: TextStyle(color: AraColors.textSecondary),
+          ),
+        const SizedBox(height: 10),
+        _directionPad(disabled: busy || _rate == null),
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  'Hold a direction to move; release to stop. Centre stops all motion.',
+                  style: TextStyle(
+                    color: AraColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              HelpIcon(helpKey: 'eq.mount.manual_move'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+
   // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
   // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
   // multi-rate mounts). The selected rate is what the direction pad sends at
@@ -459,6 +491,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       ],
     );
   }
+
 
   Widget _directionPad({required bool disabled}) {
     Widget pad(IconData icon, List<(int, double)> moves) => _HoldButton(
@@ -545,6 +578,8 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       // ref.read threw during teardown — nothing to do; Stop/AbortSlew is the backstop.
     }
   }
+
+
 }
 
 /// A press-and-hold button: fires [onStart] on pointer-down and [onStop] on
