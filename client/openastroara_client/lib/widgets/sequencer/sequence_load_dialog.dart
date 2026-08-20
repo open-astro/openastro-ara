@@ -355,7 +355,8 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
     try {
       final share = await api.exportShare(widget.id);
       // Pretty-print so the shared file is human-readable; saveFile writes the
-      // bytes itself on the desktop targets and returns the path (null on cancel).
+      // bytes itself on the desktop targets and returns the saved location as a
+      // Uri (null on cancel).
       final bytes = Uint8List.fromList(
           utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)));
       final saved = await FilePicker.saveFile(

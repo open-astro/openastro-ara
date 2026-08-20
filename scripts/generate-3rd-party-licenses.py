@@ -180,7 +180,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team",
     },
     "file_picker": {
-        "version": "12.0.0-beta.7",
+        # 12.0.0 verified 2026-08-19: LICENSE unchanged (MIT, Miguel Ruivo).
+        "version": "12.0.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Miguel Ruivo",
     },

@@ -582,7 +582,7 @@ void main() {
       final previousSaver = frameExportSaver;
       frameExportSaver = (fileName, bytes) async {
         savedCall = (fileName, bytes.length);
-        return '/tmp/$fileName';
+        return Uri.file('/tmp/$fileName');
       };
       addTearDown(() => frameExportSaver = previousSaver);
       await _pump(tester, fake);

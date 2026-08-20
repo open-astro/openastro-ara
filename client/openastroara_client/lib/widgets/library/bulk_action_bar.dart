@@ -154,7 +154,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                 }
                               })();
                               if (bytes.isEmpty || !context.mounted) return;
-                              String? saved;
+                              Uri? saved;
                               try {
                                 // Dio already yields Uint8List — don't copy a
                                 // potentially multi-GB tar (the repo idiom).
@@ -181,9 +181,11 @@ class LibraryBulkActionBar extends ConsumerWidget {
                               final summary = exportedCount == ids.length
                                   ? 'Exported $exportedCount frame(s)'
                                   : 'Exported $exportedCount of ${ids.length} frame(s) — the rest were missing on disk';
+                              final savedName = saved.pathSegments.isNotEmpty
+                                  ? saved.pathSegments.last
+                                  : saved.toString();
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                  content: Text(
-                                      '$summary → ${saved.split(RegExp(r'[/\\]')).last}')));
+                                  content: Text('$summary → $savedName')));
                             },
                     ),
                     _BulkAction(
@@ -250,7 +252,7 @@ class _BulkAction extends StatelessWidget {
 /// Writes the export tar via the OS save dialog. Swappable in widget tests
 /// (the real FilePicker plugin isn't available there).
 @visibleForTesting
-Future<String?> Function(String fileName, Uint8List bytes) frameExportSaver =
+Future<Uri?> Function(String fileName, Uint8List bytes) frameExportSaver =
     (fileName, bytes) => FilePicker.saveFile(
           dialogTitle: 'Export frames',
           fileName: fileName,
