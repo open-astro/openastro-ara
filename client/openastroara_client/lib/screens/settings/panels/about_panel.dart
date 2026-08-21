@@ -9,6 +9,7 @@ import '../../../app_version.dart';
 import '../../../services/server_maintenance_api.dart';
 import '../../../state/night_mode_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 
@@ -148,10 +149,10 @@ class _NightModeRow extends ConsumerWidget {
       AsyncData(:final value) => value,
       _ => false,
     };
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: const Text('Night mode'),
-      subtitle: const Text('Red display for dark-site observing (N hotkey)'),
+    return SettingsSwitchRow(
+      label: 'Night mode',
+      hint: 'Red display for dark-site observing (N hotkey)',
+      helpKey: 'app.night_mode',
       value: night,
       onChanged: (v) => ref.read(nightModeProvider.notifier).set(v),
     );

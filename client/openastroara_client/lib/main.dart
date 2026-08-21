@@ -42,7 +42,9 @@ class OpenAstroAraApp extends ConsumerWidget {
       title: 'OpenAstro Ara',
       // Theme build: a full red M3 theme; overlay build: the normal dark theme
       // with a red colour filter layered over it in [builder].
-      theme: (night && !isNightModeOverlay) ? buildNightTheme() : buildAraTheme(),
+      theme: (night && !isNightModeOverlay)
+          ? buildNightTheme()
+          : buildAraTheme(),
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
@@ -77,6 +79,13 @@ Widget _withNightHotkey(WidgetRef ref, Widget child) {
   return CallbackShortcuts(
     bindings: <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.keyN): () {
+        // Unmodified letter: skip it while a text field has focus, or typing
+        // an 'n' into a target name (or any other field) flips the display.
+        // Same guard the sequencer's plain-key shortcuts use.
+        if (FocusManager.instance.primaryFocus?.context?.widget
+            is EditableText) {
+          return;
+        }
         ref.read(nightModeProvider.notifier).toggle();
       },
     },
@@ -104,9 +113,7 @@ class _RootRouter extends ConsumerWidget {
     ref.listen(appDisplayVersionProvider, (previous, next) {
       final version = next.asData?.value;
       if (version != null) {
-        unawaited(
-          ref.read(windowModeProvider).setTitle('$kAppName $version'),
-        );
+        unawaited(ref.read(windowModeProvider).setTitle('$kAppName $version'));
       }
     });
     // Materialize the DSO-catalog mirror sync (fetch-on-connect) at the root
@@ -125,18 +132,21 @@ class _RootRouter extends ConsumerWidget {
           // plan with (seeding the settings notifiers) before the shell.
           ? (gatePassed ? const AppShell() : const OfflineLaunchScreen())
           : servers.isEmpty || serverChooserRequested
-              ? const FirstRunScreen()
-              : gatePassed
-                  ? const AppShell()
-                  : const LaunchProfileScreen(),
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+          ? const FirstRunScreen()
+          : gatePassed
+          ? const AppShell()
+          : const LaunchProfileScreen(),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, st) {
         // Log internal details for debug; UI shows a generic message so
         // exception text can't leak into the user-facing surface.
-        developer.log('Failed to load saved servers',
-            name: 'openastroara.saved_servers', error: e, stackTrace: st);
+        developer.log(
+          'Failed to load saved servers',
+          name: 'openastroara.saved_servers',
+          error: e,
+          stackTrace: st,
+        );
         // A storage-read failure must not dead-end the app — offline planning
         // stays reachable from here too (§2: offline is never blocked).
         return Scaffold(
@@ -164,8 +174,11 @@ class _RootRouter extends ConsumerWidget {
     // routed-to surface really changes.
     final inShell = routed is AppShell;
     final windowMode = ref.read(windowModeProvider);
-    WidgetsBinding.instance.addPostFrameCallback((_) => windowMode
-        .set(inShell ? WindowMode.workstation : WindowMode.launchpad));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => windowMode.set(
+        inShell ? WindowMode.workstation : WindowMode.launchpad,
+      ),
+    );
     return routed;
   }
 }
