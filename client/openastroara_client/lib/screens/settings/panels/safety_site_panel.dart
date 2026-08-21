@@ -92,8 +92,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   }
 
   /// Fill the observing site from GPS (§31.3). Preferred: a USB GPS dongle on
-  /// the server machine; fallback: this Mac's own location (internet + fresh
-  /// fix). Shared logic in [fillSiteFromGps]. Values still go through Save.
+  /// the server machine; fallback: the client machine's own location. Shared
+  /// logic in [fillSiteFromGps]. Values still go through Save.
   Future<void> _fillFromGps() async {
     if (_gpsBusy) return;
     setState(() {

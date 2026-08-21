@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -83,16 +84,23 @@ void main() {
     expect(container.read(wizardControllerProvider).draft.latitudeDeg, isNull);
   });
 
-  testWidgets('no server + no internet → explains there is no usable GPS',
+  testWidgets('no server + no device location → says so, naming this platform',
       (tester) async {
-    debugInternetProbe = () async => false; // offline Mac
-    addTearDown(() => debugInternetProbe = null);
+    debugMacLocationProvider = () async => null;
+    addTearDown(() => debugMacLocationProvider = null);
     await pump(tester, api: null);
     await tester.ensureVisible(find.text('Fill from GPS'));
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('no internet was detected'), findsOneWidget);
-    expect(find.textContaining('Plug in a GPS dongle'), findsOneWidget);
+    expect(find.textContaining('No server connected'), findsOneWidget);
+    // The copy names the machine the user is actually on — the app ships on
+    // three desktops, so it must not hardcode "this Mac".
+    final expected = Platform.isMacOS
+        ? 'this Mac'
+        : Platform.isWindows
+            ? 'this PC'
+            : 'this computer';
+    expect(find.textContaining(expected), findsOneWidget);
   });
 
   test('the coordinate→timezone mapping is worldwide, not US-only', () {

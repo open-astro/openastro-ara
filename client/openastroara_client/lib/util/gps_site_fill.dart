@@ -14,7 +14,7 @@ class GpsSiteFill {
   final double lng;
   final double? alt;
   /// On success, a describe-the-source label, e.g.
-  /// "the server's GPS dongle" or "this Mac's location".
+  /// "the server's GPS dongle" or "this Mac's own location".
   final String sourceLabel;
   /// On failure, a ready-to-show explanation.
   final String message;
@@ -35,22 +35,41 @@ class GpsSiteFill {
         sourceLabel = '';
 }
 
-typedef MacLocationResult = ({double lat, double lng, double? alt});
-typedef MacLocationProvider = Future<MacLocationResult?> Function();
-typedef InternetProbe = Future<bool> Function();
+typedef DeviceLocationResult = ({double lat, double lng, double? alt});
+typedef DeviceLocationProvider = Future<DeviceLocationResult?> Function();
 
-/// Test seams — replace to force a deterministic Mac-location / internet
-/// outcome in widget tests (real geolocator/platform channels aren't available
-/// there). Leave null in production.
+/// Test seam — replace to force a deterministic device-location outcome in
+/// widget tests (real geolocator platform channels aren't available there).
+/// Leave null in production.
 @visibleForTesting
-MacLocationProvider? debugMacLocationProvider;
-@visibleForTesting
-InternetProbe? debugInternetProbe;
+DeviceLocationProvider? debugMacLocationProvider;
+
+/// What to call the machine running the client, in user-facing copy. The app
+/// ships on macOS, Windows and Linux, so "this Mac" is wrong two thirds of
+/// the time.
+String get _thisDevice => Platform.isMacOS
+    ? 'this Mac'
+    : Platform.isWindows
+        ? 'this PC'
+        : 'this computer';
+
+/// Where the user goes to grant location access, per platform. Linux has no
+/// geolocator implementation at all, so it gets the honest answer instead of
+/// a settings path that doesn't exist there.
+String get _permissionHint => Platform.isMacOS
+    ? 'Open System Settings → Privacy & Security → Location Services and '
+        'allow OpenAstro Ara, then click Fill from GPS again.'
+    : Platform.isWindows
+        ? 'Open Settings → Privacy & security → Location and allow desktop '
+            'apps to access your location, then click Fill from GPS again.'
+        : 'On Linux there is no system location service to fall back on — '
+            'plug a USB GPS dongle into the machine running Ara Server.';
 
 /// Try to fill an observing site from GPS. **Preferred** source is a USB GPS
 /// dongle on the server machine (§31.3 time-sync state); when that's absent
-/// (no server, or no fix yet) it falls back to **this Mac's own location** —
-/// but only when there's internet AND the Mac's fix is fresh. This one routine
+/// (no server, or no fix yet) it falls back to **the client machine's own
+/// location** (macOS/Windows; Linux has no geolocator backend), accepting
+/// only a fix less than ten minutes old. This one routine
 /// is shared by the wizard (profile creation) and the Safety → Site panel
 /// (editing), so every "Fill from GPS" behaves the same everywhere.
 Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
@@ -73,7 +92,7 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     }
   }
 
-  // 2) Fallback: this Mac's own location (internet + fresh fix required).
+  // 2) Fallback: this machine's own location (a fresh fix is required).
   final baseNote = api == null
       ? 'No server connected, '
       : 'No GPS dongle fix yet, ';
@@ -84,24 +103,14 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
       final r = await debugMacLocationProvider!();
       if (r == null) {
         return GpsSiteFill.failed(
-            '$baseNote this Mac\'s location was unavailable. Check System '
-            'Settings → Privacy & Security → Location Services → allow '
-            'OpenAstro Ara, be online, then click Fill from GPS again.');
+            '$baseNote $_thisDevice couldn\'t provide a location. '
+            '$_permissionHint');
       }
       return GpsSiteFill.success(
         lat: r.lat,
         lng: r.lng,
         alt: r.alt,
-        sourceLabel: 'this Mac\'s location (internet, fix up to date)',
-      );
-    }
-
-    final internet =
-        debugInternetProbe != null ? await debugInternetProbe!() : await _hasInternet();
-    if (!internet) {
-      return GpsSiteFill.failed(
-        '$baseNote no internet was detected, so this Mac couldn\'t get a '
-        'current location. Plug in a GPS dongle or connect to the internet.',
+        sourceLabel: '$_thisDevice\'s own location',
       );
     }
 
@@ -112,9 +121,8 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return GpsSiteFill.failed(
-        '$baseNote this Mac\'s location permission is blocked. Open System '
-        'Settings → Privacy & Security → Location Services → allow OpenAstro '
-        'Ara, then click Fill from GPS again.',
+        '$baseNote $_thisDevice\'s location permission is blocked. '
+        '$_permissionHint',
       );
     }
 
@@ -127,40 +135,22 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     final age = DateTime.now().difference(pos.timestamp);
     if (age > const Duration(minutes: 10)) {
       return GpsSiteFill.failed(
-        '$baseNote this Mac\'s location is stale (${age.inMinutes} min old), '
-        'so it was not filled.',
+        '$baseNote $_thisDevice\'s location is stale (${age.inMinutes} min '
+        'old), so it was not filled. Desktop location needs a network to fix '
+        'a position — connect to one, or plug in a GPS dongle.',
       );
     }
     return GpsSiteFill.success(
       lat: pos.latitude,
       lng: pos.longitude,
       alt: pos.altitude,
-      sourceLabel: 'this Mac\'s location (internet, fix up to date)',
+      sourceLabel: '$_thisDevice\'s own location',
     );
   } catch (_) {
     // Any platform failure (e.g. no geolocator registered) → a clear message
     // that tells the user exactly how to make the Mac location available.
     return GpsSiteFill.failed(
-      '$baseNote this Mac\'s location was unavailable. Check System Settings → '
-      'Privacy & Security → Location Services → allow OpenAstro Ara, be '
-      'online, then click Fill from GPS again.',
+      '$baseNote $_thisDevice couldn\'t provide a location. $_permissionHint',
     );
-  }
-}
-
-/// Quick reachability probe — the Mac's location fix is only trusted when
-/// there's internet (CoreLocation's Wi-Fi/GPS positioning needs the network).
-Future<bool> _hasInternet() async {
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
-  try {
-    final req = await client
-        .getUrl(Uri.parse('https://www.gstatic.com/generate_204'))
-        .timeout(const Duration(seconds: 6));
-    final res = await req.close().timeout(const Duration(seconds: 6));
-    return res.statusCode == 204;
-  } catch (_) {
-    return false;
-  } finally {
-    client.close(force: true);
   }
 }

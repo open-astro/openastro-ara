@@ -34,8 +34,8 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   }
 
   /// Fill the observing site from GPS (§31.3) — a USB GPS dongle on the
-  /// server machine preferred, falling back to this Mac's location when the
-  /// dongle has no fix (internet + fresh fix required). Shared logic in
+  /// server machine preferred, falling back to the client machine's own
+  /// location when the dongle has no fix. Shared logic in
   /// [fillSiteFromGps], so profile creation behaves like the Safety → Site
   /// panel. The daemon's USB-GPS worker polls any dongle on the server, so
   /// this works with no mount connected at all.
