@@ -8,8 +8,10 @@ import 'package:webview_all/webview_all.dart' as wva;
 
 import '../../services/dso_catalog_service.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
+import '../../services/planetarium_overlay.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
+import '../../state/night_mode_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sky_atlas/site_location_state.dart';
@@ -130,6 +132,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // channels are loopback HTTP, so the search bar + add-to-sequence keep
       // working against the overlay page exactly as on mac/Windows.
       if (Platform.isLinux) {
+        // StellariumView owns night-mode propagation on every platform: push
+        // the current state before the overlay loads (the native side stores
+        // the flag and re-applies it once the page finishes loading).
+        _applyNightOnWeb(switch (ref.read(nightModeProvider)) {
+          AsyncData(:final value) => value,
+          _ => false,
+        });
         setState(() => _linuxOverlayUrl = url);
         return;
       }
@@ -141,6 +150,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final controller = wva.WebViewController()..loadRequest(Uri.parse(url));
         if (!mounted) return;
         setState(() => _controller = controller);
+        // Apply any already-active night mode once the Stellarium page is up.
+        _applyNightOnWeb(switch (ref.read(nightModeProvider)) {
+          AsyncData(:final value) => value,
+          _ => false,
+        }, retry: true);
       } catch (e, st) {
         debugPrint('StellariumView: webview init failed: $e\n$st');
         if (mounted) setState(() => _unavailable = true);
@@ -267,6 +281,54 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // panel is now the Tonight's Sky UI on every platform.
   void _toggleTonight() => ref.read(skyAtlasModeProvider.notifier).toggle();
 
+  // Night mode for the sky map. Flutter paints can't cover a native WebView, so
+  // we inject (or remove) a red tint layer into the Stellarium page — matching
+  // the overlay build's filter. Best-effort, fire-and-forget.
+  void _applyNightOnWeb(bool on, {bool retry = false}) {
+    // Linux renders the map in the native GTK overlay, which has no
+    // WebViewController — the tint goes over its method channel instead (the
+    // native side owns the same script and re-applies it on every page load).
+    if (Platform.isLinux) {
+      const PlanetariumOverlay().setNightMode(on);
+      return;
+    }
+    final c = _controller;
+    if (c == null) return;
+    const create = r'''
+      ;(function(){
+        var el=document.getElementById('ara-night');
+        if(!el){ el=document.createElement('div'); el.id='ara-night';
+          el.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483647;mix-blend-mode:multiply;background:rgba(255,0,0,0.35);';
+          document.body.appendChild(el); }
+      })();
+    ''';
+    const remove = r'''
+      ;(function(){var el=document.getElementById('ara-night'); if(el) el.remove();})();
+    ''';
+    c.runJavaScript(on ? create : remove);
+    if (on && retry) {
+      // The page may not have finished loading yet, and the injected element
+      // only survives if there's a document to attach it to. webview_all's
+      // setters are unimplemented on some platforms (calling one can abort the
+      // whole init — see the controller setup above), so instead of hooking a
+      // load-finished callback, re-apply on a short ladder: a slow first load
+      // otherwise leaves the map untinted until the next toggle. Injecting
+      // twice is a no-op — the script checks for its own element first.
+      for (final after in const [1, 3, 8]) {
+        Future.delayed(Duration(seconds: after), () {
+          if (!mounted) return;
+          // Night mode may have been switched off inside the ladder's window —
+          // re-injecting then would put the tint back with nothing to remove it.
+          final stillOn = switch (ref.read(nightModeProvider)) {
+            AsyncData(:final value) => value,
+            _ => false,
+          };
+          if (stillOn) c.runJavaScript(create);
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_unavailable) return const _Unavailable();
@@ -284,6 +346,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // forwarded command for a fresh one. (updateShouldNotify ignores the null,
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
+    });
+
+    // Night mode for the sky map: a Flutter overlay can't paint over the native
+    // WebView, so drive a red tint directly inside the Stellarium page instead.
+    ref.listen(nightModeProvider, (_, next) {
+      _applyNightOnWeb(switch (next) {
+        AsyncData(:final value) => value,
+        _ => false,
+      });
     });
 
     final tonightOpen =

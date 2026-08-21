@@ -7,7 +7,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app_version.dart';
 import '../../../services/server_maintenance_api.dart';
+import '../../../state/night_mode_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 
@@ -57,6 +59,10 @@ class AboutPanel extends ConsumerWidget {
           'Version ${version.when(data: (v) => v, loading: () => '…', error: (_, _) => '(unknown)')}',
           style: dim,
         ),
+        const SizedBox(height: 12),
+        // Observing-session night display: red overlay/theme, toggleable via
+        // the switch or the N hotkey; persisted across launches.
+        _NightModeRow(),
         const SizedBox(height: 12),
         // The daemon is the half that actually runs the rig — its build is what
         // matters in a bug report, and it was previously invisible in the app.
@@ -128,6 +134,28 @@ class AboutPanel extends ConsumerWidget {
         ),
       );
     }
+  }
+}
+
+/// Settings → System → About — night mode toggle. Also togglable via the moon
+/// button in the top bar and the `N` hotkey from anywhere in the app;
+/// persisted across launches.
+class _NightModeRow extends ConsumerWidget {
+  const _NightModeRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final night = switch (ref.watch(nightModeProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    };
+    return SettingsSwitchRow(
+      label: 'Night mode',
+      hint: 'Red display for dark-site observing (N hotkey)',
+      helpKey: 'app.night_mode',
+      value: night,
+      onChanged: (v) => ref.read(nightModeProvider.notifier).set(v),
+    );
   }
 }
 
