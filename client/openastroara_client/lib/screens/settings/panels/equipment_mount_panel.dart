@@ -22,7 +22,8 @@ class EquipmentMountPanel extends ConsumerStatefulWidget {
   const EquipmentMountPanel({super.key});
 
   @override
-  ConsumerState<EquipmentMountPanel> createState() => _EquipmentMountPanelState();
+  ConsumerState<EquipmentMountPanel> createState() =>
+      _EquipmentMountPanelState();
 }
 
 class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
@@ -83,9 +84,10 @@ class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
         // independent of GoTo (canSlew) capability.
         if (mount != null && (mount.capabilities?.canMoveAxis ?? false))
           _ManualMovePad(status: mount),
-        if (mount != null &&
-            ((mount.capabilities?.canSlew ?? false) ||
-                (mount.capabilities?.canMoveAxis ?? false))) ...[
+        // Manual control is the GoTo form only now that the direction pad has
+        // its own section above — gate it on canSlew alone, or a MoveAxis-only
+        // mount gets a "Manual control" header with nothing under it.
+        if (mount != null && (mount.capabilities?.canSlew ?? false)) ...[
           const SettingsSectionHeader('Manual control'),
           _ManualControl(status: mount),
         ],
@@ -287,9 +289,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     final busy = widget.status.isBusy;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (widget.status.capabilities?.canSlew ?? false) _goTo(busy),
-      ],
+      children: [if (widget.status.capabilities?.canSlew ?? false) _goTo(busy)],
     );
   }
 
@@ -335,8 +335,6 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     );
   }
 
-
-
   Future<void> _dispatchGoTo() async {
     final messenger = ScaffoldMessenger.of(context);
     final ra = double.tryParse(_ra.text.trim());
@@ -368,9 +366,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       );
     }
   }
-
 }
-
 
 /// §37.5 manual move: a press-and-hold 8-way direction pad with a speed
 /// picker. Primary axis = RA/Az (E/W), secondary = Dec/Alt (N/S); corners
@@ -421,9 +417,8 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   }
 
   // Default to a middle rate — a usable nudge without lurching at full speed.
-  static double? _defaultRate(List<SlewRateOption> options) => options.isEmpty
-      ? null
-      : options[(options.length - 1) ~/ 2].rateDegPerSec;
+  static double? _defaultRate(List<SlewRateOption> options) =>
+      options.isEmpty ? null : options[(options.length - 1) ~/ 2].rateDegPerSec;
 
   static bool _sameRates(List<double> a, List<double> b) {
     if (a.length != b.length) return false;
@@ -469,7 +464,6 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
     );
   }
 
-
   // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
   // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
   // multi-rate mounts). The selected rate is what the direction pad sends at
@@ -491,7 +485,6 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
       ],
     );
   }
-
 
   Widget _directionPad({required bool disabled}) {
     Widget pad(IconData icon, List<(int, double)> moves) => _HoldButton(
@@ -578,8 +571,6 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
       // ref.read threw during teardown — nothing to do; Stop/AbortSlew is the backstop.
     }
   }
-
-
 }
 
 /// A press-and-hold button: fires [onStart] on pointer-down and [onStop] on
