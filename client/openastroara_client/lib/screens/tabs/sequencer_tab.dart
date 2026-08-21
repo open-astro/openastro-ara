@@ -228,11 +228,24 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
           if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).redo();
         },
-        const SingleActivator(LogicalKeyboardKey.delete): _deleteSelected,
-        const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelected,
       },
       child: Focus(
         autofocus: true,
+        // Delete/Backspace live here, NOT in CallbackShortcuts: when a field is
+        // focused, the field consumes them itself (so text delete works and a
+        // dropdown isn't overridden) and they only remove the selected node when
+        // no field editor is focused. CallbackShortcuts can't "ignore" a key it
+        // matched — it always consumes it, which is what broke field delete.
+        onKeyEvent: (node, event) {
+          if (!_focusInFieldEditor &&
+              event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.delete ||
+                  event.logicalKey == LogicalKeyboardKey.backspace)) {
+            _deleteSelected();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
         child: Column(
       children: [
         const SequencerToolbar(),
