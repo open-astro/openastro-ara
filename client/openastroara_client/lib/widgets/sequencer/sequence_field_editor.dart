@@ -664,6 +664,7 @@ class _FieldControl extends StatelessWidget {
           _textField(
             initial: value is String ? value as String : '',
             keyboard: TextInputType.text,
+            multiline: true, // the note field grows to multiple lines
             parse: (s) => s,
           ),
         );
@@ -776,11 +777,13 @@ class _FieldControl extends StatelessWidget {
   Widget _textField({
     required String initial,
     required TextInputType keyboard,
+    bool multiline = false,
     required Object? Function(String) parse,
   }) => _ValueTextField(
     text: initial,
     enabled: enabled,
     keyboard: keyboard,
+    multiline: multiline,
     // "8" typed vs "8.0" echoed back by the model are the SAME value — only a
     // genuinely different value (Apply, undo) may re-seed the controller, or
     // every keystroke would yank the caret to a reformatted echo.
@@ -1189,11 +1192,16 @@ class _ValueTextField extends StatefulWidget {
     required this.onChanged,
     required this.isEquivalent,
     this.enabled = true,
+    this.multiline = false,
   });
 
   final String text;
   final TextInputType keyboard;
   final ValueChanged<String> onChanged;
+
+  /// True for free-text note fields: the input grows to more lines as you
+  /// type (only these fields — numeric fields stay single-line).
+  final bool multiline;
 
   /// True when the controller's current text already MEANS the model's text
   /// ("8" vs "8.0") — an equivalent echo must not re-seed and move the caret.
@@ -1226,17 +1234,43 @@ class _ValueTextFieldState extends State<_ValueTextField> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
-    controller: _controller,
-    enabled: widget.enabled,
-    keyboardType: widget.keyboard,
-    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-    ),
-    onChanged: widget.onChanged,
-  );
+  Widget build(BuildContext context) {
+    final keyboard = widget.multiline ? TextInputType.multiline : widget.keyboard;
+    return TextField(
+      controller: _controller,
+      enabled: widget.enabled,
+      keyboardType: keyboard,
+      // Note fields grow with their content; numeric/value fields stay single
+      // line.
+      maxLines: widget.multiline ? null : 1,
+      minLines: widget.multiline ? 1 : null,
+      // Numeric value fields accept only digits, '.' and '-' (no letters or
+      // other symbols) — the free-text note field is exempt.
+      inputFormatters: !widget.multiline && _isNumericKeyboard
+          ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]'))]
+          : null,
+      style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+      decoration: const InputDecoration(
+        isDense: true,
+        border: OutlineInputBorder(),
+      ),
+      onChanged: widget.onChanged,
+    );
+  }
+
+  /// True when the field is a number intent (digits, decimal point, minus) —
+  /// covers [TextInputType.number] and every [TextInputType.numberWithOptions]
+  /// flag combination the editor passes (decimal, signed, both).
+  bool get _isNumericKeyboard {
+    const numeric = <TextInputType>[
+      TextInputType.number,
+      TextInputType.numberWithOptions(),
+      TextInputType.numberWithOptions(decimal: true),
+      TextInputType.numberWithOptions(signed: true),
+      TextInputType.numberWithOptions(decimal: true, signed: true),
+    ];
+    return numeric.contains(widget.keyboard);
+  }
 }
 
 class _Placeholder extends StatelessWidget {
