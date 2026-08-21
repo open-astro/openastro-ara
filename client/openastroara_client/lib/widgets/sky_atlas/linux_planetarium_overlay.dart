@@ -103,7 +103,7 @@ class _LinuxPlanetariumOverlayState
   // is always safe; re-show stays deferred so it honours the isPlanning gate.)
   @override
   void didPushNext() {
-    _applyVisibility(false);   // immediate hide + keeps _lastVisible in sync
+    _applyVisibility(false); // immediate hide + keeps _lastVisible in sync
     setState(() => _routeOnTop = true);
   }
 
@@ -130,8 +130,7 @@ class _LinuxPlanetariumOverlayState
 
   @override
   Widget build(BuildContext context) {
-    final isPlanning =
-        ref.watch(selectedTabIndexProvider) == _planningTabIndex;
+    final isPlanning = ref.watch(selectedTabIndexProvider) == _planningTabIndex;
     final visible = isPlanning && !_routeOnTop;
     // Geometry and visibility can only be read/applied after this frame lays the
     // slot out. Re-push bounds when becoming visible in case the window resized
@@ -142,6 +141,9 @@ class _LinuxPlanetariumOverlayState
       _applyVisibility(visible);
     });
     // Background only — the live sky map is the native webview on top of this.
-    return const ColoredBox(color: AraColors.bgPrimary, child: SizedBox.expand());
+    return const ColoredBox(
+      color: AraColors.bgPrimary,
+      child: SizedBox.expand(),
+    );
   }
 }

@@ -1930,4 +1930,22 @@ const Map<String, Help> helpRegistry = {
           'refocus without a separate sensor.',
     },
   ),
+
+  // ─── Display ───
+  'app.night_mode': Help(
+    key: 'app.night_mode',
+    title: 'Night mode',
+    body:
+        'Turns the whole app red so it doesn\'t wreck your dark adaptation at the eyepiece.\n\n'
+        'Your eyes take 20–30 minutes to fully dark-adapt, and one look at a white screen '
+        'resets that. Deep red light is the one colour your night vision barely responds to, '
+        'so a red display lets you drive the rig between subs without starting the clock over.\n\n'
+        '**Toggling it:** this switch, the moon button beside the equipment chips in the top '
+        'bar, or the **N** key from anywhere in the app (except while you\'re typing in a '
+        'field). The choice is remembered for next launch.\n\n'
+        'The sky map is a native browser view that Ara can\'t paint over, so it gets a matching '
+        'red tint applied inside the map itself.\n\n'
+        'For the deepest red, also turn your monitor\'s brightness right down — a dim red screen '
+        'beats a bright one, and no software filter can undo a backlight at full blast.',
+  ),
 };

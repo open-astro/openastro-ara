@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/app_shell_state.dart';
+import '../state/night_mode_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/notifications/notification_center.dart';
@@ -240,6 +241,30 @@ class _TopEquipmentBar extends StatelessWidget {
               // Per §25.3 device-type order; each chip is live (status dot) +
               // clickable (routes to its Settings panel). See TopEquipmentChips.
               child: TopEquipmentChips(),
+            ),
+          ),
+          // Night mode toggle — sits right beside the equipment chips (the
+          // DOME chip is the last one) so it's reachable in one tap from any
+          // tab; the same as the N hotkey.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Consumer(
+              builder: (context, ref, _) {
+                final night = switch (ref.watch(nightModeProvider)) {
+                  AsyncData(:final value) => value,
+                  _ => false,
+                };
+                return IconButton(
+                  icon: Icon(
+                    night ? Icons.nights_stay : Icons.nights_stay_outlined,
+                    size: 22,
+                    color: night ? AraColors.accentInfo : null,
+                  ),
+                  tooltip: night ? 'Night mode on (N)' : 'Night mode (N)',
+                  onPressed: () =>
+                      ref.read(nightModeProvider.notifier).set(!night),
+                );
+              },
             ),
           ),
           // §61.1 — visible magnifying-glass icon on the right side of the
