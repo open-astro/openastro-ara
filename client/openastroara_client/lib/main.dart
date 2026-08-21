@@ -48,14 +48,19 @@ class OpenAstroAraApp extends ConsumerWidget {
       builder: (context, child) {
         Widget result = child ?? const SizedBox.shrink();
         if (night) {
-          // Night observing filter: keep the red signal, dim green/blue and
-          // lift them into red without washing the whole UI.
+          // Night observing filter: fold every pixel's luminance into the red
+          // channel and zero green and blue outright. Blue/green light is what
+          // actually resets scotopic dark adaptation, so leaking half of it
+          // through would defeat the point. Luminance weights keep the UI
+          // readable — a green "connected" chip stays brighter than a dim
+          // border, so the interface still reads by brightness once hue is
+          // gone.
           result = ColorFiltered(
             colorFilter: const ColorFilter.matrix(<double>[
-              0.9, 0.1, 0.0, 0.0, 0.0, // R
-              0.0, 0.5, 0.0, 0.0, 0.0, // G
-              0.0, 0.0, 0.5, 0.0, 0.0, // B
-              0.0, 0.0, 0.0, 1.0, 0.0, // A
+              0.30, 0.59, 0.11, 0.0, 0.0, // R ← luminance
+              0.00, 0.00, 0.00, 0.0, 0.0, // G
+              0.00, 0.00, 0.00, 0.0, 0.0, // B
+              0.00, 0.00, 0.00, 1.0, 0.0, // A
             ]),
             child: result,
           );

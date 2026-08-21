@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/night_mode_state.dart';
-
 import '../../services/planetarium_overlay.dart';
 import '../../state/app_shell_state.dart';
 import '../../theme/ara_colors.dart';
@@ -57,11 +55,6 @@ class _LinuxPlanetariumOverlayState
     // Load the page once (creates the native webview on the first call), then
     // push the initial geometry after the first layout.
     _overlay.setUrl(widget.url);
-    // Carry any already-active night mode into the native page.
-    _overlay.setNightMode(switch (ref.read(nightModeProvider)) {
-      AsyncData(:final value) => value,
-      _ => false,
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pushBounds();
     });

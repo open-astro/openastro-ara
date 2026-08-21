@@ -132,6 +132,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // channels are loopback HTTP, so the search bar + add-to-sequence keep
       // working against the overlay page exactly as on mac/Windows.
       if (Platform.isLinux) {
+        // StellariumView owns night-mode propagation on every platform: push
+        // the current state before the overlay loads (the native side stores
+        // the flag and re-applies it once the page finishes loading).
+        _applyNightOnWeb(switch (ref.read(nightModeProvider)) {
+          AsyncData(:final value) => value,
+          _ => false,
+        });
         setState(() => _linuxOverlayUrl = url);
         return;
       }

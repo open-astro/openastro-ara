@@ -137,9 +137,9 @@ class AboutPanel extends ConsumerWidget {
   }
 }
 
-/// Settings → System → About — night mode toggle. Also togglable via the `N`
-/// hotkey from anywhere in the app; persisted across launches. The rendering
-/// (red overlay vs red theme) is fixed at build time via NIGHT_MODE_KIND.
+/// Settings → System → About — night mode toggle. Also togglable via the moon
+/// button in the top bar and the `N` hotkey from anywhere in the app;
+/// persisted across launches.
 class _NightModeRow extends ConsumerWidget {
   const _NightModeRow();
 
