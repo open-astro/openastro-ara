@@ -102,6 +102,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     });
     try {
       final result = await fillSiteFromGps(ref);
+      // The device-location fallback can run for ~20s (permission prompt +
+      // getCurrentPosition timeout); the panel may be long gone by now, and
+      // _applyFix reads a provider off `ref`.
+      if (!mounted) return;
       if (result.success) {
         _applyFix(
           result.lat,
@@ -109,7 +113,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           result.alt,
           'Filled from ${result.sourceLabel}. Press Save to persist.',
         );
-      } else if (mounted) {
+      } else {
         setState(() => _gpsStatus = result.message);
       }
     } finally {
