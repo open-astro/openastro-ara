@@ -18,7 +18,6 @@ import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
 import 'state/night_mode_state.dart';
 import 'theme/ara_theme.dart';
-import 'theme/night_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
 void main() {
@@ -37,14 +36,9 @@ class OpenAstroAraApp extends ConsumerWidget {
       AsyncData(:final value) => value,
       _ => false,
     };
-    final overlay = night && isNightModeOverlay;
     return MaterialApp(
       title: 'OpenAstro Ara',
-      // Theme build: a full red M3 theme; overlay build: the normal dark theme
-      // with a red colour filter layered over it in [builder].
-      theme: (night && !isNightModeOverlay)
-          ? buildNightTheme()
-          : buildAraTheme(),
+      theme: buildAraTheme(),
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
@@ -53,7 +47,7 @@ class OpenAstroAraApp extends ConsumerWidget {
       navigatorObservers: [planetariumRouteObserver],
       builder: (context, child) {
         Widget result = child ?? const SizedBox.shrink();
-        if (overlay) {
+        if (night) {
           // Night observing filter: keep the red signal, dim green/blue and
           // lift them into red without washing the whole UI.
           result = ColorFiltered(
