@@ -259,8 +259,7 @@ class _SwitchCard extends ConsumerWidget {
             ),
             const Divider(height: 20, color: AraColors.border),
             if (device.isConnected && device.ports.isNotEmpty)
-              for (final p in device.ports)
-                _PortRow(device: device, port: p)
+              for (final p in device.ports) _PortRow(device: device, port: p)
             else
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -369,7 +368,8 @@ class _PortRowState extends ConsumerState<_PortRow> {
     if (value <= widget.port.min &&
         isThermalSwitchFanPort(widget.device, widget.port)) {
       final refusal = fanOffRefusal(
-          await coolerOnTriState(ref.read(cameraStatusProvider.future)));
+        await coolerOnTriState(ref.read(cameraStatusProvider.future)),
+      );
       if (refusal != null) {
         if (mounted) setState(() => _dragValue = null);
         messenger.showSnackBar(
@@ -579,10 +579,14 @@ String _fmt(double v) =>
 /// its own "Couldn't …" wording.
 String _msg(Object? e) {
   if (e == null) return 'unknown error';
-  if (e is DioException || e is SocketException) {
+  if (e is DioException || e is SocketException || e is StateError) {
     final full = friendlyError(e);
-    final idx = full.indexOf(' — ');
-    return idx >= 0 ? full.substring(idx + 3) : full;
+    // Strip only friendlyError's own generic lead-in. Splitting on the first
+    // ' — ' would also cut a server message that happens to contain one
+    // ('port is locked — stop the sequence first' → 'stop the sequence
+    // first'), throwing away the half that says what went wrong.
+    const lead = "Couldn't do that — ";
+    return full.startsWith(lead) ? full.substring(lead.length) : full;
   }
   return e.toString().replaceFirst('Exception: ', '');
 }
