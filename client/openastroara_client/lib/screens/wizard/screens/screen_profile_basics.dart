@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../models/profile_draft.dart';
-import '../../../state/time_sync_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../util/gps_site_fill.dart';
 import '../wizard_form_kit.dart';
 
 /// §37.1 Screen 1 — Profile name + location.
@@ -33,52 +33,40 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
     _draft = ref.read(wizardControllerProvider).draft;
   }
 
-  /// Pull the server's last GPS fix (§31.3 time-sync state) into the location
-  /// fields. The daemon's USB-GPS worker polls any dongle plugged into the
-  /// server machine, so this works with no mount connected at all.
+  /// Fill the observing site from GPS (§31.3) — a USB GPS dongle on the
+  /// server machine preferred, falling back to this Mac's location when the
+  /// dongle has no fix (internet + fresh fix required). Shared logic in
+  /// [fillSiteFromGps], so profile creation behaves like the Safety → Site
+  /// panel. The daemon's USB-GPS worker polls any dongle on the server, so
+  /// this works with no mount connected at all.
   Future<void> _fillFromGps() async {
-    final api = ref.read(timeSyncApiProvider);
-    if (api == null) {
-      setState(() => _gpsStatus =
-          'Not connected to a server — GPS fixes come from the dongle on the '
-          'server machine.');
-      return;
-    }
+    if (_gpsBusy) return;
     setState(() {
       _gpsBusy = true;
       _gpsStatus = null;
     });
     try {
-      final state = await api.getState();
-      final loc = state.location;
+      final result = await fillSiteFromGps(ref);
       if (!mounted) return;
-      if (loc == null) {
-        setState(() => _gpsStatus =
-            'No GPS fix yet. Plug a USB GPS dongle into the computer running '
-            'Ara Server and give it a minute or two under open sky, then try '
-            'again.');
-        return;
+      if (result.success) {
+        setState(() {
+          // 2-decimal (~1 km) site precision: enough for ephemerides/safety
+          // limits without publishing the observer's exact backyard position.
+          _draft.latitudeDeg = _round2(result.lat);
+          _draft.longitudeDeg = _round2(result.lng);
+          if (result.alt != null) _draft.altitudeMeters = result.alt;
+          // GPS transmits UTC + position, never a timezone — derive the IANA
+          // zone from the coordinates (worldwide polygon lookup, offline). The
+          // NAME stays valid through DST-policy changes (the OS tz database
+          // carries the rules); only boundary redraws would need a package bump.
+          _draft.timezone = tz_map.latLngToTimezoneString(result.lat, result.lng);
+          _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
+          _gpsFill++; // remount the fields so the fill is visible
+          _gpsStatus = 'Filled from ${result.sourceLabel}.';
+        });
+      } else {
+        setState(() => _gpsStatus = result.message);
       }
-      setState(() {
-        // 2-decimal (~1 km) site precision: enough for ephemerides/safety
-        // limits without publishing the observer's exact backyard position.
-        _draft.latitudeDeg = _round2(loc.lat);
-        _draft.longitudeDeg = _round2(loc.lng);
-        if (loc.alt != null) _draft.altitudeMeters = loc.alt;
-        // GPS transmits UTC + position, never a timezone — derive the IANA
-        // zone from the coordinates (worldwide polygon lookup, offline). The
-        // NAME stays valid through DST-policy changes (the OS tz database
-        // carries the rules); only boundary redraws would need a package bump.
-        _draft.timezone = tz_map.latLngToTimezoneString(loc.lat, loc.lng);
-        _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
-        _gpsFill++; // remount the fields so the fill is visible
-        _gpsStatus =
-            'Filled from the server\'s GPS fix (source: ${state.source}).';
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() =>
-          _gpsStatus = 'Couldn\'t read the server\'s GPS state — try again.');
     } finally {
       if (mounted) setState(() => _gpsBusy = false);
     }

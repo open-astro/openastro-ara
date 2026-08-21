@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
-import '../../../state/time_sync_state.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
+import '../../../util/friendly_error.dart';
+import '../../../util/gps_site_fill.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/settings/time_sync_section.dart';
@@ -28,6 +28,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   String? _lastError;
   bool _gpsBusy = false;
   String? _gpsStatus;
+  // Bumped after a GPS fill so the Lat/Long/Elevation/Time-zone rows remount
+  // with the fetched values — a provider-driven rebuild alone leaves the
+  // seeded controllers stale until the panel is reopened.
+  int _gpsFill = 0;
 
   @override
   void initState() {
@@ -87,59 +91,48 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     }
   }
 
-  /// Pull the server's last GPS fix (§31.3 time-sync state) into the site
-  /// fields — same source as the wizard's "Fill from GPS" (a USB dongle on
-  /// the server machine). Values still go through Save to persist.
+  /// Fill the observing site from GPS (§31.3). Preferred: a USB GPS dongle on
+  /// the server machine; fallback: this Mac's own location (internet + fresh
+  /// fix). Shared logic in [fillSiteFromGps]. Values still go through Save.
   Future<void> _fillFromGps() async {
-    final api = ref.read(timeSyncApiProvider);
-    if (api == null) {
-      setState(
-        () => _gpsStatus =
-            'Not connected to a server — GPS fixes come from the dongle on the '
-            'server machine.',
-      );
-      return;
-    }
+    if (_gpsBusy) return;
     setState(() {
       _gpsBusy = true;
       _gpsStatus = null;
     });
     try {
-      final state = await api.getState();
-      final loc = state.location;
-      if (!mounted) return;
-      if (loc == null) {
-        setState(
-          () => _gpsStatus =
-              'No GPS fix yet. Plug a USB GPS dongle into the computer running '
-              'Ara Server and give it a minute or two under open sky, then try '
-              'again.',
+      final result = await fillSiteFromGps(ref);
+      if (result.success) {
+        _applyFix(
+          result.lat,
+          result.lng,
+          result.alt,
+          'Filled from ${result.sourceLabel}. Press Save to persist.',
         );
-        return;
+      } else if (mounted) {
+        setState(() => _gpsStatus = result.message);
       }
-      final n = ref.read(siteSettingsProvider.notifier);
-      // 2-decimal (~1 km) site precision — matches the wizard's GPS fill.
-      n.setLatitudeDeg(_round2(loc.lat));
-      n.setLongitudeDeg(_round2(loc.lng));
-      final alt = loc.alt;
-      if (alt != null) n.setElevationM(alt);
-      // GPS transmits UTC + position, never a timezone — derive the IANA
-      // zone from the coordinates (offline polygon lookup).
-      n.setTimeZone(tz_map.latLngToTimezoneString(loc.lat, loc.lng));
-      _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
-      setState(
-        () => _gpsStatus =
-            'Filled from the server\'s GPS fix (source: ${state.source}). '
-            'Press Save to persist.',
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(
-        () =>
-            _gpsStatus = 'Couldn\'t read the server\'s GPS state — try again.',
-      );
     } finally {
       if (mounted) setState(() => _gpsBusy = false);
+    }
+  }
+
+  /// Writes a fix into the site fields (2-dp ~1 km precision) and derives the
+  /// IANA timezone from the coordinates, then reports [message].
+  void _applyFix(double lat, double lng, double? alt, String message) {
+    final n = ref.read(siteSettingsProvider.notifier);
+    n.setLatitudeDeg(_round2(lat));
+    n.setLongitudeDeg(_round2(lng));
+    if (alt != null) n.setElevationM(alt);
+    // GPS transmits UTC + position, never a timezone — derive the IANA zone
+    // from the coordinates (offline polygon lookup).
+    n.setTimeZone(tz_map.latLngToTimezoneString(lat, lng));
+    _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
+    if (mounted) {
+      setState(() {
+        _gpsStatus = message;
+        _gpsFill++; // remount the location rows so the fetched values show.
+      });
     }
   }
 
@@ -215,6 +208,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         EditableNumberRow(
           label: 'Latitude (°)',
           helpKey: 'safety.site.latitude',
+          key: ValueKey('site-gps-lat-$_gpsFill'),
           currentValue: s.latitudeDeg.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).latitudeDeg.toString(),
@@ -229,6 +223,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         EditableNumberRow(
           label: 'Longitude (°)',
           helpKey: 'safety.site.longitude',
+          key: ValueKey('site-gps-lng-$_gpsFill'),
           currentValue: s.longitudeDeg.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).longitudeDeg.toString(),
@@ -243,6 +238,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         EditableNumberRow(
           label: 'Elevation (m)',
           helpKey: 'safety.site.elevation',
+          key: ValueKey('site-gps-alt-$_gpsFill'),
           currentValue: s.elevationM.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).elevationM.toString(),
@@ -254,6 +250,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         EditableTextRow(
           label: 'Time zone',
           helpKey: 'safety.site.time_zone',
+          key: ValueKey('site-gps-tz-$_gpsFill'),
           currentValue: s.timeZone,
           getCanonical: () => ref.read(siteSettingsProvider).timeZone,
           parse: (v) {

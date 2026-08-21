@@ -6,6 +6,7 @@ import 'package:openastroara/screens/wizard/screens/screen_profile_basics.dart';
 import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
+import 'package:openastroara/util/gps_site_fill.dart';
 
 /// getState() returns a configurable §31.3 state — the wizard's "Fill from
 /// GPS" reads the server's last fix (the USB dongle plugged into the SERVER
@@ -63,12 +64,14 @@ void main() {
     expect(find.text('30.5'), findsOneWidget);
     expect(find.text('-97.75'), findsOneWidget);
     expect(find.text('240.0'), findsOneWidget);
-    expect(find.textContaining('Filled from the server\'s GPS fix'),
+    expect(find.textContaining("Filled from the server's GPS dongle"),
         findsOneWidget);
   });
 
-  testWidgets('no fix yet → dongle-on-the-server hint, fields untouched',
+  testWidgets('no fix yet → Mac fallback unavailable → fields untouched',
       (tester) async {
+    debugMacLocationProvider = () async => null; // Mac locator returns no fix
+    addTearDown(() => debugMacLocationProvider = null);
     final container = await pump(tester,
         api: _FakeTimeSync(const TimeSyncState(synced: false)));
 
@@ -76,18 +79,20 @@ void main() {
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Plug a USB GPS dongle into the computer'),
-        findsOneWidget);
+    expect(find.textContaining('No GPS dongle fix yet'), findsOneWidget);
     expect(container.read(wizardControllerProvider).draft.latitudeDeg, isNull);
   });
 
-  testWidgets('offline → explains fixes come from the server machine',
+  testWidgets('no server + no internet → explains there is no usable GPS',
       (tester) async {
+    debugInternetProbe = () async => false; // offline Mac
+    addTearDown(() => debugInternetProbe = null);
     await pump(tester, api: null);
     await tester.ensureVisible(find.text('Fill from GPS'));
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Not connected to a server'), findsOneWidget);
+    expect(find.textContaining('no internet was detected'), findsOneWidget);
+    expect(find.textContaining('Plug in a GPS dongle'), findsOneWidget);
   });
 
   test('the coordinate→timezone mapping is worldwide, not US-only', () {
