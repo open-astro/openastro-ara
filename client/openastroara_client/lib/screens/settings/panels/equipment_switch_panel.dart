@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +13,7 @@ import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../util/friendly_error.dart';
 import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -569,5 +572,17 @@ class _MessageRow extends StatelessWidget {
 String _fmt(double v) =>
     v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 
-String _msg(Object? e) =>
-    e == null ? 'unknown error' : e.toString().replaceFirst('Exception: ', '');
+/// Human-friendly switch error. Uses [friendlyError], which prefers the
+/// server's own human-readable `detail` (e.g. a 409 "switch ... is not
+/// connected") over raw exception text — and strips friendlyError's
+/// "Couldn't \`action\`" prefix because every call site here already supplies
+/// its own "Couldn't …" wording.
+String _msg(Object? e) {
+  if (e == null) return 'unknown error';
+  if (e is DioException || e is SocketException) {
+    final full = friendlyError(e);
+    final idx = full.indexOf(' — ');
+    return idx >= 0 ? full.substring(idx + 3) : full;
+  }
+  return e.toString().replaceFirst('Exception: ', '');
+}
