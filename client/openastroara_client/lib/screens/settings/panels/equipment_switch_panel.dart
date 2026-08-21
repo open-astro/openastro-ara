@@ -579,7 +579,11 @@ String _fmt(double v) =>
 /// its own "Couldn't …" wording.
 String _msg(Object? e) {
   if (e == null) return 'unknown error';
-  if (e is DioException || e is SocketException || e is StateError) {
+  if (e is DioException ||
+      e is SocketException ||
+      e is FileSystemException ||
+      e is FormatException ||
+      e is StateError) {
     final full = friendlyError(e);
     // Strip only friendlyError's own generic lead-in. Splitting on the first
     // ' — ' would also cut a server message that happens to contain one
