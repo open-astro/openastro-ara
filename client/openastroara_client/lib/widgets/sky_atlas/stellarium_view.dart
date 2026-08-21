@@ -307,10 +307,18 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     ''';
     c.runJavaScript(on ? create : remove);
     if (on && retry) {
-      // The page may not have finished loading; re-apply once shortly after.
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) c.runJavaScript(create);
-      });
+      // The page may not have finished loading yet, and the injected element
+      // only survives if there's a document to attach it to. webview_all's
+      // setters are unimplemented on some platforms (calling one can abort the
+      // whole init — see the controller setup above), so instead of hooking a
+      // load-finished callback, re-apply on a short ladder: a slow first load
+      // otherwise leaves the map untinted until the next toggle. Injecting
+      // twice is a no-op — the script checks for its own element first.
+      for (final after in const [1, 3, 8]) {
+        Future.delayed(Duration(seconds: after), () {
+          if (mounted) c.runJavaScript(create);
+        });
+      }
     }
   }
 
