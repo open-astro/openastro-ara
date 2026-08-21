@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_version.dart';
@@ -15,7 +16,9 @@ import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
+import 'state/night_mode_state.dart';
 import 'theme/ara_theme.dart';
+import 'theme/night_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
 void main() {
@@ -25,23 +28,60 @@ void main() {
 /// The planetarium renders in the platform's native webview (`webview_all`), which
 /// the OS tears down with the process — so there's no CEF/Chromium subprocess tree
 /// to shut down on exit, and the app needs no exit-lifecycle hook.
-class OpenAstroAraApp extends StatelessWidget {
+class OpenAstroAraApp extends ConsumerWidget {
   const OpenAstroAraApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final night = switch (ref.watch(nightModeProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    };
+    final overlay = night && isNightModeOverlay;
     return MaterialApp(
       title: 'OpenAstro Ara',
-      theme: buildAraTheme(),
+      // Theme build: a full red M3 theme; overlay build: the normal dark theme
+      // with a red colour filter layered over it in [builder].
+      theme: (night && !isNightModeOverlay) ? buildNightTheme() : buildAraTheme(),
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
       // The Linux planetarium overlay subscribes to this so the native GTK
       // webview hides when a route is pushed over the shell (no-op elsewhere).
       navigatorObservers: [planetariumRouteObserver],
-      home: const _RootRouter(),
+      builder: (context, child) {
+        Widget result = child ?? const SizedBox.shrink();
+        if (overlay) {
+          // Night observing filter: keep the red signal, dim green/blue and
+          // lift them into red without washing the whole UI.
+          result = ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              0.9, 0.1, 0.0, 0.0, 0.0, // R
+              0.0, 0.5, 0.0, 0.0, 0.0, // G
+              0.0, 0.0, 0.5, 0.0, 0.0, // B
+              0.0, 0.0, 0.0, 1.0, 0.0, // A
+            ]),
+            child: result,
+          );
+        }
+        return result;
+      },
+      home: _withNightHotkey(ref, const _RootRouter()),
     );
   }
+}
+
+/// Wraps the app root so `N` toggles night mode from anywhere (press & the
+/// whole UI switches). The [Focus] gives the shortcut a target to receive keys.
+Widget _withNightHotkey(WidgetRef ref, Widget child) {
+  return CallbackShortcuts(
+    bindings: <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.keyN): () {
+        ref.read(nightModeProvider.notifier).toggle();
+      },
+    },
+    child: Focus(autofocus: true, child: child),
+  );
 }
 
 /// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the

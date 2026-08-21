@@ -10,6 +10,7 @@ import '../../services/dso_catalog_service.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
+import '../../state/night_mode_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sky_atlas/site_location_state.dart';
@@ -141,6 +142,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final controller = wva.WebViewController()..loadRequest(Uri.parse(url));
         if (!mounted) return;
         setState(() => _controller = controller);
+        // Apply any already-active night mode once the Stellarium page is up.
+        _applyNightOnWeb(
+          switch (ref.read(nightModeProvider)) {
+            AsyncData(:final value) => value,
+            _ => false,
+          },
+          retry: true,
+        );
       } catch (e, st) {
         debugPrint('StellariumView: webview init failed: $e\n$st');
         if (mounted) setState(() => _unavailable = true);
@@ -267,6 +276,32 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // panel is now the Tonight's Sky UI on every platform.
   void _toggleTonight() => ref.read(skyAtlasModeProvider.notifier).toggle();
 
+  // Night mode for the sky map. Flutter paints can't cover a native WebView, so
+  // we inject (or remove) a red tint layer into the Stellarium page — matching
+  // the overlay build's filter. Best-effort, fire-and-forget.
+  void _applyNightOnWeb(bool on, {bool retry = false}) {
+    final c = _controller;
+    if (c == null) return;
+    const create = r'''
+      ;(function(){
+        var el=document.getElementById('ara-night');
+        if(!el){ el=document.createElement('div'); el.id='ara-night';
+          el.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483647;mix-blend-mode:multiply;background:rgba(255,0,0,0.35);';
+          document.body.appendChild(el); }
+      })();
+    ''';
+    const remove = r'''
+      ;(function(){var el=document.getElementById('ara-night'); if(el) el.remove();})();
+    ''';
+    c.runJavaScript(on ? create : remove);
+    if (on && retry) {
+      // The page may not have finished loading; re-apply once shortly after.
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) c.runJavaScript(create);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_unavailable) return const _Unavailable();
@@ -284,6 +319,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // forwarded command for a fresh one. (updateShouldNotify ignores the null,
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
+    });
+
+    // Night mode for the sky map: a Flutter overlay can't paint over the native
+    // WebView, so drive a red tint directly inside the Stellarium page instead.
+    ref.listen(nightModeProvider, (_, next) {
+      _applyNightOnWeb(
+        switch (next) { AsyncData(:final value) => value, _ => false },
+      );
     });
 
     final tonightOpen =
