@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,52 +28,65 @@ class _FakeSavedServerService implements SavedServerService {
 
 class _FakeSwitchApi implements SwitchClient {
   final removed = <String>[];
-  _FakeSwitchApi(this.devices);
+  _FakeSwitchApi(this.devices, {this.setValueError});
   List<SwitchDevice> devices;
   final List<String> calls = [];
+
+  /// Thrown by [setValue] when set, to exercise the error copy.
+  final Object? setValueError;
 
   @override
   Future<List<SwitchDevice>> getAll() async => devices;
   @override
-  Future<void> connect(DiscoveredDevice device) async => calls.add('connect:${device.alpacaDeviceNumber}');
+  Future<void> connect(DiscoveredDevice device) async =>
+      calls.add('connect:${device.alpacaDeviceNumber}');
   @override
   Future<void> reconnect() async => calls.add("reconnect");
 
   @override
-  Future<void> disconnect(String deviceId) async => calls.add('disconnect:$deviceId');
+  Future<void> disconnect(String deviceId) async =>
+      calls.add('disconnect:$deviceId');
 
   @override
   Future<void> remove(String deviceId) async => removed.add(deviceId);
   @override
-  Future<void> setValue({required String deviceId, required int portId, required double value}) async =>
-      calls.add('setValue:$deviceId:$portId=$value');
+  Future<void> setValue({
+    required String deviceId,
+    required int portId,
+    required double value,
+  }) async {
+    calls.add('setValue:$deviceId:$portId=$value');
+    if (setValueError != null) throw setValueError!;
+  }
+
   @override
   void close() {}
 }
 
-SwitchDevice _device(List<SwitchPort> ports,
-        {SwitchConnectionState state = SwitchConnectionState.connected}) =>
-    SwitchDevice(
-      deviceId: 'sw-0',
-      alpacaDeviceNumber: 0,
-      name: 'PowerBox',
-      connectionState: state,
-      ports: ports,
-    );
+SwitchDevice _device(
+  List<SwitchPort> ports, {
+  SwitchConnectionState state = SwitchConnectionState.connected,
+}) => SwitchDevice(
+  deviceId: 'sw-0',
+  alpacaDeviceNumber: 0,
+  name: 'PowerBox',
+  connectionState: state,
+  ports: ports,
+);
 
 /// Minimal connected camera with the given cooler state (for the fan-off
 /// interlock tests).
 CameraStatus _camera({required bool coolerOn}) => CameraStatus(
-      deviceId: 'cam-2',
-      name: 'ATR2600M',
-      connectionState: EquipmentConnectionState.connected,
-      capabilities: null,
-      runtimeState: 'idle',
-      ccdTemperature: 17.9,
-      coolerPowerPct: 0,
-      coolerOn: coolerOn,
-      exposureProgressPct: null,
-    );
+  deviceId: 'cam-2',
+  name: 'ATR2600M',
+  connectionState: EquipmentConnectionState.connected,
+  capabilities: null,
+  runtimeState: 'idle',
+  ccdTemperature: 17.9,
+  coolerPowerPct: 0,
+  coolerOn: coolerOn,
+  exposureProgressPct: null,
+);
 
 class _FixedCameraNotifier extends CameraStatusNotifier {
   _FixedCameraNotifier(this._status);
@@ -81,45 +95,63 @@ class _FixedCameraNotifier extends CameraStatusNotifier {
   Future<CameraStatus?> build() async => _status;
 }
 
-Future<_FakeSwitchApi> _pump(WidgetTester tester, List<SwitchDevice> devices,
-    {CameraStatus? camera}) async {
-  final api = _FakeSwitchApi(devices);
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      serverLinkUpProvider.overrideWith((ref) => true),
-      savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-      switchApiFactoryProvider.overrideWithValue((_) => api),
-      cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
-    ],
-    child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
-  ));
+Future<_FakeSwitchApi> _pump(
+  WidgetTester tester,
+  List<SwitchDevice> devices, {
+  CameraStatus? camera,
+  Object? setValueError,
+}) async {
+  final api = _FakeSwitchApi(devices, setValueError: setValueError);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+        ),
+        switchApiFactoryProvider.overrideWithValue((_) => api),
+        cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
+    ),
+  );
   await tester.pumpAndSettle();
   return api;
 }
 
 void main() {
-  testWidgets('a connecting switch settles to connected via the poll', (tester) async {
+  testWidgets('a connecting switch settles to connected via the poll', (
+    tester,
+  ) async {
     // The daemon's connect is 202 + background, so the first read shows `connecting`.
     // The panel polls while anything is connecting; once the daemon finishes, the
     // card must settle to Connected without the user re-opening the panel.
-    final api = _FakeSwitchApi([_device(const [], state: SwitchConnectionState.connecting)]);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        serverLinkUpProvider.overrideWith((ref) => true),
-        savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-        switchApiFactoryProvider.overrideWithValue((_) => api),
-      ],
-      child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
-    ));
+    final api = _FakeSwitchApi([
+      _device(const [], state: SwitchConnectionState.connecting),
+    ]);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          switchApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
+      ),
+    );
     await tester.pump(); // build
     await tester.pump(); // resolve the initial getAll
     expect(find.text('Connecting'), findsOneWidget);
 
     // Daemon finished connecting in the background.
     api.devices = [_device(const [], state: SwitchConnectionState.connected)];
-    await tester.pump(const Duration(milliseconds: 1600)); // fire the settle-poll tick → refresh
+    await tester.pump(
+      const Duration(milliseconds: 1600),
+    ); // fire the settle-poll tick → refresh
     await tester.pump(); // resolve the refresh getAll
     expect(find.text('Connected'), findsOneWidget);
     expect(find.text('Connecting'), findsNothing);
@@ -131,11 +163,13 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Add switch'), findsOneWidget);
   });
 
-  testWidgets('offers Reconnect when no switch is connected (post power-cycle)',
-      (tester) async {
-    await _pump(tester, const []);
-    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
-  });
+  testWidgets(
+    'offers Reconnect when no switch is connected (post power-cycle)',
+    (tester) async {
+      await _pump(tester, const []);
+      expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+    },
+  );
 
   testWidgets('hides Reconnect while a switch is connected', (tester) async {
     // Guard from review: reconnectAll re-dispatches every remembered switch, so
@@ -146,15 +180,18 @@ void main() {
   });
 
   testWidgets('hides Reconnect while a switch is connecting', (tester) async {
-    await _pump(tester,
-        [_device(const [], state: SwitchConnectionState.connecting)]);
+    await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.connecting),
+    ]);
     expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);
   });
 
-  testWidgets('offers Reconnect when a remembered switch is in error',
-      (tester) async {
-    await _pump(
-        tester, [_device(const [], state: SwitchConnectionState.error)]);
+  testWidgets('offers Reconnect when a remembered switch is in error', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.error),
+    ]);
     expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
   });
 
@@ -168,9 +205,30 @@ void main() {
   testWidgets('renders a connected switch with its ports', (tester) async {
     await _pump(tester, [
       _device(const [
-        SwitchPort(id: 0, name: 'Dew A', value: 1, min: 0, max: 1, canWrite: true),
-        SwitchPort(id: 1, name: 'PWM', value: 40, min: 0, max: 100, canWrite: true),
-        SwitchPort(id: 2, name: 'Volts', value: 12, min: 0, max: 30, canWrite: false),
+        SwitchPort(
+          id: 0,
+          name: 'Dew A',
+          value: 1,
+          min: 0,
+          max: 1,
+          canWrite: true,
+        ),
+        SwitchPort(
+          id: 1,
+          name: 'PWM',
+          value: 40,
+          min: 0,
+          max: 100,
+          canWrite: true,
+        ),
+        SwitchPort(
+          id: 2,
+          name: 'Volts',
+          value: 12,
+          min: 0,
+          max: 30,
+          canWrite: false,
+        ),
       ]),
     ]);
     expect(find.text('PowerBox'), findsOneWidget);
@@ -178,8 +236,10 @@ void main() {
     expect(find.text('Dew A'), findsOneWidget); // boolean → toggle
     // Scope to the switch Card so the panel's "Auto-connect on boot" toggle
     // (a separate Switch at the top of the panel) isn't matched.
-    expect(find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
-        findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+      findsOneWidget,
+    );
     expect(find.text('PWM'), findsOneWidget); // value → slider
     expect(find.byType(Slider), findsOneWidget);
     expect(find.text('Volts'), findsOneWidget); // read-only → text value
@@ -187,88 +247,201 @@ void main() {
 
   testWidgets('toggling a boolean port writes its value', (tester) async {
     final api = await _pump(tester, [
-      _device(const [SwitchPort(id: 0, name: 'Dew A', value: 0, min: 0, max: 1, canWrite: true)]),
+      _device(const [
+        SwitchPort(
+          id: 0,
+          name: 'Dew A',
+          value: 0,
+          min: 0,
+          max: 1,
+          canWrite: true,
+        ),
+      ]),
     ]);
-    await tester.tap(find.descendant(
-        of: find.byType(Card), matching: find.byType(Switch)));
+    await tester.tap(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+    );
     await tester.pumpAndSettle();
     expect(api.calls, contains('setValue:sw-0:0=1.0'));
+  });
+
+  // The panel's own "Couldn't …" wording already leads the sentence, so the
+  // mapper strips friendlyError's generic lead-in — and only that. A server
+  // message is shown whole, em-dash and all.
+  testWidgets("a write failure shows the server's own words, not a Dio dump", (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      [
+        _device(const [
+          SwitchPort(
+            id: 0,
+            name: 'Dew A',
+            value: 0,
+            min: 0,
+            max: 1,
+            canWrite: true,
+          ),
+        ]),
+      ],
+      setValueError: DioException(
+        requestOptions: RequestOptions(path: '/switch'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/switch'),
+          statusCode: 409,
+          data: const {'detail': "port is locked — stop the sequence first"},
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+    await tester.tap(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text("Couldn't set Dew A: port is locked — stop the sequence first"),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an unreachable rig drops the generic lead-in', (tester) async {
+    await _pump(
+      tester,
+      [
+        _device(const [
+          SwitchPort(
+            id: 0,
+            name: 'Dew A',
+            value: 0,
+            min: 0,
+            max: 1,
+            canWrite: true,
+          ),
+        ]),
+      ],
+      setValueError: DioException(
+        requestOptions: RequestOptions(path: '/switch'),
+        type: DioExceptionType.connectionError,
+      ),
+    );
+    await tester.tap(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining("Couldn't set Dew A: your rig didn't answer"),
+      findsOneWidget,
+    );
+    expect(find.textContaining("Couldn't do that"), findsNothing);
   });
 
   // §25.5.6 — the fan-off interlock must also cover this generic panel, not
   // just the FanSwitchRow in Settings → Camera (both reach the same port).
   SwitchDevice thermalSwitch({double fanValue = 1.0}) => SwitchDevice(
+    deviceId: 'sw-1',
+    alpacaDeviceNumber: 1,
+    name: 'ToupTek Thermal Switch',
+    connectionState: SwitchConnectionState.connected,
+    ports: [
+      SwitchPort(
+        id: 0,
+        name: 'Fan',
+        value: fanValue,
+        min: 0,
+        max: 1,
+        canWrite: true,
+      ),
+    ],
+  );
+
+  testWidgets('refuses a Thermal-Switch fan-off while the cooler is cooling', (
+    tester,
+  ) async {
+    final api = await _pump(tester, [
+      thermalSwitch(),
+    ], camera: _camera(coolerOn: true));
+    await tester.tap(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('damage the camera'), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
+  });
+
+  testWidgets('allows a Thermal-Switch fan-off with no camera connected '
+      '(resolved-null status = no TEC this client started)', (tester) async {
+    final api = await _pump(tester, [thermalSwitch()]);
+    await tester.tap(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+    );
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('setValue:sw-1:0=0.0'));
+  });
+
+  testWidgets(
+    'refuses dragging a PWM Fan slider to its true off (min != 0) while '
+    'cooling — the interlock is range-aware, not a fixed 0.5 threshold',
+    (tester) async {
+      final pwmThermal = SwitchDevice(
         deviceId: 'sw-1',
         alpacaDeviceNumber: 1,
         name: 'ToupTek Thermal Switch',
         connectionState: SwitchConnectionState.connected,
         ports: [
           SwitchPort(
-              id: 0, name: 'Fan', value: fanValue, min: 0, max: 1, canWrite: true),
+            id: 0,
+            name: 'Fan',
+            value: 50,
+            min: 10,
+            max: 100,
+            canWrite: true,
+          ),
         ],
       );
+      final api = await _pump(tester, [
+        pwmThermal,
+      ], camera: _camera(coolerOn: true));
+      await tester.drag(find.byType(Slider), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('damage the camera'), findsOneWidget);
+      expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
+    },
+  );
 
-  testWidgets('refuses a Thermal-Switch fan-off while the cooler is cooling',
-      (tester) async {
-    final api = await _pump(tester, [thermalSwitch()],
-        camera: _camera(coolerOn: true));
-    await tester.tap(find.descendant(
-        of: find.byType(Card), matching: find.byType(Switch)));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('damage the camera'), findsOneWidget);
-    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
-  });
-
-  testWidgets(
-      'allows a Thermal-Switch fan-off with no camera connected '
-      '(resolved-null status = no TEC this client started)', (tester) async {
-    final api = await _pump(tester, [thermalSwitch()]);
-    await tester.tap(find.descendant(
-        of: find.byType(Card), matching: find.byType(Switch)));
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('setValue:sw-1:0=0.0'));
-  });
-
-  testWidgets(
-      'refuses dragging a PWM Fan slider to its true off (min != 0) while '
-      'cooling — the interlock is range-aware, not a fixed 0.5 threshold',
-      (tester) async {
-    final pwmThermal = SwitchDevice(
-      deviceId: 'sw-1',
-      alpacaDeviceNumber: 1,
-      name: 'ToupTek Thermal Switch',
-      connectionState: SwitchConnectionState.connected,
-      ports: [
-        SwitchPort(
-            id: 0, name: 'Fan', value: 50, min: 10, max: 100, canWrite: true),
-      ],
+  testWidgets('allows a Thermal-Switch fan-off once the cooler is off', (
+    tester,
+  ) async {
+    final api = await _pump(tester, [
+      thermalSwitch(),
+    ], camera: _camera(coolerOn: false));
+    await tester.tap(
+      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
     );
-    final api =
-        await _pump(tester, [pwmThermal], camera: _camera(coolerOn: true));
-    await tester.drag(find.byType(Slider), const Offset(-600, 0));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('damage the camera'), findsOneWidget);
-    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
-  });
-
-  testWidgets('allows a Thermal-Switch fan-off once the cooler is off',
-      (tester) async {
-    final api = await _pump(tester, [thermalSwitch()],
-        camera: _camera(coolerOn: false));
-    await tester.tap(find.descendant(
-        of: find.byType(Card), matching: find.byType(Switch)));
     await tester.pumpAndSettle();
     expect(api.calls, contains('setValue:sw-1:0=0.0'));
   });
 
-  testWidgets('a writable port with degenerate bounds (min==max) shows no slider', (tester) async {
-    await _pump(tester, [
-      _device(const [SwitchPort(id: 0, name: 'Bad', value: 5, min: 5, max: 5, canWrite: true)]),
-    ]);
-    // Must not crash on the Slider's min < max assert — falls back to read-only.
-    expect(find.byType(Slider), findsNothing);
-    expect(find.text('Bad'), findsOneWidget);
-  });
+  testWidgets(
+    'a writable port with degenerate bounds (min==max) shows no slider',
+    (tester) async {
+      await _pump(tester, [
+        _device(const [
+          SwitchPort(
+            id: 0,
+            name: 'Bad',
+            value: 5,
+            min: 5,
+            max: 5,
+            canWrite: true,
+          ),
+        ]),
+      ]);
+      // Must not crash on the Slider's min < max assert — falls back to read-only.
+      expect(find.byType(Slider), findsNothing);
+      expect(find.text('Bad'), findsOneWidget);
+    },
+  );
 
   testWidgets('disconnect targets the device', (tester) async {
     final api = await _pump(tester, [_device(const [])]);
@@ -277,8 +450,9 @@ void main() {
     expect(api.calls, contains('disconnect:sw-0'));
   });
 
-  testWidgets('a disconnected switch shows Remove; confirm calls the API',
-      (tester) async {
+  testWidgets('a disconnected switch shows Remove; confirm calls the API', (
+    tester,
+  ) async {
     final client = await _pump(tester, [
       const SwitchDevice(
         deviceId: 'dead-1',
@@ -297,8 +471,9 @@ void main() {
     expect(client.removed, contains('dead-1'));
   });
 
-  testWidgets('a connected switch offers no Remove (disconnect first)',
-      (tester) async {
+  testWidgets('a connected switch offers no Remove (disconnect first)', (
+    tester,
+  ) async {
     await _pump(tester, [
       const SwitchDevice(
         deviceId: 'live-1',

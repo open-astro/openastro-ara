@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +13,7 @@ import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../util/friendly_error.dart';
 import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -256,8 +259,7 @@ class _SwitchCard extends ConsumerWidget {
             ),
             const Divider(height: 20, color: AraColors.border),
             if (device.isConnected && device.ports.isNotEmpty)
-              for (final p in device.ports)
-                _PortRow(device: device, port: p)
+              for (final p in device.ports) _PortRow(device: device, port: p)
             else
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -366,7 +368,8 @@ class _PortRowState extends ConsumerState<_PortRow> {
     if (value <= widget.port.min &&
         isThermalSwitchFanPort(widget.device, widget.port)) {
       final refusal = fanOffRefusal(
-          await coolerOnTriState(ref.read(cameraStatusProvider.future)));
+        await coolerOnTriState(ref.read(cameraStatusProvider.future)),
+      );
       if (refusal != null) {
         if (mounted) setState(() => _dragValue = null);
         messenger.showSnackBar(
@@ -569,5 +572,25 @@ class _MessageRow extends StatelessWidget {
 String _fmt(double v) =>
     v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 
-String _msg(Object? e) =>
-    e == null ? 'unknown error' : e.toString().replaceFirst('Exception: ', '');
+/// Human-friendly switch error. Uses [friendlyError], which prefers the
+/// server's own human-readable `detail` (e.g. a 409 "switch ... is not
+/// connected") over raw exception text — and strips friendlyError's
+/// "Couldn't \`action\`" prefix because every call site here already supplies
+/// its own "Couldn't …" wording.
+String _msg(Object? e) {
+  if (e == null) return 'unknown error';
+  if (e is DioException ||
+      e is SocketException ||
+      e is FileSystemException ||
+      e is FormatException ||
+      e is StateError) {
+    final full = friendlyError(e);
+    // Strip only friendlyError's own generic lead-in. Splitting on the first
+    // ' — ' would also cut a server message that happens to contain one
+    // ('port is locked — stop the sequence first' → 'stop the sequence
+    // first'), throwing away the half that says what went wrong.
+    const lead = "Couldn't do that — ";
+    return full.startsWith(lead) ? full.substring(lead.length) : full;
+  }
+  return e.toString().replaceFirst('Exception: ', '');
+}
