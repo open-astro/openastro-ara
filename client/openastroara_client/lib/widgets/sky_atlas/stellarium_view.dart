@@ -316,7 +316,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // twice is a no-op — the script checks for its own element first.
       for (final after in const [1, 3, 8]) {
         Future.delayed(Duration(seconds: after), () {
-          if (mounted) c.runJavaScript(create);
+          if (!mounted) return;
+          // Night mode may have been switched off inside the ladder's window —
+          // re-injecting then would put the tint back with nothing to remove it.
+          final stillOn = switch (ref.read(nightModeProvider)) {
+            AsyncData(:final value) => value,
+            _ => false,
+          };
+          if (stillOn) c.runJavaScript(create);
         });
       }
     }
