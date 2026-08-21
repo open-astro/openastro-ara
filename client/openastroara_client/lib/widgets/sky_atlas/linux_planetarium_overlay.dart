@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/night_mode_state.dart';
+
 import '../../services/planetarium_overlay.dart';
 import '../../state/app_shell_state.dart';
 import '../../theme/ara_colors.dart';
@@ -55,6 +57,11 @@ class _LinuxPlanetariumOverlayState
     // Load the page once (creates the native webview on the first call), then
     // push the initial geometry after the first layout.
     _overlay.setUrl(widget.url);
+    // Carry any already-active night mode into the native page.
+    _overlay.setNightMode(switch (ref.read(nightModeProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pushBounds();
     });
@@ -103,7 +110,7 @@ class _LinuxPlanetariumOverlayState
   // is always safe; re-show stays deferred so it honours the isPlanning gate.)
   @override
   void didPushNext() {
-    _applyVisibility(false);   // immediate hide + keeps _lastVisible in sync
+    _applyVisibility(false); // immediate hide + keeps _lastVisible in sync
     setState(() => _routeOnTop = true);
   }
 
@@ -130,8 +137,7 @@ class _LinuxPlanetariumOverlayState
 
   @override
   Widget build(BuildContext context) {
-    final isPlanning =
-        ref.watch(selectedTabIndexProvider) == _planningTabIndex;
+    final isPlanning = ref.watch(selectedTabIndexProvider) == _planningTabIndex;
     final visible = isPlanning && !_routeOnTop;
     // Geometry and visibility can only be read/applied after this frame lays the
     // slot out. Re-push bounds when becoming visible in case the window resized
@@ -142,6 +148,9 @@ class _LinuxPlanetariumOverlayState
       _applyVisibility(visible);
     });
     // Background only — the live sky map is the native webview on top of this.
-    return const ColoredBox(color: AraColors.bgPrimary, child: SizedBox.expand());
+    return const ColoredBox(
+      color: AraColors.bgPrimary,
+      child: SizedBox.expand(),
+    );
   }
 }

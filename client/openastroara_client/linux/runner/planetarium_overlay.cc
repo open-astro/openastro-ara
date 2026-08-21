@@ -36,6 +36,9 @@ struct OverlayState {
   // captured from the first setUrl. Navigations are locked to this — not merely
   // "any 127.0.0.1 port" — so the page can't be steered onto another local service.
   gchar* allowed_origin = nullptr;
+  // Night mode is a page-level tint; remembered so a page (re)load can
+  // re-apply it, and so a toggle before the first setUrl isn't lost.
+  bool night = false;
 };
 
 // Read a numeric arg that Dart may encode as float or int.
@@ -120,11 +123,52 @@ gboolean decide_policy_cb(WebKitWebView* web_view,
   return TRUE;  // handled.
 }
 
+// Night mode (§ red display): Flutter can't paint over this native surface, so
+// the red tint is injected into the page itself — the same fixed-position
+// multiply layer the embedded webviews get from stellarium_view.dart. The
+// script is a constant here rather than passed over the channel: this webview
+// runs JS unsandboxed, so the channel never accepts caller-supplied code.
+const char* kNightOnJs =
+    ";(function(){"
+    "var el=document.getElementById('ara-night');"
+    "if(!el){el=document.createElement('div');el.id='ara-night';"
+    "el.style.cssText='position:fixed;inset:0;pointer-events:none;"
+    "z-index:2147483647;mix-blend-mode:multiply;background:rgba(255,0,0,0.35);';"
+    "document.body.appendChild(el);}"
+    "})();";
+const char* kNightOffJs =
+    ";(function(){var el=document.getElementById('ara-night');"
+    "if(el)el.remove();})();";
+
+void run_js(WebKitWebView* view, const char* script) {
+  if (view == nullptr) return;
+#if WEBKIT_CHECK_VERSION(2, 40, 0)
+  webkit_web_view_evaluate_javascript(view, script, -1, nullptr, nullptr,
+                                      nullptr, nullptr, nullptr);
+#else
+  webkit_web_view_run_javascript(view, script, nullptr, nullptr, nullptr);
+#endif
+}
+
+// Re-apply the page tint after every load: the injected <div> dies with the
+// document, so a reload (or the very first page, if night mode was already on
+// at startup) would otherwise come back white.
+void load_changed_cb(WebKitWebView* view,
+                     WebKitLoadEvent event,
+                     gpointer user_data) {
+  OverlayState* state = static_cast<OverlayState*>(user_data);
+  if (event == WEBKIT_LOAD_FINISHED && state->night) {
+    run_js(view, kNightOnJs);
+  }
+}
+
 void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
   g_signal_connect(state->webview, "decide-policy",
                    G_CALLBACK(decide_policy_cb), state);
+  g_signal_connect(state->webview, "load-changed",
+                   G_CALLBACK(load_changed_cb), state);
 
   // Wrap the webview in a windowed GtkEventBox: the event box owns a GdkWindow
   // we can promote to a native X11 subwindow (the webview itself is windowless
@@ -227,6 +271,16 @@ void method_call_cb(FlMethodChannel* channel,
         v != nullptr && fl_value_get_type(v) == FL_VALUE_TYPE_BOOL &&
         fl_value_get_bool(v);
     apply_visibility(state);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "setNightMode") == 0) {
+    FlValue* v = (args != nullptr &&
+                  fl_value_get_type(args) == FL_VALUE_TYPE_MAP)
+                     ? fl_value_lookup_string(args, "night")
+                     : nullptr;
+    state->night =
+        v != nullptr && fl_value_get_type(v) == FL_VALUE_TYPE_BOOL &&
+        fl_value_get_bool(v);
+    run_js(state->webview, state->night ? kNightOnJs : kNightOffJs);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());

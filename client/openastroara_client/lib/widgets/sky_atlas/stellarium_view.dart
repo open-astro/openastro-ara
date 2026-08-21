@@ -8,6 +8,7 @@ import 'package:webview_all/webview_all.dart' as wva;
 
 import '../../services/dso_catalog_service.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
+import '../../services/planetarium_overlay.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
 import '../../state/night_mode_state.dart';
@@ -143,13 +144,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         if (!mounted) return;
         setState(() => _controller = controller);
         // Apply any already-active night mode once the Stellarium page is up.
-        _applyNightOnWeb(
-          switch (ref.read(nightModeProvider)) {
-            AsyncData(:final value) => value,
-            _ => false,
-          },
-          retry: true,
-        );
+        _applyNightOnWeb(switch (ref.read(nightModeProvider)) {
+          AsyncData(:final value) => value,
+          _ => false,
+        }, retry: true);
       } catch (e, st) {
         debugPrint('StellariumView: webview init failed: $e\n$st');
         if (mounted) setState(() => _unavailable = true);
@@ -280,6 +278,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // we inject (or remove) a red tint layer into the Stellarium page — matching
   // the overlay build's filter. Best-effort, fire-and-forget.
   void _applyNightOnWeb(bool on, {bool retry = false}) {
+    // Linux renders the map in the native GTK overlay, which has no
+    // WebViewController — the tint goes over its method channel instead (the
+    // native side owns the same script and re-applies it on every page load).
+    if (Platform.isLinux) {
+      const PlanetariumOverlay().setNightMode(on);
+      return;
+    }
     final c = _controller;
     if (c == null) return;
     const create = r'''
@@ -324,9 +329,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // Night mode for the sky map: a Flutter overlay can't paint over the native
     // WebView, so drive a red tint directly inside the Stellarium page instead.
     ref.listen(nightModeProvider, (_, next) {
-      _applyNightOnWeb(
-        switch (next) { AsyncData(:final value) => value, _ => false },
-      );
+      _applyNightOnWeb(switch (next) {
+        AsyncData(:final value) => value,
+        _ => false,
+      });
     });
 
     final tonightOpen =
