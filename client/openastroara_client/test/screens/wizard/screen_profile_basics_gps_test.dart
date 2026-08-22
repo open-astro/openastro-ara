@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
@@ -101,6 +102,30 @@ void main() {
             ? 'this PC'
             : 'this computer';
     expect(find.textContaining(expected), findsOneWidget);
+  });
+
+  testWidgets('a fix that lands after a manual edit does not overwrite it',
+      (tester) async {
+    // Hold the fix open, type a latitude while it's in flight, then release.
+    final gate = Completer<void>();
+    debugMacLocationProvider = () async {
+      await gate.future;
+      return (lat: 30.5, lng: -97.75, alt: 240.0);
+    };
+    addTearDown(() => debugMacLocationProvider = null);
+    final container = await pump(tester, api: null);
+
+    await tester.ensureVisible(find.text('Fill from GPS'));
+    await tester.tap(find.text('Fill from GPS'));
+    await tester.pump();
+
+    final draft = container.read(wizardControllerProvider).draft;
+    draft.latitudeDeg = 12.34; // the user types while the fetch is running
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    expect(draft.latitudeDeg, 12.34, reason: 'the typed value must survive');
+    expect(find.textContaining('not overwritten'), findsOneWidget);
   });
 
   test('the coordinate→timezone mapping is worldwide, not US-only', () {

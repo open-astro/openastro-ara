@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -156,8 +157,17 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
       alt: altitude,
       sourceLabel: '$_thisDevice\'s own location',
     );
+  } on TimeoutException {
+    // Permission was already granted by this point, so blaming permissions
+    // here sends the user to the wrong settings pane. Desktop location is
+    // network-positioned: no network, no fix.
+    return GpsSiteFill.failed(
+      '$baseNote $_thisDevice couldn\'t fix a position in time. Desktop '
+      'location needs a network connection — connect to one, or plug a USB '
+      'GPS dongle into the machine running Ara Server.',
+    );
   } catch (_) {
-    // Any platform failure (e.g. no geolocator registered) → a clear message
+    // Any other platform failure (e.g. no geolocator backend) → a clear message
     // that tells the user exactly how to make the Mac location available.
     return GpsSiteFill.failed(
       '$baseNote $_thisDevice couldn\'t provide a location. $_permissionHint',
