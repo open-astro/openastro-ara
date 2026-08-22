@@ -42,6 +42,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>OpenAstro Ara scans your local network to find OpenAstro Ara servers running on a Raspberry Pi or similar.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>OpenAstro Ara uses your Mac's location to fill the observing site when a GPS dongle isn't connected.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
