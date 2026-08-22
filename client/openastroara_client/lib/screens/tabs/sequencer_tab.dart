@@ -193,59 +193,19 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     // pauses/resumes — the lifecycle keys drive the toolbar's OWN fenced path
     // (runSequenceLifecycle: busy re-entrancy guard + state re-read), gated by
     // the same conditions as its buttons. Abort stays mouse-only: destructive,
-    // behind its confirm dialog. All guarded to skip while a text field has
-    // focus so typing in the inspector never fires tree/run actions.
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.arrowUp): () {
-          if (_focusInFieldEditor) return;
-          ref.read(sequenceEditorProvider.notifier).selectAdjacent(next: false);
-        },
-        const SingleActivator(LogicalKeyboardKey.arrowDown): () {
-          if (_focusInFieldEditor) return;
-          ref.read(sequenceEditorProvider.notifier).selectAdjacent(next: true);
-        },
-        const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
-            _runOrResumeKey,
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true):
-            _runOrResumeKey,
-        const SingleActivator(LogicalKeyboardKey.space): _spaceKey,
-        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () {
-          if (_focusInFieldEditor) return;
-          ref.read(sequenceEditorProvider.notifier).undo();
-        },
-        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
-            () {
-          if (_focusInFieldEditor) return;
-          ref.read(sequenceEditorProvider.notifier).redo();
-        },
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
-          if (_focusInFieldEditor) return;
-          ref.read(sequenceEditorProvider.notifier).undo();
-        },
-        const SingleActivator(LogicalKeyboardKey.keyZ,
-            control: true, shift: true): () {
-          if (_focusInFieldEditor) return;
-          ref.read(sequenceEditorProvider.notifier).redo();
-        },
-      },
-      child: Focus(
-        autofocus: true,
-        // Delete/Backspace live here, NOT in CallbackShortcuts: when a field is
-        // focused, the field consumes them itself (so text delete works and a
-        // dropdown isn't overridden) and they only remove the selected node when
-        // no field editor is focused. CallbackShortcuts can't "ignore" a key it
-        // matched — it always consumes it, which is what broke field delete.
-        onKeyEvent: (node, event) {
-          if (!_focusInFieldEditor &&
-              event is KeyDownEvent &&
-              (event.logicalKey == LogicalKeyboardKey.delete ||
-                  event.logicalKey == LogicalKeyboardKey.backspace)) {
-            _deleteSelected();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
+    // behind its confirm dialog.
+    //
+    // All of it lives in this Focus's onKeyEvent rather than CallbackShortcuts,
+    // because a matched CallbackShortcuts binding ALWAYS consumes the key even
+    // when its callback decides to do nothing. That swallowed the key on its
+    // way to whatever had focus: Space never reached an inspector text field
+    // (you could not type a space into a note or a container name), ↑/↓ never
+    // moved the caret, and ⌘Z never hit the field's own undo. Returning
+    // `ignored` hands the key onward; only a key we actually act on is
+    // `handled`.
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onTabKeyEvent,
         child: Column(
       children: [
         const SequencerToolbar(),
@@ -271,9 +231,51 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
                 ),
         ),
       ],
-        ),
       ),
     );
+  }
+
+  /// Every tab-level shortcut, in one place. Returns `ignored` for anything it
+  /// doesn't actually act on, so the key continues to whatever has focus.
+  KeyEventResult _onTabKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    // While the inspector owns focus, every one of these keys belongs to the
+    // field being edited — not to the tree or the run controls.
+    if (_focusInFieldEditor) return KeyEventResult.ignored;
+
+    final keyboard = HardwareKeyboard.instance;
+    final accel = keyboard.isMetaPressed || keyboard.isControlPressed;
+    final shift = keyboard.isShiftPressed;
+    final key = event.logicalKey;
+    final editor = ref.read(sequenceEditorProvider.notifier);
+
+    if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      _deleteSelected();
+      return KeyEventResult.handled;
+    }
+    if (!accel && key == LogicalKeyboardKey.arrowUp) {
+      editor.selectAdjacent(next: false);
+      return KeyEventResult.handled;
+    }
+    if (!accel && key == LogicalKeyboardKey.arrowDown) {
+      editor.selectAdjacent(next: true);
+      return KeyEventResult.handled;
+    }
+    if (accel && key == LogicalKeyboardKey.keyZ) {
+      shift ? editor.redo() : editor.undo();
+      return KeyEventResult.handled;
+    }
+    if (accel && key == LogicalKeyboardKey.keyR) {
+      return _runOrResumeKey() ? KeyEventResult.handled : KeyEventResult.ignored;
+    }
+    if (!accel && key == LogicalKeyboardKey.space) {
+      // A focused button gets Space to activate itself; firing the lifecycle
+      // shortcut on top would double-command the daemon.
+      if (_buttonFocused) return KeyEventResult.ignored;
+      return _spaceKey() ? KeyEventResult.handled : KeyEventResult.ignored;
+    }
+    return KeyEventResult.ignored;
   }
 
   /// True while focus is inside the field editor (inspector) — any field type
@@ -305,30 +307,38 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   /// ⌘R — Run when idle/finished, Resume when paused. Mirrors the toolbar's
   /// canRunOrResume gate exactly; a mid-run press is a silent no-op.
-  void _runOrResumeKey() {
-    if (_focusInFieldEditor || !_lifecycleKeysArmed) return;
+  /// Returns true when it actually started/resumed — a no-op press must not
+  /// consume the key.
+  bool _runOrResumeKey() {
+    if (!_lifecycleKeysArmed) return false;
     final state = ref.read(sequenceRunStateProvider).value?.state;
     final isPaused = state?.isAnyPaused ?? false;
-    if ((state?.isActive ?? false) && !isPaused) return;
+    if ((state?.isActive ?? false) && !isPaused) return false;
     // §38.10 — a keyboard resume offers the same re-center/refocus choice as
     // the toolbar button (one path, one dialog).
     unawaited(isPaused
         ? promptAndResumeSequence(context, ref)
         : preflightAndRunSequence(context, ref));
+    return true;
   }
 
   /// Space — Pause while running, Resume while paused; anything else no-ops
   /// (so Space can't START a run by surprise — starting is ⌘R's deliberate
   /// gesture). Skipped while a button owns focus: Space there activates the
   /// focused button, and firing both would double-command the daemon.
-  void _spaceKey() {
-    if (_focusInFieldEditor || _buttonFocused || !_lifecycleKeysArmed) return;
+  /// Returns true when it actually paused/resumed — see [_runOrResumeKey].
+  bool _spaceKey() {
+    if (!_lifecycleKeysArmed) return false;
     final state = ref.read(sequenceRunStateProvider).value?.state;
     if (state == SequenceRunState.running) {
       unawaited(runSequenceLifecycle(context, ref, (api, id) => api.pause(id)));
-    } else if (state?.isAnyPaused ?? false) {
-      unawaited(promptAndResumeSequence(context, ref));
+      return true;
     }
+    if (state?.isAnyPaused ?? false) {
+      unawaited(promptAndResumeSequence(context, ref));
+      return true;
+    }
+    return false;
   }
 
   /// True while a button-like control owns focus (Space would activate it).

@@ -343,6 +343,80 @@ void main() {
     });
   });
 
+  // A shortcut the tab declines must reach the widget that has focus. The tab
+  // is wrapped in a recorder Focus: key events bubble UP from the focused node,
+  // so anything the tab consumes never arrives — which is exactly the bug
+  // (typing a space into an inspector field did nothing, because the tab's
+  // Space binding ate it).
+  group('inspector typing beats the tab shortcuts', () {
+    Future<List<LogicalKeyboardKey>> pumpWithRecorder(
+        WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final seen = <LogicalKeyboardKey>[];
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Focus(
+              onKeyEvent: (_, event) {
+                if (event is KeyDownEvent) seen.add(event.logicalKey);
+                return KeyEventResult.ignored;
+              },
+              child: const SequencerTab(),
+            ),
+          ),
+        ),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-k');
+      await tester.pumpAndSettle();
+      container.read(sequenceEditorProvider.notifier).select(const [0]);
+      await tester.pumpAndSettle();
+
+      // Focus a field in the inspector — the "I am typing" state.
+      await tester.tap(find.descendant(
+        of: find.byType(SequenceFieldEditor),
+        matching: find.byType(EditableText),
+      ).first);
+      await tester.pumpAndSettle();
+      seen.clear();
+      return seen;
+    }
+
+    testWidgets('Space reaches the focused field instead of the run controls',
+        (tester) async {
+      final seen = await pumpWithRecorder(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(seen, contains(LogicalKeyboardKey.space),
+          reason: 'a swallowed space is a space you cannot type');
+    });
+
+    testWidgets('arrow keys reach the focused field (caret movement)',
+        (tester) async {
+      final seen = await pumpWithRecorder(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      expect(seen, contains(LogicalKeyboardKey.arrowDown));
+      expect(seen, contains(LogicalKeyboardKey.arrowUp));
+    });
+
+    testWidgets("undo reaches the field's own undo, not the tree's",
+        (tester) async {
+      final seen = await pumpWithRecorder(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+      expect(seen, contains(LogicalKeyboardKey.keyZ));
+    });
+  });
+
   // §Run-redesign S12 — the lifecycle keys (review #864: the riskiest wiring
   // needs coverage: state-dependent gating + the focus guard).
   group('lifecycle keyboard shortcuts', () {
