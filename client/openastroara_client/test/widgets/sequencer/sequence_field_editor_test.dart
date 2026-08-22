@@ -107,6 +107,46 @@ void main() {
     expect(_nodeAt(c, [0])['Time'], 45.0);
   });
 
+  group('value fields only accept what their keyboard implies', () {
+    Finder fieldFor(String key) => find.descendant(
+          of: find.byKey(ValueKey('3/$key')),
+          matching: find.byType(TextField),
+        );
+
+    testWidgets('a decimal field drops letters but keeps digits and the point',
+        (tester) async {
+      // TakeExposure's ExposureTime is an unbounded number → the plain value
+      // field (not the min/max-clamped _NumField).
+      await _pump(tester, detail: sampleDetail(), select: const [3]);
+      await tester.enterText(fieldFor('ExposureTime'), '1a2.3x');
+      await tester.pump();
+      expect(tester.widget<TextField>(fieldFor('ExposureTime')).controller!.text,
+          '12.3');
+    });
+
+    testWidgets('an integer field also drops the decimal point',
+        (tester) async {
+      // Gain is an integer: a '.' could only parse to nothing and silently
+      // drop the edit, so it never reaches the field.
+      await _pump(tester, detail: sampleDetail(), select: const [3]);
+      await tester.enterText(fieldFor('Gain'), '-1.5');
+      await tester.pump();
+      expect(
+          tester.widget<TextField>(fieldFor('Gain')).controller!.text, '-15');
+    });
+  });
+
+  testWidgets('the Annotation note field grows to multiple lines',
+      (tester) async {
+    await _pump(tester,
+        detail: _detailWith(
+            'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer'),
+        select: const [0]);
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    expect(field.maxLines, isNull, reason: 'null maxLines = grows with text');
+    expect(field.inputFormatters, isNull, reason: 'free text is not filtered');
+  });
+
   testWidgets('toggles a boolean field', (tester) async {
     final c = await _pump(tester, detail: sampleDetail(), select: const [1]);
     expect(_nodeAt(c, [1])['ForceCalibration'], false);
