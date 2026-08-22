@@ -246,33 +246,42 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     final keyboard = HardwareKeyboard.instance;
     final accel = keyboard.isMetaPressed || keyboard.isControlPressed;
     final shift = keyboard.isShiftPressed;
+    final alt = keyboard.isAltPressed;
     final key = event.logicalKey;
     final editor = ref.read(sequenceEditorProvider.notifier);
 
-    if (key == LogicalKeyboardKey.delete ||
-        key == LogicalKeyboardKey.backspace) {
+    // Every branch matches its modifiers EXACTLY, the way the SingleActivators
+    // these replaced did — an activator fires only when the modifiers it does
+    // NOT name are all up. A held modifier usually means the key belongs to
+    // someone else: Shift+↑/↓ is a selection idiom, Alt+Backspace deletes a
+    // word, and ⌘⇧R isn't Run. Anything we don't match falls through to
+    // whatever has focus, which is the whole point of this handler.
+    final plain = !accel && !shift && !alt;
+
+    if (plain &&
+        (key == LogicalKeyboardKey.delete ||
+            key == LogicalKeyboardKey.backspace)) {
       _deleteSelected();
       return KeyEventResult.handled;
     }
-    // Every branch below matches its modifiers EXACTLY, the way the
-    // SingleActivators these replaced did: Shift+↑/↓ is a selection idiom, not
-    // tree navigation, and ⌘⇧R isn't Run.
-    if (!accel && !shift && key == LogicalKeyboardKey.arrowUp) {
+    if (plain && key == LogicalKeyboardKey.arrowUp) {
       editor.selectAdjacent(next: false);
       return KeyEventResult.handled;
     }
-    if (!accel && !shift && key == LogicalKeyboardKey.arrowDown) {
+    if (plain && key == LogicalKeyboardKey.arrowDown) {
       editor.selectAdjacent(next: true);
       return KeyEventResult.handled;
     }
-    if (accel && key == LogicalKeyboardKey.keyZ) {
+    // ⌘Z / ⌘⇧Z (and the Ctrl equivalents) — shift is the redo half of this
+    // pair, so it is the one binding that reads it rather than rejecting it.
+    if (accel && !alt && key == LogicalKeyboardKey.keyZ) {
       shift ? editor.redo() : editor.undo();
       return KeyEventResult.handled;
     }
-    if (accel && !shift && key == LogicalKeyboardKey.keyR) {
+    if (accel && !shift && !alt && key == LogicalKeyboardKey.keyR) {
       return _runOrResumeKey() ? KeyEventResult.handled : KeyEventResult.ignored;
     }
-    if (!accel && !shift && key == LogicalKeyboardKey.space) {
+    if (plain && key == LogicalKeyboardKey.space) {
       // A focused button gets Space to activate itself; firing the lifecycle
       // shortcut on top would double-command the daemon.
       if (_buttonFocused) return KeyEventResult.ignored;
