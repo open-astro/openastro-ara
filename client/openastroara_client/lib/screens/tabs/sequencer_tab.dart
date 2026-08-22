@@ -198,11 +198,11 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.arrowUp): () {
-          if (_textFieldFocused) return;
+          if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).selectAdjacent(next: false);
         },
         const SingleActivator(LogicalKeyboardKey.arrowDown): () {
-          if (_textFieldFocused) return;
+          if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).selectAdjacent(next: true);
         },
         const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
@@ -211,28 +211,41 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
             _runOrResumeKey,
         const SingleActivator(LogicalKeyboardKey.space): _spaceKey,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () {
-          if (_textFieldFocused) return;
+          if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).undo();
         },
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
             () {
-          if (_textFieldFocused) return;
+          if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).redo();
         },
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
-          if (_textFieldFocused) return;
+          if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).undo();
         },
         const SingleActivator(LogicalKeyboardKey.keyZ,
             control: true, shift: true): () {
-          if (_textFieldFocused) return;
+          if (_focusInFieldEditor) return;
           ref.read(sequenceEditorProvider.notifier).redo();
         },
-        const SingleActivator(LogicalKeyboardKey.delete): _deleteSelected,
-        const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelected,
       },
       child: Focus(
         autofocus: true,
+        // Delete/Backspace live here, NOT in CallbackShortcuts: when a field is
+        // focused, the field consumes them itself (so text delete works and a
+        // dropdown isn't overridden) and they only remove the selected node when
+        // no field editor is focused. CallbackShortcuts can't "ignore" a key it
+        // matched — it always consumes it, which is what broke field delete.
+        onKeyEvent: (node, event) {
+          if (!_focusInFieldEditor &&
+              event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.delete ||
+                  event.logicalKey == LogicalKeyboardKey.backspace)) {
+            _deleteSelected();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
         child: Column(
       children: [
         const SequencerToolbar(),
@@ -263,13 +276,17 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     );
   }
 
-  /// True while any editable text field owns focus — keyboard editing must
-  /// win over tree shortcuts.
-  bool get _textFieldFocused =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  /// True while focus is inside the field editor (inspector) — any field type
+  /// (text, dropdown, switch) must win over tree shortcuts, so editing a value
+  /// never deletes/moves the selected instruction.
+  bool get _focusInFieldEditor {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    return ctx != null &&
+        ctx.findAncestorWidgetOfExactType<SequenceFieldEditor>() != null;
+  }
 
   void _deleteSelected() {
-    if (_textFieldFocused) return;
+    if (_focusInFieldEditor) return;
     final editor = ref.read(sequenceEditorProvider);
     final path = editor?.selectedPath;
     if (path == null || path.isEmpty) return;
@@ -289,7 +306,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
   /// ⌘R — Run when idle/finished, Resume when paused. Mirrors the toolbar's
   /// canRunOrResume gate exactly; a mid-run press is a silent no-op.
   void _runOrResumeKey() {
-    if (_textFieldFocused || !_lifecycleKeysArmed) return;
+    if (_focusInFieldEditor || !_lifecycleKeysArmed) return;
     final state = ref.read(sequenceRunStateProvider).value?.state;
     final isPaused = state?.isAnyPaused ?? false;
     if ((state?.isActive ?? false) && !isPaused) return;
@@ -305,7 +322,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
   /// gesture). Skipped while a button owns focus: Space there activates the
   /// focused button, and firing both would double-command the daemon.
   void _spaceKey() {
-    if (_textFieldFocused || _buttonFocused || !_lifecycleKeysArmed) return;
+    if (_focusInFieldEditor || _buttonFocused || !_lifecycleKeysArmed) return;
     final state = ref.read(sequenceRunStateProvider).value?.state;
     if (state == SequenceRunState.running) {
       unawaited(runSequenceLifecycle(context, ref, (api, id) => api.pause(id)));
