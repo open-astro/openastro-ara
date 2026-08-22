@@ -127,6 +127,15 @@ class WsEventStream {
   StreamSubscription<dynamic>? _sub;
   Timer? _reconnectTimer;
   Timer? _connectGraceTimer;
+  // Liveness watchdog: while connected, if no frame arrives within
+  // [silenceTimeout] (the daemon heartbeats every 30s, so 45s of silence means
+  // the link is dead) we close the socket — which flips the state to
+  // `reconnecting` → the UI's serverLinkUpProvider turns the chips off instead
+  // of showing stale green across an outage.
+  static const Duration silenceTimeout = Duration(seconds: 45);
+  static const Duration silenceCheckEvery = Duration(seconds: 5);
+  Timer? _silenceTimer;
+  DateTime _lastFrameAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _reconnectAttempt = 0;
   int? _lastSeq;
   bool _disposed = false;
@@ -196,7 +205,33 @@ class WsEventStream {
   void _setConnState(WsConnectionState s) {
     if (s == _connState) return;
     _connState = s;
+    // Arm the liveness watchdog only while the link is deemed connected; any
+    // other state (connecting / reconnecting / disconnected / takenOver) stops
+    // it so a dropped link re-arms on the next successful connect.
+    if (s == WsConnectionState.connected) {
+      _armSilenceWatchdog();
+    } else {
+      _silenceTimer?.cancel();
+      _silenceTimer = null;
+    }
     if (!_connStates.isClosed) _connStates.add(s);
+  }
+
+  // Periodically checks that frames are still arriving; a live link sees the
+  // daemon's 30s heartbeat (or real events), so 45s of silence ⇒ dead link.
+  void _armSilenceWatchdog() {
+    _lastFrameAt = DateTime.now();
+    _silenceTimer?.cancel();
+    _silenceTimer = Timer.periodic(silenceCheckEvery, (_) {
+      if (_disposed || _socket == null) return;
+      if (DateTime.now().difference(_lastFrameAt) > silenceTimeout) {
+        debugPrint('[ws] no frames for $silenceTimeout — link presumed dead; '
+            'closing to reconnect');
+        // Close the socket → onDone/_onClosed → `reconnecting` (and backoff),
+        // so the UI stops showing a stale connected state during an outage.
+        _socket?.close();
+      }
+    });
   }
 
   /// Open the connection. Idempotent: a second call while already open — or
@@ -296,6 +331,8 @@ class WsEventStream {
       return; // ignore non-JSON frames (don't reset backoff on garbage)
     }
     if (decoded is! Map<String, dynamic>) return;
+    // Any decoded frame proves the link is live → poke the silence watchdog.
+    _lastFrameAt = DateTime.now();
     // Any decoded frame (event OR the resume-response control frame) proves the
     // link is live → connected; the grace fallback is no longer needed.
     _connectGraceTimer?.cancel();
@@ -369,6 +406,8 @@ class WsEventStream {
     // await), and the stream that triggered it has already closed — so there's
     // nothing left to deliver. dispose() does NOT await this one (it short-
     // circuits on the null _sub below); it only awaits a cancel of a live sub.
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
     _connectGraceTimer?.cancel();
     _connectGraceTimer = null;
     final sub = _sub;
@@ -423,6 +462,8 @@ class WsEventStream {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
     _connectGraceTimer?.cancel();
     _connectGraceTimer = null;
     final sub = _sub;
