@@ -1244,11 +1244,10 @@ class _ValueTextFieldState extends State<_ValueTextField> {
       // line.
       maxLines: widget.multiline ? null : 1,
       minLines: widget.multiline ? 1 : null,
-      // Numeric value fields accept only digits, '.' and '-' (no letters or
-      // other symbols) — the free-text note field is exempt.
-      inputFormatters: !widget.multiline && _isNumericKeyboard
-          ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]'))]
-          : null,
+      // Numeric value fields accept only the characters their own keyboard
+      // implies — digits always, '.' only for a decimal field, '-' only for a
+      // signed one. The free-text note field is exempt.
+      inputFormatters: _numericFilter,
       style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
       decoration: const InputDecoration(
         isDense: true,
@@ -1258,18 +1257,22 @@ class _ValueTextFieldState extends State<_ValueTextField> {
     );
   }
 
-  /// True when the field is a number intent (digits, decimal point, minus) —
-  /// covers [TextInputType.number] and every [TextInputType.numberWithOptions]
-  /// flag combination the editor passes (decimal, signed, both).
-  bool get _isNumericKeyboard {
-    const numeric = <TextInputType>[
-      TextInputType.number,
-      TextInputType.numberWithOptions(),
-      TextInputType.numberWithOptions(decimal: true),
-      TextInputType.numberWithOptions(signed: true),
-      TextInputType.numberWithOptions(decimal: true, signed: true),
-    ];
-    return numeric.contains(widget.keyboard);
+  /// Keystroke filter for a number field, or null to accept anything.
+  ///
+  /// Every `TextInputType.numberWithOptions(...)` combination shares
+  /// [TextInputType.number]'s index, so one comparison covers them all —
+  /// no list of flag permutations to keep in sync. The allowed characters
+  /// come from the keyboard's own flags, so an integer field rejects '.'
+  /// (which would only parse to nothing and silently drop the edit) and an
+  /// unsigned field rejects '-'.
+  List<TextInputFormatter>? get _numericFilter {
+    final kb = widget.keyboard;
+    if (widget.multiline || kb.index != TextInputType.number.index) return null;
+    final allowed = StringBuffer('[0-9');
+    if (kb.decimal ?? false) allowed.write(r'.');
+    if (kb.signed ?? false) allowed.write(r'\-');
+    allowed.write(']');
+    return [FilteringTextInputFormatter.allow(RegExp(allowed.toString()))];
   }
 }
 
