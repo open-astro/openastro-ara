@@ -41,6 +41,12 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   /// this works with no mount connected at all.
   Future<void> _fillFromGps() async {
     if (_gpsBusy) return;
+    // A lookup can take up to ~20 s — snapshot the site so a fetched fix can't
+    // silently overwrite lat/long/elevation/timezone the user typed meanwhile.
+    final beforeLat = _draft.latitudeDeg;
+    final beforeLng = _draft.longitudeDeg;
+    final beforeAlt = _draft.altitudeMeters;
+    final beforeTz = _draft.timezone;
     setState(() {
       _gpsBusy = true;
       _gpsStatus = null;
@@ -49,6 +55,16 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
       final result = await fillSiteFromGps(ref);
       if (!mounted) return;
       if (result.success) {
+        if (beforeLat != _draft.latitudeDeg ||
+            beforeLng != _draft.longitudeDeg ||
+            beforeAlt != _draft.altitudeMeters ||
+            beforeTz != _draft.timezone) {
+          setState(() => _gpsStatus =
+              'A location was found, but you edited the site fields while it '
+              'was being looked up — not overwritten. Press Fill from GPS '
+              'again to apply it.');
+          return;
+        }
         setState(() {
           // 2-decimal (~1 km) site precision: enough for ephemerides/safety
           // limits without publishing the observer's exact backyard position.

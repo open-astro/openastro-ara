@@ -96,6 +96,9 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   /// logic in [fillSiteFromGps]. Values still go through Save.
   Future<void> _fillFromGps() async {
     if (_gpsBusy) return;
+    // A lookup can take up to ~20 s — snapshot the site so a fetched fix can't
+    // silently overwrite lat/long/elevation/timezone the user typed meanwhile.
+    final before = ref.read(siteSettingsProvider);
     setState(() {
       _gpsBusy = true;
       _gpsStatus = null;
@@ -107,6 +110,15 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       // _applyFix reads a provider off `ref`.
       if (!mounted) return;
       if (result.success) {
+        if (!_siteUnchangedSince(before)) {
+          if (mounted) {
+            setState(() => _gpsStatus =
+                'A location was found, but you edited the site fields while it '
+                'was being looked up — not overwritten. Press Fill from GPS '
+                'again to apply it.');
+          }
+          return;
+        }
         _applyFix(
           result.lat,
           result.lng,
@@ -119,6 +131,16 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     } finally {
       if (mounted) setState(() => _gpsBusy = false);
     }
+  }
+
+  /// True when the site's GPS-relevant fields still match [before] — i.e. the
+  /// user didn't edit them while the location fetch was in flight.
+  bool _siteUnchangedSince(SiteSettings before) {
+    final s = ref.read(siteSettingsProvider);
+    return s.latitudeDeg == before.latitudeDeg &&
+        s.longitudeDeg == before.longitudeDeg &&
+        s.elevationM == before.elevationM &&
+        s.timeZone == before.timeZone;
   }
 
   /// Writes a fix into the site fields (2-dp ~1 km precision) and derives the

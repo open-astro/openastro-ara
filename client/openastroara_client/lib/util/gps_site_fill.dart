@@ -75,6 +75,7 @@ String get _permissionHint => Platform.isMacOS
 Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
   // 1) Preferred: the server's USB GPS dongle fix.
   final api = ref.read(timeSyncApiProvider);
+  var dongleReadFailed = false;
   if (api != null) {
     try {
       final state = await api.getState();
@@ -88,14 +89,18 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
         );
       }
     } catch (_) {
-      // Ignore — fall through to the Mac path below.
+      // The dongle can't be read (server unreachable, error) — distinct from
+      // "no fix yet", so the user isn't told to wait under open sky.
+      dongleReadFailed = true;
     }
   }
 
   // 2) Fallback: this machine's own location (a fresh fix is required).
   final baseNote = api == null
       ? 'No server connected, '
-      : 'No GPS dongle fix yet, ';
+      : dongleReadFailed
+          ? "Couldn't read the server's GPS state, "
+          : 'No GPS dongle fix yet, ';
 
   try {
     // Deterministic test seam first (real platform channels aren't in tests).
