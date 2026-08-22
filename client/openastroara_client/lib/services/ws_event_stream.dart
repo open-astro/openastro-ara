@@ -141,6 +141,13 @@ class WsEventStream {
   // healthy link or stall it on a dead one. Ticks also make it testable under
   // FakeAsync, which fakes timers but not DateTime.now().
   int _silentTicks = 0;
+  // Whether the current socket bound a §27 session. ONLY bound sockets are
+  // pinged (WebSocketEndpoints.cs gates its 30s ping loop on boundSessionId),
+  // so the silence watchdog would otherwise kill a perfectly healthy unbound
+  // socket — the supported case of a second client watching a rig whose
+  // control slot another client holds — every 45s that no event happens to
+  // flow, and flap it forever, since the reconnect gets denied the slot too.
+  bool _sessionBound = false;
   int _reconnectAttempt = 0;
   int? _lastSeq;
   bool _disposed = false;
@@ -213,7 +220,7 @@ class WsEventStream {
     // Arm the liveness watchdog only while the link is deemed connected; any
     // other state (connecting / reconnecting / disconnected / takenOver) stops
     // it so a dropped link re-arms on the next successful connect.
-    if (s == WsConnectionState.connected) {
+    if (s == WsConnectionState.connected && _sessionBound) {
       _armSilenceWatchdog();
     } else {
       _silenceTimer?.cancel();
@@ -290,6 +297,8 @@ class WsEventStream {
       // may have run. Re-check before touching the socket slot.
       if (_disposed || _socket != null) return;
     }
+    // Only a bound socket is heartbeated — see [_sessionBound].
+    _sessionBound = sessionId != null;
     final socket = _connect(_url, {
       'X-Ara-WS-Version': wsVersion,
       'X-Ara-Session': ?sessionId,

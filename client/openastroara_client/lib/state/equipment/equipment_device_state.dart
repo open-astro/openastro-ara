@@ -88,6 +88,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // server would otherwise lock out actions on the new one.
     _refreshing = false;
     _acting = false;
+    // Failures counted against the OLD server must not carry over: three
+    // failures on server A plus one on server B would otherwise trip the
+    // threshold on a device that has failed once on its current link.
+    _consecutiveReadFailures = 0;
     _generation++;
     _cancelAllPolls();
     // Tear down both timers when the notifier is disposed OR rebuilt. Riverpod

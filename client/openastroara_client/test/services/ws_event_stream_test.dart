@@ -403,8 +403,10 @@ void main() {
           server,
           connect: conn.connect,
           backoff: const [Duration(minutes: 10)], // don't reconnect in-test
+          claimSession: () async => 'sess-1', // only bound sockets are pinged
         );
         ws.connect();
+        async.flushMicrotasks();
         conn.legs.first.incoming.add(_envelope('e', 1));
         async.flushMicrotasks();
         expect(ws.connectionState, WsConnectionState.connected);
@@ -427,8 +429,10 @@ void main() {
     test('a heartbeat every 30s keeps the link up indefinitely', () {
       fakeAsync((async) {
         final conn = _FakeConnector();
-        final ws = WsEventStream(server, connect: conn.connect);
+        final ws = WsEventStream(server, connect: conn.connect,
+            claimSession: () async => 'sess-1');
         ws.connect();
+        async.flushMicrotasks();
         for (var i = 1; i <= 10; i++) {
           conn.legs.first.incoming.add(_envelope('heartbeat', i));
           async.flushMicrotasks();
@@ -443,12 +447,41 @@ void main() {
       });
     });
 
+    test('an unbound socket is never watchdogged (the daemon never pings it)',
+        () {
+      fakeAsync((async) {
+        final conn = _FakeConnector();
+        // A denied §27 claim (another client holds the control slot) connects
+        // unbound, and WebSocketEndpoints only pings BOUND sockets — so
+        // silence here means "nothing happened", not "link died".
+        final ws = WsEventStream(server, connect: conn.connect,
+            claimSession: () async => null);
+        ws.connect();
+        async.flushMicrotasks();
+        conn.legs.first.incoming.add(_envelope('e', 1));
+        async.flushMicrotasks();
+        expect(ws.connectionState, WsConnectionState.connected);
+
+        async.elapse(const Duration(minutes: 5));
+        async.flushMicrotasks();
+        expect(conn.legs.first.closed, isFalse,
+            reason: 'a healthy unbound socket must not be closed');
+        expect(ws.connectionState, WsConnectionState.connected);
+        expect(conn.legs, hasLength(1), reason: 'no reconnect flapping');
+
+        unawaited(ws.dispose());
+        async.flushTimers();
+      });
+    });
+
     test('the watchdog stops with the stream — no timer outlives dispose()',
         () {
       fakeAsync((async) {
         final conn = _FakeConnector();
-        final ws = WsEventStream(server, connect: conn.connect);
+        final ws = WsEventStream(server, connect: conn.connect,
+            claimSession: () async => 'sess-1');
         ws.connect();
+        async.flushMicrotasks();
         conn.legs.first.incoming.add(_envelope('e', 1));
         async.flushMicrotasks();
 
