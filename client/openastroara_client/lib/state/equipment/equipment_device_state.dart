@@ -242,13 +242,17 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
           // A real outage must not hold stale "connected" green forever: after
           // [staleAfterFailures] consecutive failed reads of a device that WAS
           // connected, surface an error (one good read restores the live
-          // status). The value is retained so panels don't blank mid-outage.
+          // status).
           final last = state.value;
           final wasConnected = last != null &&
               last.connectionState == EquipmentConnectionState.connected;
           if (wasConnected) {
             _consecutiveReadFailures++;
             if (_consecutiveReadFailures >= staleAfterFailures) {
+              // The last status goes with it — that's the point: a panel must
+              // not keep rendering a green "connected" body sourced from a
+              // reading that's now a minute stale. Panels show their read-
+              // failed treatment until a good read lands.
               state = AsyncError<T?>(error, stackTrace);
             }
           } else {

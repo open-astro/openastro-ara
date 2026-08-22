@@ -135,7 +135,12 @@ class WsEventStream {
   static const Duration silenceTimeout = Duration(seconds: 45);
   static const Duration silenceCheckEvery = Duration(seconds: 5);
   Timer? _silenceTimer;
-  DateTime _lastFrameAt = DateTime.fromMillisecondsSinceEpoch(0);
+  // Ticks of [silenceCheckEvery] since the last frame. Deliberately a tick
+  // count rather than a DateTime comparison: Ara sets the machine's clock from
+  // GPS (§31), and a wall-clock jump would either trip this watchdog on a
+  // healthy link or stall it on a dead one. Ticks also make it testable under
+  // FakeAsync, which fakes timers but not DateTime.now().
+  int _silentTicks = 0;
   int _reconnectAttempt = 0;
   int? _lastSeq;
   bool _disposed = false;
@@ -220,13 +225,21 @@ class WsEventStream {
   // Periodically checks that frames are still arriving; a live link sees the
   // daemon's 30s heartbeat (or real events), so 45s of silence ⇒ dead link.
   void _armSilenceWatchdog() {
-    _lastFrameAt = DateTime.now();
+    _silentTicks = 0;
     _silenceTimer?.cancel();
     _silenceTimer = Timer.periodic(silenceCheckEvery, (_) {
       if (_disposed || _socket == null) return;
-      if (DateTime.now().difference(_lastFrameAt) > silenceTimeout) {
+      _silentTicks++;
+      if (_silentTicks * silenceCheckEvery.inMilliseconds >=
+          silenceTimeout.inMilliseconds) {
         debugPrint('[ws] no frames for $silenceTimeout — link presumed dead; '
             'closing to reconnect');
+        // Stop the watchdog before closing: close() completes asynchronously
+        // (on a vanished network it can sit there a while), and _onClosed is
+        // what would otherwise cancel this — so leaving it armed re-fires the
+        // close every 5s until the socket finally gives up.
+        _silenceTimer?.cancel();
+        _silenceTimer = null;
         // Close the socket → onDone/_onClosed → `reconnecting` (and backoff),
         // so the UI stops showing a stale connected state during an outage.
         _socket?.close();
@@ -332,7 +345,7 @@ class WsEventStream {
     }
     if (decoded is! Map<String, dynamic>) return;
     // Any decoded frame proves the link is live → poke the silence watchdog.
-    _lastFrameAt = DateTime.now();
+    _silentTicks = 0;
     // Any decoded frame (event OR the resume-response control frame) proves the
     // link is live → connected; the grace fallback is no longer needed.
     _connectGraceTimer?.cancel();
