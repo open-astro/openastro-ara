@@ -145,10 +145,15 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
         'a position — connect to one, or plug in a GPS dongle.',
       );
     }
+    // A desktop (Wi-Fi/GPS-less) fix often reports altitude 0.0 or an
+    // uncalibrated value — only keep it when the fix carries a decent
+    // accuracy, mirroring the dongle path's "unknown altitude → don't
+    // overwrite" guard. (A previously-entered real elevation stays put.)
+    final altitude = pos.altitudeAccuracy < 100.0 ? pos.altitude : null;
     return GpsSiteFill.success(
       lat: pos.latitude,
       lng: pos.longitude,
-      alt: pos.altitude,
+      alt: altitude,
       sourceLabel: '$_thisDevice\'s own location',
     );
   } catch (_) {
