@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,7 @@ import 'package:openastroara/screens/wizard/screens/screen_profile_basics.dart';
 import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
+import 'package:openastroara/util/gps_site_fill.dart';
 
 /// getState() returns a configurable §31.3 state — the wizard's "Fill from
 /// GPS" reads the server's last fix (the USB dongle plugged into the SERVER
@@ -63,12 +66,14 @@ void main() {
     expect(find.text('30.5'), findsOneWidget);
     expect(find.text('-97.75'), findsOneWidget);
     expect(find.text('240.0'), findsOneWidget);
-    expect(find.textContaining('Filled from the server\'s GPS fix'),
+    expect(find.textContaining("Filled from the server's GPS dongle"),
         findsOneWidget);
   });
 
-  testWidgets('no fix yet → dongle-on-the-server hint, fields untouched',
+  testWidgets('no fix yet → Mac fallback unavailable → fields untouched',
       (tester) async {
+    debugMacLocationProvider = () async => null; // Mac locator returns no fix
+    addTearDown(() => debugMacLocationProvider = null);
     final container = await pump(tester,
         api: _FakeTimeSync(const TimeSyncState(synced: false)));
 
@@ -76,18 +81,51 @@ void main() {
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Plug a USB GPS dongle into the computer'),
-        findsOneWidget);
+    expect(find.textContaining('No GPS dongle fix yet'), findsOneWidget);
     expect(container.read(wizardControllerProvider).draft.latitudeDeg, isNull);
   });
 
-  testWidgets('offline → explains fixes come from the server machine',
+  testWidgets('no server + no device location → says so, naming this platform',
       (tester) async {
+    debugMacLocationProvider = () async => null;
+    addTearDown(() => debugMacLocationProvider = null);
     await pump(tester, api: null);
     await tester.ensureVisible(find.text('Fill from GPS'));
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Not connected to a server'), findsOneWidget);
+    expect(find.textContaining('No server connected'), findsOneWidget);
+    // The copy names the machine the user is actually on — the app ships on
+    // three desktops, so it must not hardcode "this Mac".
+    final expected = Platform.isMacOS
+        ? 'this Mac'
+        : Platform.isWindows
+            ? 'this PC'
+            : 'this computer';
+    expect(find.textContaining(expected), findsOneWidget);
+  });
+
+  testWidgets('a fix that lands after a manual edit does not overwrite it',
+      (tester) async {
+    // Hold the fix open, type a latitude while it's in flight, then release.
+    final gate = Completer<void>();
+    debugMacLocationProvider = () async {
+      await gate.future;
+      return (lat: 30.5, lng: -97.75, alt: 240.0);
+    };
+    addTearDown(() => debugMacLocationProvider = null);
+    final container = await pump(tester, api: null);
+
+    await tester.ensureVisible(find.text('Fill from GPS'));
+    await tester.tap(find.text('Fill from GPS'));
+    await tester.pump();
+
+    final draft = container.read(wizardControllerProvider).draft;
+    draft.latitudeDeg = 12.34; // the user types while the fetch is running
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    expect(draft.latitudeDeg, 12.34, reason: 'the typed value must survive');
+    expect(find.textContaining('not overwritten'), findsOneWidget);
   });
 
   test('the coordinate→timezone mapping is worldwide, not US-only', () {
