@@ -54,6 +54,14 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // stale data over a new server's result.
   int _generation = 0;
 
+  // Consecutive failed reads of a device that WAS connected. A momentary blip
+  // (one or two lost polls) must not flip anything — the liveness poll keeps
+  // retrying — but a real outage shouldn't hold the last "connected" green
+  // forever. After [staleAfterFailures] it surfaces an error to the panels;
+  // the next successful read restores the live status.
+  static const int staleAfterFailures = 4; // ~60 s at the 15 s liveness poll
+  int _consecutiveReadFailures = 0;
+
   // Monotonic per-read issue number, shared by build() and refresh(). A read's
   // result applies only if it is still the LATEST issued read when it resolves:
   // a §60.9 WS-push refresh fired while build()'s own read was in flight would
@@ -80,6 +88,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // server would otherwise lock out actions on the new one.
     _refreshing = false;
     _acting = false;
+    // Failures counted against the OLD server must not carry over: three
+    // failures on server A plus one on server B would otherwise trip the
+    // threshold on a device that has failed once on its current link.
+    _consecutiveReadFailures = 0;
     _generation++;
     _cancelAllPolls();
     // Tear down both timers when the notifier is disposed OR rebuilt. Riverpod
@@ -226,11 +238,38 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
         return api.getStatus();
       });
       if (ref.mounted && gen == _generation && issue == _readIssue) {
-        state = next;
-        // Re-evaluate the polls only on a SUCCESSFUL read. A transient read error
-        // (mid-connect or mid-liveness) must NOT cancel the timer — it should keep
-        // retrying — so leave whatever is running in place on an error.
-        if (next case AsyncData(:final value)) _syncPolls(value);
+        if (next case AsyncData<T?>(:final value)) {
+          _consecutiveReadFailures = 0;
+          state = next;
+          _syncPolls(value);
+        } else if (next case AsyncError<T?>(:final error, :final stackTrace)) {
+          // A real outage must not hold stale "connected" green forever: after
+          // [staleAfterFailures] consecutive failed reads of a device that WAS
+          // connected, surface an error (one good read restores the live
+          // status).
+          final last = state.value;
+          final wasConnected = last != null &&
+              last.connectionState == EquipmentConnectionState.connected;
+          if (wasConnected) {
+            _consecutiveReadFailures++;
+            if (_consecutiveReadFailures >= staleAfterFailures) {
+              // The last status goes with it — that's the point: a panel must
+              // not keep rendering a green "connected" body sourced from a
+              // reading that's now a minute stale. Panels show their read-
+              // failed treatment until a good read lands.
+              state = AsyncError<T?>(error, stackTrace);
+            }
+          } else {
+            // Not connected as far as we know — including AFTER this watchdog
+            // has tripped, since the AsyncError above carries no value, so
+            // `last` is null from then on and the counter sits at 0. That's
+            // fine: the device is already showing as offline, and a good read
+            // is what restores it, not the counter.
+            _consecutiveReadFailures = 0;
+          }
+          // Leave the poll armed — a transient error must keep retrying; the
+          // counter only trips after the threshold above.
+        }
       }
     } finally {
       if (manual && gen == _generation) _refreshing = false;

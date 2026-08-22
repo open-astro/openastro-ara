@@ -49,6 +49,10 @@ void main() {
         overrides: [
           wsEventStreamProvider.overrideWith((ref) {
             stream.connect();
+            // Mirror the real provider: tearing the scope down disposes the
+            // stream. Without this the stream's connected-link timers outlive
+            // the widget tree and the test fails on a pending timer.
+            ref.onDispose(() => unawaited(stream.dispose()));
             return stream;
           }),
         ],
