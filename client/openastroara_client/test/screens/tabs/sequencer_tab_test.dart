@@ -406,6 +406,20 @@ void main() {
       expect(seen, contains(LogicalKeyboardKey.arrowUp));
     });
 
+    testWidgets('a shifted shortcut is not the shortcut (Shift+arrow, Shift+Space)',
+        (tester) async {
+      // The SingleActivators these replaced matched modifiers exactly, so
+      // Shift+↑ was never tree navigation. Shift+arrow is a selection idiom.
+      final seen = await pumpWithRecorder(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(seen, contains(LogicalKeyboardKey.arrowDown));
+      expect(seen, contains(LogicalKeyboardKey.space));
+    });
+
     testWidgets("undo reaches the field's own undo, not the tree's",
         (tester) async {
       final seen = await pumpWithRecorder(tester);

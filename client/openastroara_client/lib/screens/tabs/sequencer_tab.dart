@@ -254,11 +254,14 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       _deleteSelected();
       return KeyEventResult.handled;
     }
-    if (!accel && key == LogicalKeyboardKey.arrowUp) {
+    // Every branch below matches its modifiers EXACTLY, the way the
+    // SingleActivators these replaced did: Shift+↑/↓ is a selection idiom, not
+    // tree navigation, and ⌘⇧R isn't Run.
+    if (!accel && !shift && key == LogicalKeyboardKey.arrowUp) {
       editor.selectAdjacent(next: false);
       return KeyEventResult.handled;
     }
-    if (!accel && key == LogicalKeyboardKey.arrowDown) {
+    if (!accel && !shift && key == LogicalKeyboardKey.arrowDown) {
       editor.selectAdjacent(next: true);
       return KeyEventResult.handled;
     }
@@ -266,10 +269,10 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       shift ? editor.redo() : editor.undo();
       return KeyEventResult.handled;
     }
-    if (accel && key == LogicalKeyboardKey.keyR) {
+    if (accel && !shift && key == LogicalKeyboardKey.keyR) {
       return _runOrResumeKey() ? KeyEventResult.handled : KeyEventResult.ignored;
     }
-    if (!accel && key == LogicalKeyboardKey.space) {
+    if (!accel && !shift && key == LogicalKeyboardKey.space) {
       // A focused button gets Space to activate itself; firing the lifecycle
       // shortcut on top would double-command the daemon.
       if (_buttonFocused) return KeyEventResult.ignored;
