@@ -127,6 +127,27 @@ class WsEventStream {
   StreamSubscription<dynamic>? _sub;
   Timer? _reconnectTimer;
   Timer? _connectGraceTimer;
+  // Liveness watchdog: while connected, if no frame arrives within
+  // [silenceTimeout] (the daemon heartbeats every 30s, so 45s of silence means
+  // the link is dead) we close the socket — which flips the state to
+  // `reconnecting` → the UI's serverLinkUpProvider turns the chips off instead
+  // of showing stale green across an outage.
+  static const Duration silenceTimeout = Duration(seconds: 45);
+  static const Duration silenceCheckEvery = Duration(seconds: 5);
+  Timer? _silenceTimer;
+  // Ticks of [silenceCheckEvery] since the last frame. Deliberately a tick
+  // count rather than a DateTime comparison: Ara sets the machine's clock from
+  // GPS (§31), and a wall-clock jump would either trip this watchdog on a
+  // healthy link or stall it on a dead one. Ticks also make it testable under
+  // FakeAsync, which fakes timers but not DateTime.now().
+  int _silentTicks = 0;
+  // Whether the current socket bound a §27 session. ONLY bound sockets are
+  // pinged (WebSocketEndpoints.cs gates its 30s ping loop on boundSessionId),
+  // so the silence watchdog would otherwise kill a perfectly healthy unbound
+  // socket — the supported case of a second client watching a rig whose
+  // control slot another client holds — every 45s that no event happens to
+  // flow, and flap it forever, since the reconnect gets denied the slot too.
+  bool _sessionBound = false;
   int _reconnectAttempt = 0;
   int? _lastSeq;
   bool _disposed = false;
@@ -196,7 +217,41 @@ class WsEventStream {
   void _setConnState(WsConnectionState s) {
     if (s == _connState) return;
     _connState = s;
+    // Arm the liveness watchdog only while the link is deemed connected; any
+    // other state (connecting / reconnecting / disconnected / takenOver) stops
+    // it so a dropped link re-arms on the next successful connect.
+    if (s == WsConnectionState.connected && _sessionBound) {
+      _armSilenceWatchdog();
+    } else {
+      _silenceTimer?.cancel();
+      _silenceTimer = null;
+    }
     if (!_connStates.isClosed) _connStates.add(s);
+  }
+
+  // Periodically checks that frames are still arriving; a live link sees the
+  // daemon's 30s heartbeat (or real events), so 45s of silence ⇒ dead link.
+  void _armSilenceWatchdog() {
+    _silentTicks = 0;
+    _silenceTimer?.cancel();
+    _silenceTimer = Timer.periodic(silenceCheckEvery, (_) {
+      if (_disposed || _socket == null) return;
+      _silentTicks++;
+      if (_silentTicks * silenceCheckEvery.inMilliseconds >=
+          silenceTimeout.inMilliseconds) {
+        debugPrint('[ws] no frames for $silenceTimeout — link presumed dead; '
+            'closing to reconnect');
+        // Stop the watchdog before closing: close() completes asynchronously
+        // (on a vanished network it can sit there a while), and _onClosed is
+        // what would otherwise cancel this — so leaving it armed re-fires the
+        // close every 5s until the socket finally gives up.
+        _silenceTimer?.cancel();
+        _silenceTimer = null;
+        // Close the socket → onDone/_onClosed → `reconnecting` (and backoff),
+        // so the UI stops showing a stale connected state during an outage.
+        _socket?.close();
+      }
+    });
   }
 
   /// Open the connection. Idempotent: a second call while already open — or
@@ -242,6 +297,8 @@ class WsEventStream {
       // may have run. Re-check before touching the socket slot.
       if (_disposed || _socket != null) return;
     }
+    // Only a bound socket is heartbeated — see [_sessionBound].
+    _sessionBound = sessionId != null;
     final socket = _connect(_url, {
       'X-Ara-WS-Version': wsVersion,
       'X-Ara-Session': ?sessionId,
@@ -296,6 +353,8 @@ class WsEventStream {
       return; // ignore non-JSON frames (don't reset backoff on garbage)
     }
     if (decoded is! Map<String, dynamic>) return;
+    // Any decoded frame proves the link is live → poke the silence watchdog.
+    _silentTicks = 0;
     // Any decoded frame (event OR the resume-response control frame) proves the
     // link is live → connected; the grace fallback is no longer needed.
     _connectGraceTimer?.cancel();
@@ -369,6 +428,8 @@ class WsEventStream {
     // await), and the stream that triggered it has already closed — so there's
     // nothing left to deliver. dispose() does NOT await this one (it short-
     // circuits on the null _sub below); it only awaits a cancel of a live sub.
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
     _connectGraceTimer?.cancel();
     _connectGraceTimer = null;
     final sub = _sub;
@@ -423,6 +484,8 @@ class WsEventStream {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
     _connectGraceTimer?.cancel();
     _connectGraceTimer = null;
     final sub = _sub;
