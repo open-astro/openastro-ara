@@ -256,6 +256,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
               state = AsyncError<T?>(error, stackTrace);
             }
           } else {
+            // Not connected as far as we know — including AFTER this watchdog
+            // has tripped, since the AsyncError above carries no value, so
+            // `last` is null from then on and the counter sits at 0. That's
+            // fine: the device is already showing as offline, and a good read
+            // is what restores it, not the counter.
             _consecutiveReadFailures = 0;
           }
           // Leave the poll armed — a transient error must keep retrying; the
