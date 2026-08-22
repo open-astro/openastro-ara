@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_version.dart';
@@ -15,6 +16,7 @@ import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
+import 'state/night_mode_state.dart';
 import 'theme/ara_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
@@ -25,11 +27,15 @@ void main() {
 /// The planetarium renders in the platform's native webview (`webview_all`), which
 /// the OS tears down with the process — so there's no CEF/Chromium subprocess tree
 /// to shut down on exit, and the app needs no exit-lifecycle hook.
-class OpenAstroAraApp extends StatelessWidget {
+class OpenAstroAraApp extends ConsumerWidget {
   const OpenAstroAraApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final night = switch (ref.watch(nightModeProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    };
     return MaterialApp(
       title: 'OpenAstro Ara',
       theme: buildAraTheme(),
@@ -39,9 +45,51 @@ class OpenAstroAraApp extends StatelessWidget {
       // The Linux planetarium overlay subscribes to this so the native GTK
       // webview hides when a route is pushed over the shell (no-op elsewhere).
       navigatorObservers: [planetariumRouteObserver],
-      home: const _RootRouter(),
+      builder: (context, child) {
+        Widget result = child ?? const SizedBox.shrink();
+        if (night) {
+          // Night observing filter: fold every pixel's luminance into the red
+          // channel and zero green and blue outright. Blue/green light is what
+          // actually resets scotopic dark adaptation, so leaking half of it
+          // through would defeat the point. Luminance weights keep the UI
+          // readable — a green "connected" chip stays brighter than a dim
+          // border, so the interface still reads by brightness once hue is
+          // gone.
+          result = ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              0.30, 0.59, 0.11, 0.0, 0.0, // R ← luminance
+              0.00, 0.00, 0.00, 0.0, 0.0, // G
+              0.00, 0.00, 0.00, 0.0, 0.0, // B
+              0.00, 0.00, 0.00, 1.0, 0.0, // A
+            ]),
+            child: result,
+          );
+        }
+        return result;
+      },
+      home: _withNightHotkey(ref, const _RootRouter()),
     );
   }
+}
+
+/// Wraps the app root so `N` toggles night mode from anywhere (press & the
+/// whole UI switches). The [Focus] gives the shortcut a target to receive keys.
+Widget _withNightHotkey(WidgetRef ref, Widget child) {
+  return CallbackShortcuts(
+    bindings: <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.keyN): () {
+        // Unmodified letter: skip it while a text field has focus, or typing
+        // an 'n' into a target name (or any other field) flips the display.
+        // Same guard the sequencer's plain-key shortcuts use.
+        if (FocusManager.instance.primaryFocus?.context?.widget
+            is EditableText) {
+          return;
+        }
+        ref.read(nightModeProvider.notifier).toggle();
+      },
+    },
+    child: Focus(autofocus: true, child: child),
+  );
 }
 
 /// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
@@ -64,9 +112,7 @@ class _RootRouter extends ConsumerWidget {
     ref.listen(appDisplayVersionProvider, (previous, next) {
       final version = next.asData?.value;
       if (version != null) {
-        unawaited(
-          ref.read(windowModeProvider).setTitle('$kAppName $version'),
-        );
+        unawaited(ref.read(windowModeProvider).setTitle('$kAppName $version'));
       }
     });
     // Materialize the DSO-catalog mirror sync (fetch-on-connect) at the root
@@ -85,18 +131,21 @@ class _RootRouter extends ConsumerWidget {
           // plan with (seeding the settings notifiers) before the shell.
           ? (gatePassed ? const AppShell() : const OfflineLaunchScreen())
           : servers.isEmpty || serverChooserRequested
-              ? const FirstRunScreen()
-              : gatePassed
-                  ? const AppShell()
-                  : const LaunchProfileScreen(),
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+          ? const FirstRunScreen()
+          : gatePassed
+          ? const AppShell()
+          : const LaunchProfileScreen(),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, st) {
         // Log internal details for debug; UI shows a generic message so
         // exception text can't leak into the user-facing surface.
-        developer.log('Failed to load saved servers',
-            name: 'openastroara.saved_servers', error: e, stackTrace: st);
+        developer.log(
+          'Failed to load saved servers',
+          name: 'openastroara.saved_servers',
+          error: e,
+          stackTrace: st,
+        );
         // A storage-read failure must not dead-end the app — offline planning
         // stays reachable from here too (§2: offline is never blocked).
         return Scaffold(
@@ -124,8 +173,11 @@ class _RootRouter extends ConsumerWidget {
     // routed-to surface really changes.
     final inShell = routed is AppShell;
     final windowMode = ref.read(windowModeProvider);
-    WidgetsBinding.instance.addPostFrameCallback((_) => windowMode
-        .set(inShell ? WindowMode.workstation : WindowMode.launchpad));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => windowMode.set(
+        inShell ? WindowMode.workstation : WindowMode.launchpad,
+      ),
+    );
     return routed;
   }
 }

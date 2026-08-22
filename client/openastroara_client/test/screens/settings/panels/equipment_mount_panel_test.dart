@@ -54,15 +54,18 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   @override
   Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
       // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
-      calls.add(body != null && body.containsKey('rate')
-          ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
-          : 'command:$subpath:enabled=${body?['enabled']}');
+      calls.add(
+        body != null && body.containsKey('rate')
+            ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
+            : 'command:$subpath:enabled=${body?['enabled']}',
+      );
   @override
   void close() {}
 }
 
 MountStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
+  bool canSlew = true,
   bool canSetTracking = true,
   bool canFindHome = false,
   bool canMoveAxis = false,
@@ -72,50 +75,56 @@ MountStatus _status({
   String runtimeState = 'idle',
   double? targetRaHours,
   double? targetDecDegrees,
-}) =>
-    MountStatus(
-      deviceId: 'mount-0',
-      name: 'EQ6-R',
-      connectionState: state,
-      capabilities: MountCapabilities(
-        canSlew: true,
-        canSync: true,
-        canPark: true,
-        canUnpark: true,
-        canSetTracking: canSetTracking,
-        canFindHome: canFindHome,
-        canMoveAxis: canMoveAxis,
-        axisRatesDegPerSec: axisRates,
-      ),
-      runtimeState: runtimeState,
-      rightAscensionHours: 5.5,
-      declinationDegrees: -12.25,
-      targetRightAscensionHours: targetRaHours,
-      targetDeclinationDegrees: targetDecDegrees,
-      tracking: tracking,
-      parked: parked,
-      atHome: false,
-    );
+}) => MountStatus(
+  deviceId: 'mount-0',
+  name: 'EQ6-R',
+  connectionState: state,
+  capabilities: MountCapabilities(
+    canSlew: canSlew,
+    canSync: true,
+    canPark: true,
+    canUnpark: true,
+    canSetTracking: canSetTracking,
+    canFindHome: canFindHome,
+    canMoveAxis: canMoveAxis,
+    axisRatesDegPerSec: axisRates,
+  ),
+  runtimeState: runtimeState,
+  rightAscensionHours: 5.5,
+  declinationDegrees: -12.25,
+  targetRightAscensionHours: targetRaHours,
+  targetDeclinationDegrees: targetDecDegrees,
+  tracking: tracking,
+  parked: parked,
+  atHome: false,
+);
 
 Future<void> _wideSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1200, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeMountApi> _pump(WidgetTester tester, MountStatus? status,
-    {SiteSettings? site}) async {
+Future<_FakeMountApi> _pump(
+  WidgetTester tester,
+  MountStatus? status, {
+  SiteSettings? site,
+}) async {
   await _wideSurface(tester);
   final api = _FakeMountApi(status);
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      serverLinkUpProvider.overrideWith((ref) => true),
-      savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-      mountApiFactoryProvider.overrideWithValue((_) => api),
-      if (site != null) siteSettingsProvider.overrideWith(() => _FixedSite(site)),
-    ],
-    child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
-  ));
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+        ),
+        mountApiFactoryProvider.overrideWithValue((_) => api),
+        if (site != null)
+          siteSettingsProvider.overrideWith(() => _FixedSite(site)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+    ),
+  );
   await tester.pumpAndSettle();
   return api;
 }
@@ -133,29 +142,31 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'Stop'), findsOneWidget);
   });
 
-  testWidgets('shows the slew target rows (— when the mount has none)',
-      (tester) async {
+  testWidgets('shows the slew target rows (— when the mount has none)', (
+    tester,
+  ) async {
     await _pump(tester, _status());
     expect(find.text('Target RA'), findsOneWidget);
     expect(find.text('Target Dec'), findsOneWidget);
     expect(find.text('—'), findsNWidgets(2));
   });
 
-  testWidgets('formats a commanded target from the mount bookkeeping',
-      (tester) async {
-    await _pump(tester, _status(
-      targetRaHours: 10.5,
-      targetDecDegrees: 55,
-    ));
+  testWidgets('formats a commanded target from the mount bookkeeping', (
+    tester,
+  ) async {
+    await _pump(tester, _status(targetRaHours: 10.5, targetDecDegrees: 55));
     expect(find.text('10h 30m 00s'), findsOneWidget);
     expect(find.text('+55° 00′ 00″'), findsOneWidget);
   });
 
-  testWidgets('shows the observing site lat/long below Declination when set',
-      (tester) async {
-    await _pump(tester, _status(),
-        site: const SiteSettings(
-            latitudeDeg: 12.5989, longitudeDeg: -75.8408));
+  testWidgets('shows the observing site lat/long below Declination when set', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _status(),
+      site: const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
+    );
     expect(find.text('Latitude'), findsOneWidget);
     expect(find.text('12.60° N'), findsOneWidget);
     expect(find.text('Longitude'), findsOneWidget);
@@ -168,8 +179,9 @@ void main() {
     expect(parkedY, greaterThan(latY));
   });
 
-  testWidgets('hides lat/long when the profile has no site configured',
-      (tester) async {
+  testWidgets('hides lat/long when the profile has no site configured', (
+    tester,
+  ) async {
     await _pump(tester, _status());
     expect(find.text('Latitude'), findsNothing);
     expect(find.text('Longitude'), findsNothing);
@@ -178,16 +190,21 @@ void main() {
   testWidgets('hydrates the site on mount and shows lat/long', (tester) async {
     await _wideSurface(tester);
     final api = _FakeMountApi(_status());
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        serverLinkUpProvider.overrideWith((ref) => true),
-        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(
-            const [AraServer(hostname: 'h', port: 5555)])),
-        mountApiFactoryProvider.overrideWithValue((_) => api),
-        profileApiProvider.overrideWithValue(_FakeProfileApi()),
-      ],
-      child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          mountApiFactoryProvider.overrideWithValue((_) => api),
+          profileApiProvider.overrideWithValue(_FakeProfileApi()),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
     // The panel hydrated the profile's site from the daemon (not overridden).
     expect(find.text('Latitude'), findsOneWidget);
@@ -215,8 +232,9 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'Home'), findsNothing);
   });
 
-  testWidgets('Home shows and sends the home command when supported',
-      (tester) async {
+  testWidgets('Home shows and sends the home command when supported', (
+    tester,
+  ) async {
     final api = await _pump(tester, _status(canFindHome: true));
     await tester.tap(find.widgetWithText(OutlinedButton, 'Home'));
     await tester.pumpAndSettle();
@@ -226,46 +244,89 @@ void main() {
   testWidgets('Home is disabled while parked', (tester) async {
     await _pump(tester, _status(canFindHome: true, parked: true));
     final home = tester.widget<OutlinedButton>(
-        find.widgetWithText(OutlinedButton, 'Home'));
+      find.widgetWithText(OutlinedButton, 'Home'),
+    );
     expect(home.onPressed, isNull); // must unpark before homing
   });
 
-  testWidgets('parked mount shows Unpark and hides Park; tracking disabled',
-      (tester) async {
+  testWidgets('parked mount shows Unpark and hides Park; tracking disabled', (
+    tester,
+  ) async {
     await _pump(tester, _status(parked: true));
     expect(find.widgetWithText(OutlinedButton, 'Unpark'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Park'), findsNothing);
-    final tracking =
-        tester.widget<Switch>(find.byKey(const Key('mount_tracking_switch')));
+    final tracking = tester.widget<Switch>(
+      find.byKey(const Key('mount_tracking_switch')),
+    );
     expect(tracking.onChanged, isNull); // disabled while parked
   });
 
-  testWidgets('no device connected shows the empty state + Connect…',
-      (tester) async {
+  testWidgets('no device connected shows the empty state + Connect…', (
+    tester,
+  ) async {
     await _pump(tester, null);
     expect(find.text('No mount connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
   });
 
-  testWidgets('manual control surfaces GoTo + speed + direction pad for a capable mount',
-      (tester) async {
-    await _pump(tester, _status(canMoveAxis: true, axisRates: const [1.0, 4.0]));
-    expect(find.text('Manual control'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'GoTo'), findsOneWidget);
-    expect(find.text('Speed'), findsOneWidget);
-    expect(find.text('4°/s'), findsOneWidget); // a reported rate chip
-    expect(find.byIcon(Icons.north), findsOneWidget); // a direction-pad button
-    expect(find.byIcon(Icons.stop), findsOneWidget); // the centre stop
+  testWidgets(
+    'manual control surfaces GoTo + speed + direction pad for a capable mount',
+    (tester) async {
+      await _pump(
+        tester,
+        _status(canMoveAxis: true, axisRates: const [1.0, 4.0]),
+      );
+      expect(find.text('Manual control'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'GoTo'), findsOneWidget);
+      expect(find.text('Speed'), findsOneWidget);
+      expect(find.text('4°/s'), findsOneWidget); // a reported rate chip
+      expect(
+        find.byIcon(Icons.north),
+        findsOneWidget,
+      ); // a direction-pad button
+      expect(find.byIcon(Icons.stop), findsOneWidget); // the centre stop
+    },
+  );
+
+  testWidgets('the direction pad sits above the Manual control section', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _status(canMoveAxis: true, axisRates: const [1.0, 4.0]),
+    );
+    final padY = tester.getTopLeft(find.byIcon(Icons.north)).dy;
+    final manualY = tester.getTopLeft(find.text('Manual control')).dy;
+    expect(padY, lessThan(manualY));
   });
 
-  testWidgets('the direction pad is hidden when the mount cannot MoveAxis',
-      (tester) async {
+  testWidgets(
+    'a MoveAxis-only mount gets the pad and no empty Manual control header',
+    (tester) async {
+      await _pump(
+        tester,
+        _status(canSlew: false, canMoveAxis: true, axisRates: const [4.0]),
+      );
+      expect(find.byIcon(Icons.north), findsOneWidget);
+      expect(find.text('Manual control'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'GoTo'), findsNothing);
+    },
+  );
+
+  testWidgets('the direction pad is hidden when the mount cannot MoveAxis', (
+    tester,
+  ) async {
     await _pump(tester, _status(canMoveAxis: false));
     expect(find.byIcon(Icons.north), findsNothing);
   });
 
-  testWidgets('GoTo dispatches a slew to the entered coordinates', (tester) async {
-    final api = await _pump(tester, _status(canMoveAxis: true, axisRates: const [4.0]));
+  testWidgets('GoTo dispatches a slew to the entered coordinates', (
+    tester,
+  ) async {
+    final api = await _pump(
+      tester,
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+    );
     await tester.enterText(find.widgetWithText(TextField, 'RA (h)'), '5.5');
     await tester.enterText(find.widgetWithText(TextField, 'Dec (°)'), '-12.25');
     await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
@@ -273,36 +334,60 @@ void main() {
     expect(api.calls.any((c) => c.startsWith('command:slew')), isTrue);
   });
 
-  testWidgets('a held direction button stops the axis if the mount goes busy',
-      (tester) async {
+  testWidgets('a held direction button stops the axis if the mount goes busy', (
+    tester,
+  ) async {
     await _wideSurface(tester);
-    final api = _FakeMountApi(_status(canMoveAxis: true, axisRates: const [4.0]));
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        serverLinkUpProvider.overrideWith((ref) => true),
-        savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-        mountApiFactoryProvider.overrideWithValue((_) => api),
-      ],
-      child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
-    ));
+    final api = _FakeMountApi(
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          mountApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
     // The single-rate fixture (4.0 °/s) yields percentage presets with a mid
     // default — pick 100% so the held move runs at the mount's max (4.0 °/s).
     await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
     await tester.pump();
     // Press and hold the North button → starts a move at the picked rate.
-    final hold = await tester.startGesture(tester.getCenter(find.byIcon(Icons.north)));
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.north)),
+    );
     await tester.pump();
-    expect(api.calls.any((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=4.0')),
-        isTrue);
+    expect(
+      api.calls.any(
+        (c) => c.startsWith('command:moveaxis') && c.endsWith('rate=4.0'),
+      ),
+      isTrue,
+    );
     // Mount goes busy from another source (a slew) while still held → pad disables,
     // and the held button must dispatch a stop (rate 0) on the enabled→false transition.
-    api.status = _status(canMoveAxis: true, axisRates: const [4.0], runtimeState: 'slewing');
-    await tester.pump(const Duration(seconds: 16)); // live poll picks up the new status
+    api.status = _status(
+      canMoveAxis: true,
+      axisRates: const [4.0],
+      runtimeState: 'slewing',
+    );
+    await tester.pump(
+      const Duration(seconds: 16),
+    ); // live poll picks up the new status
     await tester.pump();
-    expect(api.calls.any((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0')),
-        isTrue);
+    expect(
+      api.calls.any(
+        (c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0'),
+      ),
+      isTrue,
+    );
     await hold.up();
   });
 }
