@@ -13,6 +13,7 @@ import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
 
 // A body whose single child is a Take Exposure, so the tree renders a row the
 // test can see — and the root Name carries the id to prove the right load.
@@ -270,6 +271,76 @@ void main() {
     container.read(selectedSequenceIdProvider.notifier).select('seq-r');
     await tester.pumpAndSettle();
     expect(_loadedId(container), 'seq-r'); // retry succeeded
+  });
+
+  // The bug this PR fixes: Delete/Backspace inside an inspector field used to
+  // delete the whole instruction instead of a character, because
+  // CallbackShortcuts always consumes a key it matched.
+  group('Delete/Backspace vs the field editor', () {
+    Future<ProviderContainer> pumpLoaded(WidgetTester tester) async {
+      // The tab renders the tree AND the inspector side by side once a node is
+      // selected; the default 800x600 test surface overflows.
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-d');
+      await tester.pumpAndSettle();
+      // Select the single Take Exposure child so there's something to delete.
+      container.read(sequenceEditorProvider.notifier).select(const [0]);
+      await tester.pumpAndSettle();
+      return container;
+    }
+
+    int childCount(ProviderContainer c) =>
+        childrenOf(c.read(sequenceEditorProvider)!.body).length;
+
+    // Focus each kind of inspector field in turn: the old guard only
+    // recognised EditableText, so a focused dropdown or switch let Delete
+    // fall through and remove the whole instruction.
+    for (final (label, matcher) in <(String, Finder)>[
+      ('a text field', find.byType(EditableText)),
+      ('a dropdown', find.byType(DropdownButton<String>)),
+    ]) {
+      testWidgets('Delete with $label focused leaves the instruction alone',
+          (tester) async {
+        final container = await pumpLoaded(tester);
+        expect(childCount(container), 1);
+
+        final field = find.descendant(
+          of: find.byType(SequenceFieldEditor),
+          matching: matcher,
+        );
+        expect(field, findsWidgets, reason: 'the inspector must show $label');
+        await tester.tap(field.first, warnIfMissed: false);
+        await tester.pumpAndSettle();
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+        await tester.pumpAndSettle();
+
+        expect(childCount(container), 1,
+            reason: 'editing a field must never delete the instruction');
+      });
+    }
+
+    testWidgets('Delete outside the inspector still removes the selection',
+        (tester) async {
+      final container = await pumpLoaded(tester);
+      expect(childCount(container), 1);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
+
+      expect(childCount(container), 0);
+    });
   });
 
   // §Run-redesign S12 — the lifecycle keys (review #864: the riskiest wiring
