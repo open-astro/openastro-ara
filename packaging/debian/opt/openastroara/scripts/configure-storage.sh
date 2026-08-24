@@ -75,6 +75,15 @@ base_disk() { # deepest ancestor of a device node
 
 refuse_if_system_disk() {
     dev=$1
+    # A partition ALREADY mounted as the data store (under /media, e.g.
+    # /media/openastroara) is a dedicated on-board store partition, not the
+    # running system — allow (re)configuring it without reformatting the boot
+    # volume. Refuse everything else on the boot disk (root/boot holders and
+    # unmounted system-disk partitions) below.
+    mnt=$(findmnt -no TARGET "$dev" 2>/dev/null || true)
+    case "$mnt" in
+        /media/*) return 0 ;;
+    esac
     base=$(base_disk "$dev")
     for critical in / /boot /boot/firmware; do
         holder=$(findmnt -no SOURCE "$critical" 2>/dev/null || true)

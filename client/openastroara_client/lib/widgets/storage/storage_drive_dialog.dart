@@ -154,7 +154,17 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                     textAlign: TextAlign.center)),
           ),
           data: (all) {
-            final disks = all.where((d) => !d.isSystemDisk).toList();
+            // Offer removable/USB drives AND a dedicated on-board data
+            // partition (a system-disk partition already mounted under
+            // /media, e.g. the SBC's large store). System disks that carry the
+            // OS (or aren't mounted as data) stay hidden so the boot volume
+            // can't be offered for format.
+            final disks = all
+                .where((d) =>
+                    !d.isSystemDisk ||
+                    ((d.mountPoint?.startsWith('/media') ?? false) &&
+                        (d.label?.isNotEmpty ?? false)))
+                .toList();
             // A rescan hands out fresh device objects — re-point the
             // selection at its current record so the erase/label logic never
             // reads pre-rescan state. A disk that vanished deselects.
