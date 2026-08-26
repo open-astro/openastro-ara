@@ -260,6 +260,23 @@ void main() {
     expect(sent, lessThanOrEqualTo(255));
   });
 
+  testWidgets('dragging brightness up from off moves the switch with it',
+      (tester) async {
+    // Brightness alone implies the light state: the daemon maps any positive
+    // level to CalibratorOn. The switch must not sit at "off" while the panel is
+    // being lit by the slider next to it.
+    final api = await _pump(tester, _status(lightOn: false, brightness: 0));
+    await tester.drag(find.byType(Slider), const Offset(200, 0));
+    await tester.pump();
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isTrue);
+    expect(find.textContaining('Turning the light on'), findsOneWidget);
+    api.status = _status(
+        lightOn: true, brightness: api.bodies.last!['brightness'] as int,
+        runtimeState: 'light_on');
+    await _drainConfirm(tester);
+  });
+
   testWidgets('the brightness slider is disabled until the max is known',
       (tester) async {
     await _pump(tester, _status(lightOn: true, maxBrightness: 0));

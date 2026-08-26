@@ -263,7 +263,12 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
   /// exact complaint this panel exists to fix.
   Future<void> _apply({bool? openCover, bool? lightOn, int? brightness}) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (lightOn != null) setState(() => _pendingLight = lightOn);
+    // A brightness-only command implies the light's end state too (the daemon maps
+    // any positive level to CalibratorOn and 0 to CalibratorOff), so the switch
+    // must follow the slider — otherwise dragging up from 0 leaves the switch
+    // reading "off" until the next poll, contradicting the light itself.
+    final impliedLight = lightOn ?? (brightness == null ? null : brightness > 0);
+    if (impliedLight != null) setState(() => _pendingLight = impliedLight);
     try {
       final performed = await ref
           .read(flatPanelProvider.notifier)
