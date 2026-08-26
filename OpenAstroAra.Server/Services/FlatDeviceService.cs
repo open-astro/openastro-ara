@@ -149,6 +149,13 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                 if (changingLight) {
                     WaitForCoverSettle(client);
                 }
+            } else if (changingLight) {
+                // A STANDALONE light command while the cover is still travelling from an
+                // EARLIER request: panels reject a calibrator change mid-motion
+                // ("A cover open/close operation is already in progress"), and the caller
+                // already has its 202 — so the failure would be invisible. Wait the cover
+                // out and then apply, which is what the user asked for.
+                WaitForCoverSettle(client);
             }
             if (req.LightOn is bool lit) {
                 if (lit) {
@@ -190,13 +197,15 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         }
         try {
             AlpacaCoverCalibrator? client;
+            int? cachedMax;
             bool needMax;
             lock (_gate) {
                 if (_disposed || _state != EquipmentConnectionState.Connected) {
                     return;
                 }
                 client = _client;
-                needMax = _maxBrightness is null;
+                cachedMax = _maxBrightness;
+                needMax = cachedMax is null;
             }
             if (client is null) {
                 return;
@@ -213,8 +222,8 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                 return; // the device didn't answer — skip this tick's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client);
-            int? max = needMax ? ReadMaxBrightness(client) : null;
+            int? max = needMax ? ReadMaxBrightness(client) : cachedMax;
+            var runtime = ReadRuntime(client, max);
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -232,7 +241,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported cover/calibrator property throws; that field falls back to a default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static FlatDeviceStateDto ReadRuntime(AlpacaCoverCalibrator c) {
+    private static FlatDeviceStateDto ReadRuntime(AlpacaCoverCalibrator c, int? maxBrightness) {
         CoverStatus cover;
         try { cover = c.CoverState; } catch (Exception) { cover = CoverStatus.Unknown; }
         CalibratorStatus cal;
@@ -253,14 +262,22 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             : lightOn ? "light_on"
             : coverOpen ? "cover_open"
             : "cover_closed";
-        return new FlatDeviceStateDto(state, coverOpen, lightOn, lightOn ? brightness : 0);
+        return new FlatDeviceStateDto(state, coverOpen, lightOn, lightOn ? brightness : 0,
+            MaxBrightness: maxBrightness ?? 0,
+            // NotPresent is the only reading that proves the feature is absent; Unknown (an
+            // unsupported/failed read) stays "present" so a working control is never hidden.
+            HasCover: cover != CoverStatus.NotPresent,
+            HasCalibrator: cal != CalibratorStatus.NotPresent,
+            LightWarming: cal == CalibratorStatus.NotReady);
     }
 
-    // Bounded best-effort wait (~6s) for the cover to stop moving before a subsequent light op.
-    // Runs on the fire-and-forget apply thread; a CoverState read that throws propagates to
+    // Bounded best-effort wait (~40s) for the cover to stop moving before a subsequent light op.
+    // Sized for real hardware: a motorised cover takes 10-30s end to end (the earlier 6s budget
+    // expired mid-travel and the light op then failed with "already in progress"). Runs on the
+    // fire-and-forget apply thread; a CoverState read that throws propagates to
     // ApplyInBackground's catch.
     private static void WaitForCoverSettle(AlpacaCoverCalibrator c) {
-        for (var i = 0; i < 30; i++) {
+        for (var i = 0; i < 200; i++) {
             if (c.CoverState != CoverStatus.Moving) {
                 return;
             }

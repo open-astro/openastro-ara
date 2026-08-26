@@ -1247,6 +1247,35 @@ const Map<String, Help> helpRegistry = {
   ),
 
   // ── Flat panel (eq.flat) ────────────────────────────────────────────────
+  'eq.flat.cover': Help(
+    key: 'eq.flat.cover',
+    title: 'Cover open / close',
+    body:
+        'Drives the panel\'s motorised cover (ASCOM OpenCover / CloseCover). Closed with the light on is how flats are '
+        'taken; closed with the light off is your dark/bias position and how the scope is parked between sessions. '
+        'Open it before imaging — a closed cover means every frame is blank. '
+        'Both buttons disable while the cover is travelling, since it is a single motor and reversing mid-travel is '
+        'how covers get jammed. Panels with no motorised cover (a bare light panel) do not show this row.',
+  ),
+  'eq.flat.light': Help(
+    key: 'eq.flat.light',
+    title: 'Calibrator light',
+    body:
+        'Turns the panel\'s illumination on or off (ASCOM CalibratorOn / CalibratorOff). Turning it on uses the current '
+        'brightness, or full brightness if none has been set yet. Leave it off for darks and bias frames — stray light '
+        'from the panel contaminates them. A dust cover with no light in it does not show this row.',
+  ),
+  'eq.flat.brightness': Help(
+    key: 'eq.flat.brightness',
+    title: 'Panel brightness',
+    body:
+        'Sets the illumination level, from 0 (off) to the panel\'s own maximum, which varies wildly between models — '
+        'some go to 255, some to 100, some to tens of thousands. Brightness is what you tune to land the flat\'s '
+        'average level on the auto-brightness target with a sane exposure time: too bright and short exposures hit '
+        'shutter/rolling-shutter artefacts, too dim and flats take forever. The level is applied when you release the '
+        'slider, not while dragging, because each change is a round-trip to the device. The control stays disabled '
+        'until Ara has read the panel\'s maximum brightness (a second or two after connecting).',
+  ),
   'eq.flat.auto_brightness_target': Help(
     key: 'eq.flat.auto_brightness_target',
     title: 'Auto-brightness target',
