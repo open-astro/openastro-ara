@@ -27,6 +27,8 @@ class _FakeFlatApi implements EquipmentDeviceClient<FlatPanelStatus> {
   _FakeFlatApi(this.status);
   FlatPanelStatus? status;
   final List<String> calls = [];
+  final List<Map<String, dynamic>?> bodies = [];
+  Object? commandError; // when set, `command` throws it (a failing device)
 
   @override
   Future<FlatPanelStatus?> getStatus() async => status;
@@ -36,8 +38,11 @@ class _FakeFlatApi implements EquipmentDeviceClient<FlatPanelStatus> {
   @override
   Future<void> disconnect() async => calls.add('disconnect');
   @override
-  Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
-      calls.add('command:$subpath');
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
+    calls.add('command:$subpath');
+    bodies.add(body);
+    if (commandError != null) throw commandError!;
+  }
   @override
   void close() {}
 }
@@ -48,6 +53,10 @@ FlatPanelStatus _status({
   int brightness = 0,
   bool coverOpen = false,
   String runtimeState = 'cover_closed',
+  int maxBrightness = 255,
+  bool hasCover = true,
+  bool hasCalibrator = true,
+  bool lightWarming = false,
 }) =>
     FlatPanelStatus(
       deviceId: 'flat-0',
@@ -57,6 +66,10 @@ FlatPanelStatus _status({
       coverOpen: coverOpen,
       lightOn: lightOn,
       brightness: brightness,
+      maxBrightness: maxBrightness,
+      hasCover: hasCover,
+      hasCalibrator: hasCalibrator,
+      lightWarming: lightWarming,
     );
 
 // The settings panels are designed for the wide right-hand pane; give the test a
@@ -80,6 +93,16 @@ Future<_FakeFlatApi> _pump(WidgetTester tester, FlatPanelStatus? status) async {
   ));
   await tester.pumpAndSettle();
   return api;
+}
+
+/// Let the notifier's post-apply confirm poll run to completion (it re-reads
+/// every 500 ms until the device reflects the command, or its ~4 s budget runs
+/// out) so no timer outlives the test.
+Future<void> _drainConfirm(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 500));
+  }
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -170,5 +193,184 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Reconnect'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:reconnect'));
+  });
+
+  testWidgets('Open / Close drive the cover through apply', (tester) async {
+    final api = await _pump(tester, _status());
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Open'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:apply'));
+    expect(api.bodies.last, {'open_cover': true});
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Close'));
+    await tester.pumpAndSettle();
+    expect(api.bodies.last, {'open_cover': false});
+  });
+
+  testWidgets('both cover buttons are disabled while the cover moves',
+      (tester) async {
+    await _pump(tester, _status(runtimeState: 'cover_moving'));
+    for (final label in ['Open', 'Close']) {
+      final button = tester.widget<OutlinedButton>(
+          find.widgetWithText(OutlinedButton, label));
+      expect(button.onPressed, isNull, reason: '$label must be dead mid-travel');
+    }
+  });
+
+  testWidgets('the light switch turns the calibrator on', (tester) async {
+    final api = await _pump(tester, _status(lightOn: false));
+    // What the device becomes once the daemon's background apply lands.
+    api.status = _status(lightOn: true, brightness: 255, runtimeState: 'light_on');
+    await tester.tap(find.byKey(const Key('flat-light-switch')));
+    await tester.pump();
+    expect(api.bodies.last, {'light_on': true});
+    // The switch moves under the finger — it does NOT wait for the device.
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isTrue);
+    expect(find.text('Turning the light on…'), findsOneWidget);
+    await _drainConfirm(tester);
+    // …and the confirm poll lands the real reading well inside the 15 s
+    // liveness poll that used to be the only update.
+    expect(find.text('Light on · brightness 255'), findsOneWidget);
+  });
+
+  testWidgets('the light switch turns the calibrator off again', (tester) async {
+    // The switch reflects the DEVICE's state, not a local toggle: pumped with the
+    // light already on, tapping it must command off.
+    final api = await _pump(tester,
+        _status(lightOn: true, brightness: 255, runtimeState: 'light_on'));
+    api.status = _status(lightOn: false);
+    await tester.tap(find.byKey(const Key('flat-light-switch')));
+    await tester.pump();
+    expect(api.bodies.last, {'light_on': false});
+    await _drainConfirm(tester);
+    expect(find.text('Light off'), findsOneWidget);
+  });
+
+  testWidgets('the brightness slider commits once, on release', (tester) async {
+    final api = await _pump(tester,
+        _status(lightOn: true, brightness: 0, runtimeState: 'light_on'));
+    await tester.drag(find.byType(Slider), const Offset(200, 0));
+    await tester.pump();
+    await _drainConfirm(tester);
+    // One apply for the whole drag (onChangeEnd), never one per frame.
+    expect(api.calls.where((c) => c == 'command:apply').length, 1);
+    final sent = api.bodies.last!['brightness'] as int;
+    expect(sent, greaterThan(0));
+    expect(sent, lessThanOrEqualTo(255));
+  });
+
+  testWidgets('dragging brightness up from off moves the switch with it',
+      (tester) async {
+    // Brightness alone implies the light state: the daemon maps any positive
+    // level to CalibratorOn. The switch must not sit at "off" while the panel is
+    // being lit by the slider next to it.
+    final api = await _pump(tester, _status(lightOn: false, brightness: 0));
+    await tester.drag(find.byType(Slider), const Offset(200, 0));
+    await tester.pump();
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isTrue);
+    expect(find.textContaining('Turning the light on'), findsOneWidget);
+    api.status = _status(
+        lightOn: true, brightness: api.bodies.last!['brightness'] as int,
+        runtimeState: 'light_on');
+    await _drainConfirm(tester);
+  });
+
+  testWidgets('the brightness slider is disabled until the max is known',
+      (tester) async {
+    await _pump(tester, _status(lightOn: true, maxBrightness: 0));
+    expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNull);
+    expect(find.textContaining('brightness range'), findsOneWidget);
+  });
+
+  testWidgets('a device with no cover hides the cover row', (tester) async {
+    await _pump(tester, _status(hasCover: false));
+    expect(find.widgetWithText(OutlinedButton, 'Open'), findsNothing);
+    expect(find.text('Cover closed'), findsNothing);
+    expect(find.byKey(const Key('flat-light-switch')), findsOneWidget); // light row stays
+  });
+
+  testWidgets('a device with no calibrator hides the light + brightness rows',
+      (tester) async {
+    await _pump(tester, _status(hasCalibrator: false));
+    expect(find.byType(Slider), findsNothing);
+    expect(find.byKey(const Key('flat-light-switch')), findsNothing);
+    expect(find.text('Light off'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Open'), findsOneWidget);
+  });
+
+  testWidgets('a light command waits out a moving cover instead of giving up',
+      (tester) async {
+    // Panels refuse a calibrator change while the cover travels, so the daemon
+    // holds the command until the cover settles. The pending state must survive
+    // that wait — well past the 4 s confirm budget — rather than snapping back.
+    final api = await _pump(tester, _status(runtimeState: 'cover_moving'));
+    await tester.tap(find.byKey(const Key('flat-light-switch')));
+    await tester.pump();
+    expect(api.bodies.last, {'light_on': true});
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 500)); // 15 s of travel
+    }
+    expect(find.textContaining('Waiting for the cover'), findsOneWidget);
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isTrue);
+
+    // Cover settles, the daemon applies the held command, the panel confirms.
+    api.status = _status(lightOn: true, brightness: 255, runtimeState: 'light_on');
+    await _drainConfirm(tester);
+    expect(find.text('Light on · brightness 255'), findsOneWidget);
+  });
+
+  testWidgets('a warming light reads as in-progress, not as a failure',
+      (tester) async {
+    // EL panels report NotReady while ramping to the commanded level. That is the
+    // command still working, so the pending state must hold through it rather
+    // than time out and snap the switch back.
+    final api = await _pump(tester, _status(lightWarming: true));
+    await tester.tap(find.byKey(const Key('flat-light-switch')));
+    await tester.pump();
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 500)); // 15 s of warm-up
+    }
+    expect(find.text('Light warming up…'), findsOneWidget);
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isTrue);
+
+    api.status = _status(lightOn: true, brightness: 255, runtimeState: 'light_on');
+    await _drainConfirm(tester);
+    expect(find.text('Light on · brightness 255'), findsOneWidget);
+  });
+
+  testWidgets('a cover stuck moving forever stops polling and reports it',
+      (tester) async {
+    // A jammed cover (or a driver bug reporting Moving forever) must not leave the
+    // panel polling the daemon every 500 ms for the rest of the session: the
+    // confirm poll has an absolute ceiling on top of the busy exclusion, after
+    // which the ordinary liveness poll owns the device again and the user is told
+    // the command never landed.
+    await _pump(tester, _status(runtimeState: 'cover_moving'));
+    await tester.tap(find.byKey(const Key('flat-light-switch')));
+    await tester.pump();
+    // Past the ~60 s ceiling. Asserted right at the end of the budget: a SnackBar
+    // auto-dismisses after ~4 s, so over-pumping would hide the very message
+    // under test.
+    for (var i = 0; i < 122; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    expect(find.textContaining("didn't apply that"), findsOneWidget);
+    // …and the switch is back to the device's truth, not stuck pending.
+    expect(find.textContaining('Waiting for the cover'), findsNothing);
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isFalse);
+  });
+
+  testWidgets('a failing apply surfaces the error instead of failing silently',
+      (tester) async {
+    final api = await _pump(tester, _status());
+    api.commandError = Exception('driver said no');
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining("Couldn't drive the flat panel"), findsOneWidget);
   });
 }

@@ -36,6 +36,9 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable {
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan SettlePollInterval = TimeSpan.FromMilliseconds(200);
+    // ~40s of cover travel at SettlePollInterval — real motorised covers take 10-30s end to end.
+    internal const int MaxSettlePolls = 200;
     private static readonly FlatDeviceStateDto IdleRuntime = new("cover_closed", CoverOpen: false, LightOn: false, Brightness: 0);
 
     private readonly ILogger<FlatDeviceService> _logger;
@@ -137,7 +140,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         Justification = "Background apply boundary: the blocking ASCOM OpenCover/CloseCover/CalibratorOn/Off can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-apply; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private void ApplyInBackground(AlpacaCoverCalibrator client, FlatPanelRequestDto req, int? maxBrightness) {
         try {
-            var changingLight = req.LightOn is not null || req.Brightness is not null;
+            var changingLight = NeedsCoverSettle(req);
             if (req.OpenCover is bool open) {
                 if (open) {
                     client.OpenCover();
@@ -146,8 +149,17 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                 }
                 // If the same request also changes the light, wait for the cover to stop moving
                 // first: some panels reject a calibrator change while the cover is in motion.
-                if (changingLight) {
-                    WaitForCoverSettle(client);
+                if (changingLight && !WaitForCoverSettle(client)) {
+                    LogCoverNeverSettled();
+                }
+            } else if (changingLight) {
+                // A STANDALONE light command while the cover is still travelling from an
+                // EARLIER request: panels reject a calibrator change mid-motion
+                // ("A cover open/close operation is already in progress"), and the caller
+                // already has its 202 — so the failure would be invisible. Wait the cover
+                // out and then apply, which is what the user asked for.
+                if (!WaitForCoverSettle(client)) {
+                    LogCoverNeverSettled();
                 }
             }
             if (req.LightOn is bool lit) {
@@ -190,13 +202,15 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         }
         try {
             AlpacaCoverCalibrator? client;
+            int? cachedMax;
             bool needMax;
             lock (_gate) {
                 if (_disposed || _state != EquipmentConnectionState.Connected) {
                     return;
                 }
                 client = _client;
-                needMax = _maxBrightness is null;
+                cachedMax = _maxBrightness;
+                needMax = cachedMax is null;
             }
             if (client is null) {
                 return;
@@ -213,8 +227,8 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                 return; // the device didn't answer — skip this tick's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client);
-            int? max = needMax ? ReadMaxBrightness(client) : null;
+            int? max = needMax ? ReadMaxBrightness(client) : cachedMax;
+            var runtime = ReadRuntime(client, max);
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -232,20 +246,28 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported cover/calibrator property throws; that field falls back to a default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static FlatDeviceStateDto ReadRuntime(AlpacaCoverCalibrator c) {
+    private static FlatDeviceStateDto ReadRuntime(AlpacaCoverCalibrator c, int? maxBrightness) {
         CoverStatus cover;
         try { cover = c.CoverState; } catch (Exception) { cover = CoverStatus.Unknown; }
         CalibratorStatus cal;
         try { cal = c.CalibratorState; } catch (Exception) { cal = CalibratorStatus.Unknown; }
         int brightness;
         try { brightness = c.Brightness; } catch (Exception) { brightness = 0; }
+        return MapRuntime(cover, cal, brightness, maxBrightness);
+    }
 
+    /// <summary>
+    /// Pure ASCOM-status -> DTO mapping, split out of <see cref="ReadRuntime"/> so the capability
+    /// and warming rules are unit-testable without an Alpaca device.
+    /// </summary>
+    internal static FlatDeviceStateDto MapRuntime(
+            CoverStatus cover, CalibratorStatus cal, int brightness, int? maxBrightness) {
         var coverOpen = cover == CoverStatus.Open;
         // Only Ready counts as "on": CalibratorStatus.NotReady (the calibrator is warming up /
-        // changing) is treated as not-on and is transient — the next 2s poll resolves to Ready
-        // (light_on) or Off. The FlatDeviceStateDto.State contract is a fixed token set
-        // (cover_*/light_on/error) with no "warming" value, so a distinct warming label is deferred
-        // to the FlatDevice mediator work, where the DTO can be extended deliberately.
+        // changing) is not yet on. It is reported separately as LightWarming rather than folded
+        // into LightOn, because a client that reads warming as "off" reads a command still in
+        // flight as a FAILED one. The State token set stays fixed (cover_*/light_on/error) — the
+        // warming distinction rides on its own field.
         var lightOn = cal == CalibratorStatus.Ready;
         var state =
             cover == CoverStatus.Moving ? "cover_moving"
@@ -253,19 +275,48 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             : lightOn ? "light_on"
             : coverOpen ? "cover_open"
             : "cover_closed";
-        return new FlatDeviceStateDto(state, coverOpen, lightOn, lightOn ? brightness : 0);
+        return new FlatDeviceStateDto(state, coverOpen, lightOn, lightOn ? brightness : 0,
+            MaxBrightness: maxBrightness ?? 0,
+            // NotPresent is the only reading that proves the feature is absent; Unknown (an
+            // unsupported/failed read) stays "present" so a working control is never hidden.
+            HasCover: cover != CoverStatus.NotPresent,
+            HasCalibrator: cal != CalibratorStatus.NotPresent,
+            LightWarming: cal == CalibratorStatus.NotReady);
     }
 
-    // Bounded best-effort wait (~6s) for the cover to stop moving before a subsequent light op.
-    // Runs on the fire-and-forget apply thread; a CoverState read that throws propagates to
+    // Bounded best-effort wait (~40s) for the cover to stop moving before a subsequent light op.
+    // Sized for real hardware: a motorised cover takes 10-30s end to end (the earlier 6s budget
+    // expired mid-travel and the light op then failed with "already in progress"). Runs on the
+    // fire-and-forget apply thread; a CoverState read that throws propagates to
     // ApplyInBackground's catch.
-    private static void WaitForCoverSettle(AlpacaCoverCalibrator c) {
-        for (var i = 0; i < 30; i++) {
-            if (c.CoverState != CoverStatus.Moving) {
-                return;
+    private static bool WaitForCoverSettle(AlpacaCoverCalibrator c) =>
+        WaitForCoverSettle(() => c.CoverState, () => Thread.Sleep(SettlePollInterval), MaxSettlePolls);
+
+    /// <summary>
+    /// True when [req] changes the calibrator light and therefore needs the cover at rest first —
+    /// panels reject a calibrator change while the cover is in motion, whether that motion was
+    /// commanded by this same request or by an earlier one.
+    /// </summary>
+    internal static bool NeedsCoverSettle(FlatPanelRequestDto req) {
+        ArgumentNullException.ThrowIfNull(req);
+        return req.LightOn is not null || req.Brightness is not null;
+    }
+
+    /// <summary>
+    /// The settle loop itself, over an injected state reader + sleeper so it can be unit-tested
+    /// without a device or a 40s wall clock. Returns true when the cover came to rest, false when
+    /// the budget ran out (the caller proceeds anyway — best effort, never a hang).
+    /// </summary>
+    internal static bool WaitForCoverSettle(Func<CoverStatus> readCoverState, Action sleep, int maxPolls) {
+        ArgumentNullException.ThrowIfNull(readCoverState);
+        ArgumentNullException.ThrowIfNull(sleep);
+        for (var i = 0; i < maxPolls; i++) {
+            if (readCoverState() != CoverStatus.Moving) {
+                return true;
             }
-            Thread.Sleep(200);
+            sleep();
         }
+        return false;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -452,6 +503,14 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "FlatDevice apply (cover/light) failed")]
     private partial void LogApplyFailed(Exception ex);
+
+    // Distinct from LogApplyFailed: the light op is still attempted after the budget expires
+    // (best effort), so without this line a jammed cover would look like a clean apply right up
+    // until the driver's own exception — or produce no server-side trace at all if the panel
+    // silently ignores the command.
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "FlatDevice cover never settled within the wait budget — applying the light change anyway")]
+    private partial void LogCoverNeverSettled();
 
     [LoggerMessage(Level = LogLevel.Information, Message = "FlatDevice connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);

@@ -366,7 +366,20 @@ public sealed record FlatDeviceStateDto(
     string State,    // "cover_open" | "cover_moving" | "cover_closed" | "light_on" | "error"
     bool CoverOpen,
     bool LightOn,
-    int Brightness);
+    int Brightness,
+    /// <summary>Device's <c>MaxBrightness</c>, or 0 until it has been read (or when the
+    /// device has no calibrator). The client's brightness control scales to this.</summary>
+    int MaxBrightness = 0,
+    /// <summary>False when the device reports <c>CoverStatus.NotPresent</c> — a bare light
+    /// panel with no motorised cover, so the client hides the open/close controls.</summary>
+    bool HasCover = true,
+    /// <summary>False when the device reports <c>CalibratorStatus.NotPresent</c> — a plain
+    /// dust cover with no light, so the client hides the light/brightness controls.</summary>
+    bool HasCalibrator = true,
+    /// <summary><c>CalibratorStatus.NotReady</c> — the light is warming up or changing level
+    /// (EL panels take a moment to reach the commanded brightness). Not yet on, but on its
+    /// way: the client waits rather than reporting the command as failed.</summary>
+    bool LightWarming = false);
 
 public sealed record FlatPanelRequestDto(
     bool? OpenCover = null,
