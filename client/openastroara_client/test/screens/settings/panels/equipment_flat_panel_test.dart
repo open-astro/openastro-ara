@@ -342,6 +342,29 @@ void main() {
     expect(find.text('Light on · brightness 255'), findsOneWidget);
   });
 
+  testWidgets('a cover stuck moving forever stops polling and reports it',
+      (tester) async {
+    // A jammed cover (or a driver bug reporting Moving forever) must not leave the
+    // panel polling the daemon every 500 ms for the rest of the session: the
+    // confirm poll has an absolute ceiling on top of the busy exclusion, after
+    // which the ordinary liveness poll owns the device again and the user is told
+    // the command never landed.
+    await _pump(tester, _status(runtimeState: 'cover_moving'));
+    await tester.tap(find.byKey(const Key('flat-light-switch')));
+    await tester.pump();
+    // Past the ~60 s ceiling. Asserted right at the end of the budget: a SnackBar
+    // auto-dismisses after ~4 s, so over-pumping would hide the very message
+    // under test.
+    for (var i = 0; i < 122; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    expect(find.textContaining("didn't apply that"), findsOneWidget);
+    // …and the switch is back to the device's truth, not stuck pending.
+    expect(find.textContaining('Waiting for the cover'), findsNothing);
+    expect(tester.widget<Switch>(
+            find.byKey(const Key('flat-light-switch'))).value, isFalse);
+  });
+
   testWidgets('a failing apply surfaces the error instead of failing silently',
       (tester) async {
     final api = await _pump(tester, _status());

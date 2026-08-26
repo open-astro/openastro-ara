@@ -149,8 +149,8 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                 }
                 // If the same request also changes the light, wait for the cover to stop moving
                 // first: some panels reject a calibrator change while the cover is in motion.
-                if (changingLight) {
-                    WaitForCoverSettle(client);
+                if (changingLight && !WaitForCoverSettle(client)) {
+                    LogCoverNeverSettled();
                 }
             } else if (changingLight) {
                 // A STANDALONE light command while the cover is still travelling from an
@@ -158,7 +158,9 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                 // ("A cover open/close operation is already in progress"), and the caller
                 // already has its 202 — so the failure would be invisible. Wait the cover
                 // out and then apply, which is what the user asked for.
-                WaitForCoverSettle(client);
+                if (!WaitForCoverSettle(client)) {
+                    LogCoverNeverSettled();
+                }
             }
             if (req.LightOn is bool lit) {
                 if (lit) {
@@ -287,7 +289,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
     // expired mid-travel and the light op then failed with "already in progress"). Runs on the
     // fire-and-forget apply thread; a CoverState read that throws propagates to
     // ApplyInBackground's catch.
-    private static void WaitForCoverSettle(AlpacaCoverCalibrator c) =>
+    private static bool WaitForCoverSettle(AlpacaCoverCalibrator c) =>
         WaitForCoverSettle(() => c.CoverState, () => Thread.Sleep(SettlePollInterval), MaxSettlePolls);
 
     /// <summary>
@@ -501,6 +503,14 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "FlatDevice apply (cover/light) failed")]
     private partial void LogApplyFailed(Exception ex);
+
+    // Distinct from LogApplyFailed: the light op is still attempted after the budget expires
+    // (best effort), so without this line a jammed cover would look like a clean apply right up
+    // until the driver's own exception — or produce no server-side trace at all if the panel
+    // silently ignores the command.
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "FlatDevice cover never settled within the wait budget — applying the light change anyway")]
+    private partial void LogCoverNeverSettled();
 
     [LoggerMessage(Level = LogLevel.Information, Message = "FlatDevice connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);

@@ -62,16 +62,33 @@ class FlatPanelNotifier extends EquipmentDeviceNotifier<FlatPanelStatus> {
       }),
     );
     if (performed) {
-      await _confirm(lightOn: lightOn, brightness: brightness);
+      _lastApplyConfirmed =
+          await _confirm(lightOn: lightOn, brightness: brightness);
     }
     return performed;
   }
+
+  /// Whether the last [apply] was observed to take effect on the device. False
+  /// when the confirm poll gave up — a jammed cover, or a panel that quietly
+  /// refused. Read by the panel right after an apply so an unlanded command is
+  /// reported instead of vanishing.
+  bool get lastApplyConfirmed => _lastApplyConfirmed;
+  bool _lastApplyConfirmed = true;
 
   /// Cadence and budget of the post-apply confirm poll (~4 s).
   @visibleForTesting
   static const Duration confirmInterval = Duration(milliseconds: 500);
   @visibleForTesting
   static const int maxConfirmPolls = 8;
+
+  /// Absolute ceiling on the confirm poll (~60 s), independent of the busy
+  /// exclusion below. A jammed cover — or a driver bug that reports `Moving` /
+  /// `NotReady` forever — must not leave the panel polling the daemon every
+  /// 500 ms for the rest of the session; past this the ordinary liveness poll
+  /// owns the device again. Sized above the daemon's ~40 s cover-settle budget so
+  /// a legitimately slow cover still confirms here.
+  @visibleForTesting
+  static const int maxConfirmPollsAbsolute = 120;
 
   /// Re-read until the device reflects the light change we just commanded.
   ///
@@ -84,22 +101,27 @@ class FlatPanelNotifier extends EquipmentDeviceNotifier<FlatPanelStatus> {
   ///
   /// Gives up after [maxConfirmPolls] rather than polling forever — a device that
   /// refuses the command must not spin the panel; the liveness poll owns it again.
-  Future<void> _confirm({bool? lightOn, int? brightness}) async {
+  /// Returns true when the device confirmed the change, false when it never did
+  /// (budget or ceiling exhausted) — the caller reports that rather than leaving
+  /// a command that silently never landed.
+  Future<bool> _confirm({bool? lightOn, int? brightness}) async {
     // Only the light needs it, and only when the request actually pins an
     // expected end state. `brightness: 0` means "off"; any positive level means
     // "on at that level".
     final wantOn = lightOn ?? (brightness == null ? null : brightness > 0);
-    if (wantOn == null) return;
+    if (wantOn == null) return true;
     var ticks = 0;
-    while (ticks < maxConfirmPolls) {
+    var polls = 0;
+    while (ticks < maxConfirmPolls && polls < maxConfirmPollsAbsolute) {
+      polls++;
       await Future<void>.delayed(confirmInterval);
-      if (!ref.mounted) return;
+      if (!ref.mounted) return true;
       await refresh();
       final s = state.value;
-      if (s == null) return;
+      if (s == null) return true;
       if (s.lightOn == wantOn &&
           (brightness == null || !wantOn || s.brightness == brightness)) {
-        return; // the device is where we asked it to be
+        return true; // the device is where we asked it to be
       }
       // A cover mid-travel doesn't spend budget: panels refuse a calibrator change
       // while the cover moves, so the daemon holds the light command until the
@@ -109,6 +131,7 @@ class FlatPanelNotifier extends EquipmentDeviceNotifier<FlatPanelStatus> {
       // still in progress, not a failure — don't spend budget on it either.
       if (!s.isMoving && !s.lightWarming) ticks++;
     }
+    return false;
   }
 }
 

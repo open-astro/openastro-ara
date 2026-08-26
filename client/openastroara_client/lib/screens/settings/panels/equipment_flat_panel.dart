@@ -270,12 +270,27 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
     final impliedLight = lightOn ?? (brightness == null ? null : brightness > 0);
     if (impliedLight != null) setState(() => _pendingLight = impliedLight);
     try {
-      final performed = await ref
-          .read(flatPanelProvider.notifier)
-          .apply(openCover: openCover, lightOn: lightOn, brightness: brightness);
+      final notifier = ref.read(flatPanelProvider.notifier);
+      final performed = await notifier.apply(
+        openCover: openCover,
+        lightOn: lightOn,
+        brightness: brightness,
+      );
       if (!performed) {
         messenger.showSnackBar(
           const SnackBar(content: Text('Another action is still in progress.')),
+        );
+      } else if (!notifier.lastApplyConfirmed) {
+        // The command was accepted but the device never showed it — a jammed
+        // cover, or a panel that refused it in the background. Say so rather than
+        // letting the controls quietly snap back.
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              "The panel didn't apply that — check it isn't jammed or busy.",
+            ),
+            backgroundColor: AraColors.accentError,
+          ),
         );
       }
     } catch (e) {
