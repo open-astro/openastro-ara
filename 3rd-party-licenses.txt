@@ -315,7 +315,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.OpenApi 2.12.0
+Package:        Microsoft.OpenApi 2.12.2
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -610,7 +610,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.16.20
+Package:        Scalar.AspNetCore 2.17.1
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
