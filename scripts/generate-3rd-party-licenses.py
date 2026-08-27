@@ -144,7 +144,7 @@ _NUGET_OVERRIDES_CI = {k.lower(): (k, v) for k, v in NUGET_OVERRIDES.items()}
 # ways (unmapped direct dep / dead entry → hard fail).
 PUB_LICENSES: dict[str, dict[str, str]] = {
     "geolocator": {
-        "version": "13.0.4",
+        "version": "14.0.3",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Baseflow",
     },
