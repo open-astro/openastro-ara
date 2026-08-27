@@ -55,22 +55,25 @@ String get _thisDevice => Platform.isMacOS
         : 'this computer';
 
 /// Where the user goes to grant location access, per platform. Linux has no
-/// geolocator implementation at all, so it gets the honest answer instead of
-/// a settings path that doesn't exist there.
+/// REGISTERED geolocator implementation — geolocator 14 ships a GeoClue backend
+/// (`geolocator_linux`), but it is absent from the checked-in
+/// linux/flutter/generated_plugin_registrant.cc, so a call there still lands on
+/// a missing implementation. Until that plugin is registered and tested on a
+/// Linux box, Linux gets the honest answer instead of a settings path that
+/// doesn't exist there.
 String get _permissionHint => Platform.isMacOS
     ? 'Open System Settings → Privacy & Security → Location Services and '
         'allow OpenAstro Ara, then click Fill from GPS again.'
     : Platform.isWindows
         ? 'Open Settings → Privacy & security → Location and allow desktop '
             'apps to access your location, then click Fill from GPS again.'
-        : 'On Linux, location comes from GeoClue — install and enable the '
-            'geoclue service and allow it for this app, or plug a USB GPS '
-            'dongle into the machine running Ara Server.';
+        : 'On Linux there is no system location service to fall back on — '
+            'plug a USB GPS dongle into the machine running Ara Server.';
 
 /// Try to fill an observing site from GPS. **Preferred** source is a USB GPS
 /// dongle on the server machine (§31.3 time-sync state); when that's absent
 /// (no server, or no fix yet) it falls back to **the client machine's own
-/// location** (macOS/Windows, and Linux via GeoClue since geolocator 14),
+/// location** (macOS/Windows; Linux has no registered geolocator backend),
 /// accepting
 /// only a fix less than ten minutes old. This one routine
 /// is shared by the wizard (profile creation) and the Safety → Site panel
@@ -172,9 +175,9 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
       'GPS dongle into the machine running Ara Server.',
     );
   } catch (_) {
-    // Any other platform failure (no geolocator backend, or a Linux box with no
-    // GeoClue daemon running) → a clear message that tells the user exactly how
-    // to make this machine's location available.
+    // Any other platform failure (e.g. no registered geolocator backend, as on
+    // Linux) → a clear message that tells the user exactly how to make this
+    // machine's location available.
     return GpsSiteFill.failed(
       '$baseNote $_thisDevice couldn\'t provide a location. $_permissionHint',
     );
