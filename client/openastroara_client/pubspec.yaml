@@ -22,7 +22,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   dio: ^5.11.0
   web_socket_channel: ^3.0.3
-  geolocator: ^13.0.1
+  geolocator: ^14.0.3
   multicast_dns: ^0.3.3
   riverpod: ^3.2.1
   flutter_riverpod: ^3.4.2
