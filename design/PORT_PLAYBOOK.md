@@ -359,7 +359,9 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 Phase 0.5 — Fork hygiene + project demolition
             §4, §17, §18 (decisions) — rename, license headers, delete WPF/plugins/vendor SDKs/WiX/WebView2/MGEN/COM
             **Split into 16 sub-PRs (0.5a–0.5p) per `design/COMMIT-PR-RULES.md`** — DELETE before RENAME pattern, each sub-PR
-            stays under CodeRabbit's 200-file free-tier limit. See COMMIT-PR-RULES.md for the full mapping. Order:
+            keeps each review tractable. (The original ≤200-file target was CodeRabbit's free-tier cap;
+            that reviewer is gone and COMMIT-PR-RULES.md relaxed the size rule on 2026-06-09 — bundle
+            related work when it reads as one logical change.) See COMMIT-PR-RULES.md for the full mapping. Order:
             0.5a (delete WPF UI) → 0.5b (delete MGEN/nikoncswrapper/WiX/Plugin) → 0.5c (delete vendor SDKs, may sub-split) →
             0.5d (delete ASCOM COM) → 0.5e (delete WebView2 refs) → 0.5f (strip Stefan branding + license headers) →
             0.5g–0.5n (project renames: Core → Astrometry → Profile → Image → Equipment → Sequencer → PlateSolving → Test) →
@@ -1421,7 +1423,7 @@ The script `scripts/bump-alpaca-simulators.sh`:
 3. Runs the §14.1 server integration tests against the new simulators
 4. Generates a regression report (which existing test names pass/fail; new event shapes detected)
 5. Opens a PR with body: "Bump Alpaca simulators v0.4.0 → vX.Y.Z. Regression test results: N passed, N failed. Upstream changelog: <link>"
-6. PR follows the standard CodeRabbit poll-and-fix loop (COMMIT-PR-RULES.md); AI merges per the §19.1 merge-gate if green
+6. PR follows the standard review poll-and-fix loop (COMMIT-PR-RULES.md); AI merges per the §19.1 merge-gate if green
 
 If the upstream API has breaking changes, the PR's failing tests document exactly what changed — informs whether ARA needs adaptation code or whether the change is benign.
 
@@ -1446,7 +1448,7 @@ If the upstream API has breaking changes, the PR's failing tests document exactl
 - §14.3 — CI matrix downloads the pinned version at job start
 - §14.4 — pre-PR gate auto-downloads if missing
 - §14.5 — parent section (this is a subsection)
-- COMMIT-PR-RULES.md — bump PRs follow the standard CodeRabbit poll-and-fix loop
+- COMMIT-PR-RULES.md — bump PRs follow the standard review poll-and-fix loop
 
 ### 14.6 Manual UI verification + screenshots
 
@@ -9906,7 +9908,7 @@ Four-layer enforcement spec lives in [`design/COMMIT-PR-RULES.md` → "Settings-
 1. Local pre-commit hook (`check-settings-registry.mjs --staged`) — blocks the commit
 2. CI check on every PR — blocks merge
 3. PR template mandatory checkbox — manual confirmation
-4. CodeRabbit review focus on `lib/screens/settings/**` and `lib/wizard/**` diffs
+4. Reviewer focus on `lib/screens/settings/**` and `lib/wizard/**` diffs
 
 The gate activates at **Phase 12 of the port** (when Settings UI begins). Phase 12 sub-PR 12h is the natural home for the registry's initial bulk-population. After 12h, the gate is the steady-state enforcement for all subsequent work and all community contributions.
 
@@ -11454,23 +11456,24 @@ The script scans the diff for widgets that use `helpKey:` and verifies each refe
 - [ ] Cross-links via `relatedHelpKeys` / `relatedSettings` added where applicable
 ```
 
-**Layer 4 — CodeRabbit review focus** (`.coderabbit.yaml`):
-```yaml
-path_instructions:
-  - path: "client/openastroara_client/lib/help/registry.dart"
-    instructions: |
-      Verify every Help entry has a body that would help a novice user decide
-      whether to use the setting. Flag entries where body just restates the label
-      or refers to "this setting" without explaining WHAT it does. Body should
-      explain effect, recommendation (when to enable / when not to), and any
-      surprising interactions with other settings.
-  - path: "client/openastroara_client/lib/screens/**"
-    instructions: |
-      For widgets that use helpKey, verify the key exists in lib/help/registry.dart.
-      For widgets that DON'T use helpKey but feel like they would benefit from one
-      (non-obvious effect, novice would be confused), suggest adding a help entry.
-      Don't suggest help entries for obvious labels (e.g., "Camera address" needs none).
-```
+**Layer 4 — reviewer focus** (the prompt in `.github/workflows/claude-review.yml`):
+
+The reviewer has no per-repo config file; its rubric lives in the workflow's
+prompt. To make help-registry quality a review concern, add to that prompt:
+
+- For `client/openastroara_client/lib/help/registry.dart` — every Help entry
+  needs a body that would help a novice decide whether to use the setting. Flag
+  entries whose body just restates the label or says "this setting" without
+  explaining WHAT it does. A body should explain the effect, the recommendation
+  (when to enable, when not to), and any surprising interactions.
+- For `client/openastroara_client/lib/screens/**` — for widgets using `helpKey`,
+  verify the key exists in the registry. For widgets that don't but would benefit
+  (non-obvious effect, novice would be confused), suggest one. Don't suggest help
+  entries for obvious labels (e.g. "Camera address" needs none).
+
+(Historical: this layer was originally specified as `path_instructions` in
+`.coderabbit.yaml`. CodeRabbit left the org 2026-05-29 and that file is gone —
+see COMMIT-PR-RULES.md's reviewer-history table.)
 
 ### 69.5 Per-screen "Learn more" link (complementary to per-control help)
 
@@ -11946,7 +11949,7 @@ dotnet publish OpenAstroAra.Server \
 
 Cross-compilation from x64 to ARM64 works for AOT via the `Microsoft.DotNet.ILCompiler` cross-targeting package (auto-pulled by `-r linux-arm64`). CI matrix uses Linux ARM64 self-hosted runner OR x64 with QEMU + the cross-toolchain. Build time is ~3-5x longer than plain JIT publish (ILC + linker are slower than CSC) — acceptable given it runs per-tag, not per-commit.
 
-**Pre-PR gate (§14.4)** adds an AOT-warning check: `dotnet publish -p:PublishAot=true` exit 0 + no IL2026/IL2104/IL3050 warnings. Suppressions require `[UnconditionalSuppressMessage]` with justification text — caught by CodeRabbit review (`.coderabbit.yaml` path instruction added).
+**Pre-PR gate (§14.4)** adds an AOT-warning check: `dotnet publish -p:PublishAot=true` exit 0 + no IL2026/IL2104/IL3050 warnings. Suppressions require `[UnconditionalSuppressMessage]` with justification text — a reviewer concern, added to the rubric in `.github/workflows/claude-review.yml`.
 
 ### 71.8 §61 search registry entries
 
@@ -12411,13 +12414,13 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - Combined: `./scripts/start-dev-env.sh` (starts sims + PHD2 + server; tears down on Ctrl+C)
 
 **6. IDE configuration** — recommended setups:
-- **VS Code**: bundled `.vscode/extensions.json` recommends C# Dev Kit + Flutter + GitLens + CodeRabbit; `.vscode/settings.json` (committed) sets format-on-save + omnisharp config
+- **VS Code**: bundled `.vscode/extensions.json` recommends C# Dev Kit + Flutter + GitLens; `.vscode/settings.json` (committed) sets format-on-save + omnisharp config
 - **JetBrains Rider**: open `OpenAstroAra.sln`; install Flutter plugin from JetBrains Marketplace; recommended Rider settings exported in `design/rider-settings.zip`
 - **Cursor / Windsurf**: VS Code config works; bundled `.cursor/rules` files provide ARA-specific context (link to playbook, COMMIT-PR-RULES, settings + help registries)
 - **Claude Code**: bundled `CLAUDE.md` at repo root provides project-specific instructions per the [Anthropic docs convention](https://docs.claude.com/en/docs/claude-code/memory)
 
-**7. CodeRabbit + pre-commit hook setup**:
-- CodeRabbit config at `.coderabbit.yaml` per COMMIT-PR-RULES.md — works automatically on PRs
+**7. Review + pre-commit hook setup**:
+- Nothing to configure for review: `.github/workflows/claude-review.yml` runs automatically on every PR. There is no per-repo reviewer config file to create.
 - Local pre-commit hook setup: `./scripts/install-hooks.sh` installs Husky or lefthook + wires the §61 settings-registry gate, §69 help-registry gate, AOT-warning check, and other pre-commit checks per §14.4
 - Bypass policy: **no `--no-verify`** per §19.1 git safety; if a hook fails, fix the root cause
 
@@ -12426,7 +12429,7 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - Pre-PR gate (§14.4) MUST pass green before opening
 - Screenshots required for any user-visible Flutter UI change per §14.6
 - §61 settings-registry + §69 help-registry entries required for new settings/controls
-- CodeRabbit poll-and-fix loop runs automatically; address findings via additional commits
+- The review poll-and-fix loop runs automatically; address Defects via additional commits (Notes never block)
 - Maintainer reviews + merges
 
 **9. Where to ask questions** — community surfaces:
@@ -12479,7 +12482,7 @@ COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (
 - §69 — help-registry gate (CONTRIBUTING references for "help compliance")
 - §71 — AOT discipline (CONTRIBUTING points to §71.1 + §71.2 + §71.7)
 - §72 — cfitsio dev setup (CONTRIBUTING references for "FITS lib install")
-- COMMIT-PR-RULES.md — PR workflow + CodeRabbit loop
+- COMMIT-PR-RULES.md — PR workflow + review loop
 
 ---
 
