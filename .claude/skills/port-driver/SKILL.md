@@ -1,6 +1,6 @@
 ---
 name: port-driver
-description: Drive the openastro-ara port end-to-end — pick up the next sub-PR per design/COMMIT-PR-RULES.md, build, open the PR, poll CodeRabbit (with /review fallback when rate-limited), merge under the §19.1 gate, advance PORT_PROGRESS.md, repeat. Designed to be invoked under `/loop /port-driver` (autonomous, self-paced) so it survives disconnects.
+description: Drive the openastro-ara port end-to-end — pick up the next sub-PR per design/COMMIT-PR-RULES.md, build, open the PR, poll the claude[bot] review, merge under the §19.1 gate, advance PORT_PROGRESS.md, repeat. Designed to be invoked under `/loop /port-driver` (autonomous, self-paced) so it survives disconnects.
 ---
 
 # port-driver
@@ -8,19 +8,19 @@ description: Drive the openastro-ara port end-to-end — pick up the next sub-PR
 **You are driving the openastro-ara port autonomously.** The user is offline / may disconnect. Your job is to make forward progress every iteration without losing state. The canonical references are:
 
 - `design/PORT_PLAYBOOK.md` (~12k lines — read sections on demand, do not load whole)
-- `design/COMMIT-PR-RULES.md` (the rhythm + CR loop + §19.1 merge-gate)
+- `design/COMMIT-PR-RULES.md` (the rhythm + review loop + §19.1 merge-gate)
 - `design/PORT_PROGRESS.md` (current phase + last merged sub-PR — **always re-read on each loop iteration**, it's the source of truth)
-- `design/PORT_TODO.md` (out-of-scope CR findings deferred)
+- `design/PORT_TODO.md` (out-of-scope review findings deferred)
 - `design/PORT_DECISIONS.md` (locked-in decisions)
 
-Plus the user's auto-memory under `~/.claude/projects/-Users-dev-Documents-GitHub-openastro-ara/memory/` — re-check `MEMORY.md` each iteration; relevant entries are `feedback-merge-authority` and `project-coderabbit-rate-limit`.
+Plus the user's auto-memory under `~/.claude/projects/-Users-joey-Documents-GitHub-openastro-ara/memory/` — if a `MEMORY.md` index exists there, re-check it each iteration and read any entry relevant to the merge gate. Treat the directory as possibly empty; it is an index, not a dependency.
 
 ## One-line stop conditions
 
 Stop the loop (omit `ScheduleWakeup`) when any of these are true. Post a final status note to the user and exit:
 
 1. The user has explicitly paused work (a comment on an open PR saying "pause", "stop", "hold", or similar — check the most recent PR comments by `@joeytroy`).
-2. You hit a `Held for human review @joeytroy — <reason>` situation in two consecutive iterations on the same PR with no intervening successful work (the counter resets the moment any iteration produces a fix push, a CI pass, a CR reply, or any other non-Held outcome).
+2. You hit a `Held for human review @joeytroy — <reason>` situation in two consecutive iterations on the same PR with no intervening successful work (the counter resets the moment any iteration produces a fix push, a CI pass, a reply to a review finding, or any other non-Held outcome).
 3. PORT_PROGRESS.md shows the port is complete (Phase 15 merged and `v0.0.1-ara.1` tagged).
 4. A `dotnet build` or pre-PR gate fails twice in a row on the same fix attempt (don't ping-pong).
 5. Git state is unexpectedly dirty or on an unknown branch (investigate, don't auto-recover).
@@ -38,14 +38,14 @@ Run in parallel:
 - `gh pr list --state open --json number,title,headRefName,baseRefName,author,updatedAt`
 - Read `design/PORT_PROGRESS.md` (whole file — it's ≤200 lines)
 
-If `MEMORY.md` is loaded and `[[feedback-merge-authority]]` / `[[project-coderabbit-rate-limit]]` aren't already in mind, read those two files.
+If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge authority or the review gate.
 
 ### Step 2 — Decide the branch state
 
 Pick exactly one of these scenarios, checking in the order **D → A → B → C → E** (highest priority first). Don't multi-task. Precedence matters because (C) and (D) can both be true when the last merge was the final sub-PR of a phase — (D) wins so the promotion tag + `port/ara → master` PR happen before scenario-C picks up the next phase's sub-PR.
 
 **(A) Open PR exists and you authored it (or it's the active sub-PR on `phase-N…`).**
-→ Go to §3 (CR poll/fix loop).
+→ Go to §3 (review poll/fix loop).
 
 **(B) On a `phase-N…` sub-branch with unpushed commits and no open PR.**
 → Run pre-PR gate, push, open the PR (§4), then schedule a wake-up to start polling.
@@ -59,30 +59,44 @@ Pick exactly one of these scenarios, checking in the order **D → A → B → C
 **(E) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
 → Stop. Post a status note to the user. Do not schedule another wake-up.
 
-### Step 3 — CR poll/fix loop (scenario A)
+### Step 3 — Review poll/fix loop (scenario A)
 
-This implements COMMIT-PR-RULES.md "CodeRabbit review loop".
+This implements COMMIT-PR-RULES.md "Review loop (AI-driven)". The reviewer is
+`claude[bot]`, posted by `.github/workflows/claude-review.yml` on every PR.
+There is no rate limit and no fallback path — if no review has appeared, it is
+still running or the workflow failed; both are waits, not reasons to self-review.
 
 1. `gh pr checks <N>` — if any check is `fail`, treat findings as a fix opportunity:
    - Read the failing job's log via `gh run view <run-id> --log-failed`
    - Fix the underlying issue (do not skip hooks; do not retry blindly twice in a row)
    - Commit + push with a message like `fix(ci): <one-line>` and re-poll next iteration
 
-2. Pull CR's comments — `{owner}` and `{repo}` are placeholders you must substitute with the actual GitHub coordinates (`open-astro` and `openastro-ara` for this repo):
+   The `review` check failing means the workflow errored (it asserts a comment was
+   posted). Read its log rather than assuming a review exists.
+
+2. Pull the review — `{owner}` and `{repo}` are placeholders you must substitute with the actual GitHub coordinates (`open-astro` and `openastro-ara` for this repo):
    ```shell
    gh api repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | {user: .user.login, created_at, body: (.body | .[0:400])}'
    gh api repos/{owner}/{repo}/pulls/<N>/comments    --jq '.[] | {user: .user.login, path, line, body: (.body | .[0:400])}'
    ```
-   Look for these markers in CR's *latest* comment body — **comment body, not check status** (CR's check reports pass even when throttled):
-   - `<!-- walkthrough_start -->` or `📝 Walkthrough` → real review, in progress or done
-   - `No actionable comments were generated` (or equivalent) → real review, clean
-   - `Review limit reached` / `out of usage credits` / `refill in` → **rate-limited**, NOT a real review
+   The review is the latest comment by `claude[bot]` (or `github-actions[bot]` on
+   the fork path). Read the **comment body, not the check status** — a green
+   `review` check means "a comment was posted", never "the comment was clean".
 
-3. **If rate-limited and >15 minutes have passed since the PR was opened (or the last `@coderabbitai review` retrigger):**
-   → Switch to **/review fallback** (see §3a below). This is the policy update from 2026-05-26: `/review` self-review now satisfies the merge-gate when CR is unavailable.
+3. **Interpret the review by its two sections** — the rubric is a builder/checker
+   split, and the distinction is the whole gate:
 
-4. **If real CR comments exist and there are unaddressed actionable findings:**
-   For each finding (use the table from COMMIT-PR-RULES.md):
+   | Section | Meaning | Blocks merge? |
+   |---|---|---|
+   | **Defects** | Wrong result on a realistic input, untested changed behaviour, security hole, stale test/CI/doc/`design/*.md`, crash/hang/race/leak, non-Alpaca equipment access, blocking I/O on the per-frame or per-poll path, or a PR description that does not match the diff | **Yes** |
+   | **Notes** | Hardening, alternatives, "correct today but fragile", follow-ups, out-of-scope and pre-existing issues. At most five. | **No** |
+
+   A review with an empty Defects section is a pass — merge on it. Do not treat
+   Notes as blocking, and do not fix them in the same PR when doing so would
+   widen it beyond its description; open an issue or append to
+   `design/PORT_TODO.md` instead.
+
+4. **For each unaddressed Defect:**
 
    | Finding | Action |
    |---|---|
@@ -93,28 +107,21 @@ This implements COMMIT-PR-RULES.md "CodeRabbit review loop".
 
    If the same issue ping-pongs >2× on the same thread, post `Deferring this to human review — see comments above` and stop touching that thread.
 
+   Pushing a fix retriggers the workflow, so expect a fresh review comment each round.
+
 5. **Quiescence check** (merge-gate clearance per §19.1):
    - Green CI on `gh pr checks <N>` (all required checks `pass`)
-   - Real CR review posted (walkthrough/summary) **OR** /review fallback completed cleanly (§3a)
-   - No unresolved actionable findings
+   - A `claude[bot]` review comment posted, with **no unaddressed Defects**
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `created_at` from `gh api`
    - Clean self-review against scope
 
    If all clear → **merge** (§3b).
    If any gate is ambiguous → post `Held for human review @joeytroy — <reason>` and stop the loop.
 
-### Step 3a — /review fallback (CR rate-limited)
-
-When CR has been rate-limited for >15 min and no real review is forthcoming:
-
-1. Check out the PR locally: `gh pr checkout <N>`
-2. Invoke the built-in `/review` skill via the `Skill` tool with the PR number as arg. This runs a structured self-review against the diff.
-3. Process the findings the same way as CR findings (§3 step 4 table). Fix → commit → push.
-4. After /review is clean (no remaining actionable findings), post a comment on the PR:
-   ```text
-   CodeRabbit was rate-limited for >15 min. Ran `/review` self-review as the gate per the 2026-05-26 policy update — clean. Proceeding to merge under the §19.1 gate.
-   ```
-5. Treat the clean /review as satisfying the "real review" condition of §19.1. Continue to merge.
+6. **If no review comment has appeared yet:** the workflow is still running (or
+   queued). Schedule the next wake-up and re-poll — do not substitute `/review`
+   and do not merge on CI alone. If `gh pr checks <N>` shows `review` itself
+   failed, that is a CI failure; handle it under step 1.
 
 ### Step 3b — Merge
 
@@ -129,9 +136,9 @@ After merge:
 Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use. Timing rule:
 
 - **Standalone direct commit to `port/ara`**: use this *only* when you're on `port/ara` immediately after a merge and PORT_PROGRESS.md is the single file changing (pure tracking-metadata update, no code).
-- **Folded into the next sub-PR**: use this when you've already moved onto a `phase-N` branch and have other changes queued — include the PORT_PROGRESS.md edit in the sub-PR's commits so it reviews through CR alongside the code work.
+- **Folded into the next sub-PR**: use this when you've already moved onto a `phase-N` branch and have other changes queued — include the PORT_PROGRESS.md edit in the sub-PR's commits so it reviews alongside the code work.
 
-When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` bypass CR review, so keep that path narrow.
+When in doubt, prefer folding into the sub-PR — direct pushes bypass review, so keep that path narrow.
 
 ### Step 4 — Open the PR (scenario B)
 
@@ -170,7 +177,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
    )"
    ```
 
-5. Schedule next wake-up at 270s — give CR time to start its review pass.
+5. Schedule next wake-up at 270s — give the review workflow time to start its pass.
 
 ### Step 5 — Start the next sub-PR (scenario C)
 
@@ -191,7 +198,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
 
 **Important guardrails while doing sub-PR work:**
 - Never skip hooks (`--no-verify` is forbidden by §19.1).
-- Never amend a pushed commit (create new commits; CR sees incremental review).
+- Never amend a pushed commit (create new commits; the reviewer sees each push).
 - Never force-push to a sub-branch with an open PR unless rebasing on updated `port/ara` and announcing it in a PR comment.
 - Don't refactor adjacent code outside the sub-PR's scope (track in `design/PORT_TODO.md` instead).
 - Don't add comments that just describe what the code does (per CLAUDE.md guidance).
@@ -203,7 +210,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
    ```shell
    gh pr create --base master --head port/ara --title "Merge port/ara: Phase <N> (<short-description>)" --body "<summary of what landed>"
    ```
-3. This PR also goes through the CR loop (§3) — same gate, but use `--merge` not `--squash` when merging it (per COMMIT-PR-RULES.md).
+3. This PR also goes through the review loop (§3) — same gate, but use `--merge` not `--squash` when merging it (per COMMIT-PR-RULES.md).
 4. Update `design/PORT_PROGRESS.md` to move the phase from "In flight" → "Completed", reflect the new "Currently working on" / "Next" pointer.
 
 ## Pacing (ScheduleWakeup)
@@ -213,9 +220,7 @@ At the **end of every iteration** call `ScheduleWakeup` with the same prompt the
 | Situation | delaySeconds | Why |
 |---|---|---|
 | CI is `pending` and you just pushed | 270 | CI usually finishes in 2-5 min; stay in cache window |
-| CR review in progress (walkthrough started but not done) | 270 | Same; CR turnaround is 2-10 min |
-| CR rate-limited, waiting for refill (<60 min) | 1200 | Refill usually 30-60 min; one cache miss buys the wait |
-| CR rate-limited, refill long (>60 min) | 1800 | Same; bigger ceiling |
+| Review workflow running, no comment yet | 270 | Turnaround is a few minutes; it runs per push |
 | Quiescence test (3 min idle for merge-gate) | 270 | Tight loop, cache-friendly |
 | Building / doing sub-PR work, expecting next iteration to push | 60 | Work is local + fast |
 | Just merged, about to start next sub-PR | 60 | No external wait |
@@ -233,7 +238,7 @@ One short paragraph for the user / log:
 
 Example:
 ```text
-[port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase-10 pr=#43 | did: pushed fix for CR nit on Dockerfile USER directive | next: poll CR for round-2 review | sleep 270s
+[port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase-10 pr=#43 | did: pushed fix for a review Defect on the Dockerfile USER directive | next: poll for the round-2 review | sleep 270s
 ```
 
 That single line is enough — don't write multi-paragraph summaries each iteration, they pile up.
@@ -241,8 +246,8 @@ That single line is enough — don't write multi-paragraph summaries each iterat
 ## Safety net — what you do NOT do
 
 - Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`/`port/ara`) without an explicit user instruction.
-- Do NOT merge a PR whose CI is failing, whose findings are unresolved, or whose only "review" signal is the CR rate-limit comment (use /review fallback first).
+- Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
 - Do NOT touch `master` directly — only via promotion PRs.
-- Do NOT modify `.husky/`, `.github/workflows/`, or `.coderabbit.yaml` as part of a feature sub-PR. Those go in their own infra sub-PRs.
+- Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.
 - Do NOT update `design/PORT_PLAYBOOK.md` rules autonomously — that's user-authoritative.
 - Do NOT spawn cloud agents (no `/ultrareview`, no `/schedule`) from within the loop — they cost extra and the user runs them manually.

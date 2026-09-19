@@ -111,7 +111,8 @@ Still open under this banner: **"Build Mosaic Sequence"** (1e — needs server `
 | 2026-05-23 → 2026-05-28 | CodeRabbit (`coderabbitai[bot]`) | Free-tier rate-limit (1 review/hr/org) incompatible with cadence; dropped. |
 | 2026-05-29 (briefly) | Augment Code (`augmentcode[bot]` / `app/augmentcode`) | Worked for 2 PRs (#105, #106) then exhausted its internal Gemini quota mid-session. Also authored one autonomous PR (#107) that overclaimed scope. Dropped. |
 | 2026-05-29 (briefly) | Gemini via `google-github-actions/run-gemini-cli` | Hit `gemini-3-flash` free-tier daily cap (20 req/day) on the very PR introducing it. Workflow file removed before merging. |
-| 2026-05-29 → present | **Sonnet (Anthropic Claude, running on user's account)** | Posts structured reviews as `joeytroy` user comments. No separate quota meter. Caught real bugs on PR #108 that self-review missed. **Current.** |
+| 2026-05-29 → 2026-09-19 | Sonnet (Anthropic Claude, running on user's account) | Posts structured reviews as `joeytroy` user comments. No separate quota meter. Caught real bugs on PR #108 that self-review missed. Later moved into `.github/workflows/claude-review.yml`, posting as `claude[bot]`. |
+| 2026-09-19 → present | **Opus via `.github/workflows/claude-review.yml`** (`claude[bot]`) | Single-pass inline review on every PR, Defects/Notes rubric, base-branch instruction files substituted so a PR cannot rewrite its own reviewer. Moved to Opus in #995. **Current.** |
 
 This means:
 - All 16+ Phase 0.5 sub-PRs + all 8 Phase 12 sub-PRs + every other phase PR get full review
