@@ -55,8 +55,10 @@ in scenario D.
 
 **Deliberate deviation (1 of 4) — `chore/<short-name>`.** §19.1 does not name it; it
 closes with "All other branches are off-limits without explicit user
-instruction", and `COMMIT-PR-RULES.md` records `chore/*` under "Branch naming" as the
-*community* convention, "Distinct from the port's" pattern. It is here because the driver's
+instruction", and `COMMIT-PR-RULES.md` records `chore/*` only in its open-items checklist
+("Branch naming convention for community PRs"), not under the "Branch naming"
+heading -- i.e. as a *proposed* community convention, "Distinct from the
+port's" pattern. It is here because the driver's
 own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
 own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
 treat this as a deviation, not as something §19.1 says.
@@ -158,14 +160,26 @@ gh pr list --head "$(git branch --show-current)" --state merged \
      (check out `master`, pull, continue). Recoverable, not ambiguous: it is
      what an interruption between `gh pr merge` and §3b's `git checkout master`
      looks like.
+   - Any `$merged` OID is an ancestor of `origin/master` → that PR merged with a
+     **merge commit**, so its head is part of `master`'s history for good and
+     anything here that reaches it came through `master`, not through an
+     un-deleted branch → **B**. Test this *before* the next bullet: `master` can
+     advance during the B window (a branch pushed but `gh pr create` failed,
+     then a maintainer hotfix through the admin bypass), and then
+     `origin/master` is no longer an ancestor of `HEAD` even though the branch
+     is ordinary fresh work. Re-pushing such a branch re-creates it but opens no
+     duplicate: the merged head is already in `master`, so the PR shows only the
+     new commits.
    - `git merge-base --is-ancestor origin/master HEAD` succeeds → this branch
      was cut from (or refreshed onto) the current `master`, so anything it
      inherited came through `master`, not through an un-deleted branch → **B**,
      however many merged OIDs are ancestors. This is the reused-placeholder
      case, and it is the common one.
-   - Otherwise, any `$merged` OID that is an ancestor of `HEAD` → the branch
-     never came back through `master` and still carries the merged work *plus*
-     something else → **D**. Do not guess. The extra commit is either stray or
+   - Otherwise, any `$merged` OID that is an ancestor of `HEAD` → that PR was
+     **squashed**, so its head is nowhere in `master`, and this branch still
+     carries it *plus* something else → **D**. This is the case that genuinely
+     duplicates: pushing re-creates the deleted branch with the whole
+     already-merged diff on it. Do not guess. The extra commit is either stray or
      real unpushed work, and the driver cannot tell which: pushing would
      re-create a deleted branch, discarding it would lose work. Post
      `Held for human review @joeytroy — <branch> carries N commits on top of
@@ -331,11 +345,12 @@ PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
 PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
 
 ```shell
-# Name the ref. Do NOT rely on what is checked out — on a clean first-round
-# review the driver never leaves `master`, and an unqualified `git tag` would
-# then tag master's head: the commit BEFORE this PR, which still satisfies
-# §19.1's "tag has been pushed" check while silently excluding the phase's
-# final PR from the milestone.
+# Name the ref. Do NOT assume what is checked out: §5 step 2 leaves the driver
+# on the feature branch, but an interrupted or resumed iteration can reach §3b
+# from `master`, and an unqualified `git tag` would then tag master's head --
+# the commit BEFORE this PR, which still satisfies §19.1's "tag has been
+# pushed" check while silently excluding the phase's final PR from the
+# milestone. Naming the ref costs nothing and is right either way.
 git fetch --prune origin
 git tag phase-<N>-complete origin/<branch-name>
 git push origin phase-<N>-complete    # deliberate: see the note below
@@ -483,13 +498,19 @@ with the next sub-PR rather than getting a PR of its own.
 
 1. Re-read PORT_PROGRESS.md "Next" section + the COMMIT-PR-RULES.md table to identify which sub-PR comes next.
 
-2. Get onto the branch (playbook §22.1 step 1). If you are already on it — the
-   zero-commits-ahead hand-off from scenario B — skip the create, or
-   `git checkout -b` dies with `a branch named '…' already exists`:
+2. Get onto the branch (playbook §22.1 step 1). The branch may already exist —
+   the zero-commits-ahead hand-off from scenario B leaves you standing on it,
+   and a reused placeholder name can exist locally without that — so switch
+   first and create only as the fallback, or `git checkout -b` dies with
+   `a branch named '…' already exists`:
    ```shell
-   # only when not already on the branch
    git checkout master && git pull --ff-only
-   git checkout -b phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
+   # Reuse the branch if it is already there. B routes to C without deleting the
+   # stale local ref (§19.1 forbids `branch -D`, and `fetch --prune` only drops
+   # tracking refs), so a reused name -- `prep-ci` at 0.5p/4/11 -- still exists
+   # locally even when you are not standing on it.
+   B=phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
+   git switch "$B" 2>/dev/null || git checkout -b "$B"
    ```
    The slash namespace is the convention (COMMIT-PR-RULES.md "Branch naming").
    It is valid because no branch is literally named `phase` — the old flat-name
