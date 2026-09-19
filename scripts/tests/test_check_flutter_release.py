@@ -266,6 +266,89 @@ class ExplicitVersionTest(unittest.TestCase):
             self._run("--apply", "--version", "3.48", "--dart", "3.14.1")
 
 
+class CheckModeTest(unittest.TestCase):
+    """--check is what the workflow keys off: every downstream step gates on
+    its step outputs, so an unemitted or inverted output silently turns the
+    whole watcher into a no-op that still reports success."""
+
+    def setUp(self):
+        self.m = load_module()
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        client = root / "client" / "openastroara_client"
+        client.mkdir(parents=True)
+        shutil.copy(REAL_PUBSPEC, client / "pubspec.yaml")
+        self.m.REPO_ROOT = root
+        self.m.CLIENT = client
+        self.m.VERSION_FILE = client / ".flutter-version"
+        self.m.PUBSPEC = client / "pubspec.yaml"
+        self.out = root / "gh_output"
+        self.out.write_text("")
+        self.addCleanup(self.tmp.cleanup)
+
+    def _run(self, pinned, latest, dart="3.14.1"):
+        import os
+        import sys
+        from unittest import mock
+
+        self.m.VERSION_FILE.write_text(f"{pinned}\n")
+        self.m.fetch_current_stable = lambda: (latest, dart)
+        saved = sys.argv
+        sys.argv = ["check-flutter-release.py", "--check"]
+        try:
+            with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(self.out)}):
+                rc = self.m.main()
+        finally:
+            sys.argv = saved
+        outputs = dict(
+            line.split("=", 1)
+            for line in self.out.read_text().splitlines()
+            if "=" in line
+        )
+        return rc, outputs
+
+    def test_a_newer_patch_emits_update_true_with_the_branch_name(self):
+        rc, out = self._run("3.47.5", "3.48.2")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["update"], "true")
+        self.assertEqual(out["major"], "false")
+        self.assertEqual(out["latest"], "3.48.2")
+        self.assertEqual(out["pinned"], "3.47.5")
+        self.assertEqual(out["dart"], "3.14.1")
+        self.assertEqual(out["branch"], "ci/flutter-3.48.2")
+
+    def test_an_equal_version_emits_update_false(self):
+        rc, out = self._run("3.47.5", "3.47.5")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["update"], "false")
+        self.assertNotIn("branch", out)
+
+    def test_an_older_stable_never_proposes_a_downgrade(self):
+        rc, out = self._run("3.47.5", "3.47.4")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["update"], "false")
+
+    def test_a_double_digit_patch_is_newer_than_a_single_digit_one(self):
+        """3.47.10 > 3.47.9 — a lexical compare would stall the watcher here."""
+        rc, out = self._run("3.47.9", "3.47.10")
+        self.assertEqual(out["update"], "true")
+        self.assertEqual(out["branch"], "ci/flutter-3.47.10")
+
+    def test_a_major_bump_reports_but_does_not_propose(self):
+        rc, out = self._run("3.47.5", "4.0.0", dart="4.0.0")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["update"], "false")
+        self.assertEqual(out["major"], "true")
+        self.assertEqual(out["latest"], "4.0.0")
+
+    def test_emit_output_is_a_noop_without_github_output(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.m.emit_output(update="true")  # must not raise
+
+
 class AtomicityTest(unittest.TestCase):
     def setUp(self):
         self.m = load_module()

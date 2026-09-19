@@ -326,7 +326,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Concern | Value |
 |---|---|
 | Language | Dart |
-| Framework | Flutter stable, **pinned via `client/openastroara_client/.flutter-version`** (3.27.x at port time, 2026-05-23; currently 3.47.5). Pin enforced by that file + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.1 (`.github/workflows/check-flutter.yml`) mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
+| Framework | Flutter stable, **pinned via `client/openastroara_client/.flutter-version`** (3.27.x at port time, 2026-05-23; bumped weekly by `check-flutter.yml`, so the number is not restated here). Pin enforced by that file + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.1 (`.github/workflows/check-flutter.yml`) mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
 | Target platforms | macOS, iOS, Android, Windows, Linux desktop |
 | HTTP client | `dio` (supports interceptors and progress callbacks for image downloads) |
 | WebSocket | `web_socket_channel` |

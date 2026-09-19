@@ -155,7 +155,11 @@ jobs:
           #    means the notices were NOT regenerated for a reason nobody
           #    intended. Fail the run rather than opening a PR whose body
           #    blames a licence pin that was never the problem.
-          if echo "$out" | grep -q "PUB_LICENSES"; then
+          # Here-string, not `echo | grep -q`: grep -q exits on first match,
+          # and on a long message the echo subshell takes SIGPIPE (status 141),
+          # which would misfile a real PUB_LICENSES stop as an unrelated crash —
+          # the exact misclassification this triage exists to prevent.
+          if grep -q "PUB_LICENSES" <<<"$out"; then
             echo "ok=false" >> "$GITHUB_OUTPUT"
             echo "::warning::A curated PUB_LICENSES entry needs a human re-verification pass."
             exit 0
@@ -180,7 +184,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git checkout -b "$BRANCH"
-          git add -A
+          # Stage only what this PR claims to change. `git add -A` would also
+          # sweep in whatever `flutter pub get` regenerated under tracked
+          # platform paths — and on an ubuntu runner only the Linux
+          # generated_plugin_registrant/generated_plugins.cmake get rewritten,
+          # so a bump PR would carry a one-platform refresh nobody asked for.
+          git add \
+            client/openastroara_client/.flutter-version \
+            client/openastroara_client/pubspec.yaml \
+            client/openastroara_client/pubspec.lock \
+            3rd-party-licenses.txt
           git commit -m "build(client): update Flutter to ${LATEST}
 
           Flutter stable moved ${PINNED} -> ${LATEST} (Dart ${DART}).
@@ -191,8 +204,10 @@ jobs:
           # .git/config — not by checkout (persist-credentials: false) and not
           # by a remote pushurl either, so nothing later in the job, and no
           # artifact upload, can read it back off disk. It does appear in this
-          # command's argv; Actions masks the secret in logs, and the value is
-          # job-scoped.
+          # command's argv, which is readable from /proc/*/cmdline by anything
+          # else on the runner for the duration of the push — acceptable on an
+          # ephemeral single-tenant runner, and the value is job-scoped. Actions
+          # masks the secret in logs.
           git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "HEAD:refs/heads/${BRANCH}"
 
@@ -201,10 +216,12 @@ jobs:
             licence_note="**Third-party notices need a human pass.** A curated \`PUB_LICENSES\` entry in \`scripts/generate-3rd-party-licenses.py\` is version-pinned, so a dependency bump deliberately fails until someone re-reads the new \`LICENSE\` and moves the pin. Do that before merging, or the Server job's §15/§17.2 freshness gate will fail."
           fi
 
+          # Label applied after creation, not via --label: `gh pr create`
+          # resolves labels up front and hard-fails if one is missing, which
+          # would abort *after* the branch push above and strand it (#1008).
           gh pr create \
             --base master \
             --head "$BRANCH" \
-            --label dependencies \
             --title "build(client): update Flutter to ${LATEST}" \
             --body "Flutter stable moved **${PINNED} → ${LATEST}** (Dart ${DART}).
 
@@ -224,3 +241,9 @@ jobs:
           - PRs opened by a workflow using \`GITHUB_TOKEN\` do not trigger \`pull_request\` CI. If the checks are missing, close and reopen this PR once (or set a \`FLUTTER_BUMP_TOKEN\` secret to a PAT so it happens automatically).
 
           Major bumps (3.x → 4.x) are **not** automated and will never appear here — the workflow reports them and stops."
+
+          # Non-fatal: the PR exists and is the point of the run. A missing
+          # label should warn, not fail a job that has already pushed a branch.
+          if ! gh pr edit "$BRANCH" --add-label dependencies; then
+            echo "::warning::Could not apply the 'dependencies' label — add it by hand."
+          fi
