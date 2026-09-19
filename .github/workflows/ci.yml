@@ -786,7 +786,17 @@ jobs:
   client-test:
     name: Client (analyze + test) — ${{ matrix.os }}
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
+    # NO job-level `if:` here, deliberately — see #1025.
+    # The three legs of this matrix are REQUIRED contexts. A matrix job skipped
+    # at job level never expands, so GitHub publishes ONE check named
+    # "Client (analyze + test) — ${{ matrix.os }}" (literally, unexpanded) and
+    # the three required contexts are never reported at all. The PR then sits
+    # on "Expected — Waiting for status to be reported" forever — the exact
+    # deadlock the `changes` job comment says job-level `if:` avoids. That is
+    # true for non-matrix jobs; it is false for matrix jobs.
+    # So this job always runs and its STEPS are guarded instead: the matrix
+    # expands, all three contexts report `success`, and a docs-only PR pays
+    # only three runner spin-ups.
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays
     # portable since the WILMA client ships to all three platforms.
@@ -809,12 +819,14 @@ jobs:
         shell: bash
     steps:
       - name: Checkout (no LFS)
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor + CodeRabbit security policy
         with:
           lfs: false
           persist-credentials: false
 
       - name: Read pinned Flutter version
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         id: flutter-version
         run: |
           set -euo pipefail
@@ -826,6 +838,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Flutter
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.x pinned per zizmor immutable-ref policy
         with:
           flutter-version: ${{ steps.flutter-version.outputs.version }}
@@ -833,14 +846,17 @@ jobs:
           cache: true
 
       - name: pub get
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
         run: flutter pub get
 
       - name: flutter analyze
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
         run: flutter analyze
 
       - name: flutter test
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
         run: flutter test
 
