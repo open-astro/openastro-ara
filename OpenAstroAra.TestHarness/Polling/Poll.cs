@@ -66,7 +66,10 @@ public static class Poll {
         }
 
         // One last probe: a condition that became true inside the final gap
-        // should not fail purely because the loop exited first.
+        // should not fail purely because the loop exited first. A cancellation
+        // requested during that gap still wins, so this re-probe cannot swallow
+        // it (review note).
+        cancellationToken.ThrowIfCancellationRequested();
         if (await condition().ConfigureAwait(false)) {
             return;
         }
