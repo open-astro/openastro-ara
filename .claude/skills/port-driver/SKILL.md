@@ -137,14 +137,16 @@ these. Waiting on a review that can never arrive would spin forever — see step
    `updated_at` rather than waiting for a new comment id.
 
 5. **Quiescence check** (merge-gate clearance per §19.1):
-   - Green CI on `gh pr checks <N>`: every required check is `pass` **or
-     `skipping`**. A skipped required check is a pass, not an ambiguity — CI
-     gates its expensive jobs on changed paths (#1020, `ci.yml`'s `changes`
-     job), so a docs-only PR legitimately shows `skipping` for `server-build`,
-     `registry-gate` and the three `client-test` legs. Treating that as
-     ambiguous would halt the loop on precisely the PRs the gate exists to
-     speed up. A required check still `pending`, or reporting `fail`, is not
-     clearance.
+   - Green CI on `gh pr checks <N>`: every required check is `pass`, **or
+     `skipping` and you can attribute the skip to CI's path gate** — `ci.yml`'s
+     `changes` job emitting `docs_only=true` (#1020), which skips
+     `server-build`, `registry-gate` and the three `client-test` legs. Confirm
+     that is why, don't assume it: `gh pr checks <N>` shows the skip but not
+     its cause, and GitHub counts *any* skipped required context as satisfied.
+     Check the `changes` job's `docs_only` output. A skip you cannot account
+     for — a `needs:` failure, an `if:` you don't recognise — is **ambiguous,
+     not clearance**. `pending` or `fail` is never clearance. (Playbook §19.1,
+     amended for this in #1021.)
    - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push) **carrying a sign-off marker**, with **no unaddressed Defects**
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope
