@@ -100,7 +100,8 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - Deleted `phase-12h2-equipment-connect` (superseded by Phase 12h.6L / PR #140) and `phase-12h3-search` (was PR #107, closed-unmerged; the feature shipped via PRs #65 + #113–#123). Both confirmed already-on-`master` or abandoned before deletion.
 
 ### Review tooling note
-- CodeRabbit is being replaced (the new review solution is in progress). Status options on the project board and the rewritten workflow docs are kept **review-tool-agnostic** (generic "In review" / "review poll-and-fix loop") so they don't bake in a specific bot. `.coderabbit.yaml` still contains a stale `port/ara` base-branch entry — left untouched pending the review-tooling decision, since the file is slated for replacement.
+- CodeRabbit was replaced. Status options on the project board and the rewritten workflow docs are kept **review-tool-agnostic** (generic "In review" / "review poll-and-fix loop") so they don't bake in a specific bot.
+- **Settled 2026-05-29:** CodeRabbit was removed from the org and `.coderabbit.yaml` deleted; the reviewer now runs from `.github/workflows/claude-review.yml` and has no per-repo config file. See COMMIT-PR-RULES.md's reviewer-history table for the full sequence of reviewers tried.
 
 ### §36 Sky Atlas embed — `webview_cef` (Chromium/CEF) for the cross-desktop Aladin Lite WebView
 - **Decision:** the §36 Sky Atlas embeds Aladin Lite via the **`webview_cef`** package — a Chromium Embedded Framework browser rendered to a Flutter texture — so the atlas composites **in-tab** on macOS, Windows, and Linux through one code path. Chosen by the user 2026-06-14 after the cross-desktop webview options were surfaced (per the standing v0.1.0 goal: "surface the cross-desktop webview decision before the client embed").

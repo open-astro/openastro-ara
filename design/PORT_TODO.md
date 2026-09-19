@@ -1,10 +1,10 @@
 # OpenAstro Ara — Port TODO log
 
-Append-only list of every `TODO(port)` and `PORT_BLOCKED` left in the codebase during the port, grouped by phase. Also tracks out-of-scope CodeRabbit suggestions deferred for follow-up.
+Append-only list of every `TODO(port)` and `PORT_BLOCKED` left in the codebase during the port, grouped by phase. Also tracks out-of-scope review suggestions deferred for follow-up.
 
 Per PORT_PLAYBOOK.md §0 rule 4 (`Cite when stuck`): when you cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it here, and move on. Sweep in Phase 15.
 
-Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope suggestions": when CR suggests a broader refactor or future feature, log it here with the PR reference and reply "Acknowledged — tracked in design/PORT_TODO.md for follow-up".
+Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md's review rule "out-of-scope suggestions": when a review suggests a broader refactor or future feature, log it here with the PR reference and reply "Acknowledged — tracked in design/PORT_TODO.md for follow-up".
 
 **File layout (since 2026-07-07):** open and mixed sections first; sections that are entirely
 closed live under **"✅ Done / obsolete — archived entries"** at the bottom. When a section up
