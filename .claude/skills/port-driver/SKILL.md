@@ -141,8 +141,10 @@ these. Waiting on a review that can never arrive would spin forever — see step
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope
    - **At a phase boundary:** the `phase-<N>-complete` tag (and any applicable
-     `phase-<N>-<letter>-complete`) has been pushed for the work being merged —
-     §19.1's own gate item, satisfied by the tag-then-`--merge` order in §3b
+     `phase-<N>-<letter>-complete`) will be pushed as the first action of §3b,
+     onto this PR's head, before the merge — that is §19.1's own gate item. It
+     is not yet true when you evaluate this checklist; what you are checking is
+     that you have identified this as a phase boundary at all.
 
    If all clear → **merge** (§3b).
    If any gate is ambiguous → post `Held for human review @joeytroy — <reason>` and stop the loop.
@@ -181,10 +183,19 @@ PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
 PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
 
 ```shell
-git tag phase-<N>-complete            # on the PR branch head
+# Name the ref. Do NOT rely on what is checked out — on a clean first-round
+# review the driver never leaves `master`, and an unqualified `git tag` would
+# then tag master's head: the commit BEFORE this PR, which still satisfies
+# §19.1's "tag has been pushed" check while silently excluding the phase's
+# final PR from the milestone.
+git fetch origin
+git tag phase-<N>-complete origin/<branch-name>
 git push origin phase-<N>-complete    # not --tags: that pushes stray local tags too
 gh pr merge <N> --merge --delete-branch
 ```
+
+Confirm the tag points where you meant before merging —
+`git log -1 --oneline phase-<N>-complete` should be the PR's head commit.
 
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
@@ -196,6 +207,8 @@ and `git log master`. A merge commit keeps the tagged commit as an ancestor, so
 the milestone survives. This is not a special case invented here: §22.1 step 5
 already picks merge-commit "where per-commit granularity matters", and §22.3
 prescribes merge-commit for the phase-15 release PR for the same reason.
+(Merge commits are enabled on the repo — `allow_merge_commit: true` — so
+`--merge` is available at a boundary.)
 
 Tagging before the merge also satisfies the §19.1 gate condition the driver is
 required to check — *"at a phase boundary: verify the expected
@@ -283,13 +296,18 @@ with the next sub-PR rather than getting a PR of its own.
 - Don't refactor adjacent code outside the sub-PR's scope (track in `design/PORT_TODO.md` instead).
 - Don't add comments that just describe what the code does (per CLAUDE.md guidance).
 
-### Step 6 — Phase boundary bookkeeping
+### Step 6 — Phase boundary (reference only)
 
-There is no promotion PR (playbook §22.0). At a phase boundary the tag is pushed
-in §3b — before the phase's last PR merges, which then merges with `--merge` so
-the tagged commit stays reachable. The only thing left is tracking state: update `design/PORT_PROGRESS.md` to move the phase from
-"In flight" → "Completed" and reset the "Currently working on" / "Next"
-pointers, folded into the next sub-PR's commits per §3b.
+No scenario routes here; it is kept as a single place to look up what a phase
+boundary involves, all of which happens inside §3b:
+
+- There is no promotion PR (playbook §22.0) — the merge to `master` *is* the
+  integration.
+- The `phase-<N>-complete` tag is pushed onto the PR's head **before** the
+  merge, and that PR merges with `--merge` so the tagged commit stays reachable.
+- `design/PORT_PROGRESS.md` moves the phase "In flight" → "Completed" and the
+  "Currently working on" / "Next" pointers are reset, folded into the next
+  sub-PR's commits.
 
 ## Pacing (ScheduleWakeup)
 
