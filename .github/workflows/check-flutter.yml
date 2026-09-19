@@ -68,7 +68,7 @@ jobs:
             echo "Major bumps are not automated (breaking API changes) — bump by hand."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Stop if an equivalent PR is already open
+      - name: Stop if this bump is already proposed
         id: existing
         if: steps.check.outputs.update == 'true'
         env:
@@ -76,12 +76,38 @@ jobs:
           BRANCH: ${{ steps.check.outputs.branch }}
         run: |
           set -euo pipefail
+
+          # Check the BRANCH, not just an open PR. A branch left on origin with
+          # no open PR — because the PR was closed without deleting it, or a
+          # step after the push failed — would otherwise send this job on to
+          # rebuild the commit on a newer master and push non-fast-forward,
+          # which fails. The branch name is derived from the version, so it
+          # would fail identically every week until stable moved again: the
+          # watcher stops watching, silently, which is the problem #997 exists
+          # to solve.
           if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
             echo "open=true" >> "$GITHUB_OUTPUT"
             echo "A PR for $BRANCH is already open; nothing to do."
-          else
-            echo "open=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            # No open PR but the branch exists. Do NOT force-push over it: a
+            # maintainer may have closed that PR deliberately, and re-proposing
+            # a version they rejected is worse than doing nothing. Say so
+            # loudly and stop.
+            echo "open=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Branch $BRANCH exists on origin with no open PR. Either its PR was closed (delete the branch to re-propose this version) or a previous run failed after pushing. Not overwriting it."
+            {
+              echo "## Flutter bump skipped"
+              echo
+              echo "\`$BRANCH\` is already on origin with no open PR."
+              echo "Delete the branch to let the next run re-propose this version."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "open=false" >> "$GITHUB_OUTPUT"
 
       - name: Apply the bump
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
