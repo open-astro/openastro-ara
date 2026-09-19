@@ -215,6 +215,18 @@ namespace OpenAstroAra.Test {
             proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
             await WaitForStateAsync(svc, EquipmentConnectionState.Error, TimeSpan.FromSeconds(25));
 
+            // The state is observable before the fault lands: TripConnectionLost
+            // sets Error under _gate and publishes after releasing it, deliberately
+            // (publishing under the gate would re-enter subscribers while held).
+            // So poll for the fault rather than reading the list once — asserting
+            // straight after the state change is a race the runner loses under load.
+            await WaitForFaultAsync(faults, TimeSpan.FromSeconds(10));
+
+            // Then let a couple of §42.3 refresh ticks pass: "exactly one per
+            // episode" is a claim about later ticks NOT re-firing, so it only
+            // means something once some have gone by.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "exactly one fault per episode — no re-fire on later ticks");
                 Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.Disconnected));
@@ -224,6 +236,19 @@ namespace OpenAstroAra.Test {
             lock (wsEvents) {
                 Assert.That(wsEvents.FindAll(e => e.Type == WsEventCatalog.EquipmentFault), Has.Count.EqualTo(1));
             }
+        }
+
+        private static async Task WaitForFaultAsync(List<EquipmentFaultEvent> faults, TimeSpan timeout) {
+            var deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline) {
+                lock (faults) {
+                    if (faults.Count > 0) {
+                        return;
+                    }
+                }
+                await Task.Delay(100);
+            }
+            Assert.Fail($"no equipment fault published within {timeout.TotalSeconds:0}s of the device reaching Error");
         }
 
         private static async Task WaitForStateAsync(FocuserService svc, EquipmentConnectionState want, TimeSpan timeout) {
