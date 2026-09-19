@@ -23,6 +23,27 @@ SCRIPT = REPO_ROOT / "scripts" / "check-flutter-release.py"
 REAL_PUBSPEC = REPO_ROOT / "client" / "openastroara_client" / "pubspec.yaml"
 
 
+def next_target(module, pubspec: Path) -> tuple[str, str]:
+    """A (flutter, dart) pair guaranteed to differ from what `pubspec` pins.
+
+    Derived, never hardcoded: these tests copy the REAL pubspec, and the whole
+    point of this workflow is that it rewrites that file weekly. A literal
+    target ("3.48.2") silently stops exercising the rewrite the moment the pin
+    reaches that minor — and would then fail on the very bump PR the watcher
+    opens, in the sanity job, for a reason unrelated to the change.
+    """
+    import re
+
+    text = pubspec.read_text()
+    fl = re.search(r"(?m)^[ \t]+flutter:[ \t]*'>=(\d+)\.(\d+)\.", text)
+    sdk = re.search(r"(?m)^[ \t]+sdk:[ \t]*\^(\d+)\.(\d+)\.", text)
+    assert fl and sdk, "copied pubspec is missing its environment constraints"
+    return (
+        f"{fl.group(1)}.{int(fl.group(2)) + 1}.2",
+        f"{sdk.group(1)}.{int(sdk.group(2)) + 1}.1",
+    )
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("check_flutter_release", SCRIPT)
     mod = importlib.util.module_from_spec(spec)
@@ -76,14 +97,15 @@ class ApplyTest(unittest.TestCase):
         self.m.CLIENT = client
         self.m.VERSION_FILE = client / ".flutter-version"
         self.m.PUBSPEC = client / "pubspec.yaml"
+        self.flutter, self.dart = next_target(self.m, self.m.PUBSPEC)
         self.addCleanup(self.tmp.cleanup)
 
     def test_apply_updates_both_files(self):
-        changes = self.m.apply("3.48.2", "3.14.1")
-        self.assertEqual(self.m.VERSION_FILE.read_text(), "3.48.2\n")
+        changes = self.m.apply(self.flutter, self.dart)
+        self.assertEqual(self.m.VERSION_FILE.read_text(), f"{self.flutter}\n")
         text = self.m.PUBSPEC.read_text()
-        self.assertIn("  flutter: '>=3.48.0 <3.49.0'", text)
-        self.assertIn("  sdk: ^3.14.0", text)
+        self.assertIn(f"  flutter: {self.m.flutter_constraint(self.flutter)}", text)
+        self.assertIn(f"  sdk: {self.m.dart_constraint(self.dart)}", text)
         self.assertEqual(len(changes), 3)
 
     def test_apply_leaves_the_dependency_sdk_lines_alone(self):
@@ -94,21 +116,21 @@ class ApplyTest(unittest.TestCase):
         """
         before = self.m.PUBSPEC.read_text()
         self.assertIn("    sdk: flutter", before)
-        self.m.apply("3.48.2", "3.14.1")
+        self.m.apply(self.flutter, self.dart)
         after = self.m.PUBSPEC.read_text()
         self.assertEqual(before.count("    sdk: flutter"), after.count("    sdk: flutter"))
 
     def test_apply_changes_exactly_two_pubspec_lines(self):
         before = self.m.PUBSPEC.read_text().splitlines()
-        self.m.apply("3.48.2", "3.14.1")
+        self.m.apply(self.flutter, self.dart)
         after = self.m.PUBSPEC.read_text().splitlines()
         self.assertEqual(len(before), len(after))
         differing = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
         self.assertEqual(len(differing), 2, f"expected 2 changed lines, got {differing}")
 
     def test_apply_is_idempotent(self):
-        self.m.apply("3.48.2", "3.14.1")
-        self.assertEqual(self.m.apply("3.48.2", "3.14.1"), [])
+        self.m.apply(self.flutter, self.dart)
+        self.assertEqual(self.m.apply(self.flutter, self.dart), [])
 
     def test_missing_environment_block_is_fatal(self):
         self.m.PUBSPEC.write_text("name: openastroara\ndependencies:\n  dio: ^5.0.0\n")

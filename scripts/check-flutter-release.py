@@ -164,6 +164,10 @@ def apply(version: str, dart_version: str) -> list[str]:
 
 def emit_output(**values: str) -> None:
     """Write step outputs when running under GitHub Actions."""
+    # Plain key=value is safe here only because every value is a literal or has
+    # been through parse_version(): no newlines, so none can forge a line. An
+    # output carrying free text (a release note, a feed error) would need the
+    # heredoc form instead.
     path = os.environ.get("GITHUB_OUTPUT")
     if not path:
         return

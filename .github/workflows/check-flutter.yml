@@ -73,6 +73,7 @@ jobs:
         if: steps.check.outputs.update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PUSH_TOKEN: ${{ secrets.FLUTTER_BUMP_TOKEN || github.token }}
           BRANCH: ${{ steps.check.outputs.branch }}
         run: |
           set -euo pipefail
@@ -91,7 +92,15 @@ jobs:
             exit 0
           fi
 
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+          # Authenticated on purpose. `persist-credentials: false` left no
+          # credential in .git/config, so a bare `git ls-remote origin` works
+          # only while the repo is public — and if it ever went private the
+          # failure would be swallowed here, the guard would read "branch
+          # absent", and the run would fall through to the non-fast-forward
+          # push this check exists to prevent.
+          if git ls-remote --exit-code --heads \
+               "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+               "$BRANCH" >/dev/null 2>&1; then
             # No open PR but the branch exists. Do NOT force-push over it: a
             # maintainer may have closed that PR deliberately, and re-proposing
             # a version they rejected is worse than doing nothing. Say so

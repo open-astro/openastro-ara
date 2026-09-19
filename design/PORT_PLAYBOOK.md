@@ -1009,7 +1009,7 @@ flutter create --org org.openastro --project-name openastroara \
 # Note: iOS + Android platforms NOT added in the initial release per §18.G mobile-deferred (ROADMAP);
 # Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
 cd openastroara_client
-echo "3.47.5" > .flutter-version   # whatever §12.1 currently pins
+echo "X.Y.Z" > .flutter-version    # the pinned stable; see §12.1
 flutter pub add dio web_socket_channel multicast_dns riverpod flutter_riverpod \
     flutter_secure_storage file_picker
 flutter pub add --dev openapi_generator build_runner
