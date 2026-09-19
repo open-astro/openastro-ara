@@ -180,7 +180,7 @@ The check script parses `registry.dart`, scans the diff for new settings widgets
 
 **No bypass.** `--no-verify` is already prohibited by §19.1 git safety; this rule extends that to "you cannot ship a setting without registering it."
 
-**Layer 2 — CI check on every PR** (GitHub Actions, `.github/workflows/ci.yml`):
+**Layer 2 — CI check on every code PR** (GitHub Actions, `.github/workflows/ci.yml`; docs-only PRs skip it per #1020 — they cannot touch `registry.dart`):
 
 Same `check-settings-registry.mjs` runs in CI against the PR diff. A failing check blocks the PR's required-check status; PR cannot merge until green.
 

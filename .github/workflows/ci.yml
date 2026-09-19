@@ -88,11 +88,6 @@ jobs:
       # When `actionlint` style checks are wanted (e.g., shellcheck inside
       # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
 
-  # §14e — Alpaca simulator harness smoke test. Downloads the pinned ASCOM OmniSim
-  # release (SHA-256 verified, not committed), runs it headless on the runner, and
-  # confirms its Alpaca API answers + exposes a Camera device. This proves the
-  # download-and-run harness works on the real linux-x64 target; the daemon-discovery
-  # integration test builds on it in a follow-up. Non-required for now.
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
@@ -115,6 +110,7 @@ jobs:
         with:
           lfs: false
           fetch-depth: 0  # merge-base against the PR's base needs real history
+          filter: blob:none  # history without blobs — this job never reads file contents
           persist-credentials: false
 
       - name: Classify changed paths
@@ -156,7 +152,16 @@ jobs:
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             case "$f" in
+              # Whole directories that contain no build inputs.
               design/*|docs/*|.claude/*|.github/ISSUE_TEMPLATE/*) ;;
+              # Root-level prose only. NOT a bare `*.md`: that would also match
+              # OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md, whose entire
+              # point is to be verified by `analyzer-gate`
+              # (SimulatorVersionPinTest) and re-downloaded + checksummed by the
+              # two Alpaca simulator jobs. The §14.5.1 auto-bump PR touches that
+              # file *and nothing else*, so a bare `*.md` would skip exactly the
+              # gates that PR exists to pass.
+              */*) echo "non-docs path: $f"; docs_only=false; break ;;
               *.md|LICENSE) ;;
               *) echo "non-docs path: $f"; docs_only=false; break ;;
             esac
@@ -167,11 +172,19 @@ jobs:
           echo "docs_only=$docs_only"
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
 
+  # §14e — Alpaca simulator harness smoke test. Downloads the pinned ASCOM OmniSim
+  # release (SHA-256 verified, not committed), runs it headless on the runner, and
+  # confirms its Alpaca API answers + exposes a Camera device. This proves the
+  # download-and-run harness works on the real linux-x64 target; the daemon-discovery
+  # integration test builds on it in a follow-up. Non-required for now.
   alpaca-sim-smoke:
     name: Alpaca simulator harness (smoke)
     runs-on: ubuntu-latest
     needs: [sanity, changes]  # don't burn a runner + sim download if design-doc/workflow sanity already failed
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
+    # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
+    # need failed; the explicit sanity check keeps the original gating.
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     timeout-minutes: 10  # backstop if a runner/OmniSim hang outlives the ~270s poll window
     permissions:
       contents: read  # only needs to check out + download a public release artifact
@@ -256,7 +269,10 @@ jobs:
     name: Alpaca discovery integration test
     runs-on: ubuntu-latest
     needs: [sanity, changes]  # don't burn a runner + sim download if design-doc/workflow sanity already failed
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
+    # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
+    # need failed; the explicit sanity check keeps the original gating.
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     timeout-minutes: 15
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
@@ -330,7 +346,7 @@ jobs:
     name: Analyzer gate (full solution, warnings = errors)
     runs-on: ubuntu-latest
     needs: [sanity, changes]
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -398,7 +414,7 @@ jobs:
     name: Server (build + cross-publish + Docker)
     runs-on: ubuntu-latest
     needs: [sanity, changes]
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -738,7 +754,7 @@ jobs:
     name: Settings + Help registry gate
     runs-on: ubuntu-latest
     needs: [sanity, changes]
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
@@ -755,7 +771,7 @@ jobs:
   client-test:
     name: Client (analyze + test) — ${{ matrix.os }}
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays
     # portable since the WILMA client ships to all three platforms.
@@ -816,7 +832,7 @@ jobs:
   client-build:
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'  # #1020: docs-only PRs cannot affect this
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     # Native desktop compile gate. `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO
