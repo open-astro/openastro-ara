@@ -55,11 +55,20 @@ There is no promotion scenario: under the master-only model (playbook §22.0) th
 **(A) Open PR exists and you authored it (or it's the active sub-PR on an allowlisted branch).**
 → Go to §3 (review poll/fix loop).
 
-**(B) On an allowlisted sub-branch with no open PR** — whether or not the commits are pushed.
+**(B) On an allowlisted sub-branch with commits ahead of `origin/master` and no open PR** — whether or not those commits are pushed.
 → Run pre-PR gate, push if needed, open the PR (§4), then schedule a wake-up to start polling.
 A fully-pushed branch with no PR is this case, not an ambiguous one: it is what a
 successful `git push` followed by a failed `gh pr create` leaves behind, and
 `gh pr create` on an already-pushed branch is the correct recovery.
+
+Check before matching: `git rev-list --count origin/master..HEAD` must be > 0.
+**Zero commits ahead is not scenario B.** A freshly created branch whose work was
+interrupted before any commit would otherwise be pushed empty, and `gh pr create`
+then fails with `No commits between master and <branch>` — skipping the phase's
+actual work and leaving a stale branch on origin that §19.1 bars the driver from
+deleting. The same applies to a local `phase/*` whose PR merged elsewhere: pushing
+it re-creates the branch `--delete-branch` just removed. Zero ahead means the work
+is unstarted (scenario C, continue it) or the state is unexpected (scenario D).
 
 **(C) On `master` with no PR in flight, last merge advanced the phase.**
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch, do the work (§5).
@@ -206,6 +215,12 @@ gh pr merge <N> --merge --delete-branch
 Confirm the tag points where you meant before merging —
 `git log -1 --oneline phase-<N>-complete` should be the PR's head commit.
 
+If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a
+previous §3b attempt got as far as tagging before being held — do **not** force
+it. Check where the existing tag points: if it is already the PR head, skip the
+tag step and carry on; if it is anything else, post `Held for human review
+@joeytroy — phase-<N>-complete already exists on a different commit` and stop.
+
 **Deliberate deviation:** §22.1 step 4 and §19.1 both say `git push --tags`.
 This pushes the named ref instead, because `--tags` pushes *every* stray local
 tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
@@ -216,8 +231,11 @@ maintainer.
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
 
-**If the merge fails after the tag is pushed** — a check flips red, branch
-protection rejects, a conflict appears — the tag is already on origin pointing
+**If the merge fails after the tag is pushed** — a check flips red, a conflict
+appears, or branch protection rejects the merge commit itself (which is what
+would happen if `required_linear_history` were ever turned on; it is off today,
+and there is deliberately no automatic fallback to `--squash`, because that
+would orphan the tag just pushed) — the tag is already on origin pointing
 at an unmerged commit, and §19.1 bars deleting remote refs without explicit
 instruction. Do not retry blindly and do not delete it: post
 `Held for human review @joeytroy — phase-<N>-complete pushed but the merge
@@ -235,9 +253,10 @@ prescribes merge-commit for the phase-15 release PR for the same reason.
 
 Tagging before the merge also satisfies the §19.1 gate condition the driver is
 required to check — *"at a phase boundary: verify the expected
-`phase-N-complete` tag has been pushed **for the work being merged**"*
-(`PORT_PLAYBOOK.md:1771`). Deferring the tag until after the merge would fail
-that check and stall the loop at every phase boundary.
+`phase-N-complete` tag has been pushed **for the work being merged**"* (search
+`PORT_PLAYBOOK.md` §19.1 for that sentence; don't cite it by line number, the
+file moves). Deferring the tag until after the merge would fail that check and
+stall the loop at every phase boundary.
 
 After merge:
 
