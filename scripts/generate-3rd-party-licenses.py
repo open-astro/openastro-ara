@@ -179,8 +179,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2016 Vladimir Kharlampidi",
     },
     "dio": {
-        # 5.11.0 verified 2026-07-30: LICENSE unchanged (MIT, same Wen Du + CFUG Team copyrights).
-        "version": "5.11.0",
+        # 5.11.1 verified 2026-09-19: LICENSE byte-identical to 5.11.0 (MIT, same Wen Du + CFUG Team copyrights).
+        "version": "5.11.1",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team",
     },
@@ -196,8 +196,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2022 Flutter 4 Fun",
     },
     "flutter_riverpod": {
-        # 3.4.2 verified 2026-07-30: LICENSE unchanged (MIT, Remi Rousselet).
-        "version": "3.4.2",
+        # 3.4.3 verified 2026-09-19: LICENSE byte-identical to 3.4.2 (MIT, Remi Rousselet).
+        "version": "3.4.3",
         "license": "MIT",
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
@@ -222,8 +222,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "riverpod": {
-        # 3.4.2 verified 2026-07-30: LICENSE unchanged (MIT, Remi Rousselet).
-        "version": "3.4.2",
+        # 3.4.3 verified 2026-09-19: LICENSE byte-identical to 3.4.2 (MIT, Remi Rousselet).
+        "version": "3.4.3",
         "license": "MIT",
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
@@ -238,7 +238,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2016, the Dart project authors",
     },
     "webview_all": {
-        "version": "1.3.5",
+        # 1.4.1 verified 2026-09-19: LICENSE byte-identical to 1.3.5 (MIT, Abandoft).
+        "version": "1.4.1",
         "license": "MIT",
         "copyright": "Copyright 2021-2026 Abandoft",
     },
