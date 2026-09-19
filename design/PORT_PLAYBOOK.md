@@ -11448,7 +11448,7 @@ The script scans the diff for widgets that use `helpKey:` and verifies each refe
 - Duplicate `key` across registry entries
 - `learnMoreUrl` doesn't start with `wiki/` or `https://openastro.net/`
 
-**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff.
+**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff (on code PRs; docs-only PRs skip it per #1020).
 
 **Layer 3 — PR template checkbox** (`.github/PULL_REQUEST_TEMPLATE.md`):
 ```markdown
