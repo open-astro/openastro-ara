@@ -204,6 +204,14 @@ gh pr list --head "$(git branch --show-current)" --state merged \
      `Held for human review @joeytroy — <branch> carries N commits on top of
      merged PR #<n>` and stop.
 
+   **If you change this decision list, change its mirror.**
+   `scripts/tests/test_port_driver_guards.py` encodes conditions (0), (1) and
+   (2) -- including their order -- as runnable cases, and it is the only thing
+   that checks these rules against a real repository. A skill edit without a
+   matching test edit leaves the suite green while it pins the *old* rules, so
+   the tests then argue against this file. Every revision of these rules so far
+   has been wrong in a way only the tests caught.
+
    No OID matched → nothing merged is reachable from here → **B**. That covers
    the ordinary reused-placeholder case, where the branch was cut fresh from
    `master` and the old heads are either in `master` already or stranded off to
@@ -231,7 +239,7 @@ exiting 0 with a warning and no comment. Since the safety net routes
 `.github/workflows/` changes into their own infra sub-PR, the driver authors
 these. Waiting on a review that can never arrive would spin forever — see step 6.
 
-1. `gh pr checks <N>` — if any check is `fail`, treat findings as a fix opportunity:
+1. `gh pr checks <PR>` — if any check is `fail`, treat findings as a fix opportunity:
    - Read the failing job's log via `gh run view <run-id> --log-failed`
    - Fix the underlying issue (do not skip hooks; do not retry blindly twice in a row)
    - Commit + push with a message like `fix(ci): <one-line>` and re-poll next iteration
@@ -293,7 +301,7 @@ these. Waiting on a review that can never arrive would spin forever — see step
    `updated_at` rather than waiting for a new comment id.
 
 5. **Quiescence check** (merge-gate clearance per §19.1):
-   - Green CI on `gh pr checks <N>`: every required check is `pass`, **or
+   - Green CI on `gh pr checks <PR>`: every required check is `pass`, **or
      `skipping` and you can attribute the skip to CI's path gate** — `ci.yml`'s
      `changes` job emitting `docs_only=true` (#1020).
 
@@ -338,14 +346,14 @@ these. Waiting on a review that can never arrive would spin forever — see step
 6. **If no review comment has appeared yet**, branch on *why*:
 
    - **The PR changes `.github/workflows/claude-review.yml`** — check with
-     `gh pr diff <N> --name-only`. No review will ever be posted (see above).
+     `gh pr diff <PR> --name-only`. No review will ever be posted (see above).
      Post `Held for human review @joeytroy — PR edits claude-review.yml, the
      review action self-skips; needs eye review` and **stop the loop**. Do not
      merge on CI alone; do not keep re-polling.
    - **The PR head is a fork without the `safe-to-review` label** — same
      outcome: nothing will run until a maintainer applies the label. Post
      `Held for human review @joeytroy — fork PR awaiting safe-to-review` and stop.
-   - **`gh pr checks <N>` shows `review` itself failed** — that is a workflow
+   - **`gh pr checks <PR>` shows `review` itself failed** — that is a workflow
      error, not a missing review; handle it under step 1.
    - **Otherwise** the run is still in flight. Schedule the next wake-up and
      re-poll — do not substitute `/review` and do not merge on CI alone.
@@ -360,9 +368,14 @@ these. Waiting on a review that can never arrive would spin forever — see step
 Every PR targets `master` (playbook §22.0). Pick the merge method by the PR's
 commit history — **except at a phase boundary, where the tag decides it**:
 
-- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <N> --squash --delete-branch` — the default
-- **PR where per-commit granularity is worth keeping:** `gh pr merge <N> --merge --delete-branch`
-- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <N> --merge --delete-branch` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below.
+- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash --delete-branch` — the default
+- **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge --delete-branch`
+- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge --delete-branch` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
+  ```shell
+  HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
+  [ -n "$HEAD_OID" ] || exit 1
+  git ls-remote --tags origin | grep -E "^$HEAD_OID[[:space:]]+refs/tags/phase-"
+  ```
 
 **Phase boundary — tag first, then merge with `--merge`.** If this is the last
 PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
@@ -382,8 +395,8 @@ git fetch --prune origin
 # `fetch --prune origin` does not bring fork heads either, so fetch the PR ref
 # explicitly -- otherwise `git tag` cannot resolve the OID in exactly the fork
 # case this avoids. Harmless on a same-repo PR.
-git fetch origin "pull/<N>/head"
-HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
+git fetch origin "pull/<PR>/head"
+HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
 git tag phase-<N>-complete "$HEAD_OID"
 ```
 
@@ -398,7 +411,7 @@ the head has not moved underneath you:
 
 ```shell
 [ "$(git rev-parse phase-<N>-complete^{commit})" = "$HEAD_OID" ] || exit 1
-[ "$(gh pr view <N> --json headRefOid --jq .headRefOid)" = "$HEAD_OID" ] || exit 1
+[ "$(gh pr view <PR> --json headRefOid --jq .headRefOid)" = "$HEAD_OID" ] || exit 1
 git push origin phase-<N>-complete    # named ref, deliberate: see the note below
 ```
 
@@ -406,7 +419,7 @@ The merge is deliberately in a block of its own, so that a driver running any
 block verbatim cannot merge ahead of the check:
 
 ```shell
-gh pr merge <N> --merge --delete-branch
+gh pr merge <PR> --merge --delete-branch
 ```
 
 If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a
