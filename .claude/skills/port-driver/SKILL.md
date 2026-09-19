@@ -152,39 +152,54 @@ gh pr list --head "$(git branch --show-current)" --state merged \
      --json headRefOid --jq '.[].headRefOid')
    ```
 
+   Two guards before the OIDs are read at all:
+
    - `$branch` empty → detached HEAD, `gh pr list` silently drops the `--head`
      filter and would match an unrelated repo-wide PR → **D**. Never let the
      query run without a branch name.
-   - `$merged` empty → not merged → **B**.
-   - Any `$merged` OID == `git rev-parse HEAD` → this exact commit landed → **C**
-     (check out `master`, pull, continue). Recoverable, not ambiguous: it is
-     what an interruption between `gh pr merge` and §3b's `git checkout master`
-     looks like.
-   - Any `$merged` OID is an ancestor of `origin/master` → that PR merged with a
-     **merge commit**, so its head is part of `master`'s history for good and
-     anything here that reaches it came through `master`, not through an
-     un-deleted branch → **B**. Test this *before* the next bullet: `master` can
-     advance during the B window (a branch pushed but `gh pr create` failed,
-     then a maintainer hotfix through the admin bypass), and then
-     `origin/master` is no longer an ancestor of `HEAD` even though the branch
-     is ordinary fresh work. Re-pushing such a branch re-creates it but opens no
-     duplicate: the merged head is already in `master`, so the PR shows only the
-     new commits.
-   - `git merge-base --is-ancestor origin/master HEAD` succeeds → this branch
-     was cut from (or refreshed onto) the current `master`, so anything it
-     inherited came through `master`, not through an un-deleted branch → **B**,
-     however many merged OIDs are ancestors. This is the reused-placeholder
-     case, and it is the common one.
-   - Otherwise, any `$merged` OID that is an ancestor of `HEAD` → that PR was
+   - `$merged` empty → no PR ever merged under this name → **B**.
+
+   Then walk the OIDs **one at a time**, applying these tests in order to each
+   before moving to the next. Classify per OID, never in separate passes over
+   the whole list: a reused name can carry several merged PRs with *different*
+   merge methods, and a pass-per-test lets an older, harmless OID answer for a
+   newer, dangerous one.
+
+   - `git cat-file -e "$oid^{commit}"` fails → the driver was resumed from a
+     fresh clone and never fetched that head. An OID git does not have is not
+     reachable from anything: treat as **no match** and move on. Do not read the
+     `fatal:` from `--is-ancestor` as ambiguity — it is not an error, it is a
+     miss.
+   - `$oid` == `git rev-parse HEAD` → this exact commit landed → **C** (check
+     out `master`, pull, continue). Recoverable, not ambiguous: it is what an
+     interruption between `gh pr merge` and §3b's `git checkout master` looks
+     like.
+   - `git merge-base --is-ancestor "$oid" origin/master` succeeds → that PR
+     merged with a **merge commit**, so its head is in `master`'s history for
+     good. Anything here that reaches *this* OID reaches it through `master` →
+     **no match**, move to the next OID. Re-pushing a branch over it re-creates
+     the ref but opens no duplicate: the merged head is already in `master`, so
+     the PR shows only the new commits.
+
+     This has to be tested per OID rather than as a blanket "some OID came
+     through `master`, so the branch is clean". Test it against the list and a
+     name carrying an older merge-committed PR *and* a newer squashed one lets
+     the old OID clear the branch while the squashed head — the one that
+     actually got left behind — is still sitting under `HEAD`.
+   - `git merge-base --is-ancestor "$oid" HEAD` succeeds → that PR was
      **squashed**, so its head is nowhere in `master`, and this branch still
      carries it *plus* something else → **D**. This is the case that genuinely
      duplicates: pushing re-creates the deleted branch with the whole
-     already-merged diff on it. Do not guess. The extra commit is either stray or
-     real unpushed work, and the driver cannot tell which: pushing would
+     already-merged diff on it. Do not guess. The extra commit is either stray
+     or real unpushed work, and the driver cannot tell which: pushing would
      re-create a deleted branch, discarding it would lose work. Post
      `Held for human review @joeytroy — <branch> carries N commits on top of
      merged PR #<n>` and stop.
-   - No OID matches any of those → nothing merged is reachable from here → **B**.
+
+   No OID matched → nothing merged is reachable from here → **B**. That covers
+   the ordinary reused-placeholder case, where the branch was cut fresh from
+   `master` and the old heads are either in `master` already or stranded off to
+   the side.
 
 **(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
@@ -505,12 +520,23 @@ with the next sub-PR rather than getting a PR of its own.
    `a branch named '…' already exists`:
    ```shell
    git checkout master && git pull --ff-only
+   B=phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
+
    # Reuse the branch if it is already there. B routes to C without deleting the
    # stale local ref (§19.1 forbids `branch -D`, and `fetch --prune` only drops
    # tracking refs), so a reused name -- `prep-ci` at 0.5p/4/11 -- still exists
    # locally even when you are not standing on it.
-   B=phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
-   git switch "$B" 2>/dev/null || git checkout -b "$B"
+   if git rev-parse --verify -q "refs/heads/$B" >/dev/null; then
+     # Scenario B's guard, from the other side: B only runs it when the driver
+     # is already standing on the branch, so C has to re-ask here. A ref whose
+     # commits are NOT in master was squash-merged and abandoned; building on
+     # it puts the next PR on top of an already-merged diff.
+     git merge-base --is-ancestor origin/master "$B" || {
+       echo "stale branch $B is not on top of master -- scenario D"; exit 1; }
+     git switch "$B"          # let a real failure (dirty tree) print its reason
+   else
+     git checkout -b "$B"
+   fi
    ```
    The slash namespace is the convention (COMMIT-PR-RULES.md "Branch naming").
    It is valid because no branch is literally named `phase` — the old flat-name
