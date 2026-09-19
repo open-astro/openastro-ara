@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenAstroAra.TestHarness.Polling;
 
 namespace OpenAstroAra.Test {
 
@@ -336,15 +337,7 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string failure) {
-            var deadline = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < deadline) {
-                if (await condition()) {
-                    return;
-                }
-                await Task.Delay(200);
-            }
-            Assert.Fail(failure);
-        }
+        private static Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string failure) =>
+            Poll.UntilAsync(condition, timeout, failure);
     }
 }
