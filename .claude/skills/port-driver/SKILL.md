@@ -141,20 +141,26 @@ these. Waiting on a review that can never arrive would spin forever — see step
      `skipping` and you can attribute the skip to CI's path gate** — `ci.yml`'s
      `changes` job emitting `docs_only=true` (#1020).
 
-     That gate skips **all seven gated jobs**, which is eleven check contexts:
+     That gate skips **six jobs**, which is **six** check contexts:
 
      ```
      Alpaca simulator harness (smoke)
      Alpaca discovery integration test
      Analyzer gate (full solution, warnings = errors)
-     Server (build + cross-publish + Docker)            <- required
-     Settings + Help registry gate                      <- required
-     Client (analyze + test) — {ubuntu,macos,windows}-latest   <- required
-     Client (native build) — {macos,linux,windows}
+     Server (build + cross-publish + Docker)              <- required
+     Settings + Help registry gate                        <- required
+     Client (native build) — ${{ matrix.target }}         <- literally this
      ```
 
-     Expect every one of those to read `skipping` on a docs-only PR, not just
-     the required five. Confirm that is why, don't assume it: `gh pr checks`
+     The last one is not a typo. `client-build` is a matrix skipped at job
+     level, so it never expands: it reports **one** context under its raw,
+     uninterpolated name — not three per-target ones. Expect that exact string.
+
+     The three `Client (analyze + test) — *-latest` legs are **required and
+     matrix-expanded**, so they are gated at *step* level and report `pass`
+     with their steps skipped, never `skipping` (#1025: a matrix job skipped at
+     job level never expands, so its required contexts are never reported and
+     the PR blocks forever). Expect `pass` there, not `skipping`. Confirm that is why, don't assume it: `gh pr checks`
      shows the skip but not its cause, and GitHub counts *any* skipped required
      context as satisfied. Check the `changes` job's `docs_only` output. A skip
      outside that list, or one you cannot account for — a `needs:` failure, an
