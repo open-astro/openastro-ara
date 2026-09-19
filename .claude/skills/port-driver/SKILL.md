@@ -137,7 +137,29 @@ these. Waiting on a review that can never arrive would spin forever — see step
    `updated_at` rather than waiting for a new comment id.
 
 5. **Quiescence check** (merge-gate clearance per §19.1):
-   - Green CI on `gh pr checks <N>` (all required checks `pass`)
+   - Green CI on `gh pr checks <N>`: every required check is `pass`, **or
+     `skipping` and you can attribute the skip to CI's path gate** — `ci.yml`'s
+     `changes` job emitting `docs_only=true` (#1020).
+
+     That gate skips **all seven gated jobs**, which is eleven check contexts:
+
+     ```
+     Alpaca simulator harness (smoke)
+     Alpaca discovery integration test
+     Analyzer gate (full solution, warnings = errors)
+     Server (build + cross-publish + Docker)            <- required
+     Settings + Help registry gate                      <- required
+     Client (analyze + test) — {ubuntu,macos,windows}-latest   <- required
+     Client (native build) — {macos,linux,windows}
+     ```
+
+     Expect every one of those to read `skipping` on a docs-only PR, not just
+     the required five. Confirm that is why, don't assume it: `gh pr checks`
+     shows the skip but not its cause, and GitHub counts *any* skipped required
+     context as satisfied. Check the `changes` job's `docs_only` output. A skip
+     outside that list, or one you cannot account for — a `needs:` failure, an
+     `if:` you don't recognise — is **ambiguous, not clearance**. `pending` or
+     `fail` is never clearance. (Playbook §19.1, amended for this in #1021.)
    - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push) **carrying a sign-off marker**, with **no unaddressed Defects**
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope

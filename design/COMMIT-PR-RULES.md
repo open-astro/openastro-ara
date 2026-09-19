@@ -4,7 +4,7 @@ Authoritative reference for the per-phase + sub-PR rhythm, branch naming, code-r
 
 **Workflow note (2026-06-09) — PR size relaxed + merge-gate now mechanically enforced.** Two updates from the maintainer:
 1. **PR size is no longer constrained to tiny single-step sub-PRs.** The original "≤200 files / one sub-PR per step" target (see "Phase size audit" + the Phase 0.5/12 sub-split tables below) was about keeping reviews tractable. In practice the current reviewer (`claude[bot]`) handles large diffs well — the analyzer-compliance work (PR #313, ~885 files) and the §38k-13…18 stub-layer PR (#315, one PR covering six § sub-steps) both reviewed cleanly. So **bundle related work and multiple commits into one coherent PR** when it reads as a single logical change; don't force smallness. Every *other* rule still holds verbatim: branch from master, push per commit, full review on every PR, and the merge-gate below.
-2. **`master` is now a protected branch** (set up 2026-06-09). Required status checks: `Analyzer gate`, `review`, `Server build`, and the three `Client (analyze + test)` OSes; strict/up-to-date required; PR-before-merge; force-push + deletion blocked; `enforce_admins=false` (solo-admin emergency override retained). This makes the §19.1 merge-gate **mechanical**, not just policy — a PR literally cannot merge until those checks are green. **Reminder:** a green `review` *check* is necessary but NOT sufficient — the gate requires the review *comment body* to carry **no unaddressed findings** (learned on #314, where a green check still had a stale-doc finding to fix). Read the review, don't just watch the status dot.
+2. **`master` is now a protected branch** (set up 2026-06-09). Required status checks: `Analyzer gate`, `review`, `Server build`, and the three `Client (analyze + test)` OSes; strict/up-to-date required; PR-before-merge; force-push + deletion blocked; `enforce_admins=false` (solo-admin emergency override retained). This makes the §19.1 merge-gate **mechanical**, not just policy — a PR literally cannot merge until those checks are green — **or `skipping` because CI's path gate skipped them** (`ci.yml`'s `changes` job; a docs-only PR skips the build/test jobs per #1020, and playbook §19.1 accepts an attributable skip as clearance). Note this list itself is stale in two other ways — see #1023. **Reminder:** a green `review` *check* is necessary but NOT sufficient — the gate requires the review *comment body* to carry **no unaddressed findings** (learned on #314, where a green check still had a stale-doc finding to fix). Read the review, don't just watch the status dot.
 
 ## The constraint that drove this
 
@@ -180,7 +180,7 @@ The check script parses `registry.dart`, scans the diff for new settings widgets
 
 **No bypass.** `--no-verify` is already prohibited by §19.1 git safety; this rule extends that to "you cannot ship a setting without registering it."
 
-**Layer 2 — CI check on every PR** (GitHub Actions, `.github/workflows/ci.yml`):
+**Layer 2 — CI check on every code PR** (GitHub Actions, `.github/workflows/ci.yml`; docs-only PRs skip it per #1020 — they cannot touch `registry.dart`):
 
 Same `check-settings-registry.mjs` runs in CI against the PR diff. A failing check blocks the PR's required-check status; PR cannot merge until green.
 
