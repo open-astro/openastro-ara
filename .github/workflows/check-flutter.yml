@@ -45,9 +45,9 @@ jobs:
         with:
           lfs: false
           # This job pushes a branch, but it does NOT persist the token into
-          # .git/config (zizmor artipacked): the push step below supplies it
-          # via an explicit remote URL, so the credential never sits on disk
-          # where a later step or artifact upload could pick it up.
+          # .git/config (zizmor artipacked): the push step below passes it
+          # directly to `git push`, so the credential never sits on disk where
+          # a later step or artifact upload could pick it up.
           persist-credentials: false
 
       - name: Compare the pin against the stable channel
@@ -85,7 +85,13 @@ jobs:
 
       - name: Apply the bump
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
-        run: python3 scripts/check-flutter-release.py --apply
+        env:
+          LATEST: ${{ steps.check.outputs.latest }}
+          DART: ${{ steps.check.outputs.dart }}
+        # Pass the version --check resolved rather than re-reading the feed: a
+        # release landing between the two calls would otherwise write one
+        # version while the branch name, title and commit cite another.
+        run: python3 scripts/check-flutter-release.py --apply --version "$LATEST" --dart "$DART"
 
       - name: Setup Flutter at the new pin
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
@@ -112,6 +118,20 @@ jobs:
         working-directory: client/openastroara_client
         run: flutter test
 
+      # The notices generator enumerates BOTH graphs: the client's pub deps and
+      # the daemon's NuGet closure via `dotnet package list`. That needs a .NET
+      # SDK and a restored Server project — without them the generator dies on
+      # the server half and never reaches the pub half at all.
+      - name: Setup .NET (the notices generator reads the NuGet graph)
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore the Server project
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        run: dotnet restore OpenAstroAra.Server/OpenAstroAra.Server.csproj
+
       # pubspec.lock and the third-party notices both move with the SDK, and
       # the §15/§17.2 freshness gate fails the Server job if the notices go
       # stale — so regenerate them here rather than leaving a red PR (#999).
@@ -119,16 +139,29 @@ jobs:
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
         id: licences
         run: |
-          set -euo pipefail
-          if python3 scripts/generate-3rd-party-licenses.py; then
+          set -uo pipefail
+          if out="$(python3 scripts/generate-3rd-party-licenses.py 2>&1)"; then
+            echo "$out"
             echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            # A curated PUB_LICENSES entry is version-pinned so a bump forces a
-            # human to re-read the new LICENSE. That is working as intended:
-            # say so in the PR instead of failing the whole run.
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Third-party licence notices need a human re-verification pass."
+            exit 0
           fi
+          echo "$out"
+          # Two very different failures share an exit code, so tell them apart:
+          #
+          #  * A curated PUB_LICENSES entry is version-pinned, so a dependency
+          #    bump deliberately fails until a human re-reads the new LICENSE.
+          #    That is the gate working — report it in the PR body and carry on.
+          #  * Anything else (no .NET SDK, unrestored project, network, a bug)
+          #    means the notices were NOT regenerated for a reason nobody
+          #    intended. Fail the run rather than opening a PR whose body
+          #    blames a licence pin that was never the problem.
+          if echo "$out" | grep -q "PUB_LICENSES"; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::A curated PUB_LICENSES entry needs a human re-verification pass."
+            exit 0
+          fi
+          echo "::error::The notices generator failed for a reason unrelated to the licence pins."
+          exit 1
 
       - name: Open the bump PR
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
@@ -154,12 +187,14 @@ jobs:
           Opened automatically by .github/workflows/check-flutter.yml per
           playbook §12.1; verified with flutter analyze + flutter test against
           the new SDK before this PR was opened."
-          # Credentials are supplied here rather than persisted by checkout.
-          # The URL carries the token, so keep it out of the command line that
-          # `set -x` or a failure trace could echo.
-          git remote set-url --push origin \
-            "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push origin "$BRANCH"
+          # The token is handed to this one git push and is never written to
+          # .git/config — not by checkout (persist-credentials: false) and not
+          # by a remote pushurl either, so nothing later in the job, and no
+          # artifact upload, can read it back off disk. It does appear in this
+          # command's argv; Actions masks the secret in logs, and the value is
+          # job-scoped.
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${BRANCH}"
 
           licence_note="Third-party notices regenerated."
           if [ "$LICENCES_OK" != "true" ]; then

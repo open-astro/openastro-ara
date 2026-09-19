@@ -173,10 +173,27 @@ def main() -> int:
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="report without writing")
     mode.add_argument("--apply", action="store_true", help="rewrite the pin files")
+    ap.add_argument(
+        "--version",
+        help="Flutter version to apply, instead of re-reading the feed. Pass the "
+        "value --check resolved so a release landing between the two runs cannot "
+        "write one version while the rest of the job cites another.",
+    )
+    ap.add_argument("--dart", help="Dart SDK version that ships with --version")
     args = ap.parse_args()
 
+    if (args.version is None) != (args.dart is None):
+        fail("--version and --dart must be given together")
+    if args.version and args.check:
+        fail("--version/--dart only apply to --apply")
+
     pin = read_pin()
-    latest, dart = fetch_current_stable()
+    if args.version:
+        latest, dart = args.version, args.dart
+        parse_version(latest)
+        parse_version(dart)
+    else:
+        latest, dart = fetch_current_stable()
 
     pin_v = parse_version(pin)
     latest_v = parse_version(latest)

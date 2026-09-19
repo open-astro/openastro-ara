@@ -326,7 +326,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Concern | Value |
 |---|---|
 | Language | Dart |
-| Framework | Flutter stable, **pinned to 3.27.x** (latest stable at port time, 2026-05-23). Pin enforced via `client/openastroara_client/.flutter-version` + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.X mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
+| Framework | Flutter stable, **pinned via `client/openastroara_client/.flutter-version`** (3.27.x at port time, 2026-05-23; currently 3.47.5). Pin enforced by that file + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.1 (`.github/workflows/check-flutter.yml`) mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
 | Target platforms | macOS, iOS, Android, Windows, Linux desktop |
 | HTTP client | `dio` (supports interceptors and progress callbacks for image downloads) |
 | WebSocket | `web_socket_channel` |
@@ -1009,7 +1009,7 @@ flutter create --org org.openastro --project-name openastroara \
 # Note: iOS + Android platforms NOT added in the initial release per §18.G mobile-deferred (ROADMAP);
 # Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
 cd openastroara_client
-echo "3.27.1" > .flutter-version
+echo "3.47.5" > .flutter-version   # whatever §12.1 currently pins
 flutter pub add dio web_socket_channel multicast_dns riverpod flutter_riverpod \
     flutter_secure_storage file_picker
 flutter pub add --dev openapi_generator build_runner
@@ -12332,7 +12332,7 @@ Phase 6-9 implementation per §10.6-§10.9 specs which NINA service per row gets
 
 CONTRIBUTING.md is in the post-Phase-15 documentation queue (§55 + post-port doc list). This section specs what it must cover so the AI's Phase 15 doc-writing pass produces a complete, usable onboarding guide rather than a generic placeholder.
 
-ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
+ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
 
 ### 74.1 Required CONTRIBUTING.md sections
 
@@ -12344,11 +12344,10 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio v
   brew install --cask dotnet-sdk
   # OR Microsoft's installer from dot.net
 
-  # Flutter 3.27.x (pinned per §12.1)
-  brew install --cask flutter
-  # OR FVM for version pinning per project:
-  brew tap leoafarias/fvm && brew install fvm
-  cd client/openastroara_client && fvm install
+  # Flutter at the pinned version (per §12.1). NOT `brew install --cask
+  # flutter` — that tracks latest stable and drifts off the pin.
+  git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
+  export PATH="$HOME/development/flutter/bin:$PATH"
 
   # CFITSIO (per §72.2)
   brew install cfitsio
@@ -12362,9 +12361,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio v
   # .NET 10 SDK (Microsoft package feed)
   curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0
 
-  # Flutter 3.27.x via FVM
-  curl -fsSL https://fvm.app/install.sh | bash
-  cd client/openastroara_client && fvm install
+  # Flutter at the pinned version — see docs/RUNNING.md
+  git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
+  export PATH="$HOME/development/flutter/bin:$PATH"
 
   # CFITSIO + ASTAP
   sudo apt install libcfitsio-dev astap
@@ -12442,7 +12441,7 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - "AOT build warnings" → see §71.7 troubleshooting
 - "CFITSIO not loaded" → see §72.2 dev setup
 - "Alpaca simulators won't start" → see §14.5.1 checksum verification path
-- "Flutter version mismatch" → see §12.1 FVM setup
+- "Flutter version mismatch" → see §12.1 (the pin lives in `.flutter-version`; docs/RUNNING.md has the install steps)
 - "Settings-registry gate failing" → see COMMIT-PR-RULES.md gate spec
 - "Tests pass locally but fail in CI" → check that bootstrap-dev.sh has been re-run since the last dep change
 
