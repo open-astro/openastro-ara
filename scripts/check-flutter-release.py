@@ -119,7 +119,7 @@ def _environment_block(text: str) -> tuple[int, int]:
     return start, end
 
 
-def _set_in_environment(text: str, key: str, value: str, label: str) -> tuple[str, bool]:
+def _set_in_environment(text: str, key: str, value: str) -> tuple[str, bool]:
     start, end = _environment_block(text)
     block = text[start:end]
     new_block, n = re.subn(
@@ -136,22 +136,26 @@ def _set_in_environment(text: str, key: str, value: str, label: str) -> tuple[st
 def apply(version: str, dart_version: str) -> list[str]:
     """Rewrite both pin files. Returns a list of human-readable changes."""
     changed: list[str] = []
-
     old_pin = read_pin()
-    if old_pin != version:
-        VERSION_FILE.write_text(f"{version}\n")
-        changed.append(f".flutter-version: {old_pin} -> {version}")
 
+    # Work out the whole pubspec rewrite before writing anything. A malformed
+    # pubspec fails here, leaving the tree untouched — otherwise someone running
+    # --apply by hand ends up with a bumped .flutter-version and stale
+    # constraints, which is worse than not having run it.
     text = PUBSPEC.read_text()
 
     want_flutter = flutter_constraint(version)
-    text, did = _set_in_environment(text, "flutter", want_flutter, "flutter")
-    if did:
-        changed.append(f"pubspec.yaml environment.flutter -> {want_flutter}")
+    text, flutter_changed = _set_in_environment(text, "flutter", want_flutter)
 
     want_sdk = dart_constraint(dart_version)
-    text, did = _set_in_environment(text, "sdk", want_sdk, "sdk")
-    if did:
+    text, sdk_changed = _set_in_environment(text, "sdk", want_sdk)
+
+    if old_pin != version:
+        VERSION_FILE.write_text(f"{version}\n")
+        changed.append(f".flutter-version: {old_pin} -> {version}")
+    if flutter_changed:
+        changed.append(f"pubspec.yaml environment.flutter -> {want_flutter}")
+    if sdk_changed:
         changed.append(f"pubspec.yaml environment.sdk -> {want_sdk}")
 
     PUBSPEC.write_text(text)

@@ -996,10 +996,10 @@ Commit: `port(server): smoke test on linux-arm64`.
 
 ### 12.1 Scaffold
 
-Flutter SDK pin: **3.47.5** (current stable; was 3.27.1 at port time, then 3.44.0 — see #997). Pinned via:
+Flutter SDK pin: **whatever `client/openastroara_client/.flutter-version` says** — that file is the single source of truth, and `check-flutter.yml` bumps it weekly, so this section deliberately does not restate the number. (3.27.1 at port time, 3.44.0, then 3.47.5 — see #997.) Pinned via:
 
 1. `client/openastroara_client/.flutter-version` — a single bare version. Read by CI, which passes it to `subosito/flutter-action` (`.github/workflows/ci.yml`). This file is the single source of truth. (FVM is *not* wired up — local dev installs the pinned version directly; see `docs/RUNNING.md`.)
-2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=3.47.0 <3.48.0'` (allows patch updates within minor; major/minor bumps need explicit PR) and `environment.sdk`, the Dart constraint shipping with that release.
+2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=X.Y.0 <X.(Y+1).0'` matching that pin (allows patch updates within the minor; major/minor bumps need an explicit PR) and `environment.sdk`, the Dart constraint shipping with that release.
 
 ```bash
 mkdir client

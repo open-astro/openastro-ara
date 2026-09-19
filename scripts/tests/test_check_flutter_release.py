@@ -192,6 +192,103 @@ class MajorBumpTest(unittest.TestCase):
         self.assertEqual(self.m.VERSION_FILE.read_text(), "3.47.5\n")
 
 
+class ExplicitVersionTest(unittest.TestCase):
+    """--apply --version/--dart must bypass the feed entirely.
+
+    The workflow passes the version --check already resolved, so a release
+    landing between the two calls cannot write one version while the branch
+    name, title and commit message cite another. Every test here makes
+    fetch_current_stable() raise: if the flags stop being honoured, the code
+    falls back to the feed and these fail.
+    """
+
+    def setUp(self):
+        self.m = load_module()
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        client = root / "client" / "openastroara_client"
+        client.mkdir(parents=True)
+        shutil.copy(REAL_PUBSPEC, client / "pubspec.yaml")
+        (client / ".flutter-version").write_text("3.47.5\n")
+        self.m.REPO_ROOT = root
+        self.m.CLIENT = client
+        self.m.VERSION_FILE = client / ".flutter-version"
+        self.m.PUBSPEC = client / "pubspec.yaml"
+
+        def explode():
+            raise AssertionError("fetch_current_stable() must not be called")
+
+        self.m.fetch_current_stable = explode
+        self.addCleanup(self.tmp.cleanup)
+
+    def _run(self, *argv):
+        import sys
+
+        saved = sys.argv
+        sys.argv = ["check-flutter-release.py", *argv]
+        try:
+            return self.m.main()
+        finally:
+            sys.argv = saved
+
+    def test_apply_with_explicit_version_never_reads_the_feed(self):
+        self._run("--apply", "--version", "3.48.2", "--dart", "3.14.1")
+        self.assertEqual(self.m.VERSION_FILE.read_text(), "3.48.2\n")
+        text = self.m.PUBSPEC.read_text()
+        self.assertIn("  flutter: '>=3.48.0 <3.49.0'", text)
+        self.assertIn("  sdk: ^3.14.0", text)
+
+    def test_version_without_dart_is_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self._run("--apply", "--version", "3.48.2")
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(self.m.VERSION_FILE.read_text(), "3.47.5\n")
+
+    def test_dart_without_version_is_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self._run("--apply", "--dart", "3.14.1")
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_check_rejects_an_explicit_version(self):
+        """--check reports on the live feed; pinning it would be meaningless."""
+        with self.assertRaises(SystemExit) as ctx:
+            self._run("--check", "--version", "3.48.2", "--dart", "3.14.1")
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_an_explicit_major_bump_is_still_refused(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self._run("--apply", "--version", "4.0.0", "--dart", "4.0.0")
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(self.m.VERSION_FILE.read_text(), "3.47.5\n")
+
+    def test_a_malformed_explicit_version_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            self._run("--apply", "--version", "3.48", "--dart", "3.14.1")
+
+
+class AtomicityTest(unittest.TestCase):
+    def setUp(self):
+        self.m = load_module()
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        client = root / "client" / "openastroara_client"
+        client.mkdir(parents=True)
+        self.m.REPO_ROOT = root
+        self.m.CLIENT = client
+        self.m.VERSION_FILE = client / ".flutter-version"
+        self.m.PUBSPEC = client / "pubspec.yaml"
+        client.mkdir(parents=True, exist_ok=True)
+        (client / ".flutter-version").write_text("3.47.5\n")
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_a_bad_pubspec_leaves_the_version_file_untouched(self):
+        """Don't half-update the tree: someone runs --apply by hand."""
+        self.m.PUBSPEC.write_text("name: openastroara\ndependencies:\n  dio: ^5.0.0\n")
+        with self.assertRaises(SystemExit):
+            self.m.apply("3.48.2", "3.14.1")
+        self.assertEqual(self.m.VERSION_FILE.read_text(), "3.47.5\n")
+
+
 class FeedParsingTest(unittest.TestCase):
     """fetch_current_stable against a stubbed feed — no network."""
 
@@ -199,15 +296,26 @@ class FeedParsingTest(unittest.TestCase):
         self.m = load_module()
 
     def _stub(self, payload):
+        """Patch urlopen for this test only.
+
+        mock.patch.object restores on teardown — assigning directly would
+        mutate the real urllib.request for the whole interpreter and silently
+        swallow a genuine network call from any test module added later.
+        """
         import contextlib
         import io
         import json
+        from unittest import mock
 
         @contextlib.contextmanager
         def fake_urlopen(url, timeout=None):
             yield io.StringIO(json.dumps(payload))
 
-        self.m.urllib.request.urlopen = fake_urlopen
+        patcher = mock.patch.object(
+            self.m.urllib.request, "urlopen", fake_urlopen
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_picks_the_release_matching_current_release_stable(self):
         self._stub(
