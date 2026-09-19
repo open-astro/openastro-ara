@@ -825,6 +825,14 @@ jobs:
         # parameter expansion exactly like Linux/macOS.
         shell: bash
     steps:
+      # Always runs: with the work gated at step level, a misclassified
+      # docs-only PR would otherwise show three green required contexts and no
+      # trace of why. This puts the classifier's answer in the job summary.
+      - name: Record path-gate decision
+        run: echo "docs_only=${DOCS_ONLY:-<unset>}" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+
       - name: Checkout (no LFS)
         if: ${{ needs.changes.outputs.docs_only != 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor + CodeRabbit security policy
