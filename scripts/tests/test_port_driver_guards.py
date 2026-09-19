@@ -33,8 +33,15 @@ from pathlib import Path
 
 
 def git(repo: Path, *args: str) -> str:
+    """Run a git command that must succeed, and return its stdout.
+
+    `check=True` pins the fixtures as well as the guards: a silently failing
+    setup step (a `branch -D` that errors, say) would otherwise leave HEAD
+    somewhere unintended and let a case pass for the wrong reason. Commands
+    whose failure is meaningful go through `git_ok` instead.
+    """
     return subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True
     ).stdout.strip()
 
 

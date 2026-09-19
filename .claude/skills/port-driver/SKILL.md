@@ -397,6 +397,10 @@ git fetch --prune origin
 # case this avoids. Harmless on a same-repo PR.
 git fetch origin "pull/<PR>/head"
 HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
+# Same bail as the two tag probes above: an empty OID from a rate limit or an
+# auth blip would make the verification below compare against "" and pass
+# vacuously. It still fails closed at the push, but bail uniformly.
+[ -n "$HEAD_OID" ] || exit 1
 git tag phase-<N>-complete "$HEAD_OID"
 ```
 
