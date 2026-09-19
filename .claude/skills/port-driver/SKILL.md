@@ -47,10 +47,18 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
-**Allowlisted branch** means `phase/<N>[-<letter>]-<short-name>` plus the named
-prep branches — §19.1 allows "a small set of named prep branches (e.g.
-`prep-ci`)", and §22.2 names `prep-*` and `rules-*` as branches the driver
-itself created and may delete. A branch outside that set is genuinely unknown and
+**Allowlisted branch** means what §19.1's branch allowlist permits:
+`phase/<N>[-<letter>]-<short-name>`, the named prep branches (`prep-*`, e.g.
+`prep-ci`), `rules-*` (§22.2 lists both as branches the driver created and may
+delete), and `chore/<short-name>` for maintenance that is not a port phase —
+skill and doc upkeep, CI cleanups. Anything outside that set is genuinely
+unknown and belongs in scenario D.
+
+`chore/*` is on the list because the driver's own maintenance PRs use it (#1000,
+#1003), and without it the loop stopped on its own work. §5 still only ever
+*creates* `phase/…`: recognising a branch and choosing to create one are
+different permissions, and the phase naming is what PORT_PROGRESS.md and the
+COMMIT-PR-RULES.md sub-split tables are keyed on. A branch outside that set is genuinely unknown and
 belongs in scenario D — but a `prep-ci` the driver created itself is not, and
 treating it as unknown would stop the loop on its own work.
 
