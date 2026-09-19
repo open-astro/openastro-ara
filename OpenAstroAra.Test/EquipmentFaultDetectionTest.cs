@@ -249,11 +249,13 @@ namespace OpenAstroAra.Test {
             // assertion is a regression guard, not a test of the property.
             //
             // This drives two real episodes — drop, recover, drop again — which
-            // is the only way the per-episode claim can be observed at all. It
-            // also exercises the ReferenceEquals(_client, probed) identity check
-            // in TripConnectionLost: the reconnect replaces _client, and a probe
-            // still in flight from the first episode must not trip the new,
-            // healthy session.
+            // is the only way the per-episode claim can be observed at all.
+            //
+            // It does NOT cover the ReferenceEquals(_client, probed) identity
+            // check in TripConnectionLost: RefreshCacheOnce is single-flight and
+            // the trip happens inside the tick holding that flag, so by the time
+            // this test observes Error and reconnects, no episode-1 probe can
+            // still be in flight. Dropping that clause leaves this test green.
             await using var stub = StubDevice.Start();
             await using var proxy = AlpacaFaultProxy.Start(stub.BaseUri);
             var (hub, wsEvents) = Hub();
@@ -275,20 +277,19 @@ namespace OpenAstroAra.Test {
             await WaitForFaultCountAsync(faults, 1, TimeSpan.FromSeconds(10));
 
             // --- Recovery ------------------------------------------------------
-            // Heal the device and reconnect. This replaces _client, so any probe
-            // left over from episode 1 now fails the identity check rather than
-            // tripping the fresh session.
+            // Heal the device and reconnect: the fresh session must come up
+            // Connected without publishing a fault of its own.
             proxy.ClearFaults();
             await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
             await WaitForStateAsync(svc, EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15));
 
-            // Hold through several §42.3 refresh ticks while healthy: a stale
-            // probe tripping the new session would show up here as a second
+            // Hold through several §42.3 refresh ticks while healthy: a spurious
+            // trip on the reconnected session would show up here as a second
             // fault against a device that is fine.
             await Task.Delay(TimeSpan.FromSeconds(6));
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1),
-                    "reconnecting must not publish a fault, and a probe left over from episode 1 must not trip the new session");
+                    "reconnecting must not publish a fault");
             }
 
             // --- Episode 2 -----------------------------------------------------
@@ -316,10 +317,22 @@ namespace OpenAstroAra.Test {
                 timeout,
                 $"{want} equipment fault(s) to be published after the device reached Error");
 
-        private static Task WaitForStateAsync(FocuserService svc, EquipmentConnectionState want, TimeSpan timeout) =>
-            Poll.UntilAsync(
-                async () => (await svc.GetAsync(CancellationToken.None))?.State == want,
-                timeout,
-                $"the focuser to reach {want}");
+        private static async Task WaitForStateAsync(FocuserService svc, EquipmentConnectionState want, TimeSpan timeout) {
+            // Poll's description is built up front, so the observed state is
+            // appended on the way out instead: on a timeout, "reach Connected
+            // (last state: Error)" is diagnosable where "reach Connected" is not.
+            EquipmentConnectionState? last = null;
+            try {
+                await Poll.UntilAsync(
+                    async () => {
+                        last = (await svc.GetAsync(CancellationToken.None))?.State;
+                        return last == want;
+                    },
+                    timeout,
+                    $"the focuser to reach {want}");
+            } catch (TimeoutException ex) {
+                throw new TimeoutException($"{ex.Message} (last state: {last?.ToString() ?? "<none>"})", ex);
+            }
+        }
     }
 }
