@@ -1778,7 +1778,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
   **No review, no merge.** `.github/workflows/claude-review.yml` runs automatically on `opened` and `synchronize`, so pushing a fix is what re-reviews a PR — AI never @-mentions or hand-retriggers a reviewer, and there is no self-review fallback (`/review` does not satisfy this gate). If no review has appeared the run is still in flight, and AI waits. Two cases can never produce one: a PR that edits `claude-review.yml` (the action refuses to run when the workflow differs from the default branch, and the assert step exempts it — `claude-review.yml:218-228`) and a fork PR without the `safe-to-review` label. Both are `Held for human review @<user> — <reason>`, never a merge on green CI alone. No "strict-letter" merge-on-skip — that defeats the checks-and-balances purpose of the gate.
 
-  Merge method: **squash** for prep + multi-commit PRs that should land as one logical change on `master`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch`** so the merged feature branch is removed from origin immediately. Pull `master` and continue.
+  Merge method: **squash** for prep + multi-commit PRs that should land as one logical change on `master`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history — **except that a PR carrying a phase or sub-phase tag always merges with `--merge`**, whatever its commit history looks like, because a squash rewrites the head the tag points at and strands the tag off `master` (§0 rule 9, §22.1 step 5). **Always use `--delete-branch`** so the merged feature branch is removed from origin immediately. Pull `master` and continue.
 
   If any of the gate conditions are ambiguous or the AI is uncertain whether to merge, it posts "Held for human review @<user> — <reason>" instead of merging. The user can override either way.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
@@ -1877,7 +1877,7 @@ For each phase or sub-PR:
 2. Do the work, run the §15 gate, push the branch, open the PR **targeting `master`**.
 3. Run the review poll-and-fix loop (COMMIT-PR-RULES.md). The §19.1 merge-gate applies: CI green + review reviewed + no unresolved actionable findings + clean self-review.
 4. At a **phase boundary**, before merging the last PR of the phase, tag it: `git tag phase-N-complete && git push --tags` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone — judgment call).
-5. **Merge to `master`** with `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1). Pull `master` and continue.
+5. **Merge to `master`** with `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1; **always `--merge` if step 4 tagged this PR**, regardless of commit history, or the squash orphans the tag). Pull `master` and continue.
 
 ### 22.2 Branch cleanup (continuous)
 

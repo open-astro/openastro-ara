@@ -53,7 +53,7 @@ prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
 `chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
-**Deliberate deviation (1 of 3) — `chore/<short-name>`.** §19.1 does not name it; it
+**Deliberate deviation (1 of 2) — `chore/<short-name>`.** §19.1 does not name it; it
 closes with "All other branches are off-limits without explicit user
 instruction", and `COMMIT-PR-RULES.md` records `chore/*` only in its open-items checklist
 ("Branch naming convention for community PRs"), not under the "Branch naming"
@@ -321,7 +321,8 @@ these. Waiting on a review that can never arrive would spin forever — see step
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope
    - **At a phase boundary:** the `phase-<N>-complete` tag (and any applicable
-     `phase-<N>-<letter>-complete`) will be pushed as the first action of §3b,
+     `phase-<N>-<letter>-complete`) will be pushed by §3b immediately before the
+     merge, after it has settled the merge method,
      onto this PR's head, before the merge — that is §19.1's own gate item. It
      is not yet true when you evaluate this checklist; what you are checking is
      that you have identified this as a phase boundary at all.
@@ -373,6 +374,10 @@ git fetch --prune origin
 # Tag the head OID the API reports, not `origin/<branch-name>`: a fork-head PR
 # has no such remote-tracking ref and `git tag` would fail to resolve it. The
 # verification below reads the same field, so this costs no extra call.
+# `fetch --prune origin` does not bring fork heads either, so fetch the PR ref
+# explicitly -- otherwise `git tag` cannot resolve the OID in exactly the fork
+# case this avoids. Harmless on a same-repo PR.
+git fetch origin "pull/<N>/head"
 git tag phase-<N>-complete "$(gh pr view <N> --json headRefOid --jq .headRefOid)"
 git push origin phase-<N>-complete    # deliberate: see the note below
 ```
@@ -402,14 +407,7 @@ commit, while `git tag` succeeds locally and the check above passes. The push is
 then rejected as a non-fast-forward tag update. Do not force it — that is the
 same situation, so take the same Held stop.
 
-**Deliberate deviation (2 of 3):** the rule above — *any* PR carrying a phase or
-sub-phase tag merges with `--merge` — is stricter than §19.1 and §22.1 step 5,
-which pick the method from the PR's commit history. Not a contradiction (a merge
-commit is already an allowed choice there), but it removes the discretion those
-sections grant, because a squash would orphan the tag. Same maintainer
-reconciliation as the deviation below.
-
-**Deliberate deviation (3 of 3):** §22.1 step 4 and §19.1 both say `git push --tags`.
+**Deliberate deviation (2 of 2):** §22.1 step 4 and §19.1 both say `git push --tags`.
 This pushes the named ref instead, because `--tags` pushes *every* stray local
 tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
 `reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;

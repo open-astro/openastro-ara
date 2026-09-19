@@ -390,8 +390,11 @@ Then:
   **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
   `--squash`: squashing rewrites the head the tag points at, so the tag is left
   on a commit that is not reachable from `master` (COMMIT-PR-RULES.md steps 6-7).
-  Check with `git ls-remote --tags origin | grep "$(gh pr view <N> --json
-  headRefOid --jq .headRefOid)"` before choosing the method.
+  Check for a tag on the head before choosing the method:
+  ```bash
+  HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
+  git ls-remote --tags origin | grep -q "$HEAD_OID" && echo "tagged -> use --merge"
+  ```
   Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
   step; a fork head belongs to the contributor and is never deleted from here.
 

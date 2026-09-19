@@ -78,7 +78,11 @@ jobs:
       # they ride along in the sanity job rather than earning their own.
       # Currently: scripts/check-flutter-release.py, which drives the weekly
       # Flutter bump PR (playbook §12.1) unattended — the pubspec-rewriting
-      # logic wants a guard that fails when it regresses.
+      # logic wants a guard that fails when it regresses; and
+      # scripts/tests/test_port_driver_guards.py, which pins the port-driver
+      # skill's git-state guards against throwaway repositories (they decide
+      # whether a branch carries live work or an already-merged leftover, and
+      # every prose-only revision of them so far has been wrong).
       - name: Python tooling tests
         run: python3 -m unittest discover -s scripts/tests -v
 

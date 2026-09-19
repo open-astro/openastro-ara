@@ -47,13 +47,21 @@ def git_ok(repo: Path, *args: str) -> bool:
 def scenario_b(repo: Path, merged: list[str]) -> str:
     """SKILL.md scenario B: classify a branch against its merged PRs' head OIDs.
 
-    Returns "B" (live work, carry on), "C" (this exact commit landed) or
-    "D" (hold for a human). The OIDs are walked one at a time, every test
-    applied to each before moving on -- see test_mixed_merge_methods for why
-    a pass-per-test is wrong.
+    Returns "B" (live work, carry on), "C" (nothing to push yet, or this exact
+    commit landed) or "D" (hold for a human). Mirrors the skill's two
+    conditions in order: commits-ahead first, then the merged-head walk. The
+    OIDs are walked one at a time, every test applied to each before moving on
+    -- see test_mixed_merge_methods_on_one_name for why a pass-per-test is
+    wrong.
     """
     if not git(repo, "branch", "--show-current"):
         return "D"  # detached HEAD: `gh pr list --head ""` matches anything
+    # Condition (1): zero commits ahead is not B. Pushing an empty branch makes
+    # `gh pr create` fail with "No commits between master and <branch>" and
+    # strands a ref §19.1 bars the driver from deleting.
+    if git(repo, "rev-list", "--count", "origin/master..HEAD") == "0":
+        return "C"
+    # Condition (2), checked only when (1) found commits.
     if not merged:
         return "B"
     head = git(repo, "rev-parse", "HEAD")
@@ -198,9 +206,27 @@ class ScenarioB(GitFixture):
         self.commit("stray")
         self.assertEqual(scenario_b(self.repo, [old, new]), "D")
 
+    def test_zero_commits_ahead_is_not_b(self):
+        # Skill condition (1): a branch §5 step 2 created, interrupted before
+        # any commit. B would push it empty and strand the ref.
+        git(self.repo, "checkout", "-qb", "fresh", "master")
+        self.assertEqual(scenario_b(self.repo, []), "C")
+
+    def test_zero_commits_ahead_outranks_the_oid_walk(self):
+        # (1) decides before (2) is consulted: same empty branch, but a PR
+        # merged under this name earlier.
+        git(self.repo, "checkout", "-qb", "prep-ci", "master")
+        oid = self.commit("first use")
+        self.merge_pr("prep-ci", squash=True)
+        git(self.repo, "branch", "-qD", "prep-ci")
+        git(self.repo, "checkout", "-qb", "prep-ci", "master")
+        self.assertEqual(scenario_b(self.repo, [oid]), "C")
+
     def test_unfetched_oid_is_not_a_match(self):
         # Resumed from a fresh clone: --is-ancestor on a missing object exits
         # fatal, which is a miss, not ambiguity.
+        git(self.repo, "checkout", "-qb", "work", "master")
+        self.commit("live work")
         self.assertEqual(scenario_b(self.repo, ["0" * 40]), "B")
 
 
