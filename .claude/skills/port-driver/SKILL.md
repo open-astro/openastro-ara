@@ -173,16 +173,19 @@ commit history, not by its base:
 - **PR where per-commit granularity is worth keeping:** `gh pr merge <N> --merge --delete-branch`
 
 After merge:
-- `git checkout master && git pull --ff-only`
-
-**Phase boundary — tag the landed commit, after the merge.** If this was the
-last PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
-PORT_PROGRESS.md), tag `master` once the merge has landed and you have pulled:
 
 ```shell
 git checkout master && git pull --ff-only
+```
+
+**Phase boundary — tag the landed commit, after the merge.** If this was the
+last PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
+PORT_PROGRESS.md), tag `master` now that the merge has landed and you have
+pulled it:
+
+```shell
 git tag phase-<N>-complete            # tags the landed commit on master
-git push origin phase-<N>-complete
+git push origin phase-<N>-complete    # not --tags: that pushes stray local tags too
 ```
 
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
@@ -274,8 +277,8 @@ with the next sub-PR rather than getting a PR of its own.
 ### Step 6 — Phase boundary bookkeeping
 
 There is no promotion PR (playbook §22.0). At a phase boundary the tag is pushed
-in §3b, immediately before the phase's last PR merges. The only thing left is
-tracking state: update `design/PORT_PROGRESS.md` to move the phase from
+in §3b, on the landed commit **after** the phase's last PR merges — see the
+"Why after, not before" note there. The only thing left is tracking state: update `design/PORT_PROGRESS.md` to move the phase from
 "In flight" → "Completed" and reset the "Currently working on" / "Next"
 pointers, folded into the next sub-PR's commits per §3b.
 
