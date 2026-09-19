@@ -53,7 +53,7 @@ prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
 `chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
-**Deliberate deviation 3 — `chore/<short-name>`.** §19.1 does not name it; it
+**Deliberate deviation (3 of 3) — `chore/<short-name>`.** §19.1 does not name it; it
 closes with "All other branches are off-limits without explicit user
 instruction", and `COMMIT-PR-RULES.md:337` records `chore/*` as the *community*
 convention, distinct from the port's pattern. It is here because the driver's
@@ -288,14 +288,14 @@ commit, while `git tag` succeeds locally and the check above passes. The push is
 then rejected as a non-fast-forward tag update. Do not force it — that is the
 same situation, so take the same Held stop.
 
-**Deliberate deviation (1 of 2):** the rule above — *any* PR carrying a phase or
+**Deliberate deviation (1 of 3):** the rule above — *any* PR carrying a phase or
 sub-phase tag merges with `--merge` — is stricter than §19.1 and §22.1 step 5,
 which pick the method from the PR's commit history. Not a contradiction (a merge
 commit is already an allowed choice there), but it removes the discretion those
 sections grant, because a squash would orphan the tag. Same maintainer
 reconciliation as the deviation below.
 
-**Deliberate deviation (2 of 2):** §22.1 step 4 and §19.1 both say `git push --tags`.
+**Deliberate deviation (2 of 3):** §22.1 step 4 and §19.1 both say `git push --tags`.
 This pushes the named ref instead, because `--tags` pushes *every* stray local
 tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
 `reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
