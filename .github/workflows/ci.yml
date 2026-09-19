@@ -88,6 +88,105 @@ jobs:
       # When `actionlint` style checks are wanted (e.g., shellcheck inside
       # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
 
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5  # gates all seven jobs below; a wedged fetch must not hold the matrix to the 6h default
+    # Classifies the PR so the expensive jobs below can skip work that cannot
+    # possibly be affected by it. See #1020.
+    #
+    # This is deliberately a job-level gate and NOT a workflow-level `paths:`
+    # filter. A workflow filtered out by `paths:` never creates its checks at
+    # all, so every required context in the `master protection` ruleset
+    # ("Sanity (design docs)", "Server (build + cross-publish + Docker)",
+    # "Settings + Help registry gate", the three "Client (analyze + test)"
+    # legs) would sit in "Expected — Waiting for status to be reported"
+    # forever and the PR could never merge. A job skipped by `if:` reports a
+    # `skipped` conclusion, which GitHub counts as satisfying a required check.
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - name: Checkout (no LFS, full history for the merge-base diff)
+        # Only a pull_request needs the diff at all; every other event short
+        # -circuits to docs_only=false below, so skip the clone entirely.
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          lfs: false
+          fetch-depth: 0  # merge-base against the PR's base needs real history
+          filter: blob:none  # history without blobs — this job never reads file contents
+          persist-credentials: false
+
+      - name: Classify changed paths
+        id: classify
+        env:
+          # Via env, not ${{ }} interpolation into the script body — zizmor
+          # template-injection policy.
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+
+          # Any unexpected failure below classifies as code and runs everything,
+          # rather than leaving a red `Changed paths` that blocks the PR anyway.
+          # The `if:` guards already fail safe on an empty output; this makes the
+          # job itself match that intent instead of going red.
+          trap 'echo "classifier failed -> running everything"; echo "docs_only=false" >> "$GITHUB_OUTPUT"; exit 0' ERR
+          set -e
+
+          # Fail safe: anything that is not a PR (push to master,
+          # workflow_dispatch) runs the full matrix.
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "not a pull_request event -> running everything"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          # --no-renames: rename detection needs blob contents (defeating
+          # `filter: blob:none` with a lazy promisor fetch) and reports only a
+          # rename's destination — so a code file moved into design/ would look
+          # docs-only while its deletion went unbuilt.
+          files="$(git diff --no-renames --name-only "$base" "$HEAD_SHA")"
+
+          echo "Changed files:"
+          echo "$files" | sed 's/^/  /'
+
+          # An empty diff is unexpected; treat it as code and run everything.
+          if [ -z "$files" ]; then
+            echo "empty diff -> running everything"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Allowlist, not a denylist: a path is only "docs" if it matches
+          # something here. A new top-level source directory therefore runs the
+          # full matrix by default instead of silently skipping it.
+          docs_only=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              # Whole directories that contain no build inputs.
+              design/*|docs/*|.claude/*|.github/ISSUE_TEMPLATE/*) ;;
+              # Root-level prose only. NOT a bare `*.md`: that would also match
+              # OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md, whose entire
+              # point is to be verified by `analyzer-gate`
+              # (SimulatorVersionPinTest) and re-downloaded + checksummed by the
+              # two Alpaca simulator jobs. The §14.5.1 auto-bump PR touches that
+              # file *and nothing else*, so a bare `*.md` would skip exactly the
+              # gates that PR exists to pass.
+              */*) echo "non-docs path: $f"; docs_only=false; break ;;
+              *.md|LICENSE.txt|COPYING) ;;
+              *) echo "non-docs path: $f"; docs_only=false; break ;;
+            esac
+          done <<EOF
+          $files
+          EOF
+
+          echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   # §14e — Alpaca simulator harness smoke test. Downloads the pinned ASCOM OmniSim
   # release (SHA-256 verified, not committed), runs it headless on the runner, and
   # confirms its Alpaca API answers + exposes a Camera device. This proves the
@@ -96,7 +195,11 @@ jobs:
   alpaca-sim-smoke:
     name: Alpaca simulator harness (smoke)
     runs-on: ubuntu-latest
-    needs: sanity  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    needs: [sanity, changes]  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
+    # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
+    # need failed; the explicit sanity check keeps the original gating.
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     timeout-minutes: 10  # backstop if a runner/OmniSim hang outlives the ~270s poll window
     permissions:
       contents: read  # only needs to check out + download a public release artifact
@@ -180,7 +283,11 @@ jobs:
   alpaca-sim-integration:
     name: Alpaca discovery integration test
     runs-on: ubuntu-latest
-    needs: sanity  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    needs: [sanity, changes]  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
+    # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
+    # need failed; the explicit sanity check keeps the original gating.
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     timeout-minutes: 15
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
@@ -253,7 +360,8 @@ jobs:
   analyzer-gate:
     name: Analyzer gate (full solution, warnings = errors)
     runs-on: ubuntu-latest
-    needs: sanity
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -320,7 +428,8 @@ jobs:
   server-build:
     name: Server (build + cross-publish + Docker)
     runs-on: ubuntu-latest
-    needs: sanity
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -659,7 +768,8 @@ jobs:
     # the port, per the activation table in COMMIT-PR-RULES.md.
     name: Settings + Help registry gate
     runs-on: ubuntu-latest
-    needs: sanity
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
@@ -675,6 +785,8 @@ jobs:
 
   client-test:
     name: Client (analyze + test) — ${{ matrix.os }}
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays
     # portable since the WILMA client ships to all three platforms.
@@ -734,6 +846,8 @@ jobs:
 
   client-build:
     name: Client (native build) — ${{ matrix.target }}
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     # Native desktop compile gate. `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO

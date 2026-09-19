@@ -1770,7 +1770,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 - **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
 - **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
-  - All required CI checks are `pass` (no `pending`, no `failure`)
+  - All required CI checks are `pass` — or `skipping` **because CI's documented path gate skipped them** (`.github/workflows/ci.yml`'s `changes` job, #1020: a docs-only PR skips all seven gated jobs — eleven check contexts, of which five are required: `server-build`, `registry-gate` and the three `client-test` legs. The other six — both Alpaca jobs, `analyzer-gate` and the three `client-build` legs — are not required contexts but will also read `skipping`, and the driver must expect them). No `pending`, no `failure`. A `skipping` that is *not* attributable to that gate — a job skipped because one of its `needs:` failed, or by an `if:` the merging agent cannot account for — is **ambiguous, not clearance**: post `Held for human review` and stop. The distinction matters because GitHub counts a skipped required context as satisfied, so "skipped" alone cannot be trusted to mean "did not need to run"; the reason has to be checked. (Amended 2026-09-19 in PR #1021, which introduced the path gate, at the user's direction after the AI flagged that editing this gate autonomously was not its call.)
   - **The reviewer has actually reviewed the current head** — a `claude[bot]` comment (or `github-actions[bot]` on the fork path) whose `updated_at` is at or after the last push, carrying a sign-off marker (`Approved` / `Issues found`). A green `review` status check **does not satisfy** this gate on its own: that check only asserts a comment was posted, never that it was clean, and a comment older than the last push is the previous round's verdict on code that has since changed. The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
   - All **Defects** in that review have been addressed via additional commits on the same sub-branch (per the review poll-and-fix loop in COMMIT-PR-RULES.md). **Notes never block a merge.** Disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
   - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
@@ -9910,7 +9910,7 @@ A setting that isn't registered in `registry.dart` doesn't merge. Mechanically e
 Four-layer enforcement spec lives in [`design/COMMIT-PR-RULES.md` → "Settings-registry gate"](COMMIT-PR-RULES.md):
 
 1. Local pre-commit hook (`check-settings-registry.mjs --staged`) — blocks the commit
-2. CI check on every PR — blocks merge
+2. CI check on every code PR — blocks merge (docs-only PRs skip it per #1020; they cannot touch `registry.dart`)
 3. PR template mandatory checkbox — manual confirmation
 4. Reviewer focus on `lib/screens/settings/**` and `lib/wizard/**` diffs
 
@@ -11448,7 +11448,7 @@ The script scans the diff for widgets that use `helpKey:` and verifies each refe
 - Duplicate `key` across registry entries
 - `learnMoreUrl` doesn't start with `wiki/` or `https://openastro.net/`
 
-**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff.
+**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff (on code PRs; docs-only PRs skip it per #1020).
 
 **Layer 3 — PR template checkbox** (`.github/PULL_REQUEST_TEMPLATE.md`):
 ```markdown
