@@ -118,29 +118,59 @@ gh pr list --head "$(git branch --show-current)" --state merged \
      and B re-creates the deleted branch anyway.
 
    `headRefOid` is immune to both: it names a specific commit, and it stays
-   meaningful however far `master` advances afterwards. But compare it three
-   ways, not two — **exact equality alone is also wrong**, because an
-   interruption can leave a commit *on top of* the merged head (an iteration
-   that committed before the merge finished, a hook that amended). Equality then
-   fails, B matches, and the branch `--delete-branch` removed is re-created:
-   the exact failure this guard exists to prevent.
+   meaningful however far `master` advances afterwards. But **`headRefOid`
+   alone is not enough either**, and the two ways it goes wrong pull in
+   opposite directions:
+
+   - **Exact equality alone is too narrow.** An interruption can leave a commit
+     *on top of* the merged head (an iteration that committed before the merge
+     finished, a hook that amended). Equality fails, B matches, and the branch
+     `--delete-branch` removed is re-created: the exact failure this guard
+     exists to prevent.
+   - **A bare `--is-ancestor` is too broad.** Once a reused name's first PR
+     merged with a **merge commit** — which §19.1 allows and §3b *mandates* for
+     a tagged PR, exactly what a `prep-ci` PR at a phase boundary is — that
+     PR's `headRefOid` is an ancestor of `master` forever, hence of any fresh
+     branch cut from `master`. `--is-ancestor` then succeeds on the driver's
+     own brand-new work and holds the loop: #1007 re-introduced through the
+     guard meant to close it. (Had the first PR been squashed instead, the OID
+     is neither an ancestor nor equal, and a two-way test returns no verdict
+     at all.)
+
+   What separates the hazard from ordinary reuse is not whether the merged head
+   is reachable, but whether this branch was cut from a `master` that already
+   contains it. So test `origin/master` first, and iterate every merged PR for
+   the name — `prep-ci` can carry several, and `head -1` picks one by an
+   ordering nothing guarantees.
 
    ```shell
-   merged=$(gh pr list --head "$(git branch --show-current)" --state merged \
-     --json headRefOid --jq '.[].headRefOid' | head -1)
+   branch=$(git branch --show-current)          # empty on a detached HEAD
+   git fetch -q origin master
+   merged=$(gh pr list --head "$branch" --state merged \
+     --json headRefOid --jq '.[].headRefOid')
    ```
 
+   - `$branch` empty → detached HEAD, `gh pr list` silently drops the `--head`
+     filter and would match an unrelated repo-wide PR → **D**. Never let the
+     query run without a branch name.
    - `$merged` empty → not merged → **B**.
-   - `$merged` == `git rev-parse HEAD` → this exact commit landed → **C**
+   - Any `$merged` OID == `git rev-parse HEAD` → this exact commit landed → **C**
      (check out `master`, pull, continue). Recoverable, not ambiguous: it is
      what an interruption between `gh pr merge` and §3b's `git checkout master`
      looks like.
-   - `git merge-base --is-ancestor "$merged" HEAD` succeeds but they are not
-     equal → the merged work is here *plus* something else → **D**. Do not
-     guess. The extra commit is either stray or real unpushed work, and the
-     driver cannot tell which: pushing would re-create a deleted branch,
-     discarding it would lose work. Post `Held for human review @joeytroy —
-     <branch> carries N commits on top of merged PR #<n>` and stop.
+   - `git merge-base --is-ancestor origin/master HEAD` succeeds → this branch
+     was cut from (or refreshed onto) the current `master`, so anything it
+     inherited came through `master`, not through an un-deleted branch → **B**,
+     however many merged OIDs are ancestors. This is the reused-placeholder
+     case, and it is the common one.
+   - Otherwise, any `$merged` OID that is an ancestor of `HEAD` → the branch
+     never came back through `master` and still carries the merged work *plus*
+     something else → **D**. Do not guess. The extra commit is either stray or
+     real unpushed work, and the driver cannot tell which: pushing would
+     re-create a deleted branch, discarding it would lose work. Post
+     `Held for human review @joeytroy — <branch> carries N commits on top of
+     merged PR #<n>` and stop.
+   - No OID matches any of those → nothing merged is reachable from here → **B**.
 
 **(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
