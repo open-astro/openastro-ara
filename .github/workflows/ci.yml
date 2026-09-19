@@ -876,6 +876,11 @@ jobs:
         run: flutter test
 
   client-build:
+    # Matrix + job-level gate. Safe ONLY because these are not required
+    # contexts: skipped at job level the matrix never expands, so this reports
+    # one check under the literal name below rather than three per-target ones.
+    # If it is ever added to the ruleset's required checks, it reproduces the
+    # #1025 deadlock verbatim — gate it at step level like client-test instead.
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}

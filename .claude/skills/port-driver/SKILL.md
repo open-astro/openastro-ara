@@ -141,16 +141,20 @@ these. Waiting on a review that can never arrive would spin forever — see step
      `skipping` and you can attribute the skip to CI's path gate** — `ci.yml`'s
      `changes` job emitting `docs_only=true` (#1020).
 
-     That gate skips **six jobs**, which is eight check contexts:
+     That gate skips **six jobs**, which is **six** check contexts:
 
      ```
      Alpaca simulator harness (smoke)
      Alpaca discovery integration test
      Analyzer gate (full solution, warnings = errors)
-     Server (build + cross-publish + Docker)            <- required
-     Settings + Help registry gate                      <- required
-     Client (native build) — {macos,linux,windows}
+     Server (build + cross-publish + Docker)              <- required
+     Settings + Help registry gate                        <- required
+     Client (native build) — ${{ matrix.target }}         <- literally this
      ```
+
+     The last one is not a typo. `client-build` is a matrix skipped at job
+     level, so it never expands: it reports **one** context under its raw,
+     uninterpolated name — not three per-target ones. Expect that exact string.
 
      The three `Client (analyze + test) — *-latest` legs are **required and
      matrix-expanded**, so they are gated at *step* level and report `pass`
