@@ -9,7 +9,7 @@ pre-1.0, breaking changes can happen in any release per the playbook §0.6.
 For Ara-specific release tagging convention (`v0.0.1-ara.N`), see
 [design/PORT_PLAYBOOK.md §34.5](design/PORT_PLAYBOOK.md). Phase boundary tags
 (`phase-N-complete`) are NOT release tags — they're internal milestone markers
-used by the port's `port/ara → master` promotion cadence (playbook §22.0).
+pushed onto the tagged PR before it merges (playbook §22.1 step 4).
 
 ## How to update this file
 

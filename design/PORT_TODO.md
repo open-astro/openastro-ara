@@ -1721,3 +1721,12 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
 ## openapi.yaml refresh (2026-08-05, from the docs audit)
 
 `OpenAstroAra.Server/openapi.yaml` is frozen at an early generation (28 paths). Missing entirely: `/storage/*` (devices/configure/rescan/space), `/backup-stream/*`, `/frames/{id}/{preview,histogram,thumbnail,download}`, `/liveview*`, faults, guider, polar-align, profiles CRUD, time-sync, jobs. The reasoning log (`API_CONTRACT.md`) is current; the machine-readable spec is not. Options: hand-refresh in arcs, or generate from the minimal-API metadata (Swashbuckle/NSwag emit) and hand-annotate. Until done, `API_CONTRACT.md` + the endpoint source files are the contract of record.
+
+## port-driver loop mechanics (2026-09-19, from the #1003 review rounds)
+
+Two out-of-scope findings from #1003's review, both filed as issues rather than widened into that PR:
+
+- **#1028 — no lawful way to retire a stale local branch ref.** After a squash merge, `--delete-branch` drops the remote ref but the local one survives and §19.1 forbids `git branch -D`, so `origin/master..prep-ci` stays non-empty forever. §5 step 2's reuse guard then Helds — correctly, since building on it would stack new work on an already-merged diff — but §19.1/§19.5 plan to grow `prep-ci` at Phase 0.5p, 4 and 11, so in any clone that ran 0.5p, **Phase 4 stops the loop**. Pinned by `test_port_driver_guards.py::ReuseGuard::test_squash_merged_leftover`; a fix must update that test.
+- **#1029 — `/pr-checker` merges a phase-boundary PR without pushing the tag.** It now detects a tag and switches to `--merge`, but never pushes one, and #1003 moved tagging to immediately before the merge inside the driver's §3b. A boundary PR driven through `/pr-checker` merges untagged and silently skips §19.1's phase-boundary gate item.
+
+Also noted and not filed: scenario A adopts any-author PRs on `prep-*`/`rules-*` but carves out `chore/*`, though all three are equally unreserved on origin — fold into #1013 when the allowlist is settled.
