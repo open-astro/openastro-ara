@@ -47,24 +47,31 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
-**Allowlisted branch** means what §19.1's branch allowlist permits:
-`phase/<N>[-<letter>]-<short-name>`, the named prep branches (`prep-*`, e.g.
-`prep-ci`), `rules-*` (§22.2 lists both as branches the driver created and may
-delete), and `chore/<short-name>` for maintenance that is not a port phase —
-skill and doc upkeep, CI cleanups. Anything outside that set is genuinely
-unknown and belongs in scenario D.
+**Allowlisted branch** means `phase/<N>[-<letter>]-<short-name>` and the named
+prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
+`rules-*` (§22.2 lists both as branches the driver created and may delete) and
+`chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
+in scenario D.
 
-`chore/*` is on the list because the driver's own maintenance PRs use it (#1000,
-#1003), and without it the loop stopped on its own work. §5 still only ever
-*creates* `phase/…`: recognising a branch and choosing to create one are
-different permissions, and the phase naming is what PORT_PROGRESS.md and the
-COMMIT-PR-RULES.md sub-split tables are keyed on. A branch outside that set is genuinely unknown and
-belongs in scenario D — but a `prep-ci` the driver created itself is not, and
-treating it as unknown would stop the loop on its own work.
+**Deliberate deviation 3 — `chore/<short-name>`.** §19.1 does not name it; it
+closes with "All other branches are off-limits without explicit user
+instruction", and `COMMIT-PR-RULES.md:337` records `chore/*` as the *community*
+convention, distinct from the port's pattern. It is here because the driver's
+own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
+own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
+treat this as a deviation, not as something §19.1 says.
+
+Because `chore/*` is also what outside contributors use, scenario A's
+"not authored by you" clause deliberately excludes it: the driver never adopts a
+`chore/*` PR it did not open. Recognising a branch, adopting someone's PR on it,
+and creating one are three different permissions. §5 still only ever *creates*
+`phase/…` — the phase naming is what `PORT_PROGRESS.md` and the
+`COMMIT-PR-RULES.md` sub-split tables are keyed on.
 
 There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
-**(A) Open PR exists and you authored it (or it's the active sub-PR on an allowlisted branch).**
+**(A) Open PR exists and you authored it — or it is the active sub-PR on a `phase/*`, `prep-*` or `rules-*` branch.**
+(Not `chore/*`: see the deviation note above. A `chore/*` PR you did not author is scenario D.)
 → Go to §3 (review poll/fix loop).
 
 **(B) On an allowlisted sub-branch carrying unmerged work, with no open PR** — whether or not the commits are pushed.
@@ -76,7 +83,7 @@ successful `git push` followed by a failed `gh pr create` leaves behind, and
 Two conditions before matching, and they are different questions:
 
 ```shell
-git fetch origin
+git fetch --prune origin
 git rev-list --count origin/master..HEAD   # (1) is there anything here?
 gh pr list --head "$(git branch --show-current)" --state merged \
   --json number,headRefOid --jq '.[] | select(.headRefOid == "'"$(git rev-parse HEAD)"'")'
@@ -252,14 +259,19 @@ PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
 # then tag master's head: the commit BEFORE this PR, which still satisfies
 # §19.1's "tag has been pushed" check while silently excluding the phase's
 # final PR from the milestone.
-git fetch origin
+git fetch --prune origin
 git tag phase-<N>-complete origin/<branch-name>
 git push origin phase-<N>-complete    # deliberate: see the note below
-gh pr merge <N> --merge --delete-branch
 ```
 
-Confirm the tag points where you meant before merging —
-`git log -1 --oneline phase-<N>-complete` should be the PR's head commit.
+Confirm the tag points where you meant **before** merging —
+`git log -1 --oneline phase-<N>-complete` should be the PR's head commit. The
+merge is deliberately not in the block above, so that a driver running the block
+verbatim cannot merge ahead of that check:
+
+```shell
+gh pr merge <N> --merge --delete-branch
+```
 
 If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a
 previous §3b attempt got as far as tagging before being held — do **not** force
