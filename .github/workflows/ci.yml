@@ -106,6 +106,9 @@ jobs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
     steps:
       - name: Checkout (no LFS, full history for the merge-base diff)
+        # Only a pull_request needs the diff at all; every other event short
+        # -circuits to docs_only=false below, so skip the clone entirely.
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
         with:
           lfs: false
@@ -173,7 +176,7 @@ jobs:
               # file *and nothing else*, so a bare `*.md` would skip exactly the
               # gates that PR exists to pass.
               */*) echo "non-docs path: $f"; docs_only=false; break ;;
-              *.md|LICENSE) ;;
+              *.md|LICENSE.txt|COPYING) ;;
               *) echo "non-docs path: $f"; docs_only=false; break ;;
             esac
           done <<EOF

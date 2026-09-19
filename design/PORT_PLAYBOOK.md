@@ -9910,7 +9910,7 @@ A setting that isn't registered in `registry.dart` doesn't merge. Mechanically e
 Four-layer enforcement spec lives in [`design/COMMIT-PR-RULES.md` → "Settings-registry gate"](COMMIT-PR-RULES.md):
 
 1. Local pre-commit hook (`check-settings-registry.mjs --staged`) — blocks the commit
-2. CI check on every PR — blocks merge
+2. CI check on every code PR — blocks merge (docs-only PRs skip it per #1020; they cannot touch `registry.dart`)
 3. PR template mandatory checkbox — manual confirmation
 4. Reviewer focus on `lib/screens/settings/**` and `lib/wizard/**` diffs
 
