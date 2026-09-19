@@ -996,10 +996,10 @@ Commit: `port(server): smoke test on linux-arm64`.
 
 ### 12.1 Scaffold
 
-Flutter SDK pin: **3.27.1** (or latest 3.27.x at port time) per §2.2. Pinned via:
+Flutter SDK pin: **3.47.5** (current stable; was 3.27.1 at port time, then 3.44.0 — see #997). Pinned via:
 
-1. `client/openastroara_client/.flutter-version` — single line `3.27.1`. Consumed by `subosito/flutter-action@v2` in CI + by FVM (Flutter Version Manager) for local dev.
-2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=3.27.0 <3.28.0'` (allows patch updates within minor; major/minor bumps need explicit PR).
+1. `client/openastroara_client/.flutter-version` — a single bare version. Read by CI, which passes it to `subosito/flutter-action` (`.github/workflows/ci.yml`). This file is the single source of truth. (FVM is *not* wired up — local dev installs the pinned version directly; see `docs/RUNNING.md`.)
+2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=3.47.0 <3.48.0'` (allows patch updates within minor; major/minor bumps need explicit PR) and `environment.sdk`, the Dart constraint shipping with that release.
 
 ```bash
 mkdir client
@@ -1017,13 +1017,17 @@ flutter pub add --dev openapi_generator build_runner
 
 Configure `openapi_generator` to read `../../OpenAstroAra.Server/openapi.yaml`, generate Dart client into `lib/api/generated/`. Run via `dart run build_runner build`.
 
-**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns:
+**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns. Implemented per #997; the version logic lives in `scripts/check-flutter-release.py` (`--check` / `--apply`) so it is testable outside Actions:
 
-- Weekly cron Mondays 08:00 UTC alongside other version checks
-- Queries Flutter SDK release feed for latest stable in `3.x` series
-- If newer 3.x stable than pinned, opens PR bumping `.flutter-version` + `pubspec.yaml` constraint + runs widget + integration tests + posts regression report
-- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes
+- Weekly cron Mondays 08:00 UTC alongside other version checks, plus `workflow_dispatch`
+- Queries the Flutter stable release feed for the current stable release
+- If newer than the pin **in the same major series**, applies the bump, runs `flutter pub get` + `analyze` + `test` against the new SDK, regenerates the third-party notices, and opens a PR labelled `dependencies`
+- Verification runs *before* the PR opens, so a release that breaks the client fails the scheduled run rather than landing as a green-looking PR
+- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes; the workflow reports one and stops
+- Skips if a PR for that version is already open (safe to re-run)
 - User reviews + merges if green
+
+**Caveat:** a PR opened with `GITHUB_TOKEN` does not trigger `pull_request` CI (GitHub's recursion guard). The in-workflow verification above is the gate. Setting a `FLUTTER_BUMP_TOKEN` repo secret to a PAT makes the full matrix run automatically; otherwise close/reopen the PR once.
 
 ### 12.2 First-run flow
 

@@ -42,6 +42,30 @@ wasn't reopened). The first `flutter --version` downloads the bundled Dart SDK;
 give it a minute. It must report `Flutter 3.47.5 … channel stable`. Then run
 `flutter doctor` and fix anything red for your platform's desktop toolchain.
 
+### How the pin gets updated
+
+You don't have to watch the Flutter release feed.
+`.github/workflows/check-flutter.yml` runs weekly (Mondays 08:00 UTC) and opens
+a `dependencies`-labelled PR when stable moves within the same major series,
+bumping `.flutter-version` and the `pubspec.yaml` constraints together. It runs
+`flutter analyze` + `flutter test` against the new SDK *before* opening the PR,
+so a release that breaks the client shows up as a failed scheduled run rather
+than a green-looking PR.
+
+Major bumps (3.x → 4.x) are deliberately not automated — the workflow reports
+one and stops.
+
+To check by hand, or to see what a bump would change:
+
+```bash
+python3 scripts/check-flutter-release.py --check   # compare pin vs stable
+python3 scripts/check-flutter-release.py --apply   # rewrite both pin files
+```
+
+After `--apply`, re-run `flutter pub get` and
+`python3 scripts/generate-3rd-party-licenses.py` — the notices ship in the
+`.deb` and their freshness gate fails CI if a dependency moved.
+
 ---
 
 ## 1. Run the daemon
