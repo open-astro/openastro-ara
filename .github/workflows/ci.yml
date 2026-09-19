@@ -91,6 +91,7 @@ jobs:
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 5  # gates all seven jobs below; a wedged fetch must not hold the matrix to the 6h default
     # Classifies the PR so the expensive jobs below can skip work that cannot
     # possibly be affected by it. See #1020.
     #
