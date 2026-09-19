@@ -387,6 +387,11 @@ Then:
   gh pr merge <N> --squash --delete-branch    # multi-commit PR landing as one logical change
   gh pr merge <N> --merge  --delete-branch    # when per-commit granularity matters (§19.1)
   ```
+  **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
+  `--squash`: squashing rewrites the head the tag points at, so the tag is left
+  on a commit that is not reachable from `master` (COMMIT-PR-RULES.md steps 6-7).
+  Check with `git ls-remote --tags origin | grep "$(gh pr view <N> --json
+  headRefOid --jq .headRefOid)"` before choosing the method.
   Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
   step; a fork head belongs to the contributor and is never deleted from here.
 
@@ -435,7 +440,8 @@ The loop ends only when every PR is merged or a **Hard stop** below applies. In 
   verdict can still carry new Defects, so the merge half gates on the printed verdict's **last**
   line (the prompt defines the sign-off as the last line, and a review can quote either string in
   its body) — with `poll` = the Step 2 block saved to a file:
-  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && gh pr merge <N> --squash --delete-branch`.
+  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && gh pr merge <N> --squash --delete-branch`
+  (`--merge` instead when the PR carries a phase tag, as above).
 - **A Defect you disagree with** is still fixed or wired into the skill/docs when there is any
   reasonable change that satisfies it. Only a Defect that would require a wrong or unsafe change
   becomes a hard stop. A Note you disagree with is a wrap-up line, not a change.

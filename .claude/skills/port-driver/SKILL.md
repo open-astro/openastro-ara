@@ -58,7 +58,10 @@ closes with "All other branches are off-limits without explicit user
 instruction", and `COMMIT-PR-RULES.md` records `chore/*` only in its open-items checklist
 ("Branch naming convention for community PRs"), not under the "Branch naming"
 heading -- i.e. as a *proposed* community convention, "Distinct from the
-port's" pattern. It is here because the driver's
+port's" pattern. (`PORT_PLAYBOOK.md:1418` does prescribe a
+`chore/bump-alpaca-simulators-<tag>` branch for a future automated PR, but
+§19.1's allowlist is the authority for what the driver may touch and it is
+silent -- #1013 should cover both sites.) It is here because the driver's
 own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
 own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
 treat this as a deviation, not as something §19.1 says.
@@ -367,7 +370,10 @@ PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
 # pushed" check while silently excluding the phase's final PR from the
 # milestone. Naming the ref costs nothing and is right either way.
 git fetch --prune origin
-git tag phase-<N>-complete origin/<branch-name>
+# Tag the head OID the API reports, not `origin/<branch-name>`: a fork-head PR
+# has no such remote-tracking ref and `git tag` would fail to resolve it. The
+# verification below reads the same field, so this costs no extra call.
+git tag phase-<N>-complete "$(gh pr view <N> --json headRefOid --jq .headRefOid)"
 git push origin phase-<N>-complete    # deliberate: see the note below
 ```
 
@@ -528,12 +534,20 @@ with the next sub-PR rather than getting a PR of its own.
    # locally even when you are not standing on it.
    if git rev-parse --verify -q "refs/heads/$B" >/dev/null; then
      # Scenario B's guard, from the other side: B only runs it when the driver
-     # is already standing on the branch, so C has to re-ask here. A ref whose
-     # commits are NOT in master was squash-merged and abandoned; building on
-     # it puts the next PR on top of an already-merged diff.
-     git merge-base --is-ancestor origin/master "$B" || {
-       echo "stale branch $B is not on top of master -- scenario D"; exit 1; }
+     # is already standing on the branch, so C has to re-ask here. Ask about
+     # the ref's OWN commits, not how far it trails `master` -- a ref that is
+     # merely behind an advanced `master` is fine to reuse and gets caught by
+     # a plain ancestor test.
+     if [ -n "$(git rev-list "origin/master..$B")" ]; then
+       # Commits here that master does not have: either a squash-merged
+       # leftover (building on it puts the next PR on top of an already-merged
+       # diff) or real unpushed work. Same fork as scenario B's D bullet, and
+       # the driver cannot clear the ref itself -- §19.1 bars `branch -D`.
+       echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
+       exit 1
+     fi
      git switch "$B"          # let a real failure (dirty tree) print its reason
+     git merge --ff-only origin/master
    else
      git checkout -b "$B"
    fi
