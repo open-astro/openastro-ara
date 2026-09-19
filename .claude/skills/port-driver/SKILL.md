@@ -55,8 +55,11 @@ There is no promotion scenario: under the master-only model (playbook §22.0) th
 **(A) Open PR exists and you authored it (or it's the active sub-PR on an allowlisted branch).**
 → Go to §3 (review poll/fix loop).
 
-**(B) On an allowlisted sub-branch with unpushed commits and no open PR.**
-→ Run pre-PR gate, push, open the PR (§4), then schedule a wake-up to start polling.
+**(B) On an allowlisted sub-branch with no open PR** — whether or not the commits are pushed.
+→ Run pre-PR gate, push if needed, open the PR (§4), then schedule a wake-up to start polling.
+A fully-pushed branch with no PR is this case, not an ambiguous one: it is what a
+successful `git push` followed by a failed `gh pr create` leaves behind, and
+`gh pr create` on an already-pushed branch is the correct recovery.
 
 **(C) On `master` with no PR in flight, last merge advanced the phase.**
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch, do the work (§5).
@@ -180,7 +183,7 @@ these. Waiting on a review that can never arrive would spin forever — see step
 Every PR targets `master` (playbook §22.0). Pick the merge method by the PR's
 commit history — **except at a phase boundary, where the tag decides it**:
 
-- **Ordinary multi-commit PR that should land as one logical change:** `gh pr merge <N> --squash --delete-branch`
+- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <N> --squash --delete-branch` — the default
 - **PR where per-commit granularity is worth keeping:** `gh pr merge <N> --merge --delete-branch`
 - **The last PR of a phase:** `gh pr merge <N> --merge --delete-branch` — see below.
 
@@ -196,15 +199,29 @@ PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
 # final PR from the milestone.
 git fetch origin
 git tag phase-<N>-complete origin/<branch-name>
-git push origin phase-<N>-complete    # not --tags: that pushes stray local tags too
+git push origin phase-<N>-complete    # deliberate: see the note below
 gh pr merge <N> --merge --delete-branch
 ```
 
 Confirm the tag points where you meant before merging —
 `git log -1 --oneline phase-<N>-complete` should be the PR's head commit.
 
+**Deliberate deviation:** §22.1 step 4 and §19.1 both say `git push --tags`.
+This pushes the named ref instead, because `--tags` pushes *every* stray local
+tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
+`reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
+the playbook lines are user-authoritative and reconciling them needs the
+maintainer.
+
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
+
+**If the merge fails after the tag is pushed** — a check flips red, branch
+protection rejects, a conflict appears — the tag is already on origin pointing
+at an unmerged commit, and §19.1 bars deleting remote refs without explicit
+instruction. Do not retry blindly and do not delete it: post
+`Held for human review @joeytroy — phase-<N>-complete pushed but the merge
+failed` and stop the loop.
 
 **Why `--merge` and not `--squash` here.** A squash merge replaces the branch
 head with a new commit and `--delete-branch` removes the branch, so a tag on
@@ -213,8 +230,8 @@ and `git log master`. A merge commit keeps the tagged commit as an ancestor, so
 the milestone survives. This is not a special case invented here: §22.1 step 5
 already picks merge-commit "where per-commit granularity matters", and §22.3
 prescribes merge-commit for the phase-15 release PR for the same reason.
-(Merge commits are enabled on the repo — `allow_merge_commit: true` — so
-`--merge` is available at a boundary.)
+(Checked on the repo: `allow_merge_commit: true` and `master`'s protection has
+`required_linear_history: false`, so a merge commit is accepted at a boundary.)
 
 Tagging before the merge also satisfies the §19.1 gate condition the driver is
 required to check — *"at a phase boundary: verify the expected
