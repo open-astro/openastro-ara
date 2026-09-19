@@ -53,10 +53,10 @@ prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
 `chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
-**Deliberate deviation (3 of 3) — `chore/<short-name>`.** §19.1 does not name it; it
+**Deliberate deviation (1 of 4) — `chore/<short-name>`.** §19.1 does not name it; it
 closes with "All other branches are off-limits without explicit user
-instruction", and `COMMIT-PR-RULES.md:337` records `chore/*` as the *community*
-convention, distinct from the port's pattern. It is here because the driver's
+instruction", and `COMMIT-PR-RULES.md` records `chore/*` under "Branch naming" as the
+*community* convention, "Distinct from the port's" pattern. It is here because the driver's
 own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
 own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
 treat this as a deviation, not as something §19.1 says.
@@ -86,8 +86,7 @@ Two conditions before matching, and they are different questions:
 git fetch --prune origin
 git rev-list --count origin/master..HEAD   # (1) is there anything here?
 gh pr list --head "$(git branch --show-current)" --state merged \
-  --json number,headRefOid --jq '.[] | select(.headRefOid == "'"$(git rev-parse HEAD)"'")'
-                                           # (2) was THIS commit already merged?
+  --json number,headRefOid          # (2) where does HEAD stand vs. a merged head?
 ```
 
 1. **Zero commits ahead is not B.** A branch created by §5 whose work was
@@ -99,12 +98,10 @@ gh pr list --head "$(git branch --show-current)" --state merged \
    you** (check this only when (1) found commits — at zero ahead, (1) has already
    decided). §3b's default is `--squash`, which lands a *new* commit on `master`,
    so the branch's own commits never become ancestors of `origin/master` and the
-   count stays > 0 forever after the merge. Ask whether **this exact commit** was
-   merged: a merged PR for this head whose `headRefOid` equals `git rev-parse
-   HEAD`. If so, pushing would **re-create the branch `--delete-branch` just
-   removed** and open a duplicate PR → check out `master`, pull, and continue at
-   scenario C. That is recoverable, not ambiguous: it is what an interruption
-   between `gh pr merge` and §3b's `git checkout master` looks like.
+   count stays > 0 forever after the merge. Ask instead where **this commit**
+   stands relative to the head of any merged PR for this branch — getting that
+   wrong means pushing would **re-create the branch `--delete-branch` just
+   removed** and open a duplicate PR.
 
    Both halves of that test are load-bearing, and each was wrong on its own in
    an earlier draft:
@@ -120,8 +117,30 @@ gh pr list --head "$(git branch --show-current)" --state merged \
      hotfix through the admin bypass. Then the trees differ, the guard passes,
      and B re-creates the deleted branch anyway.
 
-   `headRefOid == HEAD` is immune to both: it names a specific commit, and it
-   stays true however far `master` advances afterwards.
+   `headRefOid` is immune to both: it names a specific commit, and it stays
+   meaningful however far `master` advances afterwards. But compare it three
+   ways, not two — **exact equality alone is also wrong**, because an
+   interruption can leave a commit *on top of* the merged head (an iteration
+   that committed before the merge finished, a hook that amended). Equality then
+   fails, B matches, and the branch `--delete-branch` removed is re-created:
+   the exact failure this guard exists to prevent.
+
+   ```shell
+   merged=$(gh pr list --head "$(git branch --show-current)" --state merged \
+     --json headRefOid --jq '.[].headRefOid' | head -1)
+   ```
+
+   - `$merged` empty → not merged → **B**.
+   - `$merged` == `git rev-parse HEAD` → this exact commit landed → **C**
+     (check out `master`, pull, continue). Recoverable, not ambiguous: it is
+     what an interruption between `gh pr merge` and §3b's `git checkout master`
+     looks like.
+   - `git merge-base --is-ancestor "$merged" HEAD` succeeds but they are not
+     equal → the merged work is here *plus* something else → **D**. Do not
+     guess. The extra commit is either stray or real unpushed work, and the
+     driver cannot tell which: pushing would re-create a deleted branch,
+     discarding it would lose work. Post `Held for human review @joeytroy —
+     <branch> carries N commits on top of merged PR #<n>` and stop.
 
 **(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
@@ -264,8 +283,9 @@ git tag phase-<N>-complete origin/<branch-name>
 git push origin phase-<N>-complete    # deliberate: see the note below
 ```
 
-Confirm the tag points where you meant **before** merging —
-`git log -1 --oneline phase-<N>-complete` should be the PR's head commit. The
+Confirm the tag points where you meant **before** merging — mechanically, not
+by eye: `git rev-parse phase-<N>-complete^{commit}` must equal
+`gh pr view <N> --json headRefOid --jq .headRefOid`. The
 merge is deliberately not in the block above, so that a driver running the block
 verbatim cannot merge ahead of that check:
 
@@ -288,19 +308,30 @@ commit, while `git tag` succeeds locally and the check above passes. The push is
 then rejected as a non-fast-forward tag update. Do not force it — that is the
 same situation, so take the same Held stop.
 
-**Deliberate deviation (1 of 3):** the rule above — *any* PR carrying a phase or
+**Deliberate deviation (2 of 4):** the rule above — *any* PR carrying a phase or
 sub-phase tag merges with `--merge` — is stricter than §19.1 and §22.1 step 5,
 which pick the method from the PR's commit history. Not a contradiction (a merge
 commit is already an allowed choice there), but it removes the discretion those
 sections grant, because a squash would orphan the tag. Same maintainer
 reconciliation as the deviation below.
 
-**Deliberate deviation (2 of 3):** §22.1 step 4 and §19.1 both say `git push --tags`.
+**Deliberate deviation (3 of 4):** §22.1 step 4 and §19.1 both say `git push --tags`.
 This pushes the named ref instead, because `--tags` pushes *every* stray local
 tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
 `reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
 the playbook lines are user-authoritative and reconciling them needs the
 maintainer.
+
+**Deliberate deviation (4 of 4) — playbook §0 rule 9's ordering.** Rule 9 states
+the phase-boundary order as *"tag … update `design/PORT_PROGRESS.md`, push the
+feature branch, open the PR, run the review poll-and-fix loop … then AI merges"*
+— i.e. tag **before** the PR is opened. §3b tags immediately before the merge
+instead. Rule 9's order cannot hold once a review round produces a fix commit:
+the tag would sit on the pre-review head while §19.1 requires the tag to be on
+"the work being merged". Rule 9 also says "Per `design/COMMIT-PR-RULES.md`",
+which this PR changed to the merge-time order, so the two now disagree. The
+playbook is user-authoritative and the driver may not edit it (§19.5) — #1013
+asks the maintainer to reconcile it. Until then, follow §3b.
 
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
