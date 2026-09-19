@@ -1,0 +1,284 @@
+name: Check Flutter release
+
+# Dependabot has no Flutter-SDK ecosystem — its `pub` entry in
+# .github/dependabot.yml covers package dependencies only, so nothing watched
+# the SDK pin itself and it drifted from 3.27 to 3.44 to 3.47 by hand (#997).
+#
+# This implements the auto-PR upgrade workflow playbook §12.1 already specified:
+# weekly cron, query the stable feed, open a PR bumping .flutter-version +
+# pubspec.yaml when a newer stable exists in the same major series. Major bumps
+# (3.x -> 4.x) are deliberately NOT automated — the script refuses them and this
+# job reports instead, because they carry breaking API changes.
+#
+# The bump is verified before the PR opens: analyze + test run here against the
+# candidate SDK, so a release that breaks the client produces a failed run
+# rather than a green-looking PR.
+#
+# NOTE ON CI: PRs opened with GITHUB_TOKEN do not trigger `pull_request`
+# workflows (GitHub's recursion guard). The verification steps below are what
+# gates the bump. To also get the full CI matrix on the PR automatically, set a
+# repo secret FLUTTER_BUMP_TOKEN to a PAT with `repo` scope; otherwise close and
+# reopen the PR once to run the matrix by hand.
+
+on:
+  schedule:
+    # Mondays 08:00 UTC, alongside the other weekly version checks (§12.1).
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-flutter
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # pushes the bump branch
+      pull-requests: write   # opens the bump PR
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor immutable-ref policy
+        with:
+          lfs: false
+          # This job pushes a branch, but it does NOT persist the token into
+          # .git/config (zizmor artipacked): the push step below passes it
+          # directly to `git push`, so the credential never sits on disk where
+          # a later step or artifact upload could pick it up.
+          persist-credentials: false
+
+      - name: Compare the pin against the stable channel
+        id: check
+        run: python3 scripts/check-flutter-release.py --check
+
+      - name: Report a major bump
+        if: steps.check.outputs.major == 'true'
+        env:
+          LATEST: ${{ steps.check.outputs.latest }}
+          PINNED: ${{ steps.check.outputs.pinned }}
+        run: |
+          echo "::warning::Flutter $LATEST is a major bump from the pinned $PINNED — not automated; bump by hand."
+          {
+            echo "## Flutter major release available"
+            echo
+            echo "Stable is now **$LATEST**; the client is pinned to **$PINNED**."
+            echo "Major bumps are not automated (breaking API changes) — bump by hand."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop if this bump is already proposed
+        id: existing
+        if: steps.check.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_TOKEN: ${{ secrets.FLUTTER_BUMP_TOKEN || github.token }}
+          BRANCH: ${{ steps.check.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          # Check the BRANCH, not just an open PR. A branch left on origin with
+          # no open PR — because the PR was closed without deleting it, or a
+          # step after the push failed — would otherwise send this job on to
+          # rebuild the commit on a newer master and push non-fast-forward,
+          # which fails. The branch name is derived from the version, so it
+          # would fail identically every week until stable moved again: the
+          # watcher stops watching, silently, which is the problem #997 exists
+          # to solve.
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+            echo "A PR for $BRANCH is already open; nothing to do."
+            exit 0
+          fi
+
+          # Authenticated on purpose. `persist-credentials: false` left no
+          # credential in .git/config, so a bare `git ls-remote origin` works
+          # only while the repo is public — and if it ever went private the
+          # failure would be swallowed here, the guard would read "branch
+          # absent", and the run would fall through to the non-fast-forward
+          # push this check exists to prevent.
+          if git ls-remote --exit-code --heads \
+               "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+               "$BRANCH" >/dev/null 2>&1; then
+            # No open PR but the branch exists. Do NOT force-push over it: a
+            # maintainer may have closed that PR deliberately, and re-proposing
+            # a version they rejected is worse than doing nothing. Say so
+            # loudly and stop.
+            echo "open=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Branch $BRANCH exists on origin with no open PR. Either its PR was closed (delete the branch to re-propose this version) or a previous run failed after pushing. Not overwriting it."
+            {
+              echo "## Flutter bump skipped"
+              echo
+              echo "\`$BRANCH\` is already on origin with no open PR."
+              echo "Delete the branch to let the next run re-propose this version."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "open=false" >> "$GITHUB_OUTPUT"
+
+      - name: Apply the bump
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        env:
+          LATEST: ${{ steps.check.outputs.latest }}
+          DART: ${{ steps.check.outputs.dart }}
+        # Pass the version --check resolved rather than re-reading the feed: a
+        # release landing between the two calls would otherwise write one
+        # version while the branch name, title and commit cite another.
+        run: python3 scripts/check-flutter-release.py --apply --version "$LATEST" --dart "$DART"
+
+      - name: Setup Flutter at the new pin
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.x pinned per zizmor immutable-ref policy
+        with:
+          flutter-version: ${{ steps.check.outputs.latest }}
+          channel: stable
+          cache: true
+
+      # Verify before proposing. A release that breaks the client should fail
+      # this run, not land as a green-looking PR nobody re-checks.
+      - name: flutter pub get
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        working-directory: client/openastroara_client
+        run: flutter pub get
+
+      - name: flutter analyze
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        working-directory: client/openastroara_client
+        run: flutter analyze
+
+      - name: flutter test
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        working-directory: client/openastroara_client
+        run: flutter test
+
+      # The notices generator enumerates BOTH graphs: the client's pub deps and
+      # the daemon's NuGet closure via `dotnet package list`. That needs a .NET
+      # SDK and a restored Server project — without them the generator dies on
+      # the server half and never reaches the pub half at all.
+      - name: Setup .NET (the notices generator reads the NuGet graph)
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore the Server project
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        run: dotnet restore OpenAstroAra.Server/OpenAstroAra.Server.csproj
+
+      # pubspec.lock and the third-party notices both move with the SDK, and
+      # the §15/§17.2 freshness gate fails the Server job if the notices go
+      # stale — so regenerate them here rather than leaving a red PR (#999).
+      - name: Refresh the third-party licence notices
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        id: licences
+        run: |
+          set -uo pipefail
+          if out="$(python3 scripts/generate-3rd-party-licenses.py 2>&1)"; then
+            echo "$out"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$out"
+          # Two very different failures share an exit code, so tell them apart:
+          #
+          #  * A curated PUB_LICENSES entry is version-pinned, so a dependency
+          #    bump deliberately fails until a human re-reads the new LICENSE.
+          #    That is the gate working — report it in the PR body and carry on.
+          #  * Anything else (no .NET SDK, unrestored project, network, a bug)
+          #    means the notices were NOT regenerated for a reason nobody
+          #    intended. Fail the run rather than opening a PR whose body
+          #    blames a licence pin that was never the problem.
+          # Here-string, not `echo | grep -q`: grep -q exits on first match,
+          # and on a long message the echo subshell takes SIGPIPE (status 141),
+          # which would misfile a real PUB_LICENSES stop as an unrelated crash —
+          # the exact misclassification this triage exists to prevent.
+          if grep -q "PUB_LICENSES" <<<"$out"; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::A curated PUB_LICENSES entry needs a human re-verification pass."
+            exit 0
+          fi
+          echo "::error::The notices generator failed for a reason unrelated to the licence pins."
+          exit 1
+
+      - name: Open the bump PR
+        if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.FLUTTER_BUMP_TOKEN || github.token }}
+          PUSH_TOKEN: ${{ secrets.FLUTTER_BUMP_TOKEN || github.token }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          PINNED: ${{ steps.check.outputs.pinned }}
+          DART: ${{ steps.check.outputs.dart }}
+          BRANCH: ${{ steps.check.outputs.branch }}
+          LICENCES_OK: ${{ steps.licences.outputs.ok }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+          # Stage only what this PR claims to change. `git add -A` would also
+          # sweep in whatever `flutter pub get` regenerated under tracked
+          # platform paths — and on an ubuntu runner only the Linux
+          # generated_plugin_registrant/generated_plugins.cmake get rewritten,
+          # so a bump PR would carry a one-platform refresh nobody asked for.
+          git add \
+            client/openastroara_client/.flutter-version \
+            client/openastroara_client/pubspec.yaml \
+            client/openastroara_client/pubspec.lock \
+            3rd-party-licenses.txt
+          git commit -m "build(client): update Flutter to ${LATEST}
+
+          Flutter stable moved ${PINNED} -> ${LATEST} (Dart ${DART}).
+          Opened automatically by .github/workflows/check-flutter.yml per
+          playbook §12.1; verified with flutter analyze + flutter test against
+          the new SDK before this PR was opened."
+          # The token is handed to this one git push and is never written to
+          # .git/config — not by checkout (persist-credentials: false) and not
+          # by a remote pushurl either, so nothing later in the job, and no
+          # artifact upload, can read it back off disk. It does appear in this
+          # command's argv, which is readable from /proc/*/cmdline by anything
+          # else on the runner for the duration of the push — acceptable on an
+          # ephemeral single-tenant runner, and the value is job-scoped. Actions
+          # masks the secret in logs.
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${BRANCH}"
+
+          licence_note="Third-party notices regenerated."
+          if [ "$LICENCES_OK" != "true" ]; then
+            licence_note="**Third-party notices need a human pass.** A curated \`PUB_LICENSES\` entry in \`scripts/generate-3rd-party-licenses.py\` is version-pinned, so a dependency bump deliberately fails until someone re-reads the new \`LICENSE\` and moves the pin. Do that before merging, or the Server job's §15/§17.2 freshness gate will fail."
+          fi
+
+          # Label applied after creation, not via --label: `gh pr create`
+          # resolves labels up front and hard-fails if one is missing, which
+          # would abort *after* the branch push above and strand it (#1008).
+          gh pr create \
+            --base master \
+            --head "$BRANCH" \
+            --title "build(client): update Flutter to ${LATEST}" \
+            --body "Flutter stable moved **${PINNED} → ${LATEST}** (Dart ${DART}).
+
+          Opened automatically by \`.github/workflows/check-flutter.yml\` (playbook §12.1), which watches the stable release feed because Dependabot has no Flutter-SDK ecosystem.
+
+          ## Verified before this PR opened
+
+          - \`flutter pub get\`
+          - \`flutter analyze\`
+          - \`flutter test\`
+
+          all against Flutter ${LATEST}. ${licence_note}
+
+          ## Before merging
+
+          - Check the platform build legs. Gradle/AGP and Xcode minimums tend to move with SDK bumps, and the native builds regenerate the plugin registrants in-tree.
+          - PRs opened by a workflow using \`GITHUB_TOKEN\` do not trigger \`pull_request\` CI. If the checks are missing, close and reopen this PR once (or set a \`FLUTTER_BUMP_TOKEN\` secret to a PAT so it happens automatically).
+
+          Major bumps (3.x → 4.x) are **not** automated and will never appear here — the workflow reports them and stops."
+
+          # Non-fatal: the PR exists and is the point of the run. A missing
+          # label should warn, not fail a job that has already pushed a branch.
+          if ! gh pr edit "$BRANCH" --add-label dependencies; then
+            echo "::warning::Could not apply the 'dependencies' label — add it by hand."
+          fi
