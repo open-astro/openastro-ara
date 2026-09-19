@@ -74,6 +74,14 @@ jobs:
             echo "ok: $f ($(wc -l < "$f") lines)"
           done
 
+      # Unit tests for the repo's Python tooling. Cheap and network-free, so
+      # they ride along in the sanity job rather than earning their own.
+      # Currently: scripts/check-flutter-release.py, which drives the weekly
+      # Flutter bump PR (playbook §12.1) unattended — the pubspec-rewriting
+      # logic wants a guard that fails when it regresses.
+      - name: Python tooling tests
+        run: python3 -m unittest discover -s scripts/tests -v
+
       # NOTE: We intentionally don't yaml-lint workflow files here.
       # GitHub Actions' own parser is the ultimate validator — a malformed
       # workflow won't run at all. A lint step is duplicate work.

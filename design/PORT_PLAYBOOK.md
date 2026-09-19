@@ -326,7 +326,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Concern | Value |
 |---|---|
 | Language | Dart |
-| Framework | Flutter stable, **pinned to 3.27.x** (latest stable at port time, 2026-05-23). Pin enforced via `client/openastroara_client/.flutter-version` + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.X mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
+| Framework | Flutter stable, **pinned via `client/openastroara_client/.flutter-version`** (3.27.x at port time, 2026-05-23; bumped weekly by `check-flutter.yml`, so the number is not restated here). Pin enforced by that file + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.1 (`.github/workflows/check-flutter.yml`) mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
 | Target platforms | macOS, iOS, Android, Windows, Linux desktop |
 | HTTP client | `dio` (supports interceptors and progress callbacks for image downloads) |
 | WebSocket | `web_socket_channel` |
@@ -998,10 +998,10 @@ Commit: `port(server): smoke test on linux-arm64`.
 
 ### 12.1 Scaffold
 
-Flutter SDK pin: **3.27.1** (or latest 3.27.x at port time) per §2.2. Pinned via:
+Flutter SDK pin: **whatever `client/openastroara_client/.flutter-version` says** — that file is the single source of truth, and `check-flutter.yml` bumps it weekly, so this section deliberately does not restate the number. (3.27.1 at port time, 3.44.0, then 3.47.5 — see #997.) Pinned via:
 
-1. `client/openastroara_client/.flutter-version` — single line `3.27.1`. Consumed by `subosito/flutter-action@v2` in CI + by FVM (Flutter Version Manager) for local dev.
-2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=3.27.0 <3.28.0'` (allows patch updates within minor; major/minor bumps need explicit PR).
+1. `client/openastroara_client/.flutter-version` — a single bare version. Read by CI, which passes it to `subosito/flutter-action` (`.github/workflows/ci.yml`). This file is the single source of truth. (FVM is *not* wired up — local dev installs the pinned version directly; see `docs/RUNNING.md`.)
+2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=X.Y.0 <X.(Y+1).0'` matching that pin (allows patch updates within the minor; major/minor bumps need an explicit PR) and `environment.sdk`, the Dart constraint shipping with that release.
 
 ```bash
 mkdir client
@@ -1011,7 +1011,7 @@ flutter create --org org.openastro --project-name openastroara \
 # Note: iOS + Android platforms NOT added in the initial release per §18.G mobile-deferred (ROADMAP);
 # Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
 cd openastroara_client
-echo "3.27.1" > .flutter-version
+echo "X.Y.Z" > .flutter-version    # the pinned stable; see §12.1
 flutter pub add dio web_socket_channel multicast_dns riverpod flutter_riverpod \
     flutter_secure_storage file_picker
 flutter pub add --dev openapi_generator build_runner
@@ -1019,13 +1019,17 @@ flutter pub add --dev openapi_generator build_runner
 
 Configure `openapi_generator` to read `../../OpenAstroAra.Server/openapi.yaml`, generate Dart client into `lib/api/generated/`. Run via `dart run build_runner build`.
 
-**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns:
+**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns. Implemented per #997; the version logic lives in `scripts/check-flutter-release.py` (`--check` / `--apply`) so it is testable outside Actions:
 
-- Weekly cron Mondays 08:00 UTC alongside other version checks
-- Queries Flutter SDK release feed for latest stable in `3.x` series
-- If newer 3.x stable than pinned, opens PR bumping `.flutter-version` + `pubspec.yaml` constraint + runs widget + integration tests + posts regression report
-- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes
+- Weekly cron Mondays 08:00 UTC alongside other version checks, plus `workflow_dispatch`
+- Queries the Flutter stable release feed for the current stable release
+- If newer than the pin **in the same major series**, applies the bump, runs `flutter pub get` + `analyze` + `test` against the new SDK, regenerates the third-party notices, and opens a PR labelled `dependencies`
+- Verification runs *before* the PR opens, so a release that breaks the client fails the scheduled run rather than landing as a green-looking PR
+- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes; the workflow reports one and stops
+- Skips if a PR for that version is already open (safe to re-run)
 - User reviews + merges if green
+
+**Caveat:** a PR opened with `GITHUB_TOKEN` does not trigger `pull_request` CI (GitHub's recursion guard). The in-workflow verification above is the gate. Setting a `FLUTTER_BUMP_TOKEN` repo secret to a PAT makes the full matrix run automatically; otherwise close/reopen the PR once.
 
 ### 12.2 First-run flow
 
@@ -12331,7 +12335,7 @@ Phase 6-9 implementation per §10.6-§10.9 specs which NINA service per row gets
 
 CONTRIBUTING.md is in the post-Phase-15 documentation queue (§55 + post-port doc list). This section specs what it must cover so the AI's Phase 15 doc-writing pass produces a complete, usable onboarding guide rather than a generic placeholder.
 
-ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
+ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
 
 ### 74.1 Required CONTRIBUTING.md sections
 
@@ -12343,11 +12347,10 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio v
   brew install --cask dotnet-sdk
   # OR Microsoft's installer from dot.net
 
-  # Flutter 3.27.x (pinned per §12.1)
-  brew install --cask flutter
-  # OR FVM for version pinning per project:
-  brew tap leoafarias/fvm && brew install fvm
-  cd client/openastroara_client && fvm install
+  # Flutter at the pinned version (per §12.1). NOT `brew install --cask
+  # flutter` — that tracks latest stable and drifts off the pin.
+  git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
+  export PATH="$HOME/development/flutter/bin:$PATH"
 
   # CFITSIO (per §72.2)
   brew install cfitsio
@@ -12361,9 +12364,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio v
   # .NET 10 SDK (Microsoft package feed)
   curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0
 
-  # Flutter 3.27.x via FVM
-  curl -fsSL https://fvm.app/install.sh | bash
-  cd client/openastroara_client && fvm install
+  # Flutter at the pinned version — see docs/RUNNING.md
+  git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
+  export PATH="$HOME/development/flutter/bin:$PATH"
 
   # CFITSIO + ASTAP
   sudo apt install libcfitsio-dev astap
@@ -12441,7 +12444,7 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - "AOT build warnings" → see §71.7 troubleshooting
 - "CFITSIO not loaded" → see §72.2 dev setup
 - "Alpaca simulators won't start" → see §14.5.1 checksum verification path
-- "Flutter version mismatch" → see §12.1 FVM setup
+- "Flutter version mismatch" → see §12.1 (the pin lives in `.flutter-version`; docs/RUNNING.md has the install steps)
 - "Settings-registry gate failing" → see COMMIT-PR-RULES.md gate spec
 - "Tests pass locally but fail in CI" → check that bootstrap-dev.sh has been re-run since the last dep change
 
