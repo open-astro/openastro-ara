@@ -94,6 +94,12 @@ gh pr list --head "$(git branch --show-current)" --state merged \
   --json number,headRefOid          # (2) where does HEAD stand vs. a merged head?
 ```
 
+0. **Not on a branch at all is not B.** On a detached HEAD (an interrupted
+   iteration, a CI-style checkout) `git branch --show-current` is empty,
+   `gh pr list --head ""` silently drops the filter, and the counts below
+   describe a state no branch owns → **D**, before either condition is
+   evaluated. This comes first because a detached HEAD sitting on `master`'s
+   head is zero commits ahead and would otherwise read as C.
 1. **Zero commits ahead is not B.** A branch created by §5 whose work was
    interrupted before any commit would be pushed empty, and `gh pr create` then
    fails with `No commits between master and <branch>` — the phase's actual work
@@ -155,11 +161,10 @@ gh pr list --head "$(git branch --show-current)" --state merged \
      --json headRefOid --jq '.[].headRefOid')
    ```
 
-   Two guards before the OIDs are read at all:
+   Guards before the OIDs are read at all — condition (0) has already rejected
+   a detached HEAD and condition (1) a branch with no commits, so neither is
+   re-tested here:
 
-   - `$branch` empty → detached HEAD, `gh pr list` silently drops the `--head`
-     filter and would match an unrelated repo-wide PR → **D**. Never let the
-     query run without a branch name.
    - `$merged` empty → no PR ever merged under this name → **B**.
 
    Then walk the OIDs **one at a time**, applying these tests in order to each
@@ -378,15 +383,27 @@ git fetch --prune origin
 # explicitly -- otherwise `git tag` cannot resolve the OID in exactly the fork
 # case this avoids. Harmless on a same-repo PR.
 git fetch origin "pull/<N>/head"
-git tag phase-<N>-complete "$(gh pr view <N> --json headRefOid --jq .headRefOid)"
-git push origin phase-<N>-complete    # deliberate: see the note below
+HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
+git tag phase-<N>-complete "$HEAD_OID"
 ```
 
-Confirm the tag points where you meant **before** merging — mechanically, not
-by eye: `git rev-parse phase-<N>-complete^{commit}` must equal
-`gh pr view <N> --json headRefOid --jq .headRefOid`. The
-merge is deliberately not in the block above, so that a driver running the block
-verbatim cannot merge ahead of that check:
+Confirm the tag points where you meant **before pushing it**, mechanically and
+not by eye: `git rev-parse phase-<N>-complete^{commit}` must equal `$HEAD_OID`.
+Verifying before the push is what makes the check load-bearing — a push first
+leaves a wrong tag on origin, which is the Held-with-the-damage-already-done
+state this section exists to avoid, and §19.1 bars deleting it. Re-reading
+`headRefOid` here would only compare the field against itself, so compare
+against the value the tag was built from and re-read the API only to confirm
+the head has not moved underneath you:
+
+```shell
+[ "$(git rev-parse phase-<N>-complete^{commit})" = "$HEAD_OID" ] || exit 1
+[ "$(gh pr view <N> --json headRefOid --jq .headRefOid)" = "$HEAD_OID" ] || exit 1
+git push origin phase-<N>-complete    # named ref, deliberate: see the note below
+```
+
+The merge is deliberately in a block of its own, so that a driver running any
+block verbatim cannot merge ahead of the check:
 
 ```shell
 gh pr merge <N> --merge --delete-branch

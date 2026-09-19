@@ -393,7 +393,14 @@ Then:
   Check for a tag on the head before choosing the method:
   ```bash
   HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
-  git ls-remote --tags origin | grep -q "$HEAD_OID" && echo "tagged -> use --merge"
+  # Bail rather than guess: an empty HEAD_OID makes the grep below match every
+  # line, so a failed API call would read as "tagged" for every PR.
+  [ -n "$HEAD_OID" ] || { echo "cannot read head OID -- hard stop"; exit 1; }
+  # Anchor to the phase namespace: §19.1 mandates `backup-<timestamp>` tags
+  # before a `reset --hard`, and one of those on the head is not a phase tag.
+  git ls-remote --tags origin \
+    | grep -E "^$HEAD_OID[[:space:]]+refs/tags/phase-" \
+    && echo "tagged -> use --merge"
   ```
   Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
   step; a fork head belongs to the contributor and is never deleted from here.

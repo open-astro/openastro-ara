@@ -48,14 +48,17 @@ def scenario_b(repo: Path, merged: list[str]) -> str:
     """SKILL.md scenario B: classify a branch against its merged PRs' head OIDs.
 
     Returns "B" (live work, carry on), "C" (nothing to push yet, or this exact
-    commit landed) or "D" (hold for a human). Mirrors the skill's two
-    conditions in order: commits-ahead first, then the merged-head walk. The
+    commit landed) or "D" (hold for a human). Mirrors the skill's conditions in
+    the order the skill states them: (0) not on a branch, (1) commits ahead,
+    (2) the merged-head walk. The order is part of what is pinned -- a detached
+    HEAD at master's head is zero commits ahead, so (0) before (1) is the
+    difference between D and C. The
     OIDs are walked one at a time, every test applied to each before moving on
     -- see test_mixed_merge_methods_on_one_name for why a pass-per-test is
     wrong.
     """
     if not git(repo, "branch", "--show-current"):
-        return "D"  # detached HEAD: `gh pr list --head ""` matches anything
+        return "D"  # condition (0): `gh pr list --head ""` matches anything
     # Condition (1): zero commits ahead is not B. Pushing an empty branch makes
     # `gh pr create` fail with "No commits between master and <branch>" and
     # strands a ref §19.1 bars the driver from deleting.
