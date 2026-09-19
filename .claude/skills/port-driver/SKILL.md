@@ -44,12 +44,18 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
+**Allowlisted branch** means anything §19.1 permits the driver to create:
+`phase/<N>[-<letter>]-<short-name>`, plus the named prep branches `prep-*` and
+`rules-*` (playbook §22.2). A branch outside that set is genuinely unknown and
+belongs in scenario D — but a `prep-ci` the driver created itself is not, and
+treating it as unknown would stop the loop on its own work.
+
 There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
-**(A) Open PR exists and you authored it (or it's the active sub-PR on `phase/…`).**
+**(A) Open PR exists and you authored it (or it's the active sub-PR on an allowlisted branch).**
 → Go to §3 (review poll/fix loop).
 
-**(B) On a `phase/…` sub-branch with unpushed commits and no open PR.**
+**(B) On an allowlisted sub-branch with unpushed commits and no open PR.**
 → Run pre-PR gate, push, open the PR (§4), then schedule a wake-up to start polling.
 
 **(C) On `master` with no PR in flight, last merge advanced the phase.**
