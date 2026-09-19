@@ -42,20 +42,20 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 ### Step 2 — Decide the branch state
 
-Pick exactly one of these scenarios, checking in the order **A → B → C → E** (highest priority first). Don't multi-task.
+Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
 There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
-**(A) Open PR exists and you authored it (or it's the active sub-PR on `phase-N…`).**
+**(A) Open PR exists and you authored it (or it's the active sub-PR on `phase/…`).**
 → Go to §3 (review poll/fix loop).
 
-**(B) On a `phase-N…` sub-branch with unpushed commits and no open PR.**
+**(B) On a `phase/…` sub-branch with unpushed commits and no open PR.**
 → Run pre-PR gate, push, open the PR (§4), then schedule a wake-up to start polling.
 
 **(C) On `master` with no PR in flight, last merge advanced the phase.**
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch, do the work (§5).
 
-**(E) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
+**(D) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
 → Stop. Post a status note to the user. Do not schedule another wake-up.
 
 ### Step 3 — Review poll/fix loop (scenario A)
@@ -172,22 +172,34 @@ commit history, not by its base:
 - **Multi-commit PR that should land as one logical change:** `gh pr merge <N> --squash --delete-branch`
 - **PR where per-commit granularity is worth keeping:** `gh pr merge <N> --merge --delete-branch`
 
-**Phase boundary — tag before merging.** If this is the last PR of a phase
-(consult the COMMIT-PR-RULES.md sub-split tables and PORT_PROGRESS.md), push the
-tag *before* the merge, per playbook §22.1 step 4:
+After merge:
+- `git checkout master && git pull --ff-only`
+
+**Phase boundary — tag the landed commit, after the merge.** If this was the
+last PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
+PORT_PROGRESS.md), tag `master` once the merge has landed and you have pulled:
 
 ```shell
-git tag phase-<N>-complete && git push origin phase-<N>-complete
+git checkout master && git pull --ff-only
+git tag phase-<N>-complete            # tags the landed commit on master
+git push origin phase-<N>-complete
 ```
 
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
 
-After merge:
-- `git checkout master && git pull --ff-only`
-- Go to scenario C next iteration.
+**Why after, not before.** Playbook §22.1 step 4 says to tag before merging;
+that was written when a phase landed via a `--merge` promotion, so the tagged
+commit became an ancestor of `master`. A squash merge does not preserve it: the
+branch head you tagged is replaced by a new commit and then deleted by
+`--delete-branch`, leaving `phase-<N>-complete` pointing at an object no longer
+reachable from `master`, invisible to `git describe` and `git log master`.
+Tagging the landed commit gives the same milestone marker and keeps it on the
+branch it describes.
 
-Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use. Timing rule:
+Then go to scenario C next iteration.
+
+Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use.
 
 **Always fold it into a PR.** `master` is a protected branch (PR-before-merge,
 force-push blocked), so there is no direct-commit path — include the
