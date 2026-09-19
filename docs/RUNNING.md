@@ -14,7 +14,7 @@ see [`DEPLOY.md`](DEPLOY.md) instead.
 | Tool | Version | Notes |
 |---|---|---|
 | .NET SDK | **10.0.100+** | Pinned in `global.json` (`rollForward: latestFeature`) |
-| Flutter | **3.44.x** (stable) | Pinned in `client/openastroara_client/.flutter-version`; the client's `pubspec.yaml` requires `>=3.44.0 <3.45.0` — a newer Flutter fails `flutter pub get` |
+| Flutter | **3.47.x** (stable) | Pinned in `client/openastroara_client/.flutter-version`; the client's `pubspec.yaml` requires `>=3.47.0 <3.48.0` — a newer Flutter fails `flutter pub get` |
 | CFITSIO | any recent | Native library the daemon loads at runtime to write FITS files — per-OS install below |
 
 ### Installing Flutter at the exact pinned version
@@ -25,13 +25,13 @@ past the pin):
 
 ```bash
 # Linux / macOS
-git clone https://github.com/flutter/flutter.git -b 3.44.0 ~/development/flutter
+git clone https://github.com/flutter/flutter.git -b 3.47.5 ~/development/flutter
 echo 'export PATH="$HOME/development/flutter/bin:$PATH"' >> ~/.bashrc   # or ~/.zshrc
 ```
 
 ```powershell
 # Windows — use a short path WITHOUT spaces (not under Program Files)
-git clone https://github.com/flutter/flutter.git -b 3.44.0 C:\development\flutter
+git clone https://github.com/flutter/flutter.git -b 3.47.5 C:\development\flutter
 # Then add C:\development\flutter\bin to your user Path:
 # Start → "environment variables" → Environment Variables… → Path → Edit → New
 ```
@@ -39,7 +39,7 @@ git clone https://github.com/flutter/flutter.git -b 3.44.0 C:\development\flutte
 **Open a new terminal after editing PATH** — it only refreshes in new sessions
 (`flutter: command not found` almost always means PATH wasn't set or the terminal
 wasn't reopened). The first `flutter --version` downloads the bundled Dart SDK;
-give it a minute. It must report `Flutter 3.44.0 … channel stable`. Then run
+give it a minute. It must report `Flutter 3.47.5 … channel stable`. Then run
 `flutter doctor` and fix anything red for your platform's desktop toolchain.
 
 ---
@@ -215,7 +215,7 @@ simulators — the same devices the integration tests use
 
 ## 4. Troubleshooting (client builds)
 
-- **`flutter pub get` fails with a version error** → wrong Flutter. It must be 3.44.x
+- **`flutter pub get` fails with a version error** → wrong Flutter. It must be 3.47.x
   (`flutter --version`); reinstall via the version-exact git clone above.
 - **`flutter: command not found` / `not recognized`** → Flutter's `bin` isn't on PATH,
   or the terminal wasn't reopened after editing PATH.

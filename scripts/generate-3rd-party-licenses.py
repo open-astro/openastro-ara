@@ -163,10 +163,14 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2015, the Dart project authors",
     },
+    # NB: Apache-2.0, not the BSD-3-Clause most dart-lang packages carry —
+    # verified against the LICENSE in the pub cache (identical in 1.1.2 and
+    # 1.1.3; the pre-1.1.3 entry here mislabelled it). Attribution from the
+    # package's AUTHORS + source headers.
     "clock": {
-        "version": "1.1.2",
-        "license": "BSD-3-Clause",
-        "copyright": "Copyright 2014, the Dart project authors",
+        "version": "1.1.3",
+        "license": "Apache-2.0",
+        "copyright": "Copyright 2013 Google Inc.",
     },
     "crypto": {
         "version": "3.0.7",
@@ -185,8 +189,9 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team",
     },
     "file_picker": {
-        # 12.0.0 verified 2026-08-19: LICENSE unchanged (MIT, Miguel Ruivo).
-        "version": "12.0.0",
+        # 12.3.0 verified 2026-09-19: LICENSE byte-identical to 12.0.0
+        # (MIT, Miguel Ruivo).
+        "version": "12.3.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Miguel Ruivo",
     },
@@ -202,12 +207,15 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
     "flutter_secure_storage": {
-        "version": "11.0.0",
+        # 11.2.0 verified 2026-09-19: LICENSE byte-identical to 11.0.0.
+        "version": "11.2.0",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 German Saprykin",
     },
     "multicast_dns": {
-        "version": "0.3.3",
+        # 0.3.3+1 verified 2026-09-19: LICENSE drops the trailing "All rights
+        # reserved." from the copyright line; terms unchanged.
+        "version": "0.3.3+1",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2013 The Flutter Authors",
     },
