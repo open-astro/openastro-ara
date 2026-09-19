@@ -33,6 +33,9 @@ Each loop iteration is **one focused unit of work** + a self-paced wake-up. Do n
 
 Run in parallel:
 
+- `git fetch origin` — every scenario-B check below compares against
+  `origin/master`, and after a fresh clone or an interrupted iteration the
+  remote ref is stale
 - `git status --short && git branch --show-current`
 - `git log -1 --oneline`
 - `gh pr list --state open --json number,title,headRefName,baseRefName,author,updatedAt`
@@ -55,23 +58,37 @@ There is no promotion scenario: under the master-only model (playbook §22.0) th
 **(A) Open PR exists and you authored it (or it's the active sub-PR on an allowlisted branch).**
 → Go to §3 (review poll/fix loop).
 
-**(B) On an allowlisted sub-branch with commits ahead of `origin/master` and no open PR** — whether or not those commits are pushed.
+**(B) On an allowlisted sub-branch carrying unmerged work, with no open PR** — whether or not the commits are pushed.
 → Run pre-PR gate, push if needed, open the PR (§4), then schedule a wake-up to start polling.
 A fully-pushed branch with no PR is this case, not an ambiguous one: it is what a
 successful `git push` followed by a failed `gh pr create` leaves behind, and
 `gh pr create` on an already-pushed branch is the correct recovery.
 
-Check before matching: `git rev-list --count origin/master..HEAD` must be > 0.
-**Zero commits ahead is not scenario B.** A freshly created branch whose work was
-interrupted before any commit would otherwise be pushed empty, and `gh pr create`
-then fails with `No commits between master and <branch>` — skipping the phase's
-actual work and leaving a stale branch on origin that §19.1 bars the driver from
-deleting. The same applies to a local `phase/*` whose PR merged elsewhere: pushing
-it re-creates the branch `--delete-branch` just removed. Zero ahead means the work
-is unstarted (scenario C, continue it) or the state is unexpected (scenario D).
+Two conditions before matching, and they are different questions:
 
-**(C) On `master` with no PR in flight, last merge advanced the phase.**
-→ Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch, do the work (§5).
+```shell
+git fetch origin
+git rev-list --count origin/master..HEAD          # (1) is there anything here?
+gh pr list --head "$(git branch --show-current)" --state merged --json number
+git diff --quiet origin/master HEAD               # (2) is it already on master?
+```
+
+1. **Zero commits ahead is not B.** A branch created by §5 whose work was
+   interrupted before any commit would be pushed empty, and `gh pr create` then
+   fails with `No commits between master and <branch>` — the phase's actual work
+   is skipped and a stale branch is stranded on origin that §19.1 bars the driver
+   from deleting. Zero ahead → scenario C (continue the work) or D.
+2. **Already-merged work is not B either, and the commit count will not tell
+   you.** §3b's default is `--squash`, which lands a *new* commit on `master`, so
+   the branch's own commits never become ancestors of `origin/master` and the
+   count stays > 0 forever after the merge. Ask the merge question directly: a
+   merged PR for this head, or `git diff origin/master HEAD` reporting no
+   difference (same tree = the content is already on master), means the work
+   landed. Pushing then **re-creates the branch `--delete-branch` just removed**
+   and opens a duplicate PR for work already on `master` → scenario D.
+
+**(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
+→ Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
 
 **(D) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
 → Stop. Post a status note to the user. Do not schedule another wake-up.
@@ -194,7 +211,7 @@ commit history — **except at a phase boundary, where the tag decides it**:
 
 - **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <N> --squash --delete-branch` — the default
 - **PR where per-commit granularity is worth keeping:** `gh pr merge <N> --merge --delete-branch`
-- **The last PR of a phase:** `gh pr merge <N> --merge --delete-branch` — see below.
+- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <N> --merge --delete-branch` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below.
 
 **Phase boundary — tag first, then merge with `--merge`.** If this is the last
 PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
@@ -248,8 +265,10 @@ and `git log master`. A merge commit keeps the tagged commit as an ancestor, so
 the milestone survives. This is not a special case invented here: §22.1 step 5
 already picks merge-commit "where per-commit granularity matters", and §22.3
 prescribes merge-commit for the phase-15 release PR for the same reason.
-(Checked on the repo: `allow_merge_commit: true` and `master`'s protection has
-`required_linear_history: false`, so a merge commit is accepted at a boundary.)
+(Checked on the repo: `allow_merge_commit: true`, and `master`'s protection
+allows merge commits. Note the control is a repository **ruleset** — see
+`design/PORT_DECISIONS.md` "master protection" — so re-verify there rather than
+in the classic branch-protection object.)
 
 Tagging before the merge also satisfies the §19.1 gate condition the driver is
 required to check — *"at a phase boundary: verify the expected
