@@ -30,8 +30,8 @@ Rhythm:
 3. Completes phase, runs §15 gate
 4. At a **phase boundary**, tags `phase-N-complete` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone)
 5. Opens PR **targeting `master`**
-6. Review poll-and-fix loop runs (AI watches for the review comment; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). If no review appears within ~15 min, AI falls back to the built-in `/review` self-review as the gate signal.
-7. **AI merges** once the §19.1 merge-gate clears (green CI + **review pass posted** — a structured review with no unaddressed findings, or a clean `/review` fallback; + ≥3 min quiescence + clean self-review against scope). Use `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1) to remove the branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
+6. Review poll-and-fix loop runs (AI watches for the review comment; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). If no review has appeared, the workflow is still running — AI waits and re-polls. There is no self-review fallback: `/review` does not satisfy this gate.
+7. **AI merges** once the §19.1 merge-gate clears (green CI + **review pass posted** — a `claude[bot]` review comment for the current head, with no unaddressed Defects; + ≥3 min quiescence + clean self-review against scope). Use `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1) to remove the branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
 8. AI pulls updated `master` and starts the next sub-PR from there. **Whether the just-merged PR was the last in a phase** is determined by the phase sub-PR list in PORT_PLAYBOOK.md §3 plus the per-phase sub-split table in this document (e.g., `phase-12h` is the last under Phase 12's row); at a phase boundary AI ensures the `phase-N-complete` tag is pushed. There is no separate promotion step — the merge to `master` *is* the integration.
 
 ### Phase size audit
@@ -136,7 +136,7 @@ After the AI opens any PR (Phase 0.5 sub-PRs, Phase 12 sub-PRs, or any other pha
 4. **AI merges** under the §19.1 merge-gate (policy revised 2026-05-23).
 5. **After AI merge**, AI pulls updated `master` and starts the next sub-PR from there
 
-**Triggering a re-review:** Sonnet runs on the user's invocation (out-of-band of GitHub comments). AI does not @-mention any bot — if Sonnet's review is needed and hasn't appeared, AI either waits or falls back to `/review` per the 2026-05-26 fallback policy.
+**Triggering a re-review:** `.github/workflows/claude-review.yml` runs automatically on `opened` and `synchronize`, so pushing a fix is what re-reviews a PR. AI does not @-mention any bot and does not retrigger by hand — if the review has not appeared, the run is still in flight, and AI waits. The one case that never produces a review is a PR that edits `claude-review.yml` itself (the action refuses to run when the workflow differs from the default branch, and the assert step exempts it); such a PR is held for eye review, never merged on CI alone.
 
 ## Settings-registry gate (BAKED — applies to port AND community)
 
@@ -342,7 +342,7 @@ Open items for that v2 pass:
   - For PRs touching the settings registry, run `/code-review` with focus on §61.4 compliance
   - For PRs adding new sections to design docs, follow the existing playbook section style
 - [ ] **Pre-commit hooks for contributors** — beyond the already-baked settings-registry gate (see "Settings-registry gate" section above — settled, applies to community too): additional lint rules enforcing no `--no-verify`, no force pushes to main/master, license-header presence on new C# files
-- [ ] ~~**`.coderabbit.yaml`**~~ — obsolete: CodeRabbit removed from the org 2026-05-29. The current reviewer (Sonnet) doesn't read a per-repo config; reviewer behavior is set per-invocation by the user.
+- [ ] ~~**`.coderabbit.yaml`**~~ — obsolete: CodeRabbit removed from the org 2026-05-29, and the file is no longer in the tree. The current reviewer runs from `.github/workflows/claude-review.yml`; its rubric lives in that workflow, not in a per-repo config.
 - [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`) — bug-report (auto-filled with §54 bug-report-submission zip), feature-request (mapped to design/ROADMAP.md sections), driver-quirk-report (auto-routed upstream per §52.5)
 - [ ] **Release cadence post-first-release** — semver discipline, RELEASE_NOTES.md entry per release, GitHub Releases pipeline (already in §14.3 CI), how community PRs feed into next-release vs current-release branches
 - [ ] **Maintainer workflow** — who reviews, merge criteria, how long PRs sit before stale-bot pings, etc. Light-touch at first (small project); formalize as community grows.

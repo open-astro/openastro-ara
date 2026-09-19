@@ -62,9 +62,17 @@ Pick exactly one of these scenarios, checking in the order **D → A → B → C
 ### Step 3 — Review poll/fix loop (scenario A)
 
 This implements COMMIT-PR-RULES.md "Review loop (AI-driven)". The reviewer is
-`claude[bot]`, posted by `.github/workflows/claude-review.yml` on every PR.
-There is no rate limit and no fallback path — if no review has appeared, it is
-still running or the workflow failed; both are waits, not reasons to self-review.
+`claude[bot]`, posted by `.github/workflows/claude-review.yml`, which runs on
+`opened` and `synchronize` — pushing a fix is what re-reviews a PR. There is no
+rate limit and no fallback path: if no review has appeared, it is still running
+or the workflow failed, and both are waits, not reasons to self-review.
+
+**One PR class never gets a review: a PR that edits `claude-review.yml`.** The
+action refuses to run when the workflow differs from the default branch, and the
+workflow's assert step exempts exactly that case (`claude-review.yml:218-226`),
+exiting 0 with a warning and no comment. Since the safety net routes
+`.github/workflows/` changes into their own infra sub-PR, the driver authors
+these. Waiting on a review that can never arrive would spin forever — see step 6.
 
 1. `gh pr checks <N>` — if any check is `fail`, treat findings as a fix opportunity:
    - Read the failing job's log via `gh run view <run-id> --log-failed`
@@ -76,15 +84,25 @@ still running or the workflow failed; both are waits, not reasons to self-review
 
 2. Pull the review — `{owner}` and `{repo}` are placeholders you must substitute with the actual GitHub coordinates (`open-astro` and `openastro-ara` for this repo):
    ```shell
-   gh api repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | {user: .user.login, created_at, body: (.body | .[0:400])}'
+   gh api repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | {user: .user.login, created_at, updated_at, body: (.body | .[0:400])}'
    gh api repos/{owner}/{repo}/pulls/<N>/comments    --jq '.[] | {user: .user.login, path, line, body: (.body | .[0:400])}'
    ```
-   The review is the latest comment by `claude[bot]` (or `github-actions[bot]` on
-   the fork path). Read the **comment body, not the check status** — a green
-   `review` check means "a comment was posted", never "the comment was clean".
+   The review is the comment by `claude[bot]` (or `github-actions[bot]` on the
+   fork path) **whose `updated_at` is at or after your last push**. Select on
+   `updated_at`, not `created_at`, and never just take the newest comment: the
+   workflow sets `use_sticky_comment: true`, so a round-2 review may arrive as an
+   *edit* of the round-1 comment, leaving `created_at` pinned to round 1. This is
+   the same test the workflow's own assert step uses (`claude-review.yml:236`:
+   `select(.updated_at >= $since)`). A comment older than your last push is the
+   previous round's verdict on code you have already changed — not a gate.
+
+   Read the **comment body, not the check status** — a green `review` check means
+   "a comment was posted", never "the comment was clean".
 
 3. **Interpret the review by its two sections** — the rubric is a builder/checker
-   split, and the distinction is the whole gate:
+   split, and the distinction is the whole gate. The authoritative defect list is
+   the prompt in `claude-review.yml` (search `DEFECTS block the merge`); the table
+   below is a summary that can drift, so read the workflow if the two disagree:
 
    | Section | Meaning | Blocks merge? |
    |---|---|---|
@@ -107,21 +125,38 @@ still running or the workflow failed; both are waits, not reasons to self-review
 
    If the same issue ping-pongs >2× on the same thread, post `Deferring this to human review — see comments above` and stop touching that thread.
 
-   Pushing a fix retriggers the workflow, so expect a fresh review comment each round.
+   Pushing a fix retriggers the workflow (`synchronize`). The verdict may arrive
+   as a new comment or as an in-place edit of the existing one, so re-poll on
+   `updated_at` rather than waiting for a new comment id.
 
 5. **Quiescence check** (merge-gate clearance per §19.1):
    - Green CI on `gh pr checks <N>` (all required checks `pass`)
-   - A `claude[bot]` review comment posted, with **no unaddressed Defects**
-   - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `created_at` from `gh api`
+   - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push), with **no unaddressed Defects**
+   - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope
 
    If all clear → **merge** (§3b).
    If any gate is ambiguous → post `Held for human review @joeytroy — <reason>` and stop the loop.
 
-6. **If no review comment has appeared yet:** the workflow is still running (or
-   queued). Schedule the next wake-up and re-poll — do not substitute `/review`
-   and do not merge on CI alone. If `gh pr checks <N>` shows `review` itself
-   failed, that is a CI failure; handle it under step 1.
+6. **If no review comment has appeared yet**, branch on *why*:
+
+   - **The PR changes `.github/workflows/claude-review.yml`** — check with
+     `gh pr diff <N> --name-only`. No review will ever be posted (see above).
+     Post `Held for human review @joeytroy — PR edits claude-review.yml, the
+     review action self-skips; needs eye review` and **stop the loop**. Do not
+     merge on CI alone; do not keep re-polling.
+   - **The PR head is a fork without the `safe-to-review` label** — same
+     outcome: nothing will run until a maintainer applies the label. Post
+     `Held for human review @joeytroy — fork PR awaiting safe-to-review` and stop.
+   - **`gh pr checks <N>` shows `review` itself failed** — that is a workflow
+     error, not a missing review; handle it under step 1.
+   - **Otherwise** the run is still in flight. Schedule the next wake-up and
+     re-poll — do not substitute `/review` and do not merge on CI alone.
+
+   Re-polling is only ever correct in the last case. If you have re-polled more
+   than ~6 times (roughly 30 minutes) with no comment and no in-flight run in
+   `gh run list`, treat it as ambiguous: post `Held for human review @joeytroy —
+   no review after N polls, no run in flight` and stop.
 
 ### Step 3b — Merge
 
