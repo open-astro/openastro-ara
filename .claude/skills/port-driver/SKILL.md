@@ -68,9 +68,8 @@ Two conditions before matching, and they are different questions:
 
 ```shell
 git fetch origin
-git rev-list --count origin/master..HEAD          # (1) is there anything here?
-gh pr list --head "$(git branch --show-current)" --state merged --json number
-git diff --quiet origin/master HEAD               # (2) is it already on master?
+git rev-list --count origin/master..HEAD   # (1) is there anything here?
+git diff --quiet origin/master HEAD        # (2) is this exact tree already on master?
 ```
 
 1. **Zero commits ahead is not B.** A branch created by §5 whose work was
@@ -81,11 +80,24 @@ git diff --quiet origin/master HEAD               # (2) is it already on master?
 2. **Already-merged work is not B either, and the commit count will not tell
    you.** §3b's default is `--squash`, which lands a *new* commit on `master`, so
    the branch's own commits never become ancestors of `origin/master` and the
-   count stays > 0 forever after the merge. Ask the merge question directly: a
-   merged PR for this head, or `git diff origin/master HEAD` reporting no
-   difference (same tree = the content is already on master), means the work
-   landed. Pushing then **re-creates the branch `--delete-branch` just removed**
-   and opens a duplicate PR for work already on `master` → scenario D.
+   count stays > 0 forever after the merge. Test the *tree*:
+   `git diff --quiet origin/master HEAD` succeeding means this branch's content
+   is already on `master`, so the work landed. Pushing then **re-creates the
+   branch `--delete-branch` just removed** and opens a duplicate PR → go to
+   `master` and take scenario C instead.
+
+   **Do not test this by branch name.** `gh pr list --head <branch> --state
+   merged` matches the ref *name*, not the commit, and branch names are reused:
+   `prep-ci` has a merged PR from the first time it was used, and §19.1/§19.5
+   have the driver grow that same placeholder at later phase boundaries. A
+   name-based check therefore fires on live, unmerged work and stops the loop on
+   the driver's own commits. If you do consult a merged PR, require its
+   `headRefOid` to equal `HEAD`; the tree test above is simpler and is what
+   actually answers the question.
+
+   This case is **recoverable, not ambiguous** — it is what an interruption
+   between `gh pr merge` and §3b's `git checkout master` looks like. Check out
+   `master`, pull, and continue at scenario C rather than stopping the loop.
 
 **(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
@@ -287,8 +299,9 @@ Then go to scenario C next iteration.
 
 Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use.
 
-**Always fold it into a PR.** `master` is a protected branch (PR-before-merge,
-force-push blocked), so there is no direct-commit path — include the
+**Always fold it into a PR.** There is no direct-commit path for the driver —
+not because the server would refuse it (it would not; see the safety net on
+admin bypass) but because it would bypass the §19.1 gate. Include the
 PORT_PROGRESS.md edit in the next sub-PR's commits so it reviews alongside the
 code work. If the tracking update is the only thing outstanding, it rides along
 with the next sub-PR rather than getting a PR of its own.
@@ -336,8 +349,11 @@ with the next sub-PR rather than getting a PR of its own.
 
 1. Re-read PORT_PROGRESS.md "Next" section + the COMMIT-PR-RULES.md table to identify which sub-PR comes next.
 
-2. From `master` (playbook §22.1 step 1):
+2. Get onto the branch (playbook §22.1 step 1). If you are already on it — the
+   zero-commits-ahead hand-off from scenario B — skip the create, or
+   `git checkout -b` dies with `a branch named '…' already exists`:
    ```shell
+   # only when not already on the branch
    git checkout master && git pull --ff-only
    git checkout -b phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
    ```
@@ -404,7 +420,7 @@ That single line is enough — don't write multi-paragraph summaries each iterat
 
 - Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction.
 - Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
-- Do NOT touch `master` directly — only via merged PRs. It is a protected branch (PR-before-merge, force-push and deletion blocked), so a direct push is refused anyway.
+- Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** the ruleset requires a PR for everyone *except* repository admins (`enforce_admins=false`, admin bypass retained for hotfixes — `PORT_DECISIONS.md` "master protection"), and the driver runs under the maintainer's admin credentials. A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
 - Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.
 - Do NOT update `design/PORT_PLAYBOOK.md` rules autonomously — that's user-authoritative.
 - Do NOT spawn cloud agents (no `/ultrareview`, no `/schedule`) from within the loop — they cost extra and the user runs them manually.

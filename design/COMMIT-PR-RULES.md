@@ -28,7 +28,7 @@ Rhythm:
 1. AI branches from up-to-date master: `git checkout master && git pull && git checkout -b phase/<N>-<short-name>`
 2. Does the phase's work on the branch (commits + pushes per commit)
 3. Completes phase, runs §15 gate
-4. At a **phase boundary**, tags `phase-N-complete` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone)
+4. At a **phase boundary**, tags `phase-N-complete` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone). The tag goes on the PR's head **immediately before that PR merges**, and a tagged PR merges with `--merge` (not `--squash`) so the tagged commit stays reachable from `master` — see playbook §22.1 step 4
 5. Opens PR **targeting `master`**
 6. Review poll-and-fix loop runs (AI watches for the review comment; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). If no review has appeared, the workflow is still running — AI waits and re-polls. There is no self-review fallback: `/review` does not satisfy this gate.
 7. **AI merges** once the §19.1 merge-gate clears (green CI + **review pass posted** — a `claude[bot]` review comment for the current head, with no unaddressed Defects; + ≥3 min quiescence + clean self-review against scope). Use `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1) to remove the branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
