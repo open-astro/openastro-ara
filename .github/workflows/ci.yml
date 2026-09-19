@@ -91,7 +91,7 @@ jobs:
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # gates all seven jobs below; a wedged fetch must not hold the matrix to the 6h default
+    timeout-minutes: 5  # gates six jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
     # Classifies the PR so the expensive jobs below can skip work that cannot
     # possibly be affected by it. See #1020.
     #
@@ -103,6 +103,9 @@ jobs:
     # legs) would sit in "Expected — Waiting for status to be reported"
     # forever and the PR could never merge. A job skipped by `if:` reports a
     # `skipped` conclusion, which GitHub counts as satisfying a required check.
+    # That holds for NON-MATRIX jobs only. A matrix job skipped at job level
+    # never expands, so its per-leg contexts are never reported at all — which
+    # is why `client-test` is gated at step level instead (#1025).
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
     steps:
@@ -786,7 +789,7 @@ jobs:
   client-test:
     name: Client (analyze + test) — ${{ matrix.os }}
     needs: changes
-    # NO job-level `if:` here, deliberately — see #1025.
+    # `!cancelled()` and nothing else, deliberately — see #1025.
     # The three legs of this matrix are REQUIRED contexts. A matrix job skipped
     # at job level never expands, so GitHub publishes ONE check named
     # "Client (analyze + test) — ${{ matrix.os }}" (literally, unexpanded) and
@@ -797,6 +800,10 @@ jobs:
     # So this job always runs and its STEPS are guarded instead: the matrix
     # expands, all three contexts report `success`, and a docs-only PR pays
     # only three runner spin-ups.
+    # The guard must NOT be omitted entirely: with no `if:` the implicit
+    # condition is success() over `needs: changes`, so a failed or timed-out
+    # `changes` would skip this job at job level and reproduce the deadlock.
+    if: ${{ !cancelled() }}
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays
     # portable since the WILMA client ships to all three platforms.
