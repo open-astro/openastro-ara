@@ -262,7 +262,20 @@ with no tag on origin and violate the §19.1 gate item this section exists to
 satisfy); if it points anywhere else, post `Held for human review @joeytroy —
 phase-<N>-complete already exists on a different commit` and stop.
 
-**Deliberate deviation:** §22.1 step 4 and §19.1 both say `git push --tags`.
+A plain `git fetch` will not pull a tag pointing at a commit unreachable from
+the fetched refs, so the tag can exist **on origin only**, at a different
+commit, while `git tag` succeeds locally and the check above passes. The push is
+then rejected as a non-fast-forward tag update. Do not force it — that is the
+same situation, so take the same Held stop.
+
+**Deliberate deviation (1 of 2):** the rule above — *any* PR carrying a phase or
+sub-phase tag merges with `--merge` — is stricter than §19.1 and §22.1 step 5,
+which pick the method from the PR's commit history. Not a contradiction (a merge
+commit is already an allowed choice there), but it removes the discretion those
+sections grant, because a squash would orphan the tag. Same maintainer
+reconciliation as the deviation below.
+
+**Deliberate deviation (2 of 2):** §22.1 step 4 and §19.1 both say `git push --tags`.
 This pushes the named ref instead, because `--tags` pushes *every* stray local
 tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
 `reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
@@ -432,7 +445,7 @@ That single line is enough — don't write multi-paragraph summaries each iterat
 
 - Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction.
 - Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
-- Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** the ruleset requires a PR for everyone *except* repository admins (`enforce_admins=false`, admin bypass retained for hotfixes — `PORT_DECISIONS.md` "master protection"), and the driver runs under the maintainer's admin credentials. A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
+- Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** `master` is governed by a repository **ruleset** (`PORT_DECISIONS.md` "master protection") that requires a PR for everyone *except* its bypass actors — repository admins, retained for hotfixes — and the driver runs under the maintainer's admin credentials. (Don't go looking for `enforce_admins`: that is classic branch protection, which this repo does not use.) A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
 - Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.
 - Do NOT update `design/PORT_PLAYBOOK.md` rules autonomously — that's user-authoritative.
 - Do NOT spawn cloud agents (no `/ultrareview`, no `/schedule`) from within the loop — they cost extra and the user runs them manually.
