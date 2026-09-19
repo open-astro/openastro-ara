@@ -830,10 +830,22 @@ jobs:
       # trace of why. This puts the classifier's answer in the job summary.
       - name: Record path-gate decision
         run: |
-          echo "docs_only=${DOCS_ONLY:-<unset>}" >> "$GITHUB_STEP_SUMMARY"
+          # `unset`, not `<unset>`: the summary is rendered as markdown, so an
+          # angle-bracketed word is parsed as an HTML tag and disappears from
+          # exactly the case a reader most needs to see.
+          echo "docs_only=${DOCS_ONLY:-unset} (work steps run only when not 'true')" >> "$GITHUB_STEP_SUMMARY"
           # ::notice:: surfaces in the checks UI; the summary alone is only
-          # visible by opening the run, which `gh pr checks` never shows.
-          echo "::notice title=Path gate::docs_only=${DOCS_ONLY:-<unset>} (work steps ${DOCS_ONLY:+skipped when true})"
+          # visible by opening the run, which `gh pr checks` never shows. Fire
+          # it only when the work did NOT run: on an ordinary code PR the three
+          # legs would otherwise each post an annotation saying nothing. The two
+          # cases worth an annotation are a docs-only classification (three green
+          # contexts with no analyze/test behind them) and a missing output (the
+          # `changes` job failed, and the fail-open path ran the work anyway).
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "::notice title=Path gate::docs_only=true -- work steps skipped, contexts reported green by design"
+          elif [ -z "$DOCS_ONLY" ]; then
+            echo "::notice title=Path gate::docs_only=unset -- the changes job did not report; running the full work (fail-open)"
+          fi
         env:
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
 
