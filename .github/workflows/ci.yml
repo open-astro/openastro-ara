@@ -122,7 +122,14 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+
+          # Any unexpected failure below classifies as code and runs everything,
+          # rather than leaving a red `Changed paths` that blocks the PR anyway.
+          # The `if:` guards already fail safe on an empty output; this makes the
+          # job itself match that intent instead of going red.
+          trap 'echo "classifier failed -> running everything"; echo "docs_only=false" >> "$GITHUB_OUTPUT"; exit 0' ERR
+          set -e
 
           # Fail safe: anything that is not a PR (push to master,
           # workflow_dispatch) runs the full matrix.
@@ -133,7 +140,11 @@ jobs:
           fi
 
           base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-          files="$(git diff --name-only "$base" "$HEAD_SHA")"
+          # --no-renames: rename detection needs blob contents (defeating
+          # `filter: blob:none` with a lazy promisor fetch) and reports only a
+          # rename's destination — so a code file moved into design/ would look
+          # docs-only while its deletion went unbuilt.
+          files="$(git diff --no-renames --name-only "$base" "$HEAD_SHA")"
 
           echo "Changed files:"
           echo "$files" | sed 's/^/  /'
