@@ -69,7 +69,8 @@ or the workflow failed, and both are waits, not reasons to self-review.
 
 **One PR class never gets a review: a PR that edits `claude-review.yml`.** The
 action refuses to run when the workflow differs from the default branch, and the
-workflow's assert step exempts exactly that case (`claude-review.yml:218-226`),
+workflow's assert step exempts exactly that case (`claude-review.yml:218-228`,
+and `:437-447` on the fork path),
 exiting 0 with a warning and no comment. Since the safety net routes
 `.github/workflows/` changes into their own infra sub-PR, the driver authors
 these. Waiting on a review that can never arrive would spin forever — see step 6.
@@ -92,9 +93,15 @@ these. Waiting on a review that can never arrive would spin forever — see step
    `updated_at`, not `created_at`, and never just take the newest comment: the
    workflow sets `use_sticky_comment: true`, so a round-2 review may arrive as an
    *edit* of the round-1 comment, leaving `created_at` pinned to round 1. This is
-   the same test the workflow's own assert step uses (`claude-review.yml:236`:
-   `select(.updated_at >= $since)`). A comment older than your last push is the
+   the same test the workflow's own assert step uses (`claude-review.yml:237`, and `:456` on the
+   fork path: `select(.updated_at >= $since)`). A comment older than your last push is the
    previous round's verdict on code you have already changed — not a gate.
+
+   **Also require the body to carry a sign-off marker** — `Approved` or
+   `Issues found`. The sticky comment can be created or updated at run start with
+   in-progress content, so a fresh `updated_at` alone does not mean the verdict
+   has landed. This is the same grep the workflow's assert step uses. A body with
+   a fresh timestamp but no marker is a review still being written: keep polling.
 
    Read the **comment body, not the check status** — a green `review` check means
    "a comment was posted", never "the comment was clean".
@@ -131,7 +138,7 @@ these. Waiting on a review that can never arrive would spin forever — see step
 
 5. **Quiescence check** (merge-gate clearance per §19.1):
    - Green CI on `gh pr checks <N>` (all required checks `pass`)
-   - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push), with **no unaddressed Defects**
+   - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push) **carrying a sign-off marker**, with **no unaddressed Defects**
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope
 
