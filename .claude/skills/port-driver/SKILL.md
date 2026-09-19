@@ -47,9 +47,10 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
-**Allowlisted branch** means anything §19.1 permits the driver to create:
-`phase/<N>[-<letter>]-<short-name>`, plus the named prep branches `prep-*` and
-`rules-*` (playbook §22.2). A branch outside that set is genuinely unknown and
+**Allowlisted branch** means `phase/<N>[-<letter>]-<short-name>` plus the named
+prep branches — §19.1 allows "a small set of named prep branches (e.g.
+`prep-ci`)", and §22.2 names `prep-*` and `rules-*` as branches the driver
+itself created and may delete. A branch outside that set is genuinely unknown and
 belongs in scenario D — but a `prep-ci` the driver created itself is not, and
 treating it as unknown would stop the loop on its own work.
 
@@ -69,7 +70,9 @@ Two conditions before matching, and they are different questions:
 ```shell
 git fetch origin
 git rev-list --count origin/master..HEAD   # (1) is there anything here?
-git diff --quiet origin/master HEAD        # (2) is this exact tree already on master?
+gh pr list --head "$(git branch --show-current)" --state merged \
+  --json number,headRefOid --jq '.[] | select(.headRefOid == "'"$(git rev-parse HEAD)"'")'
+                                           # (2) was THIS commit already merged?
 ```
 
 1. **Zero commits ahead is not B.** A branch created by §5 whose work was
@@ -78,26 +81,32 @@ git diff --quiet origin/master HEAD        # (2) is this exact tree already on m
    is skipped and a stale branch is stranded on origin that §19.1 bars the driver
    from deleting. Zero ahead → scenario C (continue the work) or D.
 2. **Already-merged work is not B either, and the commit count will not tell
-   you.** §3b's default is `--squash`, which lands a *new* commit on `master`, so
-   the branch's own commits never become ancestors of `origin/master` and the
-   count stays > 0 forever after the merge. Test the *tree*:
-   `git diff --quiet origin/master HEAD` succeeding means this branch's content
-   is already on `master`, so the work landed. Pushing then **re-creates the
-   branch `--delete-branch` just removed** and opens a duplicate PR → go to
-   `master` and take scenario C instead.
+   you** (check this only when (1) found commits — at zero ahead, (1) has already
+   decided). §3b's default is `--squash`, which lands a *new* commit on `master`,
+   so the branch's own commits never become ancestors of `origin/master` and the
+   count stays > 0 forever after the merge. Ask whether **this exact commit** was
+   merged: a merged PR for this head whose `headRefOid` equals `git rev-parse
+   HEAD`. If so, pushing would **re-create the branch `--delete-branch` just
+   removed** and open a duplicate PR → check out `master`, pull, and continue at
+   scenario C. That is recoverable, not ambiguous: it is what an interruption
+   between `gh pr merge` and §3b's `git checkout master` looks like.
 
-   **Do not test this by branch name.** `gh pr list --head <branch> --state
-   merged` matches the ref *name*, not the commit, and branch names are reused:
-   `prep-ci` has a merged PR from the first time it was used, and §19.1/§19.5
-   have the driver grow that same placeholder at later phase boundaries. A
-   name-based check therefore fires on live, unmerged work and stops the loop on
-   the driver's own commits. If you do consult a merged PR, require its
-   `headRefOid` to equal `HEAD`; the tree test above is simpler and is what
-   actually answers the question.
+   Both halves of that test are load-bearing, and each was wrong on its own in
+   an earlier draft:
 
-   This case is **recoverable, not ambiguous** — it is what an interruption
-   between `gh pr merge` and §3b's `git checkout master` looks like. Check out
-   `master`, pull, and continue at scenario C rather than stopping the loop.
+   - **Name alone is wrong.** `gh pr list --head <branch> --state merged` matches
+     the ref *name*, and names are reused — `prep-ci` carries a merged PR from
+     its first use, and §19.1/§19.5 have the driver grow that placeholder at
+     later phase boundaries. Matching on name alone fires on live work and stops
+     the loop on the driver's own commits.
+   - **Comparing trees is wrong too.** `git diff --quiet origin/master HEAD` only
+     answers "is master identical to this branch", which stops being true the
+     moment anything else lands on `master` — another merge, or a maintainer
+     hotfix through the admin bypass. Then the trees differ, the guard passes,
+     and B re-creates the deleted branch anyway.
+
+   `headRefOid == HEAD` is immune to both: it names a specific commit, and it
+   stays true however far `master` advances afterwards.
 
 **(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
@@ -247,8 +256,11 @@ Confirm the tag points where you meant before merging —
 If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a
 previous §3b attempt got as far as tagging before being held — do **not** force
 it. Check where the existing tag points: if it is already the PR head, skip the
-tag step and carry on; if it is anything else, post `Held for human review
-@joeytroy — phase-<N>-complete already exists on a different commit` and stop.
+`git tag` but **still run the push** (`git push origin <tag>` is idempotent, and
+one of those causes leaves the tag local-only, which would merge the boundary
+with no tag on origin and violate the §19.1 gate item this section exists to
+satisfy); if it points anywhere else, post `Held for human review @joeytroy —
+phase-<N>-complete already exists on a different commit` and stop.
 
 **Deliberate deviation:** §22.1 step 4 and §19.1 both say `git push --tags`.
 This pushes the named ref instead, because `--tags` pushes *every* stray local
