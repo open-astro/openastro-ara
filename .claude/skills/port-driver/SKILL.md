@@ -42,7 +42,9 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 ### Step 2 — Decide the branch state
 
-Pick exactly one of these scenarios, checking in the order **D → A → B → C → E** (highest priority first). Don't multi-task. Precedence matters because (C) and (D) can both be true when the last merge was the final sub-PR of a phase — (D) wins so the promotion tag + `port/ara → master` PR happen before scenario-C picks up the next phase's sub-PR.
+Pick exactly one of these scenarios, checking in the order **A → B → C → E** (highest priority first). Don't multi-task.
+
+There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
 **(A) Open PR exists and you authored it (or it's the active sub-PR on `phase-N…`).**
 → Go to §3 (review poll/fix loop).
@@ -50,11 +52,8 @@ Pick exactly one of these scenarios, checking in the order **D → A → B → C
 **(B) On a `phase-N…` sub-branch with unpushed commits and no open PR.**
 → Run pre-PR gate, push, open the PR (§4), then schedule a wake-up to start polling.
 
-**(C) On `port/ara` or `master` with no PR in flight, last merge advanced the phase.**
+**(C) On `master` with no PR in flight, last merge advanced the phase.**
 → Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch, do the work (§5).
-
-**(D) Phase boundary just crossed (last sub-PR of the phase merged).**
-→ Tag `phase-N-complete` on `port/ara`, open the `port/ara → master` promotion PR per playbook §22.0 (§6).
 
 **(E) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
 → Stop. Post a status note to the user. Do not schedule another wake-up.
@@ -167,20 +166,34 @@ these. Waiting on a review that can never arrive would spin forever — see step
 
 ### Step 3b — Merge
 
-- **Sub-PR (base = `port/ara`):** `gh pr merge <N> --squash --delete-branch`
-- **Promotion PR (`port/ara → master`):** `gh pr merge <N> --merge` (preserves per-phase history)
+Every PR targets `master` (playbook §22.0). Pick the merge method by the PR's
+commit history, not by its base:
+
+- **Multi-commit PR that should land as one logical change:** `gh pr merge <N> --squash --delete-branch`
+- **PR where per-commit granularity is worth keeping:** `gh pr merge <N> --merge --delete-branch`
+
+**Phase boundary — tag before merging.** If this is the last PR of a phase
+(consult the COMMIT-PR-RULES.md sub-split tables and PORT_PROGRESS.md), push the
+tag *before* the merge, per playbook §22.1 step 4:
+
+```shell
+git tag phase-<N>-complete && git push origin phase-<N>-complete
+```
+
+Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
+coherent milestone — judgment call.
 
 After merge:
-- `git checkout port/ara && git pull --ff-only`
-- If the merged sub-PR was the last in a phase (consult COMMIT-PR-RULES.md sub-split tables and PORT_PROGRESS.md), go to scenario D next iteration.
-- Otherwise go to scenario C next iteration.
+- `git checkout master && git pull --ff-only`
+- Go to scenario C next iteration.
 
 Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use. Timing rule:
 
-- **Standalone direct commit to `port/ara`**: use this *only* when you're on `port/ara` immediately after a merge and PORT_PROGRESS.md is the single file changing (pure tracking-metadata update, no code).
-- **Folded into the next sub-PR**: use this when you've already moved onto a `phase-N` branch and have other changes queued — include the PORT_PROGRESS.md edit in the sub-PR's commits so it reviews alongside the code work.
-
-When in doubt, prefer folding into the sub-PR — direct pushes bypass review, so keep that path narrow.
+**Always fold it into a PR.** `master` is a protected branch (PR-before-merge,
+force-push blocked), so there is no direct-commit path — include the
+PORT_PROGRESS.md edit in the next sub-PR's commits so it reviews alongside the
+code work. If the tracking update is the only thing outstanding, it rides along
+with the next sub-PR rather than getting a PR of its own.
 
 ### Step 4 — Open the PR (scenario B)
 
@@ -203,7 +216,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes bypass review, s
 
 4. Open the PR:
    ```shell
-   gh pr create --base port/ara --head <branch-name> --title "<conventional-prefix>: <one-line>" --body "$(cat <<'EOF'
+   gh pr create --base master --head <branch-name> --title "<conventional-prefix>: <one-line>" --body "$(cat <<'EOF'
    ## Summary
    <1-3 bullets — what + why>
 
@@ -225,14 +238,15 @@ When in doubt, prefer folding into the sub-PR — direct pushes bypass review, s
 
 1. Re-read PORT_PROGRESS.md "Next" section + the COMMIT-PR-RULES.md table to identify which sub-PR comes next.
 
-2. From `port/ara`:
+2. From `master` (playbook §22.1 step 1):
    ```shell
-   git checkout port/ara && git pull --ff-only
-   git checkout -b <branch-name>     # flat name, e.g. phase-10, phase-12a
-   # NEVER use hierarchical names like port/ara/phase-10 — Git refs are tree-structured,
-   # so `port/ara/anything` is invalid while `port/ara` itself exists as a branch
-   # (per COMMIT-PR-RULES.md "Git ref naming constraint").
+   git checkout master && git pull --ff-only
+   git checkout -b phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
    ```
+   The slash namespace is the convention (COMMIT-PR-RULES.md "Branch naming").
+   It is valid because no branch is literally named `phase` — the old flat-name
+   workaround (`phase-10`) was forced only while `port/ara` existed as a branch,
+   and was retired with it on 2026-06-02.
 
 3. Do the actual work for the sub-PR's scope. Keep commits small + focused. Push after every commit (per the 2026-05-23 cadence decision).
 
@@ -241,19 +255,17 @@ When in doubt, prefer folding into the sub-PR — direct pushes bypass review, s
 **Important guardrails while doing sub-PR work:**
 - Never skip hooks (`--no-verify` is forbidden by §19.1).
 - Never amend a pushed commit (create new commits; the reviewer sees each push).
-- Never force-push to a sub-branch with an open PR unless rebasing on updated `port/ara` and announcing it in a PR comment.
+- Never force-push to a sub-branch with an open PR unless rebasing on updated `master` and announcing it in a PR comment.
 - Don't refactor adjacent code outside the sub-PR's scope (track in `design/PORT_TODO.md` instead).
 - Don't add comments that just describe what the code does (per CLAUDE.md guidance).
 
-### Step 6 — Phase boundary promotion (scenario D)
+### Step 6 — Phase boundary bookkeeping
 
-1. From `port/ara`: `git tag phase-<N>-complete && git push origin phase-<N>-complete`
-2. Open the promotion PR:
-   ```shell
-   gh pr create --base master --head port/ara --title "Merge port/ara: Phase <N> (<short-description>)" --body "<summary of what landed>"
-   ```
-3. This PR also goes through the review loop (§3) — same gate, but use `--merge` not `--squash` when merging it (per COMMIT-PR-RULES.md).
-4. Update `design/PORT_PROGRESS.md` to move the phase from "In flight" → "Completed", reflect the new "Currently working on" / "Next" pointer.
+There is no promotion PR (playbook §22.0). At a phase boundary the tag is pushed
+in §3b, immediately before the phase's last PR merges. The only thing left is
+tracking state: update `design/PORT_PROGRESS.md` to move the phase from
+"In flight" → "Completed" and reset the "Currently working on" / "Next"
+pointers, folded into the next sub-PR's commits per §3b.
 
 ## Pacing (ScheduleWakeup)
 
@@ -280,16 +292,16 @@ One short paragraph for the user / log:
 
 Example:
 ```text
-[port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase-10 pr=#43 | did: pushed fix for a review Defect on the Dockerfile USER directive | next: poll for the round-2 review | sleep 270s
+[port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase/10-docker pr=#43 | did: pushed fix for a review Defect on the Dockerfile USER directive | next: poll for the round-2 review | sleep 270s
 ```
 
 That single line is enough — don't write multi-paragraph summaries each iteration, they pile up.
 
 ## Safety net — what you do NOT do
 
-- Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`/`port/ara`) without an explicit user instruction.
+- Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction.
 - Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
-- Do NOT touch `master` directly — only via promotion PRs.
+- Do NOT touch `master` directly — only via merged PRs. It is a protected branch (PR-before-merge, force-push and deletion blocked), so a direct push is refused anyway.
 - Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.
 - Do NOT update `design/PORT_PLAYBOOK.md` rules autonomously — that's user-authoritative.
 - Do NOT spawn cloud agents (no `/ultrareview`, no `/schedule`) from within the loop — they cost extra and the user runs them manually.
