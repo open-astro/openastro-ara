@@ -53,18 +53,12 @@ prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
 `chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
-**Deliberate deviation (1 of 2) — `chore/<short-name>`.** §19.1 does not name it; it
-closes with "All other branches are off-limits without explicit user
-instruction", and `COMMIT-PR-RULES.md` records `chore/*` only in its open-items checklist
-("Branch naming convention for community PRs"), not under the "Branch naming"
-heading -- i.e. as a *proposed* community convention, "Distinct from the
-port's" pattern. (`PORT_PLAYBOOK.md:1418` does prescribe a
-`chore/bump-alpaca-simulators-<tag>` branch for a future automated PR, but
-§19.1's allowlist is the authority for what the driver may touch and it is
-silent -- #1013 should cover both sites.) It is here because the driver's
-own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
-own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
-treat this as a deviation, not as something §19.1 says.
+`chore/<short-name>` is sanctioned by §19.1 itself: its branch allowlist names
+it alongside `phase/*` and the prep branches, "for maintenance work that is not
+a port phase (skill and doc upkeep, CI cleanups)". It is what the driver's own
+maintenance PRs use (#1000, #1003). (Before #1013 landed this was a deliberate
+deviation, because §19.1 was silent and closed with "All other branches are
+off-limits"; that gap is closed and the note is retired.)
 
 Because `chore/*` is also what outside contributors use, scenario A's
 "not authored by you" clause deliberately excludes it: the driver never adopts a
@@ -76,7 +70,7 @@ and creating one are three different permissions. §5 still only ever *creates*
 There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
 **(A) Open PR exists and you authored it — or it is the active sub-PR on a `phase/*`, `prep-*` or `rules-*` branch.**
-(Not `chore/*`: see the deviation note above. A `chore/*` PR you did not author is scenario D.)
+(Not `chore/*`: see the carve-out above. A `chore/*` PR you did not author is scenario D.)
 → Go to §3 (review poll/fix loop).
 
 **(B) On an allowlisted sub-branch carrying unmerged work, with no open PR** — whether or not the commits are pushed.
@@ -441,12 +435,12 @@ commit, while `git tag` succeeds locally and the check above passes. The push is
 then rejected as a non-fast-forward tag update. Do not force it — that is the
 same situation, so take the same Held stop.
 
-**Deliberate deviation (2 of 2):** §22.1 step 4 and §19.1 both say `git push --tags`.
-This pushes the named ref instead, because `--tags` pushes *every* stray local
-tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
-`reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
-the playbook lines are user-authoritative and reconciling them needs the
-maintainer.
+Pushing the named ref rather than `git push --tags` is what §19.1 and §22.1
+step 4 now prescribe, for the reason they give: `--tags` pushes *every* stray
+local tag, including the `backup-<timestamp>` tags §19.1 itself requires before
+a `reset --hard`. Same result for this tag, fewer accidents. (This was a
+deliberate deviation while the playbook still said `--tags`; #1013/#1014
+reconciled both sites and the note is retired.)
 
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
