@@ -326,7 +326,11 @@ jobs:
           # the paragraph above justifies: `ci/flutter-pin-fixup`,
           # `ci/flutter-3.x-triage` and `ci/flutter-3.48.0-fixup` are all
           # hand-made names that must never be closed and branch-deleted.
-          new_pr="$(gh pr list --head "$BRANCH" --state open --json number --jq 'first(.[].number)' || true)"
+          # Fork-scoped for the same reason the supersede list is: if a fork
+          # PR ever shared this head-branch name, `first` could return the
+          # fork's number and the loop would then treat the run's own fresh
+          # PR as an old one and close it with --delete-branch.
+          new_pr="$(gh pr list --head "$BRANCH" --state open --json number,isCrossRepository --jq 'first(.[] | select(.isCrossRepository | not) | .number)' || true)"
           if [ -n "$new_pr" ]; then
             { gh pr list --state open --limit 1000 --json number,headRefName,isCrossRepository \
                 --jq '.[] | select(.isCrossRepository | not) | select(.headRefName | test("^ci/flutter-[0-9]+\\.[0-9]+\\.[0-9]+$")) | .number' || true; } \
@@ -349,14 +353,21 @@ jobs:
                   # silently swallow the remaining PR numbers and leave those
                   # PRs un-superseded. The redirect goes on the calls and not
                   # on `done`, which would starve `read` of the pipe instead.
-                  commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' < /dev/null || echo 2)"
-                  # A gh that exits 0 but prints nothing would otherwise take
-                  # the keep-the-branch side with an empty count, rendering
-                  # the comment as "carries  commits".
-                  [ -n "$commits" ] || commits=2
+                  # `unknown` and not a number: this value is interpolated
+                  # into a public comment, and every other gh call here is
+                  # guarded because a transient 502 or secondary rate limit
+                  # is expected. Defaulting to a digit would post "carries 2
+                  # commits" on someone's seven-commit branch — a false
+                  # statement about their work. The sentinel is not `1`, so
+                  # it still takes the keep-the-branch side.
+                  commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' < /dev/null || echo unknown)"
+                  [ -n "$commits" ] || commits=unknown
                   if [ "$commits" = 1 ]; then
                     gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this PR was the workflow's own untouched commit, so nothing here is lost — the newer PR does the same job against the newer release." < /dev/null || true
                     gh pr close "$old_pr" --delete-branch < /dev/null || true
+                  elif [ "$commits" = unknown ]; then
+                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal. **The commit count on this branch could not be read, so the branch is being kept, not deleted** — if there is work here that is still wanted, reopen this PR or cherry-pick onto #${new_pr}." < /dev/null || true
+                    gh pr close "$old_pr" < /dev/null || true
                   else
                     gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal. **This branch carries ${commits} commits, so it is being kept, not deleted** — if any of that work is still wanted, reopen this PR or cherry-pick onto #${new_pr}." < /dev/null || true
                     gh pr close "$old_pr" < /dev/null || true

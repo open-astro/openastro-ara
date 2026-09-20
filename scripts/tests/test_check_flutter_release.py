@@ -518,9 +518,14 @@ class SupersedeSelectorTest(unittest.TestCase):
         Production runs these through the gojq embedded in `gh --jq` (Go
         `regexp`); a developer box has oniguruma `jq`. The selectors are
         deliberately written to the intersection of the two -- character
-        classes, `+`, anchors, escaped dots, nothing engine-specific -- so
-        where both are installed this asserts they agree, rather than
-        trusting whichever one happens to be on PATH.
+        classes, `+`, anchors, escaped dots, nothing engine-specific.
+
+        Be clear about the coverage this actually buys: ubuntu-latest, where
+        CI runs this suite, ships `jq` and not `gojq`, so in CI the only
+        engine exercised is the one production does NOT use. The cross-check
+        fires only where someone has both installed. Closing that gap means
+        installing gojq in the sanity job -- tracked in design/PORT_TODO.md,
+        not done here because it edits ci.yml.
         """
         import subprocess
 
@@ -575,20 +580,79 @@ class SupersedeSelectorTest(unittest.TestCase):
         payload = '[{"number": 1, "headRefName": "%s"}]' % generated
         self.assertEqual(self._jq(selector, payload), "1")
 
+    def _commit_count_branches(self) -> dict:
+        """The three arms of the commit-count `if`, split on CODE lines only.
+
+        Never on the bare words `else`/`fi`: the arms are full of prose
+        ("fix commits", "configured", "verified") that contains those
+        substrings, and splitting on them truncates an arm so an assertion
+        about what it does NOT contain passes vacuously. A shell keyword is
+        a stripped line equal to the keyword, and a comment starts with `#`.
+        """
+        body = self.text.split("| while read -r old_pr; do", 1)[1]
+        arms, current, depth = {}, None, 0
+        for raw in body.splitlines():
+            line = raw.strip()
+            if line.startswith("#"):
+                continue
+            if line == 'if [ "$commits" = 1 ]; then':
+                current, depth = "one", 1
+                arms[current] = []
+                continue
+            if depth == 0:
+                continue
+            if line == 'elif [ "$commits" = unknown ]; then':
+                current = "unknown"
+                arms[current] = []
+                continue
+            if line == "else":
+                current = "many"
+                arms[current] = []
+                continue
+            if line == "fi":
+                break
+            arms[current].append(line)
+        return {k: "\n".join(v) for k, v in arms.items()}
+
     def test_a_touched_bump_branch_is_closed_but_not_deleted(self):
         # supersede was chosen over skip-while-open so a contentious bump stays
         # visible; someone investigating a breakage pushes onto that branch, and
         # deleting it would put that work behind a Restore-branch button.
-        marker = 'if [ "$commits" = 1 ]; then'
-        self.assertIn(marker, self.text)
-        one_commit, many_commits = self.text.split(marker, 1)[1].split("else", 1)
-        self.assertIn('gh pr close "$old_pr" --delete-branch', one_commit)
-        self.assertNotIn("--delete-branch", many_commits.split("fi", 1)[0])
+        arms = self._commit_count_branches()
+        self.assertEqual(set(arms), {"one", "unknown", "many"})
+        self.assertIn('gh pr close "$old_pr" --delete-branch', arms["one"])
+        for name in ("unknown", "many"):
+            self.assertIn('gh pr close "$old_pr"', arms[name])
+            self.assertNotIn("--delete-branch", arms[name])
+        # The split has to have found real content in every arm, or the
+        # assertNotIn above would be vacuous.
+        for name, arm in arms.items():
+            self.assertIn("gh pr comment", arm, f"{name} arm looks truncated")
 
-    def test_an_unreadable_commit_count_keeps_the_branch(self):
-        # `|| echo 2`, not `|| echo 1`: if the count cannot be read, the safe
-        # side is keeping a branch that could have been deleted.
-        self.assertIn("|| echo 2)", self.text)
+    def test_an_unreadable_commit_count_never_states_a_number(self):
+        # `commits` is interpolated into a public comment. A numeric default
+        # would post "carries 2 commits" on someone's seven-commit branch.
+        self.assertIn("|| echo unknown)", self.text)
+        self.assertIn("[ -n \"$commits\" ] || commits=unknown", self.text)
+        arms = self._commit_count_branches()
+        self.assertNotIn("${commits}", arms["unknown"])
+        self.assertIn("could not be read", arms["unknown"])
+
+    def test_the_new_pr_lookup_is_fork_scoped(self):
+        # If a fork PR shared the new head-branch name, an unscoped `first`
+        # could return its number and the loop would then close the PR this
+        # run just opened, with --delete-branch.
+        self.assertIn(
+            "gh pr list --head \"$BRANCH\" --state open "
+            "--json number,isCrossRepository",
+            self.text,
+        )
+        selector = self._selector(r"first")
+        payload = """[
+          {"number": 9, "isCrossRepository": true},
+          {"number": 4, "isCrossRepository": false}
+        ]"""
+        self.assertEqual(self._jq(selector, payload), "4")
 
     def test_fork_prs_are_not_superseded(self):
         # headRefName on a cross-repo PR is the branch name on the FORK,

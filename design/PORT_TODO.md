@@ -1753,6 +1753,15 @@ One out-of-scope note from #1017's approval, not widened into that PR:
 
 - `design/PORT_PLAYBOOK.md` §12.1 (lines 1024-1030) enumerates what
   `check-flutter.yml` does and stops at "Skips if a PR for that version is
-  already open". Still accurate, but a run now also comments on, closes and
-  deletes the branch of every other open `ci/flutter-<version>` PR. One bullet
-  keeps §12.1 the source of truth; fold it in when §12.1 is next touched.
+  already open". Still accurate, but a run now also comments on and closes
+  every other open **non-fork** `ci/flutter-<version>` PR, deleting the branch
+  only when that PR still carries the workflow's own single commit — one that
+  has been pushed to is closed with its branch kept, and so is one whose commit
+  count cannot be read. One bullet keeps §12.1 the source of truth; fold it in
+  when §12.1 is next touched, and copy the conditions rather than the summary.
+- `scripts/tests/test_check_flutter_release.py`'s `SupersedeSelectorTest` cross-
+  checks the workflow's jq selectors against every engine on PATH, but
+  `ubuntu-latest` — where `.github/workflows/ci.yml` runs the suite — ships
+  oniguruma `jq` and not the `gojq` embedded in `gh --jq`. So CI only ever
+  exercises the engine production does *not* use. Installing `gojq` in the
+  sanity job makes the guard real; left out of #1017 because it edits ci.yml.
