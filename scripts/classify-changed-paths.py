@@ -52,7 +52,13 @@ INERT_DIRS = (
     ".github/ISSUE_TEMPLATE/",
 )
 
-# Root-level files that are prose or editor configuration.
+# Root-level files that are prose and nothing else. Deliberately short:
+# every other root file falls through to the open `dotnet` default. In
+# particular `.editorconfig` is NOT here -- it carries the
+# `dotnet_diagnostic.*.severity` lines that decide whether the analyzer
+# gate's `dotnet build -c Release` passes at all, and `.gitattributes`
+# changes the bytes a checkout writes. Neither claim of inertness is
+# checkable, so neither is made.
 INERT_ROOT_FILES = frozenset(
     {
         "AUTHORS",
@@ -62,17 +68,15 @@ INERT_ROOT_FILES = frozenset(
         "LICENSE.txt",
         "NOTICE.md",
         "README.md",
-        "CodeMaid.config",
-        "md-template.html",
-        ".editorconfig",
-        ".gitattributes",
-        ".gitignore",
     }
 )
 
-# Root-level files that ARE build inputs for the .NET graph.
+# Root-level files that ARE build inputs for the .NET graph. Documentation
+# only: an unlisted root file reaches the same answer via the open default,
+# and the tests assert both routes agree.
 DOTNET_ROOT_FILES = frozenset(
     {
+        ".editorconfig",  # dotnet_diagnostic.* severities feed the analyzer
         "CommonAssemblyInfo.cs",
         "Directory.Build.props",
         "Dockerfile",
@@ -99,12 +103,23 @@ SCRIPT_RULES = {
     "scripts/fit-star-count-model.py": NONE,
 }
 
-# .github/ is mixed the same way.
+# .github/ is mixed the same way. An explicit list, not a suffix rule: a
+# `.github/actions/*/action.yml` composite consumed by analyzer-gate would
+# be a .yml that very much affects the .NET graph, so anything under
+# .github/ that is not named here (or under ISSUE_TEMPLATE/) falls through
+# to the open `dotnet` default.
 GITHUB_RULES = {
     # CI itself changed: validate the whole matrix, whatever else is in the PR.
     ".github/workflows/ci.yml": ALL,
+    # Sibling workflows: none of them builds or tests anything ci.yml gates.
+    ".github/workflows/check-flutter.yml": NONE,
+    ".github/workflows/claude-review.yml": NONE,
+    ".github/workflows/codeql.yml": NONE,
+    ".github/workflows/label-trusted-authors.yml": NONE,
     ".github/dependabot.yml": NONE,
-    ".github/CODEOWNERS": NONE,
+    ".github/FUNDING.yml": NONE,
+    ".github/pull_request_template.md": NONE,
+    # Run by the (ungated) Unicode scan job only.
     ".github/scripts/check-unicode.py": NONE,
 }
 
@@ -121,12 +136,6 @@ def buckets_for(path: str) -> frozenset:
 
     for prefix in INERT_DIRS:
         if path.startswith(prefix):
-            return NONE
-
-    # Other workflows and .github prose affect neither build graph. A path
-    # under .github/ that is not one of these falls through to ALL.
-    if path.startswith(".github/workflows/") or path.startswith(".github/"):
-        if path.endswith((".yml", ".yaml", ".md")):
             return NONE
 
     # Python tooling for the repo's own scripts, run by the Sanity job.

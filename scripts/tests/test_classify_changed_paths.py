@@ -52,6 +52,41 @@ class ClassifyTest(unittest.TestCase):
     def test_an_unknown_root_file_runs_the_dotnet_jobs(self):
         self.assertTrue(self.c("NuGet.config")["dotnet"])
 
+    def test_editorconfig_runs_the_analyzer_gate(self):
+        # .editorconfig carries the dotnet_diagnostic.*.severity lines that
+        # decide whether `dotnet build -c Release` under TreatWarningsAsErrors
+        # passes. A PR that only flips CA1854 from suggestion to error must
+        # run the analyzer, and server-build does not cover it (it compiles
+        # Server+Fits only). Regression pinned from #1035's review.
+        self.assertTrue(self.c(".editorconfig")["dotnet"])
+        self.assertIn(".editorconfig", self.m.DOTNET_ROOT_FILES)
+        self.assertNotIn(".editorconfig", self.m.INERT_ROOT_FILES)
+
+    def test_uncheckable_root_files_are_not_asserted_inert(self):
+        # No test can show these cannot affect a build, so they are not
+        # claimed to. .gitattributes at least changes checkout bytes.
+        for f in (".gitattributes", ".gitignore", "CodeMaid.config", "md-template.html"):
+            with self.subTest(f=f):
+                self.assertTrue(self.c(f)["dotnet"], f)
+                self.assertNotIn(f, self.m.INERT_ROOT_FILES)
+
+    def test_a_composite_action_under_github_runs_the_dotnet_jobs(self):
+        # No suffix catch-all under .github/: a .yml there is not inert by
+        # virtue of being YAML.
+        self.assertTrue(self.c(".github/actions/setup/action.yml")["dotnet"])
+        self.assertTrue(self.c(".github/some-new-thing.yml")["dotnet"])
+
+    def test_every_sibling_workflow_on_disk_is_classified_explicitly(self):
+        # The allowlist must track the directory: a new workflow file is
+        # either added to GITHUB_RULES on purpose or runs the full dotnet set.
+        on_disk = sorted(
+            f"{p.relative_to(REPO_ROOT)}"
+            for p in (REPO_ROOT / ".github" / "workflows").glob("*.yml")
+        )
+        for wf in on_disk:
+            with self.subTest(workflow=wf):
+                self.assertIn(wf, self.m.GITHUB_RULES, f"{wf} is not classified")
+
     def test_known_dotnet_root_files_run_the_dotnet_jobs(self):
         for f in sorted(self.m.DOTNET_ROOT_FILES):
             with self.subTest(f=f):
@@ -164,6 +199,55 @@ class ClassifyTest(unittest.TestCase):
                 self.assertTrue(r["client"])
                 self.assertFalse(r["docs_only"])
 
+    def test_only_these_paths_may_skip_the_non_required_jobs_alone(self):
+        """The state docs_only=false, dotnet=false, client=false is the one
+        this PR introduced: the required contexts run, the four non-required
+        ones skip. Every path that can produce it is enumerated here, so a
+        classifier edit that widens the set has to add to this list and say
+        why. #1035's .editorconfig defect was exactly this state, unlisted.
+        """
+        allowed = {
+            "AUTHORS",
+            ".github/workflows/check-flutter.yml",
+            ".github/workflows/claude-review.yml",
+            ".github/workflows/codeql.yml",
+            ".github/workflows/label-trusted-authors.yml",
+            ".github/dependabot.yml",
+            ".github/FUNDING.yml",
+            ".github/pull_request_template.md",
+            ".github/scripts/check-unicode.py",
+            "scripts/check-flutter-release.py",
+            "scripts/check-settings-registry.mjs",
+            "scripts/check-help-registry.mjs",
+            "scripts/fit-star-count-model.py",
+            "scripts/tests/<anything>",
+        }
+        probe = sorted(
+            set(self.m.GITHUB_RULES)
+            | set(self.m.SCRIPT_RULES)
+            | self.m.INERT_ROOT_FILES
+            | self.m.DOTNET_ROOT_FILES
+            | {
+                "scripts/tests/test_x.py",
+                ".editorconfig", ".gitattributes", ".gitignore",
+                "CodeMaid.config", "md-template.html", "NuGet.config",
+                ".github/CODEOWNERS", ".github/actions/x/action.yml",
+                "OpenAstroAra.Core/A.cs", "SOFA/x.c", "packaging/x",
+                "client/openastroara_client/a.dart",
+                "client/openastroara_client/pubspec.lock",
+                "design/a.md", "README.md", "scripts/new-tool.sh",
+            }
+        )
+        for path in probe:
+            r = self.c(path)
+            neither = not r["docs_only"] and not r["dotnet"] and not r["client"]
+            key = "scripts/tests/<anything>" if path.startswith("scripts/tests/") else path
+            with self.subTest(path=path):
+                if neither:
+                    self.assertIn(key, allowed, f"{path} skips every gated job but is not on the allowed list")
+                else:
+                    self.assertNotIn(key, allowed, f"{path} is listed as skip-all but no longer is")
+
     def test_this_prs_own_shape_skips_the_dotnet_jobs(self):
         # The change that motivated this script: workflow + tooling + docs.
         r = self.c(
@@ -213,29 +297,49 @@ class DocsOnlyParityTest(unittest.TestCase):
     # verbatim so the port can be proven rather than eyeballed. If ci.yml's
     # classifier ever changes meaning again, this is the thing to update and
     # re-run, not delete.
+    # The shell `case` that lived inline in ci.yml before this script, kept
+    # verbatim so the port can be proven rather than eyeballed. If ci.yml's
+    # classifier ever changes meaning again, this is the thing to update and
+    # re-run, not delete. Wrapped as a function so ONE bash process can
+    # evaluate every case: the corpus is O(n^2) in pairs, and one subprocess
+    # per case turned 300 cases into 300 forks.
     LEGACY_SHELL = r"""
-      docs_only=true
-      while IFS= read -r f; do
-        [ -z "$f" ] && continue
-        case "$f" in
-          design/*|docs/*|.claude/*|.github/ISSUE_TEMPLATE/*) ;;
-          */*) docs_only=false; break ;;
-          *.md|LICENSE.txt|COPYING) ;;
-          *) docs_only=false; break ;;
-        esac
-      done <<EOF
+      legacy() {
+        docs_only=true
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          case "$f" in
+            design/*|docs/*|.claude/*|.github/ISSUE_TEMPLATE/*) ;;
+            */*) docs_only=false; break ;;
+            *.md|LICENSE.txt|COPYING) ;;
+            *) docs_only=false; break ;;
+          esac
+        done <<EOF
 $1
 EOF
-      printf %s "$docs_only"
+        printf '%s\n' "$docs_only"
+      }
+      # One case per line on stdin, paths within a case separated by '|'.
+      while IFS= read -r line; do
+        legacy "$(printf '%s' "$line" | tr '|' '\n')"
+      done
     """
 
-    def legacy_docs_only(self, paths) -> bool:
+    def legacy_docs_only(self, cases):
+        """Evaluate many cases in one bash process; returns a list of bools."""
+        for case in cases:
+            for path in case:
+                self.assertNotIn("|", path, "corpus paths must not contain the separator")
+        stdin = "\n".join("|".join(case) for case in cases) + "\n"
         out = subprocess.run(
-            ["bash", "-c", self.LEGACY_SHELL, "bash", "\n".join(paths)],
-            capture_output=True, text=True, check=True,
-        ).stdout
-        self.assertIn(out, ("true", "false"), f"legacy shell emitted {out!r}")
-        return out == "true"
+            ["bash", "-c", self.LEGACY_SHELL],
+            input=stdin, capture_output=True, text=True, check=True,
+        ).stdout.split("\n")
+        out = [o for o in out if o]
+        self.assertEqual(len(out), len(cases), "legacy shell emitted the wrong number of results")
+        for o in out:
+            self.assertIn(o, ("true", "false"), f"legacy shell emitted {o!r}")
+        return [o == "true" for o in out]
 
     def test_docs_only_matches_the_shell_it_replaced(self):
         """Differential: the port must not have moved a required-context gate.
@@ -246,6 +350,8 @@ EOF
         against intent -- because for docs_only, the previous behaviour IS
         the intent.
         """
+        import itertools
+
         corpus = [
             "design/PORT_TODO.md",
             "design/nested/deep/file.md",
@@ -259,6 +365,7 @@ EOF
             "LICENSE.txt",
             "COPYING",
             "AUTHORS",
+            ".editorconfig",
             "Directory.Build.props",
             "global.json",
             "OpenAstroAra.Core/A.cs",
@@ -272,25 +379,13 @@ EOF
             "some-new-dir/whatever.txt",
             "NuGet.config",
         ]
-        # Each path alone.
-        for path in corpus:
-            with self.subTest(path=path):
-                self.assertEqual(
-                    self.m.classify([path])["docs_only"],
-                    self.legacy_docs_only([path]),
-                    path,
-                )
-        # And every pair, since docs_only is an AND across the diff and the
-        # legacy loop short-circuits on its first non-docs hit.
-        import itertools
-
-        for a, b in itertools.combinations(corpus, 2):
-            with self.subTest(pair=(a, b)):
-                self.assertEqual(
-                    self.m.classify([a, b])["docs_only"],
-                    self.legacy_docs_only([a, b]),
-                    f"{a} + {b}",
-                )
+        # Each path alone, then every pair: docs_only is an AND across the
+        # diff and the legacy loop short-circuits on its first non-docs hit.
+        cases = [[p] for p in corpus] + [list(pr) for pr in itertools.combinations(corpus, 2)]
+        legacy = self.legacy_docs_only(cases)
+        for case, expected in zip(cases, legacy):
+            with self.subTest(case=case):
+                self.assertEqual(self.m.classify(case)["docs_only"], expected, " + ".join(case))
 
     def test_docs_only_needs_every_path_to_be_docs(self):
         self.assertTrue(self.m.classify(["design/a.md", "README.md"])["docs_only"])
