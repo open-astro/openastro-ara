@@ -320,10 +320,32 @@ these. Waiting on a review that can never arrive would spin forever — see step
      job level never expands, so its required contexts are never reported and
      the PR blocks forever). Expect `pass` there, not `skipping`. Confirm that is why, don't assume it: `gh pr checks`
      shows the skip but not its cause, and GitHub counts *any* skipped required
-     context as satisfied. Check the `changes` job's `docs_only` output. A skip
-     outside that list, or one you cannot account for — a `needs:` failure, an
+     context as satisfied.
+
+     **`docs_only=true` is no longer the only attributable cause.** The
+     `changes` job also emits `dotnet` and `client`, which gate the four
+     NON-required contexts in that list: the two Alpaca jobs and
+     `analyzer-gate` on `dotnet`, `client-build` on `client`. So a
+     client-only PR legitimately shows the three `dotnet` jobs as `skipping`
+     while nothing is docs-only, and a PR touching neither graph skips all
+     four. The two **required** contexts above stay on `docs_only` alone, on
+     purpose — a skipped required context counts as satisfied, so the finer
+     buckets are kept out of that blast radius.
+
+     Attribute a skip by running the classifier on the PR's own diff instead
+     of guessing at it:
+
+     ```bash
+     git diff --no-renames --name-only "$(git merge-base origin/master HEAD)" HEAD \
+       | python3 scripts/classify-changed-paths.py
+     ```
+
+     `dotnet=false` explains the three dotnet skips, `client=false` explains
+     `client-build`, `docs_only=true` explains all six. A skip outside that
+     list, or one the classifier does not account for — a `needs:` failure, an
      `if:` you don't recognise — is **ambiguous, not clearance**. `pending` or
-     `fail` is never clearance. (Playbook §19.1, amended for this in #1021.)
+     `fail` is never clearance. (Playbook §19.1, amended in #1021 and again
+     for the finer buckets.)
    - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push) **carrying a sign-off marker**, with **no unaddressed Defects**
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope

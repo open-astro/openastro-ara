@@ -112,6 +112,13 @@ jobs:
     # is why `client-test` is gated at step level instead (#1025).
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
+      # Finer-grained than docs_only, and consumed ONLY by jobs that are not
+      # required contexts (analyzer-gate, the two Alpaca jobs, client-build).
+      # A skipped required context is reported to GitHub as satisfied, so a
+      # classifier bug there would merge a broken PR with nothing red; these
+      # buckets are deliberately kept away from that blast radius.
+      dotnet: ${{ steps.classify.outputs.dotnet }}
+      client: ${{ steps.classify.outputs.client }}
     steps:
       - name: Checkout (no LFS, full history for the merge-base diff)
         # Only a pull_request needs the diff at all; every other event short
@@ -167,32 +174,15 @@ jobs:
             exit 0
           fi
 
-          # Allowlist, not a denylist: a path is only "docs" if it matches
-          # something here. A new top-level source directory therefore runs the
-          # full matrix by default instead of silently skipping it.
-          docs_only=true
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              # Whole directories that contain no build inputs.
-              design/*|docs/*|.claude/*|.github/ISSUE_TEMPLATE/*) ;;
-              # Root-level prose only. NOT a bare `*.md`: that would also match
-              # OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md, whose entire
-              # point is to be verified by `analyzer-gate`
-              # (SimulatorVersionPinTest) and re-downloaded + checksummed by the
-              # two Alpaca simulator jobs. The §14.5.1 auto-bump PR touches that
-              # file *and nothing else*, so a bare `*.md` would skip exactly the
-              # gates that PR exists to pass.
-              */*) echo "non-docs path: $f"; docs_only=false; break ;;
-              *.md|LICENSE.txt|COPYING) ;;
-              *) echo "non-docs path: $f"; docs_only=false; break ;;
-            esac
-          done <<EOF
-          $files
-          EOF
-
-          echo "docs_only=$docs_only"
-          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          # Classification lives in scripts/classify-changed-paths.py, not in
+          # this block. It decides which jobs a PR may skip, an allowlist with
+          # a dozen carve-outs (the SIMULATORS_VERSION.md fixture, the client
+          # lockfile feeding the licence gate, ci.yml forcing the full
+          # matrix), and inline shell in a workflow is the one place in this
+          # repo nothing can unit-test. scripts/tests/ runs in the Sanity job.
+          classification="$(printf '%s\n' "$files" | python3 scripts/classify-changed-paths.py)"
+          echo "$classification"
+          echo "$classification" >> "$GITHUB_OUTPUT"
 
   # §14e — Alpaca simulator harness smoke test. Downloads the pinned ASCOM OmniSim
   # release (SHA-256 verified, not committed), runs it headless on the runner, and
@@ -206,7 +196,7 @@ jobs:
     # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
     # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
     # need failed; the explicit sanity check keeps the original gating.
-    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
     timeout-minutes: 10  # backstop if a runner/OmniSim hang outlives the ~270s poll window
     permissions:
       contents: read  # only needs to check out + download a public release artifact
@@ -294,7 +284,7 @@ jobs:
     # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
     # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
     # need failed; the explicit sanity check keeps the original gating.
-    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
     timeout-minutes: 15
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
@@ -368,7 +358,7 @@ jobs:
     name: Analyzer gate (full solution, warnings = errors)
     runs-on: ubuntu-latest
     needs: [sanity, changes]
-    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -903,7 +893,7 @@ jobs:
     # #1025 deadlock verbatim — gate it at step level like client-test instead.
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
     # Native desktop compile gate. `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO
