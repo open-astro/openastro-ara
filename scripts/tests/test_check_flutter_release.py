@@ -483,5 +483,74 @@ class FeedParsingTest(unittest.TestCase):
             self.m.fetch_current_stable()
 
 
+class SupersedeSelectorTest(unittest.TestCase):
+    """The supersede step's jq selectors, read out of the real workflow.
+
+    The selectors live in a `run:` block, so nothing else executes them until
+    a stable actually ships. These cases pull them straight out of
+    check-flutter.yml and run them through jq, so an edit that widens the
+    branch filter or reintroduces the `null` new_pr fails here instead of on
+    the next live bump.
+    """
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "check-flutter.yml"
+
+    @classmethod
+    def setUpClass(cls):
+        if shutil.which("jq") is None:
+            raise unittest.SkipTest("jq is not installed")
+        cls.text = cls.WORKFLOW.read_text()
+
+    def _selector(self, marker: str) -> str:
+        import re
+
+        m = re.search(r"--jq '(" + marker + r"[^']*)'", self.text)
+        self.assertIsNotNone(m, f"no --jq selector matching {marker!r} in {self.WORKFLOW}")
+        # `run: |` is a literal block scalar and the argument is single-quoted,
+        # so what the file holds is byte-for-byte what jq is handed: the
+        # workflow's `\\.` stays `\\.`, which is how a jq *string* spells the
+        # regex `\.`. Unescaping it here would hand jq an invalid escape.
+        return m.group(1)
+
+    def _jq(self, selector: str, payload: str) -> str:
+        import json
+        import subprocess
+
+        out = subprocess.run(
+            ["jq", "-r", selector],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        del json
+        return out.stdout.strip()
+
+    def test_only_versioned_bump_branches_are_superseded(self):
+        selector = self._selector(r"\.\[\] \| select")
+        payload = """[
+          {"number": 1, "headRefName": "ci/flutter-3.48.0"},
+          {"number": 2, "headRefName": "ci/flutter-pin-fixup"},
+          {"number": 3, "headRefName": "ci/flutter-3.48.1"},
+          {"number": 4, "headRefName": "fix/unrelated"}
+        ]"""
+        self.assertEqual(self._jq(selector, payload).split(), ["1", "3"])
+
+    def test_new_pr_selector_is_empty_when_nothing_matches(self):
+        # `.[0].number` would print a literal "null" here, `[ -n ]` would pass,
+        # and the loop would then close the PR the run had just opened.
+        selector = self._selector(r"first")
+        self.assertEqual(self._jq(selector, "[]"), "")
+
+    def test_new_pr_selector_yields_the_number_when_one_matches(self):
+        selector = self._selector(r"first")
+        self.assertEqual(self._jq(selector, '[{"number": 42}]'), "42")
+
+    def test_the_supersede_list_call_is_not_capped_at_the_gh_default(self):
+        # gh defaults to 30, newest-first; the supersede targets are the oldest
+        # open PRs, so the default would silently supersede nothing.
+        self.assertIn("gh pr list --state open --limit 100", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()

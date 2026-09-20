@@ -297,11 +297,28 @@ jobs:
           # configured, which is exactly when the workflow is working best.
           #
           # Non-fatal throughout: the new PR is the point of the run, and
-          # failing to tidy an old one must not fail it.
-          new_pr="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')"
+          # failing to tidy an old one must not fail it. That includes the two
+          # `gh pr list` calls — the step runs under `set -euo pipefail`, so
+          # without the guards a rate-limited list would turn a run that has
+          # already pushed the branch and opened the PR red.
+          #
+          # `first(.[].number)` rather than `.[0].number`: on an empty result
+          # the latter yields a literal `null`, and a `new_pr` of "null" would
+          # match no PR number and let the loop close the PR this run just
+          # opened. `first` emits nothing instead.
+          #
+          # `--limit 100`: gh defaults to 30, newest-first, and the PRs this
+          # loop exists to close are by construction the oldest — the default
+          # would silently supersede nothing once the repo carries 30+ open
+          # PRs, which is exactly the accumulation this is here to prevent.
+          #
+          # The selector matches `ci/flutter-<version>` and not the bare
+          # prefix, so a hand-made branch like `ci/flutter-pin-fixup` is never
+          # commented on, closed and deleted.
+          new_pr="$(gh pr list --head "$BRANCH" --state open --json number --jq 'first(.[].number)' || true)"
           if [ -n "$new_pr" ]; then
-            gh pr list --state open --json number,headRefName \
-              --jq '.[] | select(.headRefName | startswith("ci/flutter-")) | .number' \
+            { gh pr list --state open --limit 100 --json number,headRefName \
+                --jq '.[] | select(.headRefName | test("^ci/flutter-[0-9]+\\.")) | .number' || true; } \
               | while read -r old_pr; do
                   [ "$old_pr" = "$new_pr" ] && continue
                   echo "Superseding #$old_pr with #$new_pr"

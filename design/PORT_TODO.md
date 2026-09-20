@@ -1746,3 +1746,13 @@ Two out-of-scope notes from #1015's approval, neither widened into that PR:
   both the default unit job and the arm64 bench lane. A `Poll`-based "still N
   after K ticks" shape with an early bail gets the same guarantee without the
   floor; worth doing if lane wall-clock becomes a problem.
+
+## Flutter bump supersede (2026-09-19, from the #1017 review notes)
+
+One out-of-scope note from #1017's approval, not widened into that PR:
+
+- `design/PORT_PLAYBOOK.md` §12.1 (lines 1024-1030) enumerates what
+  `check-flutter.yml` does and stops at "Skips if a PR for that version is
+  already open". Still accurate, but a run now also comments on, closes and
+  deletes the branch of every other open `ci/flutter-<version>` PR. One bullet
+  keeps §12.1 the source of truth; fold it in when §12.1 is next touched.
