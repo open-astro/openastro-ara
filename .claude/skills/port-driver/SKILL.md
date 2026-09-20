@@ -33,6 +33,9 @@ Each loop iteration is **one focused unit of work** + a self-paced wake-up. Do n
 
 Run in parallel:
 
+- `git fetch origin` — every scenario-B check below compares against
+  `origin/master`, and after a fresh clone or an interrupted iteration the
+  remote ref is stale
 - `git status --short && git branch --show-current`
 - `git log -1 --oneline`
 - `gh pr list --state open --json number,title,headRefName,baseRefName,author,updatedAt`
@@ -42,21 +45,182 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 
 ### Step 2 — Decide the branch state
 
-Pick exactly one of these scenarios, checking in the order **D → A → B → C → E** (highest priority first). Don't multi-task. Precedence matters because (C) and (D) can both be true when the last merge was the final sub-PR of a phase — (D) wins so the promotion tag + `port/ara → master` PR happen before scenario-C picks up the next phase's sub-PR.
+Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
-**(A) Open PR exists and you authored it (or it's the active sub-PR on `phase-N…`).**
+**Allowlisted branch** means `phase/<N>[-<letter>]-<short-name>` and the named
+prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
+`rules-*` (§22.2 lists both as branches the driver created and may delete) and
+`chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
+in scenario D.
+
+**Deliberate deviation (1 of 2) — `chore/<short-name>`.** §19.1 does not name it; it
+closes with "All other branches are off-limits without explicit user
+instruction", and `COMMIT-PR-RULES.md` records `chore/*` only in its open-items checklist
+("Branch naming convention for community PRs"), not under the "Branch naming"
+heading -- i.e. as a *proposed* community convention, "Distinct from the
+port's" pattern. (`PORT_PLAYBOOK.md:1418` does prescribe a
+`chore/bump-alpaca-simulators-<tag>` branch for a future automated PR, but
+§19.1's allowlist is the authority for what the driver may touch and it is
+silent -- #1013 should cover both sites.) It is here because the driver's
+own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
+own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
+treat this as a deviation, not as something §19.1 says.
+
+Because `chore/*` is also what outside contributors use, scenario A's
+"not authored by you" clause deliberately excludes it: the driver never adopts a
+`chore/*` PR it did not open. Recognising a branch, adopting someone's PR on it,
+and creating one are three different permissions. §5 still only ever *creates*
+`phase/…` — the phase naming is what `PORT_PROGRESS.md` and the
+`COMMIT-PR-RULES.md` sub-split tables are keyed on.
+
+There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
+
+**(A) Open PR exists and you authored it — or it is the active sub-PR on a `phase/*`, `prep-*` or `rules-*` branch.**
+(Not `chore/*`: see the deviation note above. A `chore/*` PR you did not author is scenario D.)
 → Go to §3 (review poll/fix loop).
 
-**(B) On a `phase-N…` sub-branch with unpushed commits and no open PR.**
-→ Run pre-PR gate, push, open the PR (§4), then schedule a wake-up to start polling.
+**(B) On an allowlisted sub-branch carrying unmerged work, with no open PR** — whether or not the commits are pushed.
+→ Run pre-PR gate, push if needed, open the PR (§4), then schedule a wake-up to start polling.
+A fully-pushed branch with no PR is this case, not an ambiguous one: it is what a
+successful `git push` followed by a failed `gh pr create` leaves behind, and
+`gh pr create` on an already-pushed branch is the correct recovery.
 
-**(C) On `port/ara` or `master` with no PR in flight, last merge advanced the phase.**
-→ Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch, do the work (§5).
+Two conditions before matching, and they are different questions:
 
-**(D) Phase boundary just crossed (last sub-PR of the phase merged).**
-→ Tag `phase-N-complete` on `port/ara`, open the `port/ara → master` promotion PR per playbook §22.0 (§6).
+```shell
+git fetch --prune origin
+git rev-list --count origin/master..HEAD   # (1) is there anything here?
+gh pr list --head "$(git branch --show-current)" --state merged \
+  --json number,headRefOid          # (2) where does HEAD stand vs. a merged head?
+```
 
-**(E) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
+0. **Not on a branch at all is not B.** On a detached HEAD (an interrupted
+   iteration, a CI-style checkout) `git branch --show-current` is empty,
+   `gh pr list --head ""` silently drops the filter, and the counts below
+   describe a state no branch owns → **D**, before either condition is
+   evaluated. This comes first because a detached HEAD sitting on `master`'s
+   head is zero commits ahead and would otherwise read as C.
+1. **Zero commits ahead is not B.** A branch created by §5 whose work was
+   interrupted before any commit would be pushed empty, and `gh pr create` then
+   fails with `No commits between master and <branch>` — the phase's actual work
+   is skipped and a stale branch is stranded on origin that §19.1 bars the driver
+   from deleting. Zero ahead → scenario C (continue the work) or D.
+2. **Already-merged work is not B either, and the commit count will not tell
+   you** (check this only when (1) found commits — at zero ahead, (1) has already
+   decided). §3b's default is `--squash`, which lands a *new* commit on `master`,
+   so the branch's own commits never become ancestors of `origin/master` and the
+   count stays > 0 forever after the merge. Ask instead where **this commit**
+   stands relative to the head of any merged PR for this branch — getting that
+   wrong means pushing would **re-create the branch `--delete-branch` just
+   removed** and open a duplicate PR.
+
+   Both halves of that test are load-bearing, and each was wrong on its own in
+   an earlier draft:
+
+   - **Name alone is wrong.** `gh pr list --head <branch> --state merged` matches
+     the ref *name*, and names are reused — `prep-ci` carries a merged PR from
+     its first use, and §19.1/§19.5 have the driver grow that placeholder at
+     later phase boundaries. Matching on name alone fires on live work and stops
+     the loop on the driver's own commits.
+   - **Comparing trees is wrong too.** `git diff --quiet origin/master HEAD` only
+     answers "is master identical to this branch", which stops being true the
+     moment anything else lands on `master` — another merge, or a maintainer
+     hotfix through the admin bypass. Then the trees differ, the guard passes,
+     and B re-creates the deleted branch anyway.
+
+   `headRefOid` is immune to both: it names a specific commit, and it stays
+   meaningful however far `master` advances afterwards. But **`headRefOid`
+   alone is not enough either**, and the two ways it goes wrong pull in
+   opposite directions:
+
+   - **Exact equality alone is too narrow.** An interruption can leave a commit
+     *on top of* the merged head (an iteration that committed before the merge
+     finished, a hook that amended). Equality fails, B matches, and the branch
+     `--delete-branch` removed is re-created: the exact failure this guard
+     exists to prevent.
+   - **A bare `--is-ancestor` is too broad.** Once a reused name's first PR
+     merged with a **merge commit** — which §19.1 allows and §3b *mandates* for
+     a tagged PR, exactly what a `prep-ci` PR at a phase boundary is — that
+     PR's `headRefOid` is an ancestor of `master` forever, hence of any fresh
+     branch cut from `master`. `--is-ancestor` then succeeds on the driver's
+     own brand-new work and holds the loop: #1007 re-introduced through the
+     guard meant to close it. (Had the first PR been squashed instead, the OID
+     is neither an ancestor nor equal, and a two-way test returns no verdict
+     at all.)
+
+   What separates the hazard from ordinary reuse is not whether the merged head
+   is reachable, but whether this branch was cut from a `master` that already
+   contains it. So test `origin/master` first, and iterate every merged PR for
+   the name — `prep-ci` can carry several, and `head -1` picks one by an
+   ordering nothing guarantees.
+
+   ```shell
+   branch=$(git branch --show-current)          # empty on a detached HEAD
+   git fetch -q origin master
+   merged=$(gh pr list --head "$branch" --state merged \
+     --json headRefOid --jq '.[].headRefOid')
+   ```
+
+   Guards before the OIDs are read at all — condition (0) has already rejected
+   a detached HEAD and condition (1) a branch with no commits, so neither is
+   re-tested here:
+
+   - `$merged` empty → no PR ever merged under this name → **B**.
+
+   Then walk the OIDs **one at a time**, applying these tests in order to each
+   before moving to the next. Classify per OID, never in separate passes over
+   the whole list: a reused name can carry several merged PRs with *different*
+   merge methods, and a pass-per-test lets an older, harmless OID answer for a
+   newer, dangerous one.
+
+   - `git cat-file -e "$oid^{commit}"` fails → the driver was resumed from a
+     fresh clone and never fetched that head. An OID git does not have is not
+     reachable from anything: treat as **no match** and move on. Do not read the
+     `fatal:` from `--is-ancestor` as ambiguity — it is not an error, it is a
+     miss.
+   - `$oid` == `git rev-parse HEAD` → this exact commit landed → **C** (check
+     out `master`, pull, continue). Recoverable, not ambiguous: it is what an
+     interruption between `gh pr merge` and §3b's `git checkout master` looks
+     like.
+   - `git merge-base --is-ancestor "$oid" origin/master` succeeds → that PR
+     merged with a **merge commit**, so its head is in `master`'s history for
+     good. Anything here that reaches *this* OID reaches it through `master` →
+     **no match**, move to the next OID. Re-pushing a branch over it re-creates
+     the ref but opens no duplicate: the merged head is already in `master`, so
+     the PR shows only the new commits.
+
+     This has to be tested per OID rather than as a blanket "some OID came
+     through `master`, so the branch is clean". Test it against the list and a
+     name carrying an older merge-committed PR *and* a newer squashed one lets
+     the old OID clear the branch while the squashed head — the one that
+     actually got left behind — is still sitting under `HEAD`.
+   - `git merge-base --is-ancestor "$oid" HEAD` succeeds → that PR was
+     **squashed**, so its head is nowhere in `master`, and this branch still
+     carries it *plus* something else → **D**. This is the case that genuinely
+     duplicates: pushing re-creates the deleted branch with the whole
+     already-merged diff on it. Do not guess. The extra commit is either stray
+     or real unpushed work, and the driver cannot tell which: pushing would
+     re-create a deleted branch, discarding it would lose work. Post
+     `Held for human review @joeytroy — <branch> carries N commits on top of
+     merged PR #<n>` and stop.
+
+   **If you change this decision list, change its mirror.**
+   `scripts/tests/test_port_driver_guards.py` encodes conditions (0), (1) and
+   (2) -- including their order -- as runnable cases, and it is the only thing
+   that checks these rules against a real repository. A skill edit without a
+   matching test edit leaves the suite green while it pins the *old* rules, so
+   the tests then argue against this file. Every revision of these rules so far
+   has been wrong in a way only the tests caught.
+
+   No OID matched → nothing merged is reachable from here → **B**. That covers
+   the ordinary reused-placeholder case, where the branch was cut fresh from
+   `master` and the old heads are either in `master` already or stranded off to
+   the side.
+
+**(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
+→ Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
+
+**(D) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
 → Stop. Post a status note to the user. Do not schedule another wake-up.
 
 ### Step 3 — Review poll/fix loop (scenario A)
@@ -75,7 +239,7 @@ exiting 0 with a warning and no comment. Since the safety net routes
 `.github/workflows/` changes into their own infra sub-PR, the driver authors
 these. Waiting on a review that can never arrive would spin forever — see step 6.
 
-1. `gh pr checks <N>` — if any check is `fail`, treat findings as a fix opportunity:
+1. `gh pr checks <PR>` — if any check is `fail`, treat findings as a fix opportunity:
    - Read the failing job's log via `gh run view <run-id> --log-failed`
    - Fix the underlying issue (do not skip hooks; do not retry blindly twice in a row)
    - Commit + push with a message like `fix(ci): <one-line>` and re-poll next iteration
@@ -137,10 +301,44 @@ these. Waiting on a review that can never arrive would spin forever — see step
    `updated_at` rather than waiting for a new comment id.
 
 5. **Quiescence check** (merge-gate clearance per §19.1):
-   - Green CI on `gh pr checks <N>` (all required checks `pass`)
+   - Green CI on `gh pr checks <PR>`: every required check is `pass`, **or
+     `skipping` and you can attribute the skip to CI's path gate** — `ci.yml`'s
+     `changes` job emitting `docs_only=true` (#1020).
+
+     That gate skips **six jobs**, which is **six** check contexts:
+
+     ```
+     Alpaca simulator harness (smoke)
+     Alpaca discovery integration test
+     Analyzer gate (full solution, warnings = errors)
+     Server (build + cross-publish + Docker)              <- required
+     Settings + Help registry gate                        <- required
+     Client (native build) — ${{ matrix.target }}         <- literally this
+     ```
+
+     The last one is not a typo. `client-build` is a matrix skipped at job
+     level, so it never expands: it reports **one** context under its raw,
+     uninterpolated name — not three per-target ones. Expect that exact string.
+
+     The three `Client (analyze + test) — *-latest` legs are **required and
+     matrix-expanded**, so they are gated at *step* level and report `pass`
+     with their steps skipped, never `skipping` (#1025: a matrix job skipped at
+     job level never expands, so its required contexts are never reported and
+     the PR blocks forever). Expect `pass` there, not `skipping`. Confirm that is why, don't assume it: `gh pr checks`
+     shows the skip but not its cause, and GitHub counts *any* skipped required
+     context as satisfied. Check the `changes` job's `docs_only` output. A skip
+     outside that list, or one you cannot account for — a `needs:` failure, an
+     `if:` you don't recognise — is **ambiguous, not clearance**. `pending` or
+     `fail` is never clearance. (Playbook §19.1, amended for this in #1021.)
    - A `claude[bot]` review comment **for the current head** (`updated_at` ≥ your last push) **carrying a sign-off marker**, with **no unaddressed Defects**
    - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `updated_at` from `gh api`, for the same sticky-comment reason
    - Clean self-review against scope
+   - **At a phase boundary:** the `phase-<N>-complete` tag (and any applicable
+     `phase-<N>-<letter>-complete`) will be pushed by §3b immediately before the
+     merge, after it has settled the merge method,
+     onto this PR's head, before the merge — that is §19.1's own gate item. It
+     is not yet true when you evaluate this checklist; what you are checking is
+     that you have identified this as a phase boundary at all.
 
    If all clear → **merge** (§3b).
    If any gate is ambiguous → post `Held for human review @joeytroy — <reason>` and stop the loop.
@@ -148,14 +346,14 @@ these. Waiting on a review that can never arrive would spin forever — see step
 6. **If no review comment has appeared yet**, branch on *why*:
 
    - **The PR changes `.github/workflows/claude-review.yml`** — check with
-     `gh pr diff <N> --name-only`. No review will ever be posted (see above).
+     `gh pr diff <PR> --name-only`. No review will ever be posted (see above).
      Post `Held for human review @joeytroy — PR edits claude-review.yml, the
      review action self-skips; needs eye review` and **stop the loop**. Do not
      merge on CI alone; do not keep re-polling.
    - **The PR head is a fork without the `safe-to-review` label** — same
      outcome: nothing will run until a maintainer applies the label. Post
      `Held for human review @joeytroy — fork PR awaiting safe-to-review` and stop.
-   - **`gh pr checks <N>` shows `review` itself failed** — that is a workflow
+   - **`gh pr checks <PR>` shows `review` itself failed** — that is a workflow
      error, not a missing review; handle it under step 1.
    - **Otherwise** the run is still in flight. Schedule the next wake-up and
      re-poll — do not substitute `/review` and do not merge on CI alone.
@@ -167,20 +365,137 @@ these. Waiting on a review that can never arrive would spin forever — see step
 
 ### Step 3b — Merge
 
-- **Sub-PR (base = `port/ara`):** `gh pr merge <N> --squash --delete-branch`
-- **Promotion PR (`port/ara → master`):** `gh pr merge <N> --merge` (preserves per-phase history)
+Every PR targets `master` (playbook §22.0). Pick the merge method by the PR's
+commit history — **except at a phase boundary, where the tag decides it**:
+
+- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash --delete-branch` — the default
+- **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge --delete-branch`
+- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge --delete-branch` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
+  ```shell
+  HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
+  [ -n "$HEAD_OID" ] || exit 1
+  git ls-remote --tags origin | grep -E "^$HEAD_OID[[:space:]]+refs/tags/phase-"
+  ```
+
+**Phase boundary — tag first, then merge with `--merge`.** If this is the last
+PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
+PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
+
+```shell
+# Name the ref. Do NOT assume what is checked out: §5 step 2 leaves the driver
+# on the feature branch, but an interrupted or resumed iteration can reach §3b
+# from `master`, and an unqualified `git tag` would then tag master's head --
+# the commit BEFORE this PR, which still satisfies §19.1's "tag has been
+# pushed" check while silently excluding the phase's final PR from the
+# milestone. Naming the ref costs nothing and is right either way.
+git fetch --prune origin
+# Tag the head OID the API reports, not `origin/<branch-name>`: a fork-head PR
+# has no such remote-tracking ref and `git tag` would fail to resolve it. The
+# verification below reads the same field, so this costs no extra call.
+# `fetch --prune origin` does not bring fork heads either, so fetch the PR ref
+# explicitly -- otherwise `git tag` cannot resolve the OID in exactly the fork
+# case this avoids. Harmless on a same-repo PR.
+git fetch origin "pull/<PR>/head"
+HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
+# Same bail as the two tag probes above: an empty OID from a rate limit or an
+# auth blip would make the verification below compare against "" and pass
+# vacuously. It still fails closed at the push, but bail uniformly.
+[ -n "$HEAD_OID" ] || exit 1
+git tag phase-<N>-complete "$HEAD_OID"
+```
+
+Confirm the tag points where you meant **before pushing it**, mechanically and
+not by eye: `git rev-parse phase-<N>-complete^{commit}` must equal `$HEAD_OID`.
+Verifying before the push is what makes the check load-bearing — a push first
+leaves a wrong tag on origin, which is the Held-with-the-damage-already-done
+state this section exists to avoid, and §19.1 bars deleting it. Re-reading
+`headRefOid` here would only compare the field against itself, so compare
+against the value the tag was built from and re-read the API only to confirm
+the head has not moved underneath you:
+
+```shell
+[ "$(git rev-parse phase-<N>-complete^{commit})" = "$HEAD_OID" ] || exit 1
+[ "$(gh pr view <PR> --json headRefOid --jq .headRefOid)" = "$HEAD_OID" ] || exit 1
+git push origin phase-<N>-complete    # named ref, deliberate: see the note below
+```
+
+The merge is deliberately in a block of its own, so that a driver running any
+block verbatim cannot merge ahead of the check:
+
+```shell
+gh pr merge <PR> --merge --delete-branch
+```
+
+If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a
+previous §3b attempt got as far as tagging before being held — do **not** force
+it. Check where the existing tag points: if it is already the PR head, skip the
+`git tag` but **still run the push** (`git push origin <tag>` is idempotent, and
+one of those causes leaves the tag local-only, which would merge the boundary
+with no tag on origin and violate the §19.1 gate item this section exists to
+satisfy); if it points anywhere else, post `Held for human review @joeytroy —
+phase-<N>-complete already exists on a different commit` and stop.
+
+A plain `git fetch` will not pull a tag pointing at a commit unreachable from
+the fetched refs, so the tag can exist **on origin only**, at a different
+commit, while `git tag` succeeds locally and the check above passes. The push is
+then rejected as a non-fast-forward tag update. Do not force it — that is the
+same situation, so take the same Held stop.
+
+**Deliberate deviation (2 of 2):** §22.1 step 4 and §19.1 both say `git push --tags`.
+This pushes the named ref instead, because `--tags` pushes *every* stray local
+tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
+`reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
+the playbook lines are user-authoritative and reconciling them needs the
+maintainer.
+
+Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
+coherent milestone — judgment call.
+
+**If the merge fails after the tag is pushed** — a check flips red, a conflict
+appears, or branch protection rejects the merge commit itself (which is what
+would happen if `required_linear_history` were ever turned on; it is off today,
+and there is deliberately no automatic fallback to `--squash`, because that
+would orphan the tag just pushed) — the tag is already on origin pointing
+at an unmerged commit, and §19.1 bars deleting remote refs without explicit
+instruction. Do not retry blindly and do not delete it: post
+`Held for human review @joeytroy — phase-<N>-complete pushed but the merge
+failed` and stop the loop.
+
+**Why `--merge` and not `--squash` here.** A squash merge replaces the branch
+head with a new commit and `--delete-branch` removes the branch, so a tag on
+that head ends up unreachable from `master` — invisible to `git describe master`
+and `git log master`. A merge commit keeps the tagged commit as an ancestor, so
+the milestone survives. This is not a special case invented here: §22.1 step 5
+already picks merge-commit "where per-commit granularity matters", and §22.3
+prescribes merge-commit for the phase-15 release PR for the same reason.
+(Checked on the repo: `allow_merge_commit: true`, and `master`'s protection
+allows merge commits. Note the control is a repository **ruleset** — see
+`design/PORT_DECISIONS.md` "master protection" — so re-verify there rather than
+in the classic branch-protection object.)
+
+Tagging before the merge also satisfies the §19.1 gate condition the driver is
+required to check — *"at a phase boundary: verify the expected
+`phase-N-complete` tag has been pushed **for the work being merged**"* (search
+`PORT_PLAYBOOK.md` §19.1 for that sentence; don't cite it by line number, the
+file moves). Deferring the tag until after the merge would fail that check and
+stall the loop at every phase boundary.
 
 After merge:
-- `git checkout port/ara && git pull --ff-only`
-- If the merged sub-PR was the last in a phase (consult COMMIT-PR-RULES.md sub-split tables and PORT_PROGRESS.md), go to scenario D next iteration.
-- Otherwise go to scenario C next iteration.
 
-Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use. Timing rule:
+```shell
+git checkout master && git pull --ff-only
+```
 
-- **Standalone direct commit to `port/ara`**: use this *only* when you're on `port/ara` immediately after a merge and PORT_PROGRESS.md is the single file changing (pure tracking-metadata update, no code).
-- **Folded into the next sub-PR**: use this when you've already moved onto a `phase-N` branch and have other changes queued — include the PORT_PROGRESS.md edit in the sub-PR's commits so it reviews alongside the code work.
+Then go to scenario C next iteration.
 
-When in doubt, prefer folding into the sub-PR — direct pushes bypass review, so keep that path narrow.
+Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use.
+
+**Always fold it into a PR.** There is no direct-commit path for the driver —
+not because the server would refuse it (it would not; see the safety net on
+admin bypass) but because it would bypass the §19.1 gate. Include the
+PORT_PROGRESS.md edit in the next sub-PR's commits so it reviews alongside the
+code work. If the tracking update is the only thing outstanding, it rides along
+with the next sub-PR rather than getting a PR of its own.
 
 ### Step 4 — Open the PR (scenario B)
 
@@ -203,7 +518,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes bypass review, s
 
 4. Open the PR:
    ```shell
-   gh pr create --base port/ara --head <branch-name> --title "<conventional-prefix>: <one-line>" --body "$(cat <<'EOF'
+   gh pr create --base master --head <branch-name> --title "<conventional-prefix>: <one-line>" --body "$(cat <<'EOF'
    ## Summary
    <1-3 bullets — what + why>
 
@@ -225,14 +540,43 @@ When in doubt, prefer folding into the sub-PR — direct pushes bypass review, s
 
 1. Re-read PORT_PROGRESS.md "Next" section + the COMMIT-PR-RULES.md table to identify which sub-PR comes next.
 
-2. From `port/ara`:
+2. Get onto the branch (playbook §22.1 step 1). The branch may already exist —
+   the zero-commits-ahead hand-off from scenario B leaves you standing on it,
+   and a reused placeholder name can exist locally without that — so switch
+   first and create only as the fallback, or `git checkout -b` dies with
+   `a branch named '…' already exists`:
    ```shell
-   git checkout port/ara && git pull --ff-only
-   git checkout -b <branch-name>     # flat name, e.g. phase-10, phase-12a
-   # NEVER use hierarchical names like port/ara/phase-10 — Git refs are tree-structured,
-   # so `port/ara/anything` is invalid while `port/ara` itself exists as a branch
-   # (per COMMIT-PR-RULES.md "Git ref naming constraint").
+   git checkout master && git pull --ff-only
+   B=phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
+
+   # Reuse the branch if it is already there. B routes to C without deleting the
+   # stale local ref (§19.1 forbids `branch -D`, and `fetch --prune` only drops
+   # tracking refs), so a reused name -- `prep-ci` at 0.5p/4/11 -- still exists
+   # locally even when you are not standing on it.
+   if git rev-parse --verify -q "refs/heads/$B" >/dev/null; then
+     # Scenario B's guard, from the other side: B only runs it when the driver
+     # is already standing on the branch, so C has to re-ask here. Ask about
+     # the ref's OWN commits, not how far it trails `master` -- a ref that is
+     # merely behind an advanced `master` is fine to reuse and gets caught by
+     # a plain ancestor test.
+     if [ -n "$(git rev-list "origin/master..$B")" ]; then
+       # Commits here that master does not have: either a squash-merged
+       # leftover (building on it puts the next PR on top of an already-merged
+       # diff) or real unpushed work. Same fork as scenario B's D bullet, and
+       # the driver cannot clear the ref itself -- §19.1 bars `branch -D`.
+       echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
+       exit 1
+     fi
+     git switch "$B"          # let a real failure (dirty tree) print its reason
+     git merge --ff-only origin/master
+   else
+     git checkout -b "$B"
+   fi
    ```
+   The slash namespace is the convention (COMMIT-PR-RULES.md "Branch naming").
+   It is valid because no branch is literally named `phase` — the old flat-name
+   workaround (`phase-10`) was forced only while `port/ara` existed as a branch,
+   and was retired with it on 2026-06-02.
 
 3. Do the actual work for the sub-PR's scope. Keep commits small + focused. Push after every commit (per the 2026-05-23 cadence decision).
 
@@ -241,19 +585,22 @@ When in doubt, prefer folding into the sub-PR — direct pushes bypass review, s
 **Important guardrails while doing sub-PR work:**
 - Never skip hooks (`--no-verify` is forbidden by §19.1).
 - Never amend a pushed commit (create new commits; the reviewer sees each push).
-- Never force-push to a sub-branch with an open PR unless rebasing on updated `port/ara` and announcing it in a PR comment.
+- Never force-push to a sub-branch with an open PR unless rebasing on updated `master` and announcing it in a PR comment.
 - Don't refactor adjacent code outside the sub-PR's scope (track in `design/PORT_TODO.md` instead).
 - Don't add comments that just describe what the code does (per CLAUDE.md guidance).
 
-### Step 6 — Phase boundary promotion (scenario D)
+### Step 6 — Phase boundary (reference only)
 
-1. From `port/ara`: `git tag phase-<N>-complete && git push origin phase-<N>-complete`
-2. Open the promotion PR:
-   ```shell
-   gh pr create --base master --head port/ara --title "Merge port/ara: Phase <N> (<short-description>)" --body "<summary of what landed>"
-   ```
-3. This PR also goes through the review loop (§3) — same gate, but use `--merge` not `--squash` when merging it (per COMMIT-PR-RULES.md).
-4. Update `design/PORT_PROGRESS.md` to move the phase from "In flight" → "Completed", reflect the new "Currently working on" / "Next" pointer.
+No scenario routes here; it is kept as a single place to look up what a phase
+boundary involves, all of which happens inside §3b:
+
+- There is no promotion PR (playbook §22.0) — the merge to `master` *is* the
+  integration.
+- The `phase-<N>-complete` tag is pushed onto the PR's head **before** the
+  merge, and that PR merges with `--merge` so the tagged commit stays reachable.
+- `design/PORT_PROGRESS.md` moves the phase "In flight" → "Completed" and the
+  "Currently working on" / "Next" pointers are reset, folded into the next
+  sub-PR's commits.
 
 ## Pacing (ScheduleWakeup)
 
@@ -280,16 +627,16 @@ One short paragraph for the user / log:
 
 Example:
 ```text
-[port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase-10 pr=#43 | did: pushed fix for a review Defect on the Dockerfile USER directive | next: poll for the round-2 review | sleep 270s
+[port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase/10-docker pr=#43 | did: pushed fix for a review Defect on the Dockerfile USER directive | next: poll for the round-2 review | sleep 270s
 ```
 
 That single line is enough — don't write multi-paragraph summaries each iteration, they pile up.
 
 ## Safety net — what you do NOT do
 
-- Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`/`port/ara`) without an explicit user instruction.
+- Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction.
 - Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
-- Do NOT touch `master` directly — only via promotion PRs.
+- Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** `master` is governed by a repository **ruleset** (`PORT_DECISIONS.md` "master protection") that requires a PR for everyone *except* its bypass actors — repository admins, retained for hotfixes — and the driver runs under the maintainer's admin credentials. (Don't go looking for `enforce_admins`: that is classic branch protection, which this repo does not use.) A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
 - Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.
 - Do NOT update `design/PORT_PLAYBOOK.md` rules autonomously — that's user-authoritative.
 - Do NOT spawn cloud agents (no `/ultrareview`, no `/schedule`) from within the loop — they cost extra and the user runs them manually.
