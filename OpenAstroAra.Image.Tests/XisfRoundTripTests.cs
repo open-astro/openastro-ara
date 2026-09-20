@@ -283,6 +283,17 @@ public sealed class XisfRoundTripTests : IDisposable {
     }
 
     [Fact]
+    public async Task ImageTypeFallsBackToTheImagetypKeywordWhenTheAttributeIsAbsent() {
+        // PixInsight-written files carry IMAGETYP as a FITSKeyword and may omit the attribute.
+        var raw = new byte[] { 0x01, 0x00 };
+        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\"",
+            "<FITSKeyword name=\"IMAGETYP\" value=\"'DARK'\" comment=\"\"/>" + Convert.ToBase64String(raw));
+        var img = await Read(file);
+        Assert.Equal("DARK", img.MetaData.Image.ImageType);
+        Assert.Equal(new ushort[] { 1 }, img.Data.FlatArray);
+    }
+
+    [Fact]
     public async Task InlineHexBlockIsAccepted() {
         var file = Monolithic("geometry=\"2:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:hex\"", "3412 ffff");
         var img = await Read(file);

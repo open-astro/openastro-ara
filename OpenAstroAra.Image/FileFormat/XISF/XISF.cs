@@ -285,7 +285,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported block location '{0}'", location));
             }
 
-            payload = string.Concat(payload.Where(c => !char.IsWhiteSpace(c)));
+            // Strip whitespace without a per-char LINQ pipeline: inline blocks can be multi-MB.
+            var compact = new StringBuilder(payload.Length);
+            foreach (char c in payload) {
+                if (!char.IsWhiteSpace(c)) { compact.Append(c); }
+            }
+            payload = compact.ToString();
             try {
                 return encoding switch {
                     "base64" => Convert.FromBase64String(payload),
