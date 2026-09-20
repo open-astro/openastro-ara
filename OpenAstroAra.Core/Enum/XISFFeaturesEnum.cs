@@ -30,7 +30,10 @@ namespace OpenAstroAra.Core.Enums {
         LZ4HC,
 
         [Description("LblCompressionZLib")]
-        ZLIB
+        ZLIB,
+
+        [Description("LblCompressionZstd")]
+        ZSTD
     }
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]

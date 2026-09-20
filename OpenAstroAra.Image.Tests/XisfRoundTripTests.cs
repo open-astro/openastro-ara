@@ -78,7 +78,7 @@ public sealed class XisfRoundTripTests : IDisposable {
 
     /// <summary>Every writer option combination. The reader must return the identical pixels.</summary>
     public static IEnumerable<object[]> WriterOptions() {
-        foreach (var c in new[] { XISFCompressionType.NONE, XISFCompressionType.LZ4, XISFCompressionType.LZ4HC, XISFCompressionType.ZLIB }) {
+        foreach (var c in new[] { XISFCompressionType.NONE, XISFCompressionType.LZ4, XISFCompressionType.LZ4HC, XISFCompressionType.ZLIB, XISFCompressionType.ZSTD }) {
             foreach (var shuffle in new[] { false, true }) {
                 if (c == XISFCompressionType.NONE && shuffle) { continue; }
                 foreach (var k in new[] { XISFChecksumType.NONE, XISFChecksumType.SHA1, XISFChecksumType.SHA256, XISFChecksumType.SHA512, XISFChecksumType.Sha3256, XISFChecksumType.Sha3512 }) {
@@ -393,7 +393,7 @@ public sealed class XisfRoundTripTests : IDisposable {
 
     [Fact]
     public async Task AnUnsupportedCompressionCodecIsAClearError() {
-        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" compression=\"zstd:2\"", string.Empty, new byte[2]);
+        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" compression=\"bzip2:2\"", string.Empty, new byte[2]);
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 
@@ -414,13 +414,13 @@ public sealed class XisfRoundTripTests : IDisposable {
     }
 
     [Theory]
-    [InlineData("bounds=\"1:0\"")]
-    [InlineData("bounds=\"0\"")]
-    [InlineData("bounds=\"a:b\"")]
-    [InlineData("pixelStorage=\"Diagonal\"")]
-    [InlineData("colorSpace=\"CMYK\"")]
-    public async Task AMalformedShapeAttributeIsRejected(string attribute) {
-        var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"UInt16\" {attribute}", string.Empty, new byte[2]);
+    [InlineData("bounds=\"1:0\"", "Float32", 4)]
+    [InlineData("bounds=\"0\"", "Float32", 4)]
+    [InlineData("bounds=\"a:b\"", "Float64", 8)]
+    [InlineData("pixelStorage=\"Diagonal\"", "UInt16", 2)]
+    [InlineData("colorSpace=\"CMYK\"", "UInt16", 2)]
+    public async Task AMalformedShapeAttributeIsRejected(string attribute, string sampleFormat, int sampleBytes) {
+        var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"{sampleFormat}\" {attribute}", string.Empty, new byte[sampleBytes]);
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 
@@ -446,6 +446,104 @@ public sealed class XisfRoundTripTests : IDisposable {
     public async Task ATruncatedCompressionOrChecksumAttributeIsInvalidData(string attribute) {
         var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" {attribute}", string.Empty, new byte[2]);
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+    }
+
+    [Fact]
+    public async Task ZstdInlineBlockFromAnotherWriterIsDecompressed() {
+        // A zstd frame we did not write ourselves (level 19, shuffled), as PixInsight would emit.
+        var pixels = new byte[] { 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00 };
+        var shuffled = XISFData.Shuffle(pixels, 2);
+        using var compressor = new ZstdSharp.Compressor(19);
+        var packed = compressor.Wrap(shuffled).ToArray();
+        var file = Monolithic($"geometry=\"6:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\" compression=\"zstd+sh:{pixels.Length}:2\"", Convert.ToBase64String(packed));
+        Assert.Equal(new ushort[] { 1, 2, 3, 4, 5, 6 }, (await Read(file)).Data.FlatArray);
+    }
+
+    [Fact]
+    public async Task AZstdFrameLargerThanItsDeclaredSizeIsRejected() {
+        // Declares 4 uncompressed bytes but the frame holds 12: the bounded Unwrap must refuse.
+        var pixels = new byte[12];
+        using var compressor = new ZstdSharp.Compressor(3);
+        var packed = compressor.Wrap(pixels).ToArray();
+        var file = Monolithic($"geometry=\"2:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\" compression=\"zstd:4\"", Convert.ToBase64String(packed));
+        await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+    }
+
+    [Fact]
+    public async Task AJunkBoundsAttributeOnAnIntegerFormatIsIgnoredPerSpec() {
+        // XISF 1.0: bounds applies to floating-point and complex formats and is ignored otherwise.
+        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" bounds=\"junk\"", string.Empty, new byte[] { 0x34, 0x12 });
+        Assert.Equal(new ushort[] { 0x1234 }, (await Read(file)).Data.FlatArray);
+    }
+
+    private static uint[] EncodedSamples(int[] adu, int bitDepth) {
+        var block = new XISFData(adu, bitDepth, SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE)).Data;
+        var samples = new uint[block.Length / 4];
+        for (int i = 0; i < samples.Length; i++) { samples[i] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(i * 4, 4)); }
+        return samples;
+    }
+
+    [Fact]
+    public void TheUInt32ScaleIsFrameIndependent() {
+        // The reported depth is the scale whatever the frame holds: a light peaking above the
+        // reported 16 bits and a dark that fits it encode ADU 5000 identically, which is what
+        // light - dark calibration needs. The out-of-range sample is clipped (and logged), not
+        // used to change the scale.
+        int[] light = { 0, 5000, 70000 };
+        int[] dark = { 0, 5000 };
+        var l = EncodedSamples(light, 16);
+        var d = EncodedSamples(dark, 16);
+        Assert.Equal(l[1], d[1]);
+        Assert.Equal((uint)Math.Round(5000 / 65535d * uint.MaxValue), l[1]);
+        Assert.Equal(uint.MaxValue, l[2]);   // clipped to the reported depth
+        Assert.Equal(0u, l[0]);
+    }
+
+    [Fact]
+    public void A32BitDepthScalesAsIdentity() {
+        int[] adu = { 0, 1, int.MaxValue };
+        uint[] expected = { 0, 1, int.MaxValue };
+        Assert.Equal(expected, EncodedSamples(adu, 32));
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(-3, 1)]
+    [InlineData(40, 32)]
+    public void AnOutOfRangeBitDepthIsClampedNotThrown(int bitDepth, int effective) {
+        // A save must not fail over a nonsense depth report; it is clamped and logged.
+        int[] adu = { 0, 1 };
+        double max = Math.Pow(2, effective) - 1;
+        var s = EncodedSamples(adu, bitDepth);
+        Assert.Equal((uint)Math.Round(1 / max * uint.MaxValue), s[1]);
+    }
+
+    [Fact]
+    public async Task AduAboveTheReportedDepthClipToFullScaleOnRead() {
+        int[] px = { 0, 4095, 65535 };
+        var header = new XISFHeader();
+        header.AddImageMetaData(new ImageProperties(3, 1, 12, false, 0, 0), "LIGHT", XISFSampleFormat.UInt32);
+        header.Populate(new ImageMetaData());
+        var xisf = new XISF(header);
+        xisf.AddAttachedImageInt(px, 12, SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE));
+        using var ms = new MemoryStream();
+        xisf.Save(ms);
+        var read = (await Read(ms.ToArray())).Data.FlatArray;
+        Assert.Equal(new ushort[] { 0, ushort.MaxValue, ushort.MaxValue }, read);
+    }
+
+    [Fact]
+    public void SaveWritesNothingWhenTheDeclaredOffsetIsInsideTheHeader() {
+        var header = new XISFHeader();
+        header.AddImageMetaData(new ImageProperties(2, 2, 16, false, 0, 0), "LIGHT");
+        header.Populate(new ImageMetaData());
+        var xisf = new XISF(header);
+        xisf.AddAttachedImage(Pattern(2, 2), SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE));
+        // Corrupt the converged offset the way a future AttachData bug would.
+        header.Image!.SetAttributeValue("location", "attachment:16:8");
+        using var ms = new MemoryStream();
+        Assert.Throws<InvalidDataException>(() => xisf.Save(ms));
+        Assert.Equal(0, ms.Length);
     }
 
     [Fact]

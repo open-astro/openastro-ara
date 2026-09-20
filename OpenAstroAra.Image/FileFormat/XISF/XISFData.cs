@@ -104,12 +104,26 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         private static uint[] ScaleToUInt32(int[] data, int bitDepth) {
-            if (bitDepth < 1 || bitDepth > 32) { throw new ArgumentOutOfRangeException(nameof(bitDepth)); }
-            double max = Math.Pow(2, bitDepth) - 1;
+            // The reported bit depth is the scale, full stop. It must be frame-independent: a
+            // light and its matching dark from one camera have to encode the same ADU the same
+            // way or calibration subtracts the wrong level, so no content-driven widening. An
+            // ADU above the reported depth (a driver under-reporting BitDepth) is clipped, and
+            // the clip is logged with a count so it cannot pass silently -- the fix for that
+            // case is the driver's report, not this scale.
+            int effectiveDepth = Math.Clamp(bitDepth, 1, 32);
+            if (effectiveDepth != bitDepth) {
+                Logger.Warning($"XISF: reported bit depth {bitDepth} is outside 1..32; scaling as {effectiveDepth}-bit data");
+            }
+            double max = Math.Pow(2, effectiveDepth) - 1;
             var scaled = new uint[data.Length];
+            int clipped = 0;
             for (int i = 0; i < data.Length; i++) {
-                double v = Math.Clamp(data[i], 0, max);
+                double v = data[i];
+                if (v > max) { v = max; clipped++; } else if (v < 0) { v = 0; }
                 scaled[i] = (uint)Math.Round(v / max * uint.MaxValue);
+            }
+            if (clipped > 0) {
+                Logger.Warning($"XISF: {clipped} sample(s) exceed the reported {bitDepth}-bit depth and were clipped; the camera driver is under-reporting its bit depth");
             }
             return scaled;
         }
@@ -189,6 +203,18 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     }
 
                     outArray = ZlibStream.CompressBuffer(byteArray);
+                } else if (CompressionType == XISFCompressionType.ZSTD) {
+                    if (ByteShuffling) {
+                        CompressionName = "zstd+sh";
+                        byteArray = Shuffle(byteArray, ShuffleItemSize);
+                    } else {
+                        CompressionName = "zstd";
+                    }
+
+                    // Level 3 is zstd's default and what PixInsight ships; the spec fixes only the
+                    // frame format, so any level reads back the same.
+                    using var compressor = new ZstdSharp.Compressor(3);
+                    outArray = compressor.Wrap(byteArray).ToArray();
                 } else {
                     outArray = new byte[byteArray.Length];
                     Array.Copy(byteArray, outArray, outArray.Length);
@@ -205,6 +231,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     outArray = byteArray;
                 }
                 CompressionType = XISFCompressionType.NONE;
+                CompressionName = null;
 
                 Logger.Debug("XISF output array is larger after compression. Image will be prepared uncompressed instead.");
             }

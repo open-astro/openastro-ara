@@ -167,7 +167,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     // range actually used, and the spec makes it mandatory for float formats. Integer
                     // formats ignore it (their range is the type's).
                     double boundsLow = 0d, boundsHigh = 1d;
-                    if (imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
+                    bool floatFormat = sampleFormat.StartsWith("Float", StringComparison.Ordinal) || sampleFormat.StartsWith("Complex", StringComparison.Ordinal);
+                    if (floatFormat && imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
                         string[] b = boundsAttribute.Value.Split(':');
                         if (b.Length != 2
                             || !double.TryParse(b[0], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsLow)
@@ -470,6 +471,16 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     info.IsShuffled = true;
                     break;
 
+                case "zstd":
+                    info.CompressionType = XISFCompressionType.ZSTD;
+                    break;
+
+                case "zstd+sh":
+                    info.CompressionType = XISFCompressionType.ZSTD;
+                    info.ItemSize = int.Parse(compression[2], CultureInfo.InvariantCulture);
+                    info.IsShuffled = true;
+                    break;
+
                 default:
                     throw new InvalidDataException();
             }
@@ -585,6 +596,24 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                                 }
                                 if (total != outArray.Length) {
                                     throw new InvalidDataException($"XISF: zlib decompressed size {total} does not match expected {outArray.Length}");
+                                }
+                            }
+                            break;
+
+                        case XISFCompressionType.ZSTD:
+                            // Decompress into the pre-sized, pre-validated buffer: a frame that wants
+                            // more than UncompressedSize fails inside Unwrap instead of growing.
+                            using (var decompressor = new ZstdSharp.Decompressor()) {
+                                int written;
+                                try {
+                                    written = decompressor.Unwrap(raw, outArray);
+                                } catch (Exception ex) when (ex is ZstdSharp.ZstdException or ArgumentException or InsufficientMemoryException) {
+                                    // Which of these fires for an oversized frame depends on the
+                                    // ZstdSharp build's pre-check; all mean the same malformed input.
+                                    throw new InvalidDataException("XISF: zstd frame is malformed or larger than its declared uncompressed size", ex);
+                                }
+                                if (written != outArray.Length) {
+                                    throw new InvalidDataException($"XISF: zstd decompressed size {written} does not match expected {outArray.Length}");
                                 }
                             }
                             break;
