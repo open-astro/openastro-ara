@@ -14,9 +14,11 @@ class GpsSiteFill {
   final double lat;
   final double lng;
   final double? alt;
+
   /// On success, a describe-the-source label, e.g.
   /// "the server's GPS dongle" or "this Mac's own location".
   final String sourceLabel;
+
   /// On failure, a ready-to-show explanation.
   final String message;
 
@@ -25,15 +27,15 @@ class GpsSiteFill {
     required this.lng,
     required this.alt,
     required this.sourceLabel,
-  })  : success = true,
-        message = '';
+  }) : success = true,
+       message = '';
 
   const GpsSiteFill.failed(this.message)
-      : success = false,
-        lat = 0,
-        lng = 0,
-        alt = null,
-        sourceLabel = '';
+    : success = false,
+      lat = 0,
+      lng = 0,
+      alt = null,
+      sourceLabel = '';
 }
 
 typedef DeviceLocationResult = ({double lat, double lng, double? alt});
@@ -45,14 +47,38 @@ typedef DeviceLocationProvider = Future<DeviceLocationResult?> Function();
 @visibleForTesting
 DeviceLocationProvider? debugMacLocationProvider;
 
+/// The platforms the client ships on, for user-facing copy. Detected from
+/// `dart:io` in production; tests pin one via [debugPlatformOverride].
+enum ClientPlatform { macOS, windows, linux, android, iOS }
+
+/// Test seam — force the platform the copy below is written for. Leave null
+/// in production.
+@visibleForTesting
+ClientPlatform? debugPlatformOverride;
+
+ClientPlatform get _platform {
+  final o = debugPlatformOverride;
+  if (o != null) return o;
+  if (Platform.isMacOS) return ClientPlatform.macOS;
+  if (Platform.isWindows) return ClientPlatform.windows;
+  if (Platform.isAndroid) return ClientPlatform.android;
+  if (Platform.isIOS) return ClientPlatform.iOS;
+  return ClientPlatform.linux;
+}
+
 /// What to call the machine running the client, in user-facing copy. The app
-/// ships on macOS, Windows and Linux, so "this Mac" is wrong two thirds of
-/// the time.
-String get _thisDevice => Platform.isMacOS
-    ? 'this Mac'
-    : Platform.isWindows
-        ? 'this PC'
-        : 'this computer';
+/// ships on macOS, Windows, Linux, Android and iOS, so "this Mac" is wrong
+/// most of the time.
+@visibleForTesting
+String thisDeviceLabel(ClientPlatform p) => switch (p) {
+  ClientPlatform.macOS => 'this Mac',
+  ClientPlatform.windows => 'this PC',
+  ClientPlatform.linux => 'this computer',
+  ClientPlatform.android => 'this Android device',
+  ClientPlatform.iOS => 'this iPhone or iPad',
+};
+
+String get _thisDevice => thisDeviceLabel(_platform);
 
 /// Where the user goes to grant location access, per platform. Linux has no
 /// REGISTERED geolocator implementation — geolocator 14 ships a GeoClue backend
@@ -61,20 +87,46 @@ String get _thisDevice => Platform.isMacOS
 /// a missing implementation. Until that plugin is registered and tested on a
 /// Linux box, Linux gets the honest answer instead of a settings path that
 /// doesn't exist there.
-String get _permissionHint => Platform.isMacOS
-    ? 'Open System Settings → Privacy & Security → Location Services and '
-        'allow OpenAstro Ara, then click Fill from GPS again.'
-    : Platform.isWindows
-        ? 'Open Settings → Privacy & security → Location and allow desktop '
-            'apps to access your location, then click Fill from GPS again.'
-        : 'On Linux there is no system location service to fall back on — '
-            'plug a USB GPS dongle into the machine running Ara Server.';
+@visibleForTesting
+String permissionHint(ClientPlatform p) => switch (p) {
+  ClientPlatform.macOS =>
+    'Open System Settings → Privacy & Security → Location Services and '
+        'allow OpenAstro Ara, then click Fill from GPS again.',
+  ClientPlatform.windows =>
+    'Open Settings → Privacy & security → Location and allow desktop '
+        'apps to access your location, then click Fill from GPS again.',
+  ClientPlatform.linux =>
+    'On Linux there is no system location service to fall back on — '
+        'plug a USB GPS dongle into the machine running Ara Server.',
+  ClientPlatform.android =>
+    'Open Settings → Apps → OpenAstro Ara → Permissions → Location and '
+        'allow it while using the app, then tap Fill from GPS again.',
+  ClientPlatform.iOS =>
+    'Open Settings → Privacy & Security → Location Services → OpenAstro '
+        'Ara and allow While Using the App, then tap Fill from GPS again.',
+};
+
+/// Why a fix may be missing or stale, per platform: desktops position by
+/// network, phones and tablets carry a real GPS receiver.
+@visibleForTesting
+String noFixHint(ClientPlatform p) => switch (p) {
+  ClientPlatform.android || ClientPlatform.iOS =>
+    'Make sure Location is on and try again with a clear view of the '
+        'sky, or plug a USB GPS dongle into the machine running Ara Server.',
+  _ =>
+    'Desktop location needs a network connection — connect to one, or '
+        'plug a USB GPS dongle into the machine running Ara Server.',
+};
+
+String get _noFixHint => noFixHint(_platform);
+
+String get _permissionHint => permissionHint(_platform);
 
 /// Try to fill an observing site from GPS. **Preferred** source is a USB GPS
 /// dongle on the server machine (§31.3 time-sync state); when that's absent
 /// (no server, or no fix yet) it falls back to **the client machine's own
-/// location** (macOS/Windows; Linux has no registered geolocator backend),
-/// accepting
+/// location** (macOS/Windows/Android/iOS; Linux has no registered geolocator
+/// backend), accepting
 /// only a fix less than ten minutes old. This one routine
 /// is shared by the wizard (profile creation) and the Safety → Site panel
 /// (editing), so every "Fill from GPS" behaves the same everywhere.
@@ -105,8 +157,8 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
   final baseNote = api == null
       ? 'No server connected, '
       : dongleReadFailed
-          ? "Couldn't read the server's GPS state, "
-          : 'No GPS dongle fix yet, ';
+      ? "Couldn't read the server's GPS state, "
+      : 'No GPS dongle fix yet, ';
 
   try {
     // Deterministic test seam first (real platform channels aren't in tests).
@@ -114,8 +166,9 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
       final r = await debugMacLocationProvider!();
       if (r == null) {
         return GpsSiteFill.failed(
-            '$baseNote $_thisDevice couldn\'t provide a location. '
-            '$_permissionHint');
+          '$baseNote $_thisDevice couldn\'t provide a location. '
+          '$_permissionHint',
+        );
       }
       return GpsSiteFill.success(
         lat: r.lat,
@@ -147,8 +200,7 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     if (age > const Duration(minutes: 10)) {
       return GpsSiteFill.failed(
         '$baseNote $_thisDevice\'s location is stale (${age.inMinutes} min '
-        'old), so it was not filled. Desktop location needs a network to fix '
-        'a position — connect to one, or plug in a GPS dongle.',
+        'old), so it was not filled. $_noFixHint',
       );
     }
     // A desktop (Wi-Fi/GPS-less) fix often reports altitude 0.0 or an
@@ -168,11 +220,9 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
   } on TimeoutException {
     // Permission was already granted by this point, so blaming permissions
     // here sends the user to the wrong settings pane. Desktop location is
-    // network-positioned: no network, no fix.
+    // network-positioned (no network, no fix); a phone or tablet needs sky.
     return GpsSiteFill.failed(
-      '$baseNote $_thisDevice couldn\'t fix a position in time. Desktop '
-      'location needs a network connection — connect to one, or plug a USB '
-      'GPS dongle into the machine running Ara Server.',
+      '$baseNote $_thisDevice couldn\'t fix a position in time. $_noFixHint',
     );
   } catch (_) {
     // Any other platform failure (e.g. no registered geolocator backend, as on
