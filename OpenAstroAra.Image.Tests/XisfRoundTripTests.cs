@@ -533,6 +533,20 @@ public sealed class XisfRoundTripTests : IDisposable {
     }
 
     [Fact]
+    public void SaveWritesNothingWhenTheDeclaredOffsetIsInsideTheHeader() {
+        var header = new XISFHeader();
+        header.AddImageMetaData(new ImageProperties(2, 2, 16, false, 0, 0), "LIGHT");
+        header.Populate(new ImageMetaData());
+        var xisf = new XISF(header);
+        xisf.AddAttachedImage(Pattern(2, 2), SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE));
+        // Corrupt the converged offset the way a future AttachData bug would.
+        header.Image!.SetAttributeValue("location", "attachment:16:8");
+        using var ms = new MemoryStream();
+        Assert.Throws<InvalidDataException>(() => xisf.Save(ms));
+        Assert.Equal(0, ms.Length);
+    }
+
+    [Fact]
     public async Task FromFileDispatchesXisfByExtension() {
         var path = TempPath("dispatch.xisf");
         await File.WriteAllBytesAsync(path, Write(Pattern(3, 3), 3, 3, SaveInfo(XISFCompressionType.LZ4HC, false, XISFChecksumType.SHA512)));
