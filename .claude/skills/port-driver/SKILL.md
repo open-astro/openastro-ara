@@ -635,8 +635,12 @@ with the next sub-PR rather than getting a PR of its own.
        merged=$(gh pr list --head "$B" --state merged --json headRefOid --jq '.[].headRefOid')
        if [ -n "$REF_OID" ] && printf '%s\n' "$merged" | grep -qx "$REF_OID"; then
          echo "retiring local $B: its head $REF_OID is the merged head of a PR under this name"
-         git branch -D "$B"        # local only -- never `push --delete` (§19.1)
-         git checkout -b "$B"
+         # `|| exit 1` on both: if the opening `checkout master` failed (dirty
+         # tree) the driver is still standing on $B, `branch -D` refuses, and
+         # a fall-through here would leave it on the leftover -- the state
+         # this guard exists to prevent.
+         git branch -D "$B" || exit 1   # local only -- never `push --delete` (§19.1)
+         git checkout -b "$B" || exit 1
        else
          echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
          exit 1

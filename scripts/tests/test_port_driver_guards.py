@@ -357,14 +357,18 @@ class MirrorPin(unittest.TestCase):
 
     SECTIONS = {
         "scenario_b_decision_list": (
-            "0. **Not on a branch at all is not B.**",
-            "   **If you change this decision list, change its mirror.**",
-            'eba469f3bc741367',
+            # From the two-condition fence above condition 0 through the
+            # closing "No OID matched -> B" paragraph, which is scenario_b's
+            # final `return "B"` -- flipping it would otherwise leave the pin
+            # green.
+            "Two conditions before matching, and they are different questions:",
+            "**(C) No PR in flight and there is work to start or continue**",
+            '5cb3449b39d1bbd4',
         ),
         "step_5_reuse_fence": (
             "   # Reuse the branch if it is already there.",
             "   The slash namespace is the convention",
-            'd10a5b63567f38a3',
+            '62837b960298902f',
         ),
     }
 
@@ -375,8 +379,15 @@ class MirrorPin(unittest.TestCase):
 
     def section(self, start: str, end: str) -> str:
         text = SKILL.read_text()
-        i = text.index(start)
-        j = text.index(end, i)
+        try:
+            i = text.index(start)
+            j = text.index(end, i)
+        except ValueError:
+            self.fail(
+                f"SKILL.md no longer contains the marker line {start!r} / {end!r} "
+                "that delimits a mirrored section. Re-read the section, update the "
+                "mirror in this file to match, then update the marker in SECTIONS."
+            )
         return text[i:j]
 
     def test_sections_match_the_pinned_hashes(self):
