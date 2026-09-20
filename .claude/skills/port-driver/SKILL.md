@@ -624,6 +624,23 @@ with the next sub-PR rather than getting a PR of its own.
    # name -- `prep-ci` at 0.5p/4/11 -- still exists locally even when you are
    # not standing on it.
    if git rev-parse --verify -q "refs/heads/$B" >/dev/null; then
+     # Before either arm below: a surviving origin/$B that master does not
+     # already contain (an aborted PR, or a hand merge without
+     # `--delete-branch`) makes the eventual push of this name non-fast-forward
+     # with no hint why, and §19.1 bars `push --delete`, so Hold naming the
+     # ref for the human (#1047, #1057). Ancestors of origin/master are fine:
+     # the push fast-forwards over them. `|| exit 1` on the probe: an empty
+     # answer from a failed ls-remote must not read as "the ref is gone"; an
+     # unfetched OID fails the ancestor test, which is the Hold direction.
+     # No pipe on the capture: `$(... | cut)` would carry cut's status, not
+     # ls-remote's, and there is no pipefail here. The full ref name keeps a
+     # `someone/$B` ref from matching too.
+     REMOTE_LINE=$(git ls-remote --heads origin "refs/heads/$B") || exit 1
+     REMOTE_OID=${REMOTE_LINE%%$'\t'*}
+     if [ -n "$REMOTE_OID" ] && ! git merge-base --is-ancestor "$REMOTE_OID" origin/master 2>/dev/null; then
+       echo "Held for human review @joeytroy — origin/$B still exists at $REMOTE_OID, which master does not contain; delete it by hand before $B can be pushed"
+       exit 1
+     fi
      # Scenario B's guard, from the other side: B only runs it when the driver
      # is already standing on the branch, so C has to re-ask here. Ask about
      # the ref's OWN commits, not how far it trails `master` -- a ref that is
@@ -653,18 +670,8 @@ with the next sub-PR rather than getting a PR of its own.
        # message says so instead of leaving the miss silent.
        merged=$(gh pr list --head "$B" --base master --state merged --limit 100 --json headRefOid --jq '.[].headRefOid')
        if [ -n "$REF_OID" ] && printf '%s\n' "$merged" | grep -qx "$REF_OID"; then
-         # RETIRE assumes `--delete-branch` removed origin/$B (§22.1 step 5).
-         # An aborted PR or a hand merge without it leaves the remote ref on
-         # the squashed head, and the fresh branch's push is then rejected
-         # non-fast-forward with no hint why; §19.1 bars `push --delete`, so
-         # Hold and name the ref for the human (#1047). `|| exit 1` on the
-         # probe: an empty answer from a failed ls-remote must not read as
-         # "the ref is gone".
-         REMOTE_REF=$(git ls-remote --heads origin "$B") || exit 1
-         if [ -n "$REMOTE_REF" ]; then
-           echo "Held for human review @joeytroy — origin/$B still exists ($REMOTE_REF); delete it by hand before $B can be re-created"
-           exit 1
-         fi
+         # RETIRE assumes `--delete-branch` removed origin/$B (§22.1 step 5);
+         # the probe above the arms has already Held if it did not (#1047).
          echo "retiring local $B: its head $REF_OID is the merged head of a PR under this name"
          # `|| exit 1` on both: if the opening `checkout master` failed (dirty
          # tree) the driver is still standing on $B, `branch -D` refuses, and
