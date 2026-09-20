@@ -99,22 +99,29 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Equal(px, img.Data.FlatArray);
     }
 
-    [Fact]
-    public async Task UInt32WriterRoundTripsThroughTheUInt32Converter() {
+    [Theory]
+    [InlineData(16)]
+    [InlineData(12)]
+    [InlineData(14)]
+    public async Task UInt32WriterRoundTripsAduExactlyThroughTheSpecScaling(int bitDepth) {
+        // ADU from a bitDepth-bit camera go into a UInt32 block scaled onto [0, 2^32-1]; the
+        // spec-correct reader maps them back onto 16 bits. For a 16-bit camera that is exact;
+        // for shallower cameras it is the ADU rescaled to 16 bits, as every other reader would.
         const int w = 8, h = 4;
+        int max = (1 << bitDepth) - 1;
         var px = new int[w * h];
-        for (int i = 0; i < px.Length; i++) { px[i] = i * (int.MaxValue / (px.Length - 1)); }
+        for (int i = 0; i < px.Length; i++) { px[i] = (int)((long)i * max / (px.Length - 1)); }
         var header = new XISFHeader();
-        header.AddImageMetaData(new ImageProperties(w, h, 32, false, 0, 0), "LIGHT", XISFSampleFormat.UInt32);
+        header.AddImageMetaData(new ImageProperties(w, h, bitDepth, false, 0, 0), "LIGHT", XISFSampleFormat.UInt32);
         header.Populate(new ImageMetaData());
         var xisf = new XISF(header);
-        xisf.AddAttachedImageInt(px, SaveInfo(XISFCompressionType.LZ4, true, XISFChecksumType.SHA256));
+        xisf.AddAttachedImageInt(px, bitDepth, SaveInfo(XISFCompressionType.LZ4, true, XISFChecksumType.SHA256));
         using var ms = new MemoryStream();
         xisf.Save(ms);
         var img = await Read(ms.ToArray());
-        // Reader rescales [0, 2^32-1] onto 16 bits; the int.MaxValue top sample lands at half scale.
-        Assert.Equal(0, img.Data.FlatArray[0]);
-        Assert.InRange(img.Data.FlatArray[^1], ushort.MaxValue / 2 - 1, ushort.MaxValue / 2 + 1);
+        var expected = px.Select(v => (ushort)Math.Round(v / (double)max * ushort.MaxValue)).ToArray();
+        Assert.Equal(expected, img.Data.FlatArray);
+        Assert.Equal(ushort.MaxValue, img.Data.FlatArray[^1]);
     }
 
     [Fact]
@@ -393,6 +400,51 @@ public sealed class XisfRoundTripTests : IDisposable {
     [Fact]
     public async Task ABlockShorterThanTheGeometryIsRejected() {
         var file = Monolithic("geometry=\"4:4:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\"", string.Empty, new byte[6]);
+        await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+    }
+
+    [Fact]
+    public async Task FloatBoundsRescaleTheDeclaredRange() {
+        // bounds="0:100": 50 is mid-scale, 100 is full, values outside clamp.
+        var raw = Bytes(0f, 100f, 50f, 150f, -5f);
+        var file = Monolithic("geometry=\"5:1:1\" sampleFormat=\"Float32\" colorSpace=\"Gray\" bounds=\"0:100\"", string.Empty, raw);
+        Assert.Equal(new ushort[] { 0, 65535, 32768, 65535, 0 }, (await Read(file)).Data.FlatArray);
+        var shifted = Monolithic("geometry=\"2:1:1\" sampleFormat=\"Float64\" colorSpace=\"Gray\" bounds=\"-1:1\"", string.Empty, Bytes(-1d, 0d));
+        Assert.Equal(new ushort[] { 0, 32768 }, (await Read(shifted)).Data.FlatArray);
+    }
+
+    [Theory]
+    [InlineData("bounds=\"1:0\"")]
+    [InlineData("bounds=\"0\"")]
+    [InlineData("bounds=\"a:b\"")]
+    [InlineData("pixelStorage=\"Diagonal\"")]
+    [InlineData("colorSpace=\"CMYK\"")]
+    public async Task AMalformedShapeAttributeIsRejected(string attribute) {
+        var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"UInt16\" {attribute}", string.Empty, new byte[2]);
+        await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+    }
+
+    [Fact]
+    public async Task PixelStorageAndColorSpaceAreAcceptedInTheSpecVocabulary() {
+        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" pixelStorage=\"Normal\"", string.Empty, new byte[] { 0x34, 0x12 });
+        Assert.Equal(new ushort[] { 0x1234 }, (await Read(file)).Data.FlatArray);
+    }
+
+    [Fact]
+    public async Task AMultiChannelImageIsAClearErrorNotAScrambledPicture() {
+        var file = Monolithic("geometry=\"2:1:3\" sampleFormat=\"UInt16\" colorSpace=\"RGB\"", string.Empty, new byte[12]);
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+        Assert.Contains("3-channel", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("compression=\"lz4+sh:2\"")]
+    [InlineData("compression=\"zlib\"")]
+    [InlineData("compression=\"lz4:abc\"")]
+    [InlineData("checksum=\"sha-256\"")]
+    [InlineData("checksum=\"sha-256:\"")]
+    public async Task ATruncatedCompressionOrChecksumAttributeIsInvalidData(string attribute) {
+        var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" {attribute}", string.Empty, new byte[2]);
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 
