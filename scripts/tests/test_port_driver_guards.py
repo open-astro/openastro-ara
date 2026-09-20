@@ -107,18 +107,22 @@ def reuse_guard(
     `gh pr list --head <branch> --base master --state merged --limit 100 --json headRefOid`
     returned;
     an empty list stands in for both "no PR" and an API failure, and both
-    Hold. `remote_oid` is what `git ls-remote --heads origin <branch>` printed
-    (`remote_head` below), None when the remote ref is gone. Checked before
-    either arm (#1047, #1057): a surviving origin/<branch> that origin/master
-    does not contain makes the eventual push non-fast-forward whether the
-    local ref is reused or retired, so Hold; an ancestor of origin/master
-    fast-forwards and is fine. An OID that is not in the local object store
-    fails the ancestor test, which is the Hold direction.
+    Hold. `remote_oid` is what `git ls-remote --heads origin refs/heads/<branch>`
+    printed (`remote_head` below), None when the remote ref is gone. Checked
+    before anything local (#1047, #1057, #1059): a surviving origin/<branch>
+    that origin/master does not contain makes the eventual push
+    non-fast-forward whether the local ref is reused, retired or does not
+    exist yet, so Hold; an ancestor of origin/master fast-forwards and is
+    fine. An OID that is not in the local object store fails the ancestor
+    test, which is the Hold direction. With no local ref the verdict is
+    "CREATE" (the skill's plain `checkout -b` fallback).
     A 100-row `merged` is a possibly truncated page; that changes only the Held
     message (the miss already Holds), so the verdict is the same here.
     """
     if remote_oid and not git_ok(repo, "merge-base", "--is-ancestor", remote_oid, "origin/master"):
         return "HELD"
+    if not git_ok(repo, "rev-parse", "--verify", "-q", f"refs/heads/{branch}"):
+        return "CREATE"
     if not git(repo, "rev-list", f"origin/master..{branch}"):
         return "REUSE"
     ref_oid = git(repo, "rev-parse", f"refs/heads/{branch}")
@@ -128,7 +132,7 @@ def reuse_guard(
 
 
 def remote_head(repo: Path, branch: str) -> str | None:
-    """The #1047 probe: the OID `git ls-remote --heads origin <branch>` prints,
+    """The #1047 probe: the OID `git ls-remote --heads origin refs/heads/<branch>` prints,
     None when the remote ref is gone. A failed ls-remote raises rather than
     reading as "gone" -- the skill's `|| exit 1` on the same line.
     """
@@ -337,6 +341,17 @@ class ReuseGuard(GitFixture):
         git(self.repo, "branch", "-f", "left", "origin/master")
         self.assertEqual(reuse_guard(self.repo, "left", [oid], remote_oid=oid), "HELD")
         self.assertEqual(reuse_guard(self.repo, "left", [oid]), "REUSE")
+
+    def test_surviving_remote_ref_holds_before_a_fresh_create(self):
+        # #1059: no local ref at all (fresh clone, or a hand `branch -D`), but
+        # origin/<B> survives at the squashed head. The plain `checkout -b`
+        # fallback would walk into the same non-fast-forward push.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        git(self.repo, "branch", "-D", "left")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid], remote_oid=oid), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "CREATE")
 
     def test_remote_ref_already_in_master_is_fine(self):
         # A merge-committed head, or an empty pushed branch, is an ancestor of
@@ -569,7 +584,7 @@ class MirrorPin(unittest.TestCase):
             # the RETIRE arm rests on `checkout master` having run.
             "   git checkout master && git pull --ff-only",
             "   The slash namespace is the convention",
-            'ba21960548b05cc2',
+            '0223849346f8e166',
         ),
         "playbook_22_2_chore_delete_fence": (
             PLAYBOOK,
