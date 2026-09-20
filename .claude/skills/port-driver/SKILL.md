@@ -386,10 +386,15 @@ these. Waiting on a review that can never arrive would spin forever — see step
 
 ### Step 3b — Merge
 
-Every PR targets `master` (playbook §22.0). First settle `$DEL` — every merge
-line below uses it, because `--delete-branch` is for same-repo heads only; a fork
-head belongs to the contributor and is never deleted from here (#1031, same rule
-as `/pr-checker` Step 4 and playbook §19.1/§22.2):
+Every PR targets `master` (playbook §22.0). `--delete-branch` is for same-repo
+heads only; a fork head belongs to the contributor and is never deleted from
+here (#1031, same rule as `/pr-checker` Step 4 and playbook §19.1/§22.2). The
+probe that decides it is the `$DEL` line below. **It must run in the same shell
+invocation as the `gh pr merge` that uses it** — each fenced block here is a
+separate invocation, and an unset `$DEL` would silently merge without deleting
+a same-repo branch (the stale-ref state §2's scenario-B guard exists for). That
+is why the merge fence at the end of this step repeats the probe instead of
+referring back to it:
 
 ```shell
 # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
@@ -401,7 +406,7 @@ as `/pr-checker` Step 4 and playbook §19.1/§22.2):
 Then pick the merge method by the PR's commit history — **except at a phase
 boundary, where the tag decides it**:
 
-- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash $DEL` — the default
+- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash $DEL` (with the probe in the same invocation) — the default
 - **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge $DEL`
 - **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge $DEL` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
   ```shell
@@ -456,7 +461,11 @@ The merge is deliberately in a block of its own, so that a driver running any
 block verbatim cannot merge ahead of the check:
 
 ```shell
-gh pr merge <PR> --merge $DEL    # $DEL from the probe at the top of §3b
+# Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+# Do NOT invert this to test = "true" -- that would delete on an API error.
+[ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+  && DEL=--delete-branch || DEL=
+gh pr merge <PR> --merge $DEL
 ```
 
 If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a

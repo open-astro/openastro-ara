@@ -407,8 +407,12 @@ Then:
 - `state=BLOCKED` with checks still running -> `gh pr checks <N> --watch`, then merge.
 - otherwise merge:
   ```bash
-  gh pr merge <N> --squash --delete-branch    # multi-commit PR landing as one logical change
-  gh pr merge <N> --merge  --delete-branch    # when per-commit granularity matters (§19.1)
+  # Same invocation as the merge: shell state does not survive between blocks.
+  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <N> --squash $DEL    # multi-commit PR landing as one logical change
+  gh pr merge <N> --merge  $DEL    # when per-commit granularity matters (§19.1)
   ```
   **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
   `--squash`: squashing rewrites the head the tag points at, so the tag is left
@@ -485,7 +489,8 @@ The loop ends only when every PR is merged or a **Hard stop** below applies. In 
   verdict can still carry new Defects, so the merge half gates on the printed verdict's **last**
   line (the prompt defines the sign-off as the last line, and a review can quote either string in
   its body) — with `poll` = the Step 2 block saved to a file:
-  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && gh pr merge <N> --squash --delete-branch`
+  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && { [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] && DEL=--delete-branch || DEL=; gh pr merge <N> --squash $DEL; }`
+  (the fork probe sits inside the same chain so an unset `$DEL` cannot silently drop the flag)
   (`--merge` instead when the PR carries a phase tag, as above — and a phase-boundary PR must be tagged per Step 4 before this line runs).
 - **A Defect you disagree with** is still fixed or wired into the skill/docs when there is any
   reasonable change that satisfies it. Only a Defect that would require a wrong or unsafe change
