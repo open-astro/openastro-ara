@@ -219,14 +219,29 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         ChecksumName = "sha-512";
                         break;
 
+                    // SHA-3 is not available on every platform .NET runs on (macOS lacks it).
+                    // A save must not fail over a checksum choice: fall back to SHA-256, which
+                    // the spec also allows, and say so once in the log.
                     case XISFChecksumType.Sha3256:
-                        Checksum = GetStringFromHash(SHA3_256.HashData(outArray));
-                        ChecksumName = "sha3-256";
+                        if (SHA3_256.IsSupported) {
+                            Checksum = GetStringFromHash(SHA3_256.HashData(outArray));
+                            ChecksumName = "sha3-256";
+                        } else {
+                            Logger.Warning("XISF: SHA3-256 is not supported on this platform; writing a SHA-256 checksum instead");
+                            Checksum = GetStringFromHash(SHA256.HashData(outArray));
+                            ChecksumName = "sha-256";
+                        }
                         break;
 
                     case XISFChecksumType.Sha3512:
-                        Checksum = GetStringFromHash(SHA3_512.HashData(outArray));
-                        ChecksumName = "sha3-512";
+                        if (SHA3_512.IsSupported) {
+                            Checksum = GetStringFromHash(SHA3_512.HashData(outArray));
+                            ChecksumName = "sha3-512";
+                        } else {
+                            Logger.Warning("XISF: SHA3-512 is not supported on this platform; writing a SHA-512 checksum instead");
+                            Checksum = GetStringFromHash(SHA512.HashData(outArray));
+                            ChecksumName = "sha-512";
+                        }
                         break;
 
                     case XISFChecksumType.NONE:

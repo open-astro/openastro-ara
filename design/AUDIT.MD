@@ -180,7 +180,7 @@ All non-auth findings below were remediated in the working tree the same day. Fu
 - `BasicBody.Calculate` feeds UTC JD where TT expected (~35″ Moon error); `cal_date` declared returning `double` but C returns `void` (`NOVAS.cs:75-77,180-181`, `BasicBody.cs:43,66`).
 - DUT1 permanently stubbed to 0 (~13″ topocentric/LST error) (`DatabaseInteraction.cs:46-51`).
 - **Plate solving:** 10-minute timeout is dead code — original token passed instead of `cts.Token`, wedged solver awaited forever (`CLISolver.cs:69-72`); solver process not killed on cancel → orphaned ASTAP processes (`CLISolver.cs:175-176`).
-- XISF shuffle `ItemSize` → `DivideByZeroException`/zeroed image (`XISFData.cs:269-285`); LZ4/checksum failures only logged, corrupt buffer used (`XISF.cs:426-430`).
+- XISF shuffle `ItemSize` → `DivideByZeroException`/zeroed image (`XISFData.cs:269-285`); LZ4/checksum failures only logged, corrupt buffer used (`XISF.cs:426-430`). **Resolved (#996 PR 1, 2026-09-20):** a checksum mismatch now throws `InvalidDataException` on every block location (attached, inline, embedded); an algorithm the platform cannot compute (SHA-3 on macOS) is logged as unverified rather than treated as a mismatch. Pinned by `OpenAstroAra.Image.Tests`.
 - Per-frame LOH churn with no pooling across Stretcher/Debayer/StarDetector at Live-View cadence → gen-2 pauses on the Pi.
 
 ### Low

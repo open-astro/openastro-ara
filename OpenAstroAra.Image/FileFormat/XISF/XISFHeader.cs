@@ -98,6 +98,15 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             var metaData = new ImageMetaData();
             metaData.GenericHeaders = GetAllFITSKeywords();
 
+            // The writer emits both the Image element's imageType attribute and an IMAGETYP
+            // keyword; read the attribute first (it is the spec's own field), then the keyword.
+            var imageTypeAttribute = Image?.Attribute("imageType")?.Value;
+            if (!string.IsNullOrEmpty(imageTypeAttribute)) {
+                metaData.Image.ImageType = imageTypeAttribute;
+            } else if (TryGetFITSProperty("IMAGETYP", out var imageType)) {
+                metaData.Image.ImageType = imageType;
+            }
+
             if (TryGetImageProperty(XISFImageProperty.Observation.Time.Start, out var value)) {
                 metaData.Image.ExposureStart = DateTime.Parse(value, CultureInfo.InvariantCulture);
             }
@@ -689,7 +698,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
 
             AddImageProperty(XISFImageProperty.Observation.Equinox, 2000d, "Equinox of celestial coordinate system");
-            AddImageFITSKeyword("SWCREATE", string.Format(CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
+            AddImageFITSKeyword("SWCREATE", string.Format(CultureInfo.InvariantCulture, "OpenAstro Ara {0}", CoreUtil.Version), "Software that created this file");
 
             foreach (var elem in metaData.GenericHeaders) {
                 switch (elem) {
