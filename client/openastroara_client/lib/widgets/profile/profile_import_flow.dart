@@ -83,9 +83,9 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
         const SnackBar(content: Text("Couldn't read the selected file.")));
     return;
   }
-  // Re-check the actual byte length: file.size is metadata read before this
-  // gap (so it can be stale/0 on some backends, or the file could have grown).
-  // This bounds what we parse + upload regardless of what file.size reported.
+  // Re-check the actual byte length: file.length() was read before this gap
+  // (so it can be stale on some backends, or the file could have grown). This
+  // bounds what we parse + upload regardless of what file.length() reported.
   if (bytes.length > maxShareBytes) {
     messenger.showSnackBar(const SnackBar(
         content: Text("That file is too large to be a profile share."),
