@@ -418,17 +418,20 @@ class ProbeMirrors(unittest.TestCase):
 class MirrorPin(unittest.TestCase):
     """The mirror above is hand-synced with SKILL.md; this makes drift fail (#1030).
 
-    Two sections of the skill are hashed: scenario B's decision list
-    (condition 0 through the end of the D bullet) and the §5 step 2 fence
-    that `reuse_guard`/`retire` mirror. Editing either without touching this
-    file fails the Sanity job, which is the point: drift already happened
+    Three sections of the skill are hashed: scenario B's whole walk (the
+    two-condition shell block through the closing "No OID matched -> B"
+    paragraph), which `scenario_b` mirrors; the §5 step 2 fence, which
+    `reuse_guard`/`retire` mirror; and the reference copy of the §3b `$DEL`
+    probe, whose direction `ProbeMirrors.delete_branch_flag` mirrors. Editing
+    any of them without touching this file fails the Sanity job, which is the
+    point: drift already happened
     once inside #1003 (the skill tested detached-HEAD inside condition 2, the
     mirror tested it first -- C vs D with the suite green) and review, not
     the tests, caught it.
 
-    To update: re-read the changed section, bring `scenario_b` /
-    `reuse_guard` and their cases into line, then paste the new hash the
-    failure message prints. Pasting the hash without the re-read defeats the
+    To update: re-read the changed section, bring its mirror (`scenario_b`,
+    `reuse_guard`/`retire`, or `ProbeMirrors`) and its cases into line, then
+    paste the new hash the failure message prints. Pasting the hash without the re-read defeats the
     test, and there is nothing here that can stop that -- it is a forcing
     function for a human look, not a proof of equivalence.
     """

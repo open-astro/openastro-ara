@@ -426,7 +426,7 @@ Then:
   **Phase-boundary PR with no tag on its head -> do not merge yet (#1029).** The probe above only
   detects a tag that is already pushed; nothing else in this command pushes one, and under the
   port-driver's §3b ordering the tag goes on immediately before the merge. The question only
-  arises for a `phase/*` head (#1040): a `chore/*`, `prep-*`, `rules-*`, contributor or Dependabot
+  arises for a `phase/*` head (#1040; the head name is the `headRefName` Step 1 recorded): a `chore/*`, `prep-*`, `rules-*`, contributor or Dependabot
   PR is never a phase boundary, so for those skip this paragraph rather than stopping on a
   question that has no answer. For a `phase/*` head, decide whether this PR closes a phase or
   sub-phase: read `design/PORT_PROGRESS.md` and the COMMIT-PR-RULES.md sub-split tables, exactly
