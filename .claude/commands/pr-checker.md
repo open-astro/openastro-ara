@@ -406,13 +406,21 @@ Then:
 - `state=BEHIND` -> `update-branch` (Step 1.3) and go back to Step 2; the merge commit re-runs the bot.
 - `state=BLOCKED` with checks still running -> `gh pr checks <N> --watch`, then merge.
 - otherwise merge:
+  Multi-commit PR landing as one logical change:
   ```bash
   # Same invocation as the merge: shell state does not survive between blocks.
   # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
   [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
     && DEL=--delete-branch || DEL=
-  gh pr merge <N> --squash $DEL    # multi-commit PR landing as one logical change
-  gh pr merge <N> --merge  $DEL    # when per-commit granularity matters (§19.1)
+  gh pr merge <N> --squash $DEL
+  ```
+  When per-commit granularity matters (§19.1), or the PR carries a phase tag (below):
+  ```bash
+  # Same invocation as the merge: shell state does not survive between blocks.
+  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <N> --merge $DEL
   ```
   **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
   `--squash`: squashing rewrites the head the tag points at, so the tag is left

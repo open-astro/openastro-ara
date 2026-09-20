@@ -407,8 +407,8 @@ Then pick the merge method by the PR's commit history — **except at a phase
 boundary, where the tag decides it**:
 
 - **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash $DEL` (with the probe in the same invocation) — the default
-- **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge $DEL`
-- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge $DEL` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
+- **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge $DEL` (probe in the same invocation)
+- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge $DEL` (probe in the same invocation) — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
   ```shell
   HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
   [ -n "$HEAD_OID" ] || exit 1

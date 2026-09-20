@@ -1887,11 +1887,11 @@ For each phase or sub-PR:
 
 ### 22.2 Branch cleanup (continuous)
 
-Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`, `chore/*`); never delete `master` or branches the user created. `chore/*` is in that list because §19.1's allowlist lets AI create it; a `chore/*` branch AI did not create is a contributor's and is never deleted from here. Because `chore/*` is also the community namespace (COMMIT-PR-RULES.md future-scope section) and git carries no authorship signal, that rule has a **mechanical probe** (#1033), run before any `git push origin --delete chore/…`:
+Every PR merge uses `gh pr merge --delete-branch` on a same-repo head so merged feature branches are removed from origin immediately (a fork head keeps its branch — `isCrossRepository` true, #1031). Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`, `chore/*`); never delete `master` or branches the user created. `chore/*` is in that list because §19.1's allowlist lets AI create it; a `chore/*` branch AI did not create is a contributor's and is never deleted from here. Because `chore/*` is also the community namespace (COMMIT-PR-RULES.md future-scope section) and git carries no authorship signal, that rule has a **mechanical probe** (#1033), run before any `git push origin --delete chore/…`:
 
 ```shell
 ME=$(gh api user --jq .login); [ -n "$ME" ] || exit 1
-AUTHORS=$(gh pr list --state all --head "chore/<name>" --json author --jq '.[].author.login' | sort -u)
+AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author --jq '.[].author.login' | sort -u)
 # Delete only when at least one PR exists for that head AND every one of them is ours.
 [ -n "$AUTHORS" ] && [ "$AUTHORS" = "$ME" ] || { echo "Held for human review -- chore/<name> authorship inconclusive"; exit 1; }
 ```
