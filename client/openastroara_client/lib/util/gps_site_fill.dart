@@ -52,7 +52,8 @@ DeviceLocationProvider? debugMacLocationProvider;
 /// pin any platform without a process-wide override.
 enum ClientPlatform { macOS, windows, linux, android, iOS }
 
-ClientPlatform get _platform {
+/// The platform this client is running on, as the copy helpers see it.
+ClientPlatform get clientPlatform {
   if (Platform.isMacOS) return ClientPlatform.macOS;
   if (Platform.isWindows) return ClientPlatform.windows;
   if (Platform.isAndroid) return ClientPlatform.android;
@@ -72,7 +73,7 @@ String thisDeviceLabel(ClientPlatform p) => switch (p) {
   ClientPlatform.iOS => 'this iPhone or iPad',
 };
 
-String get _thisDevice => thisDeviceLabel(_platform);
+String get _thisDevice => thisDeviceLabel(clientPlatform);
 
 /// Where the user goes to grant location access, per platform. Linux has no
 /// REGISTERED geolocator implementation — geolocator 14 ships a GeoClue backend
@@ -112,9 +113,9 @@ String noFixHint(ClientPlatform p) => switch (p) {
         'plug a USB GPS dongle into the machine running Ara Server.',
 };
 
-String get _noFixHint => noFixHint(_platform);
+String get _noFixHint => noFixHint(clientPlatform);
 
-String get _permissionHint => permissionHint(_platform);
+String get _permissionHint => permissionHint(clientPlatform);
 
 /// Try to fill an observing site from GPS. **Preferred** source is a USB GPS
 /// dongle on the server machine (§31.3 time-sync state); when that's absent
