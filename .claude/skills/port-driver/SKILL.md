@@ -619,28 +619,31 @@ with the next sub-PR rather than getting a PR of its own.
    git checkout master && git pull --ff-only
    B=phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
 
+   # Before anything local: a surviving origin/$B that master does not
+   # already contain (an aborted PR, or a hand merge without
+   # `--delete-branch`) makes the eventual push of this name non-fast-forward
+   # with no hint why, and §19.1 bars `push --delete`, so Hold naming the
+   # ref for the human (#1047, #1057, #1059). Whether the local ref exists,
+   # is reusable or is retirable does not matter -- a fresh `checkout -b`
+   # below hits the same rejection -- so this runs above the whole split.
+   # Ancestors of origin/master are fine: the push fast-forwards over them.
+   # `|| exit 1` on the probe: an empty answer from a failed ls-remote must
+   # not read as "the ref is gone"; an unfetched OID fails the ancestor test,
+   # which is the Hold direction. No pipe on the capture: `$(... | cut)` would
+   # carry cut's status, not ls-remote's, and there is no pipefail here. The
+   # full ref name keeps a `someone/$B` ref from matching too.
+   REMOTE_LINE=$(git ls-remote --heads origin "refs/heads/$B") || exit 1
+   REMOTE_OID=${REMOTE_LINE%%$'\t'*}
+   if [ -n "$REMOTE_OID" ] && ! git merge-base --is-ancestor "$REMOTE_OID" origin/master 2>/dev/null; then
+     echo "Held for human review @joeytroy — origin/$B still exists at $REMOTE_OID, which master does not contain; delete it by hand before $B can be pushed"
+     exit 1
+   fi
+
    # Reuse the branch if it is already there. B routes to C without deleting the
    # stale local ref (`fetch --prune` only drops tracking refs), so a reused
    # name -- `prep-ci` at 0.5p/4/11 -- still exists locally even when you are
    # not standing on it.
    if git rev-parse --verify -q "refs/heads/$B" >/dev/null; then
-     # Before either arm below: a surviving origin/$B that master does not
-     # already contain (an aborted PR, or a hand merge without
-     # `--delete-branch`) makes the eventual push of this name non-fast-forward
-     # with no hint why, and §19.1 bars `push --delete`, so Hold naming the
-     # ref for the human (#1047, #1057). Ancestors of origin/master are fine:
-     # the push fast-forwards over them. `|| exit 1` on the probe: an empty
-     # answer from a failed ls-remote must not read as "the ref is gone"; an
-     # unfetched OID fails the ancestor test, which is the Hold direction.
-     # No pipe on the capture: `$(... | cut)` would carry cut's status, not
-     # ls-remote's, and there is no pipefail here. The full ref name keeps a
-     # `someone/$B` ref from matching too.
-     REMOTE_LINE=$(git ls-remote --heads origin "refs/heads/$B") || exit 1
-     REMOTE_OID=${REMOTE_LINE%%$'\t'*}
-     if [ -n "$REMOTE_OID" ] && ! git merge-base --is-ancestor "$REMOTE_OID" origin/master 2>/dev/null; then
-       echo "Held for human review @joeytroy — origin/$B still exists at $REMOTE_OID, which master does not contain; delete it by hand before $B can be pushed"
-       exit 1
-     fi
      # Scenario B's guard, from the other side: B only runs it when the driver
      # is already standing on the branch, so C has to re-ask here. Ask about
      # the ref's OWN commits, not how far it trails `master` -- a ref that is
