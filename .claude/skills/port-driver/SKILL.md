@@ -48,9 +48,9 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
 **Allowlisted branch** means `phase/<N>[-<letter>]-<short-name>` and the named
-prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
-`rules-*` (§22.2 lists both as branches the driver created and may delete) and
-`chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
+prep branches (`prep-*`, e.g. `prep-ci`), `rules-*` and `chore/<short-name>`,
+all from §19.1's branch allowlist (`rules-*` was added there in #1032; §22.2 had
+always listed it as driver-created and deletable). Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
 `chore/<short-name>` is sanctioned by §19.1 itself: its branch allowlist names
@@ -62,8 +62,13 @@ off-limits"; that gap is closed and the note is retired.)
 
 Because `chore/*` is also what outside contributors use, scenario A's
 "not authored by you" clause deliberately excludes it: the driver never adopts a
-`chore/*` PR it did not open. Recognising a branch, adopting someone's PR on it,
-and creating one are three different permissions. §5 still only ever *creates*
+`chore/*` PR it did not open. Decided 2026-09-19 (#1034): this asymmetry with
+`prep-*`/`rules-*` is intentional and stays — those two are driver-only
+namespaces, `chore/*` is shared with contributors. Deleting a stale `chore/*`
+from origin has the matching authorship probe in §22.2 (#1033): run it, and a
+no-PR or foreign-author result is a Held, not a delete. Recognising a branch,
+adopting someone's PR on it, deleting it, and creating one are four different
+permissions. §5 still only ever *creates*
 `phase/…` — the phase naming is what `PORT_PROGRESS.md` and the
 `COMMIT-PR-RULES.md` sub-split tables are keyed on.
 
@@ -381,12 +386,41 @@ these. Waiting on a review that can never arrive would spin forever — see step
 
 ### Step 3b — Merge
 
-Every PR targets `master` (playbook §22.0). Pick the merge method by the PR's
-commit history — **except at a phase boundary, where the tag decides it**:
+Every PR targets `master` (playbook §22.0). `--delete-branch` is for same-repo
+heads only; a fork head belongs to the contributor and is never deleted from
+here (#1031, same rule as `/pr-checker` Step 4 and playbook §19.1/§22.2). The
+probe that decides it is the `$DEL` line below. **It must run in the same shell
+invocation as the `gh pr merge` that uses it** — each fenced block here is a
+separate invocation, and an unset `$DEL` would silently merge without deleting
+a same-repo branch (the stale-ref state §2's scenario-B guard exists for). That
+is why every merge fence in this step repeats the probe instead of referring
+back to this one:
 
-- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash --delete-branch` — the default
-- **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge --delete-branch`
-- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge --delete-branch` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
+```shell
+# Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+# Do NOT invert this to test = "true" -- that would delete on an API error.
+[ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+  && DEL=--delete-branch || DEL=
+```
+
+Then pick the merge method by the PR's commit history — **except at a phase
+boundary, where the tag decides it**:
+
+- **Single-commit PR, or a multi-commit one that should land as one logical change** — the default:
+  ```shell
+  # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <PR> --squash $DEL
+  ```
+- **PR where per-commit granularity is worth keeping:**
+  ```shell
+  # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <PR> --merge $DEL
+  ```
+- **Any PR that carries a phase or sub-phase tag:** the `--merge` fence at the end of this step, never `--squash` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
   ```shell
   HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
   [ -n "$HEAD_OID" ] || exit 1
@@ -439,7 +473,11 @@ The merge is deliberately in a block of its own, so that a driver running any
 block verbatim cannot merge ahead of the check:
 
 ```shell
-gh pr merge <PR> --merge --delete-branch
+# Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+# Do NOT invert this to test = "true" -- that would delete on an API error.
+[ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+  && DEL=--delete-branch || DEL=
+gh pr merge <PR> --merge $DEL
 ```
 
 If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a

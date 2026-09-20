@@ -405,15 +405,13 @@ Then:
 - `draft=true` -> `gh pr ready <N>` first (`gh pr merge` refuses drafts).
 - `state=BEHIND` -> `update-branch` (Step 1.3) and go back to Step 2; the merge commit re-runs the bot.
 - `state=BLOCKED` with checks still running -> `gh pr checks <N> --watch`, then merge.
-- otherwise merge:
-  ```bash
-  gh pr merge <N> --squash --delete-branch    # multi-commit PR landing as one logical change
-  gh pr merge <N> --merge  --delete-branch    # when per-commit granularity matters (§19.1)
-  ```
+- otherwise, **settle the merge method before running any merge fence** — the tag check and the
+  boundary decision come first, so a top-down reader cannot merge ahead of them:
+
   **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
   `--squash`: squashing rewrites the head the tag points at, so the tag is left
   on a commit that is not reachable from `master` (COMMIT-PR-RULES.md steps 6-7).
-  Check for a tag on the head before choosing the method:
+  Check for a tag on the head:
   ```bash
   HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
   # Bail rather than guess: an empty HEAD_OID makes the grep below match every
@@ -425,8 +423,36 @@ Then:
     | grep -E "^$HEAD_OID[[:space:]]+refs/tags/phase-" \
     && echo "tagged -> use --merge"
   ```
+  **Phase-boundary PR with no tag on its head -> do not merge yet (#1029).** The probe above only
+  detects a tag that is already pushed; nothing else in this command pushes one, and under the
+  port-driver's §3b ordering the tag goes on immediately before the merge. So before choosing the
+  method, decide whether this PR closes a phase or sub-phase: read `design/PORT_PROGRESS.md` and the
+  COMMIT-PR-RULES.md sub-split tables, exactly as §3b does. If it does and the probe found no
+  `phase-*` tag, run the §3b tag block from `.claude/skills/port-driver/SKILL.md` verbatim —
+  `git fetch origin pull/<N>/head`, tag the `headRefOid`, both pre-push verifications, then
+  `git push origin <tag>` (the named ref, never `--tags`) — and only then merge with `--merge`.
+  Merging it untagged silently skips §19.1's phase-boundary gate item. If you cannot tell whether
+  it is a boundary, that is ambiguous: **Hard stop** with `Held for human review`.
+
+  Then merge. Multi-commit PR landing as one logical change:
+  ```bash
+  # Same invocation as the merge: shell state does not survive between blocks.
+  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <N> --squash $DEL
+  ```
+  When per-commit granularity matters (§19.1), or the PR carries a phase tag (below):
+  ```bash
+  # Same invocation as the merge: shell state does not survive between blocks.
+  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <N> --merge $DEL
+  ```
   Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
-  step; a fork head belongs to the contributor and is never deleted from here.
+  step; a fork head belongs to the contributor and is never deleted from here (`isCrossRepository`
+  true -> omit `--delete-branch`; the port-driver's §3b carries the same rule, #1031).
 
 If any gate condition is ambiguous, post `Held for human review @joeytroy — <reason>` and treat it
 as a **Hard stop** for that PR.
@@ -473,8 +499,9 @@ The loop ends only when every PR is merged or a **Hard stop** below applies. In 
   verdict can still carry new Defects, so the merge half gates on the printed verdict's **last**
   line (the prompt defines the sign-off as the last line, and a review can quote either string in
   its body) — with `poll` = the Step 2 block saved to a file:
-  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && gh pr merge <N> --squash --delete-branch`
-  (`--merge` instead when the PR carries a phase tag, as above).
+  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && { [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] && DEL=--delete-branch || DEL=; gh pr merge <N> --squash $DEL; }`
+  (the fork probe sits inside the same chain so an unset `$DEL` cannot silently drop the flag)
+  (`--merge` instead when the PR carries a phase tag, as above — and a phase-boundary PR must be tagged per Step 4 before this line runs).
 - **A Defect you disagree with** is still fixed or wired into the skill/docs when there is any
   reasonable change that satisfies it. Only a Defect that would require a wrong or unsafe change
   becomes a hard stop. A Note you disagree with is a wrap-up line, not a change.
