@@ -393,8 +393,8 @@ probe that decides it is the `$DEL` line below. **It must run in the same shell
 invocation as the `gh pr merge` that uses it** — each fenced block here is a
 separate invocation, and an unset `$DEL` would silently merge without deleting
 a same-repo branch (the stale-ref state §2's scenario-B guard exists for). That
-is why the merge fence at the end of this step repeats the probe instead of
-referring back to it:
+is why every merge fence in this step repeats the probe instead of referring
+back to this one:
 
 ```shell
 # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
@@ -406,9 +406,21 @@ referring back to it:
 Then pick the merge method by the PR's commit history — **except at a phase
 boundary, where the tag decides it**:
 
-- **Single-commit PR, or a multi-commit one that should land as one logical change:** `gh pr merge <PR> --squash $DEL` (with the probe in the same invocation) — the default
-- **PR where per-commit granularity is worth keeping:** `gh pr merge <PR> --merge $DEL` (probe in the same invocation)
-- **Any PR that carries a phase or sub-phase tag:** `gh pr merge <PR> --merge $DEL` (probe in the same invocation) — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
+- **Single-commit PR, or a multi-commit one that should land as one logical change** — the default:
+  ```shell
+  # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <PR> --squash $DEL
+  ```
+- **PR where per-commit granularity is worth keeping:**
+  ```shell
+  # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <PR> --merge $DEL
+  ```
+- **Any PR that carries a phase or sub-phase tag:** the `--merge` fence at the end of this step, never `--squash` — see below. This is keyed on *carrying a tag*, not on being the phase's last PR: a `phase-<N>-<letter>-complete` sub-phase milestone is routinely some other PR, and squashing it would orphan its tag exactly as described below. For a tag the driver did not push itself — a maintainer-pushed sub-phase milestone — establish the fact rather than assuming it, with the same probe `/pr-checker` uses (`.claude/commands/pr-checker.md`, Step 4):
   ```shell
   HEAD_OID=$(gh pr view <PR> --json headRefOid --jq .headRefOid)
   [ -n "$HEAD_OID" ] || exit 1

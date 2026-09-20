@@ -405,27 +405,13 @@ Then:
 - `draft=true` -> `gh pr ready <N>` first (`gh pr merge` refuses drafts).
 - `state=BEHIND` -> `update-branch` (Step 1.3) and go back to Step 2; the merge commit re-runs the bot.
 - `state=BLOCKED` with checks still running -> `gh pr checks <N> --watch`, then merge.
-- otherwise merge:
-  Multi-commit PR landing as one logical change:
-  ```bash
-  # Same invocation as the merge: shell state does not survive between blocks.
-  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
-  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
-    && DEL=--delete-branch || DEL=
-  gh pr merge <N> --squash $DEL
-  ```
-  When per-commit granularity matters (§19.1), or the PR carries a phase tag (below):
-  ```bash
-  # Same invocation as the merge: shell state does not survive between blocks.
-  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
-  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
-    && DEL=--delete-branch || DEL=
-  gh pr merge <N> --merge $DEL
-  ```
+- otherwise, **settle the merge method before running any merge fence** — the tag check and the
+  boundary decision come first, so a top-down reader cannot merge ahead of them:
+
   **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
   `--squash`: squashing rewrites the head the tag points at, so the tag is left
   on a commit that is not reachable from `master` (COMMIT-PR-RULES.md steps 6-7).
-  Check for a tag on the head before choosing the method:
+  Check for a tag on the head:
   ```bash
   HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
   # Bail rather than guess: an empty HEAD_OID makes the grep below match every
@@ -448,6 +434,22 @@ Then:
   Merging it untagged silently skips §19.1's phase-boundary gate item. If you cannot tell whether
   it is a boundary, that is ambiguous: **Hard stop** with `Held for human review`.
 
+  Then merge. Multi-commit PR landing as one logical change:
+  ```bash
+  # Same invocation as the merge: shell state does not survive between blocks.
+  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <N> --squash $DEL
+  ```
+  When per-commit granularity matters (§19.1), or the PR carries a phase tag (below):
+  ```bash
+  # Same invocation as the merge: shell state does not survive between blocks.
+  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
+  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+    && DEL=--delete-branch || DEL=
+  gh pr merge <N> --merge $DEL
+  ```
   Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
   step; a fork head belongs to the contributor and is never deleted from here (`isCrossRepository`
   true -> omit `--delete-branch`; the port-driver's §3b carries the same rule, #1031).

@@ -1817,7 +1817,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 - Do not edit `design/PORT_PLAYBOOK.md`, `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` except to append entries per documented rules.
 - Do not edit `.git/`, `.claude/`.
-- `.github/workflows/` is owned by the playbook: the full CI matrix per §14.3 lands at Phase 14. Pre-Phase-14 edits are permitted only to (a) replace the stale upstream NINA CI that would otherwise red-flag every PR (the progressive placeholder in `prep-ci`) and (b) grow that placeholder at the documented phase boundaries (Phase 0.5p, Phase 4, Phase 11) on the way to §14.3. Any other workflow change before Phase 14 requires explicit user instruction.
+- `.github/workflows/` is owned by the playbook: the full CI matrix per §14.3 lands at Phase 14. Pre-Phase-14 edits are permitted only to (a) replace the stale upstream NINA CI that would otherwise red-flag every PR (the progressive placeholder in `prep-ci`) and (b) grow that placeholder at the documented phase boundaries (Phase 0.5p, Phase 4, Phase 11) on the way to §14.3 (which, since #1036, documents the matrix as it stands rather than the target). Any other workflow change before Phase 14 requires explicit user instruction.
 
 ---
 
