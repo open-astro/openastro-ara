@@ -48,17 +48,11 @@ typedef DeviceLocationProvider = Future<DeviceLocationResult?> Function();
 DeviceLocationProvider? debugMacLocationProvider;
 
 /// The platforms the client ships on, for user-facing copy. Detected from
-/// `dart:io` in production; tests pin one via [debugPlatformOverride].
+/// `dart:io`; the copy helpers below are pure functions of it so tests can
+/// pin any platform without a process-wide override.
 enum ClientPlatform { macOS, windows, linux, android, iOS }
 
-/// Test seam — force the platform the copy below is written for. Leave null
-/// in production.
-@visibleForTesting
-ClientPlatform? debugPlatformOverride;
-
 ClientPlatform get _platform {
-  final o = debugPlatformOverride;
-  if (o != null) return o;
   if (Platform.isMacOS) return ClientPlatform.macOS;
   if (Platform.isWindows) return ClientPlatform.windows;
   if (Platform.isAndroid) return ClientPlatform.android;
