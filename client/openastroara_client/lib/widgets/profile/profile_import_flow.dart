@@ -50,7 +50,17 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   if (picked == null) return; // user cancelled
   final file = picked;
   const maxShareBytes = 1024 * 1024; // 1 MB ceiling — shares are a few KB
-  if (await file.length() > maxShareBytes) {
+  // file_picker 13 returns null when the length could not be determined (a
+  // failed disk read), distinct from a genuinely empty file (0). Treat that as
+  // unreadable rather than as "small enough": the readAsBytes below would only
+  // fail the same way.
+  final length = await file.length();
+  if (length == null) {
+    messenger.showSnackBar(
+        const SnackBar(content: Text("Couldn't read the selected file.")));
+    return;
+  }
+  if (length > maxShareBytes) {
     messenger.showSnackBar(const SnackBar(
         content: Text("That file is too large to be a profile share."),
         backgroundColor: AraColors.accentError));
