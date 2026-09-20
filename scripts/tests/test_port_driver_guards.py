@@ -99,7 +99,8 @@ def reuse_guard(repo: Path, branch: str, merged: list[str] = ()) -> str:
     re-create it: its head is exactly a merged PR's head, #1028) or "HELD".
     Asks for the ref's own commits, not how far it trails master -- see
     test_reuse_* for the two ways the ancestor test failed. `merged` is what
-    `gh pr list --head <branch> --state merged --json headRefOid` returned;
+    `gh pr list --head <branch> --base master --state merged --limit 100 --json headRefOid`
+    returned;
     an empty list stands in for both "no PR" and an API failure, and both
     Hold.
     """
@@ -368,7 +369,7 @@ class MirrorPin(unittest.TestCase):
         "step_5_reuse_fence": (
             "   # Reuse the branch if it is already there.",
             "   The slash namespace is the convention",
-            '5bd9959a95edf900',
+            '9a9a732aa418ad63',
         ),
     }
 
@@ -378,6 +379,8 @@ class MirrorPin(unittest.TestCase):
         return hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode()).hexdigest()[:16]
 
     def section(self, start: str, end: str) -> str:
+        if not SKILL.is_file():
+            self.fail(f"{SKILL} is missing: this test mirrors it and cannot run without it")
         text = SKILL.read_text()
         try:
             i = text.index(start)

@@ -637,7 +637,10 @@ with the next sub-PR rather than getting a PR of its own.
        # --base master: "every byte is in master by content" (§19.1) must be
        # literally true, not true because this repo happens to merge only
        # there; a same-named fork head merged elsewhere must not authorize it.
-       merged=$(gh pr list --head "$B" --base master --state merged --json headRefOid --jq '.[].headRefOid')
+       # --limit 100: a placeholder name grown at 0.5p/4/11 outgrows the
+       # default 30 eventually; a missed OID Holds rather than mis-retires,
+       # but the miss is silent.
+       merged=$(gh pr list --head "$B" --base master --state merged --limit 100 --json headRefOid --jq '.[].headRefOid')
        if [ -n "$REF_OID" ] && printf '%s\n' "$merged" | grep -qx "$REF_OID"; then
          echo "retiring local $B: its head $REF_OID is the merged head of a PR under this name"
          # `|| exit 1` on both: if the opening `checkout master` failed (dirty
