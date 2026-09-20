@@ -576,8 +576,10 @@ class InertTreesTest(unittest.TestCase):
         )
         self.assertEqual(
             offenders, [],
-            "a non-prose file under an INERT_DIRS prefix would be skipped by CI; "
-            "classify it in scripts/classify-changed-paths.py instead",
+            "a non-prose file under an INERT_DIRS prefix would be skipped by CI. "
+            "Either classify it in scripts/classify-changed-paths.py (drop the prefix "
+            "from INERT_DIRS, or add a rule for the path), or -- if the extension "
+            "provably cannot be a build input -- add it to PROSE_OR_IMAGE with a reason",
         )
 
     def test_codeql_paths_ignore_mirrors_inert_dirs(self):

@@ -821,7 +821,8 @@ jobs:
     # The guard must NOT be omitted entirely. With no `if:` the implicit
     # condition is success() over `needs: changes`, so a failed `changes`
     # would skip this job at job level and reproduce the deadlock. Since
-    # #1024 `changes` cannot fail (its steps are `continue-on-error`), so the
+    # #1024 `changes` cannot fail short of its outer 5-minute job timeout
+    # (its steps are `continue-on-error`), so the
     # implicit condition would in practice hold too -- but that is a property
     # of another job's steps, and an edit there must not be able to silently
     # re-open this deadlock. The explicit `!cancelled()` states the intent
