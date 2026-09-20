@@ -105,15 +105,17 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
         private static uint[] ScaleToUInt32(int[] data, int bitDepth) {
             // The reported bit depth is the nominal scale, but the int path exists for cameras whose
-            // ADU exceed 16 bits, and a driver can under-report. Never clip highlights over it:
-            // widen to the depth the data actually needs and say so.
-            int effectiveDepth = Math.Clamp(bitDepth, 1, 31);
+            // ADU exceed 16 bits, and a driver can under-report. Never clip highlights over it --
+            // and never scale frame-by-frame either: a light whose max is 70000 and a dark whose max
+            // is 5000 from the same camera must encode 5000 identically, or calibration subtracts
+            // the wrong level. So the only widening is to the fixed 32-bit bucket, which every
+            // frame of that camera then shares.
+            int effectiveDepth = Math.Clamp(bitDepth, 1, 32);
             int dataMax = 0;
             foreach (int v in data) { if (v > dataMax) { dataMax = v; } }
-            int neededDepth = dataMax <= 0 ? 1 : 32 - System.Numerics.BitOperations.LeadingZeroCount((uint)dataMax);
-            if (neededDepth > effectiveDepth) {
-                Logger.Warning($"XISF: samples reach {dataMax} but the reported bit depth is {bitDepth}; scaling as {neededDepth}-bit data");
-                effectiveDepth = neededDepth;
+            if (effectiveDepth < 32 && dataMax > (1L << effectiveDepth) - 1) {
+                Logger.Warning($"XISF: samples reach {dataMax} but the reported bit depth is {bitDepth}; scaling the whole frame as 32-bit data so every frame from this camera encodes alike");
+                effectiveDepth = 32;
             }
             double max = Math.Pow(2, effectiveDepth) - 1;
             var scaled = new uint[data.Length];
@@ -227,6 +229,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     outArray = byteArray;
                 }
                 CompressionType = XISFCompressionType.NONE;
+                CompressionName = null;
 
                 Logger.Debug("XISF output array is larger after compression. Image will be prepared uncompressed instead.");
             }
