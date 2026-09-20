@@ -193,7 +193,9 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Contains("pixelStorage=\"Planar\"", xml, StringComparison.Ordinal);
         Assert.Contains("id=\"XISF:BlockAlignmentSize\"", xml, StringComparison.Ordinal);
         Assert.Contains($"value=\"{XISF.PaddedBlockSize}\"", xml, StringComparison.Ordinal);
-        Assert.Contains("OpenAstro Ara", xml.Substring(xml.IndexOf("XISF:CreatorApplication", StringComparison.Ordinal)), StringComparison.Ordinal);
+        // Scoped to the property element itself: SWCREATE also says OpenAstro Ara further down.
+        Assert.Matches("id=\"XISF:CreatorApplication\"[^>]*>OpenAstro Ara<", xml);
+        Assert.DoesNotContain("N.I.N.A.", xml, StringComparison.Ordinal);
         Assert.DoesNotContain("N.I.N.A.", xml.Substring(xml.IndexOf("SWCREATE", StringComparison.Ordinal)), StringComparison.Ordinal);
 
         var loc = System.Text.RegularExpressions.Regex.Match(xml, "location=\"attachment:(\\d+):(\\d+)\"");
