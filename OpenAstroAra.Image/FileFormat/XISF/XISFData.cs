@@ -104,11 +104,21 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         private static uint[] ScaleToUInt32(int[] data, int bitDepth) {
-            if (bitDepth < 1 || bitDepth > 32) { throw new ArgumentOutOfRangeException(nameof(bitDepth)); }
-            double max = Math.Pow(2, bitDepth) - 1;
+            // The reported bit depth is the nominal scale, but the int path exists for cameras whose
+            // ADU exceed 16 bits, and a driver can under-report. Never clip highlights over it:
+            // widen to the depth the data actually needs and say so.
+            int effectiveDepth = Math.Clamp(bitDepth, 1, 31);
+            int dataMax = 0;
+            foreach (int v in data) { if (v > dataMax) { dataMax = v; } }
+            int neededDepth = dataMax <= 0 ? 1 : 32 - System.Numerics.BitOperations.LeadingZeroCount((uint)dataMax);
+            if (neededDepth > effectiveDepth) {
+                Logger.Warning($"XISF: samples reach {dataMax} but the reported bit depth is {bitDepth}; scaling as {neededDepth}-bit data");
+                effectiveDepth = neededDepth;
+            }
+            double max = Math.Pow(2, effectiveDepth) - 1;
             var scaled = new uint[data.Length];
             for (int i = 0; i < data.Length; i++) {
-                double v = Math.Clamp(data[i], 0, max);
+                double v = Math.Max(data[i], 0);
                 scaled[i] = (uint)Math.Round(v / max * uint.MaxValue);
             }
             return scaled;

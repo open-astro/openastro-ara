@@ -414,13 +414,13 @@ public sealed class XisfRoundTripTests : IDisposable {
     }
 
     [Theory]
-    [InlineData("bounds=\"1:0\"")]
-    [InlineData("bounds=\"0\"")]
-    [InlineData("bounds=\"a:b\"")]
-    [InlineData("pixelStorage=\"Diagonal\"")]
-    [InlineData("colorSpace=\"CMYK\"")]
-    public async Task AMalformedShapeAttributeIsRejected(string attribute) {
-        var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"UInt16\" {attribute}", string.Empty, new byte[2]);
+    [InlineData("bounds=\"1:0\"", "Float32", 4)]
+    [InlineData("bounds=\"0\"", "Float32", 4)]
+    [InlineData("bounds=\"a:b\"", "Float64", 8)]
+    [InlineData("pixelStorage=\"Diagonal\"", "UInt16", 2)]
+    [InlineData("colorSpace=\"CMYK\"", "UInt16", 2)]
+    public async Task AMalformedShapeAttributeIsRejected(string attribute, string sampleFormat, int sampleBytes) {
+        var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"{sampleFormat}\" {attribute}", string.Empty, new byte[sampleBytes]);
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 
@@ -467,6 +467,45 @@ public sealed class XisfRoundTripTests : IDisposable {
         var packed = compressor.Wrap(pixels).ToArray();
         var file = Monolithic($"geometry=\"2:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\" compression=\"zstd:4\"", Convert.ToBase64String(packed));
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+    }
+
+    [Fact]
+    public async Task AJunkBoundsAttributeOnAnIntegerFormatIsIgnoredPerSpec() {
+        // XISF 1.0: bounds applies to floating-point and complex formats and is ignored otherwise.
+        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" bounds=\"junk\"", string.Empty, new byte[] { 0x34, 0x12 });
+        Assert.Equal(new ushort[] { 0x1234 }, (await Read(file)).Data.FlatArray);
+    }
+
+    [Fact]
+    public async Task AduDeeperThanTheReportedBitDepthAreNotClipped() {
+        // A driver reporting 12 bits while delivering 16-bit ADU: the writer widens the scale
+        // instead of clipping every highlight to 4095.
+        var px = new[] { 0, 4095, 65535 };
+        var header = new XISFHeader();
+        header.AddImageMetaData(new ImageProperties(3, 1, 12, false, 0, 0), "LIGHT", XISFSampleFormat.UInt32);
+        header.Populate(new ImageMetaData());
+        var xisf = new XISF(header);
+        xisf.AddAttachedImageInt(px, 12, SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE));
+        using var ms = new MemoryStream();
+        xisf.Save(ms);
+        var read = (await Read(ms.ToArray())).Data.FlatArray;
+        Assert.Equal(0, read[0]);
+        Assert.Equal(4095, read[1]);
+        Assert.Equal(ushort.MaxValue, read[2]);
+    }
+
+    [Fact]
+    public void SaveWritesNothingWhenTheDeclaredOffsetIsInsideTheHeader() {
+        var header = new XISFHeader();
+        header.AddImageMetaData(new ImageProperties(2, 2, 16, false, 0, 0), "LIGHT");
+        header.Populate(new ImageMetaData());
+        var xisf = new XISF(header);
+        xisf.AddAttachedImage(Pattern(2, 2), SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE));
+        // Corrupt the converged offset the way a future AttachData bug would.
+        header.Image!.SetAttributeValue("location", "attachment:16:8");
+        using var ms = new MemoryStream();
+        Assert.Throws<InvalidDataException>(() => xisf.Save(ms));
+        Assert.Equal(0, ms.Length);
     }
 
     [Fact]

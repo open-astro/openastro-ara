@@ -167,7 +167,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     // range actually used, and the spec makes it mandatory for float formats. Integer
                     // formats ignore it (their range is the type's).
                     double boundsLow = 0d, boundsHigh = 1d;
-                    if (imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
+                    bool floatFormat = sampleFormat.StartsWith("Float", StringComparison.Ordinal) || sampleFormat.StartsWith("Complex", StringComparison.Ordinal);
+                    if (floatFormat && imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
                         string[] b = boundsAttribute.Value.Split(':');
                         if (b.Length != 2
                             || !double.TryParse(b[0], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsLow)
