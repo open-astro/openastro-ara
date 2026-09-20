@@ -219,71 +219,122 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      * If the attachment attribute does not exist, we assume that the image data is
                      * inside a <Data> element and is base64-encoded.
                      */
-                    BaseImageData imageData;
+                    string location = RequiredAttribute(imageElement, "location");
+                    byte[] raw;
 
-                    if (RequiredAttribute(imageElement, "location").StartsWith("attachment", StringComparison.Ordinal)) {
-                        string[] location = RequiredAttribute(imageElement, "location").Split(':');
-                        int start = int.Parse(location[1], CultureInfo.InvariantCulture);
-                        int size = int.Parse(location[2], CultureInfo.InvariantCulture);
+                    if (location.StartsWith("attachment", StringComparison.Ordinal)) {
+                        string[] parts = location.Split(':');
+                        if (parts.Length < 3) {
+                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                        }
+                        long start = long.Parse(parts[1], CultureInfo.InvariantCulture);
+                        long size = long.Parse(parts[2], CultureInfo.InvariantCulture);
 
                         // Validate the data block lies within the file before allocating for it.
-                        if (start < 0 || size < 0 || (long)start + size > fs.Length) {
+                        if (start < 0 || size < 0 || size > int.MaxValue || start + size > fs.Length) {
                             Logger.Error($"XISF: data block (start={start}, size={size}) lies outside the {fs.Length}-byte file");
                             throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
                         }
 
                         Logger.Debug($"XISF: Data block type: attachment, Data block start: {start}, Data block size: {size}");
 
-                        // Read the data block in, starting at the specified offset
-                        byte[] raw = new byte[size];
+                        raw = new byte[size];
                         fs.Seek(start, SeekOrigin.Begin);
-                        fs.ReadExactly(raw, 0, size);
-
-                        // Validate the data block's checksum
-                        if (cksumType != XISFChecksumType.NONE) {
-                            if (!VerifyChecksum(raw, cksumType, cksumHash)) {
-                                // Only emit a warning to the user about a bad checksum for now
-                                Notifier.ShowWarning(Loc.Instance["LblXisfBadChecksum"]);
-                            }
-                        }
-
-                        // Uncompress the data block
-                        if (compressionInfo.CompressionType != XISFCompressionType.NONE) {
-                            raw = UncompressData(raw, compressionInfo);
-
-                            if (compressionInfo.IsShuffled) {
-                                raw = XISFData.Unshuffle(raw, compressionInfo.ItemSize);
-                            }
-                        }
-
-                        var converter = GetConverter(sampleFormat);
-                        var img = converter.Convert(raw);
-
-                        if (img.LongLength != expectedSamples) {
-                            Logger.Error($"XISF: decoded sample count {img.LongLength} does not match geometry {expectedSamples}");
-                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
-                        }
-
-                        imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
+                        fs.ReadExactly(raw, 0, (int)size);
                     } else {
-                        string base64Img = (imageElement.Element("Data")
-                            ?? throw new InvalidDataException("XISF: image data block has no Data element")).Value;
-                        byte[] encodedImg = Convert.FromBase64String(base64Img);
-
-                        var converter = GetConverter(sampleFormat);
-                        var img = converter.Convert(encodedImg);
-
-                        if (img.LongLength != expectedSamples) {
-                            Logger.Error($"XISF: decoded sample count {img.LongLength} does not match geometry {expectedSamples}");
-                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
-                        }
-
-                        imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
+                        raw = ReadInlineOrEmbeddedBlock(imageElement, location);
                     }
+
+                    // Same pipeline for every block location: the spec's checksum and compression
+                    // attributes describe the block wherever it is stored.
+                    var img = DecodeBlock(raw, sampleFormat, compressionInfo, cksumType, cksumHash, expectedSamples);
+                    BaseImageData imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
 
                     return imageData;
                 }
             }, ct);
+        }
+
+        /// <summary>
+        /// Reads an inline block (location "inline:encoding": the element's own text, per XISF 1.0
+        /// "Inline data blocks") or an embedded block (location "embedded": a child Data element
+        /// with an encoding attribute). A legacy child Data element under an inline location, as
+        /// earlier writers of this code base emitted, is still accepted.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII XISF encoding tokens to match the spec's lowercase identifiers; not a security decision.")]
+        private static byte[] ReadInlineOrEmbeddedBlock(XElement imageElement, string location) {
+            string encoding;
+            string payload;
+            var dataElement = imageElement.Element("Data") ?? imageElement.Element(XName.Get("Data", imageElement.Name.NamespaceName));
+
+            if (location.StartsWith("inline", StringComparison.Ordinal)) {
+                string[] parts = location.Split(':');
+                encoding = parts.Length > 1 ? parts[1].ToLowerInvariant() : "base64";
+                // Only the element's own text nodes: Image also carries FITSKeyword/Property children.
+                payload = string.Concat(imageElement.Nodes().OfType<XText>().Select(t => t.Value));
+                if (string.IsNullOrWhiteSpace(payload) && dataElement != null) {
+                    payload = dataElement.Value;
+                    encoding = (dataElement.Attribute("encoding")?.Value ?? encoding).ToLowerInvariant();
+                }
+            } else if (location.StartsWith("embedded", StringComparison.Ordinal)) {
+                if (dataElement == null) {
+                    throw new InvalidDataException("XISF: embedded image data block has no Data element");
+                }
+                encoding = (dataElement.Attribute("encoding")?.Value ?? "base64").ToLowerInvariant();
+                payload = dataElement.Value;
+            } else {
+                throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported block location '{0}'", location));
+            }
+
+            payload = string.Concat(payload.Where(c => !char.IsWhiteSpace(c)));
+            return encoding switch {
+                "base64" => Convert.FromBase64String(payload),
+                "hex" => Convert.FromHexString(payload),
+                _ => throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported block encoding '{0}'", encoding)),
+            };
+        }
+
+        /// <summary>
+        /// Verifies, decompresses, unshuffles and converts one data block. A checksum mismatch is an
+        /// error, not a warning: a block that fails its own integrity check must never be handed on
+        /// as pixels (design/AUDIT.MD #H3).
+        /// </summary>
+        private static ushort[] DecodeBlock(byte[] raw, string sampleFormat, XISFCompressionInfo compressionInfo, XISFChecksumType cksumType, string cksumHash, long expectedSamples) {
+            if (cksumType != XISFChecksumType.NONE) {
+                switch (VerifyChecksum(raw, cksumType, cksumHash)) {
+                    case ChecksumVerdict.Mismatch:
+                        throw new InvalidDataException(Loc.Instance["LblXisfBadChecksum"]);
+                    case ChecksumVerdict.Unverifiable:
+                        Logger.Warning($"XISF: checksum algorithm {cksumType} is not supported on this platform; the block was not verified");
+                        break;
+                    case ChecksumVerdict.Match:
+                    default:
+                        break;
+                }
+            }
+
+            if (compressionInfo.CompressionType != XISFCompressionType.NONE) {
+                raw = UncompressData(raw, compressionInfo);
+
+                if (compressionInfo.IsShuffled) {
+                    raw = XISFData.Unshuffle(raw, compressionInfo.ItemSize);
+                }
+            }
+
+            int sampleBytes = SampleFormatByteSize(sampleFormat);
+            if (raw.LongLength != expectedSamples * sampleBytes) {
+                Logger.Error($"XISF: data block holds {raw.LongLength} bytes, geometry needs {expectedSamples * sampleBytes}");
+                throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+            }
+
+            var img = GetConverter(sampleFormat).Convert(raw);
+
+            if (img.LongLength != expectedSamples) {
+                Logger.Error($"XISF: decoded sample count {img.LongLength} does not match geometry {expectedSamples}");
+                throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+            }
+
+            return img;
         }
 
         private static int SampleFormatByteSize(string sampleFormat) {
@@ -317,32 +368,6 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                 case "Float64":
                     return new Float64Converter();
-
-                default: throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
-            }
-        }
-
-        private static unsafe ushort GetConvertedPixelValue(byte[] rawData, int offset, string sampleFormat) {
-            switch (sampleFormat) {
-                case "UInt8":
-                    return (ushort)(((rawData[offset]) / (double)byte.MaxValue) * ushort.MaxValue);
-
-                case "UInt16":
-                    return (ushort)((rawData[(offset * 2) + 1] << 8) | (rawData[offset * 2]));
-
-                case "UInt32":
-                    return (ushort)(((rawData[(offset * 4) + 3] << 24) | (rawData[(offset * 4) + 2] << 16) | (rawData[(offset * 4) + 1] << 8) | (rawData[offset * 4])) / (double)int.MaxValue * ushort.MaxValue);
-
-                case "UInt64":
-                    return (ushort)((((long)rawData[(offset * 8) + 7] << 56) | ((long)rawData[(offset * 8) + 6] << 48) | ((long)rawData[(offset * 8) + 5] << 40) | ((long)rawData[(offset * 8) + 4] << 32) | ((long)rawData[(offset * 8) + 3] << 24) | ((long)rawData[(offset * 8) + 2] << 16) | ((long)rawData[(offset * 8) + 1] << 8) | ((long)rawData[offset * 8])) / (double)long.MaxValue * ushort.MaxValue);
-
-                case "Float32":
-                    var integer = ((rawData[(offset * 4) + 3] << 24) | (rawData[(offset * 4) + 2] << 16) | (rawData[(offset * 4) + 1] << 8) | (rawData[offset * 4]));
-                    return (ushort)((*(float*)&integer) * ushort.MaxValue);
-
-                case "Float64":
-                    var l = (((long)rawData[(offset * 8) + 7] << 56) | ((long)rawData[(offset * 8) + 6] << 48) | ((long)rawData[(offset * 8) + 5] << 40) | ((long)rawData[(offset * 8) + 4] << 32) | ((long)rawData[(offset * 8) + 3] << 24) | ((long)rawData[(offset * 8) + 2] << 16) | ((long)rawData[(offset * 8) + 1] << 8) | ((long)rawData[offset * 8]));
-                    return (ushort)((*(double*)&l) * ushort.MaxValue);
 
                 default: throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
             }
@@ -424,8 +449,15 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
         }
 
+        /// <summary>
+        /// Outcome of checking a block against its declared checksum. "Unverifiable" means this
+        /// platform cannot compute the algorithm (SHA-3 on macOS); that is not evidence against
+        /// the file, so the caller logs it and carries on, whereas a mismatch is fatal.
+        /// </summary>
+        private enum ChecksumVerdict { Match, Mismatch, Unverifiable }
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do not use weak cryptographic algorithms", Justification = "SHA-1 is one of the integrity checksum algorithms defined by the XISF file-format specification; the algorithm is selected by the file being read/written for data-integrity verification, not for any security decision.")]
-        private static bool VerifyChecksum(byte[] raw, XISFChecksumType cksumType, string providedCksum) {
+        private static ChecksumVerdict VerifyChecksum(byte[] raw, XISFChecksumType cksumType, string providedCksum) {
             string computedCksum;
 
             using (MyStopWatch.Measure($"XISF Checksum = {cksumType}")) {
@@ -443,23 +475,24 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         break;
 
                     case XISFChecksumType.Sha3256:
+                        if (!SHA3_256.IsSupported) { return ChecksumVerdict.Unverifiable; }
                         computedCksum = GetStringFromHash(SHA3_256.HashData(raw));
                         break;
 
                     case XISFChecksumType.Sha3512:
+                        if (!SHA3_512.IsSupported) { return ChecksumVerdict.Unverifiable; }
                         computedCksum = GetStringFromHash(SHA3_512.HashData(raw));
                         break;
 
                     default:
-                        return false;
+                        return ChecksumVerdict.Unverifiable;
                 }
             }
-            if (computedCksum.Equals(providedCksum, StringComparison.Ordinal)) {
-                return true;
-            } else {
-                Logger.Error($"XISF: Invalid data block checksum! Expected: {providedCksum} Got: {computedCksum}");
-                return false;
+            if (computedCksum.Equals(providedCksum, StringComparison.OrdinalIgnoreCase)) {
+                return ChecksumVerdict.Match;
             }
+            Logger.Error($"XISF: Invalid data block checksum! Expected: {providedCksum} Got: {computedCksum}");
+            return ChecksumVerdict.Mismatch;
         }
 
         // Reads a required XISF attribute, throwing a clear InvalidDataException if it is
@@ -517,64 +550,48 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             return result.ToString();
         }
 
-        public void AddAttachedImage(ushort[] data, FileSaveInfo fileSaveInfo) {
+        public void AddAttachedImage(ushort[] data, FileSaveInfo fileSaveInfo) => AttachData(new XISFData(data, fileSaveInfo));
+
+        public void AddAttachedImageInt(int[] data, FileSaveInfo fileSaveInfo) => AttachData(new XISFData(data, fileSaveInfo));
+
+        /// <summary>
+        /// Records the prepared block in the header: checksum and compression attributes, then a
+        /// location="attachment:start:size" whose start is the first PaddedBlockSize boundary at or
+        /// after the end of the serialized header. The location attribute's own text changes the
+        /// header length, so the start is found by fixed-point iteration rather than by assuming a
+        /// fixed byte budget for the attributes: the old 256-byte assumption could put the declared
+        /// offset before the header's end and produce an unreadable file.
+        /// </summary>
+        private void AttachData(XISFData data) {
             if (Header.Image == null) { throw new InvalidOperationException("No Image Header Information available for attaching image. Add Image Header first!"); }
 
-            // Add Attached data location info to header
-            Data = new XISFData(data, fileSaveInfo);
+            Data = data;
 
             if (Data.ChecksumType != XISFChecksumType.NONE) {
-                Header.Image.Add(new XAttribute("checksum", $"{Data.ChecksumName}:{Data.Checksum}"));
+                Header.Image.SetAttributeValue("checksum", $"{Data.ChecksumName}:{Data.Checksum}");
             }
 
-            int headerLengthBytes = 4;
-            int reservedBytes = 4;
-            int attachmentInfoMaxBytes = 256; // Assume max 256 bytes for the attachment, compression, and checksum attributes.
-            int currentHeaderSize = Header.ByteCount + xisfSignature.Length + headerLengthBytes + reservedBytes + attachmentInfoMaxBytes;
-
-            int dataBlockStart = currentHeaderSize + (PaddedBlockSize - currentHeaderSize % PaddedBlockSize);
-
+            long blockSize = Data.Size;
             if (Data.CompressionType != XISFCompressionType.NONE) {
-                Header.Image.Add(new XAttribute("location", $"attachment:{dataBlockStart}:{Data.CompressedSize}"));
+                blockSize = Data.CompressedSize;
+                Header.Image.SetAttributeValue("compression", Data.ByteShuffling
+                    ? $"{Data.CompressionName}:{Data.Size}:{Data.ShuffleItemSize}"
+                    : $"{Data.CompressionName}:{Data.Size}");
+            }
 
-                if (Data.ByteShuffling == true) {
-                    Header.Image.Add(new XAttribute("compression", $"{Data.CompressionName}:{Data.Size}:{Data.ShuffleItemSize}"));
-                } else {
-                    Header.Image.Add(new XAttribute("compression", $"{Data.CompressionName}:{Data.Size}"));
+            const int headerLengthBytes = 4;
+            const int reservedBytes = 4;
+            long start = 0;
+            for (int attempt = 0; attempt < 8; attempt++) {
+                Header.Image.SetAttributeValue("location", $"attachment:{start}:{blockSize}");
+                long headerEnd = xisfSignature.Length + headerLengthBytes + reservedBytes + Header.ByteCount;
+                long aligned = (headerEnd + PaddedBlockSize - 1) / PaddedBlockSize * PaddedBlockSize;
+                if (aligned == start) {
+                    return;
                 }
-            } else {
-                Header.Image.Add(new XAttribute("location", $"attachment:{dataBlockStart}:{Data.Size}"));
+                start = aligned;
             }
-        }
-
-        public void AddAttachedImageInt(int[] data, FileSaveInfo fileSaveInfo) {
-            if (Header.Image == null) { throw new InvalidOperationException("No Image Header Information available for attaching image. Add Image Header first!"); }
-
-            // Add Attached data location info to header
-            Data = new XISFData(data, fileSaveInfo);
-
-            if (Data.ChecksumType != XISFChecksumType.NONE) {
-                Header.Image.Add(new XAttribute("checksum", $"{Data.ChecksumName}:{Data.Checksum}"));
-            }
-
-            int headerLengthBytes = 4;
-            int reservedBytes = 4;
-            int attachmentInfoMaxBytes = 256; // Assume max 256 bytes for the attachment, compression, and checksum attributes.
-            int currentHeaderSize = Header.ByteCount + xisfSignature.Length + headerLengthBytes + reservedBytes + attachmentInfoMaxBytes;
-
-            int dataBlockStart = currentHeaderSize + (PaddedBlockSize - currentHeaderSize % PaddedBlockSize);
-
-            if (Data.CompressionType != XISFCompressionType.NONE) {
-                Header.Image.Add(new XAttribute("location", $"attachment:{dataBlockStart}:{Data.CompressedSize}"));
-
-                if (Data.ByteShuffling == true) {
-                    Header.Image.Add(new XAttribute("compression", $"{Data.CompressionName}:{Data.Size}:{Data.ShuffleItemSize}"));
-                } else {
-                    Header.Image.Add(new XAttribute("compression", $"{Data.CompressionName}:{Data.Size}"));
-                }
-            } else {
-                Header.Image.Add(new XAttribute("location", $"attachment:{dataBlockStart}:{Data.Size}"));
-            }
+            throw new InvalidOperationException("XISF: data block offset did not converge");
         }
 
         /// <summary>
@@ -612,6 +629,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             // Pad space between the header and data blocks null bytes
             var remainingBlockPadding = long.Parse(location.Value.Split(':')[1], CultureInfo.InvariantCulture) - s.Position;
+            if (remainingBlockPadding < 0) {
+                throw new InvalidDataException($"XISF: header ends at byte {s.Position} but the data block is declared to start at {s.Position + remainingBlockPadding}");
+            }
 
             for (int i = 0; i < remainingBlockPadding; i++) {
                 s.WriteByte(0x0);

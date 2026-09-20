@@ -469,6 +469,7 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
   calls Debayer for OSC display (the data path exists as of #357; the display wiring is Live-View-gated).
 - Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,
   `BaseImageData.FromFile` (non-FITS/XISF), `ImageArrayExposureData.FromBitmapSource`.
+- **XISF 1.0 conformance, remaining after #996 PR 1 (2026-09-20).** PR 1 fixed the sample converters, made checksum failures fatal, read inline/embedded blocks per spec, fixed the attachment offset, and added `OpenAstroAra.Image.Tests`. Still open under #996: reader honours `pixelStorage`/`bounds`/`colorSpace`/multi-channel `geometry` (today it validates the channel count but hands the buffer to a single-channel converter and reports 16-bit unconditionally); writer emits `pixelStorage` and `bounds`, RGB, and Float sample formats; `zstd` on both sides (managed `ZstdSharp.Port`, plus a `3rd-party-licenses.txt` regen); PixInsight-written fixtures (note `.xisf` is LFS-tracked and CI checks out with `lfs: false`, so gate on presence or store under a non-LFS name); `XISF:CreatorApplication` still says N.I.N.A. via `CoreUtil.Title`.
 
 **§2105 in-memory render is otherwise COMPLETE (#354–#358)** — only libraw RAW decode + on-image star
 annotation remain, both Live-View-gated (ROADMAP part 5).

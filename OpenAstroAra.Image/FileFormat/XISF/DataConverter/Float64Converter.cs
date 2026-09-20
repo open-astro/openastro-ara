@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,15 +12,24 @@
 
 #endregion "copyright"
 
+using System;
+
+using System.Buffers.Binary;
+
 namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
 
+    /// <summary>
+    /// XISF Float64 samples, handled exactly like Float32: clamped to [0, 1], NaN reads as 0.
+    /// </summary>
     internal sealed class Float64Converter : IDataConverter {
 
-        public unsafe ushort[] Convert(byte[] rawData) {
+        public ushort[] Convert(byte[] rawData) {
+            ArgumentNullException.ThrowIfNull(rawData);
             ushort[] data = new ushort[rawData.Length / 8];
+            var span = rawData.AsSpan();
             for (var i = 0; i < data.Length; i++) {
-                var integer = (((long)rawData[(i * 8) + 7] << 56) | ((long)rawData[(i * 8) + 6] << 48) | ((long)rawData[(i * 8) + 5] << 40) | ((long)rawData[(i * 8) + 4] << 32) | ((long)rawData[(i * 8) + 3] << 24) | ((long)rawData[(i * 8) + 2] << 16) | ((long)rawData[(i * 8) + 1] << 8) | ((long)rawData[i * 8]));
-                data[i] = (ushort)((*(double*)&integer) * ushort.MaxValue);
+                double v = BinaryPrimitives.ReadDoubleLittleEndian(span.Slice(i * 8, 8));
+                data[i] = FloatSample.ToUInt16(v);
             }
             return data;
         }
