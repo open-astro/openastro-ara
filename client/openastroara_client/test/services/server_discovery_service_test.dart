@@ -12,7 +12,8 @@ void main() {
     test('sweep does NOT run when mDNS produced a result', () async {
       var sweepRan = false;
       final svc = ServerDiscoveryService(
-        mdnsSource: () => Stream.fromIterable([_s('192.168.1.10', name: 'rig')]),
+        mdnsSource: () =>
+            Stream.fromIterable([_s('192.168.1.10', name: 'rig')]),
         sweepSource: () {
           sweepRan = true;
           return Stream.fromIterable([_s('192.168.1.10')]);
@@ -21,25 +22,29 @@ void main() {
       final found = await svc.discover().toList();
       expect(found, hasLength(1));
       expect(found.single.hostname, '192.168.1.10');
-      expect(sweepRan, isFalse,
-          reason: 'a healthy mDNS answer must not trigger scan-like traffic');
-    });
-
-    test('sweep runs when mDNS finishes empty, and its results surface',
-        () async {
-      final svc = ServerDiscoveryService(
-        mdnsSource: () => const Stream.empty(),
-        sweepSource: () =>
-            Stream.fromIterable([_s('192.168.8.118', name: 'rc91')]),
+      expect(
+        sweepRan,
+        isFalse,
+        reason: 'a healthy mDNS answer must not trigger scan-like traffic',
       );
-      final found = await svc.discover().toList();
-      expect(found, hasLength(1));
-      expect(found.single.hostname, '192.168.8.118');
-      expect(found.single.mdnsName, 'rc91');
     });
 
-    test('sweep joins after the grace period when mDNS stays silent',
-        () async {
+    test(
+      'sweep runs when mDNS finishes empty, and its results surface',
+      () async {
+        final svc = ServerDiscoveryService(
+          mdnsSource: () => const Stream.empty(),
+          sweepSource: () =>
+              Stream.fromIterable([_s('192.168.8.118', name: 'rc91')]),
+        );
+        final found = await svc.discover().toList();
+        expect(found, hasLength(1));
+        expect(found.single.hostname, '192.168.8.118');
+        expect(found.single.mdnsName, 'rc91');
+      },
+    );
+
+    test('sweep joins after the grace period when mDNS stays silent', () async {
       // An mDNS strand that never emits and never closes (wedged browse):
       // the grace timer must still bring the sweep in and its results out.
       final mdnsHang = StreamController<AraServer>();
@@ -49,8 +54,8 @@ void main() {
         sweepSource: () => Stream.fromIterable([_s('10.0.0.7')]),
       );
       final first = await svc.discover().first.timeout(
-          ServerDiscoveryService.mdnsGracePeriod +
-              const Duration(seconds: 5));
+        ServerDiscoveryService.mdnsGracePeriod + const Duration(seconds: 5),
+      );
       expect(first.hostname, '10.0.0.7');
     });
 
@@ -64,8 +69,10 @@ void main() {
         sweepSource: () => const Stream.empty(),
       );
       final found = await svc.discover().toList();
-      expect(found.map((s) => '${s.hostname}:${s.port}'),
-          ['192.168.1.10:5555', '192.168.1.10:5556']);
+      expect(found.map((s) => '${s.hostname}:${s.port}'), [
+        '192.168.1.10:5555',
+        '192.168.1.10:5556',
+      ]);
     });
 
     test('cancelling discover() cancels the underlying strategies', () async {
@@ -74,9 +81,11 @@ void main() {
       var mdnsCancelled = false;
       var sweepCancelled = false;
       final mdnsCtl = StreamController<AraServer>(
-          onCancel: () => mdnsCancelled = true);
+        onCancel: () => mdnsCancelled = true,
+      );
       final sweepCtl = StreamController<AraServer>(
-          onCancel: () => sweepCancelled = true);
+        onCancel: () => sweepCancelled = true,
+      );
       addTearDown(mdnsCtl.close);
       addTearDown(sweepCtl.close);
       final svc = ServerDiscoveryService(
@@ -86,15 +95,89 @@ void main() {
           return mdnsCtl.stream;
         },
         sweepSource: () => sweepCtl.stream,
+        sweepAbandonGrace: const Duration(milliseconds: 10),
       );
       final sub = svc.discover().listen((_) {});
       await Future<void>.delayed(const Duration(milliseconds: 50));
       await sub.cancel();
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(mdnsCancelled || mdnsCtl.isClosed, isTrue);
-      expect(sweepCancelled, isTrue,
-          reason: 'an in-flight sweep must stop when the listener goes away');
+      expect(
+        sweepCancelled,
+        isTrue,
+        reason: 'an in-flight sweep must stop when the listener goes away',
+      );
     });
+
+    test(
+      'a restarted pass keeps the in-flight sweep and gets its later hits',
+      () async {
+        // The connect screen restarts discovery every ~4 s. On Android (mDNS
+        // never answers) a /24 sweep outlives that tick, so cancelling it per
+        // tick meant the daemon's batch was never reached. The restart must
+        // attach to the running sweep instead.
+        var sweepStarts = 0;
+        final sweepCtl = StreamController<AraServer>();
+        addTearDown(sweepCtl.close);
+        final svc = ServerDiscoveryService(
+          mdnsSource: () => const Stream.empty(),
+          sweepSource: () {
+            sweepStarts++;
+            return sweepCtl.stream;
+          },
+        );
+        final first = svc.discover().listen((_) {});
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        sweepCtl.add(const AraServer(hostname: '10.0.0.5', port: 5555));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await first.cancel();
+        final got = <AraServer>[];
+        final second = svc.discover().listen(got.add);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        sweepCtl.add(const AraServer(hostname: '10.0.0.235', port: 5555));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await second.cancel();
+        expect(
+          sweepStarts,
+          1,
+          reason: 'the restart must not start a new sweep',
+        );
+        expect(got.map((s) => s.hostname), [
+          '10.0.0.5',
+          '10.0.0.235',
+        ], reason: 'earlier hits replay, later ones arrive live');
+      },
+    );
+
+    test(
+      'a sweep that just finished replays its hits to the next pass',
+      () async {
+        // Real timeline on the tablet: the hit landed after the tick detached
+        // the pass and before the next pass attached, and a finished run was
+        // thrown away — so nothing ever reached the screen.
+        var sweepStarts = 0;
+        final svc = ServerDiscoveryService(
+          mdnsSource: () => const Stream.empty(),
+          sweepSource: () {
+            sweepStarts++;
+            return Stream.value(
+              const AraServer(hostname: '10.0.0.235', port: 5555),
+            );
+          },
+        );
+        final first = svc.discover().listen((_) {});
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await first.cancel();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final got = await svc.discover().toList();
+        expect(got.map((s) => s.hostname), ['10.0.0.235']);
+        expect(
+          sweepStarts,
+          2,
+          reason: 'a finished run is replayed, then a fresh sweep follows',
+        );
+      },
+    );
 
     test('stream closes once all started strategies finish', () async {
       final svc = ServerDiscoveryService(
