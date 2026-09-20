@@ -421,6 +421,7 @@ boundary, where the tag decides it**:
 - **Single-commit PR, or a multi-commit one that should land as one logical change** — the default:
   ```shell
   # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+  # Do NOT invert this to test = "true" -- that would delete on an API error.
   [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
     && DEL=--delete-branch || DEL=
   gh pr merge <PR> --squash $DEL
@@ -428,6 +429,7 @@ boundary, where the tag decides it**:
 - **PR where per-commit granularity is worth keeping:**
   ```shell
   # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
+  # Do NOT invert this to test = "true" -- that would delete on an API error.
   [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
     && DEL=--delete-branch || DEL=
   gh pr merge <PR> --merge $DEL

@@ -449,9 +449,11 @@ class MirrorPin(unittest.TestCase):
         "step_3b_delete_branch_probe": (
             # The reference copy of the $DEL probe; ProbeMirrors mirrors its
             # direction, this pin catches an inversion of the text itself.
-            "# Fails safe: an empty or errored probe is != \"false\", so the flag is omitted.",
+            # Starts above the fence so its `text` opener is hashed too: flipping it
+            # back to `shell` (two runnable copies on the squash path, #1040) must trip.
+            "copy below is for reading, not running",
             "The fail-safe direction of that test is mirrored by `ProbeMirrors`",
-            '615880f074438b0b',
+            '198eae1bac6f2615',
         ),
         "step_5_reuse_fence": (
             # From the fence's first statement: the `|| exit 1` rationale in
