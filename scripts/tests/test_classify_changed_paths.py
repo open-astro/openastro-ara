@@ -511,7 +511,7 @@ class WorkflowWiringTest(unittest.TestCase):
                     f"a required context is gated on the new `{bucket}` bucket",
                 )
 
-    def test_the_changes_job_cannot_go_red(self):
+    def test_the_changes_job_is_continue_on_error_at_step_level(self):
         # #1024: a checkout flake or the 5-minute timeout is outside the
         # script's ERR trap. Every consumer fails safe on an empty output, so
         # the job must not fail the run either -- a red `Changed paths` only
@@ -537,7 +537,19 @@ class WorkflowWiringTest(unittest.TestCase):
         # #1024: a quoted non-ASCII path misses every prefix rule (see
         # test_a_git_quoted_path_falls_through_to_code). Safe, but wasteful,
         # and exact is cheap.
-        self.assertIn("git -c core.quotePath=false diff --no-renames --name-only", self.text)
+        needle = "git -c core.quotePath=false diff --no-renames --name-only"
+        self.assertIn(needle, self.text)
+        # The two skill recipes reproduce this classification to attribute a
+        # skip; with default quoting a non-ASCII path would classify as code
+        # locally while CI skipped, and the driver would Hold on a phantom.
+        for recipe in (
+            REPO_ROOT / ".claude" / "commands" / "pr-checker.md",
+            REPO_ROOT / ".claude" / "skills" / "port-driver" / "SKILL.md",
+        ):
+            with self.subTest(recipe=recipe.name):
+                text = recipe.read_text()
+                self.assertIn(needle, text)
+                self.assertNotIn("git diff --no-renames --name-only", text)
 
 
 class InertTreesTest(unittest.TestCase):
@@ -554,6 +566,11 @@ class InertTreesTest(unittest.TestCase):
         ".md",
         ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
     }
+    # Exact paths that are inert despite their extension. GitHub's issue
+    # chooser config is read by nothing but github.com; pre-allowed so adding
+    # it does not red the required Sanity context on an unrelated PR (#1044
+    # tracks a per-prefix allowance if this list grows).
+    INERT_BY_PATH = {".github/ISSUE_TEMPLATE/config.yml"}
 
     @classmethod
     def setUpClass(cls):
@@ -573,6 +590,7 @@ class InertTreesTest(unittest.TestCase):
         offenders = sorted(
             f for f in self.files
             if Path(f).suffix.lower() not in self.PROSE_OR_IMAGE
+            and f not in self.INERT_BY_PATH
         )
         self.assertEqual(
             offenders, [],

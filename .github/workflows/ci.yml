@@ -691,9 +691,10 @@ jobs:
           platforms: linux/arm64
           push: false
           tags: openastroara-server:arm64
-          load: true  # Phase 14d: load into the local daemon so the e2e step can `docker run`.
+          load: true  # Phase 14d: load into the local daemon so the end-to-end step can `docker run`.
 
-      # Phase 14d server-e2e: actually run the arm64 image via qemu and probe
+      # Phase 14d arm64 end-to-end (steps of this job, not a separate one):
+      # actually run the arm64 image via qemu and probe
       # /healthz to prove the published artifact + Dockerfile produce a
       # working container. The x64 GitHub runner emulates arm64 instructions
       # — slow (~2× wall clock vs. native) but representative.
@@ -734,7 +735,7 @@ jobs:
           curl -fsS http://localhost:5555/api/v1/server/info \
             | tee /dev/stderr \
             | grep -q '"server_uuid":"'
-          echo "✓ server-e2e clean"
+          echo "✓ arm64 end-to-end clean"
 
       - name: Tear down container
         if: always()
