@@ -26,10 +26,15 @@ No network, no fixtures: each test builds the repository it needs.
 
 from __future__ import annotations
 
+import hashlib
+import re
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SKILL = REPO_ROOT / ".claude" / "skills" / "port-driver" / "SKILL.md"
 
 
 def git(repo: Path, *args: str) -> str:
@@ -87,13 +92,31 @@ def scenario_b(repo: Path, merged: list[str]) -> str:
     return "B"
 
 
-def reuse_guard(repo: Path, branch: str) -> str:
+def reuse_guard(repo: Path, branch: str, merged: list[str] = ()) -> str:
     """SKILL.md section 5 step 2: may scenario C reuse an existing local ref?
 
-    Returns "REUSE" or "HELD". Asks for the ref's own commits, not how far it
-    trails master -- see test_reuse_* for the two ways the ancestor test failed.
+    Returns "REUSE" (switch to it), "RETIRE" (delete the local ref and
+    re-create it: its head is exactly a merged PR's head, #1028) or "HELD".
+    Asks for the ref's own commits, not how far it trails master -- see
+    test_reuse_* for the two ways the ancestor test failed. `merged` is what
+    `gh pr list --head <branch> --base master --state merged --limit 100 --json headRefOid`
+    returned;
+    an empty list stands in for both "no PR" and an API failure, and both
+    Hold.
     """
-    return "HELD" if git(repo, "rev-list", f"origin/master..{branch}") else "REUSE"
+    if not git(repo, "rev-list", f"origin/master..{branch}"):
+        return "REUSE"
+    ref_oid = git(repo, "rev-parse", f"refs/heads/{branch}")
+    if ref_oid and ref_oid in merged:
+        return "RETIRE"
+    return "HELD"
+
+
+def retire(repo: Path, branch: str) -> None:
+    """The RETIRE action: local delete, then a fresh branch from master."""
+    git(repo, "checkout", "-q", "master")
+    git(repo, "branch", "-D", branch)
+    git(repo, "checkout", "-qb", branch, "origin/master")
 
 
 class GitFixture(unittest.TestCase):
@@ -247,22 +270,141 @@ class ReuseGuard(GitFixture):
         self.publish()
         self.assertEqual(reuse_guard(self.repo, "stale"), "REUSE")
 
-    def test_squash_merged_leftover(self):
+    def test_squash_merged_leftover_with_no_merged_pr_known_holds(self):
+        # An API failure (or genuinely no PR) leaves `merged` empty: the
+        # commits are unpushed work as far as the driver can tell.
         git(self.repo, "checkout", "-qb", "left", "master")
         self.commit("work")
         self.merge_pr("left", squash=True)
-        self.assertEqual(reuse_guard(self.repo, "left"), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "left", []), "HELD")
+
+    def test_squash_merged_leftover_is_retired(self):
+        # #1028: `--delete-branch` removed the remote ref, the local one
+        # survived, and its head IS the merged PR's head. Every byte on it is
+        # in master by content, so the local ref may go and the name is
+        # reusable -- the prep-ci at 0.5p -> 4 -> 11 case that Held the loop.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "RETIRE")
+        retire(self.repo, "left")
+        self.assertEqual(git(self.repo, "rev-list", "--count", "origin/master..left"), "0")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "REUSE")
+
+    def test_squash_merged_leftover_plus_stray_commit_holds(self):
+        # Exact equality only: a commit on top of the merged head is either
+        # stray or real work, and the driver cannot tell which.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        git(self.repo, "checkout", "-q", "left")
+        self.commit("stray")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "HELD")
+
+    def test_merge_committed_leftover_is_plain_reuse(self):
+        # A merge-committed head is an ancestor of origin/master, so the ref
+        # has no commits of its own: REUSE, no deletion needed.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=False)
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "REUSE")
+
+    def test_older_merged_head_does_not_retire_a_newer_leftover(self):
+        # A reused name with two merged PRs: the ref sits on the NEWER squashed
+        # head plus nothing else, so it retires -- but only because the newer
+        # OID is in the list. With only the older OID known, it Holds.
+        git(self.repo, "checkout", "-qb", "mix", "master")
+        old = self.commit("first")
+        self.merge_pr("mix", squash=True)
+        git(self.repo, "branch", "-qD", "mix")
+        git(self.repo, "checkout", "-qb", "mix", "master")
+        new = self.commit("second")
+        self.merge_pr("mix", squash=True)
+        self.assertEqual(reuse_guard(self.repo, "mix", [old]), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "mix", [old, new]), "RETIRE")
 
     def test_genuine_unpushed_work(self):
         # The ancestor test REUSED this: origin/master is an ancestor of a
         # branch carrying unpushed commits, so new work piled on top of it.
+        # And a merged PR under the same name whose head is NOT this commit
+        # must not change that.
         git(self.repo, "checkout", "-qb", "wip", "master")
         self.commit("unpushed")
         self.assertEqual(reuse_guard(self.repo, "wip"), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "wip", ["0" * 40]), "HELD")
 
     def test_ref_level_with_master(self):
         git(self.repo, "branch", "even", "master")
         self.assertEqual(reuse_guard(self.repo, "even"), "REUSE")
+
+
+class MirrorPin(unittest.TestCase):
+    """The mirror above is hand-synced with SKILL.md; this makes drift fail (#1030).
+
+    Two sections of the skill are hashed: scenario B's decision list
+    (condition 0 through the end of the D bullet) and the §5 step 2 fence
+    that `reuse_guard`/`retire` mirror. Editing either without touching this
+    file fails the Sanity job, which is the point: drift already happened
+    once inside #1003 (the skill tested detached-HEAD inside condition 2, the
+    mirror tested it first -- C vs D with the suite green) and review, not
+    the tests, caught it.
+
+    To update: re-read the changed section, bring `scenario_b` /
+    `reuse_guard` and their cases into line, then paste the new hash the
+    failure message prints. Pasting the hash without the re-read defeats the
+    test, and there is nothing here that can stop that -- it is a forcing
+    function for a human look, not a proof of equivalence.
+    """
+
+    SECTIONS = {
+        "scenario_b_decision_list": (
+            # From the two-condition fence above condition 0 through the
+            # closing "No OID matched -> B" paragraph, which is scenario_b's
+            # final `return "B"` -- flipping it would otherwise leave the pin
+            # green.
+            "Two conditions before matching, and they are different questions:",
+            "**(C) No PR in flight and there is work to start or continue**",
+            '8d8bc816d4656c2d',
+        ),
+        "step_5_reuse_fence": (
+            # From the fence's first statement: the `|| exit 1` rationale in
+            # the RETIRE arm rests on `checkout master` having run.
+            "   git checkout master && git pull --ff-only",
+            "   The slash namespace is the convention",
+            '2221caf1e4e11a22',
+        ),
+    }
+
+    @staticmethod
+    def digest(text: str) -> str:
+        # Whitespace-insensitive so a reflow is not a rule change.
+        return hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode()).hexdigest()[:16]
+
+    def section(self, start: str, end: str) -> str:
+        if not SKILL.is_file():
+            self.fail(f"{SKILL} is missing: this test mirrors it and cannot run without it")
+        text = SKILL.read_text()
+        try:
+            i = text.index(start)
+            j = text.index(end, i)
+        except ValueError:
+            self.fail(
+                f"SKILL.md no longer contains the marker line {start!r} / {end!r} "
+                "that delimits a mirrored section. Re-read the section, update the "
+                "mirror in this file to match, then update the marker in SECTIONS."
+            )
+        return text[i:j]
+
+    def test_sections_match_the_pinned_hashes(self):
+        for name, (start, end, expected) in self.SECTIONS.items():
+            with self.subTest(section=name):
+                actual = self.digest(self.section(start, end))
+                self.assertEqual(
+                    actual, expected,
+                    f"SKILL.md section '{name}' changed. Re-read it, update the "
+                    f"mirror in this file to match, then replace the pinned hash "
+                    f"with {actual!r}.",
+                )
 
 
 if __name__ == "__main__":
