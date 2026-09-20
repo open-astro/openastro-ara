@@ -16,8 +16,12 @@
 # neither `Analyze (csharp)` nor the code-scanning `CodeQL` check is a
 # required context. Code-scanning alerts on the default branch come from the
 # unfiltered `push` runs (and the weekly schedule), so PR-level skipping
-# leaves the alert history intact. The ignore list mirrors the inert trees
-# in scripts/classify-changed-paths.py (INERT_DIRS); a test pins the two.
+# leaves the alert history intact. The ignore list is the inert trees from
+# scripts/classify-changed-paths.py (INERT_DIRS) plus `**.md`, which is
+# deliberately WIDER than the classifier's docs_only rule: a nested *.md such
+# as OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md is a real input to
+# ci.yml's Alpaca jobs, but no *.md anywhere is an input to a C# CodeQL
+# extraction. A test pins both parts.
 #
 # Actions are pinned to immutable commit SHAs per the repo's zizmor policy.
 name: CodeQL

@@ -517,7 +517,9 @@ class WorkflowWiringTest(unittest.TestCase):
         # the job must not fail the run either -- a red `Changed paths` only
         # hands the autonomous driver a `fail` to churn on.
         block = self.text.split("\n  changes:\n", 1)[1].split("\n  alpaca-sim-smoke:\n", 1)[0]
-        self.assertIn("continue-on-error: true", block)
+        # Anchored at 4-space indentation: a STEP-level continue-on-error
+        # inside the job would not cover a checkout failure or the timeout.
+        self.assertIn("\n    continue-on-error: true\n", block)
 
     def test_the_diff_disables_path_quoting(self):
         # #1024: a quoted non-ASCII path misses every prefix rule (see
@@ -575,6 +577,9 @@ class InertTreesTest(unittest.TestCase):
         for prefix in self.m.INERT_DIRS:
             with self.subTest(prefix=prefix):
                 self.assertIn(f"- '{prefix}**'", head)
+        # Wider than is_docs_path on purpose: a nested *.md (the Alpaca
+        # SIMULATORS_VERSION.md fixture) is a ci.yml input but never a C#
+        # CodeQL input, so codeql.yml may ignore every *.md.
         self.assertIn("- '**.md'", head)
         # Only pull_request is filtered: default-branch alerts come from push.
         push = text.split("  push:\n", 1)[1].split("  pull_request:", 1)[0]

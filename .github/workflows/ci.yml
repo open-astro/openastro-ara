@@ -809,9 +809,15 @@ jobs:
     # So this job always runs and its STEPS are guarded instead: the matrix
     # expands, all three contexts report `success`, and a docs-only PR pays
     # only three runner spin-ups.
-    # The guard must NOT be omitted entirely: with no `if:` the implicit
-    # condition is success() over `needs: changes`, so a failed or timed-out
-    # `changes` would skip this job at job level and reproduce the deadlock.
+    # The guard must NOT be omitted entirely. With no `if:` the implicit
+    # condition is success() over `needs: changes`. Since #1024 `changes` is
+    # `continue-on-error`, so its own failure or timeout reports success and
+    # would no longer trip that -- but a CANCELLED `changes` (a manual cancel
+    # of the run, or a `concurrency:` group if one is ever added) still
+    # would, and the
+    # explicit `!cancelled()` is what keeps this job expanding in every case
+    # short of cancellation. The two guards are belt and braces on purpose:
+    # neither alone covers both the flake and the cancel.
     if: ${{ !cancelled() }}
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays

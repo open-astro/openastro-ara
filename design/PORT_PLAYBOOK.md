@@ -1299,7 +1299,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | `unicode` | `Unicode scan` | `ubuntu-latest` | Trojan-Source / invisible-Unicode scan | never skipped |
 | `zizmor` | `zizmor (workflow audit)` | `ubuntu-latest` | static audit of `.github/workflows/` | never skipped |
 
-Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — see #1022 for its missing path gate), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
+Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
 
 The matrix reached this shape progressively through the `prep-ci` placeholder (§19.1's pre-Phase-14 exception) rather than in one `port(ci)` commit.
 
