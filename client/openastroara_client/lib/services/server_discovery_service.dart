@@ -20,6 +20,15 @@ import '../models/server.dart';
 ///    multicast — yet scan-like probe traffic shouldn't hit every network
 ///    the laptop joins (hotel Wi-Fi) when mDNS is answering fine (review r2).
 ///
+/// A sweep, once justified, is shared: the connect screen restarts discovery
+/// every ~4 s, and a full /24 on a quiet Wi-Fi outlives that tick, so a new
+/// pass JOINS the sweep in flight (or replays one that finished within
+/// [sweepReplayWindow]) instead of cancelling it. Joining never spawns a
+/// sweep: a fresh one still needs the current pass's own mDNS to come up
+/// empty, and an mDNS answer drops the joined strand, so a healthy network
+/// sees no further probe traffic. [resetSweepCache] (the ⟳ Rescan) forgets
+/// the shared run so a daemon that went away is re-probed, not replayed.
+///
 /// Both paths yield numeric-IP hostnames, so the saved server never carries
 /// a `.local` name that only resolves while multicast is healthy.
 class ServerDiscoveryService {
@@ -53,10 +62,12 @@ class ServerDiscoveryService {
   /// out [mdnsGracePeriod] first.
   static const Duration sweepReplayWindow = Duration(seconds: 15);
 
-  /// Run a single discovery pass. mDNS starts immediately; the sweep joins
-  /// only if mDNS stays empty (grace timer) or finishes empty. Results
-  /// dedupe by endpoint; the stream closes when every started strategy is
-  /// done.
+  /// Run a single discovery pass. mDNS starts immediately. A sweep that is
+  /// current (in flight, or finished within [sweepReplayWindow]) is joined at
+  /// once for its hits; a NEW sweep is spawned only if this pass's mDNS stays
+  /// empty (grace timer) or finishes empty, and an mDNS answer drops the
+  /// sweep strands. Results dedupe by endpoint; the stream closes when every
+  /// started strategy is done.
   Stream<AraServer> discover() {
     final controller = StreamController<AraServer>();
     final seen = <String>{};
@@ -66,6 +77,7 @@ class ServerDiscoveryService {
     var cancelled = false;
     StreamSubscription<AraServer>? mdnsSub;
     StreamSubscription<AraServer>? sweepSub;
+    StreamSubscription<AraServer>? joinSub;
     Timer? grace;
 
     void done() {
@@ -92,9 +104,27 @@ class ServerDiscoveryService {
       );
     }
 
+    // mDNS answered: the sweep path is not needed on this network. Drop the
+    // joined/spawned strands (their pending slots go with them) so a healthy
+    // network never sees probe traffic chained from an earlier empty pass.
+    void dropSweepStrands() {
+      grace?.cancel();
+      for (final sub in [joinSub, sweepSub]) {
+        if (sub != null) {
+          unawaited(sub.cancel());
+          done();
+        }
+      }
+      joinSub = null;
+      sweepSub = null;
+    }
+
     mdnsSub = (mdnsSource ?? _mdnsDiscover)().listen(
       (s) {
-        sawMdnsResult = true;
+        if (!sawMdnsResult) {
+          sawMdnsResult = true;
+          dropSweepStrands();
+        }
         emit(s);
       },
       onError: (Object _) {},
@@ -106,15 +136,16 @@ class ServerDiscoveryService {
       },
     );
     if (_sweepIsCurrent) {
-      // A sweep is already running or just finished: the earlier pass proved
-      // mDNS empty on this network, so join the sweep path now — waiting out
-      // the grace period again is how the previous pass missed its own hits.
-      maybeStartSweep();
-    } else {
-      grace = Timer(mdnsGracePeriod, () {
-        if (!sawMdnsResult) maybeStartSweep();
-      });
+      // A sweep is running or just finished: an earlier pass proved mDNS
+      // empty, so take its hits now — waiting out the grace period again is
+      // how the previous pass missed its own results. This only attaches or
+      // replays; spawning a fresh sweep stays gated on THIS pass's mDNS.
+      pending++;
+      joinSub = _joinSweep().listen(emit, onError: (Object _) {}, onDone: done);
     }
+    grace = Timer(mdnsGracePeriod, () {
+      if (!sawMdnsResult) maybeStartSweep();
+    });
     // Cancellation MUST propagate (review r4): the connect screen invalidates
     // its discovery provider every ~4 s, and without this each tick stacked a
     // fresh full sweep on top of the still-running previous ones — multiple
@@ -125,6 +156,7 @@ class ServerDiscoveryService {
       cancelled = true;
       grace?.cancel();
       unawaited(mdnsSub?.cancel());
+      unawaited(joinSub?.cancel());
       unawaited(sweepSub?.cancel());
     };
     return controller.stream;
@@ -196,6 +228,27 @@ class ServerDiscoveryService {
   /// attaches to the running sweep (or replays one that just finished) and
   /// the sweep only stops once nobody has listened for [sweepAbandonGrace].
   _SweepRun? _sweepRun;
+
+  /// Forget the shared sweep: an in-flight run is discarded and a finished
+  /// one is no longer replayed, so the next pass probes the subnet afresh.
+  /// The connect screen's ⟳ Rescan calls this — a daemon that was stopped or
+  /// moved must vanish from the list, not reappear from the cache.
+  void resetSweepCache() {
+    _sweepRun?.discard();
+    _sweepRun = null;
+  }
+
+  /// Hits of the current sweep without spawning one: the finished run's list
+  /// (then done), or the live run's replay + tail.
+  Stream<AraServer> _joinSweep() async* {
+    final run = _sweepRun;
+    if (run == null || !_sweepIsCurrent) return;
+    if (run.finished) {
+      yield* Stream.fromIterable(run.found);
+    } else {
+      yield* run.attach();
+    }
+  }
 
   bool get _sweepIsCurrent {
     final run = _sweepRun;
@@ -374,6 +427,15 @@ class _SweepRun {
     if (finished || _listeners > 0) return;
     abandoned = true;
     unawaited(_drive?.cancel());
+    _finish();
+  }
+
+  /// Stop probing and close every attached listener now; the run is no
+  /// longer the service's current sweep, so nothing replays it.
+  void discard() {
+    abandoned = true;
+    unawaited(_drive?.cancel());
+    found.clear();
     _finish();
   }
 

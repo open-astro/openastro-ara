@@ -38,10 +38,10 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     // This periodic pass is deliberately ADDITIVE (it does not clear _discovered):
     // re-clearing every 4s would make the live list flicker (empty → repopulate) on
     // every tick. The trade-off is that a server which moves ports / goes away leaves
-    // a stale entry until the user taps ⟳ Rescan, which DOES clear first (see
-    // [_rescan]). mDNS one-shot lookups don't surface goodbye/departure events, so
-    // pruning the dead entry automatically would need a TTL/liveness probe — out of
-    // scope here; the manual rescan is the clear-stale path.
+    // a stale entry until the user taps ⟳ Rescan, which DOES clear first and drops
+    // the service's cached sweep (see [_rescan]). mDNS one-shot lookups don't surface
+    // goodbye/departure events, so pruning the dead entry automatically would need a
+    // TTL/liveness probe — out of scope here; the manual rescan is the clear-stale path.
     _rescanTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) ref.invalidate(discoveredServersProvider);
     });
@@ -79,8 +79,10 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Rigs found on your network',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Rigs found on your network',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Expanded(
               child: _discovered.isEmpty
@@ -97,44 +99,51 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                     )
                   : ListView(
                       children: _discovered
-                          .map((s) => ListTile(
-                                leading: const Icon(Icons.dns),
-                                title: Text(s.mdnsName ?? '${s.hostname}:${s.port}'),
-                                subtitle: Text('${s.hostname}:${s.port}'),
-                                selected: selected == s,
-                                onTap: () => ref
-                                    .read(selectedServerProvider.notifier)
-                                    .select(s),
-                              ))
+                          .map(
+                            (s) => ListTile(
+                              leading: const Icon(Icons.dns),
+                              title: Text(
+                                s.mdnsName ?? '${s.hostname}:${s.port}',
+                              ),
+                              subtitle: Text('${s.hostname}:${s.port}'),
+                              selected: selected == s,
+                              onTap: () => ref
+                                  .read(selectedServerProvider.notifier)
+                                  .select(s),
+                            ),
+                          )
                           .toList(),
                     ),
             ),
             const Divider(),
-            Text('Or add manually:',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Or add manually:',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _manualHostCtrl,
-                  decoration: const InputDecoration(labelText: 'Hostname or IP'),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _manualHostCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Hostname or IP',
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 100,
-                child: TextField(
-                  controller: _manualPortCtrl,
-                  decoration: const InputDecoration(labelText: 'Port'),
-                  keyboardType: TextInputType.number,
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _manualPortCtrl,
+                    decoration: const InputDecoration(labelText: 'Port'),
+                    keyboardType: TextInputType.number,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _addManual,
-                child: const Text('Use'),
-              ),
-            ]),
+                const SizedBox(width: 8),
+                FilledButton(onPressed: _addManual, child: const Text('Use')),
+              ],
+            ),
             const SizedBox(height: 16),
             // §2 offline planning — the client can do real work without the Pi:
             // enter the shell with no server to build the night's plan; drafts
@@ -143,7 +152,8 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             const Align(
               alignment: Alignment.centerLeft,
               child: PlanOfflineButton(
-                  label: 'Plan offline — set up your night without a server'),
+                label: 'Plan offline — set up your night without a server',
+              ),
             ),
             const SizedBox(height: 8),
             if (selected != null)
@@ -151,9 +161,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                 handshake: handshake,
                 server: selected,
                 onConfirm: () async {
-                  await ref
-                      .read(savedServersProvider.notifier)
-                      .add(selected);
+                  await ref.read(savedServersProvider.notifier).add(selected);
                   // A Launchpad-forced visit ends here: the server is chosen,
                   // so the router may resume the normal flow (profile box).
                   ref.read(serverChooserRequestedProvider.notifier).clear();
@@ -170,9 +178,12 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
 
   // mDNS discovery is a one-shot lookup per provider instance — a server that
   // comes up *after* the initial scan won't appear on its own. Rescan clears the
-  // accumulated list and re-runs the lookup so freshly-started daemons show up.
+  // accumulated list, forgets the shared subnet sweep (otherwise a daemon that
+  // just went away would be replayed straight back onto the list without a
+  // probe) and re-runs discovery so freshly-started daemons show up.
   void _rescan() {
     setState(() => _discovered.clear());
+    ref.read(discoveryServiceProvider).resetSweepCache();
     ref.invalidate(discoveredServersProvider);
   }
 
@@ -204,29 +215,48 @@ class _HandshakePanel extends StatelessWidget {
         child: handshake.when(
           data: (info) => info == null
               ? const SizedBox.shrink()
-              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Connected to ${info.name}',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  Text('Server version: ${info.version}'),
-                  Text('API version: ${info.apiVersion}'),
-                  Text('Address: ${server.baseUrl}'),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: onConfirm,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Save & continue'),
-                  ),
-                ]),
-          loading: () => Row(children: [
-            const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
-            const SizedBox(width: 12),
-            Text('Connecting to ${server.baseUrl}…'),
-          ]),
-          error: (e, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Connection failed: ${server.baseUrl}',
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            Text(friendlyError(e), style: Theme.of(context).textTheme.bodySmall),
-          ]),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Connected to ${info.name}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text('Server version: ${info.version}'),
+                    Text('API version: ${info.apiVersion}'),
+                    Text('Address: ${server.baseUrl}'),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: onConfirm,
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text('Save & continue'),
+                    ),
+                  ],
+                ),
+          loading: () => Row(
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Text('Connecting to ${server.baseUrl}…'),
+            ],
+          ),
+          error: (e, _) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Connection failed: ${server.baseUrl}',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              Text(
+                friendlyError(e),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
         ),
       ),
     );

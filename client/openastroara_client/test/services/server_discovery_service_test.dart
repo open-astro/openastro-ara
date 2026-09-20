@@ -182,6 +182,70 @@ void main() {
     );
 
     test(
+      'rescan drops the cached sweep so a stale entry is re-probed',
+      () async {
+        // The connect screen's ⟳ clears its list and re-runs discovery; if the
+        // service replayed the cached run, a daemon that just went away would
+        // reappear within milliseconds without anyone probing it.
+        var sweepStarts = 0;
+        final svc = ServerDiscoveryService(
+          mdnsSource: () => const Stream.empty(),
+          sweepSource: () {
+            sweepStarts++;
+            return sweepStarts == 1
+                ? Stream.value(_s('10.0.0.235'))
+                : const Stream<AraServer>.empty();
+          },
+        );
+        expect((await svc.discover().toList()).map((s) => s.hostname), [
+          '10.0.0.235',
+        ]);
+        svc.resetSweepCache();
+        expect(
+          await svc.discover().toList(),
+          isEmpty,
+          reason: 'a rescan must re-probe, not replay the cached hit',
+        );
+        expect(sweepStarts, 2);
+      },
+    );
+
+    test('a pass whose mDNS answers neither spawns nor chains a sweep', () async {
+      // Pass 1: the browse is silent, so the sweep runs (and finishes).
+      // Passes 2 and 3: mDNS answers at once. Joining a current sweep is fine,
+      // but no NEW sweep may be spawned while mDNS is healthy — that is the
+      // "no scan-like traffic on every network" contract (review r2).
+      var mdnsCalls = 0;
+      var sweepStarts = 0;
+      final mdnsHang = StreamController<AraServer>();
+      addTearDown(mdnsHang.close);
+      final svc = ServerDiscoveryService(
+        mdnsSource: () =>
+            ++mdnsCalls == 1 ? mdnsHang.stream : Stream.value(_s('10.0.0.10')),
+        sweepSource: () {
+          sweepStarts++;
+          return const Stream<AraServer>.empty();
+        },
+      );
+      final first = svc.discover().listen((_) {});
+      await Future<void>.delayed(
+        ServerDiscoveryService.mdnsGracePeriod +
+            const Duration(milliseconds: 100),
+      );
+      await first.cancel();
+      expect(sweepStarts, 1);
+      for (var pass = 2; pass <= 3; pass++) {
+        final got = await svc.discover().toList();
+        expect(got.map((s) => s.hostname), ['10.0.0.10'], reason: 'pass $pass');
+        expect(
+          sweepStarts,
+          1,
+          reason: 'pass $pass: mDNS answered, so no fresh sweep',
+        );
+      }
+    });
+
+    test(
       'a sweep that just finished replays its hits to the next pass',
       () async {
         // Real timeline on the tablet: the hit landed after the tick detached
