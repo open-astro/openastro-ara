@@ -1746,3 +1746,29 @@ Two out-of-scope notes from #1015's approval, neither widened into that PR:
   both the default unit job and the arm64 bench lane. A `Poll`-based "still N
   after K ticks" shape with an early bail gets the same guarantee without the
   floor; worth doing if lane wall-clock becomes a problem.
+
+## Flutter bump supersede (2026-09-19, from the #1017 review notes)
+
+Three out-of-scope items from #1017's review rounds, none widened into that PR:
+
+- `design/PORT_PLAYBOOK.md` §12.1 (lines 1024-1030) enumerates what
+  `check-flutter.yml` does and stops at "Skips if a PR for that version is
+  already open". Still accurate, but a run now also comments on and closes
+  every other open **non-fork** `ci/flutter-<version>` PR, deleting the branch
+  only when that PR still carries the workflow's own single commit — one that
+  has been pushed to is closed with its branch kept, and so is one whose commit
+  count cannot be read. One bullet keeps §12.1 the source of truth; fold it in
+  when §12.1 is next touched, and copy the conditions rather than the summary.
+- `scripts/tests/test_check_flutter_release.py`'s `SupersedeSelectorTest` cross-
+  checks the workflow's jq selectors against every engine on PATH, but
+  `ubuntu-latest` — where `.github/workflows/ci.yml` runs the suite — ships
+  oniguruma `jq` and not the `gojq` embedded in `gh --jq`. So CI only ever
+  exercises the engine production does *not* use. Installing `gojq` in the
+  sanity job makes the guard real; left out of #1017 because it edits ci.yml.
+- **Pre-existing:** the `existing` guard at `.github/workflows/check-flutter.yml:89`
+  runs `gh pr list --head "$BRANCH" --state open --json number` with no
+  `isCrossRepository` filter — the same gap #1017 closed on the two calls below
+  it. A fork PR whose head branch happened to be named `ci/flutter-<latest>`
+  would make the guard read "already proposed" and the whole run go quiet,
+  which is the #997 failure mode the watcher exists to prevent. One-line fix,
+  out of #1017's stated scope.
