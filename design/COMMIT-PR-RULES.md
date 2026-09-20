@@ -334,7 +334,7 @@ Beyond the AI-driven port, this document needs a v2 pass covering **post-first-r
 Open items for that v2 pass:
 
 - [ ] **Community contributor PR template** — `.github/PULL_REQUEST_TEMPLATE.md` enforcing: linked issue, scope statement, size, settings-registry-updated checkbox (per §61.4), tests-added checkbox, screenshot/video for UI changes
-- [ ] **Branch naming convention for community PRs** — `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Distinct from the port's flat `phase-N<letter>` pattern to keep histories clean.
+- [ ] **Branch naming convention for community PRs** — `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Distinct from the port's `phase/<N>[-<letter>]-<short-name>` pattern (the flat `phase-N<letter>` form was retired 2026-06-02, see the supersession note above) to keep histories clean.
 - [ ] **Auto-split heuristics** — if a community PR exceeds capacity, what guidance do we give? "Split before submitting" via labelled `needs-split` workflow?
 - [ ] **Claude Code skill recommendations** for community contributors — the available Claude Code skills (`code-review`, `security-review`, `fewer-permission-prompts`, `verify`, `update-config`, `init`, etc.) should be documented in `CONTRIBUTING.md` as recommended workflow:
   - Before opening a PR, run `/security-review` on the diff
