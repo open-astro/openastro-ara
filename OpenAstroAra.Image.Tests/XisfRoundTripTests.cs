@@ -190,6 +190,10 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Contains("colorSpace=\"Gray\"", xml, StringComparison.Ordinal);
         Assert.Contains("checksum=\"sha-256:", xml, StringComparison.Ordinal);
         Assert.Contains("name=\"SWCREATE\"", xml, StringComparison.Ordinal);
+        Assert.Contains("pixelStorage=\"Planar\"", xml, StringComparison.Ordinal);
+        Assert.Contains("id=\"XISF:BlockAlignmentSize\"", xml, StringComparison.Ordinal);
+        Assert.Contains($"value=\"{XISF.PaddedBlockSize}\"", xml, StringComparison.Ordinal);
+        Assert.Contains("OpenAstro Ara", xml.Substring(xml.IndexOf("XISF:CreatorApplication", StringComparison.Ordinal)), StringComparison.Ordinal);
         Assert.DoesNotContain("N.I.N.A.", xml.Substring(xml.IndexOf("SWCREATE", StringComparison.Ordinal)), StringComparison.Ordinal);
 
         var loc = System.Text.RegularExpressions.Regex.Match(xml, "location=\"attachment:(\\d+):(\\d+)\"");
@@ -428,6 +432,16 @@ public sealed class XisfRoundTripTests : IDisposable {
     public async Task PixelStorageAndColorSpaceAreAcceptedInTheSpecVocabulary() {
         var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" pixelStorage=\"Normal\"", string.Empty, new byte[] { 0x34, 0x12 });
         Assert.Equal(new ushort[] { 0x1234 }, (await Read(file)).Data.FlatArray);
+    }
+
+    [Theory]
+    [InlineData("RGB", 1)]
+    [InlineData("CIELab", 1)]
+    [InlineData("Gray", 3)]
+    public async Task AColorSpaceThatDisagreesWithTheChannelCountIsRejected(string colorSpace, int channels) {
+        var file = Monolithic($"geometry=\"2:1:{channels}\" sampleFormat=\"UInt16\" colorSpace=\"{colorSpace}\"", string.Empty, new byte[4 * channels]);
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+        Assert.Contains("implies", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

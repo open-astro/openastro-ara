@@ -55,6 +55,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             AddMetaDataProperty(XISFMetaDataProperty.XISF.CreationTime, DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
             AddMetaDataProperty(XISFMetaDataProperty.XISF.CreatorApplication, CoreUtil.Title);
+            // Attached blocks start on this boundary (XISF.PaddedBlockSize); the spec default is 4096,
+            // so a reader honouring the property must be told the value actually used.
+            AddMetaDataProperty(XISFMetaDataProperty.XISF.BlockAlignmentSize, XISF.PaddedBlockSize.ToString(CultureInfo.InvariantCulture));
 
             Xisf.Add(MetaData);
 
@@ -898,7 +901,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     new XAttribute("geometry", imageProperties.Width + ":" + imageProperties.Height + ":" + "1"),
                     new XAttribute("sampleFormat", format.ToString()),
                     new XAttribute("imageType", imageType),
-                    new XAttribute("colorSpace", "Gray")
+                    new XAttribute("colorSpace", "Gray"),
+                    new XAttribute("pixelStorage", "Planar")
                     );
 
             Image = image;
