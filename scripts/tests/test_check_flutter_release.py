@@ -483,5 +483,279 @@ class FeedParsingTest(unittest.TestCase):
             self.m.fetch_current_stable()
 
 
+class SupersedeSelectorTest(unittest.TestCase):
+    """The supersede step's jq selectors, read out of the real workflow.
+
+    The selectors live in a `run:` block, so nothing else executes them until
+    a stable actually ships. These cases pull them straight out of
+    check-flutter.yml and run them through jq, so an edit that widens the
+    branch filter or reintroduces the `null` new_pr fails here instead of on
+    the next live bump.
+    """
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "check-flutter.yml"
+
+    @classmethod
+    def setUpClass(cls):
+        # No jq guard here. Four of these cases assert on the shape of the
+        # workflow text and never invoke jq at all; skipping the whole class
+        # on a box without jq would silently drop them. `_jq` skips per-test
+        # instead, so the shape guards stay live everywhere.
+        cls.text = cls.WORKFLOW.read_text()
+
+    def _selector(self, marker: str) -> str:
+        import re
+
+        m = re.search(r"--jq '(" + marker + r"[^']*)'", self.text)
+        self.assertIsNotNone(m, f"no --jq selector matching {marker!r} in {self.WORKFLOW}")
+        # `run: |` is a literal block scalar and the argument is single-quoted,
+        # so what the file holds is byte-for-byte what jq is handed: the
+        # workflow's `\\.` stays `\\.`, which is how a jq *string* spells the
+        # regex `\.`. Unescaping it here would hand jq an invalid escape.
+        return m.group(1)
+
+    def _jq(self, selector: str, payload: str) -> str:
+        """Run `selector` through every jq engine present on this machine.
+
+        Production runs these through the gojq embedded in `gh --jq` (Go
+        `regexp`); a developer box has oniguruma `jq`. The selectors are
+        deliberately written to the intersection of the two -- character
+        classes, `+`, anchors, escaped dots, nothing engine-specific.
+
+        Be clear about the coverage this actually buys: ubuntu-latest, where
+        CI runs this suite, ships `jq` and not `gojq`, so in CI the only
+        engine exercised is the one production does NOT use. The cross-check
+        fires only where someone has both installed. Closing that gap means
+        installing gojq in the sanity job -- tracked in design/PORT_TODO.md,
+        not done here because it edits ci.yml.
+        """
+        import subprocess
+
+        outs = []
+        for engine in ("jq", "gojq"):
+            if shutil.which(engine) is None:
+                continue
+            proc = subprocess.run(
+                [engine, "-r", selector],
+                input=payload,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            outs.append((engine, proc.stdout.strip()))
+        if not outs:
+            raise unittest.SkipTest("no jq engine on PATH")
+        for engine, out in outs[1:]:
+            self.assertEqual(
+                out, outs[0][1], f"{engine} and {outs[0][0]} disagree on {selector!r}"
+            )
+        return outs[0][1]
+
+    def test_only_versioned_bump_branches_are_superseded(self):
+        # Every non-match here is a branch a human could plausibly create in
+        # the ci/flutter- namespace. Matching one would comment on it, close
+        # it and delete its branch, so the anchor has to be the full version.
+        selector = self._selector(r"\.\[\] \| select")
+        payload = """[
+          {"number": 1, "headRefName": "ci/flutter-3.48.0"},
+          {"number": 2, "headRefName": "ci/flutter-pin-fixup"},
+          {"number": 3, "headRefName": "ci/flutter-3.48.1"},
+          {"number": 4, "headRefName": "fix/unrelated"},
+          {"number": 5, "headRefName": "ci/flutter-3.48.0-fixup"},
+          {"number": 6, "headRefName": "ci/flutter-3.x-triage"},
+          {"number": 7, "headRefName": "ci/flutter-3.48"},
+          {"number": 8, "headRefName": "ci/flutter-10.2.30"}
+        ]"""
+        self.assertEqual(self._jq(selector, payload).split(), ["1", "3", "8"])
+
+    def test_the_selector_matches_what_the_script_actually_generates(self):
+        # The one pairing that matters: the branch name check-flutter-release.py
+        # emits must be superseded. Derived from the script, not retyped, so a
+        # change to either side fails here rather than on the next live bump.
+        import re
+
+        src = (REPO_ROOT / "scripts" / "check-flutter-release.py").read_text()
+        m = re.search(r'branch=f"(ci/flutter-\{[a-z_]+\})"', src)
+        self.assertIsNotNone(m, "check-flutter-release.py no longer builds a branch= f-string")
+        generated = m.group(1).replace("{latest}", "3.48.1")
+        self.assertNotIn("{", generated, "unexpected placeholder in the branch template")
+        selector = self._selector(r"\.\[\] \| select")
+        payload = '[{"number": 1, "headRefName": "%s"}]' % generated
+        self.assertEqual(self._jq(selector, payload), "1")
+
+    def _commit_count_branches(self) -> dict:
+        """The three arms of the commit-count `if`, split on CODE lines only.
+
+        Never on the bare words `else`/`fi`: the arms are full of prose
+        ("fix commits", "configured", "verified") that contains those
+        substrings, and splitting on them truncates an arm so an assertion
+        about what it does NOT contain passes vacuously. A shell keyword is
+        a stripped line equal to the keyword, and a comment starts with `#`.
+        """
+        body = self.text.split("| while read -r old_pr; do", 1)[1]
+        arms, current, depth = {}, None, 0
+        for raw in body.splitlines():
+            line = raw.strip()
+            if line.startswith("#"):
+                continue
+            if line == 'if [ "$commits" = 1 ]; then':
+                current, depth = "one", 1
+                arms[current] = []
+                continue
+            if depth == 0:
+                continue
+            if line == 'elif [ "$commits" = unknown ]; then':
+                current = "unknown"
+                arms[current] = []
+                continue
+            if line == "else":
+                current = "many"
+                arms[current] = []
+                continue
+            if line == "fi":
+                break
+            arms[current].append(line)
+        return {k: "\n".join(v) for k, v in arms.items()}
+
+    def test_a_touched_bump_branch_is_closed_but_not_deleted(self):
+        # supersede was chosen over skip-while-open so a contentious bump stays
+        # visible; someone investigating a breakage pushes onto that branch, and
+        # deleting it would put that work behind a Restore-branch button.
+        arms = self._commit_count_branches()
+        self.assertEqual(set(arms), {"one", "unknown", "many"})
+        self.assertIn('gh pr close "$old_pr" --delete-branch', arms["one"])
+        for name in ("unknown", "many"):
+            self.assertIn('gh pr close "$old_pr"', arms[name])
+            self.assertNotIn("--delete-branch", arms[name])
+        # The split has to have found real content in every arm, or the
+        # assertNotIn above would be vacuous.
+        for name, arm in arms.items():
+            self.assertIn("gh pr comment", arm, f"{name} arm looks truncated")
+
+    def test_an_unreadable_commit_count_never_states_a_number(self):
+        # `commits` is interpolated into a public comment. A numeric default
+        # would post "carries 2 commits" on someone's seven-commit branch.
+        self.assertIn("|| echo unknown)", self.text)
+        # A numeric-only allowlist, not an emptiness check: gh can write to
+        # stdout *and* exit non-zero, leaving "<junk>\nunknown", which is
+        # neither 1 nor unknown and would be posted as a commit count.
+        self.assertIn(
+            'case "$commits" in ""|*[!0-9]*) commits=unknown ;; esac', self.text
+        )
+        import subprocess
+
+        for produced, expected in (
+            ("printf 'junk\\n'; return 1", "unknown"),
+            ("return 1", "unknown"),
+            ("echo ''; return 0", "unknown"),
+            ("echo 7", "7"),
+            ("echo 1", "1"),
+        ):
+            out = subprocess.run(
+                ["bash", "-c",
+                 f'f() {{ {produced}; }}; commits="$(f || echo unknown)"; '
+                 'case "$commits" in ""|*[!0-9]*) commits=unknown ;; esac; '
+                 'printf %s "$commits"'],
+                capture_output=True, text=True, check=True,
+            ).stdout
+            self.assertEqual(out, expected, f"gh emitting `{produced}`")
+        arms = self._commit_count_branches()
+        self.assertNotIn("${commits}", arms["unknown"])
+        self.assertIn("could not be read", arms["unknown"])
+
+    def test_the_new_pr_lookup_is_fork_scoped(self):
+        # If a fork PR shared the new head-branch name, an unscoped `first`
+        # could return its number and the loop would then close the PR this
+        # run just opened, with --delete-branch.
+        self.assertIn(
+            "gh pr list --head \"$BRANCH\" --state open "
+            "--json number,isCrossRepository",
+            self.text,
+        )
+        selector = self._selector(r"first")
+        payload = """[
+          {"number": 9, "isCrossRepository": true},
+          {"number": 4, "isCrossRepository": false}
+        ]"""
+        self.assertEqual(self._jq(selector, payload), "4")
+
+    def test_fork_prs_are_not_superseded(self):
+        # headRefName on a cross-repo PR is the branch name on the FORK,
+        # unqualified, so a contributor's `ci/flutter-3.49.0` would otherwise
+        # be commented on and closed. The namespace is only ours on origin.
+        selector = self._selector(r"\.\[\] \| select")
+        payload = """[
+          {"number": 1, "headRefName": "ci/flutter-3.48.0", "isCrossRepository": false},
+          {"number": 2, "headRefName": "ci/flutter-3.49.0", "isCrossRepository": true}
+        ]"""
+        self.assertEqual(self._jq(selector, payload).split(), ["1"])
+
+    def test_every_gh_call_in_the_supersede_loop_isolates_stdin(self):
+        """The loop body's gh calls inherit the `gh pr list` pipe as stdin.
+
+        Demonstrated rather than asserted on shape: a body call that reads
+        stdin drains the pipe and every PR after the first is silently left
+        un-superseded. `< /dev/null` on each call is what prevents it -- and
+        it has to be on the calls, not on `done`, which would starve `read`.
+        """
+        import subprocess
+        import textwrap
+
+        # r""" matters: without it the `\n`s below become real newlines, the
+        # resulting zero-indent lines make dedent's common prefix "", and the
+        # dedent silently does nothing while reading as if it does.
+        script = textwrap.dedent(
+            r"""
+            drains_stdin() { cat > /dev/null; }
+            printf '1\n2\n3\n' | while read -r old_pr; do
+              echo "$old_pr"
+              drains_stdin GUARD
+            done
+            """
+        )
+        unguarded = subprocess.run(
+            ["bash", "-c", script.replace("GUARD", "")],
+            capture_output=True, text=True, check=True,
+        ).stdout.split()
+        guarded = subprocess.run(
+            ["bash", "-c", script.replace("GUARD", "< /dev/null")],
+            capture_output=True, text=True, check=True,
+        ).stdout.split()
+        self.assertEqual(unguarded, ["1"], "expected the unguarded loop to lose PRs")
+        self.assertEqual(guarded, ["1", "2", "3"])
+
+        # Now the real thing: no bare `gh` call inside the loop body.
+        marker = "| while read -r old_pr; do"
+        body = self.text.split(marker, 1)[1].split("\n                done", 1)[0]
+        calls = [
+            line.strip()
+            for line in body.splitlines()
+            if line.strip().startswith("gh ") or "$(gh " in line
+        ]
+        self.assertTrue(calls, "no gh calls found in the supersede loop body")
+        for call in calls:
+            self.assertIn("< /dev/null", call, f"gh call does not isolate stdin: {call}")
+
+    def test_the_supersede_list_is_not_capped_near_the_repos_pr_count(self):
+        # Any finite cap reintroduces the silent-no-op; keep it well past
+        # anything this repo will plausibly hold open at once.
+        import re
+
+        m = re.search(r"gh pr list --state open --limit (\d+)", self.text)
+        self.assertIsNotNone(m, "the supersede list call no longer passes --limit")
+        self.assertGreaterEqual(int(m.group(1)), 1000)
+
+    def test_new_pr_selector_is_empty_when_nothing_matches(self):
+        # `.[0].number` would print a literal "null" here, `[ -n ]` would pass,
+        # and the loop would then close the PR the run had just opened.
+        selector = self._selector(r"first")
+        self.assertEqual(self._jq(selector, "[]"), "")
+
+    def test_new_pr_selector_yields_the_number_when_one_matches(self):
+        selector = self._selector(r"first")
+        self.assertEqual(self._jq(selector, '[{"number": 42}]'), "42")
+
+
+
 if __name__ == "__main__":
     unittest.main()
