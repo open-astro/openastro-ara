@@ -338,6 +338,82 @@ class ReuseGuard(GitFixture):
         self.assertEqual(reuse_guard(self.repo, "even"), "REUSE")
 
 
+def delete_branch_flag(is_cross_repository_output: str) -> str:
+    """SKILL.md section 3b / pr-checker Step 4: the `$DEL` probe.
+
+        [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \\
+          && DEL=--delete-branch || DEL=
+
+    Returns "--delete-branch" or "". Only the literal string `false` keeps the
+    flag; `true`, an empty string (API failure) and anything else drop it. The
+    direction matters: inverting the test to `= "true"` would delete a
+    contributor's fork branch on an API blip.
+    """
+    return "--delete-branch" if is_cross_repository_output == "false" else ""
+
+
+def chore_delete_verdict(me: str, rows: list[tuple[str, bool]]) -> str:
+    """Playbook section 22.2: may the driver `push origin --delete chore/<name>`?
+
+    `rows` is what `gh pr list --state all --head chore/<name>
+    --json author,isCrossRepository` returned, as (author, isCrossRepository).
+    Returns "DELETE" or "HELD". Cross-repo rows are a fork's same-named branch
+    and are discarded first; then at least one row must remain and every
+    remaining author must be `me`. An empty `me` (the token has no user, as an
+    app token does) Holds before anything is read.
+    """
+    if not me:
+        return "HELD"
+    authors = sorted({author for author, cross in rows if not cross})
+    if not authors:
+        return "HELD"
+    return "DELETE" if authors == [me] else "HELD"
+
+
+class ProbeMirrors(unittest.TestCase):
+    """The two API-answer probes from #1036, pinned in the fail-safe direction (#1038).
+
+    Unlike the git-state guards these need no repository: each is a pure
+    function of what `gh` printed, so the cases enumerate the outputs.
+    """
+
+    def test_delete_branch_only_on_a_literal_false(self):
+        self.assertEqual(delete_branch_flag("false"), "--delete-branch")
+
+    def test_fork_head_keeps_its_branch(self):
+        self.assertEqual(delete_branch_flag("true"), "")
+
+    def test_api_failure_keeps_the_branch(self):
+        # Empty output: rate limit, auth blip, network. Never delete on a guess.
+        self.assertEqual(delete_branch_flag(""), "")
+
+    def test_garbage_output_keeps_the_branch(self):
+        for junk in ("False", "null", "error: not found", " false"):
+            with self.subTest(output=junk):
+                self.assertEqual(delete_branch_flag(junk), "")
+
+    def test_chore_delete_needs_a_same_repo_pr_of_ours(self):
+        self.assertEqual(chore_delete_verdict("me", [("me", False)]), "DELETE")
+        self.assertEqual(chore_delete_verdict("me", [("me", False), ("me", False)]), "DELETE")
+
+    def test_chore_delete_holds_with_no_pr(self):
+        self.assertEqual(chore_delete_verdict("me", []), "HELD")
+
+    def test_chore_delete_holds_on_a_foreign_or_mixed_author(self):
+        self.assertEqual(chore_delete_verdict("me", [("someone", False)]), "HELD")
+        self.assertEqual(chore_delete_verdict("me", [("me", False), ("someone", False)]), "HELD")
+
+    def test_a_fork_pr_of_the_same_name_does_not_vouch(self):
+        # #1040 item 3: my own fork's chore/foo is not origin's chore/foo.
+        self.assertEqual(chore_delete_verdict("me", [("me", True)]), "HELD")
+        # ...and it does not poison a genuine same-repo match either.
+        self.assertEqual(chore_delete_verdict("me", [("me", False), ("someone", True)]), "DELETE")
+
+    def test_chore_delete_holds_when_the_token_has_no_user(self):
+        # `gh api user --jq .login` prints nothing under an app token.
+        self.assertEqual(chore_delete_verdict("", [("", False)]), "HELD")
+
+
 class MirrorPin(unittest.TestCase):
     """The mirror above is hand-synced with SKILL.md; this makes drift fail (#1030).
 

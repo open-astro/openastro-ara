@@ -399,15 +399,20 @@ probe that decides it is the `$DEL` line below. **It must run in the same shell
 invocation as the `gh pr merge` that uses it** — each fenced block here is a
 separate invocation, and an unset `$DEL` would silently merge without deleting
 a same-repo branch (the stale-ref state §2's scenario-B guard exists for). That
-is why every merge fence in this step repeats the probe instead of referring
-back to this one:
+is why every merge fence in this step carries its own copy of the probe; the
+copy below is for reading, not running (a `text` fence on purpose, #1040 --
+there is exactly one runnable copy per merge path):
 
-```shell
+```text
 # Fails safe: an empty or errored probe is != "false", so the flag is omitted.
 # Do NOT invert this to test = "true" -- that would delete on an API error.
 [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
   && DEL=--delete-branch || DEL=
 ```
+
+The fail-safe direction of that test is pinned by `ProbeMirrors` in
+`scripts/tests/test_port_driver_guards.py` (#1038): `false` keeps the flag,
+`true`, empty and garbage all drop it.
 
 Then pick the merge method by the PR's commit history — **except at a phase
 boundary, where the tag decides it**:

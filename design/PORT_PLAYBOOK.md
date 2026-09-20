@@ -1892,12 +1892,13 @@ Every PR merge uses `gh pr merge --delete-branch` on a same-repo head so merged 
 
 ```shell
 ME=$(gh api user --jq .login); [ -n "$ME" ] || exit 1
-AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author --jq '.[].author.login' | sort -u)
+# Cross-repo rows are a fork's branch of the same name, not this origin ref: discard them (#1040).
+AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author,isCrossRepository --jq '.[] | select(.isCrossRepository == false) | .author.login' | sort -u)
 # Delete only when at least one PR exists for that head AND every one of them is ours.
 [ -n "$AUTHORS" ] && [ "$AUTHORS" = "$ME" ] || { echo "Held for human review -- chore/<name> authorship inconclusive"; exit 1; }
 ```
 
-`--head` matches head branch *names*, including fork heads, so a `chore/<name>` PR opened from your own fork would vouch for an unrelated origin `chore/<name>`; the strict author comparison closes every other direction, and that residual case is a same-author name collision. No PR at all (nothing to read an author from), a foreign author, or a failed API call are all inconclusive: stop and post `Held for human review`; never delete on a guess. It is the mechanical form of the authorship rule the port-driver skill's scenario A states in prose ("you authored it"). The comparison is deliberately strict: if the driver's PRs are opened under a different identity from the token running the cleanup (an app/bot login vs. a maintainer PAT), it always Helds — that is the safe direction, and loosening the comparison is not the fix; align the identities instead. `--delete-branch` itself is for same-repo heads: on a fork PR (`gh pr view <PR> --json isCrossRepository`) omit it — the head belongs to the contributor.
+`--head` matches head branch *names*, including fork heads; the `isCrossRepository == false` filter keeps only PRs whose head is this origin's ref, so a same-named fork branch cannot vouch for it (#1040). The decision table -- no rows, a foreign author, a mixed set, or an API failure all Hold; only "every same-repo PR on this head is ours" deletes -- is mirrored by `ProbeMirrors` in `scripts/tests/test_port_driver_guards.py` (#1038). No PR at all (nothing to read an author from), a foreign author, or a failed API call are all inconclusive: stop and post `Held for human review`; never delete on a guess. It is the mechanical form of the authorship rule the port-driver skill's scenario A states in prose ("you authored it"). The comparison is deliberately strict: if the driver's PRs are opened under a different identity from the token running the cleanup (an app/bot login vs. a maintainer PAT), it always Helds — that is the safe direction, and loosening the comparison is not the fix; align the identities instead. `--delete-branch` itself is for same-repo heads: on a fork PR (`gh pr view <PR> --json isCrossRepository`) omit it — the head belongs to the contributor.
 
 ### 22.3 Phase 15 (final release pass)
 
