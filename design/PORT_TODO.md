@@ -14,6 +14,22 @@ the other design docs.
 
 ---
 
+## Android + iOS platforms — follow-ups (2026-09-20, from the #1063 review)
+
+- CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-native-build`
+  matrix is macos/linux/windows only, so AGP / Gradle / Xcode-project drift in the new
+  `client/openastroara_client/android/` and `ios/` folders lands silently until someone builds
+  by hand. Add an `android` leg (`flutter build apk --release`, needs the Android SDK +
+  cmdline-tools on the runner) and an iOS leg (`flutter build ios --release --no-codesign` on
+  macOS). Out of scope for the platform-add PR.
+- `AndroidManifest.xml` sets `android:usesCleartextTraffic="true"` globally so the daemon's
+  plain-HTTP API works; a `network_security_config` with `cleartextTrafficPermitted` scoped to
+  RFC1918 ranges would be tighter. Hardening, not a break.
+- Android mDNS never answers: `multicast_dns` opens its socket with `reusePort`, which Dart
+  rejects on Android (`socket_linux.cc: reusePort not supported`), and logs it on every
+  discovery tick. Discovery there is carried entirely by the subnet sweep, which adds a few
+  seconds; a working Android browse (or muting the log) is its own change.
+
 ## file_picker 13 bump — follow-ups (2026-09-20, from the #1019 review)
 
 - `runProfileImportFlow` (`client/openastroara_client/lib/widgets/profile/profile_import_flow.dart`)

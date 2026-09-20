@@ -31,8 +31,11 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // TODO(signing): release builds are signed with the DEBUG keystore, so
+            // `flutter build apk --release` emits a side-loadable but not
+            // distributable artifact. Store signing is deferred with the rest of
+            // mobile distribution (PORT_PLAYBOOK §18.G); wire a real keystore
+            // here alongside the §18.F release-workflow signing step.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
