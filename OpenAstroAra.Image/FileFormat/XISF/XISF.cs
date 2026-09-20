@@ -613,7 +613,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                                 int written;
                                 try {
                                     written = decompressor.Unwrap(raw, outArray);
-                                } catch (Exception ex) when (ex is ZstdSharp.ZstdException or ArgumentException or InsufficientMemoryException) {
+                                } catch (Exception ex) when (ex is ZstdSharp.ZstdException or ArgumentOutOfRangeException or InsufficientMemoryException) {
                                     // Which of these fires for an oversized frame depends on the
                                     // ZstdSharp build's pre-check; all mean the same malformed input.
                                     throw new InvalidDataException("XISF: zstd frame is malformed or larger than its declared uncompressed size", ex);
