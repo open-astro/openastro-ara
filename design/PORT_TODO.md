@@ -16,8 +16,8 @@ the other design docs.
 
 ## Android + iOS platforms — follow-ups (2026-09-20, from the #1063 review)
 
-- CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-native-build`
-  matrix is macos/linux/windows only, so AGP / Gradle / Xcode-project drift in the new
+- CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-build` job
+  (display name `Client (native build) — <target>`) has a macos/linux/windows matrix only, so AGP / Gradle / Xcode-project drift in the new
   `client/openastroara_client/android/` and `ios/` folders lands silently until someone builds
   by hand. Add an `android` leg (`flutter build apk --release`, needs the Android SDK +
   cmdline-tools on the runner) and an iOS leg (`flutter build ios --release --no-codesign` on
