@@ -1288,7 +1288,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | Job id | Context | Runner | Steps | Gated by |
 |---|---|---|---|---|
 | `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; Python tooling tests (`scripts/tests/`) | never skipped |
-| `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything) | never skipped |
+| `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything, and the job is `continue-on-error` so a checkout flake or timeout never shows red — #1024) | never skipped |
 | `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
 | `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |
 | `analyzer-gate` | `Analyzer gate (full solution, warnings = errors)` | `ubuntu-latest` | `dotnet build OpenAstroAra.sln -c Release` with warnings as errors; astrometry natives; `dotnet test` (non-Integration) | `docs_only`, `dotnet` |

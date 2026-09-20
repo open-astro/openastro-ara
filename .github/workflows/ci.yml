@@ -28,8 +28,10 @@ name: CI
 #
 #   Phase 14 (full CI matrix per §14.3)
 #     → 14c [LANDED]: client-test extended to {linux, macos, windows} matrix.
-#     → 14d [LANDED]: server-e2e — actually `docker run` the arm64 image
-#       via qemu, probe /healthz + /api/v1/server/info from the host.
+#     → 14d [LANDED]: arm64 end-to-end inside `server-build` (no separate
+#       job): `docker run` the published image via qemu and probe /healthz
+#       from the host — the "Set up QEMU" … "Run arm64 container + health
+#       probe" steps. Playbook §14.3 describes it the same way (#1037).
 #     → [LANDED]: client-build — native desktop compile gate
 #       (`flutter build {macos,linux,windows} --release`), closing the
 #       analyze-only gap that let a non-linking macOS client merge (#599).
@@ -96,6 +98,13 @@ jobs:
     name: Changed paths
     runs-on: ubuntu-latest
     timeout-minutes: 5  # gates six jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
+    # A red `Changed paths` is never useful (#1024): every consumer below
+    # already fails safe on an empty output (`!= 'false'`, `!= 'true'`), so a
+    # checkout flake or the 5-minute timeout — neither of which the script's
+    # ERR trap can cover — must run the full matrix quietly, not hand the
+    # autonomous driver a `fail` to churn on. The workflow run and this job's
+    # check report success; the failure is still visible in the job log.
+    continue-on-error: true
     # Classifies the PR so the expensive jobs below can skip work that cannot
     # possibly be affected by it. See #1020.
     #
@@ -162,7 +171,13 @@ jobs:
           # `filter: blob:none` with a lazy promisor fetch) and reports only a
           # rename's destination — so a code file moved into design/ would look
           # docs-only while its deletion went unbuilt.
-          files="$(git diff --no-renames --name-only "$base" "$HEAD_SHA")"
+          # -c core.quotePath=false: with the default, a non-ASCII path is
+          # emitted as "design/\303\251.md" (quoted, octal-escaped), and the
+          # leading quote misses every prefix rule in the classifier, so the
+          # PR pays for a full matrix it did not need. Paths with control
+          # characters are still quoted and still fall through — the safe
+          # direction (#1024).
+          files="$(git -c core.quotePath=false diff --no-renames --name-only "$base" "$HEAD_SHA")"
 
           echo "Changed files:"
           echo "$files" | sed 's/^/  /'
