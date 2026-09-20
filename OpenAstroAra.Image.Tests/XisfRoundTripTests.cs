@@ -438,12 +438,27 @@ public sealed class XisfRoundTripTests : IDisposable {
 
     [Theory]
     [InlineData("RGB", 1)]
+    [InlineData("RGB", 2)]
+    [InlineData("RGB", 5)]
     [InlineData("CIELab", 1)]
     [InlineData("Gray", 3)]
     public async Task AColorSpaceThatDisagreesWithTheChannelCountIsRejected(string colorSpace, int channels) {
         var file = Monolithic($"geometry=\"2:1:{channels}\" sampleFormat=\"UInt16\" colorSpace=\"{colorSpace}\"", string.Empty, new byte[4 * channels]);
         var ex = await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
         Assert.Contains("implies", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Gray", 2)]
+    [InlineData("RGB", 4)]
+    [InlineData("CIELab", 4)]
+    public async Task ATrailingAlphaChannelIsLegalButNotSupportedYet(string colorSpace, int channels) {
+        // XISF 1.0 allows one alpha channel after the colour channels; that is a well-formed file
+        // the single-channel model cannot hold yet (#1054), not a malformed one.
+        var file = Monolithic($"geometry=\"2:1:{channels}\" sampleFormat=\"UInt16\" colorSpace=\"{colorSpace}\"", string.Empty, new byte[4 * channels]);
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+        Assert.Contains("not supported yet", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("implies", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

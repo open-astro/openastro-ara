@@ -139,15 +139,17 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     if (!colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("CIELab", StringComparison.OrdinalIgnoreCase)) {
                         throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported colorSpace '{0}'", colorSpace));
                     }
-                    // A colour space implies a channel count (Gray 1, RGB and CIELab 3); a mismatch is
-                    // a malformed file rather than something to read as whichever it turns out to be.
+                    // A colour space implies a channel count (Gray 1, RGB and CIELab 3), and XISF 1.0
+                    // lets one trailing alpha channel follow it (Gray 2, RGB/CIELab 4). Anything else
+                    // is a malformed file rather than something to read as whichever it turns out to be.
                     int channelsForColorSpace = colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
-                    if (channels != channelsForColorSpace) {
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: colorSpace {0} implies {1} channel(s) but geometry declares {2}", colorSpace, channelsForColorSpace, channels));
+                    if (channels != channelsForColorSpace && channels != channelsForColorSpace + 1) {
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: colorSpace {0} implies {1} channel(s), or {2} with alpha, but geometry declares {3}", colorSpace, channelsForColorSpace, channelsForColorSpace + 1, channels));
                     }
                     // The image model is single-channel (an OSC frame is a Bayered mono array). A
-                    // multi-channel block would otherwise be handed to a WxH image as a 3*W*H array,
-                    // so say so instead of producing a scrambled picture (#996, remaining scope).
+                    // multi-channel block (colour, or mono plus alpha) would otherwise be handed to a
+                    // WxH image as an N*W*H array, so say so instead of producing a scrambled picture
+                    // (#996, remaining scope: when a colour model exists, carry the alpha plane too).
                     if (channels != 1) {
                         Logger.Error($"XISF: {channels}-channel {colorSpace} image; only single-channel images are supported");
                         throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: {0}-channel images are not supported yet (colorSpace={1}, pixelStorage={2})", channels, colorSpace, pixelStorage));
