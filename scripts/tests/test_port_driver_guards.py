@@ -116,7 +116,7 @@ def retire(repo: Path, branch: str) -> None:
     """The RETIRE action: local delete, then a fresh branch from master."""
     git(repo, "checkout", "-q", "master")
     git(repo, "branch", "-D", branch)
-    git(repo, "checkout", "-qb", branch, "master")
+    git(repo, "checkout", "-qb", branch, "origin/master")
 
 
 class GitFixture(unittest.TestCase):
@@ -367,9 +367,11 @@ class MirrorPin(unittest.TestCase):
             '8d8bc816d4656c2d',
         ),
         "step_5_reuse_fence": (
-            "   # Reuse the branch if it is already there.",
+            # From the fence's first statement: the `|| exit 1` rationale in
+            # the RETIRE arm rests on `checkout master` having run.
+            "   git checkout master && git pull --ff-only",
             "   The slash namespace is the convention",
-            '9a9a732aa418ad63',
+            '2221caf1e4e11a22',
         ),
     }
 

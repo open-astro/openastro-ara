@@ -648,7 +648,7 @@ with the next sub-PR rather than getting a PR of its own.
          # a fall-through here would leave it on the leftover -- the state
          # this guard exists to prevent.
          git branch -D "$B" || exit 1   # local only -- never `push --delete` (§19.1)
-         git checkout -b "$B" || exit 1
+         git checkout -b "$B" origin/master || exit 1   # from origin, not a possibly stale local master
        else
          echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
          exit 1
@@ -658,7 +658,7 @@ with the next sub-PR rather than getting a PR of its own.
        git merge --ff-only origin/master
      fi
    else
-     git checkout -b "$B"
+     git checkout -b "$B" origin/master
    fi
    ```
    The slash namespace is the convention (COMMIT-PR-RULES.md "Branch naming").
