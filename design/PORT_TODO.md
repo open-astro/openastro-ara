@@ -14,6 +14,35 @@ the other design docs.
 
 ---
 
+## Android + iOS platforms — follow-ups (2026-09-20, from the #1063 review)
+
+- CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-build` job
+  (display name `Client (native build) — <target>`) has a macos/linux/windows matrix only, so AGP / Gradle / Xcode-project drift in the new
+  `client/openastroara_client/android/` and `ios/` folders lands silently until someone builds
+  by hand. Add an `android` leg (`flutter build apk --release`, needs the Android SDK +
+  cmdline-tools on the runner) and an iOS leg (`flutter build ios --release --no-codesign` on
+  macOS). Out of scope for the platform-add PR.
+- `AndroidManifest.xml` sets `android:usesCleartextTraffic="true"` globally so the daemon's
+  plain-HTTP API works; a `network_security_config` with `cleartextTrafficPermitted` scoped to
+  RFC1918 ranges would be tighter. Hardening, not a break.
+- Nothing verifies the checked-in launcher icons against `client/openastroara_client/icon_sources/`:
+  editing a source without re-running `dart run flutter_launcher_icons` leaves the shipped
+  Android/iOS/macOS/Windows icons silently stale. A CI step that regenerates and runs
+  `git diff --exit-code` on the icon outputs would pin it.
+- iOS 14+ gates the subnet sweep behind the Local Network permission prompt. The plist keys
+  are in place, but on *Don't Allow* `NetworkInterface.list()` still succeeds while every probe
+  fails, so the connect screen reads "no rigs found" with no hint that a permission is the
+  cause. A per-platform hint on the empty state (like the mobile-aware GPS copy) would close it.
+- iOS pod setup is not pinned like macOS's: `ios/Podfile` + `Podfile.lock` are not committed and
+  `ios/Flutter/{Debug,Release}.xcconfig` lack the `Pods-Runner.<mode>.xcconfig` include that
+  `macos/Flutter/Flutter-*.xcconfig` carries. `flutter` regenerates both on every iOS build, so
+  nothing breaks, but the tree dirties and plugin pod versions float. Commit the generated
+  Podfile + lock once the iOS toolchain settles.
+- Android mDNS never answers: `multicast_dns` opens its socket with `reusePort`, which Dart
+  rejects on Android (`socket_linux.cc: reusePort not supported`), and logs it on every
+  discovery tick. Discovery there is carried entirely by the subnet sweep, which adds a few
+  seconds; a working Android browse (or muting the log) is its own change.
+
 ## file_picker 13 bump — follow-ups (2026-09-20, from the #1019 review)
 
 - `runProfileImportFlow` (`client/openastroara_client/lib/widgets/profile/profile_import_flow.dart`)

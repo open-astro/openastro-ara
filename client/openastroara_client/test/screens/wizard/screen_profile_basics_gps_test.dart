@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,28 +26,36 @@ class _FakeTimeSync implements TimeSyncClient {
 }
 
 void main() {
-  Future<ProviderContainer> pump(WidgetTester tester,
-      {TimeSyncClient? api}) async {
-    final container = ProviderContainer(overrides: [
-      timeSyncApiProvider.overrideWithValue(api),
-    ]);
+  Future<ProviderContainer> pump(
+    WidgetTester tester, {
+    TimeSyncClient? api,
+  }) async {
+    final container = ProviderContainer(
+      overrides: [timeSyncApiProvider.overrideWithValue(api)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(
-          home: Scaffold(body: ScreenProfileBasics())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ScreenProfileBasics())),
+      ),
+    );
     return container;
   }
 
-  testWidgets('Fill from GPS fills the fields and the draft from the fix',
-      (tester) async {
-    final container = await pump(tester,
-        api: _FakeTimeSync(const TimeSyncState(
+  testWidgets('Fill from GPS fills the fields and the draft from the fix', (
+    tester,
+  ) async {
+    final container = await pump(
+      tester,
+      api: _FakeTimeSync(
+        const TimeSyncState(
           synced: true,
           source: 'gps-internal',
           location: TimeSyncLocation(lat: 30.5, lng: -97.75, alt: 240.0),
-        )));
+        ),
+      ),
+    );
 
     await tester.ensureVisible(find.text('Fill from GPS'));
     await tester.tap(find.text('Fill from GPS'));
@@ -66,16 +74,21 @@ void main() {
     expect(find.text('30.5'), findsOneWidget);
     expect(find.text('-97.75'), findsOneWidget);
     expect(find.text('240.0'), findsOneWidget);
-    expect(find.textContaining("Filled from the server's GPS dongle"),
-        findsOneWidget);
+    expect(
+      find.textContaining("Filled from the server's GPS dongle"),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('no fix yet → Mac fallback unavailable → fields untouched',
-      (tester) async {
+  testWidgets('no fix yet → Mac fallback unavailable → fields untouched', (
+    tester,
+  ) async {
     debugMacLocationProvider = () async => null; // Mac locator returns no fix
     addTearDown(() => debugMacLocationProvider = null);
-    final container = await pump(tester,
-        api: _FakeTimeSync(const TimeSyncState(synced: false)));
+    final container = await pump(
+      tester,
+      api: _FakeTimeSync(const TimeSyncState(synced: false)),
+    );
 
     await tester.ensureVisible(find.text('Fill from GPS'));
     await tester.tap(find.text('Fill from GPS'));
@@ -85,27 +98,30 @@ void main() {
     expect(container.read(wizardControllerProvider).draft.latitudeDeg, isNull);
   });
 
-  testWidgets('no server + no device location → says so, naming this platform',
-      (tester) async {
-    debugMacLocationProvider = () async => null;
-    addTearDown(() => debugMacLocationProvider = null);
-    await pump(tester, api: null);
-    await tester.ensureVisible(find.text('Fill from GPS'));
-    await tester.tap(find.text('Fill from GPS'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('No server connected'), findsOneWidget);
-    // The copy names the machine the user is actually on — the app ships on
-    // three desktops, so it must not hardcode "this Mac".
-    final expected = Platform.isMacOS
-        ? 'this Mac'
-        : Platform.isWindows
-            ? 'this PC'
-            : 'this computer';
-    expect(find.textContaining(expected), findsOneWidget);
-  });
+  testWidgets(
+    'no server + no device location → says so, naming this platform',
+    (tester) async {
+      debugMacLocationProvider = () async => null;
+      addTearDown(() => debugMacLocationProvider = null);
+      await pump(tester, api: null);
+      await tester.ensureVisible(find.text('Fill from GPS'));
+      await tester.tap(find.text('Fill from GPS'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No server connected'), findsOneWidget);
+      // The copy names the machine the user is actually on — the app ships on
+      // five platforms (three desktops, Android, iOS), so it must not hardcode
+      // "this Mac". The expected label comes from the same helper the screen
+      // uses, so a new platform arm cannot drift from this test.
+      expect(
+        find.textContaining(thisDeviceLabel(clientPlatform)),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('a fix that lands after a manual edit does not overwrite it',
-      (tester) async {
+  testWidgets('a fix that lands after a manual edit does not overwrite it', (
+    tester,
+  ) async {
     // Hold the fix open, type a latitude while it's in flight, then release.
     final gate = Completer<void>();
     debugMacLocationProvider = () async {
@@ -137,18 +153,26 @@ void main() {
     expect(tz_map.latLngToTimezoneString(35.68, 139.69), 'Asia/Tokyo');
     expect(tz_map.latLngToTimezoneString(-33.92, 18.42), 'Africa/Johannesburg');
     expect(tz_map.latLngToTimezoneString(-23.55, -46.63), 'America/Sao_Paulo');
-    expect(tz_map.latLngToTimezoneString(35.11, -106.61), 'America/Denver',
-        reason: 'Albuquerque — home turf');
+    expect(
+      tz_map.latLngToTimezoneString(35.11, -106.61),
+      'America/Denver',
+      reason: 'Albuquerque — home turf',
+    );
   });
 
-  testWidgets('an RMC-only fix (no altitude) leaves altitude alone',
-      (tester) async {
-    final container = await pump(tester,
-        api: _FakeTimeSync(const TimeSyncState(
+  testWidgets('an RMC-only fix (no altitude) leaves altitude alone', (
+    tester,
+  ) async {
+    final container = await pump(
+      tester,
+      api: _FakeTimeSync(
+        const TimeSyncState(
           synced: true,
           source: 'gps-internal',
           location: TimeSyncLocation(lat: 1.0, lng: 2.0), // alt null
-        )));
+        ),
+      ),
+    );
     container.read(wizardControllerProvider).draft.altitudeMeters = 123.0;
 
     await tester.ensureVisible(find.text('Fill from GPS'));
@@ -157,7 +181,10 @@ void main() {
 
     final draft = container.read(wizardControllerProvider).draft;
     expect(draft.latitudeDeg, 1.0);
-    expect(draft.altitudeMeters, 123.0,
-        reason: 'null altitude means unknown, not zero (#834 r1 semantics)');
+    expect(
+      draft.altitudeMeters,
+      123.0,
+      reason: 'null altitude means unknown, not zero (#834 r1 semantics)',
+    );
   });
 }

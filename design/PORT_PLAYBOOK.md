@@ -1008,8 +1008,9 @@ mkdir client
 cd client
 flutter create --org org.openastro --project-name openastroara \
     --platforms macos,windows,linux openastroara_client
-# Note: iOS + Android platforms NOT added in the initial release per §18.G mobile-deferred (ROADMAP);
-# Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
+# iOS + Android were added later (#1063) with `flutter create --platforms=ios,android .`;
+# §18.G mobile-deferred still holds for DISTRIBUTION (store signing, CI build legs), not for
+# building and side-loading the platform folders that are now checked in.
 cd openastroara_client
 echo "X.Y.Z" > .flutter-version    # the pinned stable; see §12.1
 flutter pub add dio web_socket_channel multicast_dns riverpod flutter_riverpod \
@@ -1632,8 +1633,8 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 | Project namespace prefix | `OpenAstroAra.*` |
 | Server executable | `OpenAstroAra.Server` |
 | Client app name | `OpenAstro Ara` |
-| iOS/macOS bundle ID | `org.openastro.ara` |
-| Android app ID | `org.openastro.ara` |
+| iOS/macOS bundle ID | `org.openastro.openastroara` (`macos/Runner/Configs/AppInfo.xcconfig`, `ios/Runner.xcodeproj`) |
+| Android app ID | `org.openastro.openastroara` (`android/app/build.gradle.kts` `applicationId` + `namespace`) |
 | GitHub repo (monorepo) | `github.com/open-astro/openastro-ara` |
 | Server log path | Linux: `/var/log/openastroara/`; macOS dev: `~/Library/Logs/OpenAstroAra/`; Windows dev: `%LOCALAPPDATA%\OpenAstroAra\Logs\` |
 | Server config path | `/etc/openastroara/` (Linux); equivalents on dev OSes |

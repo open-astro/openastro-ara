@@ -63,6 +63,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -153,3 +154,24 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# App icon for every platform, generated from the sources in icon_sources/
+# with `dart run flutter_launcher_icons`. That directory is deliberately NOT a
+# declared asset: only the generator reads it, so it must not ride along in
+# every app bundle. Linux loads assets/icons/app_icon.png (the one bundled
+# icon) at runtime from linux/runner/my_application.cc.
+flutter_launcher_icons:
+  image_path: "icon_sources/app_icon_1024.png"
+  android: true
+  adaptive_icon_background: "icon_sources/app_icon_android_bg.png"
+  adaptive_icon_foreground: "icon_sources/app_icon_android.png"
+  ios: true
+  image_path_ios: "icon_sources/app_icon_ios.png"
+  remove_alpha_ios: true
+  macos:
+    generate: true
+    image_path: "icon_sources/app_icon_1024.png"
+  windows:
+    generate: true
+    image_path: "icon_sources/app_icon_1024.png"
+    icon_size: 256
