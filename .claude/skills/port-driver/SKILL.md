@@ -209,7 +209,11 @@ gh pr list --head "$(git branch --show-current)" --state merged \
    that checks these rules against a real repository. A skill edit without a
    matching test edit leaves the suite green while it pins the *old* rules, so
    the tests then argue against this file. Every revision of these rules so far
-   has been wrong in a way only the tests caught.
+   has been wrong in a way only the tests caught. Since #1030 that drift is
+   mechanical: `MirrorPin` in the test file hashes this decision list (from
+   condition 0 to the end of the D bullet) and the §5 step 2 fence, and the
+   Sanity job fails until whoever edits either section re-reads the mirror and
+   updates the pinned hash -- the failure message says how.
 
    No OID matched → nothing merged is reachable from here → **B**. That covers
    the ordinary reused-placeholder case, where the branch was cut fresh from
@@ -604,9 +608,9 @@ with the next sub-PR rather than getting a PR of its own.
    B=phase/<N>[-<letter>]-<short-name>   # e.g. phase/10-docker, phase/12h-settings
 
    # Reuse the branch if it is already there. B routes to C without deleting the
-   # stale local ref (§19.1 forbids `branch -D`, and `fetch --prune` only drops
-   # tracking refs), so a reused name -- `prep-ci` at 0.5p/4/11 -- still exists
-   # locally even when you are not standing on it.
+   # stale local ref (`fetch --prune` only drops tracking refs), so a reused
+   # name -- `prep-ci` at 0.5p/4/11 -- still exists locally even when you are
+   # not standing on it.
    if git rev-parse --verify -q "refs/heads/$B" >/dev/null; then
      # Scenario B's guard, from the other side: B only runs it when the driver
      # is already standing on the branch, so C has to re-ask here. Ask about
@@ -614,15 +618,33 @@ with the next sub-PR rather than getting a PR of its own.
      # merely behind an advanced `master` is fine to reuse and gets caught by
      # a plain ancestor test.
      if [ -n "$(git rev-list "origin/master..$B")" ]; then
-       # Commits here that master does not have: either a squash-merged
-       # leftover (building on it puts the next PR on top of an already-merged
-       # diff) or real unpushed work. Same fork as scenario B's D bullet, and
-       # the driver cannot clear the ref itself -- §19.1 bars `branch -D`.
-       echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
-       exit 1
+       # Commits here that master does not have. Three cases, and only the
+       # first is one the driver may clear itself (§19.1 "Local refs", #1028):
+       #   RETIRE  the ref's head IS the headRefOid of a PR merged under this
+       #           name -- the squash-merged leftover `--delete-branch` could
+       #           not reach. Every byte on it is in master by content, so
+       #           deleting the LOCAL ref loses nothing. Exact equality only.
+       #   HELD    anything beyond that head: a squashed leftover plus a stray
+       #           commit, or real unpushed work. Same fork as scenario B's D
+       #           bullet; the driver cannot tell which, so it does not guess.
+       #   HELD    no merged PR under this name at all -> the commits are
+       #           unpushed work by definition.
+       REF_OID=$(git rev-parse "refs/heads/$B")
+       # Empty on an API failure: then nothing matches and the ref is Held,
+       # which is the safe direction.
+       merged=$(gh pr list --head "$B" --state merged --json headRefOid --jq '.[].headRefOid')
+       if [ -n "$REF_OID" ] && printf '%s\n' "$merged" | grep -qx "$REF_OID"; then
+         echo "retiring local $B: its head $REF_OID is the merged head of a PR under this name"
+         git branch -D "$B"        # local only -- never `push --delete` (§19.1)
+         git checkout -b "$B"
+       else
+         echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
+         exit 1
+       fi
+     else
+       git switch "$B"          # let a real failure (dirty tree) print its reason
+       git merge --ff-only origin/master
      fi
-     git switch "$B"          # let a real failure (dirty tree) print its reason
-     git merge --ff-only origin/master
    else
      git checkout -b "$B"
    fi
@@ -688,7 +710,7 @@ That single line is enough — don't write multi-paragraph summaries each iterat
 
 ## Safety net — what you do NOT do
 
-- Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction.
+- Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction. One standing exception, from §19.1 "Local refs" (#1028): §5 step 2 may `branch -D` a *local* ref whose head is exactly the `headRefOid` of a PR merged under that name. Nothing else, and never on the remote.
 - Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
 - Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** `master` is governed by a repository **ruleset** (`PORT_DECISIONS.md` "master protection") that requires a PR for everyone *except* its bypass actors — repository admins, retained for hotfixes — and the driver runs under the maintainer's admin credentials. (Don't go looking for `enforce_admins`: that is classic branch protection, which this repo does not use.) A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
 - Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.

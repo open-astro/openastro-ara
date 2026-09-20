@@ -26,10 +26,15 @@ No network, no fixtures: each test builds the repository it needs.
 
 from __future__ import annotations
 
+import hashlib
+import re
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SKILL = REPO_ROOT / ".claude" / "skills" / "port-driver" / "SKILL.md"
 
 
 def git(repo: Path, *args: str) -> str:
@@ -87,13 +92,30 @@ def scenario_b(repo: Path, merged: list[str]) -> str:
     return "B"
 
 
-def reuse_guard(repo: Path, branch: str) -> str:
+def reuse_guard(repo: Path, branch: str, merged: list[str] = ()) -> str:
     """SKILL.md section 5 step 2: may scenario C reuse an existing local ref?
 
-    Returns "REUSE" or "HELD". Asks for the ref's own commits, not how far it
-    trails master -- see test_reuse_* for the two ways the ancestor test failed.
+    Returns "REUSE" (switch to it), "RETIRE" (delete the local ref and
+    re-create it: its head is exactly a merged PR's head, #1028) or "HELD".
+    Asks for the ref's own commits, not how far it trails master -- see
+    test_reuse_* for the two ways the ancestor test failed. `merged` is what
+    `gh pr list --head <branch> --state merged --json headRefOid` returned;
+    an empty list stands in for both "no PR" and an API failure, and both
+    Hold.
     """
-    return "HELD" if git(repo, "rev-list", f"origin/master..{branch}") else "REUSE"
+    if not git(repo, "rev-list", f"origin/master..{branch}"):
+        return "REUSE"
+    ref_oid = git(repo, "rev-parse", f"refs/heads/{branch}")
+    if ref_oid and ref_oid in merged:
+        return "RETIRE"
+    return "HELD"
+
+
+def retire(repo: Path, branch: str) -> None:
+    """The RETIRE action: local delete, then a fresh branch from master."""
+    git(repo, "checkout", "-q", "master")
+    git(repo, "branch", "-D", branch)
+    git(repo, "checkout", "-qb", branch, "master")
 
 
 class GitFixture(unittest.TestCase):
@@ -247,22 +269,126 @@ class ReuseGuard(GitFixture):
         self.publish()
         self.assertEqual(reuse_guard(self.repo, "stale"), "REUSE")
 
-    def test_squash_merged_leftover(self):
+    def test_squash_merged_leftover_with_no_merged_pr_known_holds(self):
+        # An API failure (or genuinely no PR) leaves `merged` empty: the
+        # commits are unpushed work as far as the driver can tell.
         git(self.repo, "checkout", "-qb", "left", "master")
         self.commit("work")
         self.merge_pr("left", squash=True)
-        self.assertEqual(reuse_guard(self.repo, "left"), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "left", []), "HELD")
+
+    def test_squash_merged_leftover_is_retired(self):
+        # #1028: `--delete-branch` removed the remote ref, the local one
+        # survived, and its head IS the merged PR's head. Every byte on it is
+        # in master by content, so the local ref may go and the name is
+        # reusable -- the prep-ci at 0.5p -> 4 -> 11 case that Held the loop.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "RETIRE")
+        retire(self.repo, "left")
+        self.assertEqual(git(self.repo, "rev-list", "--count", "origin/master..left"), "0")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "REUSE")
+
+    def test_squash_merged_leftover_plus_stray_commit_holds(self):
+        # Exact equality only: a commit on top of the merged head is either
+        # stray or real work, and the driver cannot tell which.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        git(self.repo, "checkout", "-q", "left")
+        self.commit("stray")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "HELD")
+
+    def test_merge_committed_leftover_is_plain_reuse(self):
+        # A merge-committed head is an ancestor of origin/master, so the ref
+        # has no commits of its own: REUSE, no deletion needed.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=False)
+        self.assertEqual(reuse_guard(self.repo, "left", [oid]), "REUSE")
+
+    def test_older_merged_head_does_not_retire_a_newer_leftover(self):
+        # A reused name with two merged PRs: the ref sits on the NEWER squashed
+        # head plus nothing else, so it retires -- but only because the newer
+        # OID is in the list. With only the older OID known, it Holds.
+        git(self.repo, "checkout", "-qb", "mix", "master")
+        old = self.commit("first")
+        self.merge_pr("mix", squash=True)
+        git(self.repo, "branch", "-qD", "mix")
+        git(self.repo, "checkout", "-qb", "mix", "master")
+        new = self.commit("second")
+        self.merge_pr("mix", squash=True)
+        self.assertEqual(reuse_guard(self.repo, "mix", [old]), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "mix", [old, new]), "RETIRE")
 
     def test_genuine_unpushed_work(self):
         # The ancestor test REUSED this: origin/master is an ancestor of a
         # branch carrying unpushed commits, so new work piled on top of it.
+        # And a merged PR under the same name whose head is NOT this commit
+        # must not change that.
         git(self.repo, "checkout", "-qb", "wip", "master")
         self.commit("unpushed")
         self.assertEqual(reuse_guard(self.repo, "wip"), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "wip", ["0" * 40]), "HELD")
 
     def test_ref_level_with_master(self):
         git(self.repo, "branch", "even", "master")
         self.assertEqual(reuse_guard(self.repo, "even"), "REUSE")
+
+
+class MirrorPin(unittest.TestCase):
+    """The mirror above is hand-synced with SKILL.md; this makes drift fail (#1030).
+
+    Two sections of the skill are hashed: scenario B's decision list
+    (condition 0 through the end of the D bullet) and the §5 step 2 fence
+    that `reuse_guard`/`retire` mirror. Editing either without touching this
+    file fails the Sanity job, which is the point: drift already happened
+    once inside #1003 (the skill tested detached-HEAD inside condition 2, the
+    mirror tested it first -- C vs D with the suite green) and review, not
+    the tests, caught it.
+
+    To update: re-read the changed section, bring `scenario_b` /
+    `reuse_guard` and their cases into line, then paste the new hash the
+    failure message prints. Pasting the hash without the re-read defeats the
+    test, and there is nothing here that can stop that -- it is a forcing
+    function for a human look, not a proof of equivalence.
+    """
+
+    SECTIONS = {
+        "scenario_b_decision_list": (
+            "0. **Not on a branch at all is not B.**",
+            "   **If you change this decision list, change its mirror.**",
+            'eba469f3bc741367',
+        ),
+        "step_5_reuse_fence": (
+            "   # Reuse the branch if it is already there.",
+            "   The slash namespace is the convention",
+            'd10a5b63567f38a3',
+        ),
+    }
+
+    @staticmethod
+    def digest(text: str) -> str:
+        # Whitespace-insensitive so a reflow is not a rule change.
+        return hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode()).hexdigest()[:16]
+
+    def section(self, start: str, end: str) -> str:
+        text = SKILL.read_text()
+        i = text.index(start)
+        j = text.index(end, i)
+        return text[i:j]
+
+    def test_sections_match_the_pinned_hashes(self):
+        for name, (start, end, expected) in self.SECTIONS.items():
+            with self.subTest(section=name):
+                actual = self.digest(self.section(start, end))
+                self.assertEqual(
+                    actual, expected,
+                    f"SKILL.md section '{name}' changed. Re-read it, update the "
+                    f"mirror in this file to match, then replace the pinned hash "
+                    f"with {actual!r}.",
+                )
 
 
 if __name__ == "__main__":
