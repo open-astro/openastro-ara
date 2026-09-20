@@ -1749,7 +1749,7 @@ Two out-of-scope notes from #1015's approval, neither widened into that PR:
 
 ## Flutter bump supersede (2026-09-19, from the #1017 review notes)
 
-One out-of-scope note from #1017's approval, not widened into that PR:
+Three out-of-scope items from #1017's review rounds, none widened into that PR:
 
 - `design/PORT_PLAYBOOK.md` §12.1 (lines 1024-1030) enumerates what
   `check-flutter.yml` does and stops at "Skips if a PR for that version is

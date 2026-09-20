@@ -366,9 +366,13 @@ jobs:
                   # statement about their work. The sentinel is not `1`, so
                   # it still takes the keep-the-branch side.
                   commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' < /dev/null || echo unknown)"
-                  [ -n "$commits" ] || commits=unknown
+                  # Anything that is not a bare number becomes the sentinel:
+                  # empty output, and also the partial case where gh writes
+                  # to stdout *and* exits non-zero, which would otherwise
+                  # leave "<junk>\nunknown" to be posted as a commit count.
+                  case "$commits" in ""|*[!0-9]*) commits=unknown ;; esac
                   if [ "$commits" = 1 ]; then
-                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this PR was the workflow's own untouched commit, so nothing here is lost — the newer PR does the same job against the newer release." < /dev/null || true
+                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this branch carries a single commit that the newer PR supersedes in full, so nothing here is lost — it does the same job against the newer release. If that commit was yours rather than this workflow's, reopen this PR and use Restore branch." < /dev/null || true
                     gh pr close "$old_pr" --delete-branch < /dev/null || true
                   elif [ "$commits" = unknown ]; then
                     gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal. **The commit count on this branch could not be read, so the branch is being kept, not deleted** — if there is work here that is still wanted, reopen this PR or cherry-pick onto #${new_pr}." < /dev/null || true

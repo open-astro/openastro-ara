@@ -636,7 +636,29 @@ class SupersedeSelectorTest(unittest.TestCase):
         # `commits` is interpolated into a public comment. A numeric default
         # would post "carries 2 commits" on someone's seven-commit branch.
         self.assertIn("|| echo unknown)", self.text)
-        self.assertIn("[ -n \"$commits\" ] || commits=unknown", self.text)
+        # A numeric-only allowlist, not an emptiness check: gh can write to
+        # stdout *and* exit non-zero, leaving "<junk>\nunknown", which is
+        # neither 1 nor unknown and would be posted as a commit count.
+        self.assertIn(
+            'case "$commits" in ""|*[!0-9]*) commits=unknown ;; esac', self.text
+        )
+        import subprocess
+
+        for produced, expected in (
+            ("printf 'junk\\n'; return 1", "unknown"),
+            ("return 1", "unknown"),
+            ("echo ''; return 0", "unknown"),
+            ("echo 7", "7"),
+            ("echo 1", "1"),
+        ):
+            out = subprocess.run(
+                ["bash", "-c",
+                 f'f() {{ {produced}; }}; commits="$(f || echo unknown)"; '
+                 'case "$commits" in ""|*[!0-9]*) commits=unknown ;; esac; '
+                 'printf %s "$commits"'],
+                capture_output=True, text=True, check=True,
+            ).stdout
+            self.assertEqual(out, expected, f"gh emitting `{produced}`")
         arms = self._commit_count_branches()
         self.assertNotIn("${commits}", arms["unknown"])
         self.assertIn("could not be read", arms["unknown"])
