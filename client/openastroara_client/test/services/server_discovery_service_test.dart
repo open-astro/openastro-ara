@@ -150,6 +150,38 @@ void main() {
     );
 
     test(
+      'a restarted pass joins a current sweep without waiting out the grace',
+      () async {
+        // Both passes see a wedged mDNS browse (never emits, never closes), so
+        // nothing but the grace-skip branch can bring the sweep in early on
+        // pass 2. Without it, pass 2 would sit out mdnsGracePeriod again and
+        // the replayed hit would arrive ~2.5 s late.
+        final mdnsHang = StreamController<AraServer>.broadcast();
+        addTearDown(mdnsHang.close);
+        final sweepCtl = StreamController<AraServer>();
+        addTearDown(sweepCtl.close);
+        final svc = ServerDiscoveryService(
+          mdnsSource: () => mdnsHang.stream,
+          sweepSource: () => sweepCtl.stream,
+        );
+        final first = svc.discover().listen((_) {});
+        await Future<void>.delayed(
+          ServerDiscoveryService.mdnsGracePeriod +
+              const Duration(milliseconds: 100),
+        );
+        sweepCtl.add(_s('10.0.0.235'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await first.cancel();
+        final sw = Stopwatch()..start();
+        final got = await svc.discover().first.timeout(
+          const Duration(milliseconds: 500),
+        );
+        expect(got.hostname, '10.0.0.235');
+        expect(sw.elapsed, lessThan(ServerDiscoveryService.mdnsGracePeriod));
+      },
+    );
+
+    test(
       'a sweep that just finished replays its hits to the next pass',
       () async {
         // Real timeline on the tablet: the hit landed after the tick detached
