@@ -253,6 +253,45 @@ void main() {
       }
     });
 
+    test('an mDNS answer stops a joined in-flight sweep', () async {
+      // Pass 1 (silent mDNS) spawns a sweep that keeps running. Pass 2 joins
+      // it, then mDNS answers: the sweep strand is dropped, and with no
+      // listener left the run is abandoned after the grace — probing ends.
+      var mdnsCalls = 0;
+      var sweepCancelled = false;
+      final mdnsHang = StreamController<AraServer>();
+      addTearDown(mdnsHang.close);
+      final sweepCtl = StreamController<AraServer>(
+        onCancel: () => sweepCancelled = true,
+      );
+      addTearDown(sweepCtl.close);
+      Stream<AraServer> lateAnswer() async* {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        yield _s('10.0.0.10');
+      }
+
+      final svc = ServerDiscoveryService(
+        mdnsSource: () => ++mdnsCalls == 1 ? mdnsHang.stream : lateAnswer(),
+        sweepSource: () => sweepCtl.stream,
+        sweepAbandonGrace: const Duration(milliseconds: 10),
+      );
+      final first = svc.discover().listen((_) {});
+      await Future<void>.delayed(
+        ServerDiscoveryService.mdnsGracePeriod +
+            const Duration(milliseconds: 100),
+      );
+      await first.cancel();
+      expect(sweepCancelled, isFalse, reason: 'pass 2 re-attaches in time');
+      final got = await svc.discover().toList();
+      expect(got.map((s) => s.hostname), ['10.0.0.10']);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(
+        sweepCancelled,
+        isTrue,
+        reason: 'mDNS answered: the joined sweep must stop probing',
+      );
+    });
+
     test(
       'a run nobody ever attached to is abandoned after the grace',
       () async {

@@ -33,6 +33,11 @@ the other design docs.
   are in place, but on *Don't Allow* `NetworkInterface.list()` still succeeds while every probe
   fails, so the connect screen reads "no rigs found" with no hint that a permission is the
   cause. A per-platform hint on the empty state (like the mobile-aware GPS copy) would close it.
+- iOS pod setup is not pinned like macOS's: `ios/Podfile` + `Podfile.lock` are not committed and
+  `ios/Flutter/{Debug,Release}.xcconfig` lack the `Pods-Runner.<mode>.xcconfig` include that
+  `macos/Flutter/Flutter-*.xcconfig` carries. `flutter` regenerates both on every iOS build, so
+  nothing breaks, but the tree dirties and plugin pod versions float. Commit the generated
+  Podfile + lock once the iOS toolchain settles.
 - Android mDNS never answers: `multicast_dns` opens its socket with `reusePort`, which Dart
   rejects on Android (`socket_linux.cc: reusePort not supported`), and logs it on every
   discovery tick. Discovery there is carried entirely by the subnet sweep, which adds a few

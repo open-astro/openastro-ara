@@ -96,6 +96,11 @@ class ServerDiscoveryService {
 
     void maybeStartSweep() {
       if (sweepStarted || cancelled || controller.isClosed) return;
+      // A pass already joined to a sweep still IN FLIGHT has nothing to gain
+      // from a second attach to the same run: the join strand carries its
+      // hits. A join that only replayed a finished run must not block the
+      // fresh sweep this pass is entitled to.
+      if (joinSub != null && !(_sweepRun?.finished ?? true)) return;
       sweepStarted = true;
       pending++;
       // Clear the handle when the strand finishes on its own: a later
