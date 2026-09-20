@@ -17,7 +17,6 @@ using K4os.Compression.LZ4;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Image.FileFormat.XISF.DataConverter;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.ImageData;
@@ -287,11 +286,16 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
 
             payload = string.Concat(payload.Where(c => !char.IsWhiteSpace(c)));
-            return encoding switch {
-                "base64" => Convert.FromBase64String(payload),
-                "hex" => Convert.FromHexString(payload),
-                _ => throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported block encoding '{0}'", encoding)),
-            };
+            try {
+                return encoding switch {
+                    "base64" => Convert.FromBase64String(payload),
+                    "hex" => Convert.FromHexString(payload),
+                    _ => throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported block encoding '{0}'", encoding)),
+                };
+            } catch (FormatException ex) {
+                // Same exception type as every other malformed-input path in Load.
+                throw new InvalidDataException($"XISF: malformed {encoding} block payload", ex);
+            }
         }
 
         /// <summary>

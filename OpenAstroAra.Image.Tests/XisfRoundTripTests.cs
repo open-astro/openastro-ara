@@ -213,6 +213,10 @@ public sealed class XisfRoundTripTests : IDisposable {
             long start = long.Parse(loc.Groups[1].Value, CultureInfo.InvariantCulture);
             Assert.True(start >= 16 + headerLen, $"keywords={keywords}: block at {start} overlaps a {16 + headerLen}-byte header");
             Assert.Equal(0, start % XISF.PaddedBlockSize);
+            // The FIRST boundary at or after the header, not a later one: the old fixed 256-byte
+            // budget left up to a full extra block of padding, and this is what distinguishes
+            // the converging computation from it.
+            Assert.True(start - (16 + headerLen) < XISF.PaddedBlockSize, $"keywords={keywords}: {start - (16 + headerLen)} bytes of padding before the block");
             Assert.Equal(start + 8, file.LongLength);
         }
     }
@@ -283,6 +287,12 @@ public sealed class XisfRoundTripTests : IDisposable {
         var file = Monolithic("geometry=\"2:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:hex\"", "3412 ffff");
         var img = await Read(file);
         Assert.Equal(new ushort[] { 0x1234, 0xFFFF }, img.Data.FlatArray);
+    }
+
+    [Fact]
+    public async Task AMalformedInlinePayloadIsAnInvalidDataException() {
+        var file = Monolithic("geometry=\"2:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\"", "not*base64!");
+        await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 
     [Fact]

@@ -273,7 +273,7 @@ dotnet_diagnostic.CA1062.severity = none
 # ============================================================================
 # Test-project-only relaxations.
 # ============================================================================
-[{OpenAstroAra.Test,OpenAstroAra.Fits.Tests,OpenAstroAra.Stretch.Tests}/**.cs]
+[{OpenAstroAra.Test,OpenAstroAra.Fits.Tests,OpenAstroAra.Stretch.Tests,OpenAstroAra.Image.Tests}/**.cs]
 
 # CA1707: Identifiers should not contain underscores.
 # Test methods use the industry-standard Method_State_Expected naming
