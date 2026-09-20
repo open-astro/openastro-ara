@@ -425,8 +425,20 @@ Then:
     | grep -E "^$HEAD_OID[[:space:]]+refs/tags/phase-" \
     && echo "tagged -> use --merge"
   ```
+  **Phase-boundary PR with no tag on its head -> do not merge yet (#1029).** The probe above only
+  detects a tag that is already pushed; nothing else in this command pushes one, and under the
+  port-driver's §3b ordering the tag goes on immediately before the merge. So before choosing the
+  method, decide whether this PR closes a phase or sub-phase: read `design/PORT_PROGRESS.md` and the
+  COMMIT-PR-RULES.md sub-split tables, exactly as §3b does. If it does and the probe found no
+  `phase-*` tag, run the §3b tag block from `.claude/skills/port-driver/SKILL.md` verbatim —
+  `git fetch origin pull/<N>/head`, tag the `headRefOid`, both pre-push verifications, then
+  `git push origin <tag>` (the named ref, never `--tags`) — and only then merge with `--merge`.
+  Merging it untagged silently skips §19.1's phase-boundary gate item. If you cannot tell whether
+  it is a boundary, that is ambiguous: **Hard stop** with `Held for human review`.
+
   Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
-  step; a fork head belongs to the contributor and is never deleted from here.
+  step; a fork head belongs to the contributor and is never deleted from here (`isCrossRepository`
+  true -> omit `--delete-branch`; the port-driver's §3b carries the same rule, #1031).
 
 If any gate condition is ambiguous, post `Held for human review @joeytroy — <reason>` and treat it
 as a **Hard stop** for that PR.
@@ -474,7 +486,7 @@ The loop ends only when every PR is merged or a **Hard stop** below applies. In 
   line (the prompt defines the sign-off as the last line, and a review can quote either string in
   its body) — with `poll` = the Step 2 block saved to a file:
   `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && gh pr merge <N> --squash --delete-branch`
-  (`--merge` instead when the PR carries a phase tag, as above).
+  (`--merge` instead when the PR carries a phase tag, as above — and a phase-boundary PR must be tagged per Step 4 before this line runs).
 - **A Defect you disagree with** is still fixed or wired into the skill/docs when there is any
   reasonable change that satisfies it. Only a Defect that would require a wrong or unsafe change
   becomes a hard stop. A Note you disagree with is a wrap-up line, not a change.

@@ -1283,19 +1283,25 @@ In `client/openastroara_client/`:
 
 ### 14.3 CI matrix (`.github/workflows/ci.yml`)
 
-| Job | Runner | Steps |
-|---|---|---|
-| server-build | `ubuntu-latest` | `dotnet build`, `dotnet test` (unit + integration), publish `linux-arm64` + `linux-x64` |
-| server-e2e | `ubuntu-latest` | Docker-based E2E smoke against a Linux ARM64 image (qemu) — runs on phase boundaries only |
-| client-macos | `macos-latest` | `flutter build macos --release`, `flutter build ios --no-codesign` |
-| client-windows | `windows-latest` | `flutter build windows --release` |
-| client-linux | `ubuntu-latest` | `flutter build linux --release`, `flutter build apk --release` |
-| client-test | `ubuntu-latest` | `flutter test`, `flutter test integration_test/`, `flutter analyze` |
-| settings-registry | `ubuntu-latest` | `node scripts/check-settings-registry.mjs --pr-diff` — fails PR if new settings lack registry entries |
+As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the live workflow, not the original plan). Job ids are `ci.yml`'s; the **Context** column is the literal check name the `master protection` ruleset matches (COMMIT-PR-RULES.md item 2). Path gating comes from the `changes` job (#1020/#1021): `docs_only` skips every build/test job; the finer `dotnet` / `client` outputs skip only jobs that are **not** required contexts.
 
-On tag `v0.0.1-ara.*`, also a `release` job uploading artifacts to a GitHub Release.
+| Job id | Context | Runner | Steps | Gated by |
+|---|---|---|---|---|
+| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; Python tooling tests (`scripts/tests/`) | never skipped |
+| `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything) | never skipped |
+| `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
+| `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |
+| `analyzer-gate` | `Analyzer gate (full solution, warnings = errors)` | `ubuntu-latest` | `dotnet build OpenAstroAra.sln -c Release` with warnings as errors; astrometry natives; `dotnet test` (non-Integration) | `docs_only`, `dotnet` |
+| `server-build` | `Server (build + cross-publish + Docker)` ✅ required | `ubuntu-latest` | third-party licenses freshness gate; build Server + Fits; test Fits + Stretch; runtime smoke (`/healthz`); `dotnet publish linux-arm64`; QEMU arm64 Docker image + health probe; build + upload the arm64 `.deb` | `docs_only` only |
+| `registry-gate` | `Settings + Help registry gate` ✅ required | `ubuntu-latest` | `node scripts/check-settings-registry.mjs`; `node scripts/check-help-registry.mjs` | `docs_only` only |
+| `client-test` | `Client (analyze + test) — <os>` ✅ required ×3 | `ubuntu-latest`, `macos-latest`, `windows-latest` (os matrix) | `flutter pub get`, `flutter analyze`, `flutter test` | `docs_only` at **step** level — the job always expands so its three required contexts report (#1025) |
+| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client` |
+| `unicode` | `Unicode scan` | `ubuntu-latest` | Trojan-Source / invisible-Unicode scan | never skipped |
+| `zizmor` | `zizmor (workflow audit)` | `ubuntu-latest` | static audit of `.github/workflows/` | never skipped |
 
-Commit: `port(ci): GitHub Actions for server + Flutter client + registry gate`.
+Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — see #1022 for its missing path gate), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
+
+The matrix reached this shape progressively through the `prep-ci` placeholder (§19.1's pre-Phase-14 exception) rather than in one `port(ci)` commit.
 
 ### 14.4 Pre-PR gate (`scripts/pre-pr-check.sh`)
 
@@ -1768,7 +1774,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 19.1 Git safety
 
-- **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`) and `chore/<short-name>` for maintenance work that is not a port phase (skill and doc upkeep, CI cleanups). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
+- **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`), `rules-*` for rules/playbook upkeep branches (the namespace §22.2 has always listed as driver-created), and `chore/<short-name>` for maintenance work that is not a port phase (skill and doc upkeep, CI cleanups). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
 - **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
   - All required CI checks are `pass` — or `skipping` **because CI's documented path gate skipped them** (`.github/workflows/ci.yml`'s `changes` job, #1020: a docs-only PR skips six jobs — six check contexts, of which two are required: `server-build` and `registry-gate`. The other four — both Alpaca jobs, `analyzer-gate`, and `client-build`, which appears once under its literal uninterpolated name `Client (native build) — ${{ matrix.target }}` because a matrix skipped at job level never expands — are not required contexts but will also read `skipping`. The three required `client-test` legs are gated at step level and report `pass`, not `skipping`, because a matrix job skipped at job level never expands and its required contexts are never reported at all — see #1025). No `pending`, no `failure`. A `skipping` that is *not* attributable to that gate — a job skipped because one of its `needs:` failed, or by an `if:` the merging agent cannot account for — is **ambiguous, not clearance**: post `Held for human review` and stop. The distinction matters because GitHub counts a skipped required context as satisfied, so "skipped" alone cannot be trusted to mean "did not need to run"; the reason has to be checked. (Amended 2026-09-19 in PR #1021, which introduced the path gate, at the user's direction after the AI flagged that editing this gate autonomously was not its call.) **Second amendment, 2026-09-19, again at the user's direction** ("I want to make sure we are thinking thoughtful with CI so we are not running things when we do not need to"): the `changes` job now also emits `dotnet` and `client`, so the four NON-REQUIRED contexts above — both Alpaca jobs, `analyzer-gate`, and `client-build` — can read `skipping` on a PR that is **not** docs-only. A client-only PR skips the three `dotnet` jobs; a PR touching neither the .NET graph nor `client/` skips all four. That is attributable and therefore clearance. The two REQUIRED contexts (`server-build`, `registry-gate`) and the three step-gated `client-test` legs are deliberately left on `docs_only` alone, because a skipped required context is counted by GitHub as satisfied and a classifier bug there would merge a broken PR with nothing red. Classification is `scripts/classify-changed-paths.py`, unit-tested in `scripts/tests/` (which the Sanity job runs), including a differential against the shell it replaced; read that script to attribute a skip, and treat a skip it does not explain as ambiguous.
   - **The reviewer has actually reviewed the current head** — a `claude[bot]` comment (or `github-actions[bot]` on the fork path) whose `updated_at` is at or after the last push, carrying a sign-off marker (`Approved` / `Issues found`). A green `review` status check **does not satisfy** this gate on its own: that check only asserts a comment was posted, never that it was clean, and a comment older than the last push is the previous round's verdict on code that has since changed. The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
@@ -1881,7 +1887,16 @@ For each phase or sub-PR:
 
 ### 22.2 Branch cleanup (continuous)
 
-Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`, `chore/*`); never delete `master` or branches the user created. `chore/*` is in that list because §19.1's allowlist lets AI create it; a `chore/*` branch AI did not create is a contributor's and is never deleted from here.
+Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`, `chore/*`); never delete `master` or branches the user created. `chore/*` is in that list because §19.1's allowlist lets AI create it; a `chore/*` branch AI did not create is a contributor's and is never deleted from here. Because `chore/*` is also the community namespace (COMMIT-PR-RULES.md future-scope section) and git carries no authorship signal, that rule has a **mechanical probe** (#1033), run before any `git push origin --delete chore/…`:
+
+```shell
+ME=$(gh api user --jq .login); [ -n "$ME" ] || exit 1
+AUTHORS=$(gh pr list --state all --head "chore/<name>" --json author --jq '.[].author.login' | sort -u)
+# Delete only when at least one PR exists for that head AND every one of them is ours.
+[ -n "$AUTHORS" ] && [ "$AUTHORS" = "$ME" ] || { echo "Held for human review -- chore/<name> authorship inconclusive"; exit 1; }
+```
+
+No PR at all (nothing to read an author from), a foreign author, or a failed API call are all inconclusive: stop and post `Held for human review`; never delete on a guess. This is the same authorship check the port-driver skill's scenario A applies before adopting a PR. `--delete-branch` itself is for same-repo heads: on a fork PR (`gh pr view <PR> --json isCrossRepository`) omit it — the head belongs to the contributor.
 
 ### 22.3 Phase 15 (final release pass)
 

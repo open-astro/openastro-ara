@@ -48,9 +48,9 @@ If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge au
 Pick exactly one of these scenarios, checking in the order **A → B → C → D** (highest priority first). Don't multi-task.
 
 **Allowlisted branch** means `phase/<N>[-<letter>]-<short-name>` and the named
-prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
-`rules-*` (§22.2 lists both as branches the driver created and may delete) and
-`chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
+prep branches (`prep-*`, e.g. `prep-ci`), `rules-*` and `chore/<short-name>`,
+all from §19.1's branch allowlist (`rules-*` was added there in #1032; §22.2 had
+always listed it as driver-created and deletable). Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
 `chore/<short-name>` is sanctioned by §19.1 itself: its branch allowlist names
@@ -62,8 +62,13 @@ off-limits"; that gap is closed and the note is retired.)
 
 Because `chore/*` is also what outside contributors use, scenario A's
 "not authored by you" clause deliberately excludes it: the driver never adopts a
-`chore/*` PR it did not open. Recognising a branch, adopting someone's PR on it,
-and creating one are three different permissions. §5 still only ever *creates*
+`chore/*` PR it did not open. Decided 2026-09-19 (#1034): this asymmetry with
+`prep-*`/`rules-*` is intentional and stays — those two are driver-only
+namespaces, `chore/*` is shared with contributors. Deleting a stale `chore/*`
+from origin has the matching authorship probe in §22.2 (#1033): run it, and a
+no-PR or foreign-author result is a Held, not a delete. Recognising a branch,
+adopting someone's PR on it, deleting it, and creating one are four different
+permissions. §5 still only ever *creates*
 `phase/…` — the phase naming is what `PORT_PROGRESS.md` and the
 `COMMIT-PR-RULES.md` sub-split tables are keyed on.
 
@@ -440,6 +445,16 @@ block verbatim cannot merge ahead of the check:
 
 ```shell
 gh pr merge <PR> --merge --delete-branch
+```
+
+**Fork heads (#1031):** every `--delete-branch` in this step is for same-repo
+heads. A fork head belongs to the contributor and is never deleted from here —
+the same rule `/pr-checker` Step 4 states — so probe first and drop the flag:
+
+```shell
+[ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
+  && DEL=--delete-branch || DEL=
+gh pr merge <PR> --merge $DEL
 ```
 
 If `git tag` fails with "tag already exists" — a `git fetch` pulled it, or a
