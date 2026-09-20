@@ -517,9 +517,21 @@ class WorkflowWiringTest(unittest.TestCase):
         # the job must not fail the run either -- a red `Changed paths` only
         # hands the autonomous driver a `fail` to churn on.
         block = self.text.split("\n  changes:\n", 1)[1].split("\n  alpaca-sim-smoke:\n", 1)[0]
-        # Anchored at 4-space indentation: a STEP-level continue-on-error
-        # inside the job would not cover a checkout failure or the timeout.
-        self.assertIn("\n    continue-on-error: true\n", block)
+        # STEP level on both steps, never JOB level. Measured on probe PR
+        # #1043: job-level `continue-on-error` still publishes the job's
+        # check run as `failure`, so `gh pr checks` reports `fail` and the
+        # driver churns; step-level publishes `success` with an annotation.
+        self.assertNotRegex(block, r"\n    continue-on-error: true")
+        checkout = block.split("- name: Checkout", 1)[1].split("- name: Classify", 1)[0]
+        classify = block.split("- name: Classify", 1)[1]
+        self.assertRegex(checkout, r"\n        continue-on-error: true")
+        self.assertRegex(classify, r"\n        continue-on-error: true")
+        # The clone's own timeout must sit under the job's, or a wedged
+        # fetch fails the job instead of the (continued) step.
+        import re
+        job_t = int(re.search(r"\n    timeout-minutes: (\d+)", block).group(1))
+        step_t = int(re.search(r"\n        timeout-minutes: (\d+)", checkout).group(1))
+        self.assertLess(step_t, job_t)
 
     def test_the_diff_disables_path_quoting(self):
         # #1024: a quoted non-ASCII path misses every prefix rule (see
