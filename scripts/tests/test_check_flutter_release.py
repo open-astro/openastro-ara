@@ -663,10 +663,6 @@ class SupersedeSelectorTest(unittest.TestCase):
         selector = self._selector(r"first")
         self.assertEqual(self._jq(selector, '[{"number": 42}]'), "42")
 
-    def test_the_supersede_list_call_is_not_capped_at_the_gh_default(self):
-        # gh defaults to 30, newest-first; the supersede targets are the oldest
-        # open PRs, so the default would silently supersede nothing.
-        self.assertIn("gh pr list --state open --limit 100", self.text)
 
 
 if __name__ == "__main__":

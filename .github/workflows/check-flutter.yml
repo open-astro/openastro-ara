@@ -350,6 +350,10 @@ jobs:
                   # PRs un-superseded. The redirect goes on the calls and not
                   # on `done`, which would starve `read` of the pipe instead.
                   commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' < /dev/null || echo 2)"
+                  # A gh that exits 0 but prints nothing would otherwise take
+                  # the keep-the-branch side with an empty count, rendering
+                  # the comment as "carries  commits".
+                  [ -n "$commits" ] || commits=2
                   if [ "$commits" = 1 ]; then
                     gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this PR was the workflow's own untouched commit, so nothing here is lost — the newer PR does the same job against the newer release." < /dev/null || true
                     gh pr close "$old_pr" --delete-branch < /dev/null || true
