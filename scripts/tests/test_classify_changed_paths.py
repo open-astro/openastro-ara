@@ -62,13 +62,36 @@ class ClassifyTest(unittest.TestCase):
         self.assertIn(".editorconfig", self.m.DOTNET_ROOT_FILES)
         self.assertNotIn(".editorconfig", self.m.INERT_ROOT_FILES)
 
-    def test_uncheckable_root_files_are_not_asserted_inert(self):
+    def test_uncheckable_root_files_run_everything(self):
         # No test can show these cannot affect a build, so they are not
-        # claimed to. .gitattributes at least changes checkout bytes.
-        for f in (".gitattributes", ".gitignore", "CodeMaid.config", "md-template.html"):
+        # claimed to -- for EITHER bucket. `.gitattributes` with
+        # `client/** text eol=lf` rewrites client bytes at checkout, so the
+        # closed-over-directories argument for `client` does not reach root
+        # files.
+        for f in (".gitattributes", ".gitignore", "CodeMaid.config", "md-template.html", "NuGet.config"):
             with self.subTest(f=f):
-                self.assertTrue(self.c(f)["dotnet"], f)
+                r = self.c(f)
+                self.assertTrue(r["dotnet"], f)
+                self.assertTrue(r["client"], f)
                 self.assertNotIn(f, self.m.INERT_ROOT_FILES)
+
+    def test_only_client_and_root_files_reach_the_client_jobs(self):
+        # Directories other than client/ never do; that is the checkable half
+        # of the closed-bucket claim.
+        for d in ("OpenAstroAra.Core/A.cs", "SOFA/x.c", "packaging/x", "brand-new-dir/x", "scripts/new-tool.sh"):
+            with self.subTest(path=d):
+                self.assertFalse(self.c(d)["client"], d)
+
+    def test_an_unclassified_path_is_named_on_stderr(self):
+        # The inline shell logged `non-docs path: $f`; a surprising skip
+        # or run should still say which path caused it.
+        out = subprocess.run(
+            ["python3", str(SCRIPT)], input="brand-new-dir/x\nNuGet.config\n",
+            capture_output=True, text=True, check=True,
+        )
+        self.assertIn("brand-new-dir/x", out.stderr)
+        self.assertIn("NuGet.config", out.stderr)
+        self.assertNotIn("brand-new-dir", out.stdout, "stderr chatter must not reach GITHUB_OUTPUT")
 
     def test_a_composite_action_under_github_runs_the_dotnet_jobs(self):
         # No suffix catch-all under .github/: a .yml there is not inert by
@@ -81,7 +104,8 @@ class ClassifyTest(unittest.TestCase):
         # either added to GITHUB_RULES on purpose or runs the full dotnet set.
         on_disk = sorted(
             f"{p.relative_to(REPO_ROOT)}"
-            for p in (REPO_ROOT / ".github" / "workflows").glob("*.yml")
+            for p in (REPO_ROOT / ".github" / "workflows").iterdir()
+            if p.suffix in (".yml", ".yaml")
         )
         for wf in on_disk:
             with self.subTest(workflow=wf):
@@ -123,7 +147,7 @@ class ClassifyTest(unittest.TestCase):
         # client/openastroara_client and reads nothing outside client/.
         for outside in (
             "OpenAstroAra.Core/Foo.cs",
-            "Directory.Build.props",
+            "Directory.Build.props",  # listed in DOTNET_ROOT_FILES, so not the open root fallback
             "scripts/get-alpaca-simulators.sh",
             "packaging/debian/control",
             "some-new-dir/whatever.txt",
@@ -138,12 +162,19 @@ class ClassifyTest(unittest.TestCase):
     def test_a_client_change_does_not_run_the_dotnet_jobs(self):
         self.assertFalse(self.c("client/openastroara_client/lib/main.dart")["dotnet"])
 
-    def test_the_client_lockfile_also_runs_the_dotnet_jobs(self):
-        # generate-3rd-party-licenses.py reads pubspec.lock, and server-build
-        # diffs its output against the committed 3rd-party-licenses.txt.
+    def test_the_client_lockfile_stays_client_only(self):
+        # generate-3rd-party-licenses.py reads pubspec.lock and server-build
+        # diffs its output -- but server-build is gated on docs_only and runs
+        # for this path anyway, while no `dotnet`-gated job reads client/.
+        # Every Dependabot pub bump is exactly this diff; it must not pay
+        # ~1400s for the analyzer and both Alpaca jobs.
         r = self.c("client/openastroara_client/pubspec.lock")
         self.assertTrue(r["client"])
-        self.assertTrue(r["dotnet"])
+        self.assertFalse(r["dotnet"])
+        # ...and the reason that is safe: server-build is not on `dotnet`.
+        ci = CI.read_text()
+        block = ci.split("\n  server-build:\n", 1)[1].split("\n  registry-gate:\n", 1)[0]
+        self.assertNotIn("needs.changes.outputs.dotnet", block)
 
     def test_the_licence_generator_and_its_output_run_the_dotnet_jobs(self):
         self.assertTrue(self.c("scripts/generate-3rd-party-licenses.py")["dotnet"])

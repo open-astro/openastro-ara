@@ -27,12 +27,15 @@ The two buckets are not symmetrical, on purpose:
           top-level project directories, the solution, Directory.Build.props,
           vendored C sources and the packaging tree, and a new one must not
           have to be registered here before CI notices it.
-  client  CLOSED. Only `client/**` can set it. Every step of `client-test`
-          and `client-build` runs with `working-directory:
+  client  CLOSED over DIRECTORIES. Every step of `client-test` and
+          `client-build` runs with `working-directory:
           client/openastroara_client`, and the single file they read outside
-          it -- `.flutter-version` -- is under `client/` too. So a change
-          anywhere else cannot affect a Flutter analyze, test or build.
-          `.github/workflows/ci.yml` is the one exception, handled below.
+          it -- `.flutter-version` -- is under `client/` too. So a change in
+          any other top-level directory cannot affect a Flutter analyze,
+          test or build. Root-level FILES are not covered by that argument:
+          `.gitattributes` can rewrite the bytes of `client/**` at checkout,
+          so an unrecognised root file sets both buckets.
+          `.github/workflows/ci.yml` is the one directory-path exception.
 """
 
 from __future__ import annotations
@@ -83,7 +86,10 @@ DOTNET_ROOT_FILES = frozenset(
         "OpenAstroAra.sln",
         "OpenAstroAra.sln.licenseheader",
         "global.json",
-        # §15/§17.2: server-build regenerates and diffs this file.
+        # §15/§17.2: server-build regenerates and diffs this file. That job
+        # is gated on docs_only, so this entry does not change what runs; it
+        # is here so the classification is stated rather than reached by
+        # the root-file fallthrough.
         "3rd-party-licenses.txt",
     }
 )
@@ -94,7 +100,8 @@ DOTNET_ROOT_FILES = frozenset(
 SCRIPT_RULES = {
     "scripts/build-astrometry-natives.sh": frozenset({"dotnet"}),
     "scripts/get-alpaca-simulators.sh": frozenset({"dotnet"}),
-    # Produces 3rd-party-licenses.txt, which server-build diffs.
+    # Produces 3rd-party-licenses.txt, which server-build diffs; server-build
+    # runs on docs_only regardless, so this is stated, not load-bearing.
     "scripts/generate-3rd-party-licenses.py": frozenset({"dotnet"}),
     # Standalone tooling, unit-tested by the Sanity job, read by nothing else.
     "scripts/check-flutter-release.py": NONE,
@@ -143,12 +150,14 @@ def buckets_for(path: str) -> frozenset:
         return NONE
 
     if path.startswith("client/"):
-        # The client's lockfile feeds the third-party-licence freshness gate
-        # inside server-build (scripts/generate-3rd-party-licenses.py reads
-        # client/openastroara_client/pubspec.lock), so a lockfile bump is not
-        # client-only.
-        if path.endswith("pubspec.lock"):
-            return ALL
+        # pubspec.lock is read by scripts/generate-3rd-party-licenses.py,
+        # whose output server-build diffs -- but server-build is gated on
+        # docs_only, not dotnet, so it runs for this path regardless. No job
+        # gated on `dotnet` reads anything under client/, so a lockfile bump
+        # (every Dependabot pub PR) must not pay for the analyzer and the two
+        # Alpaca jobs. If server-build is ever moved onto `dotnet`, this is
+        # the carve-out to bring back; test_the_client_lockfile_stays_client_only
+        # says so.
         return frozenset({"client"})
 
     if "/" not in path:
@@ -157,13 +166,19 @@ def buckets_for(path: str) -> frozenset:
         # A root-level *.md that is not listed is still prose.
         if path.endswith(".md"):
             return NONE
-        # DOTNET_ROOT_FILES is not consulted separately: a known build input
-        # and an unrecognised root file reach the same answer, and listing the
-        # known ones only documents them. Asserted by the tests.
-        return frozenset({"dotnet"})
+        if path in DOTNET_ROOT_FILES:
+            return frozenset({"dotnet"})
+        # An unrecognised root file. Not `{"dotnet"}`: a `.gitattributes`
+        # line like `client/** text eol=lf` changes what checkout writes
+        # under client/, so the closed-over-directories argument does not
+        # apply here. Both buckets, and the path is named on stderr.
+        print(f"unclassified root file, running everything: {path}", file=sys.stderr)
+        return ALL
 
-    # Unknown, and outside client/ -- so it cannot reach the Flutter jobs
-    # (see the module docstring), but it may well reach the .NET graph.
+    # Unknown, and in a top-level directory other than client/ -- so it cannot
+    # reach the Flutter jobs (see the module docstring), but it may well reach
+    # the .NET graph.
+    print(f"unclassified path, running the .NET jobs: {path}", file=sys.stderr)
     return frozenset({"dotnet"})
 
 

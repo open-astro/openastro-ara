@@ -128,7 +128,7 @@ jobs:
         with:
           lfs: false
           fetch-depth: 0  # merge-base against the PR's base needs real history
-          filter: blob:none  # history without blobs — this job never reads file contents
+          filter: blob:none  # history without blobs; checkout still materialises HEAD, which is all the classifier script needs
           persist-credentials: false
 
       - name: Classify changed paths
