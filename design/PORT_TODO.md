@@ -1730,3 +1730,19 @@ Two out-of-scope findings from #1003's review, both filed as issues rather than 
 - **#1029 — `/pr-checker` merges a phase-boundary PR without pushing the tag.** It now detects a tag and switches to `--merge`, but never pushes one, and #1003 moved tagging to immediately before the merge inside the driver's §3b. A boundary PR driven through `/pr-checker` merges untagged and silently skips §19.1's phase-boundary gate item.
 
 Also noted and not filed: scenario A adopts any-author PRs on `prep-*`/`rules-*` but carves out `chore/*`, though all three are equally unreserved on origin — fold into #1013 when the allowlist is settled.
+
+## bench lane hygiene (2026-09-19, from the #1015 review notes)
+
+Two out-of-scope notes from #1015's approval, neither widened into that PR:
+
+- `bench/README.md:10` still says "The three hardware-free bench suites" and
+  lists only `AlpacaFaultProxyTest` / `FakeGuiderTest` /
+  `GuiderFakeIntegrationTest`. `EquipmentFaultDetectionTest` and
+  `StateChannelFaultWatchTest` tag `[Category("bench")]` per method and so also
+  run in the arm64 lane. Pre-existing; refresh the README when the lane is next
+  touched.
+- The fault-detection bench tests carry fixed `Task.Delay` holds (~11 s in
+  `Each_disconnect_episode_publishes_exactly_one_fault`, 5 s in its sibling) in
+  both the default unit job and the arm64 bench lane. A `Poll`-based "still N
+  after K ticks" shape with an early bail gets the same guarantee without the
+  floor; worth doing if lane wall-clock becomes a problem.
