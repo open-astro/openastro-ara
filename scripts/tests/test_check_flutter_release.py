@@ -590,6 +590,69 @@ class SupersedeSelectorTest(unittest.TestCase):
         # side is keeping a branch that could have been deleted.
         self.assertIn("|| echo 2)", self.text)
 
+    def test_fork_prs_are_not_superseded(self):
+        # headRefName on a cross-repo PR is the branch name on the FORK,
+        # unqualified, so a contributor's `ci/flutter-3.49.0` would otherwise
+        # be commented on and closed. The namespace is only ours on origin.
+        selector = self._selector(r"\.\[\] \| select")
+        payload = """[
+          {"number": 1, "headRefName": "ci/flutter-3.48.0", "isCrossRepository": false},
+          {"number": 2, "headRefName": "ci/flutter-3.49.0", "isCrossRepository": true}
+        ]"""
+        self.assertEqual(self._jq(selector, payload).split(), ["1"])
+
+    def test_every_gh_call_in_the_supersede_loop_isolates_stdin(self):
+        """The loop body's gh calls inherit the `gh pr list` pipe as stdin.
+
+        Demonstrated rather than asserted on shape: a body call that reads
+        stdin drains the pipe and every PR after the first is silently left
+        un-superseded. `< /dev/null` on each call is what prevents it -- and
+        it has to be on the calls, not on `done`, which would starve `read`.
+        """
+        import subprocess
+        import textwrap
+
+        script = textwrap.dedent(
+            """
+            drains_stdin() { cat > /dev/null; }
+            printf '1\n2\n3\n' | while read -r old_pr; do
+              echo "$old_pr"
+              drains_stdin GUARD
+            done
+            """
+        )
+        unguarded = subprocess.run(
+            ["bash", "-c", script.replace("GUARD", "")],
+            capture_output=True, text=True, check=True,
+        ).stdout.split()
+        guarded = subprocess.run(
+            ["bash", "-c", script.replace("GUARD", "< /dev/null")],
+            capture_output=True, text=True, check=True,
+        ).stdout.split()
+        self.assertEqual(unguarded, ["1"], "expected the unguarded loop to lose PRs")
+        self.assertEqual(guarded, ["1", "2", "3"])
+
+        # Now the real thing: no bare `gh` call inside the loop body.
+        marker = "| while read -r old_pr; do"
+        body = self.text.split(marker, 1)[1].split("\n                done", 1)[0]
+        calls = [
+            line.strip()
+            for line in body.splitlines()
+            if line.strip().startswith("gh ") or "$(gh " in line
+        ]
+        self.assertTrue(calls, "no gh calls found in the supersede loop body")
+        for call in calls:
+            self.assertIn("< /dev/null", call, f"gh call does not isolate stdin: {call}")
+
+    def test_the_supersede_list_is_not_capped_near_the_repos_pr_count(self):
+        # Any finite cap reintroduces the silent-no-op; keep it well past
+        # anything this repo will plausibly hold open at once.
+        import re
+
+        m = re.search(r"gh pr list --state open --limit (\d+)", self.text)
+        self.assertIsNotNone(m, "the supersede list call no longer passes --limit")
+        self.assertGreaterEqual(int(m.group(1)), 1000)
+
     def test_new_pr_selector_is_empty_when_nothing_matches(self):
         # `.[0].number` would print a literal "null" here, `[ -n ]` would pass,
         # and the loop would then close the PR the run had just opened.

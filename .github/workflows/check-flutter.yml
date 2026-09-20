@@ -307,10 +307,17 @@ jobs:
           # match no PR number and let the loop close the PR this run just
           # opened. `first` emits nothing instead.
           #
-          # `--limit 100`: gh defaults to 30, newest-first, and the PRs this
+          # `--limit 1000`: gh defaults to 30, newest-first, and the PRs this
           # loop exists to close are by construction the oldest — the default
           # would silently supersede nothing once the repo carries 30+ open
           # PRs, which is exactly the accumulation this is here to prevent.
+          # Any finite cap has that failure mode, so the number is set well
+          # past anything this repo will hold rather than just past today's.
+          #
+          # `isCrossRepository | not`: headRefName on a fork PR is the branch
+          # name *on the fork*, unqualified, so a contributor who forks and
+          # pushes `ci/flutter-3.49.0` would otherwise be commented on and
+          # closed by this loop. The namespace is only ours on origin.
           #
           # The selector is anchored to a full `ci/flutter-<major>.<minor>.<patch>`,
           # which is exactly what check-flutter-release.py generates (its
@@ -321,8 +328,8 @@ jobs:
           # hand-made names that must never be closed and branch-deleted.
           new_pr="$(gh pr list --head "$BRANCH" --state open --json number --jq 'first(.[].number)' || true)"
           if [ -n "$new_pr" ]; then
-            { gh pr list --state open --limit 100 --json number,headRefName \
-                --jq '.[] | select(.headRefName | test("^ci/flutter-[0-9]+\\.[0-9]+\\.[0-9]+$")) | .number' || true; } \
+            { gh pr list --state open --limit 1000 --json number,headRefName,isCrossRepository \
+                --jq '.[] | select(.isCrossRepository | not) | select(.headRefName | test("^ci/flutter-[0-9]+\\.[0-9]+\\.[0-9]+$")) | .number' || true; } \
               | while read -r old_pr; do
                   [ "$old_pr" = "$new_pr" ] && continue
                   echo "Superseding #$old_pr with #$new_pr"
@@ -336,13 +343,19 @@ jobs:
                   # branch. Deleting it would throw that work behind a
                   # Restore-branch button, so a branch with extra commits is
                   # closed and kept.
-                  commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' || echo 2)"
+                  # Every gh call in this body takes `< /dev/null`. They
+                  # inherit the `gh pr list` pipe as stdin, and one that
+                  # started reading it — a prompt, a `--body-file -` — would
+                  # silently swallow the remaining PR numbers and leave those
+                  # PRs un-superseded. The redirect goes on the calls and not
+                  # on `done`, which would starve `read` of the pipe instead.
+                  commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' < /dev/null || echo 2)"
                   if [ "$commits" = 1 ]; then
-                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this PR was the workflow's own untouched commit, so nothing here is lost — the newer PR does the same job against the newer release." || true
-                    gh pr close "$old_pr" --delete-branch || true
+                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this PR was the workflow's own untouched commit, so nothing here is lost — the newer PR does the same job against the newer release." < /dev/null || true
+                    gh pr close "$old_pr" --delete-branch < /dev/null || true
                   else
-                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal. **This branch carries ${commits} commits, so it is being kept, not deleted** — if any of that work is still wanted, reopen this PR or cherry-pick onto #${new_pr}." || true
-                    gh pr close "$old_pr" || true
+                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal. **This branch carries ${commits} commits, so it is being kept, not deleted** — if any of that work is still wanted, reopen this PR or cherry-pick onto #${new_pr}." < /dev/null || true
+                    gh pr close "$old_pr" < /dev/null || true
                   fi
                 done
           fi
