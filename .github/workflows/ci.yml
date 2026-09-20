@@ -104,7 +104,6 @@ jobs:
     # ERR trap can cover — must run the full matrix quietly, not hand the
     # autonomous driver a `fail` to churn on. The workflow run and this job's
     # check report success; the failure is still visible in the job log.
-    continue-on-error: true
     # Classifies the PR so the expensive jobs below can skip work that cannot
     # possibly be affected by it. See #1020.
     #
@@ -129,7 +128,8 @@ jobs:
       dotnet: ${{ steps.classify.outputs.dotnet }}
       client: ${{ steps.classify.outputs.client }}
     steps:
-      - name: PROBE (#1041) -- force this job to fail; throwaway PR, never merge
+      - name: PROBE v2 (#1041) -- failing step with step-level continue-on-error
+        continue-on-error: true
         run: exit 1
 
       - name: Checkout (no LFS, full history for the merge-base diff)
