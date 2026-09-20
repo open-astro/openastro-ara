@@ -185,7 +185,7 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   early-exit (`LogService.TailAsync`, byte-level carry across chunk boundaries, UTF-8-safe);
   §54 daemon-log + bug-report downloads now stream to a user-picked path via `dio.download`
   (destination-first flow: `pickStreamSavePath` directory picker + collision-safe name —
-  file_picker v12's `saveFile` requires the bytes up front, so path-only selection uses
+  file_picker's `saveFile` (v12 and v13 alike) requires the bytes up front, so path-only selection uses
   `getDirectoryPath`). A line index + continuation token stays deferred until the §54 panel
   live-streams or paginates.
 - **Merged Planning-tab prose reconciliation** — the §36/§25.5 merged-tab plan (decided
