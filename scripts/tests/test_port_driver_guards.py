@@ -28,9 +28,11 @@ the probe mirrors are pure functions of what `gh` printed and need none.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -626,6 +628,167 @@ class MirrorPin(unittest.TestCase):
                     f"mirror in this file to match, then replace the pinned hash "
                     f"with {actual!r}.",
                 )
+
+
+class FenceExecution(unittest.TestCase):
+    """Run the §5 step 2 fence itself -- the shell, not the mirror (#1060).
+
+    `reuse_guard` mirrors the fence's decisions and `MirrorPin` hashes its
+    prose, and both stayed green while #1058 round 1 shipped
+    `REMOTE_OID=$(git ls-remote ... | cut -f1) || exit 1`, which carries cut's
+    exit status and turned a failed ls-remote into "ref gone". Only running the
+    text catches that class. So this class extracts the fence from SKILL.md,
+    substitutes the `B=phase/<N>...` placeholder line, and runs it under bash
+    against a throwaway clone of a bare origin, with a `gh` shim on PATH that
+    answers the one `gh pr list` call from `$GH_MERGED`. Each case is one of
+    the states the fence names; the broken-origin case is the #1058 bug.
+    """
+
+    START = "   git checkout master && git pull --ff-only"
+    PLACEHOLDER = re.compile(r"^B=phase/<N>.*$", re.M)
+
+    @classmethod
+    def fence(cls) -> str:
+        text = SKILL.read_text()
+        i = text.index(cls.START)
+        j = text.index("\n   ```\n", i)
+        body = textwrap.dedent(text[i:j])
+        assert cls.PLACEHOLDER.search(body), "the B= placeholder line moved"
+        return cls.PLACEHOLDER.sub('B="$B"', body, count=1)
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self.origin = root / "origin.git"
+        git(root, "init", "-q", "--bare", "-b", "master", str(self.origin))
+        seed = root / "seed"
+        git(root, "init", "-q", "-b", "master", str(seed))
+        self._config(seed)
+        (seed / "f").write_text("base\n")
+        git(seed, "add", "f")
+        git(seed, "commit", "-qm", "base")
+        git(seed, "push", "-q", str(self.origin), "master")
+        self.repo = root / "work"
+        git(root, "clone", "-q", str(self.origin), str(self.repo))
+        self._config(self.repo)
+        self.bin = root / "bin"
+        self.bin.mkdir()
+        shim = self.bin / "gh"
+        shim.write_text(
+            "#!/bin/sh\n"
+            "# Answers only the fence's `gh pr list ... --json headRefOid` probe.\n"
+            'case "$*" in *"--json headRefOid"*) printf \'%s\' "$GH_MERGED"; exit 0;; esac\n'
+            "echo \"unexpected gh call: $*\" >&2; exit 1\n"
+        )
+        shim.chmod(0o755)
+        self.n = 0
+
+    @staticmethod
+    def _config(repo: Path) -> None:
+        git(repo, "config", "user.email", "t@example.invalid")
+        git(repo, "config", "user.name", "t")
+
+    def commit(self, msg: str) -> str:
+        self.n += 1
+        (self.repo / "f").write_text(f"{msg}{self.n}\n")
+        git(self.repo, "add", "f")
+        git(self.repo, "commit", "-qm", msg)
+        return git(self.repo, "rev-parse", "HEAD")
+
+    def squash_merge_pr(self, branch: str, delete_remote: bool) -> str:
+        """Push the branch, squash it into master, push master; --delete-branch or not."""
+        git(self.repo, "push", "-q", "origin", branch)
+        git(self.repo, "checkout", "-q", "master")
+        git(self.repo, "merge", "-q", "--squash", branch)
+        git(self.repo, "commit", "-qm", f"squash {branch}")
+        git(self.repo, "push", "-q", "origin", "master")
+        if delete_remote:
+            git(self.repo, "push", "-q", "origin", "--delete", branch)
+        return git(self.repo, "rev-parse", branch)
+
+    def run_fence(self, branch: str, merged: list[str] = ()) -> tuple[int, str]:
+        env = dict(os.environ, PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                   B=branch, GH_MERGED="\n".join(merged))
+        r = subprocess.run(["bash", "-c", self.fence()], cwd=self.repo, env=env,
+                           capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    def local(self, branch: str) -> bool:
+        return git_ok(self.repo, "rev-parse", "--verify", "-q", f"refs/heads/{branch}")
+
+    def test_fresh_name_is_created_from_origin_master(self):
+        rc, out = self.run_fence("phase/9-new")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "phase/9-new")
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), git(self.repo, "rev-parse", "origin/master"))
+
+    def test_level_local_ref_is_reused(self):
+        git(self.repo, "branch", "even", "master")
+        rc, out = self.run_fence("even")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "even")
+
+    def test_squash_merged_leftover_is_retired(self):
+        git(self.repo, "checkout", "-qb", "left", "master")
+        self.commit("work")
+        oid = self.squash_merge_pr("left", delete_remote=True)
+        rc, out = self.run_fence("left", [oid])
+        self.assertEqual(rc, 0, out)
+        self.assertIn("retiring local left", out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "left")
+        self.assertEqual(git(self.repo, "rev-list", "--count", "origin/master..left"), "0")
+
+    def test_unpushed_work_holds(self):
+        git(self.repo, "checkout", "-qb", "wip", "master")
+        self.commit("unpushed")
+        git(self.repo, "checkout", "-q", "master")
+        rc, out = self.run_fence("wip")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("commits master does not have", out)
+        self.assertTrue(self.local("wip"))
+
+    def test_surviving_remote_ref_holds_with_and_without_a_local_ref(self):
+        # #1047 / #1059: the remote leftover Holds whether the local ref is
+        # retirable or gone, and the fence neither deletes nor creates anything.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        self.commit("work")
+        oid = self.squash_merge_pr("left", delete_remote=False)
+        rc, out = self.run_fence("left", [oid])
+        self.assertEqual(rc, 1, out)
+        self.assertIn(f"origin/left still exists at {oid}", out)
+        self.assertEqual(git(self.repo, "rev-parse", "left"), oid)  # not retired
+        git(self.repo, "branch", "-D", "left")
+        rc, out = self.run_fence("left", [oid])
+        self.assertEqual(rc, 1, out)
+        self.assertIn("origin/left still exists", out)
+        self.assertFalse(self.local("left"))  # not created either
+
+    def test_remote_ref_already_in_master_does_not_hold(self):
+        # An empty pushed branch: its head is origin/master's, so the push
+        # would fast-forward. The fence goes on to create the local ref.
+        git(self.repo, "push", "-q", "origin", "master:refs/heads/empty")
+        rc, out = self.run_fence("empty")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "empty")
+
+    def test_broken_origin_bails_before_touching_any_ref(self):
+        # The #1058 round-1 bug: `$(ls-remote | cut) || exit 1` carried cut's
+        # status, an unreachable origin read as "ref gone", and the fence went
+        # on to create (or retire) the branch. It must exit non-zero with no
+        # Held or retire message and no ref change, on both arms.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        self.commit("work")
+        oid = self.squash_merge_pr("left", delete_remote=True)
+        git(self.repo, "remote", "set-url", "origin", str(self.origin.parent / "gone.git"))
+        rc, out = self.run_fence("left", [oid])
+        self.assertNotEqual(rc, 0, out)
+        self.assertNotIn("retiring", out)
+        self.assertNotIn("Held", out)
+        self.assertEqual(git(self.repo, "rev-parse", "left"), oid)  # leftover untouched
+        rc, out = self.run_fence("phase/9-new")
+        self.assertNotEqual(rc, 0, out)
+        self.assertFalse(self.local("phase/9-new"))
 
 
 class ProbePins(unittest.TestCase):
