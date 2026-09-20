@@ -104,24 +104,26 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         private static uint[] ScaleToUInt32(int[] data, int bitDepth) {
-            // The reported bit depth is the nominal scale, but the int path exists for cameras whose
-            // ADU exceed 16 bits, and a driver can under-report. Never clip highlights over it --
-            // and never scale frame-by-frame either: a light whose max is 70000 and a dark whose max
-            // is 5000 from the same camera must encode 5000 identically, or calibration subtracts
-            // the wrong level. So the only widening is to the fixed 32-bit bucket, which every
-            // frame of that camera then shares.
+            // The reported bit depth is the scale, full stop. It must be frame-independent: a
+            // light and its matching dark from one camera have to encode the same ADU the same
+            // way or calibration subtracts the wrong level, so no content-driven widening. An
+            // ADU above the reported depth (a driver under-reporting BitDepth) is clipped, and
+            // the clip is logged with a count so it cannot pass silently -- the fix for that
+            // case is the driver's report, not this scale.
             int effectiveDepth = Math.Clamp(bitDepth, 1, 32);
-            int dataMax = 0;
-            foreach (int v in data) { if (v > dataMax) { dataMax = v; } }
-            if (effectiveDepth < 32 && dataMax > (1L << effectiveDepth) - 1) {
-                Logger.Warning($"XISF: samples reach {dataMax} but the reported bit depth is {bitDepth}; scaling the whole frame as 32-bit data so every frame from this camera encodes alike");
-                effectiveDepth = 32;
+            if (effectiveDepth != bitDepth) {
+                Logger.Warning($"XISF: reported bit depth {bitDepth} is outside 1..32; scaling as {effectiveDepth}-bit data");
             }
             double max = Math.Pow(2, effectiveDepth) - 1;
             var scaled = new uint[data.Length];
+            int clipped = 0;
             for (int i = 0; i < data.Length; i++) {
-                double v = Math.Max(data[i], 0);
+                double v = data[i];
+                if (v > max) { v = max; clipped++; } else if (v < 0) { v = 0; }
                 scaled[i] = (uint)Math.Round(v / max * uint.MaxValue);
+            }
+            if (clipped > 0) {
+                Logger.Warning($"XISF: {clipped} sample(s) exceed the reported {bitDepth}-bit depth and were clipped; the camera driver is under-reporting its bit depth");
             }
             return scaled;
         }

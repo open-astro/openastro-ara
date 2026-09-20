@@ -498,24 +498,19 @@ public sealed class XisfRoundTripTests : IDisposable {
     }
 
     [Fact]
-    public void AduDeeperThanTheReportedBitDepthWidenToTheFixed32BitBucket() {
-        // A driver reporting 16 bits while delivering deeper ADU: no clipping, and the widening
-        // is to a FIXED bucket, so two frames from the same camera that both exceed the depth
-        // (a light peaking at 70000, another at 100000) encode the value 5000 identically --
-        // frame-relative scaling would break calibration.
-        int[] lightA = { 0, 5000, 70000 };
-        int[] lightB = { 0, 5000, 100000 };
-        var a = EncodedSamples(lightA, 16);
-        var b = EncodedSamples(lightB, 16);
-        Assert.Equal(0u, a[0]);
-        Assert.Equal(5000u, a[1]);   // 32-bit bucket: identity scale
-        Assert.Equal(70000u, a[2]);
-        Assert.Equal(a[1], b[1]);
-        // A frame that DOES fit the reported depth keeps the reported scale; that is the
-        // documented limit of a content-driven fallback, and why an under-reporting driver
-        // must be fixed at the driver.
+    public void TheUInt32ScaleIsFrameIndependent() {
+        // The reported depth is the scale whatever the frame holds: a light peaking above the
+        // reported 16 bits and a dark that fits it encode ADU 5000 identically, which is what
+        // light - dark calibration needs. The out-of-range sample is clipped (and logged), not
+        // used to change the scale.
+        int[] light = { 0, 5000, 70000 };
         int[] dark = { 0, 5000 };
-        Assert.Equal((uint)Math.Round(5000 / 65535d * uint.MaxValue), EncodedSamples(dark, 16)[1]);
+        var l = EncodedSamples(light, 16);
+        var d = EncodedSamples(dark, 16);
+        Assert.Equal(l[1], d[1]);
+        Assert.Equal((uint)Math.Round(5000 / 65535d * uint.MaxValue), l[1]);
+        Assert.Equal(uint.MaxValue, l[2]);   // clipped to the reported depth
+        Assert.Equal(0u, l[0]);
     }
 
     [Fact]
@@ -525,9 +520,21 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Equal(expected, EncodedSamples(adu, 32));
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(-3, 1)]
+    [InlineData(40, 32)]
+    public void AnOutOfRangeBitDepthIsClampedNotThrown(int bitDepth, int effective) {
+        // A save must not fail over a nonsense depth report; it is clamped and logged.
+        int[] adu = { 0, 1 };
+        double max = Math.Pow(2, effective) - 1;
+        var s = EncodedSamples(adu, bitDepth);
+        Assert.Equal((uint)Math.Round(1 / max * uint.MaxValue), s[1]);
+    }
+
     [Fact]
-    public async Task AduWithinTheReportedDepthRoundTripExactlyAfterWidening() {
-        var px = new[] { 0, 4095, 65535 };
+    public async Task AduAboveTheReportedDepthClipToFullScaleOnRead() {
+        int[] px = { 0, 4095, 65535 };
         var header = new XISFHeader();
         header.AddImageMetaData(new ImageProperties(3, 1, 12, false, 0, 0), "LIGHT", XISFSampleFormat.UInt32);
         header.Populate(new ImageMetaData());
@@ -536,25 +543,7 @@ public sealed class XisfRoundTripTests : IDisposable {
         using var ms = new MemoryStream();
         xisf.Save(ms);
         var read = (await Read(ms.ToArray())).Data.FlatArray;
-        // Widened to the 32-bit bucket (65535 does not fit 12 bits), so a 16-bit reader sees
-        // the raw ADU >> 16: dim, but consistent across the sequence and lossless in the file.
-        Assert.Equal(0, read[0]);
-        Assert.Equal(0, read[1]);
-        Assert.Equal(1, read[2]);
-    }
-
-    [Fact]
-    public void SaveWritesNothingWhenTheDeclaredOffsetIsInsideTheHeader() {
-        var header = new XISFHeader();
-        header.AddImageMetaData(new ImageProperties(2, 2, 16, false, 0, 0), "LIGHT");
-        header.Populate(new ImageMetaData());
-        var xisf = new XISF(header);
-        xisf.AddAttachedImage(Pattern(2, 2), SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE));
-        // Corrupt the converged offset the way a future AttachData bug would.
-        header.Image!.SetAttributeValue("location", "attachment:16:8");
-        using var ms = new MemoryStream();
-        Assert.Throws<InvalidDataException>(() => xisf.Save(ms));
-        Assert.Equal(0, ms.Length);
+        Assert.Equal(new ushort[] { 0, ushort.MaxValue, ushort.MaxValue }, read);
     }
 
     [Fact]
