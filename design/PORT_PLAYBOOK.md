@@ -1786,7 +1786,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 - No `git reset --hard` without first creating `backup-<timestamp>` tag.
 - No deleting branches, remotes, or stashes on the remote.
 - No history rewriting (`filter-branch`, `filter-repo`, interactive rebase).
-- Tags: `phase-N-complete` (or `phase-N-<letter>-complete` for sub-PRs) at boundaries, `backup-<timestamp>` before destructive ops. Push the named ref — `git push origin <tag>` — **not** `git push --tags`: `--tags` pushes every local tag, which would publish the `backup-<timestamp>` tags this same section mandates before a `reset --hard`, and the rule below bars deleting remote refs, so they could never be tidied up.
+- Tags: `phase-N-complete` (or `phase-N-<letter>-complete` for sub-PRs) at boundaries, `backup-<timestamp>` before destructive ops. Push the named ref — `git push origin <tag>` — **not** `git push --tags`: `--tags` pushes every local tag, which would publish the `backup-<timestamp>` tags this same section mandates before a `reset --hard`, and this section's bias against deleting refs on the remote makes tidying them up awkward.
 
 ### 19.2 Filesystem safety
 
@@ -1881,7 +1881,7 @@ For each phase or sub-PR:
 
 ### 22.2 Branch cleanup (continuous)
 
-Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`); never delete `master` or branches the user created.
+Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`, `chore/*`); never delete `master` or branches the user created. `chore/*` is in that list because §19.1's allowlist lets AI create it; a `chore/*` branch AI did not create is a contributor's and is never deleted from here.
 
 ### 22.3 Phase 15 (final release pass)
 
