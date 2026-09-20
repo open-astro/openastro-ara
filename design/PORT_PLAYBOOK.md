@@ -1288,7 +1288,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | Job id | Context | Runner | Steps | Gated by |
 |---|---|---|---|---|
 | `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; Python tooling tests (`scripts/tests/`) | never skipped |
-| `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything) | never skipped |
+| `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything, and both steps are `continue-on-error` so a checkout flake or a wedged clone leaves the job green with an annotation; only the outer 5-minute job timeout can still report failure — #1024; job-level `continue-on-error` was measured on #1043 to still publish a red check) | never skipped |
 | `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
 | `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |
 | `analyzer-gate` | `Analyzer gate (full solution, warnings = errors)` | `ubuntu-latest` | `dotnet build OpenAstroAra.sln -c Release` with warnings as errors; astrometry natives; `dotnet test` (non-Integration) | `docs_only`, `dotnet` |
@@ -1299,7 +1299,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | `unicode` | `Unicode scan` | `ubuntu-latest` | Trojan-Source / invisible-Unicode scan | never skipped |
 | `zizmor` | `zizmor (workflow audit)` | `ubuntu-latest` | static audit of `.github/workflows/` | never skipped |
 
-Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — see #1022 for its missing path gate), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
+Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
 
 The matrix reached this shape progressively through the `prep-ci` placeholder (§19.1's pre-Phase-14 exception) rather than in one `port(ci)` commit.
 

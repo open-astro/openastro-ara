@@ -28,8 +28,10 @@ name: CI
 #
 #   Phase 14 (full CI matrix per §14.3)
 #     → 14c [LANDED]: client-test extended to {linux, macos, windows} matrix.
-#     → 14d [LANDED]: server-e2e — actually `docker run` the arm64 image
-#       via qemu, probe /healthz + /api/v1/server/info from the host.
+#     → 14d [LANDED]: arm64 end-to-end inside `server-build` (no separate
+#       job): `docker run` the published image via qemu and probe /healthz
+#       + /api/v1/server/info from the host — the "Set up QEMU" … "Run arm64
+#       container + health probe" steps. Playbook §14.3 describes it the same way (#1037).
 #     → [LANDED]: client-build — native desktop compile gate
 #       (`flutter build {macos,linux,windows} --release`), closing the
 #       analyze-only gap that let a non-linking macOS client merge (#599).
@@ -96,6 +98,19 @@ jobs:
     name: Changed paths
     runs-on: ubuntu-latest
     timeout-minutes: 5  # gates six jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
+    # A red `Changed paths` is never useful (#1024): every consumer below
+    # already fails safe on an empty output (`!= 'false'`, `!= 'true'`), so a
+    # checkout flake or a wedged fetch — neither of which the script's ERR
+    # trap can cover — must run the full matrix quietly, not hand the
+    # autonomous driver a `fail` to churn on. That is done with STEP-level
+    # `continue-on-error` on both steps below, deliberately not job-level:
+    # measured on probe PR #1043, a job-level `continue-on-error` keeps the
+    # workflow run green but still publishes this job's check run as
+    # `failure` (`gh pr checks` -> fail), whereas a step-level one publishes
+    # the job as `success` with the step's failure kept as an annotation.
+    # The job-level timeout above stays as the outer bound; the checkout
+    # step carries its own shorter timeout so a wedged fetch is a continued
+    # step, not a failed job.
     # Classifies the PR so the expensive jobs below can skip work that cannot
     # possibly be affected by it. See #1020.
     #
@@ -124,6 +139,8 @@ jobs:
         # Only a pull_request needs the diff at all; every other event short
         # -circuits to docs_only=false below, so skip the clone entirely.
         if: github.event_name == 'pull_request'
+        continue-on-error: true  # a flaked or timed-out clone leaves no repo; the classify step's ERR trap then emits docs_only=false (#1024)
+        timeout-minutes: 4  # under the job's 5, so a wedged fetch fails THIS step (continued) rather than the job
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
         with:
           lfs: false
@@ -133,6 +150,7 @@ jobs:
 
       - name: Classify changed paths
         id: classify
+        continue-on-error: true  # belt and braces with the ERR trap: an exit the trap misses leaves empty outputs, which every consumer treats as "run everything" (#1024)
         env:
           # Via env, not ${{ }} interpolation into the script body — zizmor
           # template-injection policy.
@@ -162,7 +180,13 @@ jobs:
           # `filter: blob:none` with a lazy promisor fetch) and reports only a
           # rename's destination — so a code file moved into design/ would look
           # docs-only while its deletion went unbuilt.
-          files="$(git diff --no-renames --name-only "$base" "$HEAD_SHA")"
+          # -c core.quotePath=false: with the default, a non-ASCII path is
+          # emitted as "design/\303\251.md" (quoted, octal-escaped), and the
+          # leading quote misses every prefix rule in the classifier, so the
+          # PR pays for a full matrix it did not need. Paths with control
+          # characters are still quoted and still fall through — the safe
+          # direction (#1024).
+          files="$(git -c core.quotePath=false diff --no-renames --name-only "$base" "$HEAD_SHA")"
 
           echo "Changed files:"
           echo "$files" | sed 's/^/  /'
@@ -667,9 +691,10 @@ jobs:
           platforms: linux/arm64
           push: false
           tags: openastroara-server:arm64
-          load: true  # Phase 14d: load into the local daemon so the e2e step can `docker run`.
+          load: true  # Phase 14d: load into the local daemon so the end-to-end step can `docker run`.
 
-      # Phase 14d server-e2e: actually run the arm64 image via qemu and probe
+      # Phase 14d arm64 end-to-end (steps of this job, not a separate one):
+      # actually run the arm64 image via qemu and probe
       # /healthz to prove the published artifact + Dockerfile produce a
       # working container. The x64 GitHub runner emulates arm64 instructions
       # — slow (~2× wall clock vs. native) but representative.
@@ -710,7 +735,7 @@ jobs:
           curl -fsS http://localhost:5555/api/v1/server/info \
             | tee /dev/stderr \
             | grep -q '"server_uuid":"'
-          echo "✓ server-e2e clean"
+          echo "✓ arm64 end-to-end clean"
 
       - name: Tear down container
         if: always()
@@ -794,9 +819,16 @@ jobs:
     # So this job always runs and its STEPS are guarded instead: the matrix
     # expands, all three contexts report `success`, and a docs-only PR pays
     # only three runner spin-ups.
-    # The guard must NOT be omitted entirely: with no `if:` the implicit
-    # condition is success() over `needs: changes`, so a failed or timed-out
-    # `changes` would skip this job at job level and reproduce the deadlock.
+    # The guard must NOT be omitted entirely. With no `if:` the implicit
+    # condition is success() over `needs: changes`, so a failed `changes`
+    # would skip this job at job level and reproduce the deadlock. Since
+    # #1024 `changes` cannot fail short of its outer 5-minute job timeout
+    # (its steps are `continue-on-error`), so the
+    # implicit condition would in practice hold too -- but that is a property
+    # of another job's steps, and an edit there must not be able to silently
+    # re-open this deadlock. The explicit `!cancelled()` states the intent
+    # where it is enforced. (A cancelled run skips this job under either
+    # form; that is fine, a cancelled run reports nothing anyway.)
     if: ${{ !cancelled() }}
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays

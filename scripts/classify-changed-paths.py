@@ -48,6 +48,20 @@ ALL = frozenset(BUCKETS)
 NONE: frozenset = frozenset()
 
 # Directory prefixes that contain no build input of any kind.
+#
+# "No build input" is enforced, not assumed: test_classify_changed_paths.py
+# walks every tracked file under these prefixes and fails the Sanity job the
+# moment one is not prose or an image (#1024). Add the extension there, with
+# a reason, before adding a new kind of file here.
+#
+# `.claude/` is here on purpose (#1024 item 4, PORT_DECISIONS.md 2026-09-20):
+# it holds the merge gate's own rulebook, but no CI job has ever read it,
+# `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
+# change is the review, not the build matrix. Skipping the two job-gated
+# required contexts (server-build, registry-gate) and the three client-test
+# legs' steps on a SKILL.md-only PR loses nothing that CI ever checked.
+#
+# codeql.yml's `paths-ignore:` mirrors this tuple; the same test pins it.
 INERT_DIRS = (
     "design/",
     "docs/",

@@ -298,3 +298,11 @@ standard Alpaca bridge that outside contributors can reason about. ARA-side nati
 via the §77.2 disconnected-window). AlpacaBridge PR #168 (the C++ engine built to the first
 draft) was closed unmerged and is the reference implementation for the C# port. Section
 rewritten in place: playbook §77.
+
+## 2026-09-20 — `.claude/` stays in CI's inert (docs-only) bucket
+
+**Decision:** `.claude/` remains in `scripts/classify-changed-paths.py`'s `INERT_DIRS`, so a PR touching only the port-driver skill or `/pr-checker` merges with the build/test contexts skipped (#1024 item 4).
+
+**Reason:** the files there are the merge gate's rulebook, which made the inherited classification worth a conscious look. But no CI job has ever read them; `claude-review.yml` runs on every PR regardless of paths; and §19.1's protection for a rulebook change is the `claude[bot]` review body, which the path gate does not touch. Running the .NET and Flutter matrix on a SKILL.md edit would exercise nothing the edit can affect. The tree's prose-only status is now enforced by a Sanity-job test rather than assumed, so a future non-prose file under `.claude/` (a hook script, say) fails the build until it is classified deliberately.
+
+**Encoded in:** `scripts/classify-changed-paths.py` (`INERT_DIRS` comment), `scripts/tests/test_classify_changed_paths.py` (`InertTreesTest`), `.github/workflows/codeql.yml` (`paths-ignore`).

@@ -387,7 +387,7 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
 
    Attribute a skip by running the classifier on the PR's own diff rather than guessing:
    ```bash
-   git diff --no-renames --name-only "$(git merge-base origin/master HEAD)" HEAD \
+   git -c core.quotePath=false diff --no-renames --name-only "$(git merge-base origin/master HEAD)" HEAD \
      | python3 scripts/classify-changed-paths.py
    ```
    `dotnet=false` explains the three dotnet skips, `client=false` explains `client-build`,

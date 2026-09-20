@@ -341,7 +341,7 @@ these. Waiting on a review that can never arrive would spin forever — see step
      of guessing at it:
 
      ```bash
-     git diff --no-renames --name-only "$(git merge-base origin/master HEAD)" HEAD \
+     git -c core.quotePath=false diff --no-renames --name-only "$(git merge-base origin/master HEAD)" HEAD \
        | python3 scripts/classify-changed-paths.py
      ```
 

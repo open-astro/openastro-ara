@@ -7,6 +7,22 @@
 # and it stays green on a vanilla checkout). Results land in the repo's
 # Security → Code scanning tab; this workflow does not gate merges.
 #
+# Path filter (#1022): on pull_request only, prose-only PRs skip the analysis.
+# This is a workflow-level `paths-ignore:`, which ci.yml deliberately avoids
+# (#1020): a workflow filtered out by paths never creates its check, so a
+# REQUIRED context would wait forever. That does not apply here — verified
+# 2026-09-20 against the `master protection` ruleset (id 17174314): its rules
+# are deletion / non_fast_forward / pull_request / required_status_checks, and
+# neither `Analyze (csharp)` nor the code-scanning `CodeQL` check is a
+# required context. Code-scanning alerts on the default branch come from the
+# unfiltered `push` runs (and the weekly schedule), so PR-level skipping
+# leaves the alert history intact. The ignore list is the inert trees from
+# scripts/classify-changed-paths.py (INERT_DIRS) plus `**.md`, which is
+# deliberately WIDER than the classifier's docs_only rule: a nested *.md such
+# as OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md is a real input to
+# ci.yml's Alpaca jobs, but no *.md anywhere is an input to a C# CodeQL
+# extraction. A test pins both parts.
+#
 # Actions are pinned to immutable commit SHAs per the repo's zizmor policy.
 name: CodeQL
 
@@ -15,6 +31,12 @@ on:
     branches:
       - master
   pull_request:
+    paths-ignore:
+      - 'design/**'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '**.md'
   schedule:
     # Weekly catch-all so advisories published after a quiet period still surface.
     - cron: "27 4 * * 1"

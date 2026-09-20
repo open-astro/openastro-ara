@@ -22,6 +22,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "classify-changed-paths.py"
 CI = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+CODEQL = REPO_ROOT / ".github" / "workflows" / "codeql.yml"
 
 
 def load_module():
@@ -179,6 +180,17 @@ class ClassifyTest(unittest.TestCase):
     def test_the_licence_generator_and_its_output_run_the_dotnet_jobs(self):
         self.assertTrue(self.c("scripts/generate-3rd-party-licenses.py")["dotnet"])
         self.assertTrue(self.c("3rd-party-licenses.txt")["dotnet"])
+
+    def test_a_git_quoted_path_falls_through_to_code(self):
+        # With core.quotePath at its default, git emits a non-ASCII path as
+        # "design/\303\251.md" -- leading double quote included. That string
+        # matches no prefix rule, so it must land on the open default (a lost
+        # saving, never a lost job). ci.yml passes -c core.quotePath=false so
+        # the classifier sees the real path instead; see the wiring test.
+        r = self.c('"design/\\303\\251.md"')
+        self.assertFalse(r["docs_only"])
+        self.assertTrue(r["dotnet"])
+        self.assertTrue(self.c("design/\u00e9.md")["docs_only"])
 
     # --- things that legitimately skip everything --------------------------
 
@@ -498,6 +510,120 @@ class WorkflowWiringTest(unittest.TestCase):
                     block,
                     f"a required context is gated on the new `{bucket}` bucket",
                 )
+
+    def test_the_changes_job_is_continue_on_error_at_step_level(self):
+        # #1024: a checkout flake or the 5-minute timeout is outside the
+        # script's ERR trap. Every consumer fails safe on an empty output, so
+        # the job must not fail the run either -- a red `Changed paths` only
+        # hands the autonomous driver a `fail` to churn on.
+        block = self.text.split("\n  changes:\n", 1)[1].split("\n  alpaca-sim-smoke:\n", 1)[0]
+        # STEP level on both steps, never JOB level. Measured on probe PR
+        # #1043: job-level `continue-on-error` still publishes the job's
+        # check run as `failure`, so `gh pr checks` reports `fail` and the
+        # driver churns; step-level publishes `success` with an annotation.
+        self.assertNotRegex(block, r"\n    continue-on-error: true")
+        checkout = block.split("- name: Checkout", 1)[1].split("- name: Classify", 1)[0]
+        classify = block.split("- name: Classify", 1)[1]
+        self.assertRegex(checkout, r"\n        continue-on-error: true")
+        self.assertRegex(classify, r"\n        continue-on-error: true")
+        # The clone's own timeout must sit under the job's, or a wedged
+        # fetch fails the job instead of the (continued) step.
+        import re
+        job_t = int(re.search(r"\n    timeout-minutes: (\d+)", block).group(1))
+        step_t = int(re.search(r"\n        timeout-minutes: (\d+)", checkout).group(1))
+        self.assertLess(step_t, job_t)
+
+    def test_the_diff_disables_path_quoting(self):
+        # #1024: a quoted non-ASCII path misses every prefix rule (see
+        # test_a_git_quoted_path_falls_through_to_code). Safe, but wasteful,
+        # and exact is cheap.
+        needle = "git -c core.quotePath=false diff --no-renames --name-only"
+        self.assertIn(needle, self.text)
+        # The two skill recipes reproduce this classification to attribute a
+        # skip; with default quoting a non-ASCII path would classify as code
+        # locally while CI skipped, and the driver would Hold on a phantom.
+        for recipe in (
+            REPO_ROOT / ".claude" / "commands" / "pr-checker.md",
+            REPO_ROOT / ".claude" / "skills" / "port-driver" / "SKILL.md",
+        ):
+            with self.subTest(recipe=recipe.name):
+                text = recipe.read_text()
+                self.assertIn(needle, text)
+                # Only the fenced recipe blocks are held to this; a prose
+                # mention of the old form elsewhere in the file is fine.
+                fences = [
+                    f for f in text.split("```")[1::2]
+                    if "classify-changed-paths.py" in f
+                ]
+                self.assertTrue(fences, "no fenced recipe block found")
+                for fence in fences:
+                    self.assertNotIn("git diff --no-renames --name-only", fence)
+
+
+class InertTreesTest(unittest.TestCase):
+    """INERT_DIRS is a claim about the repo, so check the repo (#1024 item 2).
+
+    `design/*`, `docs/*`, `.claude/*` are prefix-allowlisted as "no build
+    input of any kind". The first .py, .json or fixture added under one of
+    them would silently lose the full matrix; this fails the Sanity job at
+    that moment instead. Add an extension here only with a reason it cannot
+    be a build input.
+    """
+
+    PROSE_OR_IMAGE = {
+        ".md",
+        ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    }
+    # Exact paths that are inert despite their extension. GitHub's issue
+    # chooser config is read by nothing but github.com; pre-allowed so adding
+    # it does not red the required Sanity context on an unrelated PR (#1044
+    # tracks a per-prefix allowance if this list grows).
+    INERT_BY_PATH = {".github/ISSUE_TEMPLATE/config.yml"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_module()
+        out = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "ls-files", "-z", "--", *cls.m.INERT_DIRS],
+            cwd=REPO_ROOT, check=True, capture_output=True, text=True,
+        ).stdout
+        cls.files = [f for f in out.split("\0") if f]
+
+    def test_every_inert_dir_is_tracked_and_non_empty(self):
+        for prefix in self.m.INERT_DIRS:
+            with self.subTest(prefix=prefix):
+                self.assertTrue(any(f.startswith(prefix) for f in self.files), f"{prefix} has no tracked files")
+
+    def test_inert_trees_hold_only_prose_or_images(self):
+        offenders = sorted(
+            f for f in self.files
+            if Path(f).suffix.lower() not in self.PROSE_OR_IMAGE
+            and f not in self.INERT_BY_PATH
+        )
+        self.assertEqual(
+            offenders, [],
+            "a non-prose file under an INERT_DIRS prefix would be skipped by CI. "
+            "Either classify it in scripts/classify-changed-paths.py (drop the prefix "
+            "from INERT_DIRS, or add a rule for the path), or -- if the extension "
+            "provably cannot be a build input -- add it to PROSE_OR_IMAGE with a reason",
+        )
+
+    def test_codeql_paths_ignore_mirrors_inert_dirs(self):
+        # #1022: codeql.yml skips prose-only PRs with a workflow-level
+        # paths-ignore (safe there: it is not a required context). Its list
+        # must not drift from the classifier's idea of "inert".
+        text = CODEQL.read_text()
+        head = text.split("  pull_request:\n", 1)[1].split("  schedule:", 1)[0]
+        for prefix in self.m.INERT_DIRS:
+            with self.subTest(prefix=prefix):
+                self.assertIn(f"- '{prefix}**'", head)
+        # Wider than is_docs_path on purpose: a nested *.md (the Alpaca
+        # SIMULATORS_VERSION.md fixture) is a ci.yml input but never a C#
+        # CodeQL input, so codeql.yml may ignore every *.md.
+        self.assertIn("- '**.md'", head)
+        # Only pull_request is filtered: default-branch alerts come from push.
+        push = text.split("  push:\n", 1)[1].split("  pull_request:", 1)[0]
+        self.assertNotIn("paths", push)
 
 
 if __name__ == "__main__":
