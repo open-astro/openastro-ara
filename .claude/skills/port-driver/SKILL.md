@@ -413,7 +413,9 @@ there is exactly one runnable copy per merge path):
 The fail-safe direction of that test is mirrored by `ProbeMirrors` in
 `scripts/tests/test_port_driver_guards.py` (#1038): `false` keeps the flag,
 `true`, empty and garbage all drop it. The fence above is hash-pinned by
-`MirrorPin` so an inversion here cannot leave the suite green.
+`MirrorPin`, and every runnable copy here and in `/pr-checker` Step 4 must
+match it byte for byte (`ProbePins`, #1050), so an inversion of any copy
+cannot leave the suite green.
 
 Then pick the merge method by the PR's commit history — **except at a phase
 boundary, where the tag decides it**:
@@ -646,10 +648,23 @@ with the next sub-PR rather than getting a PR of its own.
        # literally true, not true because this repo happens to merge only
        # there; a same-named fork head merged elsewhere must not authorize it.
        # --limit 100: a placeholder name grown at 0.5p/4/11 outgrows the
-       # default 30 eventually; a missed OID Holds rather than mis-retires,
-       # but the miss is silent.
+       # default 30 eventually; a missed OID Holds rather than mis-retires.
+       # A full page means the listing may be truncated (#1050), so the Held
+       # message says so instead of leaving the miss silent.
        merged=$(gh pr list --head "$B" --base master --state merged --limit 100 --json headRefOid --jq '.[].headRefOid')
        if [ -n "$REF_OID" ] && printf '%s\n' "$merged" | grep -qx "$REF_OID"; then
+         # RETIRE assumes `--delete-branch` removed origin/$B (§22.1 step 5).
+         # An aborted PR or a hand merge without it leaves the remote ref on
+         # the squashed head, and the fresh branch's push is then rejected
+         # non-fast-forward with no hint why; §19.1 bars `push --delete`, so
+         # Hold and name the ref for the human (#1047). `|| exit 1` on the
+         # probe: an empty answer from a failed ls-remote must not read as
+         # "the ref is gone".
+         REMOTE_REF=$(git ls-remote --heads origin "$B") || exit 1
+         if [ -n "$REMOTE_REF" ]; then
+           echo "Held for human review @joeytroy — origin/$B still exists ($REMOTE_REF); delete it by hand before $B can be re-created"
+           exit 1
+         fi
          echo "retiring local $B: its head $REF_OID is the merged head of a PR under this name"
          # `|| exit 1` on both: if the opening `checkout master` failed (dirty
          # tree) the driver is still standing on $B, `branch -D` refuses, and
@@ -658,7 +673,8 @@ with the next sub-PR rather than getting a PR of its own.
          git branch -D "$B" || exit 1   # local only -- never `push --delete` (§19.1)
          git checkout -b "$B" origin/master || exit 1   # from origin, not a possibly stale local master
        else
-         echo "Held for human review @joeytroy — $B exists locally with commits master does not have"
+         HINT=; [ "$(printf '%s\n' "$merged" | grep -c .)" -ge 100 ] && HINT=" (100 merged PRs listed: the listing is truncated and the matching head may be past the cut)"
+         echo "Held for human review @joeytroy — $B exists locally with commits master does not have$HINT"
          exit 1
        fi
      else

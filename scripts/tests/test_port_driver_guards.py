@@ -36,6 +36,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SKILL = REPO_ROOT / ".claude" / "skills" / "port-driver" / "SKILL.md"
+PLAYBOOK = REPO_ROOT / "design" / "PORT_PLAYBOOK.md"
+PR_CHECKER = REPO_ROOT / ".claude" / "commands" / "pr-checker.md"
 
 
 def git(repo: Path, *args: str) -> str:
@@ -93,7 +95,9 @@ def scenario_b(repo: Path, merged: list[str]) -> str:
     return "B"
 
 
-def reuse_guard(repo: Path, branch: str, merged: list[str] = ()) -> str:
+def reuse_guard(
+    repo: Path, branch: str, merged: list[str] = (), remote_ref_exists: bool = False
+) -> str:
     """SKILL.md section 5 step 2: may scenario C reuse an existing local ref?
 
     Returns "REUSE" (switch to it), "RETIRE" (delete the local ref and
@@ -103,14 +107,26 @@ def reuse_guard(repo: Path, branch: str, merged: list[str] = ()) -> str:
     `gh pr list --head <branch> --base master --state merged --limit 100 --json headRefOid`
     returned;
     an empty list stands in for both "no PR" and an API failure, and both
-    Hold.
+    Hold. `remote_ref_exists` is whether `git ls-remote --heads origin <branch>`
+    printed a ref (`remote_head_exists` below): RETIRE assumes it is gone, and
+    when it is not the re-created branch could not be pushed, so Hold (#1047).
+    A 100-row `merged` is a possibly truncated page; that changes only the Held
+    message (the miss already Holds), so the verdict is the same here.
     """
     if not git(repo, "rev-list", f"origin/master..{branch}"):
         return "REUSE"
     ref_oid = git(repo, "rev-parse", f"refs/heads/{branch}")
     if ref_oid and ref_oid in merged:
-        return "RETIRE"
+        return "HELD" if remote_ref_exists else "RETIRE"
     return "HELD"
+
+
+def remote_head_exists(repo: Path, branch: str) -> bool:
+    """The #1047 probe: `git ls-remote --heads origin <branch>`, non-empty means
+    the remote ref survives. A failed ls-remote raises rather than reading as
+    "gone" -- the skill's `|| exit 1` on the same line.
+    """
+    return bool(git(repo, "ls-remote", "--heads", "origin", branch))
 
 
 def retire(repo: Path, branch: str) -> None:
@@ -292,6 +308,42 @@ class ReuseGuard(GitFixture):
         self.assertEqual(git(self.repo, "rev-list", "--count", "origin/master..left"), "0")
         self.assertEqual(reuse_guard(self.repo, "left", [oid]), "REUSE")
 
+    def test_surviving_remote_ref_holds_instead_of_retiring(self):
+        # #1047: an aborted PR or a hand merge without --delete-branch leaves
+        # origin/<B> on the squashed head. Retiring would re-create the branch
+        # and the eventual push is rejected non-fast-forward; §19.1 bars the
+        # driver from `push --delete`, so it Holds and names the ref.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        self.assertEqual(reuse_guard(self.repo, "left", [oid], remote_ref_exists=True), "HELD")
+        self.assertEqual(reuse_guard(self.repo, "left", [oid], remote_ref_exists=False), "RETIRE")
+
+    def test_remote_head_probe_against_a_real_origin(self):
+        # The probe itself, against a bare origin: present after a push,
+        # absent after the remote delete `--delete-branch` performs.
+        with tempfile.TemporaryDirectory() as bare:
+            git(self.repo, "init", "-q", "--bare", bare)
+            git(self.repo, "remote", "add", "origin", bare)
+            git(self.repo, "checkout", "-qb", "left", "master")
+            git(self.repo, "push", "-q", "origin", "left")
+            self.assertTrue(remote_head_exists(self.repo, "left"))
+            git(self.repo, "push", "-q", "origin", "--delete", "left")
+            self.assertFalse(remote_head_exists(self.repo, "left"))
+            git(self.repo, "remote", "remove", "origin")
+        with self.assertRaises(subprocess.CalledProcessError):
+            remote_head_exists(self.repo, "left")  # no origin: fails loudly, not "gone"
+
+    def test_a_full_merged_page_still_decides_the_same_way(self):
+        # #1050: 100 rows may be a truncated listing. The skill only adds a hint
+        # to the Held message; an OID that IS on the page still retires.
+        git(self.repo, "checkout", "-qb", "left", "master")
+        oid = self.commit("work")
+        self.merge_pr("left", squash=True)
+        page = ["0" * 40] * 99
+        self.assertEqual(reuse_guard(self.repo, "left", page + [oid]), "RETIRE")
+        self.assertEqual(reuse_guard(self.repo, "left", page + ["1" * 40]), "HELD")
+
     def test_squash_merged_leftover_plus_stray_commit_holds(self):
         # Exact equality only: a commit on top of the merged head is either
         # stray or real work, and the driver cannot tell which.
@@ -353,17 +405,25 @@ def delete_branch_flag(is_cross_repository_output: str) -> str:
     return "--delete-branch" if is_cross_repository_output == "false" else ""
 
 
+PAGE_LIMIT = 100  # the `--limit 100` on every `gh pr list` the guards run
+
+
 def chore_delete_verdict(me: str, rows: list[tuple[str, bool]]) -> str:
     """Playbook section 22.2: may the driver `push origin --delete chore/<name>`?
 
-    `rows` is what `gh pr list --state all --head chore/<name>
+    `rows` is what `gh pr list --state all --limit 100 --head chore/<name>
     --json author,isCrossRepository` returned, as (author, isCrossRepository).
-    Returns "DELETE" or "HELD". Cross-repo rows are a fork's same-named branch
-    and are discarded first; then at least one row must remain and every
-    remaining author must be `me`. An empty `me` (the token has no user, as an
-    app token does) Holds before anything is read.
+    Returns "DELETE" or "HELD". An empty `me` (the token has no user, as an
+    app token does) Holds before anything is read. A full page Holds next: the
+    listing truncates silently and a foreign author past the cut would
+    otherwise turn a mixed set into a DELETE (#1050) -- counted before the
+    cross-repo filter, since truncation happens before it. Then cross-repo
+    rows (a fork's same-named branch) are discarded, at least one row must
+    remain, and every remaining author must be `me`.
     """
     if not me:
+        return "HELD"
+    if len(rows) >= PAGE_LIMIT:
         return "HELD"
     authors = sorted({author for author, cross in rows if not cross})
     if not authors:
@@ -414,15 +474,26 @@ class ProbeMirrors(unittest.TestCase):
         # `gh api user --jq .login` prints nothing under an app token.
         self.assertEqual(chore_delete_verdict("", [("", False)]), "HELD")
 
+    def test_chore_delete_holds_on_a_full_page(self):
+        # #1050: exactly --limit rows may be a truncated listing, and the
+        # foreign author may be row 101. Ninety-nine of ours still delete.
+        ours = [("me", False)] * 99
+        self.assertEqual(chore_delete_verdict("me", ours), "DELETE")
+        self.assertEqual(chore_delete_verdict("me", ours + [("me", False)]), "HELD")
+        # Fork rows count toward the page too: they were returned, then discarded.
+        self.assertEqual(chore_delete_verdict("me", ours + [("me", True)]), "HELD")
+
 
 class MirrorPin(unittest.TestCase):
-    """The mirror above is hand-synced with SKILL.md; this makes drift fail (#1030).
+    """The mirror above is hand-synced with the prose; this makes drift fail (#1030).
 
     Three sections of the skill are hashed: scenario B's whole walk (the
     two-condition shell block through the closing "No OID matched -> B"
     paragraph), which `scenario_b` mirrors; the §5 step 2 fence, which
-    `reuse_guard`/`retire` mirror; and the reference copy of the §3b `$DEL`
-    probe, whose direction `ProbeMirrors.delete_branch_flag` mirrors. Editing
+    `reuse_guard`/`retire`/`remote_head_exists` mirror; and the reference copy
+    of the §3b `$DEL` probe, whose direction `ProbeMirrors.delete_branch_flag`
+    mirrors. A fourth section is the playbook's §22.2 fence, which
+    `chore_delete_verdict` mirrors (#1050). Editing
     any of them without touching this file fails the Sanity job, which is the
     point: drift already happened
     once inside #1003 (the skill tested detached-HEAD inside condition 2, the
@@ -438,6 +509,7 @@ class MirrorPin(unittest.TestCase):
 
     SECTIONS = {
         "scenario_b_decision_list": (
+            SKILL,
             # From the two-condition fence above condition 0 through the
             # closing "No OID matched -> B" paragraph, which is scenario_b's
             # final `return "B"` -- flipping it would otherwise leave the pin
@@ -447,6 +519,7 @@ class MirrorPin(unittest.TestCase):
             '8d8bc816d4656c2d',
         ),
         "step_3b_delete_branch_probe": (
+            SKILL,
             # The reference copy of the $DEL probe; ProbeMirrors mirrors its
             # direction, this pin catches an inversion of the text itself.
             # Starts above the fence so its `text` opener is hashed too: flipping it
@@ -456,11 +529,20 @@ class MirrorPin(unittest.TestCase):
             '198eae1bac6f2615',
         ),
         "step_5_reuse_fence": (
+            SKILL,
             # From the fence's first statement: the `|| exit 1` rationale in
             # the RETIRE arm rests on `checkout master` having run.
             "   git checkout master && git pull --ff-only",
             "   The slash namespace is the convention",
-            '2221caf1e4e11a22',
+            '499b14fcb087ffda',
+        ),
+        "playbook_22_2_chore_delete_fence": (
+            PLAYBOOK,
+            # The whole §22.2 fence: ME, the truncation Hold, the cross-repo
+            # filter and the strict author comparison.
+            "ME=$(gh api user --jq .login)",
+            "`--head` matches head branch *names*",
+            '219a8fff3b42b25c',
         ),
     }
 
@@ -469,31 +551,77 @@ class MirrorPin(unittest.TestCase):
         # Whitespace-insensitive so a reflow is not a rule change.
         return hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode()).hexdigest()[:16]
 
-    def section(self, start: str, end: str) -> str:
-        if not SKILL.is_file():
-            self.fail(f"{SKILL} is missing: this test mirrors it and cannot run without it")
-        text = SKILL.read_text()
+    def section(self, path: Path, start: str, end: str) -> str:
+        if not path.is_file():
+            self.fail(f"{path} is missing: this test mirrors it and cannot run without it")
+        text = path.read_text()
         try:
             i = text.index(start)
             j = text.index(end, i)
         except ValueError:
             self.fail(
-                f"SKILL.md no longer contains the marker line {start!r} / {end!r} "
+                f"{path.name} no longer contains the marker line {start!r} / {end!r} "
                 "that delimits a mirrored section. Re-read the section, update the "
                 "mirror in this file to match, then update the marker in SECTIONS."
             )
         return text[i:j]
 
     def test_sections_match_the_pinned_hashes(self):
-        for name, (start, end, expected) in self.SECTIONS.items():
+        for name, (path, start, end, expected) in self.SECTIONS.items():
             with self.subTest(section=name):
-                actual = self.digest(self.section(start, end))
+                actual = self.digest(self.section(path, start, end))
                 self.assertEqual(
                     actual, expected,
-                    f"SKILL.md section '{name}' changed. Re-read it, update the "
+                    f"{path.name} section '{name}' changed. Re-read it, update the "
                     f"mirror in this file to match, then replace the pinned hash "
                     f"with {actual!r}.",
                 )
+
+
+class ProbePins(unittest.TestCase):
+    """Every runnable `$DEL` probe is byte-identical to the §3b reference (#1050).
+
+    `MirrorPin` hashes only the reference (`text`) copy. The runnable copies --
+    three in SKILL.md §3b and three in `/pr-checker` Step 4, one per merge
+    path -- could each be inverted to `= "true"` with the suite green. So each
+    file's copies are counted and compared, whitespace-normalised and with the
+    `<PR>`/`<N>` placeholder unified, against the reference. Counts are pinned
+    too: a dropped copy is a merge path that lost its probe.
+    """
+
+    PROBE = re.compile(
+        r'\[ "\$\(gh pr view <(?:PR|N)> --json isCrossRepository --jq \.isCrossRepository\)" = "[a-z]*" \]\s*\\?\s*'
+        r"&& DEL=[^ ;|]* \|\| DEL=(?=[\s;}])"
+    )
+    REFERENCE = (
+        '[ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] '
+        "&& DEL=--delete-branch || DEL="
+    )
+    EXPECTED_COPIES = {SKILL: 4, PR_CHECKER: 3}  # the reference plus 3; 2 fences plus the inline chain
+
+    @classmethod
+    def normalise(cls, probe: str) -> str:
+        return re.sub(r"\s*\\?\s+", " ", probe).replace("<N>", "<PR>").strip()
+
+    def test_every_copy_matches_the_reference(self):
+        for path, expected in self.EXPECTED_COPIES.items():
+            with self.subTest(file=path.name):
+                text = path.read_text()
+                copies = [m.group(0) for m in self.PROBE.finditer(text)]
+                self.assertEqual(
+                    len(copies), expected,
+                    f"{path.name} carries {len(copies)} $DEL probes, expected {expected}: "
+                    "a merge path lost or gained its probe",
+                )
+                for copy in copies:
+                    self.assertEqual(self.normalise(copy), self.REFERENCE, f"in {path.name}")
+
+    def test_no_stray_delete_branch_assignment(self):
+        # Belt and braces: the flag is assigned only inside a matching probe.
+        for path in self.EXPECTED_COPIES:
+            with self.subTest(file=path.name):
+                text = self.PROBE.sub("", path.read_text())
+                self.assertNotIn("DEL=--delete-branch", text)
 
 
 if __name__ == "__main__":
