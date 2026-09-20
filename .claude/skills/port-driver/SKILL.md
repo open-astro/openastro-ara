@@ -700,6 +700,12 @@ with the next sub-PR rather than getting a PR of its own.
    workaround (`phase-10`) was forced only while `port/ara` existed as a branch,
    and was retired with it on 2026-06-02.
 
+   The fence above is not only hash-pinned: `FenceExecution` in
+   `scripts/tests/test_port_driver_guards.py` extracts it, substitutes the
+   `B=` placeholder line, and runs it under bash against a throwaway clone
+   with a `gh` shim (#1060). Keep the placeholder line's `B=phase/<N>` shape
+   and the `$(...) || exit 1` capture style, or that harness goes red.
+
 3. Do the actual work for the sub-PR's scope. Keep commits small + focused. Push after every commit (per the 2026-05-23 cadence decision).
 
 4. When the scope is complete, go to scenario B next iteration (open the PR).
