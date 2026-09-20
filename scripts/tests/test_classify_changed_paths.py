@@ -638,6 +638,7 @@ class InertTreesTest(unittest.TestCase):
         # `.yml` is allowed under ISSUE_TEMPLATE/ only; the same name under
         # design/ or docs/ would be a build input nobody classified.
         self.assertIn(".yml", self.allowed(".github/ISSUE_TEMPLATE/config.yml"))
+        self.assertIn(".yaml", self.allowed(".github/ISSUE_TEMPLATE/form.yaml"))
         self.assertNotIn(".yml", self.allowed("design/something.yml"))
         self.assertNotIn(".yml", self.allowed("docs/something.yml"))
         self.assertNotIn(".yml", self.allowed(".claude/settings.yml"))
@@ -655,7 +656,7 @@ class InertTreesTest(unittest.TestCase):
         doc = yaml.safe_load(CODEQL.read_text())
         # YAML 1.1 reads a bare `on` as boolean True; PyYAML does exactly that.
         on = doc.get("on", doc.get(True))
-        self.assertIsNotNone(on, "no `on:` block in codeql.yml")
+        self.assertIsInstance(on, dict, "codeql.yml `on:` must be a mapping (list form has no paths-ignore)")
         ignore = (on.get("pull_request") or {}).get("paths-ignore") or []
         for prefix in self.m.INERT_DIRS:
             with self.subTest(prefix=prefix):
@@ -668,10 +669,14 @@ class InertTreesTest(unittest.TestCase):
         # and the weekly schedule.
         for trigger in ("push", "schedule"):
             with self.subTest(trigger=trigger):
-                cfg = on.get(trigger)
-                if isinstance(cfg, dict):
-                    self.assertNotIn("paths", cfg)
-                    self.assertNotIn("paths-ignore", cfg)
+                self.assertIn(trigger, on, f"codeql.yml lost its `{trigger}` trigger")
+                cfg = on[trigger]
+                # `push` is a mapping; `schedule` is a list of cron mappings.
+                entries = cfg if isinstance(cfg, list) else [cfg]
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        self.assertNotIn("paths", entry)
+                        self.assertNotIn("paths-ignore", entry)
 
 
 if __name__ == "__main__":
