@@ -70,7 +70,7 @@ and creating one are three different permissions. §5 still only ever *creates*
 There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
 **(A) Open PR exists and you authored it — or it is the active sub-PR on a `phase/*`, `prep-*` or `rules-*` branch.**
-(Not `chore/*`: see the deviation note above. A `chore/*` PR you did not author is scenario D.)
+(Not `chore/*`: see the carve-out above. A `chore/*` PR you did not author is scenario D.)
 → Go to §3 (review poll/fix loop).
 
 **(B) On an allowlisted sub-branch carrying unmerged work, with no open PR** — whether or not the commits are pushed.
@@ -435,12 +435,12 @@ commit, while `git tag` succeeds locally and the check above passes. The push is
 then rejected as a non-fast-forward tag update. Do not force it — that is the
 same situation, so take the same Held stop.
 
-**Deliberate deviation (2 of 2):** §22.1 step 4 and §19.1 both say `git push --tags`.
-This pushes the named ref instead, because `--tags` pushes *every* stray local
-tag — including the `backup-<timestamp>` tags §19.1 itself requires before a
-`reset --hard`. Same result for this tag, fewer accidents. Don't "fix" it back;
-the playbook lines are user-authoritative and reconciling them needs the
-maintainer.
+Pushing the named ref rather than `git push --tags` is what §19.1 and §22.1
+step 4 now prescribe, for the reason they give: `--tags` pushes *every* stray
+local tag, including the `backup-<timestamp>` tags §19.1 itself requires before
+a `reset --hard`. Same result for this tag, fewer accidents. (This was a
+deliberate deviation while the playbook still said `--tags`; #1013/#1014
+reconciled both sites and the note is retired.)
 
 Sub-phase tags are `phase-<N>-<letter>-complete` where the sub-phase is a
 coherent milestone — judgment call.
