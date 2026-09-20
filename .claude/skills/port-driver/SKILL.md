@@ -53,18 +53,12 @@ prep branches (`prep-*`, e.g. `prep-ci`) from §19.1's branch allowlist, plus
 `chore/<short-name>`. Anything outside that set is genuinely unknown and belongs
 in scenario D.
 
-**Deliberate deviation (1 of 2) — `chore/<short-name>`.** §19.1 does not name it; it
-closes with "All other branches are off-limits without explicit user
-instruction", and `COMMIT-PR-RULES.md` records `chore/*` only in its open-items checklist
-("Branch naming convention for community PRs"), not under the "Branch naming"
-heading -- i.e. as a *proposed* community convention, "Distinct from the
-port's" pattern. (`PORT_PLAYBOOK.md:1418` does prescribe a
-`chore/bump-alpaca-simulators-<tag>` branch for a future automated PR, but
-§19.1's allowlist is the authority for what the driver may touch and it is
-silent -- #1013 should cover both sites.) It is here because the driver's
-own maintenance PRs use it (#1000, #1003) and without it the loop stopped on its
-own work. Issue #1013 asks the maintainer to add it to §19.1; until that lands,
-treat this as a deviation, not as something §19.1 says.
+`chore/<short-name>` is sanctioned by §19.1 itself: its branch allowlist names
+it alongside `phase/*` and the prep branches, "for maintenance work that is not
+a port phase (skill and doc upkeep, CI cleanups)". It is what the driver's own
+maintenance PRs use (#1000, #1003). (Before #1013 landed this was a deliberate
+deviation, because §19.1 was silent and closed with "All other branches are
+off-limits"; that gap is closed and the note is retired.)
 
 Because `chore/*` is also what outside contributors use, scenario A's
 "not authored by you" clause deliberately excludes it: the driver never adopts a
