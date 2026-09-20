@@ -470,6 +470,16 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     info.IsShuffled = true;
                     break;
 
+                case "zstd":
+                    info.CompressionType = XISFCompressionType.ZSTD;
+                    break;
+
+                case "zstd+sh":
+                    info.CompressionType = XISFCompressionType.ZSTD;
+                    info.ItemSize = int.Parse(compression[2], CultureInfo.InvariantCulture);
+                    info.IsShuffled = true;
+                    break;
+
                 default:
                     throw new InvalidDataException();
             }
@@ -585,6 +595,22 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                                 }
                                 if (total != outArray.Length) {
                                     throw new InvalidDataException($"XISF: zlib decompressed size {total} does not match expected {outArray.Length}");
+                                }
+                            }
+                            break;
+
+                        case XISFCompressionType.ZSTD:
+                            // Decompress into the pre-sized, pre-validated buffer: a frame that wants
+                            // more than UncompressedSize fails inside Unwrap instead of growing.
+                            using (var decompressor = new ZstdSharp.Decompressor()) {
+                                int written;
+                                try {
+                                    written = decompressor.Unwrap(raw, outArray);
+                                } catch (ZstdSharp.ZstdException ex) {
+                                    throw new InvalidDataException("XISF: zstd frame is malformed or larger than its declared uncompressed size", ex);
+                                }
+                                if (written != outArray.Length) {
+                                    throw new InvalidDataException($"XISF: zstd decompressed size {written} does not match expected {outArray.Length}");
                                 }
                             }
                             break;

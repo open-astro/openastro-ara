@@ -189,6 +189,18 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     }
 
                     outArray = ZlibStream.CompressBuffer(byteArray);
+                } else if (CompressionType == XISFCompressionType.ZSTD) {
+                    if (ByteShuffling) {
+                        CompressionName = "zstd+sh";
+                        byteArray = Shuffle(byteArray, ShuffleItemSize);
+                    } else {
+                        CompressionName = "zstd";
+                    }
+
+                    // Level 3 is zstd's default and what PixInsight ships; the spec fixes only the
+                    // frame format, so any level reads back the same.
+                    using var compressor = new ZstdSharp.Compressor(3);
+                    outArray = compressor.Wrap(byteArray).ToArray();
                 } else {
                     outArray = new byte[byteArray.Length];
                     Array.Copy(byteArray, outArray, outArray.Length);

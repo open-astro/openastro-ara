@@ -78,7 +78,7 @@ public sealed class XisfRoundTripTests : IDisposable {
 
     /// <summary>Every writer option combination. The reader must return the identical pixels.</summary>
     public static IEnumerable<object[]> WriterOptions() {
-        foreach (var c in new[] { XISFCompressionType.NONE, XISFCompressionType.LZ4, XISFCompressionType.LZ4HC, XISFCompressionType.ZLIB }) {
+        foreach (var c in new[] { XISFCompressionType.NONE, XISFCompressionType.LZ4, XISFCompressionType.LZ4HC, XISFCompressionType.ZLIB, XISFCompressionType.ZSTD }) {
             foreach (var shuffle in new[] { false, true }) {
                 if (c == XISFCompressionType.NONE && shuffle) { continue; }
                 foreach (var k in new[] { XISFChecksumType.NONE, XISFChecksumType.SHA1, XISFChecksumType.SHA256, XISFChecksumType.SHA512, XISFChecksumType.Sha3256, XISFChecksumType.Sha3512 }) {
@@ -393,7 +393,7 @@ public sealed class XisfRoundTripTests : IDisposable {
 
     [Fact]
     public async Task AnUnsupportedCompressionCodecIsAClearError() {
-        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" compression=\"zstd:2\"", string.Empty, new byte[2]);
+        var file = Monolithic("geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" compression=\"bzip2:2\"", string.Empty, new byte[2]);
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 
@@ -445,6 +445,27 @@ public sealed class XisfRoundTripTests : IDisposable {
     [InlineData("checksum=\"sha-256:\"")]
     public async Task ATruncatedCompressionOrChecksumAttributeIsInvalidData(string attribute) {
         var file = Monolithic($"geometry=\"1:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" {attribute}", string.Empty, new byte[2]);
+        await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
+    }
+
+    [Fact]
+    public async Task ZstdInlineBlockFromAnotherWriterIsDecompressed() {
+        // A zstd frame we did not write ourselves (level 19, shuffled), as PixInsight would emit.
+        var pixels = new byte[] { 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00 };
+        var shuffled = XISFData.Shuffle(pixels, 2);
+        using var compressor = new ZstdSharp.Compressor(19);
+        var packed = compressor.Wrap(shuffled).ToArray();
+        var file = Monolithic($"geometry=\"6:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\" compression=\"zstd+sh:{pixels.Length}:2\"", Convert.ToBase64String(packed));
+        Assert.Equal(new ushort[] { 1, 2, 3, 4, 5, 6 }, (await Read(file)).Data.FlatArray);
+    }
+
+    [Fact]
+    public async Task AZstdFrameLargerThanItsDeclaredSizeIsRejected() {
+        // Declares 4 uncompressed bytes but the frame holds 12: the bounded Unwrap must refuse.
+        var pixels = new byte[12];
+        using var compressor = new ZstdSharp.Compressor(3);
+        var packed = compressor.Wrap(pixels).ToArray();
+        var file = Monolithic($"geometry=\"2:1:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" location=\"inline:base64\" compression=\"zstd:4\"", Convert.ToBase64String(packed));
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
 

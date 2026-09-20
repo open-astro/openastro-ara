@@ -69,8 +69,8 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (117 packages):
-    MIT: 79 packages
+License summary (118 packages):
+    MIT: 80 packages
     Apache-2.0: 20 packages
     BSD-3-Clause: 8 packages
     Microsoft .NET Library License: 5 packages
@@ -79,7 +79,7 @@ License summary (117 packages):
     MIT AND Ms-PL: 1 package
 
 
-SERVER — OpenAstroAra.Server NuGet dependency graph (98 packages, transitive closure)
+SERVER — OpenAstroAra.Server NuGet dependency graph (99 packages, transitive closure)
 =====================================================================================
 
 ------------------------------------------------------------------------
@@ -835,6 +835,14 @@ Copyright:      © Claire Novotny 2016-2024
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/novotnyllc/Zeroconf
+
+------------------------------------------------------------------------
+Package:        ZstdSharp.Port 0.8.8
+Authors:        Oleg Stepanischev
+Copyright:      Copyright Oleg Stepanischev 2026
+License:        MIT
+License source: https://licenses.nuget.org/MIT
+Project:        https://github.com/oleg-st/ZstdSharp
 
 
 CLIENT — WILMA direct runtime pub packages (19 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)

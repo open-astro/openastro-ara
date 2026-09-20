@@ -655,6 +655,9 @@ Do you want to close the sequence and lose the changes anyway?</value>
   <data name="LblCompressionZLib" xml:space="preserve">
     <value>ZLib</value>
   </data>
+  <data name="LblCompressionZstd" xml:space="preserve">
+    <value>Zstandard</value>
+  </data>
   <data name="LblConnect" xml:space="preserve">
     <value>Connect</value>
   </data>
