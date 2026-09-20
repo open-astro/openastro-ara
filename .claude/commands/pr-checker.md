@@ -368,9 +368,32 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
    and reports **one** context under its raw, uninterpolated name. The three
    `Client (analyze + test) — *-latest` legs are required **and** matrix-expanded, so they are
    gated at *step* level and report `pass` with their steps skipped, never `skipping` (#1025).
-   Confirm the cause, don't assume it — `gh pr checks` shows the skip but not why, and GitHub
-   counts any skipped required context as satisfied. A skip outside that list, or one you cannot
-   account for (a `needs:` failure, an `if:` you don't recognise), is **ambiguous, not clearance**.
+
+   **`docs_only` is no longer the only attributable cause.** The `changes` job also emits `dotnet`
+   and `client`, which gate the four NON-required contexts in that list:
+
+   ```
+   Alpaca simulator harness (smoke)                     <- dotnet
+   Alpaca discovery integration test                    <- dotnet
+   Analyzer gate (full solution, warnings = errors)     <- dotnet
+   Client (native build) — ${{ matrix.target }}         <- client
+   ```
+
+   So a client-only PR legitimately shows those three `dotnet` jobs as `skipping` while nothing is
+   docs-only, and a PR touching neither graph skips all four. The two required contexts it can
+   skip (`Server (build + cross-publish + Docker)`, `Settings + Help registry gate`) stay on
+   `docs_only` alone, on purpose: a skipped required context counts as satisfied, so the finer
+   buckets are kept out of that blast radius.
+
+   Attribute a skip by running the classifier on the PR's own diff rather than guessing:
+   ```bash
+   git diff --no-renames --name-only "$(git merge-base origin/master HEAD)" HEAD \
+     | python3 scripts/classify-changed-paths.py
+   ```
+   `dotnet=false` explains the three dotnet skips, `client=false` explains `client-build`,
+   `docs_only=true` explains all six. Confirm the cause, don't assume it — `gh pr checks` shows the
+   skip but not why. A skip outside that list, or one the classifier does not account for (a
+   `needs:` failure, an `if:` you don't recognise), is **ambiguous, not clearance**.
    `pending` or `fail` is never clearance.
 2. **A verdict for the current head** with no unaddressed Defects (Step 2 exit `0`).
 3. **≥3 minutes of quiescence** since the most recent of (last commit, last bot/user comment),
