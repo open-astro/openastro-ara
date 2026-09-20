@@ -14,6 +14,17 @@ the other design docs.
 
 ---
 
+## file_picker 13 bump — follow-ups (2026-09-20, from the #1019 review)
+
+- `runProfileImportFlow` (`client/openastroara_client/lib/widgets/profile/profile_import_flow.dart`)
+  calls the static `FilePicker.pickFile` with no injectable seam, so none of its branches
+  (cancel, too-large, null path, read failure, and the new null-length abort that
+  `PlatformFile.length()` returning `Future<int?>` introduced) has a test. The repo's
+  pattern is a `@visibleForTesting` function var (cf. `frameExportSaver` in
+  `bulk_action_bar.dart`); extracting the size gate behind one would make the whole flow
+  testable. Out of scope for a Dependabot bump.
+
+
 ## §42.2 fault-matrix enforcement audit (2026-07-10) — the remaining rows, precisely
 
 Full audit of the §42.2 matrix vs shipped enforcement (post #791/#792/#793/#795/#797–#799).

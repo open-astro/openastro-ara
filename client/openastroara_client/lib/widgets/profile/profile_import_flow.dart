@@ -28,7 +28,7 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
     return;
   }
 
-  // Pick metadata only (no withData) so we can size-check before reading the
+  // Pick metadata only (no file bytes) so we can size-check before reading the
   // file in — a profile share is a few KB of JSON, so anything large is a
   // mis-pick and we refuse rather than slurp it into memory. The picker itself
   // can throw (e.g. a macOS sandbox / denied-permission PlatformException), not
