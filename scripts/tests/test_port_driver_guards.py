@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executable copy of the port-driver skill's two git-state guards.
+"""Executable copy of the port-driver skill's git-state guards and API-answer probes.
 
 Run from the repo root:
 
@@ -21,7 +21,8 @@ These functions mirror the SKILL.md text; they are not imported by anything.
 between them is the bug this file exists to catch, and the cases below are
 named for the situations that produced them.
 
-No network, no fixtures: each test builds the repository it needs.
+No network, no fixtures: each git-state test builds the repository it needs;
+the probe mirrors are pure functions of what `gh` printed and need none.
 """
 
 from __future__ import annotations
@@ -338,20 +339,99 @@ class ReuseGuard(GitFixture):
         self.assertEqual(reuse_guard(self.repo, "even"), "REUSE")
 
 
+def delete_branch_flag(is_cross_repository_output: str) -> str:
+    """SKILL.md section 3b / pr-checker Step 4: the `$DEL` probe.
+
+        [ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \\
+          && DEL=--delete-branch || DEL=
+
+    Returns "--delete-branch" or "". Only the literal string `false` keeps the
+    flag; `true`, an empty string (API failure) and anything else drop it. The
+    direction matters: inverting the test to `= "true"` would delete a
+    contributor's fork branch on an API blip.
+    """
+    return "--delete-branch" if is_cross_repository_output == "false" else ""
+
+
+def chore_delete_verdict(me: str, rows: list[tuple[str, bool]]) -> str:
+    """Playbook section 22.2: may the driver `push origin --delete chore/<name>`?
+
+    `rows` is what `gh pr list --state all --head chore/<name>
+    --json author,isCrossRepository` returned, as (author, isCrossRepository).
+    Returns "DELETE" or "HELD". Cross-repo rows are a fork's same-named branch
+    and are discarded first; then at least one row must remain and every
+    remaining author must be `me`. An empty `me` (the token has no user, as an
+    app token does) Holds before anything is read.
+    """
+    if not me:
+        return "HELD"
+    authors = sorted({author for author, cross in rows if not cross})
+    if not authors:
+        return "HELD"
+    return "DELETE" if authors == [me] else "HELD"
+
+
+class ProbeMirrors(unittest.TestCase):
+    """The two API-answer probes from #1036, pinned in the fail-safe direction (#1038).
+
+    Unlike the git-state guards these need no repository: each is a pure
+    function of what `gh` printed, so the cases enumerate the outputs.
+    """
+
+    def test_delete_branch_only_on_a_literal_false(self):
+        self.assertEqual(delete_branch_flag("false"), "--delete-branch")
+
+    def test_fork_head_keeps_its_branch(self):
+        self.assertEqual(delete_branch_flag("true"), "")
+
+    def test_api_failure_keeps_the_branch(self):
+        # Empty output: rate limit, auth blip, network. Never delete on a guess.
+        self.assertEqual(delete_branch_flag(""), "")
+
+    def test_garbage_output_keeps_the_branch(self):
+        for junk in ("False", "null", "error: not found", " false"):
+            with self.subTest(output=junk):
+                self.assertEqual(delete_branch_flag(junk), "")
+
+    def test_chore_delete_needs_a_same_repo_pr_of_ours(self):
+        self.assertEqual(chore_delete_verdict("me", [("me", False)]), "DELETE")
+        self.assertEqual(chore_delete_verdict("me", [("me", False), ("me", False)]), "DELETE")
+
+    def test_chore_delete_holds_with_no_pr(self):
+        self.assertEqual(chore_delete_verdict("me", []), "HELD")
+
+    def test_chore_delete_holds_on_a_foreign_or_mixed_author(self):
+        self.assertEqual(chore_delete_verdict("me", [("someone", False)]), "HELD")
+        self.assertEqual(chore_delete_verdict("me", [("me", False), ("someone", False)]), "HELD")
+
+    def test_a_fork_pr_of_the_same_name_does_not_vouch(self):
+        # #1040 item 3: my own fork's chore/foo is not origin's chore/foo.
+        self.assertEqual(chore_delete_verdict("me", [("me", True)]), "HELD")
+        # ...and it does not poison a genuine same-repo match either.
+        self.assertEqual(chore_delete_verdict("me", [("me", False), ("someone", True)]), "DELETE")
+
+    def test_chore_delete_holds_when_the_token_has_no_user(self):
+        # `gh api user --jq .login` prints nothing under an app token.
+        self.assertEqual(chore_delete_verdict("", [("", False)]), "HELD")
+
+
 class MirrorPin(unittest.TestCase):
     """The mirror above is hand-synced with SKILL.md; this makes drift fail (#1030).
 
-    Two sections of the skill are hashed: scenario B's decision list
-    (condition 0 through the end of the D bullet) and the §5 step 2 fence
-    that `reuse_guard`/`retire` mirror. Editing either without touching this
-    file fails the Sanity job, which is the point: drift already happened
+    Three sections of the skill are hashed: scenario B's whole walk (the
+    two-condition shell block through the closing "No OID matched -> B"
+    paragraph), which `scenario_b` mirrors; the §5 step 2 fence, which
+    `reuse_guard`/`retire` mirror; and the reference copy of the §3b `$DEL`
+    probe, whose direction `ProbeMirrors.delete_branch_flag` mirrors. Editing
+    any of them without touching this file fails the Sanity job, which is the
+    point: drift already happened
     once inside #1003 (the skill tested detached-HEAD inside condition 2, the
     mirror tested it first -- C vs D with the suite green) and review, not
     the tests, caught it.
 
-    To update: re-read the changed section, bring `scenario_b` /
-    `reuse_guard` and their cases into line, then paste the new hash the
-    failure message prints. Pasting the hash without the re-read defeats the
+    To update: re-read the changed section, bring its mirror (`scenario_b`,
+    `reuse_guard`/`retire`, or `ProbeMirrors`) and its cases into line, then
+    paste the new hash the failure message prints. Pasting the hash without the re-read defeats the
     test, and there is nothing here that can stop that -- it is a forcing
     function for a human look, not a proof of equivalence.
     """
@@ -365,6 +445,15 @@ class MirrorPin(unittest.TestCase):
             "Two conditions before matching, and they are different questions:",
             "**(C) No PR in flight and there is work to start or continue**",
             '8d8bc816d4656c2d',
+        ),
+        "step_3b_delete_branch_probe": (
+            # The reference copy of the $DEL probe; ProbeMirrors mirrors its
+            # direction, this pin catches an inversion of the text itself.
+            # Starts above the fence so its `text` opener is hashed too: flipping it
+            # back to `shell` (two runnable copies on the squash path, #1040) must trip.
+            "copy below is for reading, not running",
+            "The fail-safe direction of that test is mirrored by `ProbeMirrors`",
+            '198eae1bac6f2615',
         ),
         "step_5_reuse_fence": (
             # From the fence's first statement: the `|| exit 1` rationale in

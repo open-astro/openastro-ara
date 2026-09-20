@@ -425,14 +425,20 @@ Then:
   ```
   **Phase-boundary PR with no tag on its head -> do not merge yet (#1029).** The probe above only
   detects a tag that is already pushed; nothing else in this command pushes one, and under the
-  port-driver's §3b ordering the tag goes on immediately before the merge. So before choosing the
-  method, decide whether this PR closes a phase or sub-phase: read `design/PORT_PROGRESS.md` and the
-  COMMIT-PR-RULES.md sub-split tables, exactly as §3b does. If it does and the probe found no
+  port-driver's §3b ordering the tag goes on immediately before the merge. The question only
+  arises for a `phase/*` or `prep-*` head (#1040; the head name is the `headRefName` Step 1
+  recorded). `prep-*` is included because the `prep-ci` placeholder grows at phase boundaries
+  (0.5p, 4, 11 per playbook §19.1) and a tagged `prep-ci` PR is exactly what §3b's `--merge`
+  rule exists for. A `chore/*`, `rules-*`, contributor or Dependabot PR is never a phase
+  boundary, so for those skip this paragraph rather than stopping on a question that has no
+  answer. For a `phase/*` or `prep-*` head, decide whether this PR closes a phase or
+  sub-phase: read `design/PORT_PROGRESS.md` and the COMMIT-PR-RULES.md sub-split tables, exactly
+  as §3b does. If it does and the probe found no
   `phase-*` tag, run the §3b tag block from `.claude/skills/port-driver/SKILL.md` verbatim —
   `git fetch origin pull/<N>/head`, tag the `headRefOid`, both pre-push verifications, then
   `git push origin <tag>` (the named ref, never `--tags`) — and only then merge with `--merge`.
-  Merging it untagged silently skips §19.1's phase-boundary gate item. If you cannot tell whether
-  it is a boundary, that is ambiguous: **Hard stop** with `Held for human review`.
+  Merging it untagged silently skips §19.1's phase-boundary gate item. If a `phase/*` or `prep-*` PR cannot be
+  placed in the plan, that is ambiguous: **Hard stop** with `Held for human review`.
 
   Then merge. Multi-commit PR landing as one logical change:
   ```bash
