@@ -363,12 +363,12 @@ class MirrorPin(unittest.TestCase):
             # green.
             "Two conditions before matching, and they are different questions:",
             "**(C) No PR in flight and there is work to start or continue**",
-            '5cb3449b39d1bbd4',
+            '8d8bc816d4656c2d',
         ),
         "step_5_reuse_fence": (
             "   # Reuse the branch if it is already there.",
             "   The slash namespace is the convention",
-            '62837b960298902f',
+            '5bd9959a95edf900',
         ),
     }
 

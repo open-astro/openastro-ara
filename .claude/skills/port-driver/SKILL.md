@@ -210,8 +210,10 @@ gh pr list --head "$(git branch --show-current)" --state merged \
    matching test edit leaves the suite green while it pins the *old* rules, so
    the tests then argue against this file. Every revision of these rules so far
    has been wrong in a way only the tests caught. Since #1030 that drift is
-   mechanical: `MirrorPin` in the test file hashes this decision list (from
-   condition 0 to the end of the D bullet) and the §5 step 2 fence, and the
+   mechanical: `MirrorPin` in the test file hashes this whole scenario-B
+   walk -- from "Two conditions before matching" (the shell block included)
+   through the closing "No OID matched → B" paragraph, this paragraph
+   included -- and the §5 step 2 fence, and the
    Sanity job fails until whoever edits either section re-reads the mirror and
    updates the pinned hash -- the failure message says how.
 
@@ -632,7 +634,10 @@ with the next sub-PR rather than getting a PR of its own.
        REF_OID=$(git rev-parse "refs/heads/$B")
        # Empty on an API failure: then nothing matches and the ref is Held,
        # which is the safe direction.
-       merged=$(gh pr list --head "$B" --state merged --json headRefOid --jq '.[].headRefOid')
+       # --base master: "every byte is in master by content" (§19.1) must be
+       # literally true, not true because this repo happens to merge only
+       # there; a same-named fork head merged elsewhere must not authorize it.
+       merged=$(gh pr list --head "$B" --base master --state merged --json headRefOid --jq '.[].headRefOid')
        if [ -n "$REF_OID" ] && printf '%s\n' "$merged" | grep -qx "$REF_OID"; then
          echo "retiring local $B: its head $REF_OID is the merged head of a PR under this name"
          # `|| exit 1` on both: if the opening `checkout master` failed (dirty
