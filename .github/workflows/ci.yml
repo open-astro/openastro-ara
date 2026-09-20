@@ -129,6 +129,9 @@ jobs:
       dotnet: ${{ steps.classify.outputs.dotnet }}
       client: ${{ steps.classify.outputs.client }}
     steps:
+      - name: PROBE (#1041) -- force this job to fail; throwaway PR, never merge
+        run: exit 1
+
       - name: Checkout (no LFS, full history for the merge-base diff)
         # Only a pull_request needs the diff at all; every other event short
         # -circuits to docs_only=false below, so skip the clone entirely.
