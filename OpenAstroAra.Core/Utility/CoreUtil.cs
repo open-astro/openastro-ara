@@ -72,7 +72,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        public static string Title => "N.I.N.A. - Nighttime Imaging 'N' Astronomy";
+        public static string Title => "OpenAstro Ara";
 
         public static string UserAgent => $"N.I.N.A./{Version} ({Environment.OSVersion}; {(Environment.Is64BitOperatingSystem ? "Win64" : "Win32")}; {(Environment.Is64BitProcess ? "x64" : "x86")})";
         public static bool DebugMode { get; set; }

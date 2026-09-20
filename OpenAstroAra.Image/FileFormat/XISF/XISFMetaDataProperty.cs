@@ -20,6 +20,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             public static readonly string Namespace = "XISF:";
             public static readonly string[] CreationTime = { Namespace + nameof(CreationTime), "TimePoint" };
             public static readonly string[] CreatorApplication = { Namespace + nameof(CreatorApplication), "String" };
+            public static readonly string[] BlockAlignmentSize = { Namespace + nameof(BlockAlignmentSize), "UInt16" };
         }
     }
 }

@@ -139,6 +139,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     if (!colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("CIELab", StringComparison.OrdinalIgnoreCase)) {
                         throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported colorSpace '{0}'", colorSpace));
                     }
+                    // A colour space implies a channel count (Gray 1, RGB and CIELab 3); a mismatch is
+                    // a malformed file rather than something to read as whichever it turns out to be.
+                    int channelsForColorSpace = colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
+                    if (channels != channelsForColorSpace) {
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: colorSpace {0} implies {1} channel(s) but geometry declares {2}", colorSpace, channelsForColorSpace, channels));
+                    }
                     // The image model is single-channel (an OSC frame is a Bayered mono array). A
                     // multi-channel block would otherwise be handed to a WxH image as a 3*W*H array,
                     // so say so instead of producing a scrambled picture (#996, remaining scope).
@@ -607,7 +613,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                                 int written;
                                 try {
                                     written = decompressor.Unwrap(raw, outArray);
-                                } catch (Exception ex) when (ex is ZstdSharp.ZstdException or ArgumentException or InsufficientMemoryException) {
+                                } catch (Exception ex) when (ex is ZstdSharp.ZstdException or ArgumentOutOfRangeException or InsufficientMemoryException) {
                                     // Which of these fires for an oversized frame depends on the
                                     // ZstdSharp build's pre-check; all mean the same malformed input.
                                     throw new InvalidDataException("XISF: zstd frame is malformed or larger than its declared uncompressed size", ex);
