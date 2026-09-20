@@ -410,9 +410,10 @@ there is exactly one runnable copy per merge path):
   && DEL=--delete-branch || DEL=
 ```
 
-The fail-safe direction of that test is pinned by `ProbeMirrors` in
+The fail-safe direction of that test is mirrored by `ProbeMirrors` in
 `scripts/tests/test_port_driver_guards.py` (#1038): `false` keeps the flag,
-`true`, empty and garbage all drop it.
+`true`, empty and garbage all drop it. The fence above is hash-pinned by
+`MirrorPin` so an inversion here cannot leave the suite green.
 
 Then pick the merge method by the PR's commit history — **except at a phase
 boundary, where the tag decides it**:

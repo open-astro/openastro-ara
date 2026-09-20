@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executable copy of the port-driver skill's two git-state guards.
+"""Executable copy of the port-driver skill's git-state guards and API-answer probes.
 
 Run from the repo root:
 
@@ -21,7 +21,8 @@ These functions mirror the SKILL.md text; they are not imported by anything.
 between them is the bug this file exists to catch, and the cases below are
 named for the situations that produced them.
 
-No network, no fixtures: each test builds the repository it needs.
+No network, no fixtures: each git-state test builds the repository it needs;
+the probe mirrors are pure functions of what `gh` printed and need none.
 """
 
 from __future__ import annotations
@@ -441,6 +442,13 @@ class MirrorPin(unittest.TestCase):
             "Two conditions before matching, and they are different questions:",
             "**(C) No PR in flight and there is work to start or continue**",
             '8d8bc816d4656c2d',
+        ),
+        "step_3b_delete_branch_probe": (
+            # The reference copy of the $DEL probe; ProbeMirrors mirrors its
+            # direction, this pin catches an inversion of the text itself.
+            "# Fails safe: an empty or errored probe is != \"false\", so the flag is omitted.",
+            "The fail-safe direction of that test is mirrored by `ProbeMirrors`",
+            '615880f074438b0b',
         ),
         "step_5_reuse_fence": (
             # From the fence's first statement: the `|| exit 1` rationale in
