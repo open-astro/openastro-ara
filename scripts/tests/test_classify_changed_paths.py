@@ -549,7 +549,15 @@ class WorkflowWiringTest(unittest.TestCase):
             with self.subTest(recipe=recipe.name):
                 text = recipe.read_text()
                 self.assertIn(needle, text)
-                self.assertNotIn("git diff --no-renames --name-only", text)
+                # Only the fenced recipe blocks are held to this; a prose
+                # mention of the old form elsewhere in the file is fine.
+                fences = [
+                    f for f in text.split("```")[1::2]
+                    if "classify-changed-paths.py" in f
+                ]
+                self.assertTrue(fences, "no fenced recipe block found")
+                for fence in fences:
+                    self.assertNotIn("git diff --no-renames --name-only", fence)
 
 
 class InertTreesTest(unittest.TestCase):
