@@ -219,9 +219,17 @@ void main() {
       var sweepStarts = 0;
       final mdnsHang = StreamController<AraServer>();
       addTearDown(mdnsHang.close);
+      // The healthy browse answers after a real-world delay, i.e. AFTER the
+      // join strand has replayed the finished run and completed: the pass
+      // must still emit the mDNS record (a strand that already finished is
+      // not dropped a second time).
+      Stream<AraServer> lateAnswer() async* {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        yield _s('10.0.0.10');
+      }
+
       final svc = ServerDiscoveryService(
-        mdnsSource: () =>
-            ++mdnsCalls == 1 ? mdnsHang.stream : Stream.value(_s('10.0.0.10')),
+        mdnsSource: () => ++mdnsCalls == 1 ? mdnsHang.stream : lateAnswer(),
         sweepSource: () {
           sweepStarts++;
           return const Stream<AraServer>.empty();

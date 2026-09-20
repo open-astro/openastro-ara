@@ -97,10 +97,16 @@ class ServerDiscoveryService {
       if (sweepStarted || cancelled || controller.isClosed) return;
       sweepStarted = true;
       pending++;
+      // Clear the handle when the strand finishes on its own: a later
+      // dropSweepStrands() must not count a finished strand as pending
+      // again, or the pass closes before the mDNS record is emitted.
       sweepSub = _sharedSweep().listen(
         emit,
         onError: (Object _) {},
-        onDone: done,
+        onDone: () {
+          sweepSub = null;
+          done();
+        },
       );
     }
 
@@ -141,7 +147,14 @@ class ServerDiscoveryService {
       // how the previous pass missed its own results. This only attaches or
       // replays; spawning a fresh sweep stays gated on THIS pass's mDNS.
       pending++;
-      joinSub = _joinSweep().listen(emit, onError: (Object _) {}, onDone: done);
+      joinSub = _joinSweep().listen(
+        emit,
+        onError: (Object _) {},
+        onDone: () {
+          joinSub = null;
+          done();
+        },
+      );
     }
     grace = Timer(mdnsGracePeriod, () {
       if (!sawMdnsResult) maybeStartSweep();
@@ -244,7 +257,8 @@ class ServerDiscoveryService {
     final run = _sweepRun;
     if (run == null || !_sweepIsCurrent) return;
     if (run.finished) {
-      yield* Stream.fromIterable(run.found);
+      // Snapshot: a ⟳ Rescan landing mid-replay clears run.found.
+      yield* Stream.fromIterable(List.of(run.found));
     } else {
       yield* run.attach();
     }
@@ -260,7 +274,7 @@ class ServerDiscoveryService {
   Stream<AraServer> _sharedSweep() async* {
     var run = _sweepRun;
     if (run != null && run.finishedAt != null) {
-      if (_sweepIsCurrent) yield* Stream.fromIterable(run.found);
+      if (_sweepIsCurrent) yield* Stream.fromIterable(List.of(run.found));
       run = null;
     }
     if (run == null) {
@@ -446,7 +460,7 @@ class _SweepRun {
       onListen: () {
         _listeners++;
         _abandonTimer?.cancel();
-        found.forEach(out.add);
+        List.of(found).forEach(out.add);
         if (finished) {
           unawaited(out.close());
           return;
