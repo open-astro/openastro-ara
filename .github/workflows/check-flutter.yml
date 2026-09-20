@@ -312,17 +312,37 @@ jobs:
           # would silently supersede nothing once the repo carries 30+ open
           # PRs, which is exactly the accumulation this is here to prevent.
           #
-          # The selector matches `ci/flutter-<version>` and not the bare
-          # prefix, so a hand-made branch like `ci/flutter-pin-fixup` is never
-          # commented on, closed and deleted.
+          # The selector is anchored to a full `ci/flutter-<major>.<minor>.<patch>`,
+          # which is exactly what check-flutter-release.py generates (its
+          # parse_version fullmatches `\d+\.\d+\.\d+`, so LATEST can never be
+          # anything else). A prefix match would be wider than the namespace
+          # the paragraph above justifies: `ci/flutter-pin-fixup`,
+          # `ci/flutter-3.x-triage` and `ci/flutter-3.48.0-fixup` are all
+          # hand-made names that must never be closed and branch-deleted.
           new_pr="$(gh pr list --head "$BRANCH" --state open --json number --jq 'first(.[].number)' || true)"
           if [ -n "$new_pr" ]; then
             { gh pr list --state open --limit 100 --json number,headRefName \
-                --jq '.[] | select(.headRefName | test("^ci/flutter-[0-9]+\\.")) | .number' || true; } \
+                --jq '.[] | select(.headRefName | test("^ci/flutter-[0-9]+\\.[0-9]+\\.[0-9]+$")) | .number' || true; } \
               | while read -r old_pr; do
                   [ "$old_pr" = "$new_pr" ] && continue
                   echo "Superseding #$old_pr with #$new_pr"
-                  gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; nothing here is lost, the newer PR does the same job against the newer release." || true
-                  gh pr close "$old_pr" --delete-branch || true
+                  # An untouched bump PR carries exactly the one commit this
+                  # workflow pushed, and deleting its branch is free — it is
+                  # also what stops a superseded branch becoming the
+                  # "branch on origin with no open PR" wedge fixed in #1005.
+                  # But supersede was chosen over skip-while-open precisely so
+                  # that a *contentious* bump stays visible, and someone
+                  # investigating a breakage pushes fix commits onto that
+                  # branch. Deleting it would throw that work behind a
+                  # Restore-branch button, so a branch with extra commits is
+                  # closed and kept.
+                  commits="$(gh pr view "$old_pr" --json commits --jq '.commits | length' || echo 2)"
+                  if [ "$commits" = 1 ]; then
+                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal; this PR was the workflow's own untouched commit, so nothing here is lost — the newer PR does the same job against the newer release." || true
+                    gh pr close "$old_pr" --delete-branch || true
+                  else
+                    gh pr comment "$old_pr" --body "Superseded by #${new_pr} — Flutter stable has moved on to ${LATEST}. Closing this so there is one live bump proposal. **This branch carries ${commits} commits, so it is being kept, not deleted** — if any of that work is still wanted, reopen this PR or cherry-pick onto #${new_pr}." || true
+                    gh pr close "$old_pr" || true
+                  fi
                 done
           fi

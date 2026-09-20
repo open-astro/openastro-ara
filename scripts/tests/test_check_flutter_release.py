@@ -513,28 +513,82 @@ class SupersedeSelectorTest(unittest.TestCase):
         return m.group(1)
 
     def _jq(self, selector: str, payload: str) -> str:
-        import json
+        """Run `selector` through every jq engine present on this machine.
+
+        Production runs these through the gojq embedded in `gh --jq` (Go
+        `regexp`); a developer box has oniguruma `jq`. The selectors are
+        deliberately written to the intersection of the two -- character
+        classes, `+`, anchors, escaped dots, nothing engine-specific -- so
+        where both are installed this asserts they agree, rather than
+        trusting whichever one happens to be on PATH.
+        """
         import subprocess
 
-        out = subprocess.run(
-            ["jq", "-r", selector],
-            input=payload,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        del json
-        return out.stdout.strip()
+        outs = []
+        for engine in ("jq", "gojq"):
+            if shutil.which(engine) is None:
+                continue
+            proc = subprocess.run(
+                [engine, "-r", selector],
+                input=payload,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            outs.append((engine, proc.stdout.strip()))
+        self.assertTrue(outs, "no jq engine available")
+        for engine, out in outs[1:]:
+            self.assertEqual(
+                out, outs[0][1], f"{engine} and {outs[0][0]} disagree on {selector!r}"
+            )
+        return outs[0][1]
 
     def test_only_versioned_bump_branches_are_superseded(self):
+        # Every non-match here is a branch a human could plausibly create in
+        # the ci/flutter- namespace. Matching one would comment on it, close
+        # it and delete its branch, so the anchor has to be the full version.
         selector = self._selector(r"\.\[\] \| select")
         payload = """[
           {"number": 1, "headRefName": "ci/flutter-3.48.0"},
           {"number": 2, "headRefName": "ci/flutter-pin-fixup"},
           {"number": 3, "headRefName": "ci/flutter-3.48.1"},
-          {"number": 4, "headRefName": "fix/unrelated"}
+          {"number": 4, "headRefName": "fix/unrelated"},
+          {"number": 5, "headRefName": "ci/flutter-3.48.0-fixup"},
+          {"number": 6, "headRefName": "ci/flutter-3.x-triage"},
+          {"number": 7, "headRefName": "ci/flutter-3.48"},
+          {"number": 8, "headRefName": "ci/flutter-10.2.30"}
         ]"""
-        self.assertEqual(self._jq(selector, payload).split(), ["1", "3"])
+        self.assertEqual(self._jq(selector, payload).split(), ["1", "3", "8"])
+
+    def test_the_selector_matches_what_the_script_actually_generates(self):
+        # The one pairing that matters: the branch name check-flutter-release.py
+        # emits must be superseded. Derived from the script, not retyped, so a
+        # change to either side fails here rather than on the next live bump.
+        import re
+
+        src = (REPO_ROOT / "scripts" / "check-flutter-release.py").read_text()
+        m = re.search(r'branch=f"(ci/flutter-\{[a-z_]+\})"', src)
+        self.assertIsNotNone(m, "check-flutter-release.py no longer builds a branch= f-string")
+        generated = m.group(1).replace("{latest}", "3.48.1")
+        self.assertNotIn("{", generated, "unexpected placeholder in the branch template")
+        selector = self._selector(r"\.\[\] \| select")
+        payload = '[{"number": 1, "headRefName": "%s"}]' % generated
+        self.assertEqual(self._jq(selector, payload), "1")
+
+    def test_a_touched_bump_branch_is_closed_but_not_deleted(self):
+        # supersede was chosen over skip-while-open so a contentious bump stays
+        # visible; someone investigating a breakage pushes onto that branch, and
+        # deleting it would put that work behind a Restore-branch button.
+        marker = 'if [ "$commits" = 1 ]; then'
+        self.assertIn(marker, self.text)
+        one_commit, many_commits = self.text.split(marker, 1)[1].split("else", 1)
+        self.assertIn('gh pr close "$old_pr" --delete-branch', one_commit)
+        self.assertNotIn("--delete-branch", many_commits.split("fi", 1)[0])
+
+    def test_an_unreadable_commit_count_keeps_the_branch(self):
+        # `|| echo 2`, not `|| echo 1`: if the count cannot be read, the safe
+        # side is keeping a branch that could have been deleted.
+        self.assertIn("|| echo 2)", self.text)
 
     def test_new_pr_selector_is_empty_when_nothing_matches(self):
         # `.[0].number` would print a literal "null" here, `[ -n ]` would pass,
