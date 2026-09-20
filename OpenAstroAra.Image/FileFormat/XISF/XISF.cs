@@ -129,6 +129,24 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     long expectedSamples = (long)width * height * channels;
 
+                    // Spec attributes that shape the block. Both are optional with defaults; a value
+                    // outside the spec's vocabulary is a malformed file, not something to guess at.
+                    string pixelStorage = imageElement.Attribute("pixelStorage")?.Value ?? "Planar";
+                    if (!pixelStorage.Equals("Planar", StringComparison.OrdinalIgnoreCase) && !pixelStorage.Equals("Normal", StringComparison.OrdinalIgnoreCase)) {
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported pixelStorage '{0}'", pixelStorage));
+                    }
+                    string colorSpace = imageElement.Attribute("colorSpace")?.Value ?? "Gray";
+                    if (!colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("CIELab", StringComparison.OrdinalIgnoreCase)) {
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported colorSpace '{0}'", colorSpace));
+                    }
+                    // The image model is single-channel (an OSC frame is a Bayered mono array). A
+                    // multi-channel block would otherwise be handed to a WxH image as a 3*W*H array,
+                    // so say so instead of producing a scrambled picture (#996, remaining scope).
+                    if (channels != 1) {
+                        Logger.Error($"XISF: {channels}-channel {colorSpace} image; only single-channel images are supported");
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: {0}-channel images are not supported yet (colorSpace={1}, pixelStorage={2})", channels, colorSpace, pixelStorage));
+                    }
+
                     Logger.Debug($"XISF: File geometry: width={width}, height={height}, channels={channels}");
 
                     /*
@@ -143,6 +161,20 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     } catch (Exception ex) {
                         Logger.Error($"XISF: Could not find image data type: {ex}");
                         throw new InvalidDataException("Could not find XISF image data type");
+                    }
+
+                    // Floating-point samples are nominally in [0, 1]; `bounds="lo:hi"` declares the
+                    // range actually used, and the spec makes it mandatory for float formats. Integer
+                    // formats ignore it (their range is the type's).
+                    double boundsLow = 0d, boundsHigh = 1d;
+                    if (imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
+                        string[] b = boundsAttribute.Value.Split(':');
+                        if (b.Length != 2
+                            || !double.TryParse(b[0], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsLow)
+                            || !double.TryParse(b[1], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsHigh)
+                            || !(boundsHigh > boundsLow)) {
+                            throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: malformed bounds '{0}'", boundsAttribute.Value));
+                        }
                     }
 
                     // Expected number of raw sample bytes for this image. Used to bound decompression
@@ -196,6 +228,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         if (imageElement.Attribute("checksum") != null) {
                             // [hash type]:[hash string]
                             cksum = RequiredAttribute(imageElement, "checksum").ToLowerInvariant().Split(':');
+                            if (cksum.Length != 2 || string.IsNullOrEmpty(cksum[1])) {
+                                throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedChecksum"], string.Join(':', cksum)));
+                            }
 
                             if (!string.IsNullOrEmpty(cksum[0])) {
                                 cksumType = GetChecksumType(cksum[0]);
@@ -246,7 +281,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     // Same pipeline for every block location: the spec's checksum and compression
                     // attributes describe the block wherever it is stored.
-                    var img = DecodeBlock(raw, sampleFormat, compressionInfo, cksumType, cksumHash, expectedSamples);
+                    var img = DecodeBlock(raw, sampleFormat, compressionInfo, cksumType, cksumHash, expectedSamples, boundsLow, boundsHigh);
                     BaseImageData imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
 
                     return imageData;
@@ -308,7 +343,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// error, not a warning: a block that fails its own integrity check must never be handed on
         /// as pixels (design/AUDIT.MD #H3).
         /// </summary>
-        private static ushort[] DecodeBlock(byte[] raw, string sampleFormat, XISFCompressionInfo compressionInfo, XISFChecksumType cksumType, string cksumHash, long expectedSamples) {
+        private static ushort[] DecodeBlock(byte[] raw, string sampleFormat, XISFCompressionInfo compressionInfo, XISFChecksumType cksumType, string cksumHash, long expectedSamples, double boundsLow, double boundsHigh) {
             if (cksumType != XISFChecksumType.NONE) {
                 switch (VerifyChecksum(raw, cksumType, cksumHash)) {
                     case ChecksumVerdict.Mismatch:
@@ -336,7 +371,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
             }
 
-            var img = GetConverter(sampleFormat).Convert(raw);
+            var img = GetConverter(sampleFormat, boundsLow, boundsHigh).Convert(raw);
 
             if (img.LongLength != expectedSamples) {
                 Logger.Error($"XISF: decoded sample count {img.LongLength} does not match geometry {expectedSamples}");
@@ -358,7 +393,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
         }
 
-        private static IDataConverter GetConverter(string sampleFormat) {
+        private static IDataConverter GetConverter(string sampleFormat, double boundsLow = 0d, double boundsHigh = 1d) {
             switch (sampleFormat) {
                 case "UInt8":
                     return new UInt8Converter();
@@ -373,10 +408,10 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     return new UInt64Converter();
 
                 case "Float32":
-                    return new Float32Converter();
+                    return new Float32Converter(boundsLow, boundsHigh);
 
                 case "Float64":
-                    return new Float64Converter();
+                    return new Float64Converter(boundsLow, boundsHigh);
 
                 default: throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
             }
@@ -392,8 +427,17 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         private static XISFCompressionInfo GetCompressionType(string[] compression) {
             string codec = compression[0];
 
+            // `codec:uncompressedSize[:itemSize]` -- a truncated attribute is a malformed file and
+            // must read as one, not as an index exception escaping Load.
+            bool shuffled = codec.EndsWith("+sh", StringComparison.Ordinal);
+            if (compression.Length < (shuffled ? 3 : 2)
+                || !int.TryParse(compression[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int uncompressedSize)
+                || (shuffled && !int.TryParse(compression[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out _))) {
+                throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedCompression"], string.Join(':', compression)));
+            }
+
             XISFCompressionInfo info = new XISFCompressionInfo();
-            info.UncompressedSize = int.Parse(compression[1], CultureInfo.InvariantCulture);
+            info.UncompressedSize = uncompressedSize;
 
             switch (codec) {
                 case "lz4":
@@ -561,7 +605,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
         public void AddAttachedImage(ushort[] data, FileSaveInfo fileSaveInfo) => AttachData(new XISFData(data, fileSaveInfo));
 
-        public void AddAttachedImageInt(int[] data, FileSaveInfo fileSaveInfo) => AttachData(new XISFData(data, fileSaveInfo));
+        /// <summary>
+        /// Attach integer ADU samples as a UInt32 block. <paramref name="bitDepth"/> is the camera's,
+        /// so the values can be scaled onto the spec's full [0, 2^32-1] range (see XISFData).
+        /// </summary>
+        public void AddAttachedImageInt(int[] data, int bitDepth, FileSaveInfo fileSaveInfo) => AttachData(new XISFData(data, bitDepth, fileSaveInfo));
 
         /// <summary>
         /// Records the prepared block in the header: checksum and compression attributes, then a
@@ -617,6 +665,22 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <returns></returns>
         /// <remarks>https://pixinsight.com/doc/docs/XISF-1.0-spec/XISF-1.0-spec.html#monolithic_xisf_file</remarks>
         public bool Save(Stream s) {
+            // Everything up to the data block is staged in memory, so a header/offset inconsistency
+            // throws before a single byte reaches the caller's stream rather than after a partial
+            // header has been written to a FileMode.Create file.
+            using var staged = new MemoryStream();
+            WriteHeaderAndPadding(staged);
+            staged.Position = 0;
+            staged.CopyTo(s);
+
+            if (Data != null) {
+                Data.Save(s);
+            }
+
+            return true;
+        }
+
+        private void WriteHeaderAndPadding(Stream s) {
             // XISF0100
             s.Write(xisfSignature, 0, xisfSignature.Length);
 
@@ -645,12 +709,6 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             for (int i = 0; i < remainingBlockPadding; i++) {
                 s.WriteByte(0x0);
             }
-
-            if (Data != null) {
-                Data.Save(s);
-            }
-
-            return true;
         }
     }
 }

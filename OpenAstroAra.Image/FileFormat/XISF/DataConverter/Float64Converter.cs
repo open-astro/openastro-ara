@@ -22,6 +22,16 @@ namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
     /// XISF Float64 samples, handled exactly like Float32: clamped to [0, 1], NaN reads as 0.
     /// </summary>
     internal sealed class Float64Converter : IDataConverter {
+        private readonly double _low;
+        private readonly double _range;
+
+        /// <param name="boundsLow">The `bounds` attribute's lower value (spec default 0).</param>
+        /// <param name="boundsHigh">Its upper value (spec default 1); must exceed boundsLow.</param>
+        public Float64Converter(double boundsLow = 0d, double boundsHigh = 1d) {
+            if (!(boundsHigh > boundsLow)) { throw new ArgumentOutOfRangeException(nameof(boundsHigh)); }
+            _low = boundsLow;
+            _range = boundsHigh - boundsLow;
+        }
 
         public ushort[] Convert(byte[] rawData) {
             ArgumentNullException.ThrowIfNull(rawData);
@@ -29,7 +39,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
             var span = rawData.AsSpan();
             for (var i = 0; i < data.Length; i++) {
                 double v = BinaryPrimitives.ReadDoubleLittleEndian(span.Slice(i * 8, 8));
-                data[i] = FloatSample.ToUInt16(v);
+                data[i] = FloatSample.ToUInt16((v - _low) / _range);
             }
             return data;
         }

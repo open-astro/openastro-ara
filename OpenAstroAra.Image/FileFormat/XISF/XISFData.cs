@@ -95,7 +95,23 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
         }
 
-        public XISFData(int[] data, FileSaveInfo fileSaveInfo) : this(Array.ConvertAll(data, item => (uint)item), fileSaveInfo) {
+        /// <summary>
+        /// Integer ADU samples from a <paramref name="bitDepth"/>-bit camera, scaled onto the spec's
+        /// UInt32 range [0, 2^32-1] so a spec-correct reader (ours included) maps them back to the
+        /// same ADU. Writing raw ADU into a UInt32 block, as this used to, read back as ~0.
+        /// </summary>
+        public XISFData(int[] data, int bitDepth, FileSaveInfo fileSaveInfo) : this(ScaleToUInt32(data, bitDepth), fileSaveInfo) {
+        }
+
+        private static uint[] ScaleToUInt32(int[] data, int bitDepth) {
+            if (bitDepth < 1 || bitDepth > 32) { throw new ArgumentOutOfRangeException(nameof(bitDepth)); }
+            double max = Math.Pow(2, bitDepth) - 1;
+            var scaled = new uint[data.Length];
+            for (int i = 0; i < data.Length; i++) {
+                double v = Math.Clamp(data[i], 0, max);
+                scaled[i] = (uint)Math.Round(v / max * uint.MaxValue);
+            }
+            return scaled;
         }
 
         public XISFData(uint[] data, FileSaveInfo fileSaveInfo) {
