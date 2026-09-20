@@ -526,12 +526,19 @@ class WorkflowWiringTest(unittest.TestCase):
         classify = block.split("- name: Classify", 1)[1]
         self.assertRegex(checkout, r"\n        continue-on-error: true")
         self.assertRegex(classify, r"\n        continue-on-error: true")
-        # The clone's own timeout must sit under the job's, or a wedged
-        # fetch fails the job instead of the (continued) step.
+        # Each step's own timeout must sit under the job's, or a hang fails
+        # the job instead of the (continued) step. The job timeout is read
+        # from the job header (between `name: Changed paths` and `steps:`),
+        # not "the first 4-space timeout in the block", so a reorder cannot
+        # pick a different key.
         import re
-        job_t = int(re.search(r"\n    timeout-minutes: (\d+)", block).group(1))
-        step_t = int(re.search(r"\n        timeout-minutes: (\d+)", checkout).group(1))
-        self.assertLess(step_t, job_t)
+        header = block.split("name: Changed paths", 1)[1].split("\n    steps:", 1)[0]
+        job_t = int(re.search(r"\n    timeout-minutes: (\d+)", header).group(1))
+        for name, step in (("checkout", checkout), ("classify", classify)):
+            with self.subTest(step=name):
+                m = re.search(r"\n        timeout-minutes: (\d+)", step)
+                self.assertIsNotNone(m, f"{name} step has no timeout-minutes")
+                self.assertLess(int(m.group(1)), job_t)
 
     def test_the_diff_disables_path_quoting(self):
         # #1024: a quoted non-ASCII path misses every prefix rule (see
@@ -574,11 +581,23 @@ class InertTreesTest(unittest.TestCase):
         ".md",
         ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
     }
-    # Exact paths that are inert despite their extension. GitHub's issue
-    # chooser config is read by nothing but github.com; pre-allowed so adding
-    # it does not red the required Sanity context on an unrelated PR (#1044
-    # tracks a per-prefix allowance if this list grows).
-    INERT_BY_PATH = {".github/ISSUE_TEMPLATE/config.yml"}
+    # Per-prefix additions (#1044). Only the prefix named gets the extra
+    # extension, so `design/` and `docs/` stay prose-only however this grows.
+    # `.github/ISSUE_TEMPLATE/` may hold `.yml`: GitHub's issue-chooser
+    # `config.yml` and issue-form templates are read by nothing but
+    # github.com, and nothing under that directory can be a workflow or a
+    # composite action (those live in workflows/ and actions/).
+    EXTRA_BY_PREFIX = {
+        ".github/ISSUE_TEMPLATE/": {".yml", ".yaml"},
+    }
+
+    @classmethod
+    def allowed(cls, path: str) -> set:
+        exts = set(cls.PROSE_OR_IMAGE)
+        for prefix, extra in cls.EXTRA_BY_PREFIX.items():
+            if path.startswith(prefix):
+                exts |= extra
+        return exts
 
     @classmethod
     def setUpClass(cls):
@@ -597,33 +616,62 @@ class InertTreesTest(unittest.TestCase):
     def test_inert_trees_hold_only_prose_or_images(self):
         offenders = sorted(
             f for f in self.files
-            if Path(f).suffix.lower() not in self.PROSE_OR_IMAGE
-            and f not in self.INERT_BY_PATH
+            if Path(f).suffix.lower() not in self.allowed(f)
         )
         self.assertEqual(
             offenders, [],
             "a non-prose file under an INERT_DIRS prefix would be skipped by CI. "
             "Either classify it in scripts/classify-changed-paths.py (drop the prefix "
             "from INERT_DIRS, or add a rule for the path), or -- if the extension "
-            "provably cannot be a build input -- add it to PROSE_OR_IMAGE with a reason",
+            "provably cannot be a build input -- add it to PROSE_OR_IMAGE (or to "
+            "EXTRA_BY_PREFIX for one directory only) with a reason",
         )
+
+    def test_every_extra_by_prefix_key_is_an_inert_dir(self):
+        # A per-prefix allowance for a directory the classifier does not
+        # treat as inert would be dead text at best and misleading at worst.
+        for prefix in self.EXTRA_BY_PREFIX:
+            with self.subTest(prefix=prefix):
+                self.assertIn(prefix, self.m.INERT_DIRS)
+
+    def test_the_per_prefix_allowance_does_not_leak(self):
+        # `.yml` is allowed under ISSUE_TEMPLATE/ only; the same name under
+        # design/ or docs/ would be a build input nobody classified.
+        self.assertIn(".yml", self.allowed(".github/ISSUE_TEMPLATE/config.yml"))
+        self.assertNotIn(".yml", self.allowed("design/something.yml"))
+        self.assertNotIn(".yml", self.allowed("docs/something.yml"))
+        self.assertNotIn(".yml", self.allowed(".claude/settings.yml"))
 
     def test_codeql_paths_ignore_mirrors_inert_dirs(self):
         # #1022: codeql.yml skips prose-only PRs with a workflow-level
         # paths-ignore (safe there: it is not a required context). Its list
         # must not drift from the classifier's idea of "inert".
-        text = CODEQL.read_text()
-        head = text.split("  pull_request:\n", 1)[1].split("  schedule:", 1)[0]
+        # Parsed, not string-split, so the order of the `on:` keys is not
+        # part of what is pinned (#1044). PyYAML ships on the ubuntu runner
+        # image the Sanity job uses; a missing module is a loud failure here,
+        # never a silent skip.
+        import yaml  # noqa: PLC0415 - fail loudly if the runner lacks it
+
+        doc = yaml.safe_load(CODEQL.read_text())
+        # YAML 1.1 reads a bare `on` as boolean True; PyYAML does exactly that.
+        on = doc.get("on", doc.get(True))
+        self.assertIsNotNone(on, "no `on:` block in codeql.yml")
+        ignore = (on.get("pull_request") or {}).get("paths-ignore") or []
         for prefix in self.m.INERT_DIRS:
             with self.subTest(prefix=prefix):
-                self.assertIn(f"- '{prefix}**'", head)
+                self.assertIn(f"{prefix}**", ignore)
         # Wider than is_docs_path on purpose: a nested *.md (the Alpaca
         # SIMULATORS_VERSION.md fixture) is a ci.yml input but never a C#
         # CodeQL input, so codeql.yml may ignore every *.md.
-        self.assertIn("- '**.md'", head)
-        # Only pull_request is filtered: default-branch alerts come from push.
-        push = text.split("  push:\n", 1)[1].split("  pull_request:", 1)[0]
-        self.assertNotIn("paths", push)
+        self.assertIn("**.md", ignore)
+        # Only pull_request is filtered: default-branch alerts come from push
+        # and the weekly schedule.
+        for trigger in ("push", "schedule"):
+            with self.subTest(trigger=trigger):
+                cfg = on.get(trigger)
+                if isinstance(cfg, dict):
+                    self.assertNotIn("paths", cfg)
+                    self.assertNotIn("paths-ignore", cfg)
 
 
 if __name__ == "__main__":

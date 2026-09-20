@@ -150,6 +150,7 @@ jobs:
 
       - name: Classify changed paths
         id: classify
+        timeout-minutes: 1  # a merge-base + diff + one Python call; under the job's 5 so a hang is a continued step, not a failed job (#1044)
         continue-on-error: true  # belt and braces with the ERR trap: an exit the trap misses leaves empty outputs, which every consumer treats as "run everything" (#1024)
         env:
           # Via env, not ${{ }} interpolation into the script body — zizmor
