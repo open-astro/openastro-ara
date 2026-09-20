@@ -497,8 +497,10 @@ class SupersedeSelectorTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if shutil.which("jq") is None:
-            raise unittest.SkipTest("jq is not installed")
+        # No jq guard here. Four of these cases assert on the shape of the
+        # workflow text and never invoke jq at all; skipping the whole class
+        # on a box without jq would silently drop them. `_jq` skips per-test
+        # instead, so the shape guards stay live everywhere.
         cls.text = cls.WORKFLOW.read_text()
 
     def _selector(self, marker: str) -> str:
@@ -541,7 +543,8 @@ class SupersedeSelectorTest(unittest.TestCase):
                 check=True,
             )
             outs.append((engine, proc.stdout.strip()))
-        self.assertTrue(outs, "no jq engine available")
+        if not outs:
+            raise unittest.SkipTest("no jq engine on PATH")
         for engine, out in outs[1:]:
             self.assertEqual(
                 out, outs[0][1], f"{engine} and {outs[0][0]} disagree on {selector!r}"
@@ -676,8 +679,11 @@ class SupersedeSelectorTest(unittest.TestCase):
         import subprocess
         import textwrap
 
+        # r""" matters: without it the `\n`s below become real newlines, the
+        # resulting zero-indent lines make dedent's common prefix "", and the
+        # dedent silently does nothing while reading as if it does.
         script = textwrap.dedent(
-            """
+            r"""
             drains_stdin() { cat > /dev/null; }
             printf '1\n2\n3\n' | while read -r old_pr; do
               echo "$old_pr"

@@ -1765,3 +1765,10 @@ One out-of-scope note from #1017's approval, not widened into that PR:
   oniguruma `jq` and not the `gojq` embedded in `gh --jq`. So CI only ever
   exercises the engine production does *not* use. Installing `gojq` in the
   sanity job makes the guard real; left out of #1017 because it edits ci.yml.
+- **Pre-existing:** the `existing` guard at `.github/workflows/check-flutter.yml:89`
+  runs `gh pr list --head "$BRANCH" --state open --json number` with no
+  `isCrossRepository` filter — the same gap #1017 closed on the two calls below
+  it. A fork PR whose head branch happened to be named `ci/flutter-<latest>`
+  would make the guard read "already proposed" and the whole run go quiet,
+  which is the #997 failure mode the watcher exists to prevent. One-line fix,
+  out of #1017's stated scope.

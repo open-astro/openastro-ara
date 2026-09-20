@@ -338,10 +338,15 @@ jobs:
                   [ "$old_pr" = "$new_pr" ] && continue
                   echo "Superseding #$old_pr with #$new_pr"
                   # An untouched bump PR carries exactly the one commit this
-                  # workflow pushed, and deleting its branch is free — it is
-                  # also what stops a superseded branch becoming the
-                  # "branch on origin with no open PR" wedge fixed in #1005.
-                  # But supersede was chosen over skip-while-open precisely so
+                  # workflow pushed, and deleting its branch is free: nothing
+                  # in it is not also in the newer PR. (It is NOT load-bearing
+                  # for the #1005 "branch on origin with no open PR" wedge —
+                  # the `existing` guard above keys on the *current* version's
+                  # branch name, which moves with stable, so a kept
+                  # `ci/flutter-3.48.0` can never wedge a later run for
+                  # 3.48.2. Do not let that rationale argue for deleting a
+                  # branch that should be kept.)
+                  # Supersede was chosen over skip-while-open precisely so
                   # that a *contentious* bump stays visible, and someone
                   # investigating a breakage pushes fix commits onto that
                   # branch. Deleting it would throw that work behind a
