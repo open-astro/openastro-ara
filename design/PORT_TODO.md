@@ -25,6 +25,14 @@ the other design docs.
 - `AndroidManifest.xml` sets `android:usesCleartextTraffic="true"` globally so the daemon's
   plain-HTTP API works; a `network_security_config` with `cleartextTrafficPermitted` scoped to
   RFC1918 ranges would be tighter. Hardening, not a break.
+- Nothing verifies the checked-in launcher icons against `client/openastroara_client/icon_sources/`:
+  editing a source without re-running `dart run flutter_launcher_icons` leaves the shipped
+  Android/iOS/macOS/Windows icons silently stale. A CI step that regenerates and runs
+  `git diff --exit-code` on the icon outputs would pin it.
+- iOS 14+ gates the subnet sweep behind the Local Network permission prompt. The plist keys
+  are in place, but on *Don't Allow* `NetworkInterface.list()` still succeeds while every probe
+  fails, so the connect screen reads "no rigs found" with no hint that a permission is the
+  cause. A per-platform hint on the empty state (like the mobile-aware GPS copy) would close it.
 - Android mDNS never answers: `multicast_dns` opens its socket with `reusePort`, which Dart
   rejects on Android (`socket_linux.cc: reusePort not supported`), and logs it on every
   discovery tick. Discovery there is carried entirely by the subnet sweep, which adds a few

@@ -272,12 +272,17 @@ class ServerDiscoveryService {
   }
 
   Stream<AraServer> _sharedSweep() async* {
-    var run = _sweepRun;
-    if (run != null && run.finishedAt != null) {
-      if (_sweepIsCurrent) yield* Stream.fromIterable(List.of(run.found));
-      run = null;
-    }
-    if (run == null) {
+    // Decide and publish the run BEFORE the first yield: an async* body
+    // suspends at yield*, and two live passes reading a just-finished run
+    // across that suspension would each spawn a fresh sweep, the first
+    // becoming an orphan that keeps probing.
+    final prev = _sweepRun;
+    final _SweepRun run;
+    var replay = const <AraServer>[];
+    if (prev != null && !prev.finished) {
+      run = prev;
+    } else {
+      if (prev != null && _sweepIsCurrent) replay = List.of(prev.found);
       final fresh = _SweepRun(sweepAbandonGrace);
       _sweepRun = run = fresh;
       fresh.drive(
@@ -286,6 +291,7 @@ class ServerDiscoveryService {
             : _sweepDiscover(isCancelled: () => fresh.abandoned),
       );
     }
+    yield* Stream.fromIterable(replay);
     yield* run.attach();
   }
 
