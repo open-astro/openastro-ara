@@ -254,6 +254,34 @@ void main() {
     });
 
     test(
+      'a sweep nobody ever attached to is abandoned after the grace',
+      () async {
+        // A pass cancelled in the same turn that spawned the sweep never
+        // attaches, so no detach ever re-arms the abandon timer; the run must
+        // still stop on its own.
+        var sweepCancelled = false;
+        final sweepCtl = StreamController<AraServer>(
+          onCancel: () => sweepCancelled = true,
+        );
+        addTearDown(sweepCtl.close);
+        final svc = ServerDiscoveryService(
+          mdnsSource: () => const Stream.empty(),
+          sweepSource: () => sweepCtl.stream,
+          sweepAbandonGrace: const Duration(milliseconds: 30),
+        );
+        final sub = svc.discover().listen((_) {});
+        await sub
+            .cancel(); // same turn: the sweep is spawned but never attached
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        expect(
+          sweepCancelled,
+          isTrue,
+          reason: 'an orphaned sweep must stop after sweepAbandonGrace',
+        );
+      },
+    );
+
+    test(
       'a sweep that just finished replays its hits to the next pass',
       () async {
         // Real timeline on the tablet: the hit landed after the tick detached

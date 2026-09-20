@@ -434,6 +434,11 @@ class _SweepRun {
       onError: (Object _) {},
       onDone: _finish,
     );
+    // Armed from the start, not only on the first detach: a pass cancelled
+    // between spawning the run and attaching to it would otherwise leave a
+    // sweep probing the whole /24 with nobody listening and no timer to
+    // stop it. The first attach cancels this; each detach re-arms it.
+    _abandonTimer = Timer(abandonGrace, _abandon);
   }
 
   void _finish() {
