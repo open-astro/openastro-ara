@@ -490,10 +490,43 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Equal(new ushort[] { 0x1234 }, (await Read(file)).Data.FlatArray);
     }
 
+    private static uint[] EncodedSamples(int[] adu, int bitDepth) {
+        var block = new XISFData(adu, bitDepth, SaveInfo(XISFCompressionType.NONE, false, XISFChecksumType.NONE)).Data;
+        var samples = new uint[block.Length / 4];
+        for (int i = 0; i < samples.Length; i++) { samples[i] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(i * 4, 4)); }
+        return samples;
+    }
+
     [Fact]
-    public async Task AduDeeperThanTheReportedBitDepthAreNotClipped() {
-        // A driver reporting 12 bits while delivering 16-bit ADU: the writer widens the scale
-        // instead of clipping every highlight to 4095.
+    public void AduDeeperThanTheReportedBitDepthWidenToTheFixed32BitBucket() {
+        // A driver reporting 16 bits while delivering deeper ADU: no clipping, and the widening
+        // is to a FIXED bucket, so two frames from the same camera that both exceed the depth
+        // (a light peaking at 70000, another at 100000) encode the value 5000 identically --
+        // frame-relative scaling would break calibration.
+        int[] lightA = { 0, 5000, 70000 };
+        int[] lightB = { 0, 5000, 100000 };
+        var a = EncodedSamples(lightA, 16);
+        var b = EncodedSamples(lightB, 16);
+        Assert.Equal(0u, a[0]);
+        Assert.Equal(5000u, a[1]);   // 32-bit bucket: identity scale
+        Assert.Equal(70000u, a[2]);
+        Assert.Equal(a[1], b[1]);
+        // A frame that DOES fit the reported depth keeps the reported scale; that is the
+        // documented limit of a content-driven fallback, and why an under-reporting driver
+        // must be fixed at the driver.
+        int[] dark = { 0, 5000 };
+        Assert.Equal((uint)Math.Round(5000 / 65535d * uint.MaxValue), EncodedSamples(dark, 16)[1]);
+    }
+
+    [Fact]
+    public void A32BitDepthScalesAsIdentity() {
+        int[] adu = { 0, 1, int.MaxValue };
+        uint[] expected = { 0, 1, int.MaxValue };
+        Assert.Equal(expected, EncodedSamples(adu, 32));
+    }
+
+    [Fact]
+    public async Task AduWithinTheReportedDepthRoundTripExactlyAfterWidening() {
         var px = new[] { 0, 4095, 65535 };
         var header = new XISFHeader();
         header.AddImageMetaData(new ImageProperties(3, 1, 12, false, 0, 0), "LIGHT", XISFSampleFormat.UInt32);
@@ -503,9 +536,11 @@ public sealed class XisfRoundTripTests : IDisposable {
         using var ms = new MemoryStream();
         xisf.Save(ms);
         var read = (await Read(ms.ToArray())).Data.FlatArray;
+        // Widened to the 32-bit bucket (65535 does not fit 12 bits), so a 16-bit reader sees
+        // the raw ADU >> 16: dim, but consistent across the sequence and lossless in the file.
         Assert.Equal(0, read[0]);
-        Assert.Equal(4095, read[1]);
-        Assert.Equal(ushort.MaxValue, read[2]);
+        Assert.Equal(0, read[1]);
+        Assert.Equal(1, read[2]);
     }
 
     [Fact]
