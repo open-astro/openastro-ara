@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data' show BytesBuilder;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -240,7 +241,7 @@ class ServerDiscoveryService {
   /// (Android: the raw-socket browse fails outright). Instead, a new pass
   /// attaches to the running sweep (or replays one that just finished) and
   /// the sweep only stops once nobody has listened for [sweepAbandonGrace].
-  _SweepRun? _sweepRun;
+  SweepRun? _sweepRun;
 
   /// Forget the shared sweep: an in-flight run is discarded and a finished
   /// one is no longer replayed, so the next pass probes the subnet afresh.
@@ -277,13 +278,13 @@ class ServerDiscoveryService {
     // across that suspension would each spawn a fresh sweep, the first
     // becoming an orphan that keeps probing.
     final prev = _sweepRun;
-    final _SweepRun run;
+    final SweepRun run;
     var replay = const <AraServer>[];
     if (prev != null && !prev.finished) {
       run = prev;
     } else {
       if (prev != null && _sweepIsCurrent) replay = List.of(prev.found);
-      final fresh = _SweepRun(sweepAbandonGrace);
+      final fresh = SweepRun(sweepAbandonGrace);
       _sweepRun = run = fresh;
       fresh.drive(
         sweepSource != null
@@ -411,8 +412,12 @@ class ServerDiscoveryService {
 
 /// One subnet sweep shared by every discovery pass that starts while it is
 /// running. Late attachers get the hits found so far, then live ones.
-class _SweepRun {
-  _SweepRun(this.abandonGrace);
+///
+/// Public only so its timer bookkeeping can be tested directly; production
+/// code reaches it through [ServerDiscoveryService] alone.
+@visibleForTesting
+class SweepRun {
+  SweepRun(this.abandonGrace);
 
   final Duration abandonGrace;
   final found = <AraServer>[];

@@ -254,30 +254,27 @@ void main() {
     });
 
     test(
-      'a sweep nobody ever attached to is abandoned after the grace',
+      'a run nobody ever attached to is abandoned after the grace',
       () async {
         // A pass cancelled in the same turn that spawned the sweep never
         // attaches, so no detach ever re-arms the abandon timer; the run must
-        // still stop on its own.
+        // stop on its own. Tested on the run itself: from the service the
+        // window between spawn and attach is a single microtask.
         var sweepCancelled = false;
         final sweepCtl = StreamController<AraServer>(
           onCancel: () => sweepCancelled = true,
         );
         addTearDown(sweepCtl.close);
-        final svc = ServerDiscoveryService(
-          mdnsSource: () => const Stream.empty(),
-          sweepSource: () => sweepCtl.stream,
-          sweepAbandonGrace: const Duration(milliseconds: 30),
-        );
-        final sub = svc.discover().listen((_) {});
-        await sub
-            .cancel(); // same turn: the sweep is spawned but never attached
+        final run = SweepRun(const Duration(milliseconds: 30))
+          ..drive(sweepCtl.stream);
         await Future<void>.delayed(const Duration(milliseconds: 120));
         expect(
           sweepCancelled,
           isTrue,
-          reason: 'an orphaned sweep must stop after sweepAbandonGrace',
+          reason: 'an orphaned sweep must stop after abandonGrace',
         );
+        expect(run.abandoned, isTrue);
+        expect(run.finished, isTrue);
       },
     );
 
