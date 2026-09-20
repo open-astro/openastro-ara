@@ -132,7 +132,7 @@ def remote_head(repo: Path, branch: str) -> str | None:
     None when the remote ref is gone. A failed ls-remote raises rather than
     reading as "gone" -- the skill's `|| exit 1` on the same line.
     """
-    out = git(repo, "ls-remote", "--heads", "origin", branch)
+    out = git(repo, "ls-remote", "--heads", "origin", f"refs/heads/{branch}")
     return out.split("\t")[0] if out else None
 
 
@@ -569,7 +569,7 @@ class MirrorPin(unittest.TestCase):
             # the RETIRE arm rests on `checkout master` having run.
             "   git checkout master && git pull --ff-only",
             "   The slash namespace is the convention",
-            '581a6d996e591602',
+            'ba21960548b05cc2',
         ),
         "playbook_22_2_chore_delete_fence": (
             PLAYBOOK,

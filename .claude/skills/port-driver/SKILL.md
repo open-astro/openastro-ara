@@ -632,7 +632,11 @@ with the next sub-PR rather than getting a PR of its own.
      # the push fast-forwards over them. `|| exit 1` on the probe: an empty
      # answer from a failed ls-remote must not read as "the ref is gone"; an
      # unfetched OID fails the ancestor test, which is the Hold direction.
-     REMOTE_OID=$(git ls-remote --heads origin "$B" | cut -f1) || exit 1
+     # No pipe on the capture: `$(... | cut)` would carry cut's status, not
+     # ls-remote's, and there is no pipefail here. The full ref name keeps a
+     # `someone/$B` ref from matching too.
+     REMOTE_LINE=$(git ls-remote --heads origin "refs/heads/$B") || exit 1
+     REMOTE_OID=${REMOTE_LINE%%$'\t'*}
      if [ -n "$REMOTE_OID" ] && ! git merge-base --is-ancestor "$REMOTE_OID" origin/master 2>/dev/null; then
        echo "Held for human review @joeytroy — origin/$B still exists at $REMOTE_OID, which master does not contain; delete it by hand before $B can be pushed"
        exit 1
