@@ -12,12 +12,20 @@ void main() {
   });
 
   test('remaining prefers observed rate once ≥10% and ≥2 leaves are done', () {
-    // 4/10 done in 40 min → 10 min/leaf → 60 min left, static model ignored.
+    // 4/10 done in 40 min → 10 min/leaf → 60 min left.
     final r = estimateRemainingSeconds(
         completed: 4,
         total: 10,
         elapsed: const Duration(minutes: 40));
     expect(r, 3600);
+    // …and the observed rate outranks a daemon figure once it is trusted — the
+    // precedence API_CONTRACT documents (reversing the two branches fails this).
+    final competing = estimateRemainingSeconds(
+        serverRemainingSeconds: 640,
+        completed: 4,
+        total: 10,
+        elapsed: const Duration(minutes: 40));
+    expect(competing, 3600);
   });
 
   test('no daemon estimate early in the run → nothing to show (0)', () {
