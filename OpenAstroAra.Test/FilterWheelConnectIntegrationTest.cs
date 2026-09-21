@@ -65,9 +65,13 @@ namespace OpenAstroAra.Test {
             var withSlots = await PollUntilSlotsAsync(svc).ConfigureAwait(false);
             Assert.That(withSlots, Is.Not.Null, "slots were never seeded after connect");
             Assert.That(withSlots!.Slots.Count, Is.GreaterThan(1), "the simulated wheel should expose multiple slots");
+            // #1066 — each test's fresh service issues the first-connect home to slot 0; let it land
+            // before choosing a target, or the home races the change below.
+            var homed = await PollUntilSlotAsync(svc, 0).ConfigureAwait(false);
+            Assert.That(homed?.Runtime.CurrentSlot, Is.EqualTo(0), "the first-connect home never parked the wheel on slot 0");
 
             // Change to a slot other than the current one and confirm the read-back.
-            var currentSlot = withSlots.Runtime.CurrentSlot ?? 0;
+            var currentSlot = homed!.Runtime.CurrentSlot ?? 0;
             var target = (currentSlot + 1) % withSlots.Slots.Count;
 
             await svc.ChangeFilterAsync(new FilterChangeRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -102,6 +106,9 @@ namespace OpenAstroAra.Test {
             try {
                 var withSlots = await PollUntilSlotsAsync(svc).ConfigureAwait(false);
                 Assert.That(withSlots!.Slots.Count, Is.GreaterThan(1));
+                // #1066 — let the fresh service's first-connect home to slot 0 land before moving.
+                var homed = await PollUntilSlotAsync(svc, 0).ConfigureAwait(false);
+                Assert.That(homed?.Runtime.CurrentSlot, Is.EqualTo(0), "the first-connect home never parked the wheel on slot 0");
 
                 // Import-on-connect: the device's filter list must be in the active profile now.
                 var profileFilters = profileService.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
@@ -112,7 +119,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(info.Connected, Is.True);
 
                 // Change to a different slot through the mediator, like SwitchFilter.Execute does.
-                var currentSlot = withSlots.Runtime.CurrentSlot ?? 0;
+                var currentSlot = homed!.Runtime.CurrentSlot ?? 0;
                 var targetPosition = (currentSlot + 1) % withSlots.Slots.Count;
                 var targetFilter = profileFilters[targetPosition];
                 var reached = await ((IFilterWheelMediator)svc).ChangeFilter(targetFilter, progress: null, CancellationToken.None).ConfigureAwait(false);

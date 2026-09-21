@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
@@ -20,9 +18,6 @@ class ExposureParams {
   final int bin;
   final String filterSlot;
   final FrameKind frameKind;
-  /// True while the wheel is being homed to slot 0 (L) on first launch — the
-  /// picker shows busy until the wheel is OBSERVED there.
-  final bool homing;
 
   const ExposureParams({
     this.exposure = const Duration(seconds: 5),
@@ -31,7 +26,6 @@ class ExposureParams {
     this.bin = 1,
     this.filterSlot = 'L',
     this.frameKind = FrameKind.light,
-    this.homing = false,
   });
 
   ExposureParams copyWith({
@@ -41,7 +35,6 @@ class ExposureParams {
     int? bin,
     String? filterSlot,
     FrameKind? frameKind,
-    bool? homing,
   }) =>
       ExposureParams(
         exposure: exposure ?? this.exposure,
@@ -50,7 +43,6 @@ class ExposureParams {
         bin: bin ?? this.bin,
         filterSlot: filterSlot ?? this.filterSlot,
         frameKind: frameKind ?? this.frameKind,
-        homing: homing ?? this.homing,
       );
 }
 
@@ -66,18 +58,8 @@ class ExposureController extends Notifier<ExposureParams> {
   int? _lastSyncedSlot;
   String? _lastDeviceId;
 
-  /// Whether the wheel has been homed to slot 0 (L) this session — the
-  /// default filter on first launch. Only the FIRST connect homes it.
-  bool _homed = false;
-
-  /// Safety valve: if a home command fails (rejected / re-entrancy / driver
-  /// error) or the wheel never reports reaching slot 0, the picker must not
-  /// stay busy forever.
-  Timer? _homeTimeout;
-
   @override
   ExposureParams build() {
-    ref.onDispose(() => _homeTimeout?.cancel());
     // §25.5 follow-up: the Imaging picker follows the physical wheel. Whenever
     // the wheel is connected and parked on a slot — moved here via the §37.4
     // Filter Wheel panel's Select, a sequence, or another client — the picker
@@ -99,41 +81,21 @@ class ExposureController extends Notifier<ExposureParams> {
       if (status == null || !status.isConnected) {
         _lastSyncedSlot = null;
         _lastDeviceId = null;
-        // A wheel going away mid-home must not leave the picker busy.
-        if (state.homing) setHoming(false);
         return;
       }
       // A different wheel (or the first sighting): the old latch belongs to
-      // the previous device — re-sync against this one. On the FIRST connect
-      // of a session, home the wheel to slot 0 (L) — the default filter.
+      // the previous device — re-sync against this one. The first-connect
+      // home to slot 0 (L) is DAEMON policy (#1066): it happens server-side
+      // on connect, and this picker simply follows the wheel's observed
+      // position (it reads as moving, then as slot 0) like any other move.
       if (status.deviceId != _lastDeviceId) {
-        final firstConnect = _lastDeviceId == null;
         _lastSyncedSlot = null;
         // Only latch the device once its position is KNOWN — drivers often
         // report connected with currentSlot null for a poll or two before the
-        // position arrives. Latching early would make firstConnect false on
-        // the poll that DOES know the position, silently skipping the
-        // first-launch home for the whole session.
+        // position arrives.
         if (status.currentSlot != null) {
           _lastDeviceId = status.deviceId;
-          // The first KNOWN position settles this session's home decision —
-          // whether or not an actual move is needed. Already-at-L is a no-op
-          // but still counts, so a later reconnect never force-homes.
-          if (firstConnect && !_homed) {
-            _homed = true;
-            if (status.currentSlot != 0) {
-              _homeToSlot0();
-            }
-          }
         }
-      }
-      // Homing completes once the wheel is observed on slot 0 (or the wheel
-      // goes away) — the picker drops the busy state and shows L.
-      if (state.homing &&
-          (status.currentSlot == 0 ||
-              !status.isConnected ||
-              status.deviceId != _lastDeviceId)) {
-        setHoming(false);
       }
       if (status.isMoving) return;
       _syncFilterToSlot(status);
@@ -147,17 +109,6 @@ class ExposureController extends Notifier<ExposureParams> {
           .read(filterWheelProvider)
           .maybeWhen(data: (s) => s, orElse: () => null);
       if (status != null && status.isConnected && !status.isMoving) {
-        // First launch with the wheel already connected before this provider
-        // built: home to slot 0 (L) too.
-        if (status.currentSlot != null && !_homed) {
-          _homed = true;
-          if (status.currentSlot != 0) {
-            _homeToSlot0();
-          }
-        }
-        if (state.homing && status.currentSlot == 0) {
-          setHoming(false);
-        }
         _syncFilterToSlot(status);
       }
     });
@@ -225,31 +176,6 @@ class ExposureController extends Notifier<ExposureParams> {
   }
 
   void setFrameKind(FrameKind k) => state = state.copyWith(frameKind: k);
-
-  /// Marks the first-launch home-to-L as in progress (or done). The picker
-  /// renders busy while true, so the pre-home slot is never shown as current.
-  void setHoming(bool v) => state = state.copyWith(homing: v);
-
-  /// Homes the wheel to slot 0 (L) on first connect. The picker shows busy
-  /// until the wheel is OBSERVED on slot 0; if the command fails, is dropped
-  /// by re-entrancy, or the wheel never reports arriving, [homing] is cleared
-  /// so the picker can never be left disabled forever.
-  void _homeToSlot0() {
-    _homed = true;
-    if (!state.homing) setHoming(true);
-    _homeTimeout?.cancel();
-    _homeTimeout = Timer(const Duration(seconds: 20), () {
-      // The wheel never reported slot 0 (or the command was dropped) — stop
-      // showing busy; the follow-logic keeps the picker truthful to wherever
-      // the wheel actually is.
-      if (state.homing) setHoming(false);
-    });
-    ref.read(filterWheelProvider.notifier).changeFilter(0).then((ok) {
-      if (!ok && state.homing) setHoming(false); // dropped (re-entrancy)
-    }).catchError((Object e) {
-      if (state.homing) setHoming(false); // home failed — don't stay stuck
-    });
-  }
 }
 
 final exposureControllerProvider =

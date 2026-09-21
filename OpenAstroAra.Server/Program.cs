@@ -255,8 +255,19 @@ public partial class Program {
         // backs BOTH the REST ISwitchService and the Sequencer's ISwitchMediator (§8.1), so the
         // SetSwitchValue instruction drives the live device (mediator wiring is below; this replaces
         // the HeadlessSwitchMediator stub).
-        builder.Services.AddSingleton<SwitchService>();
+        // #1065 — explicit factory: the fan-off interlock probes the camera's cooler state through
+        // a Func<> (breaks the CameraService ↔ SwitchService construction cycle), which constructor
+        // activation would not inject.
+        builder.Services.AddSingleton<SwitchService>(sp =>
+            new SwitchService(
+                sp.GetRequiredService<ILogger<SwitchService>>(),
+                sp.GetService<EquipmentEventPublisher>(),
+                sp.GetService<IEquipmentFaultSink>(),
+                sp.GetService<IProfileStore>(),
+                sp.GetService<IWsBroadcaster>(),
+                cameraProbe: () => sp.GetService<ICameraService>()));
         builder.Services.AddSingleton<ISwitchService>(sp => sp.GetRequiredService<SwitchService>());
+        builder.Services.AddSingleton<ICoolingFanActuator>(sp => sp.GetRequiredService<SwitchService>());
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4
         // cached). REST-only — no sequence instruction consumes the weather mediator's data, so
         // IWeatherDataMediator stays the headless stub.
@@ -429,6 +440,9 @@ public partial class Program {
             // rather than silently following it. If redirects are ever needed, re-validate the Location scheme.
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
+        // §63.20 / #1067 — the wizard's Alpaca device-name lookup, proxied through the daemon.
+        builder.Services.AddSingleton<IAlpacaManagementClient>(sp =>
+            new AlpacaManagementClient(sp.GetService<ILogger<AlpacaManagementClient>>()));
         var skyDataRoot = System.IO.Path.Combine(profileDir, "sky-data");
         // §36-2 startup polish: reclaim any .staging-*/.backup-* scratch dirs orphaned by a download worker
         // hard-killed mid-extract (a daemon crash) — a graceful drain can't catch that case. Best-effort + synchronous
@@ -533,7 +547,9 @@ public partial class Program {
                 faults: sp.GetRequiredService<IEquipmentFaultSink>(),
                 // §29.2 — SQM/ambient into every frame's header when a
                 // weather source is connected.
-                weather: sp.GetService<IObservingConditionsService>()));
+                weather: sp.GetService<IObservingConditionsService>(),
+                // #1065 — the cooling fan follows the cooler (Func<>: construction-cycle breaker).
+                fan: () => sp.GetService<ICoolingFanActuator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).

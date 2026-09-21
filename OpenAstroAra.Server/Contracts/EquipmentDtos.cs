@@ -484,6 +484,12 @@ public sealed record GuiderCameraPixelSizeResponseDto(
     bool Connected,
     double? PixelSize);
 
+/// <summary>§63.20 / #1067 — real device names read off one Alpaca server's management API by the
+/// daemon, keyed <c>"&lt;devicetype&gt;/&lt;devicenumber&gt;"</c> (type lowercased, e.g. <c>"camera/1"</c>).
+/// Empty when the host could not be reached or answered nothing usable — a best-effort labelling
+/// assist, never an error status.</summary>
+public sealed record AlpacaDeviceNamesResponseDto(IReadOnlyDictionary<string, string> Names);
+
 /// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
 /// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for
 /// that slot (e.g. no rotator support compiled in).</summary>

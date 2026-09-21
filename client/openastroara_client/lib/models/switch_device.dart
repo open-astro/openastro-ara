@@ -159,12 +159,12 @@ class SwitchDevice {
 /// device whose name marks it as the ToupTek **Thermal Switch** with a
 /// writable "Fan" port, or null.
 ///
-/// The single source of truth for "which switch port is the cooling fan" —
-/// shared by the Settings fan toggle (FanSwitchRow) and the cooler auto-sync
-/// (CameraStatusNotifier), so the interlock and the sync can never disagree
-/// about the device. The device-name scoping keeps an unrelated switch that
-/// happens to have a port literally named "Fan" from being actuated (or
-/// blocked) by camera cooling.
+/// The client's copy of the daemon's fan-port rule (`CoolingFanInterlock`
+/// server-side, #1065) — used only to decide whether to SHOW the Settings fan
+/// toggle (FanSwitchRow); the sync and the fan-off interlock themselves run
+/// in the daemon. The device-name scoping keeps an unrelated switch that
+/// happens to have a port literally named "Fan" from being presented as the
+/// cooling fan.
 ({SwitchDevice device, SwitchPort port})? findThermalSwitchFanPort(
     List<SwitchDevice> switches) {
   for (final device in switches) {
@@ -178,9 +178,7 @@ class SwitchDevice {
   return null;
 }
 
-/// Whether [port] on [device] is the camera's cooling fan — the same
-/// device/port identification [findThermalSwitchFanPort] uses, exposed so the
-/// generic Switches panel can apply the fan-off interlock to the exact port
-/// the camera code actuates.
+/// Whether [port] on [device] is the camera's cooling fan — the device/port
+/// identification [findThermalSwitchFanPort] uses (mirrors the daemon's rule).
 bool isThermalSwitchFanPort(SwitchDevice device, SwitchPort port) =>
     device.name.contains('Thermal Switch') && port.name == 'Fan';
