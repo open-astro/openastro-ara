@@ -54,16 +54,15 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
     if (run == null || state == null || !state.isActive) {
       return const SizedBox.shrink();
     }
-    final editor = ref.watch(sequenceEditorProvider);
     final color = RunStateBadge.colorFor(state);
     final total = run.instructionsTotal;
     final completed = run.instructionsCompleted;
     final progress = total > 0 ? (completed / total).clamp(0.0, 1.0) : null;
     final needsAttention = state == SequenceRunState.pausedAwaitingUser;
 
-    final staticEta = editor != null && editor.id == run.sequenceId
-        ? estimateRunEta(editor.body).totalSeconds
-        : 0.0;
+    // #1068 — the daemon publishes the sequencer's own estimate; the band only
+    // blends it with the observed elapsed rate for display.
+    final staticEta = run.estimatedTotalSeconds ?? 0.0;
 
     return StreamBuilder<void>(
       stream: _ticker,
@@ -73,6 +72,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
             : DateTime.now().toUtc().difference(run.startedUtc!);
         final remainingS = estimateRemainingSeconds(
           staticTotalSeconds: staticEta,
+          serverRemainingSeconds: run.estimatedRemainingSeconds,
           completed: completed,
           total: total,
           elapsed: elapsed,

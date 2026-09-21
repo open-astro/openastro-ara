@@ -976,6 +976,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
             };
+            var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
+            payload["estimated_total_seconds"] = estimatedTotal;
+            payload["estimated_remaining_seconds"] = estimatedRemaining;
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {
@@ -1249,8 +1252,26 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
         }
 
+        /// <summary>#1068 — the sequencer's estimated total / remaining seconds for this run, walked
+        /// off the live tree (null until it has loaded). Cheap: the tree is a few dozen nodes.</summary>
+        public (double? Total, double? Remaining) EstimatedSeconds() {
+            lock (_gate) {
+                return EstimatedSecondsLocked();
+            }
+        }
+
+        // Caller holds _gate.
+        private (double? Total, double? Remaining) EstimatedSecondsLocked() {
+            var top = (ISequenceItem?)_bodyTop ?? _root;
+            if (top is null) {
+                return (null, null);
+            }
+            return (RunEtaEstimator.EstimateTotalSeconds(top), RunEtaEstimator.EstimateRemainingSeconds(top));
+        }
+
         public SequenceRunStateDto ToDto(Guid sequenceId) {
             lock (_gate) {
+                var (total, remaining) = EstimatedSecondsLocked();
                 return new(
                     SequenceId: sequenceId,
                     RunId: RunId,
@@ -1261,7 +1282,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     CompletedUtc: CompletedUtc,
                     InstructionsCompleted: InstructionsCompleted,
                     InstructionsTotal: InstructionCount,
-                    CurrentInstructionDescription: CurrentInstructionDescription);
+                    CurrentInstructionDescription: CurrentInstructionDescription,
+                    EstimatedTotalSeconds: total,
+                    EstimatedRemainingSeconds: remaining);
             }
         }
     }
