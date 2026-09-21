@@ -934,7 +934,7 @@ const Map<String, Help> helpRegistry = {
         '* Camera — USB link power-up only\n'
         '* Mount — sidereal tracking comes on\n'
         '* Focuser, rotator — position read on connect, no movement\n'
-        '* Filter wheel — the first time the wheel connects after the Ara daemon starts (auto or manual) Ara itself parks it on slot 0, conventionally L, unless a filter change is requested first; a later reconnect leaves the wheel where it is. Drivers may also reposition on connect (driver-dependent).\n'
+        '* Filter wheel — the first time the wheel connects after Ara starts up on the rig (auto or manual) Ara itself parks it on slot 0, conventionally L, unless a filter change is requested first; a later reconnect leaves the wheel where it is. Drivers may also reposition on connect (driver-dependent).\n'
         '* Flat panel (CoverCalibrator) — does not change cover position\n'
         '* Safety monitor — recommended on for unattended observatories\n\n'
         '*Manual-connect by default* (driver may actuate hardware on connect):\n'
