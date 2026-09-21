@@ -46,7 +46,9 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   MountStatus? status;
   final List<String> calls = [];
 
-  /// Thrown by a moveaxis START (rate != 0) when set — the daemon's refusal.
+  /// Thrown by EVERY moveaxis (start and stop) when set — the daemon's refusal.
+  /// Throwing on the stop too is what makes "the release adds no second
+  /// toast" a real check on the pad's rate != 0 guard.
   final Object? moveAxisError;
   @override
   Future<MountStatus?> getStatus() async => status;
@@ -64,7 +66,7 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
           : 'command:$subpath:enabled=${body?['enabled']}',
     );
     final err = moveAxisError;
-    if (err != null && subpath == 'moveaxis' && (body?['rate'] ?? 0) != 0) {
+    if (err != null && subpath == 'moveaxis') {
       throw err;
     }
   }
@@ -446,7 +448,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('manual nudge refused'), findsOneWidget,
-        reason: 'the release (rate 0) adds no second toast');
+        reason: 'the release (rate 0) is refused too but adds no second toast');
     expect(
       api.calls.where((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0')),
       isNotEmpty,
