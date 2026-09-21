@@ -367,5 +367,23 @@ namespace OpenAstroAra.Test {
             Assert.That(stub.PositionWrites.TryDequeue(out var w) && w == FilterWheelService.DefaultSlot, Is.True);
             await DisconnectAsync(svc);
         }
+
+        [Test]
+        [Category("bench")]
+        public async Task The_profile_policy_can_turn_the_first_connect_home_off() {
+            // #1075 — home_on_first_connect = false: the wheel is left where the driver reports it.
+            await using var stub = StubWheel.Start(position: 3);
+            var store = new InMemoryProfileStore();
+            store.PutFilterWheelPolicy(new FilterWheelPolicyDto(HomeOnFirstConnect: false));
+            using var svc = new FilterWheelService(profileStore: store);
+            await ConnectAsync(svc, stub);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(5)), Is.False, "policy off → no home write");
+            // Turning it on afterwards never homes this session's already-claimed wheel.
+            store.PutFilterWheelPolicy(FilterWheelPolicyDto.Default);
+            await DisconnectAsync(svc);
+            await ConnectAsync(svc, stub);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "the claim was consumed on the first connect");
+            await DisconnectAsync(svc);
+        }
     }
 }

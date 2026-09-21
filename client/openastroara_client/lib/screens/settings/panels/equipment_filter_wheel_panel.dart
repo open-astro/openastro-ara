@@ -9,6 +9,7 @@ import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
+import '../../../state/settings/filter_wheel_policy_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -29,6 +30,8 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
     final notifier = ref.read(filterWheelProvider.notifier);
     final labels = ref.watch(filterWheelLabelsProvider);
     final labelsN = ref.read(filterWheelLabelsProvider.notifier);
+    final policy = ref.watch(filterWheelPolicyProvider);
+    final policyN = ref.read(filterWheelPolicyProvider.notifier);
     // While a wheel is connected its own driver slot names are authoritative and
     // shown live above, so the local "Slot labels" section is pure duplication —
     // only surface it for offline sequence authoring. Show it ONLY on a resolved
@@ -61,6 +64,14 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           value: connection.autoConnect(EquipmentDeviceType.filterWheel),
           onChanged: (v) =>
               connN.setAutoConnect(EquipmentDeviceType.filterWheel, v),
+        ),
+        // #1075 — the daemon's first-connect home (#1066) is a profile policy
+        // the user can turn off; the daemon reads it at connect time.
+        SettingsSwitchRow(
+          label: 'Park on slot 1 when the wheel first connects',
+          helpKey: 'eq.filterwheel.home_on_first_connect',
+          value: policy.homeOnFirstConnect,
+          onChanged: policyN.setHomeOnFirstConnect,
         ),
         // Local slot labels — the user's filter names used when authoring
         // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
