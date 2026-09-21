@@ -62,7 +62,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private readonly HashSet<string> _homedDevices = [];
     // #1066 — the first-connect home is CLAIMED at connect (so a reconnect can never home) and
     // DECIDED on the first refresh tick that reads a known position (a wheel mid-move at connect
-    // reports -1 and would otherwise never be parked). Cleared on disconnect/connection loss.
+    // reports -1 and would otherwise never be parked). Cleared, without a home, by: disconnect /
+    // connection loss / a newer connect (ClearPendingHomeLocked, logged), an explicit filter change
+    // (RetirePendingHome — the requested slot wins), and the tick bound (logged).
     private bool _pendingHome;
     private string _pendingHomeDevice = string.Empty;
     // Bounded window: the seed read plus a few 2 s ticks. A driver that reports -1 for longer is
@@ -221,13 +223,15 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
         }
     }
 
-    // Caller holds _gate. A connection ending with the home still pending is logged so a wheel that
-    // never parked on L leaves a trace in the journal.
-    private void ClearPendingHomeLocked() {
-        if (_pendingHome) {
-            _pendingHome = false;
-            LogHomeNeverDecided(_pendingHomeDevice);
+    // Caller holds _gate. A connection ending with the home still pending leaves a trace in the
+    // journal so a wheel that never parked on L is diagnosable; the line itself is emitted by the
+    // caller AFTER the gate is released (a slow log sink must never sit on the device lock).
+    private string? TakePendingHomeNeverDecidedLocked() {
+        if (!_pendingHome) {
+            return null;
         }
+        _pendingHome = false;
+        return _pendingHomeDevice;
     }
 
     private void RefreshTick(object? state) => RefreshCacheOnce();
@@ -268,6 +272,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             var adoptedSlots = false;
             int? homeFrom = null;
             string homeDevice = string.Empty;
+            (string Device, int Ticks)? windowExpired = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -287,10 +292,13 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                             }
                         } else if (++_pendingHomeTicks > MaxPendingHomeTicks) {
                             _pendingHome = false;
-                            LogHomeWindowExpired(_pendingHomeDevice, _pendingHomeTicks); // the refresh that dropped it
+                            windowExpired = (_pendingHomeDevice, _pendingHomeTicks); // logged after the gate
                         }
                     }
                 }
+            }
+            if (windowExpired is { } expired) {
+                LogHomeWindowExpired(expired.Device, expired.Ticks);
             }
             if (homeFrom is int from) {
                 // Daemon policy: happens with no client attached (boot auto-connect), never on a reconnect.
@@ -348,6 +356,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
         AlpacaFilterWheel? client = null;
         var adopted = false;
+        string? neverDecided = null;
         try {
             var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
             if (string.IsNullOrWhiteSpace(host)) {
@@ -365,7 +374,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
                     // #1066 — claim the once-per-session home NOW, position known or not, so a
-                    // later reconnect of this wheel (auto or manual) can never home it.
+                    // later reconnect of this wheel (auto or manual) can never home it. A previous
+                    // wheel's still-pending decision is superseded (and its journal line kept).
+                    neverDecided = TakePendingHomeNeverDecidedLocked();
                     _pendingHome = ClaimFirstConnectHome(device.UniqueId);
                     _pendingHomeDevice = device.Name;
                     _pendingHomeTicks = 0;
@@ -376,6 +387,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             if (!adopted) {
                 SafeDisconnectDispose(client);
                 return;
+            }
+            if (neverDecided is not null) {
+                LogHomeNeverDecided(neverDecided); // outside the gate, like LogConnectionLost
             }
             client = null; // ownership transferred to _client
             // Seed slots + runtime through the guarded path; the #1066 first-connect home is decided
