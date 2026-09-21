@@ -274,10 +274,13 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         }
         var port = device.Ports.FirstOrDefault(p => p.Id == request.PortId);
         if (port is null) {
-            // Connected but the port snapshot has not been read yet (one Alpaca round trip after
-            // connect). A Thermal Switch in that window might be getting its Fan port stopped and
-            // we cannot tell — fail CLOSED rather than let the write through unexamined.
-            return device.Ports.Count == 0 && CoolingFanInterlock.IsThermalSwitchDevice(device)
+            // Connected but the port snapshot has not been read yet (up to one refresh interval after
+            // connect). Only a write that could plausibly be stopping the Thermal Switch's fan is held:
+            // with no port info the one thing we know is the requested value, and a fan-off means
+            // driving it to its floor — a write to 0 or below. Anything else (fan ON, a heater port,
+            // a mid-range PWM value) goes through: refusing a fan-on is the wrong direction for the
+            // hazard this interlock exists for.
+            return device.Ports.Count == 0 && CoolingFanInterlock.IsThermalSwitchDevice(device) && request.Value <= 0
                 ? CoolingFanInterlock.FanOffRefusal(null)
                 : null;
         }
