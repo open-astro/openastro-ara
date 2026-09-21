@@ -95,8 +95,9 @@ public static class CoolingFanInterlock {
     /// <c>null</c> (unknown → refuse) when the camera is in <c>Error</c> (it just dropped — the TEC
     /// may still be running) or when this pass's CoolerOn read threw; <c>false</c> when there is
     /// no camera connected — no DTO at all (no camera device was ever configured on this daemon)
-    /// or a <c>Disconnected</c> one — since no TEC this daemon started can be running; otherwise
-    /// the reported flag. (A probe that THROWS is unknown, but that is the caller's boundary.)</summary>
+    /// or a <c>Disconnected</c> one — since no TEC this daemon started can be running, and for a
+    /// camera whose capabilities say it has no cooler at all (its CoolerOn read throws on every
+    /// pass, so the runtime flag alone would read as unknown forever); otherwise the reported flag. (A probe that THROWS is unknown, but that is the caller's boundary.)</summary>
     public static bool? CoolerStateFor(CameraDto? camera) {
         if (camera is null) {
             return false;
@@ -105,6 +106,12 @@ public static class CoolingFanInterlock {
             return null;
         }
         if (camera.State != EquipmentConnectionState.Connected) {
+            return false;
+        }
+        if (camera.Capabilities is { HasCooler: false }) {
+            // An uncooled camera throws on EVERY CoolerOn read (that is how HasCooler was
+            // decided), so its runtime CoolerStateKnown is false for good — but "no cooler" is
+            // definitively no TEC, not unknown (review of #1084).
             return false;
         }
         return camera.Runtime.CoolerStateKnown ? camera.Runtime.CoolerOn : null;

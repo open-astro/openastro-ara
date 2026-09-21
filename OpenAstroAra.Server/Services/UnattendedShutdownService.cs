@@ -453,9 +453,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     /// off (or no readable temperature) skips the ramp entirely.
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown.")]
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Ramp-step boundary: whatever a step throws (interlock refusal, driver rejection), the final cooler-off must still run — the exception is logged and the ramp cut short. CA1031's log-and-recover boundary applies.")]
+        Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown, and a ramp step that throws (interlock refusal, driver rejection) is logged and cuts the ramp short so the final cooler-off still runs.")]
     private async Task<bool> WarmCoolerAsync(System.Text.StringBuilder summary, CancellationToken abandon) {
         if (_camera is null) return true;
         var dto = await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false);

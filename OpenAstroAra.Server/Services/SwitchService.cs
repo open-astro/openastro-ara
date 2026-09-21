@@ -298,6 +298,8 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
                 return null;
             }
             return CoolingFanInterlock.CoolerStateFor(await camera.GetAsync(ct).ConfigureAwait(false));
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw; // a genuine caller cancel (the sequencer's) propagates; it is not an unknown state
         } catch (Exception ex) {
             LogFanInterlockProbeFailed(_logger, ex);
             return null;

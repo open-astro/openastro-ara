@@ -64,6 +64,8 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Not a round-trip normalization: Alpaca URL paths are lower-case on the wire, and the responder contract documents receiving the lower-cased path — upper-casing would fight the ecosystem's own convention.")]
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Test-harness serve loop: a client aborting mid-PUT must never fault the loop and silently stop the scripted device for the rest of the test.")]
     private async Task LoopAsync() {
         while (!_cts.IsCancellationRequested) {
             HttpListenerContext ctx;
@@ -84,9 +86,10 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                 try {
                     using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
                     Puts.Enqueue((ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "", await reader.ReadToEndAsync().ConfigureAwait(false)));
-                } catch (HttpListenerException) {
-                    // client aborted mid-PUT — irrelevant to the test, and the loop must keep serving
-                } catch (ObjectDisposedException) {
+                } catch (Exception) {
+                    // client aborted mid-PUT (HttpListenerException, an IOException from a half-read
+                    // body, ObjectDisposedException) — irrelevant to the test; the loop must keep
+                    // serving, or the device silently stops answering for the rest of the test.
                 }
             }
             var body = Encoding.UTF8.GetBytes(

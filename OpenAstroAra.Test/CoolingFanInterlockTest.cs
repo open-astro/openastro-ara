@@ -124,6 +124,10 @@ namespace OpenAstroAra.Test {
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, true)), Is.True);
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, false)), Is.False);
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, false, known: false)), Is.Null, "CoolerOn read threw → unknown");
+            Assert.That(CoolingFanInterlock.CoolerStateFor(new CameraDto("cam", "Cam", EquipmentConnectionState.Connected,
+                    Capabilities: new CameraCapabilitiesDto(100, 100, 3.76, false, true, false, 0, 0, 0, 0, 1, 1, 1, 1, 0.001, 3600, HasCooler: false),
+                    Runtime: new CameraStateDto("idle", null, null, false, null, CoolerStateKnown: false))),
+                Is.False, "an uncooled camera's CoolerOn always throws — no cooler is definitively no TEC, not unknown");
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Error, false)), Is.Null, "camera just dropped → the TEC may still run → unknown");
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Disconnected, false)), Is.False, "no camera connected → no TEC this daemon started");
         }
