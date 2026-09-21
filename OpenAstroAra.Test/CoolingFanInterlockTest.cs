@@ -60,8 +60,10 @@ namespace OpenAstroAra.Test {
             Assert.That(off!.Value.Request, Is.EqualTo(new SwitchValueRequestDto(1, 10)));
             // No fan-capable switch (most rigs) → nothing to write.
             Assert.That(CoolingFanInterlock.FanSyncRequest([], cooling: true), Is.Null);
-            // Already at the target (the warm ramp's minute-by-minute cooler calls) → no redundant write.
-            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 100, min: 10, max: 100))], cooling: true), Is.Null);
+            // #1076 — cooler-ON always writes (a stale cached value must never skip the fan-on);
+            // cooler-OFF skips when the cached port already holds the floor (the warm ramp's
+            // minute-by-minute cooler calls).
+            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 100, min: 10, max: 100))], cooling: true), Is.Not.Null);
             Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 0))], cooling: false), Is.Null);
         }
 
@@ -112,6 +114,18 @@ namespace OpenAstroAra.Test {
                 () => svc.SetValueAsync("dead-thermal", new SwitchValueRequestDto(0, 0), System.Threading.CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("not connected"));
             Assert.That(ex.Message, Does.Not.Contain("cooler"));
+        }
+
+        [Test]
+        public void Cooler_state_for_the_interlock_is_unknown_on_error_or_an_unreadable_read_and_off_when_disconnected() {
+            static CameraDto Cam(EquipmentConnectionState state, bool on, bool known = true) =>
+                new("cam", "Cam", state, Capabilities: null, Runtime: new CameraStateDto("idle", null, null, on, null, CoolerStateKnown: known));
+            Assert.That(CoolingFanInterlock.CoolerStateFor(null), Is.Null, "no DTO → unknown");
+            Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, true)), Is.True);
+            Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, false)), Is.False);
+            Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, false, known: false)), Is.Null, "CoolerOn read threw → unknown");
+            Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Error, false)), Is.Null, "camera just dropped → the TEC may still run → unknown");
+            Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Disconnected, false)), Is.False, "no camera connected → no TEC this daemon started");
         }
 
         [Test]

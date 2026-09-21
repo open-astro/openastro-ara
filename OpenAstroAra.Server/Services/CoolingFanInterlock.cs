@@ -74,8 +74,10 @@ public static class CoolingFanInterlock {
     /// <summary>The fan write that follows a cooler change: the port's own max (full fan) after
     /// cooler-on, its min (off) after cooler-off. Bounds, not a literal 1/0: on a PWM port
     /// (0–100) a hard-coded 1.0 would set ~1% speed while the TEC cools. Null when no fan port is
-    /// connected (most rigs), or when the cached port already holds the target — the §58 warm ramp
-    /// calls the cooler once a minute and must not re-issue the same fan write each time.</summary>
+    /// connected (most rigs). A cooler-ON ALWAYS writes (the cached value may be a stale snapshot,
+    /// and a missed fan-on is the hazard); a cooler-OFF skips when the cached port already holds the
+    /// floor — the §58 warm ramp calls the cooler once a minute and must not re-issue the same fan
+    /// write each time (#1076).</summary>
     public static (string DeviceId, SwitchValueRequestDto Request)? FanSyncRequest(IEnumerable<SwitchDto> switches, bool cooling) {
         var fan = FindThermalSwitchFanPort(switches);
         if (fan is null) {
@@ -83,10 +85,28 @@ public static class CoolingFanInterlock {
         }
         var (device, port) = fan.Value;
         var target = cooling ? port.Max : port.Min;
-        if (Math.Abs(port.Value - target) < 1e-9) {
+        if (!cooling && Math.Abs(port.Value - target) < 1e-9) {
             return null;
         }
         return (device.DeviceId, new SwitchValueRequestDto(port.Id, target));
+    }
+
+    /// <summary>The cooler state the fan-off interlock decides on, from the camera's DTO (#1076):
+    /// <c>null</c> (unknown → refuse) when there is no camera DTO at all, when the camera is in
+    /// <c>Error</c> (it just dropped — the TEC may still be running), or when this pass's CoolerOn
+    /// read threw; <c>false</c> when there is no camera connected (no TEC this daemon started);
+    /// otherwise the reported flag.</summary>
+    public static bool? CoolerStateFor(CameraDto? camera) {
+        if (camera is null) {
+            return null;
+        }
+        if (camera.State == EquipmentConnectionState.Error) {
+            return null;
+        }
+        if (camera.State != EquipmentConnectionState.Connected) {
+            return false;
+        }
+        return camera.Runtime.CoolerStateKnown ? camera.Runtime.CoolerOn : null;
     }
 
     /// <summary>Whether <paramref name="value"/> takes the port to "off" — its own minimum, so a

@@ -163,6 +163,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     public async Task SetSwitchValue(int alpacaDeviceNumber, short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         AlpacaSwitch? client;
         short portId;
+        string deviceId;
         lock (_gate) {
             var target = _disposed ? null : TargetConnectionLocked(alpacaDeviceNumber);
             client = target?.Client;
@@ -172,6 +173,15 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
                 return;
             }
             portId = id.Value;
+            deviceId = target!.Key;
+        }
+        // §25.5.6 / #1076 — the sequencer's write goes through the same fan-off interlock as the
+        // REST write: a SetSwitchValue that would stop the Thermal Switch's fan while the camera
+        // cools (or its state is unknown) fails the instruction with the refusal, so Attempts /
+        // instruction_failed engage instead of the fan silently stopping mid-cooling.
+        var refusal = await FanOffRefusalForSequencerAsync(deviceId, portId, value, ct).ConfigureAwait(false);
+        if (refusal is not null) {
+            throw new SequenceEntityFailedException(refusal);
         }
         await RunSwitchWriteAsync(client, portId, value, ct).ConfigureAwait(false);
         RefreshCacheOnce();
