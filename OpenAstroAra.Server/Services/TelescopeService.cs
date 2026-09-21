@@ -243,7 +243,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // round-trip here: the press leg must reach the driver as fast as the release leg.
         double? axisMax;
         lock (_gate) {
-            axisMax = _axisMaxDegPerSec is { } cached && axis < cached.Length ? cached[axis] : null;
+            axisMax = _axisMaxDegPerSec is { } cached && axis >= 0 && axis < cached.Length ? cached[axis] : null;
         }
         var axisEnum = (TelescopeAxis)axis;
         var effective = ClampMoveAxisRate(rate, axisMax);
@@ -413,6 +413,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try {
             AlpacaTelescope? client;
             bool needCaps;
+            bool needAxisMax;
             bool needEquatorialSystem;
             lock (_gate) {
                 if (_disposed || _state != EquipmentConnectionState.Connected) {
@@ -420,6 +421,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 }
                 client = _client;
                 needCaps = _capabilities is null;
+                // #1064 — retried every pass until BOTH pad axes have a known max (same "until one
+                // confirmed success" rule as the equatorial-system read below): a transient AxisRates
+                // failure on the caps pass must not refuse manual nudge for the whole session.
+                needAxisMax = _axisMaxDegPerSec is null || _axisMaxDegPerSec[0] is null || _axisMaxDegPerSec[1] is null;
                 needEquatorialSystem = !_equatorialSystemKnown;
             }
             if (client is null) {
@@ -439,7 +444,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
-            var axisMax = needCaps ? ReadAxisMaxRates(client) : null;
+            var axisMax = needAxisMax ? ReadAxisMaxRates(client) : null;
             // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
@@ -455,7 +460,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                         : runtime;
                     if (caps is not null) {
                         _capabilities = caps;
-                        _axisMaxDegPerSec = axisMax;
+                    }
+                    if (axisMax is not null) {
+                        // Keep any axis already known; fill the rest from this pass.
+                        _axisMaxDegPerSec ??= new double?[3];
+                        for (var i = 0; i < axisMax.Length; i++) {
+                            _axisMaxDegPerSec[i] ??= axisMax[i];
+                        }
                     }
                     if (equatorialSystem is not null) {
                         _equatorialSystemRaw = equatorialSystem.Value;
@@ -711,16 +722,21 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         return rates;
     }
 
-    // #1064 — the per-axis maximum for all three ASCOM axes, read once with the capabilities.
+    // #1064 — the per-axis maximum for the two direction-pad axes (index = ASCOM TelescopeAxis),
+    // derived from the same AxisRates sets ReadAxisRates already reads for the caps DTO, so the pass
+    // costs no extra device round-trips. Tertiary is never read (it throws on most mounts and the pad
+    // never drives it) — a Tertiary nudge stays refused (409) by design.
     private static double?[] ReadAxisMaxRates(AlpacaTelescope c) => [
-        ReadAxisMaxRate(c, TelescopeAxis.Primary),
-        ReadAxisMaxRate(c, TelescopeAxis.Secondary),
-        ReadAxisMaxRate(c, TelescopeAxis.Tertiary),
+        MaxOf(ReadAxisRateSet(c, TelescopeAxis.Primary)),
+        MaxOf(ReadAxisRateSet(c, TelescopeAxis.Secondary)),
+        null,
     ];
+
+    private static double? MaxOf(SortedSet<double> rates) => rates.Count > 0 ? rates.Max : null;
 
     // The fastest rate one axis can move (max of its bands' maxima), or null if unreadable.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements the axis; null (no cap applied) is the correct degraded result. CA1031's log-and-recover boundary applies.")]
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements the axis; null is the honest degraded result. Its two consumers own the consequence: ReadAxisRates applies no secondary cap (the primary set is offered as-is), and the #1064 clamp cache (ReadAxisMaxRates) retries the read every refresh pass until it succeeds and refuses a nudge on that axis (409) until then. CA1031's log-and-recover boundary applies.")]
     private static double? ReadAxisMaxRate(AlpacaTelescope c, TelescopeAxis axis) {
         double max = 0;
         try {
