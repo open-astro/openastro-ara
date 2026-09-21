@@ -397,7 +397,6 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
     );
   }
 
-
   @override
   void dispose() {
     _stallTimer?.cancel();

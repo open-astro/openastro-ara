@@ -404,7 +404,7 @@ void main() {
 
     final wheel = container.read(filterWheelProvider.notifier)
         as _FakeWheelNotifier;
-    // Connect at L (first-connect home-to-L is a no-op there), then the wheel
+    // Connect at L (the daemon-side first-connect home is a no-op there), then the wheel
     // is moved to Ha via the panel — the picker follows.
     wheel.park(_wheelAt(0));
     await tester.pump();
