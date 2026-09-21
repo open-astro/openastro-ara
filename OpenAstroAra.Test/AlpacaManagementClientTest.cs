@@ -79,6 +79,10 @@ namespace OpenAstroAra.Test {
             Assert.Throws<ArgumentException>(() => AlpacaManagementClient.ManagementUri(" ", 6800));
             Assert.Throws<ArgumentOutOfRangeException>(() => AlpacaManagementClient.ManagementUri("rig", 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => AlpacaManagementClient.ManagementUri("rig", 70000));
+            // Only a DNS name or IP literal: anything that would retarget the GET is refused.
+            Assert.Throws<ArgumentException>(() => AlpacaManagementClient.ManagementUri("10.0.0.5/admin/reboot?x=", 6800));
+            Assert.Throws<ArgumentException>(() => AlpacaManagementClient.ManagementUri("user@10.0.0.5", 6800));
+            Assert.Throws<ArgumentException>(() => AlpacaManagementClient.ManagementUri("10.0.0.5:80", 6800));
         }
 
         [Test]

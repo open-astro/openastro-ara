@@ -19,19 +19,27 @@ abstract interface class AlpacaDeviceNamesClient {
 class AlpacaDeviceNamesApi implements AlpacaDeviceNamesClient {
   final Dio _dio;
 
-  AlpacaDeviceNamesApi(AraServer server)
-      : _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          // The daemon's own lookup is capped at 3 s per host; leave headroom.
-          receiveTimeout: const Duration(seconds: 8),
-        ));
+  /// [dio] is the test seam (a stubbed transport); production builds one
+  /// against the active daemon.
+  AlpacaDeviceNamesApi(AraServer server, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              // The daemon's own lookup is capped at 3 s per host; leave
+              // headroom.
+              receiveTimeout: const Duration(seconds: 8),
+            ));
+
+  /// The daemon route this client dials — pinned by test so a typo can't
+  /// degrade silently into "labels stay generic forever".
+  static const String route = '/api/v1/equipment/guider/alpacadevicenames';
 
   @override
   Future<Map<String, String>> fetchNames(String host, int port) async {
     try {
       final res = await _dio.get<dynamic>(
-        '/api/v1/equipment/guider/alpacadevicenames',
+        route,
         queryParameters: <String, dynamic>{'host': host, 'port': port},
       );
       return parseNames(res.data);

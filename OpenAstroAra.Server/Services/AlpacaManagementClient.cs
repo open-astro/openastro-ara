@@ -43,13 +43,22 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
     private readonly HttpClient _http;
     private readonly ILogger<AlpacaManagementClient> _logger;
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The handler's ownership transfers to the HttpClient (disposeHandler: true), which Dispose() releases.")]
     public AlpacaManagementClient(ILogger<AlpacaManagementClient>? logger = null, HttpMessageHandler? handler = null) {
         _logger = logger ?? NullLogger<AlpacaManagementClient>.Instance;
         // Plain http against a trusted-LAN (§52/§67) surface; only the JSON body is ever parsed, and
         // only names come out of it. Same handler-injection seam as PushChannelService (tests).
-        _http = handler is null ? new HttpClient() : new HttpClient(handler);
-        _http.Timeout = RequestTimeout;
+        _http = new HttpClient(handler ?? LanHandler(), disposeHandler: true) { Timeout = RequestTimeout };
     }
+
+    // No redirects (the asked host is the only host we dial — same rule as the sky-data and backup
+    // clients in Program.cs) and a bounded pooled-connection lifetime so a daemon that runs for
+    // weeks re-resolves `rig.local` instead of pinning the first DNS answer.
+    private static SocketsHttpHandler LanHandler() => new() {
+        AllowAutoRedirect = false,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+    };
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort lookup boundary: an unreachable/slow/malformed Alpaca host must yield an empty name map (the generic labels stay), never an error toward the wizard. CA1031's log-and-recover boundary applies.")]
@@ -81,7 +90,12 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         if (port is < 1 or > 65535) {
             throw new ArgumentOutOfRangeException(nameof(port), port, "port must be 1..65535");
         }
-        // Bracket a bare IPv6 literal; hostnames/IPv4 pass through. Uri rejects anything malformed.
+        // A host is a DNS name or an IP literal, nothing else: a value carrying '/', '?', '@' or a
+        // port would survive Uri.TryCreate and retarget the GET (review of #1074).
+        if (Uri.CheckHostName(host) == UriHostNameType.Unknown) {
+            throw new ArgumentException($"'{host}' is not a valid host name or IP address", nameof(host));
+        }
+        // Bracket a bare IPv6 literal; hostnames/IPv4 pass through.
         var authority = host.Contains(':', StringComparison.Ordinal) && !host.StartsWith('[') ? $"[{host}]" : host;
         if (!Uri.TryCreate($"http://{authority}:{port.ToString(CultureInfo.InvariantCulture)}/management/v1/configureddevices",
                 UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttp) {
