@@ -31,9 +31,10 @@ namespace OpenAstroAra.Test {
 
     /// <summary>#1066 — the first-connect home to slot 0 is daemon policy. Drives a real
     /// <see cref="FilterWheelService"/> against a loopback Alpaca wheel stub that records every
-    /// <c>PUT …/position</c>, and pins the three-way rule: a first connect off slot 0 homes, a
-    /// reconnect never does, and an unknown (moving) position at seed skips WITHOUT consuming the
-    /// once-per-session claim.</summary>
+    /// <c>PUT …/position</c>, and pins the rule: the claim is taken at the wheel's first connect of
+    /// the daemon session (position known or not), the decision fires on the first refresh that
+    /// reads a known position — off slot 0 homes, at 0 counts as homed — within a bounded window,
+    /// an explicit change retires it, and a reconnect never homes.</summary>
     [TestFixture]
     public class FilterWheelFirstConnectHomeTest {
 
