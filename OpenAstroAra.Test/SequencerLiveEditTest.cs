@@ -17,6 +17,7 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Linq;
@@ -57,11 +58,22 @@ namespace OpenAstroAra.Test {
             return Serialize(block);
         }
 
-        private static (SequencerService Svc, RecordingSequenceStore Store) BuildService(Guid id, JsonElement body) {
+        private static (SequencerService Svc, RecordingSequenceStore Store) BuildService(Guid id, JsonElement body, IWsBroadcaster? ws = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var store = new RecordingSequenceStore(id, body);
-            var svc = new SequencerService(new SequenceBodyDeserializer(factory), ws: null, sequencesResolver: () => store, checkpoint: null);
+            var svc = new SequencerService(new SequenceBodyDeserializer(factory), ws: ws, sequencesResolver: () => store, checkpoint: null);
             return (svc, store);
+        }
+
+        /// <summary>Records (type, payload) so the live-edit frame's fields can be asserted.</summary>
+        private sealed class RecordingWsBroadcaster : IWsBroadcaster {
+            private readonly System.Collections.Concurrent.ConcurrentQueue<(string Type, JsonElement Payload)> _records = new();
+            public System.Collections.Generic.IReadOnlyCollection<(string Type, JsonElement Payload)> Records => _records;
+            public long CurrentSequence => _records.Count;
+            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+                _records.Enqueue((eventType, payload));
+                return Task.CompletedTask;
+            }
         }
 
         private static async Task WaitForRunningAsync(SequencerService svc, Guid id) {
@@ -82,6 +94,31 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(20);
             }
             return await svc.GetRunStateAsync(id, CancellationToken.None);
+        }
+
+        [Test]
+        public async Task The_run_items_changed_frame_carries_the_estimated_seconds() {
+            // #1068 — the live-edit frame publishes the sequencer's estimate alongside the rebased
+            // totals (delete the two lines in EmitRunItemsChangedAsync and this fails).
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var (svc, _) = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForRunningAsync(svc, id);
+
+            var result = await svc.AddRunItemAsync(id,
+                new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: Fragment("late-target")),
+                null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+
+            var frame = ws.Records.LastOrDefault(r => r.Type == WsEventCatalog.SequenceRunItemsChanged);
+            Assert.That(frame.Type, Is.EqualTo(WsEventCatalog.SequenceRunItemsChanged), "the edit published its frame");
+            Assert.That(frame.Payload.GetProperty("estimated_total_seconds").GetDouble(), Is.GreaterThan(0),
+                "the appended block joins the sequencer's total");
+            Assert.That(frame.Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.GreaterThan(0));
+            await WaitForTerminalAsync(svc, id);
         }
 
         [Test]

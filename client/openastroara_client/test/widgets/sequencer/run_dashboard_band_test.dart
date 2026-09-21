@@ -54,6 +54,37 @@ void main() {
     expect(bar.value, closeTo(0.25, 0.001));
   });
 
+  testWidgets('early in a run the header shows the daemon\'s remaining estimate '
+      '(#1068)', (tester) async {
+    await _pump(
+        tester,
+        SequenceRunStateInfo(
+          sequenceId: 's1',
+          state: SequenceRunState.running,
+          instructionsCompleted: 1,
+          instructionsTotal: 10,
+          startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+          estimatedTotalSeconds: 1215,
+          estimatedRemainingSeconds: 600,
+        ));
+    expect(find.textContaining('~10:00 left'), findsOneWidget,
+        reason: 'the daemon figure is shown before the observed rate is trusted');
+  });
+
+  testWidgets('with no daemon estimate the header shows no remaining time',
+      (tester) async {
+    await _pump(
+        tester,
+        SequenceRunStateInfo(
+          sequenceId: 's1',
+          state: SequenceRunState.running,
+          instructionsCompleted: 1,
+          instructionsTotal: 10,
+          startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+        ));
+    expect(find.textContaining('left'), findsNothing);
+  });
+
   testWidgets('needs-attention renders the urgent line', (tester) async {
     await _pump(
         tester,
