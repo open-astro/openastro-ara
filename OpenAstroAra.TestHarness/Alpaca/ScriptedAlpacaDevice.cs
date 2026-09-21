@@ -14,7 +14,9 @@
 
 using OpenAstroAra.TestHarness.Net;
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -39,6 +41,10 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     private readonly Task _loop;
     private volatile Func<string, string?>? _responder;
 
+    /// <summary>Every PUT the device received, as (lower-cased path, form body) — for tests that
+    /// assert a write reached the device (the scripted GETs never reflect a write).</summary>
+    public ConcurrentQueue<(string Path, string Body)> Puts { get; } = new();
+
     private ScriptedAlpacaDevice(HttpListener listener, int port, Func<string, string?>? responder) {
         BaseUri = new Uri($"http://127.0.0.1:{port}/");
         _listener = listener;
@@ -58,6 +64,8 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Not a round-trip normalization: Alpaca URL paths are lower-case on the wire, and the responder contract documents receiving the lower-cased path — upper-casing would fight the ecosystem's own convention.")]
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Test-harness serve loop: a client aborting mid-PUT must never fault the loop and silently stop the scripted device for the rest of the test.")]
     private async Task LoopAsync() {
         while (!_cts.IsCancellationRequested) {
             HttpListenerContext ctx;
@@ -73,6 +81,15 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                 var scripted = _responder?.Invoke(ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "");
                 if (scripted is not null) {
                     value = scripted;
+                }
+            } else if (ctx.Request.HttpMethod == "PUT") {
+                try {
+                    using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+                    Puts.Enqueue((ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "", await reader.ReadToEndAsync().ConfigureAwait(false)));
+                } catch (Exception) {
+                    // client aborted mid-PUT (HttpListenerException, an IOException from a half-read
+                    // body, ObjectDisposedException) — irrelevant to the test; the loop must keep
+                    // serving, or the device silently stops answering for the rest of the test.
                 }
             }
             var body = Encoding.UTF8.GetBytes(
