@@ -109,6 +109,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_fan_write_never_fails_the_cooler_call_and_publishes_an_op_error_fault() {
+            await using var box = ScriptedAlpacaDevice.Start(_ => null);
+            var actuator = new Mock<ICoolingFanActuator>();
+            var thermal = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
+                [new SwitchPortDto(1, "Fan", Value: 1, Min: 0, Max: 1, CanWrite: true)]);
+            actuator.Setup(a => a.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<SwitchDto> { thermal });
+            actuator.Setup(a => a.SetFanValueAsync(It.IsAny<string>(), It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new TimeoutException("bridge did not answer the fan write"));
+            var faults = new List<EquipmentFaultEvent>();
+            var sink = new Mock<IEquipmentFaultSink>();
+            sink.Setup(f => f.Publish(It.IsAny<EquipmentFaultEvent>())).Callback<EquipmentFaultEvent>(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new CameraService(faults: sink.Object, fan: () => actuator.Object);
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box, DeviceType.Camera, "Bench Camera")), null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+                TimeSpan.FromSeconds(15), "camera never connected");
+
+            // Cooler OFF (the §58 warm ramp's final step): the fan-off write fails — the call must still
+            // return normally so the ramp completes, and the failure is an op_error fault on the switch.
+            Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None));
+            lock (faults) {
+                Assert.That(faults, Has.Count.EqualTo(1));
+                Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.OpError));
+                Assert.That(faults[0].DeviceType, Is.EqualTo(DeviceType.Switch));
+                Assert.That(faults[0].DeviceId, Is.EqualTo("sw-5"));
+                Assert.That(faults[0].Details, Does.Contain("cooling fan could not be synced"));
+            }
+        }
+
+        [Test]
         public async Task The_camera_cooler_write_drives_the_fan_through_the_actuator() {
             // A scripted camera that answers every read with a default ("true"/unparseable → the
             // per-field fallbacks) and accepts every PUT: enough to connect and take a cooler write.
