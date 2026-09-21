@@ -189,7 +189,7 @@ namespace OpenAstroAra.Test {
             await using var box = ScriptedAlpacaDevice.Start(path => path.EndsWith("/cooleron", StringComparison.Ordinal) ? "false" : null);
             var actuator = new Mock<ICoolingFanActuator>();
             var thermal = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
-                [new SwitchPortDto(1, "Fan", Value: 0, Min: 0, Max: 1, CanWrite: true)]);
+                [new SwitchPortDto(1, "Fan", Value: 1, Min: 0, Max: 1, CanWrite: true)]); // Value 1: the fan-OFF below is a real (failing) write too
             actuator.Setup(a => a.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<SwitchDto> { thermal });
             actuator.Setup(a => a.SetFanValueAsync(It.IsAny<string>(), It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new TimeoutException("bridge did not answer the fan write"));
@@ -200,6 +200,9 @@ namespace OpenAstroAra.Test {
 
             var ex = Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -10, CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("cooling fan could not be started"));
+            // Fan FIRST: the refusal happens before the cooler write, so nothing reached the camera.
+            Assert.That(box.Puts.Select(p => p.Path), Has.None.EndsWith("/cooleron").And.None.EndsWith("/setccdtemperature"),
+                "a refused cooler-on commits nothing to the camera");
             Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None),
                 "cooler-off must still complete (the warm ramp's final step) even if the fan-off write fails");
         }

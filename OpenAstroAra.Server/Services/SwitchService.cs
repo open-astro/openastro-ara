@@ -317,9 +317,14 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         Justification = "Catch-up fan sync boundary: a failing camera probe or fan write on a late-connecting switch must be a logged fault, never fault the connect task. CA1031's log-and-recover boundary applies.")]
     private async Task SyncFanToCoolingCameraAsync(string deviceId) {
         try {
-            var device = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
+            // The connect's own RefreshCacheOnce is a CAS'd no-op while a timer pass or another
+            // switch's connect is already refreshing (review of #1084), so the port snapshot may
+            // still be empty here and the fan port unidentifiable. Wait for the first ports read
+            // (the next 2 s tick at the latest) rather than deciding on an empty snapshot and
+            // never coming back — this is a one-shot task.
+            var device = await WaitForPortsAsync(deviceId, PortsWaitBudget).ConfigureAwait(false);
             if (device is null || CoolingFanInterlock.FindThermalSwitchFanPort([device]) is null) {
-                return; // not the fan switch (most rigs)
+                return; // not the fan switch (most rigs), or its ports never read
             }
             if (await ProbeCoolerStateAsync(CancellationToken.None).ConfigureAwait(false) != true) {
                 return; // the camera is not (known to be) cooling — nothing to catch up
@@ -330,11 +335,36 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             }
             await SetValueCoreAsync(sync.Value.DeviceId, sync.Value.Request, CancellationToken.None).ConfigureAwait(false);
             LogFanCaughtUp(_logger, deviceId);
+        } catch (Exception ex) when (ex is ObjectDisposedException or OperationCanceledException) {
+            // A daemon shutdown racing the catch-up is not a fan fault (review of #1084).
         } catch (Exception ex) {
             LogFanCatchUpFailed(_logger, ex, deviceId);
             _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, deviceId, null, EquipmentFaultKind.OpError,
                 $"the camera is cooling, but the cooling fan on the newly connected switch could not be started ({ex.GetType().Name}) — check the fan",
                 DateTimeOffset.UtcNow));
+        }
+    }
+
+    /// <summary>How long the late-connect catch-up waits for the switch's first ports read: well
+    /// past one refresh interval, so a CAS-skipped seed refresh is covered by the next tick.</summary>
+    private static readonly TimeSpan PortsWaitBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>The switch's DTO once its ports have been read (cache polling only, no device I/O
+    /// of our own); null if it is gone, disposed, or the ports never land within the budget.</summary>
+    private async Task<SwitchDto?> WaitForPortsAsync(string deviceId, TimeSpan budget) {
+        var deadline = DateTimeOffset.UtcNow + budget;
+        while (true) {
+            var device = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
+            if (device is null || device.State != EquipmentConnectionState.Connected) {
+                return null;
+            }
+            if (device.Ports.Count > 0) {
+                return device;
+            }
+            if (DateTimeOffset.UtcNow >= deadline) {
+                return null;
+            }
+            await Task.Delay(200).ConfigureAwait(false);
         }
     }
 
