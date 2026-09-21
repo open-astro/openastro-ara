@@ -312,5 +312,37 @@ namespace OpenAstroAra.Test {
             Assert.That(writes.Count(w => w == FilterWheelService.DefaultSlot), Is.LessThanOrEqualTo(1), "the home is written at most once");
             await DisconnectAsync(svc);
         }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_dispatched_home_steps_aside_when_a_change_bumped_its_token_before_the_write() {
+            // #1079 — deterministic version of the sub-millisecond race: the wheel is parked off 0
+            // and its home has (notionally) been dispatched with the generation as it was; a
+            // change then bumps the generation; invoking the home task with the STALE token must
+            // issue no Position write.
+            await using var stub = StubWheel.Start(position: 3);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            // The real first-connect home lands first (position known at seed); let it settle.
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True);
+            while (stub.PositionWrites.TryDequeue(out _)) { }
+            await WaitForSlotsAsync(svc);
+            var (stale, client) = svc.HomeTokenForTest();
+            Assert.That(client, Is.Not.Null);
+            // An explicit change bumps the token (and moves the wheel to 2).
+            await svc.ChangeFilterAsync(new FilterChangeRequestDto(2), idempotencyKey: null, CancellationToken.None);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True);
+            while (stub.PositionWrites.TryDequeue(out _)) { }
+            // The stale home task runs now: it must step aside.
+            svc.HomeInBackground(client!, stale);
+            await Task.Delay(500);
+            Assert.That(stub.PositionWrites, Is.Empty, "a home whose token moved never writes Position = 0");
+            // And the CURRENT token still homes (proves the guard is the token, not the connection checks).
+            var (current, _) = svc.HomeTokenForTest();
+            svc.HomeInBackground(client!, current);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(5)), Is.True);
+            Assert.That(stub.PositionWrites.TryDequeue(out var w) && w == FilterWheelService.DefaultSlot, Is.True);
+            await DisconnectAsync(svc);
+        }
     }
 }

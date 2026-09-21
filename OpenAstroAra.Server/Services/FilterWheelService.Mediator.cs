@@ -165,7 +165,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             await Task.Delay(200, ct).ConfigureAwait(false);
         }
         lock (_gate) {
-            return _slots;
+            // Same liveness guard as inside the loop: a different wheel adopted in the final
+            // 200 ms must not have its slot list validated against and then written to the
+            // captured (now disposed) client.
+            return !_disposed && _state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client) ? _slots : null;
         }
     }
 

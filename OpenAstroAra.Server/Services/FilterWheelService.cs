@@ -235,13 +235,21 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     }
 
     /// <summary>#1079 — whether a home dispatched at <paramref name="dispatched"/> is still wanted
-    /// now that the generation reads <paramref name="current"/>: any explicit change, disconnect or
-    /// newer connect in between retires it. Internal static so the rule is unit-testable.</summary>
+    /// now that the generation reads <paramref name="current"/>: any explicit change, disconnect,
+    /// connection loss, newer connect or dispose in between retires it.</summary>
     internal static bool HomeStillWanted(long dispatched, long current) => dispatched == current;
+
+    /// <summary>The current home generation and live client, for the bench test that invokes
+    /// <see cref="HomeInBackground"/> with a stale token.</summary>
+    internal (long Generation, AlpacaFilterWheel? Client) HomeTokenForTest() {
+        lock (_gate) {
+            return (_homeGeneration, _client);
+        }
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background home boundary: same as ChangeInBackground — a throwing Position write or a client disposed mid-write must be contained and logged, never fault the fire-and-forget task. CA1031's log-and-recover boundary applies.")]
-    private void HomeInBackground(AlpacaFilterWheel client, long dispatched) {
+    internal void HomeInBackground(AlpacaFilterWheel client, long dispatched) {
         try {
             lock (_gate) {
                 // Re-check under the gate right before the write: a change accepted after the
@@ -522,6 +530,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
             neverDecided = TakePendingHomeNeverDecidedLocked();
+            _homeGeneration++; // #1079 — an in-flight home for a wheel that stopped answering is stale
         }
         if (neverDecided is not null) {
             LogHomeNeverDecided(neverDecided);
