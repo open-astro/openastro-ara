@@ -9,6 +9,7 @@ import '../../state/guider/guider_calibration_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/profile_management_state.dart';
+import '../../state/saved_server_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
@@ -21,7 +22,11 @@ import '../profile/profile_import_flow.dart' show friendlyDaemonError;
 /// (non-Alpaca drivers, `"None"`). Pure — unit-tested.
 /// Builds the Alpaca management-API reader. Overridable in tests.
 final alpacaDeviceNamesApiProvider = Provider<AlpacaDeviceNamesClient>((ref) {
-  final api = AlpacaDeviceNamesApi();
+  // Bound to the active daemon (#1067): the daemon reads the Alpaca host's
+  // management API, the client never dials equipment itself.
+  final server = ref.watch(activeServerProvider);
+  if (server == null) return const NoServerAlpacaDeviceNames();
+  final api = AlpacaDeviceNamesApi(server);
   ref.onDispose(api.close);
   return api;
 });

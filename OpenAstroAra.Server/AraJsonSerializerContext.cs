@@ -54,6 +54,7 @@ namespace OpenAstroAra.Server;
 // LowerCaseNamingPolicy which produces the §60.6 shape AOT-safely.
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(AlpacaDeviceNamesResponseDto))]
 [JsonSerializable(typeof(ApiSurfaceVersionDto))]
 [JsonSerializable(typeof(ApiVersionsDto))]
 [JsonSerializable(typeof(AutoFlatsDecisionRequestDto))]
