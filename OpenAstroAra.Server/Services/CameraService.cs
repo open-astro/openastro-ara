@@ -336,12 +336,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fan-sync boundary: a switch-list read or fan write failure must never fail the committed cooler change (the §58 warm ramp would otherwise skip its final cooler-off) — it is published as an equipment fault and logged. CA1031's log-and-recover boundary applies.")]
     private async Task SyncCoolingFanAsync(bool cooling) {
-        var actuator = _fan?.Invoke();
-        if (actuator is null) {
-            return;
-        }
         (string DeviceId, SwitchValueRequestDto Request)? sync;
+        ICoolingFanActuator? actuator;
         try {
+            // Resolution sits inside the guard too: a throwing DI seam must not fail the committed
+            // cooler call any more than a failing switch read may.
+            actuator = _fan?.Invoke();
+            if (actuator is null) {
+                return;
+            }
             sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(CancellationToken.None).ConfigureAwait(false), cooling);
         } catch (Exception ex) {
             // Whether a fan-capable switch even exists is unknown here — most rigs have none, and
