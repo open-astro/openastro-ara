@@ -98,8 +98,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         EquipmentEventPublisher? events = null,
         ImageHistoryService? imageHistory = null,
         IEquipmentFaultSink? faults = null,
-        IObservingConditionsService? weather = null) {
+        IObservingConditionsService? weather = null,
+        Func<ICoolingFanActuator?>? fan = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
+        _fan = fan;
         _events = events;
         _faults = faults;
         _frames = frames;
@@ -112,6 +114,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     }
 
     private readonly ImageHistoryService? _imageHistory;
+
+    // §25.5.6 / #1065 — the cooling fan follows the cooler. Lazily resolved (Func<>) to break the
+    // CameraService ↔ SwitchService construction cycle. Null = no switch service wired (tests).
+    private readonly Func<ICoolingFanActuator?>? _fan;
 
     // §29.2 header enrichment — the sky the frame was taken under (SQM,
     // ambient). Optional: no weather station, no headers, no complaints.
@@ -315,7 +321,59 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 $"the camera rejected the cooler write ({ex.GetType().Name}) — it may not support cooling", ex);
         }
         RefreshCacheOnce();
+        // §25.5.6 / #1065 — sync the fan AFTER the cooler write is committed and reflected. Every
+        // cooler path (REST, the §58 unattended warm ramp, other clients) gets it. A fan failure
+        // never fails the cooler call: the cooler DID change, and a caller such as the warm ramp
+        // must go on to its final cooler-off (review of #1070). It is published as an OpError
+        // equipment fault (→ notification center) and logged instead.
+        // CancellationToken.None, not ct (review of #1070): the fan-ON write after cooler-on is the
+        // safety half of the interlock, and Task.Run with an already-cancelled request token never
+        // runs its body — a client timeout during the blocking cooler write must not leave the TEC
+        // cooling with the fan off. Same reasoning as AbortExposureAsync.
+        await SyncCoolingFanAsync(enabled).ConfigureAwait(false);
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fan-sync boundary: a switch-list read or fan write failure must never fail the committed cooler change (the §58 warm ramp would otherwise skip its final cooler-off) — it is published as an equipment fault and logged. CA1031's log-and-recover boundary applies.")]
+    private async Task SyncCoolingFanAsync(bool cooling) {
+        (string DeviceId, SwitchValueRequestDto Request)? sync;
+        ICoolingFanActuator? actuator;
+        try {
+            // Resolution sits inside the guard too: a throwing DI seam must not fail the committed
+            // cooler call any more than a failing switch read may.
+            actuator = _fan?.Invoke();
+            if (actuator is null) {
+                return;
+            }
+            sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(CancellationToken.None).ConfigureAwait(false), cooling);
+        } catch (Exception ex) {
+            // Whether a fan-capable switch even exists is unknown here — most rigs have none, and
+            // the switch list is a separate subsystem. A list-read failure is a no-op, not an alarm
+            // on every cooler toggle; a real fan WRITE failure below is still surfaced.
+            LogFanListReadFailed(_logger, ex);
+            return;
+        }
+        if (sync is null) {
+            return;
+        }
+        try {
+            await actuator.SetFanValueAsync(sync.Value.DeviceId, sync.Value.Request, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogFanSyncFailed(_logger, ex, cooling);
+            _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, sync.Value.DeviceId, null,
+                EquipmentFaultKind.OpError,
+                $"the cooler is {(cooling ? "on" : "off")}, but the cooling fan could not be synced ({ex.GetType().Name}) — check the fan",
+                DateTimeOffset.UtcNow));
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug,
+        Message = "Cooling-fan sync skipped: switch list unreadable.")]
+    private static partial void LogFanListReadFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "Cooling-fan sync failed after cooler change (cooling={Cooling}).")]
+    private static partial void LogFanSyncFailed(ILogger logger, Exception ex, bool cooling);
 
     /// <summary>
     /// §25.5.5 cooler capability gate: returns the human-readable refusal reason

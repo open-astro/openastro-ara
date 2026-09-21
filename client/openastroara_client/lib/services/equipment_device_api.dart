@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../models/discovered_device.dart';
@@ -9,7 +11,28 @@ import '../models/server.dart';
 String describeEquipmentError(Object? e) {
   if (e == null) return 'unknown error';
   if (e is DioException) {
+    // The daemon speaks human in its 400/409 Problem responses (a refusal
+    // carries the reason in `detail`) — prefer those words over a bare status
+    // code. Other statuses keep the code: their detail is not written for
+    // people.
     final code = e.response?.statusCode;
+    // application/problem+json may reach us undecoded (a raw String body)
+    // depending on Dio's transformer; decode it ourselves so the server's
+    // sentence is never lost behind "server returned 409".
+    var data = e.response?.data;
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        data = null;
+      }
+    }
+    if ((code == 400 || code == 409) && data is Map && data['detail'] is String) {
+      // First line only: a framework-shaped 400 detail can carry a
+      // "(Parameter 'x')\nActual value was …" tail that is not for people.
+      final detail = (data['detail'] as String).trim().split('\n').first.trim();
+      if (detail.isNotEmpty) return detail;
+    }
     if (code != null) return 'server returned $code';
     return e.message ?? 'network error';
   }
