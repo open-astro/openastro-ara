@@ -248,10 +248,13 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     public async Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
         ArgumentNullException.ThrowIfNull(request);
+        // ASCOM addresses ports by a short id; validate before anything else so an out-of-range
+        // PortId is the documented 400 regardless of connection or interlock state.
+        ThrowIfPortIdOutOfRange(request);
         // §25.5.6 / #1065 fan-off interlock, daemon-side: a write that would stop the cooling fan
-        // is refused (→ 409) unless the camera's cooler is KNOWN to be off. Checked against the
-        // cached port snapshot (name + min) before the connection lookup so the refusal reads the
-        // same whether or not the write would have succeeded.
+        // is refused (→ 409) unless the camera's cooler is KNOWN to be off. Decided from the cached
+        // port snapshot (name + min) of a CONNECTED switch; the connection refusal itself stays with
+        // the write path.
         var refusal = await FanOffRefusalForAsync(deviceId, request, ct).ConfigureAwait(false);
         if (refusal is not null) {
             throw new InvalidOperationException(refusal);
@@ -267,26 +270,19 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     private async Task<string?> FanOffRefusalForAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         SwitchDto? device;
         lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             device = _connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null;
         }
-        if (device is null) {
-            return null; // not connected: the write path's own "not connected" refusal applies
-        }
-        var port = device.Ports.FirstOrDefault(p => p.Id == request.PortId);
-        if (port is null) {
-            // Connected but the port snapshot has not been read yet (up to one refresh interval after
-            // connect). Only a write that could plausibly be stopping the Thermal Switch's fan is held:
-            // with no port info the one thing we know is the requested value, and a fan-off means
-            // driving it to its floor — a write to 0 or below. Anything else (fan ON, a heater port,
-            // a mid-range PWM value) goes through: refusing a fan-on is the wrong direction for the
-            // hazard this interlock exists for.
-            return device.Ports.Count == 0 && CoolingFanInterlock.IsThermalSwitchDevice(device) && request.Value <= 0
-                ? CoolingFanInterlock.FanOffRefusal(null)
-                : null;
-        }
-        if (!CoolingFanInterlock.IsThermalSwitchFanPort(device, port) || !CoolingFanInterlock.IsFanOff(port, request.Value)) {
+        // Not connected (unknown id, Error, Disconnected): the write path's own "not connected"
+        // refusal applies — the user must be told the switch is down, not to check the camera.
+        if (device is null || device.State != EquipmentConnectionState.Connected) {
             return null;
         }
+        if (!CoolingFanInterlock.IsPlausibleFanOff(device, request)) {
+            return null;
+        }
+        // Either the identified Fan port is being driven to its floor, or the connected Thermal
+        // Switch's port snapshot is still unread and the write is to 0 or below. Both ask the camera.
         bool? coolerOn;
         try {
             var camera = _cameraProbe?.Invoke();
@@ -312,14 +308,19 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         return SetValueCoreAsync(deviceId, request, ct);
     }
 
-    private async Task SetValueCoreAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
-        // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
-        // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
-        // -32768). Checked before the connection lookup so the range contract holds regardless of state.
+    // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
+    // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
+    // -32768). Called before the connection lookup AND before the interlock so the range contract
+    // holds regardless of state.
+    private static void ThrowIfPortIdOutOfRange(SwitchValueRequestDto request) {
         if (request.PortId is < 0 or > short.MaxValue) {
             throw new ArgumentOutOfRangeException(nameof(request), request.PortId,
                 "PortId is out of range for an ASCOM Switch (0..32767).");
         }
+    }
+
+    private async Task SetValueCoreAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ThrowIfPortIdOutOfRange(request);
         AlpacaSwitch? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);

@@ -15,6 +15,7 @@
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -93,6 +94,25 @@ public static class CoolingFanInterlock {
     public static bool IsFanOff(SwitchPortDto port, double value) {
         ArgumentNullException.ThrowIfNull(port);
         return value <= port.Min;
+    }
+
+    /// <summary>Whether a write to a CONNECTED switch could be stopping the cooling fan, and so must
+    /// ask the camera before it goes through: the identified Fan port driven to its floor, or — while
+    /// the Thermal Switch's port snapshot is still unread (up to one refresh interval after connect)
+    /// and no port can be identified — any write of <c>value &lt;= 0</c>, the one way to drive an
+    /// unidentified port to its floor. A fan-on, a heater port or a mid-range PWM value is never held:
+    /// refusing a fan-on is the wrong direction for the hazard this interlock exists for.</summary>
+    public static bool IsPlausibleFanOff(SwitchDto device, SwitchValueRequestDto request) {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(request);
+        if (device.State != EquipmentConnectionState.Connected || !IsThermalSwitchDevice(device)) {
+            return false;
+        }
+        if (device.Ports.Count == 0) {
+            return request.Value <= 0;
+        }
+        var port = device.Ports.FirstOrDefault(p => p.Id == request.PortId);
+        return port is not null && IsThermalSwitchFanPort(device, port) && IsFanOff(port, request.Value);
     }
 
     /// <summary>The refusal reason for a fan-off, or null when it is allowed. <paramref name="coolerOn"/>

@@ -81,6 +81,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Plausible_fan_off_covers_the_unread_snapshot_window_but_only_for_a_connected_thermal_switch() {
+            var unread = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected, Ports: []);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, new SwitchValueRequestDto(0, 0)), Is.True, "unread snapshot + value 0: could be the fan");
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, new SwitchValueRequestDto(1, 1)), Is.False, "a fan ON / mid-range value is never held");
+            // Error / Disconnected project empty ports too — the write path's "not connected" applies, never the fan refusal.
+            var down = unread with { State = EquipmentConnectionState.Error };
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(down, new SwitchValueRequestDto(0, 0)), Is.False);
+            var other = unread with { Name = "Pegasus UPBv2" };
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(other, new SwitchValueRequestDto(0, 0)), Is.False);
+            // Snapshot read: only the identified Fan port at its floor.
+            var known = Thermal(Fan(value: 1));
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, new SwitchValueRequestDto(1, 0)), Is.True);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, new SwitchValueRequestDto(0, 0)), Is.False, "the heater port is not the fan");
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, new SwitchValueRequestDto(1, 1)), Is.False);
+        }
+
+        [Test]
+        public async System.Threading.Tasks.Task A_thermal_switch_in_Error_gets_the_not_connected_refusal_not_the_fan_one() {
+            using var svc = new SwitchService();
+            var dead = new DiscoveredDeviceDto(UniqueId: "dead-thermal", Name: "ToupTek Thermal Switch", Type: DeviceType.Switch,
+                HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 1, AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, System.Threading.CancellationToken.None);
+            for (var i = 0; i < 200; i++) {
+                var dto = await svc.GetAsync("dead-thermal", System.Threading.CancellationToken.None);
+                if (dto?.State != EquipmentConnectionState.Connecting) break;
+                await System.Threading.Tasks.Task.Delay(50);
+            }
+            var ex = Assert.ThrowsAsync<System.InvalidOperationException>(
+                () => svc.SetValueAsync("dead-thermal", new SwitchValueRequestDto(0, 0), System.Threading.CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("not connected"));
+            Assert.That(ex.Message, Does.Not.Contain("cooler"));
+        }
+
+        [Test]
         public void Fan_off_refusal_fails_closed_on_unknown_cooler_state() {
             Assert.That(CoolingFanInterlock.FanOffRefusal(false), Is.Null);
             Assert.That(CoolingFanInterlock.FanOffRefusal(true), Does.Contain("damage the camera"));
