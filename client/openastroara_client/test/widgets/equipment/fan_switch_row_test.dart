@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,9 +13,10 @@ import 'package:openastroara/widgets/equipment/fan_switch_row.dart';
 
 class _FakeSwitchClient implements SwitchClient {
   final List<SwitchDevice> devices;
-  _FakeSwitchClient(this.devices, {this.throwOnSet = false});
+  _FakeSwitchClient(this.devices, {this.throwOnSet = false, this.setError});
   final List<String> calls = [];
   final bool throwOnSet;
+  final Object? setError;
   @override
   Future<List<SwitchDevice>> getAll() async => devices;
   @override
@@ -31,7 +33,7 @@ class _FakeSwitchClient implements SwitchClient {
     required int portId,
     required double value,
   }) async {
-    if (throwOnSet) throw Exception('device rejected the write');
+    if (throwOnSet) throw setError ?? Exception('device rejected the write');
     calls.add('setValue:$deviceId:$portId:$value');
   }
 
@@ -69,21 +71,14 @@ Future<_FakeSwitchClient> _pump(
   List<SwitchDevice>? switches,
   CameraStatus? camera,
   _FakeSwitchClient? switchClient,
-  bool cameraFails = false,
 }) async {
   final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
   await tester.pumpWidget(ProviderScope(
-    // No auto-retry: the erroring camera notifier must settle in AsyncError
-    // (so provider.future completes with the error) instead of Riverpod 3's
-    // default backoff retry leaving timers pending in the test.
-    retry: (retryCount, error) => null,
     overrides: [
       switchApiProvider.overrideWithValue(fake),
       switchListProvider.overrideWith(
           () => _SwitchListNotifierForTest(fake)),
-      cameraStatusProvider.overrideWith(() => cameraFails
-          ? _ErrorCameraNotifier()
-          : _FixedCameraNotifier(camera)),
+      cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
     ],
     child: const MaterialApp(
       home: Scaffold(body: SingleChildScrollView(child: FanSwitchRow())),
@@ -141,26 +136,38 @@ void main() {
     expect(find.textContaining("Couldn't set the fan"), findsOneWidget);
   });
 
-  testWidgets(
-      'refuses fan-off when the cooler state is unknown (camera read failed) '
-      '— the interlock fails closed', (tester) async {
+  testWidgets('fan-off is sent even while cooling — the daemon owns the '
+      'interlock (#1065)', (tester) async {
     final fake = await _pump(
-      tester,
-      switches: [_fanDevice(value: 1.0)],
-      cameraFails: true,
-    );
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('cooler state is unknown'), findsOneWidget);
-    expect(fake.calls, isEmpty); // no write went through
-  });
-
-  testWidgets('refuses fan-off while the cooler is cooling', (tester) async {
-    await _pump(
       tester,
       switches: [_fanDevice(value: 1.0)],
       camera: FakeCameraStatus(coolerOn: true),
     );
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(fake.calls, contains('setValue:switch-5:1:0.0'));
+  });
+
+  testWidgets("the daemon's fan-off refusal (409 detail) is shown verbatim",
+      (tester) async {
+    final sw = _FakeSwitchClient(
+      [_fanDevice(value: 1.0)],
+      throwOnSet: true,
+      setError: DioException(
+        requestOptions: RequestOptions(path: '/switch'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/switch'),
+          statusCode: 409,
+          data: const {
+            'detail': 'Turn the cooler off before stopping the fan — cooling '
+                'with the fan off can damage the camera.'
+          },
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+    await _pump(tester, switches: sw.devices, switchClient: sw,
+        camera: FakeCameraStatus(coolerOn: true));
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.textContaining('damage the camera'), findsOneWidget);
@@ -187,14 +194,6 @@ class _FixedCameraNotifier extends CameraStatusNotifier {
   final CameraStatus? _status;
   @override
   Future<CameraStatus?> build() async => _status;
-}
-
-/// Camera status stuck in AsyncError — the "cooler state unknown" case the
-/// fan-off interlock must fail closed on.
-class _ErrorCameraNotifier extends CameraStatusNotifier {
-  @override
-  Future<CameraStatus?> build() async =>
-      throw Exception('camera read failed');
 }
 
 class _SwitchListNotifierForTest extends SwitchListNotifier {

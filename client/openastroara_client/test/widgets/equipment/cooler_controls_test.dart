@@ -31,7 +31,10 @@ class _FakeSwitchClient implements SwitchClient {
   List<SwitchDevice> devices;
   final List<String> calls = [];
   @override
-  Future<List<SwitchDevice>> getAll() async => devices;
+  Future<List<SwitchDevice>> getAll() async {
+    calls.add('getAll');
+    return devices;
+  }
   @override
   Future<void> connect(DiscoveredDevice device) async {}
   @override
@@ -228,22 +231,18 @@ void main() {
         contains('command:cooler:enabled=true:target=-10.0:fan=null'));
   });
 
-  testWidgets('turning the cooler on syncs the fan switch port (single write)',
-      (tester) async {
+  testWidgets('turning the cooler on never writes the fan from the client '
+      '(the daemon syncs it — #1065) but re-reads the switch list so the fan '
+      'row is not stale', (tester) async {
     final sw = _FakeSwitchClient([_fanDevice(value: 0.0)]);
     await _pump(tester, _status(coolerOn: false), switchClient: sw);
+    final readsBefore = sw.calls.where((c) => c == 'getAll').length;
     await tester.tap(find.byType(Switch).first); // cooler switch
     await tester.pumpAndSettle();
-    expect(sw.calls, contains('setValue:switch-5:1:1.0'));
-  });
-
-  testWidgets('turning the cooler off syncs the fan switch port off',
-      (tester) async {
-    final sw = _FakeSwitchClient([_fanDevice(value: 1.0)]);
-    await _pump(tester, _status(coolerOn: true), switchClient: sw);
-    await tester.tap(find.byType(Switch).first); // cooler switch
-    await tester.pumpAndSettle();
-    expect(sw.calls, contains('setValue:switch-5:1:0.0'));
+    expect(sw.calls.where((c) => c.startsWith('setValue')), isEmpty);
+    expect(sw.calls.where((c) => c == 'getAll').length,
+        greaterThan(readsBefore),
+        reason: 'the list is pull-on-demand; refresh after the cooler command');
   });
 
   testWidgets(

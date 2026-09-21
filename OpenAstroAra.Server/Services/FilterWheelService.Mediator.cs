@@ -117,6 +117,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             LogFilterChangeSkipped(inputFilter.Name, target);
             return inputFilter;
         }
+        // #1066 — a sequence's SwitchFilter is a deliberate position: retire the first-connect home
+        // so it can never land on top of (or after) this change.
+        RetirePendingHome();
         var reached = await RunFilterChangeAsync(client, target, token).ConfigureAwait(false);
         if (!reached) {
             // §42.2: the wheel never confirmed the slot (jam / stalled write / dropped link) —

@@ -47,7 +47,7 @@ namespace OpenAstroAra.Server.Services;
 /// switch as its "primary" — see <c>SwitchService.Mediator.cs</c>. Per-device sequencer targeting is a
 /// follow-up.
 /// </summary>
-public sealed partial class SwitchService : ISwitchService, IDisposable {
+public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IDisposable {
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
@@ -113,12 +113,14 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     }
 
     public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null) {
+            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null,
+            Func<ICameraService?>? cameraProbe = null) {
         _logger = logger ?? NullLogger<SwitchService>.Instance;
         _events = events;
         _faults = faults;
         _profileStore = profileStore;
         _ws = ws;
+        _cameraProbe = cameraProbe;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -238,16 +240,87 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         return Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
     }
 
+    // #1065 — lazily resolved (Func<>) to break the CameraService ↔ SwitchService construction
+    // cycle: the camera syncs the fan through this service, this service asks the camera whether
+    // it is cooling before it lets the fan stop.
+    private readonly Func<ICameraService?>? _cameraProbe;
+
     public async Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
         ArgumentNullException.ThrowIfNull(request);
-        // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
-        // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
-        // -32768). Checked before the connection lookup so the range contract holds regardless of state.
+        // ASCOM addresses ports by a short id; validate before anything else so an out-of-range
+        // PortId is the documented 400 regardless of connection or interlock state.
+        ThrowIfPortIdOutOfRange(request);
+        // §25.5.6 / #1065 fan-off interlock, daemon-side: a write that would stop the cooling fan
+        // is refused (→ 409) unless the camera's cooler is KNOWN to be off. Decided from the cached
+        // port snapshot (name + min) of a CONNECTED switch; the connection refusal itself stays with
+        // the write path.
+        var refusal = await FanOffRefusalForAsync(deviceId, request, ct).ConfigureAwait(false);
+        if (refusal is not null) {
+            throw new InvalidOperationException(refusal);
+        }
+        await SetValueCoreAsync(deviceId, request, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The interlock decision for one write: null when it is not a fan-off (or the port is
+    /// not the cooling fan), else the refusal reason. Fails CLOSED: no camera probe wired, or a
+    /// probe that throws, both read as "unknown" and refuse.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Interlock probe boundary: a failing camera status read must refuse the fan-off (fail closed), never surface as a 500 from a switch write. CA1031's log-and-recover boundary applies.")]
+    private async Task<string?> FanOffRefusalForAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        SwitchDto? device;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            device = _connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null;
+        }
+        // Not connected (unknown id, Error, Disconnected): the write path's own "not connected"
+        // refusal applies — the user must be told the switch is down, not to check the camera.
+        if (device is null || device.State != EquipmentConnectionState.Connected) {
+            return null;
+        }
+        if (!CoolingFanInterlock.IsPlausibleFanOff(device, request)) {
+            return null;
+        }
+        // Either the identified Fan port is being driven to its floor, or the connected Thermal
+        // Switch's port snapshot is still unread and the write is to 0 or below. Both ask the camera.
+        bool? coolerOn;
+        try {
+            var camera = _cameraProbe?.Invoke();
+            coolerOn = camera is null
+                ? null
+                : (await camera.GetAsync(ct).ConfigureAwait(false))?.Runtime.CoolerOn ?? false;
+        } catch (Exception ex) {
+            LogFanInterlockProbeFailed(_logger, ex);
+            coolerOn = null;
+        }
+        return CoolingFanInterlock.FanOffRefusal(coolerOn);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Cooling-fan interlock: camera cooler state could not be read; refusing the fan-off (fail closed).")]
+    private static partial void LogFanInterlockProbeFailed(ILogger logger, Exception ex);
+
+    /// <summary>The camera's post-cooler fan sync (<see cref="ICoolingFanActuator"/>): the plain
+    /// write, no fan-off interlock — the cooler-off that motivates it has just been committed.</summary>
+    public Task SetFanValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        ArgumentNullException.ThrowIfNull(request);
+        return SetValueCoreAsync(deviceId, request, ct);
+    }
+
+    // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
+    // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
+    // -32768). Called before the connection lookup AND before the interlock so the range contract
+    // holds regardless of state.
+    private static void ThrowIfPortIdOutOfRange(SwitchValueRequestDto request) {
         if (request.PortId is < 0 or > short.MaxValue) {
             throw new ArgumentOutOfRangeException(nameof(request), request.PortId,
                 "PortId is out of range for an ASCOM Switch (0..32767).");
         }
+    }
+
+    private async Task SetValueCoreAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ThrowIfPortIdOutOfRange(request);
         AlpacaSwitch? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);

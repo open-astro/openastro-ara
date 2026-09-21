@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/switch_device.dart';
 import '../../../services/equipment_device_api.dart'
     show isNotFoundEquipmentError;
-import '../../../state/equipment/camera_state.dart';
 import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
@@ -331,9 +330,9 @@ class _SwitchCard extends ConsumerWidget {
     );
   }
 
-  /// Writes one port. Presentation lives in [SwitchDeviceBody]; the safety
-  /// interlock and error reporting stay here, next to the device identity the
-  /// interlock is scoped to.
+  /// Writes one port. Presentation lives in [SwitchDeviceBody]; error
+  /// reporting stays here (the daemon's fan-off refusal arrives as a 409 whose
+  /// reason is shown verbatim, #1065).
   ///
   /// Returns whether the write actually committed. Every failure path reports
   /// itself to the user AND answers false, so an optimistic control can snap
@@ -345,26 +344,9 @@ class _SwitchCard extends ConsumerWidget {
     double value,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    // §25.5.6 fan-off interlock — the Thermal-Switch Fan port is also
-    // reachable from this generic panel, so it must refuse a fan-off while
-    // the camera TEC is (or may be) cooling exactly like FanSwitchRow does.
-    // Range-aware: "off" is the port's own minimum (0 for a boolean port,
-    // the true idle stop for a PWM slider whose min isn't 0) — a fixed 0.5
-    // threshold would let a min=10 PWM slider reach "off" unchecked.
-    if (value <= port.min && isThermalSwitchFanPort(device, port)) {
-      final refusal = fanOffRefusal(
-        await coolerOnTriState(ref.read(cameraStatusProvider.future)),
-      );
-      if (refusal != null) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(refusal),
-            backgroundColor: AraColors.accentError,
-          ),
-        );
-        return false;
-      }
-    }
+    // §25.5.6 / #1065 — the fan-off interlock (no stopping the Thermal-Switch
+    // Fan while the TEC is or may be cooling) lives in the DAEMON; a refused
+    // write comes back as a 409 whose reason the catch below shows verbatim.
     try {
       // false = the notifier's re-entrancy guard dropped it because another
       // change was still in flight. The grouped layout puts a slider and its
