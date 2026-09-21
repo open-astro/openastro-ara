@@ -62,7 +62,6 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
 
     // #1068 — the daemon publishes the sequencer's own estimate; the band only
     // blends it with the observed elapsed rate for display.
-    final staticEta = run.estimatedTotalSeconds ?? 0.0;
 
     return StreamBuilder<void>(
       stream: _ticker,
@@ -71,7 +70,6 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
             ? Duration.zero
             : DateTime.now().toUtc().difference(run.startedUtc!);
         final remainingS = estimateRemainingSeconds(
-          staticTotalSeconds: staticEta,
           serverRemainingSeconds: run.estimatedRemainingSeconds,
           completed: completed,
           total: total,

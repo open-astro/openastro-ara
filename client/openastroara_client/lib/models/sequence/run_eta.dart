@@ -4,14 +4,12 @@
 /// / `estimated_remaining_seconds` in run state, from `RunEtaEstimator`); the
 /// client no longer walks the body. What stays here is presentation: once
 /// enough of the run has happened to trust the observed elapsed rate, prefer
-/// it over the static model.
+/// it over the daemon's figure.
 ///
-/// Remaining seconds: prefer the observed elapsed rate over the static model
-/// once enough of the run has happened to trust it (≥ 10% and ≥ 2 leaves),
-/// else the daemon's remaining estimate when it sent one, else scale the
-/// static total by the un-completed fraction. Never negative.
+/// Remaining seconds: the observed elapsed rate once ≥ 10% and ≥ 2 leaves are
+/// done, else the daemon's remaining estimate when it sent one, else 0 (no
+/// estimate to show). Never negative.
 double estimateRemainingSeconds({
-  required double staticTotalSeconds,
   double? serverRemainingSeconds,
   required int completed,
   required int total,
@@ -23,9 +21,8 @@ double estimateRemainingSeconds({
     final perLeaf = elapsed.inSeconds / completed;
     return perLeaf * (total - completed);
   }
-  if (serverRemainingSeconds != null && serverRemainingSeconds >= 0) {
+  if (serverRemainingSeconds != null && serverRemainingSeconds > 0) {
     return serverRemainingSeconds;
   }
-  final remaining = staticTotalSeconds * (1 - fractionDone);
-  return remaining < 0 ? 0 : remaining;
+  return 0;
 }
