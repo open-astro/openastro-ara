@@ -213,5 +213,27 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "claimed at first connect — a reconnect never homes");
             await DisconnectAsync(svc);
         }
+
+        [Test]
+        [Category("bench")]
+        public async Task An_explicit_change_before_the_first_known_position_retires_the_home() {
+            // Review of #1073: a wheel mid-rotation at connect, then a change to slot 2 before the
+            // position was ever read — the change's own follow-up refresh must NOT fire the home.
+            await using var stub = StubWheel.Start(position: -1);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            // Slots are seeded even while the position is unknown; wait for them so the change validates.
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (DateTime.UtcNow < deadline && (await svc.GetAsync(CancellationToken.None))?.Slots.Count == 0) {
+                await Task.Delay(50);
+            }
+            await svc.ChangeFilterAsync(new FilterChangeRequestDto(2), idempotencyKey: null, CancellationToken.None);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "the requested change is written");
+            Assert.That(stub.PositionWrites.TryDequeue(out var first) && first == 2, Is.True);
+            // The stub now reports 2 (a known position) — the retired home must not follow.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            Assert.That(stub.PositionWrites, Is.Empty, "the explicit slot is never overridden by the first-connect home");
+            await DisconnectAsync(svc);
+        }
     }
 }
