@@ -255,17 +255,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // round-trip here: the press leg must reach the driver as fast as the release leg.
         // #1078 — a secondary axis whose AxisRates never answered (driver bug: CanMoveAxis true,
         // AxisRates(Secondary) throws) borrows the primary's bands rather than losing N/S for the
-        // session; ReadAxisRates applies the same "primary set as-is" fallback for the picker.
-        IReadOnlyList<(double Min, double Max)>? bands = null;
-        var borrowedPrimary = false;
+        // session (BandsForAxis); the picker applies the same "primary set as-is" fallback.
+        IReadOnlyList<(double Min, double Max)>? bands;
+        bool borrowedPrimary;
         lock (_gate) {
-            if (_axisBands is { } cached && axis >= 0 && axis < cached.Length) {
-                bands = cached[axis];
-                if (axis == 1 && bands is not { Count: > 0 } && cached[0] is { Count: > 0 } primary) {
-                    bands = primary;
-                    borrowedPrimary = true;
-                }
-            }
+            bands = BandsForAxis(_axisBands, axis, out borrowedPrimary);
         }
         var axisEnum = (TelescopeAxis)axis;
         var effective = SnapMoveAxisRate(rate, bands);
@@ -278,6 +272,25 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         NoteMountCommand(w => w.NoteMotionCommanded());
         await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
+    }
+
+    /// <summary>#1078 — the bands the nudge on <paramref name="axis"/> is snapped into: the axis's own
+    /// when known; for the secondary axis whose AxisRates never ANSWERED (null — a driver that
+    /// throws on it while CanMoveAxis is true) the primary's bands are borrowed (<paramref name="borrowed"/>).
+    /// An honestly EMPTY secondary (the mount says it offers no rates) is not borrowed for: by spec
+    /// MoveAxis(Secondary) throws on such a mount, so the nudge must stay refused (409). Null when
+    /// nothing usable is known. Internal static so the rule is unit-testable.</summary>
+    internal static IReadOnlyList<(double Min, double Max)>? BandsForAxis(IReadOnlyList<(double Min, double Max)>?[]? cached, int axis, out bool borrowed) {
+        borrowed = false;
+        if (cached is null || axis < 0 || axis >= cached.Length) {
+            return null;
+        }
+        var own = cached[axis];
+        if (axis == 1 && own is null && cached[0] is { Count: > 0 } primary) {
+            borrowed = true;
+            return primary;
+        }
+        return own;
     }
 
     /// <summary>The #1064 rate-cache settle rule: stop re-reading AxisRates once both pad-axis reads
@@ -527,8 +540,12 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     if (needAxisRates) {
                         // Keep any axis already known; fill the rest from this pass.
                         _axisBands ??= new IReadOnlyList<(double Min, double Max)>?[3];
-                        _axisBands[0] ??= pad.Primary;
-                        _axisBands[1] ??= pad.Secondary;
+                        // Keep an axis once it answered with bands; a null (threw) or empty read
+                        // never overwrites a known set, and an empty read is not latched — a later
+                        // pass may still return the bands (AxisRates is static per mount, so this
+                        // is belt-and-braces, not a retry path).
+                        _axisBands[0] = _axisBands[0] is { Count: > 0 } ? _axisBands[0] : pad.Primary ?? _axisBands[0];
+                        _axisBands[1] = _axisBands[1] is { Count: > 0 } ? _axisBands[1] : pad.Secondary ?? _axisBands[1];
                         var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false; // under _gate like every caps read
                         var windowElapsed = DateTimeOffset.UtcNow >= _axisRatesDeadline;
                         if (ShouldSettleAxisRates(axisReadsCompleted, mountCannotMoveAxis, windowElapsed)) {
@@ -811,8 +828,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         var bands = new List<(double Min, double Max)>();
         try {
             foreach (IRate rate in c.AxisRates(axis)) {
-                if (rate.Maximum > 0) {
-                    bands.Add((Math.Max(0, Math.Min(rate.Minimum, rate.Maximum)), rate.Maximum));
+                // Finite, positive maximum only: a NaN endpoint would reach the gap branch and throw.
+                if (double.IsFinite(rate.Maximum) && rate.Maximum > 0) {
+                    var min = double.IsFinite(rate.Minimum) ? Math.Max(0, Math.Min(rate.Minimum, rate.Maximum)) : rate.Maximum;
+                    bands.Add((min, rate.Maximum));
                 }
             }
         } catch (Exception) {

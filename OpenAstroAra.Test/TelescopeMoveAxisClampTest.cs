@@ -78,6 +78,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Secondary_axis_borrows_the_primary_bands_only_when_its_own_never_answered() {
+            IReadOnlyList<(double Min, double Max)>?[] unanswered = [OneBand, null, null];
+            Assert.That(TelescopeService.BandsForAxis(unanswered, 1, out var borrowed), Is.SameAs(OneBand));
+            Assert.That(borrowed, Is.True, "AxisRates(Secondary) threw all session → N/S uses the primary's bands");
+            IReadOnlyList<(double Min, double Max)>?[] honestlyEmpty = [OneBand, [], null];
+            Assert.That(TelescopeService.BandsForAxis(honestlyEmpty, 1, out borrowed), Is.Empty, "the mount said 'no rates' → stays refused");
+            Assert.That(borrowed, Is.False);
+            IReadOnlyList<(double Min, double Max)>?[] known = [OneBand, Discrete, null];
+            Assert.That(TelescopeService.BandsForAxis(known, 1, out borrowed), Is.SameAs(Discrete));
+            Assert.That(borrowed, Is.False);
+            IReadOnlyList<(double Min, double Max)>?[] primaryUnknown = [null, null, null];
+            Assert.That(TelescopeService.BandsForAxis(primaryUnknown, 1, out borrowed), Is.Null);
+            Assert.That(borrowed, Is.False);
+            Assert.That(TelescopeService.BandsForAxis(known, 0, out borrowed), Is.SameAs(OneBand), "the primary never borrows");
+            Assert.That(TelescopeService.BandsForAxis(null, 0, out _), Is.Null, "nothing read yet");
+        }
+
+        [Test]
         public void Picker_endpoints_are_both_ends_of_every_positive_band_deduped_ascending() {
             var endpoints = TelescopeService.EndpointsOf(Discrete);
             Assert.That(endpoints, Is.EqualTo(DiscreteEndpoints));
