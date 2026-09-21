@@ -14,53 +14,73 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Test {
 
-    // #1064 — the daemon, not the client's speed picker, is the guard on MoveAxis
-    // rates. These pin the clamp rule the endpoint relies on.
+    // #1064/#1072/#1078 — the daemon, not the client's speed picker, is the guard on MoveAxis
+    // rates. These pin the band-snap rule the endpoint relies on and the cache's settle rule.
     [TestFixture]
     public class TelescopeMoveAxisClampTest {
 
+        private static readonly IReadOnlyList<(double Min, double Max)> OneBand = [(0.001, 6.016)];
+        // A discrete-rate mount: 0.5×, 2×, 8× sidereal-ish steps, then a slew band.
+        private static readonly IReadOnlyList<(double Min, double Max)> Discrete = [(0.002, 0.002), (0.008, 0.008), (0.033, 0.033), (1.0, 4.0)];
+        private static readonly double[] DiscreteEndpoints = [0.002, 0.008, 0.033, 1.0, 4.0];
+
         [Test]
         public void Stop_passes_through_without_a_rate_read() {
-            // rate 0 must never be gated — even when no maximum is known.
-            Assert.That(TelescopeService.ClampMoveAxisRate(0, null), Is.EqualTo(0));
-            Assert.That(TelescopeService.ClampMoveAxisRate(0, 6.0), Is.EqualTo(0));
+            // rate 0 must never be gated — even when no bands are known.
+            Assert.That(TelescopeService.SnapMoveAxisRate(0, null), Is.EqualTo(0));
+            Assert.That(TelescopeService.SnapMoveAxisRate(0, OneBand), Is.EqualTo(0));
+            Assert.That(TelescopeService.SnapMoveAxisRate(double.NaN, OneBand), Is.EqualTo(0));
         }
 
         [Test]
-        public void Rate_within_max_is_unchanged() {
-            Assert.That(TelescopeService.ClampMoveAxisRate(1.5, 6.016), Is.EqualTo(1.5));
-            Assert.That(TelescopeService.ClampMoveAxisRate(-1.5, 6.016), Is.EqualTo(-1.5));
-            Assert.That(TelescopeService.ClampMoveAxisRate(6.016, 6.016), Is.EqualTo(6.016));
+        public void Rate_inside_a_band_is_unchanged_with_sign_preserved() {
+            Assert.That(TelescopeService.SnapMoveAxisRate(1.5, OneBand), Is.EqualTo(1.5));
+            Assert.That(TelescopeService.SnapMoveAxisRate(-1.5, OneBand), Is.EqualTo(-1.5));
+            Assert.That(TelescopeService.SnapMoveAxisRate(6.016, OneBand), Is.EqualTo(6.016));
+            Assert.That(TelescopeService.SnapMoveAxisRate(2.5, Discrete), Is.EqualTo(2.5));
         }
 
         [Test]
-        public void Rate_over_max_is_clamped_with_sign_preserved() {
-            Assert.That(TelescopeService.ClampMoveAxisRate(50, 6.016), Is.EqualTo(6.016));
-            Assert.That(TelescopeService.ClampMoveAxisRate(-50, 6.016), Is.EqualTo(-6.016));
+        public void Rate_over_the_top_band_is_capped_and_below_the_lowest_is_raised() {
+            Assert.That(TelescopeService.SnapMoveAxisRate(50, OneBand), Is.EqualTo(6.016));
+            Assert.That(TelescopeService.SnapMoveAxisRate(-50, OneBand), Is.EqualTo(-6.016));
+            // #1072 — the client's 1 % preset can land below the lowest band's minimum.
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.0001, OneBand), Is.EqualTo(0.001));
+            Assert.That(TelescopeService.SnapMoveAxisRate(-0.0001, Discrete), Is.EqualTo(-0.002));
         }
 
         [Test]
-        public void Nonzero_rate_with_no_readable_max_is_refused() {
-            Assert.Throws<System.InvalidOperationException>(
-                () => TelescopeService.ClampMoveAxisRate(1.0, null));
-            Assert.Throws<System.InvalidOperationException>(
-                () => TelescopeService.ClampMoveAxisRate(1.0, 0));
+        public void Rate_in_a_gap_between_bands_snaps_to_the_nearest_edge() {
+            // Between 0.033 and 1.0: nearer the lower edge → 0.033; nearer the upper → 1.0.
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.05, Discrete), Is.EqualTo(0.033));
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.9, Discrete), Is.EqualTo(1.0));
+            Assert.That(TelescopeService.SnapMoveAxisRate(-0.9, Discrete), Is.EqualTo(-1.0));
+            // Between two discrete steps.
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.003, Discrete), Is.EqualTo(0.002));
         }
 
         [Test]
-        public void Clamp_cache_settles_on_completed_reads_CanMoveAxis_false_or_the_pass_bound() {
-            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: true, mountCannotMoveAxis: false, passes: 1), Is.True);
-            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: false, mountCannotMoveAxis: true, passes: 1), Is.True);
-            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: false, mountCannotMoveAxis: false, passes: 1), Is.False, "a thrown read retries");
-            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: false, mountCannotMoveAxis: false, passes: 3), Is.True, "bounded: never on the poll path for the session");
+        public void Nonzero_rate_with_no_known_bands_is_refused() {
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(1.0, null));
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(1.0, []));
         }
 
         [Test]
-        public void NaN_is_treated_as_stop() {
-            Assert.That(TelescopeService.ClampMoveAxisRate(double.NaN, 6.0), Is.EqualTo(0));
+        public void Rate_cache_settles_on_completed_reads_CanMoveAxis_false_or_the_time_window() {
+            Assert.That(TelescopeService.ShouldSettleAxisRates(readsCompleted: true, mountCannotMoveAxis: false, windowElapsed: false), Is.True);
+            Assert.That(TelescopeService.ShouldSettleAxisRates(readsCompleted: false, mountCannotMoveAxis: true, windowElapsed: false), Is.True);
+            Assert.That(TelescopeService.ShouldSettleAxisRates(readsCompleted: false, mountCannotMoveAxis: false, windowElapsed: false), Is.False, "a thrown read retries");
+            Assert.That(TelescopeService.ShouldSettleAxisRates(readsCompleted: false, mountCannotMoveAxis: false, windowElapsed: true), Is.True, "bounded by wall clock, not by command-triggered passes");
+        }
+
+        [Test]
+        public void Picker_endpoints_are_both_ends_of_every_positive_band_deduped_ascending() {
+            var endpoints = TelescopeService.EndpointsOf(Discrete);
+            Assert.That(endpoints, Is.EqualTo(DiscreteEndpoints));
         }
     }
 }
