@@ -49,7 +49,12 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         _logger = logger ?? NullLogger<AlpacaManagementClient>.Instance;
         // Plain http against a trusted-LAN (§52/§67) surface; only the JSON body is ever parsed, and
         // only names come out of it. Same handler-injection seam as PushChannelService (tests).
-        _http = new HttpClient(handler ?? LanHandler(), disposeHandler: true) { Timeout = RequestTimeout };
+        _http = new HttpClient(handler ?? LanHandler(), disposeHandler: true) {
+            Timeout = RequestTimeout,
+            // A configureddevices envelope is a few KB; never buffer whatever a broken or hostile
+            // host at that address streams inside the 3 s window (default cap is 2 GB).
+            MaxResponseContentBufferSize = 1 << 20,
+        };
     }
 
     // No redirects (the asked host is the only host we dial — same rule as the sky-data and backup
