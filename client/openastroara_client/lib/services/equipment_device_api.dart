@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../models/discovered_device.dart';
@@ -14,7 +16,17 @@ String describeEquipmentError(Object? e) {
     // code. Other statuses keep the code: their detail is not written for
     // people.
     final code = e.response?.statusCode;
-    final data = e.response?.data;
+    // application/problem+json may reach us undecoded (a raw String body)
+    // depending on Dio's transformer; decode it ourselves so the server's
+    // sentence is never lost behind "server returned 409".
+    var data = e.response?.data;
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        data = null;
+      }
+    }
     if ((code == 400 || code == 409) && data is Map && data['detail'] is String) {
       // First line only: a framework-shaped 400 detail can carry a
       // "(Parameter 'x')\nActual value was …" tail that is not for people.
