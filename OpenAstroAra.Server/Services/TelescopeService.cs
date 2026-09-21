@@ -61,6 +61,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private TelescopeCapabilitiesDto? _capabilities;
+    // #1064 — per-axis MoveAxis maximum (deg/s; index = ASCOM TelescopeAxis), read ONCE alongside
+    // the capabilities and cached for the session so the nudge start path stays a single driver
+    // call: an inline AxisRates GET on the press leg let a fast release's MoveAxis(0) overtake the
+    // start and leave the axis running (review of #1069). Null until the first caps read lands.
+    private double?[]? _axisMaxDegPerSec;
     private TelescopeStateDto _runtime = IdleRuntime;
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
     // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member; Other is the
@@ -234,9 +239,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // nonzero rate is clamped to the axis's reported maximum (sign preserved), and an axis that
         // reports no usable rate refuses the nudge (409) rather than forwarding an unbounded rate.
         // A stop (rate 0) is never gated — it must always reach the driver.
+        // The cap comes from the session cache (read with the capabilities), never a device
+        // round-trip here: the press leg must reach the driver as fast as the release leg.
+        double? axisMax;
+        lock (_gate) {
+            axisMax = _axisMaxDegPerSec is { } cached && axis < cached.Length ? cached[axis] : null;
+        }
         var axisEnum = (TelescopeAxis)axis;
-        var effective = ClampMoveAxisRate(rate, rate == 0 ? null : ReadAxisMaxRate(client, axisEnum));
-        if (effective != rate) {
+        var effective = ClampMoveAxisRate(rate, axisMax);
+        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
             LogMoveAxisRateClamped(_logger, axis, rate, effective);
         }
         NoteMountCommand(w => w.NoteMotionCommanded());
@@ -245,16 +256,17 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     /// <summary>Clamp a MoveAxis request to the axis's reported maximum. <c>0</c> (stop) passes
-    /// through untouched. A nonzero rate with no readable maximum throws — the driver would either
-    /// reject it or, worse, honour it. Internal for direct unit testing (the rate read itself sits
-    /// behind a sealed Alpaca client).</summary>
+    /// through untouched. A nonzero rate with no known maximum (the axis reports no rates, or the
+    /// capabilities have not been read yet) throws — the driver would either reject it or, worse,
+    /// honour it. Internal for direct unit testing (the rate read itself sits behind a sealed
+    /// Alpaca client).</summary>
     internal static double ClampMoveAxisRate(double requested, double? axisMax) {
         if (requested == 0 || double.IsNaN(requested)) {
             return 0;
         }
         if (axisMax is not > 0) {
             throw new InvalidOperationException(
-                "Mount reports no MoveAxis rate for this axis; manual nudge refused.");
+                "Mount reports no MoveAxis rate for this axis (or its capabilities are still being read); manual nudge refused.");
         }
         var magnitude = Math.Min(Math.Abs(requested), axisMax.Value);
         return requested < 0 ? -magnitude : magnitude;
@@ -427,6 +439,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
+            var axisMax = needCaps ? ReadAxisMaxRates(client) : null;
             // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
@@ -442,6 +455,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                         : runtime;
                     if (caps is not null) {
                         _capabilities = caps;
+                        _axisMaxDegPerSec = axisMax;
                     }
                     if (equatorialSystem is not null) {
                         _equatorialSystemRaw = equatorialSystem.Value;
@@ -697,6 +711,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         return rates;
     }
 
+    // #1064 — the per-axis maximum for all three ASCOM axes, read once with the capabilities.
+    private static double?[] ReadAxisMaxRates(AlpacaTelescope c) => [
+        ReadAxisMaxRate(c, TelescopeAxis.Primary),
+        ReadAxisMaxRate(c, TelescopeAxis.Secondary),
+        ReadAxisMaxRate(c, TelescopeAxis.Tertiary),
+    ];
+
     // The fastest rate one axis can move (max of its bands' maxima), or null if unreadable.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements the axis; null (no cap applied) is the correct degraded result. CA1031's log-and-recover boundary applies.")]
@@ -768,6 +789,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     _capabilities = null;       // re-read for the new device
+                    _axisMaxDegPerSec = null;   // #1064 — per-axis clamp re-read with the caps
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
