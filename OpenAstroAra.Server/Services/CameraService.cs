@@ -301,11 +301,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             throw new InvalidOperationException(gateError);
         }
         // #1076 — fan FIRST when enabling: the hazardous window is "TEC on, fan off", so the fan
-        // is started before the cooler write and a rig whose fan cannot be started refuses to
-        // cool (409, nothing committed). Disabling keeps the old order: cooler off, then fan off.
+        // is started before the cooler write, and a rig whose fan cannot be started refuses to
+        // START cooling (409, nothing committed). Only a genuine off→on transition refuses: with
+        // the cooler already on (a set-point change, and above all the §58 unattended warm ramp,
+        // which calls this once a minute with enabled=true on its way to its final cooler-off)
+        // a failed fan write is a fault + log, never a throw — the ramp must always reach that
+        // final cooler-off (review of #1070/#1084), and refusing would leave the TEC where it is.
+        // Disabling keeps the old order: cooler off, then fan off.
         if (enabled) {
+            bool alreadyCooling;
+            lock (_gate) {
+                alreadyCooling = _state == EquipmentConnectionState.Connected && _runtime.CoolerOn;
+            }
             var fanFailure = await SyncCoolingFanAsync(cooling: true).ConfigureAwait(false);
-            if (fanFailure is not null) {
+            if (fanFailure is not null && !alreadyCooling) {
                 throw new InvalidOperationException(fanFailure);
             }
         }
@@ -376,7 +385,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         } catch (Exception ex) {
             LogFanSyncFailed(_logger, ex, cooling);
             var sentence = cooling
-                ? $"the cooling fan could not be started ({ex.GetType().Name}) — the cooler was left off; check the fan"
+                ? $"the cooling fan could not be started ({ex.GetType().Name}) — check the fan"
                 : $"the cooler is off, but the cooling fan could not be stopped ({ex.GetType().Name}) — check the fan";
             _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, sync.Value.DeviceId, null,
                 EquipmentFaultKind.OpError, sentence, DateTimeOffset.UtcNow));

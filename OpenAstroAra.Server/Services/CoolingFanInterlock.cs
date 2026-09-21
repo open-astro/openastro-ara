@@ -25,13 +25,13 @@ namespace OpenAstroAra.Server.Services;
 /// §25.5.6 / #1065 — the camera-cooling fan interlock, daemon-side. The bridge exposes the
 /// ToupTek "Thermal Switch" whose "Fan" port vents the TEC's heat sink; two rules keep the
 /// camera safe and they now live HERE so every path to the cooler and the fan that goes through
-/// these services (REST from any client, the §58 unattended shutdown's warm ramp) gets them, not
-/// just the Flutter UI's own buttons. Not yet covered (#1076): the sequencer's SetSwitchValue
-/// instruction writes the switch raw, and its CoolCamera/WarmCamera mediator stubs never reach
-/// SetCoolerAsync.
+/// these services (REST from any client, the §58 unattended shutdown's warm ramp, the sequencer's
+/// SetSwitchValue instruction via <see cref="SwitchService.SetSwitchValue"/>, #1076) gets them, not
+/// just the Flutter UI's own buttons.
 /// <list type="number">
 /// <item><b>The fan follows the cooler.</b> <see cref="CameraService.SetCoolerAsync"/> writes the
-/// fan port to its max after cooler-on and to its min after cooler-off.</item>
+/// fan port to its max BEFORE cooler-on (a rig whose fan cannot be started refuses to start
+/// cooling, #1076) and to its min after cooler-off.</item>
 /// <item><b>No fan-off while the TEC is (or may be) cooling.</b>
 /// <see cref="SwitchService.SetValueAsync"/> refuses a write that would take the fan port to its
 /// minimum unless the camera's cooler is known to be off. Fails CLOSED on an unknown state.</item>
@@ -92,13 +92,14 @@ public static class CoolingFanInterlock {
     }
 
     /// <summary>The cooler state the fan-off interlock decides on, from the camera's DTO (#1076):
-    /// <c>null</c> (unknown → refuse) when there is no camera DTO at all, when the camera is in
-    /// <c>Error</c> (it just dropped — the TEC may still be running), or when this pass's CoolerOn
-    /// read threw; <c>false</c> when there is no camera connected (no TEC this daemon started);
-    /// otherwise the reported flag.</summary>
+    /// <c>null</c> (unknown → refuse) when the camera is in <c>Error</c> (it just dropped — the TEC
+    /// may still be running) or when this pass's CoolerOn read threw; <c>false</c> when there is
+    /// no camera connected — no DTO at all (no camera device was ever configured on this daemon)
+    /// or a <c>Disconnected</c> one — since no TEC this daemon started can be running; otherwise
+    /// the reported flag. (A probe that THROWS is unknown, but that is the caller's boundary.)</summary>
     public static bool? CoolerStateFor(CameraDto? camera) {
         if (camera is null) {
-            return null;
+            return false;
         }
         if (camera.State == EquipmentConnectionState.Error) {
             return null;

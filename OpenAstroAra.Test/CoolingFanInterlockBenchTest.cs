@@ -53,6 +53,12 @@ namespace OpenAstroAra.Test {
         private static CameraDto Camera(bool coolerOn) => new("cam", "Bench Camera", EquipmentConnectionState.Connected,
             Capabilities: null, Runtime: new CameraStateDto("idle", -5, 60, coolerOn, null));
 
+        private static int Probes(Mock<ICameraService> camera) {
+            lock (camera.Invocations) { // Moq's list is not safe to enumerate under a concurrent add
+                return camera.Invocations.Count(i => i.Method.Name == nameof(ICameraService.GetAsync));
+            }
+        }
+
         private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string failure) {
             var deadline = DateTime.UtcNow + timeout;
             while (DateTime.UtcNow < deadline) {
@@ -102,9 +108,11 @@ namespace OpenAstroAra.Test {
             var camera = new Mock<ICameraService>();
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Camera(coolerOn: false));
             using var svc = await ConnectedThermalSwitchAsync(box, camera);
-            // #1076 — connect itself probes the camera once (the late-connect fan catch-up); count from here.
-            await Task.Delay(300);
-            var probesAfterConnect = camera.Invocations.Count(i => i.Method.Name == nameof(ICameraService.GetAsync));
+            // #1076 — connect itself probes the camera exactly once (the late-connect fan catch-up:
+            // cooler off → nothing to catch up, no further probe). Wait for that probe rather than
+            // sleeping, so the counts below are deterministic.
+            await WaitForAsync(() => Task.FromResult(Probes(camera) == 1), TimeSpan.FromSeconds(5), "the connect-time catch-up never probed the camera");
+            const int probesAfterConnect = 1;
 
             Assert.DoesNotThrowAsync(() => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 0), CancellationToken.None));
             camera.Verify(c => c.GetAsync(It.IsAny<CancellationToken>()), Times.Exactly(probesAfterConnect + 1));
@@ -176,8 +184,9 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Cooler_on_refuses_when_the_fan_cannot_be_started_but_cooler_off_still_completes() {
-            // #1076 — fan FIRST when enabling: a rig whose fan cannot be started must not cool.
-            await using var box = ScriptedAlpacaDevice.Start(_ => null);
+            // #1076 — fan FIRST when enabling: a rig whose fan cannot be started must not START
+            // cooling. The scripted camera reports CoolerOn=false, so this is the off→on transition.
+            await using var box = ScriptedAlpacaDevice.Start(path => path.EndsWith("/cooleron", StringComparison.Ordinal) ? "false" : null);
             var actuator = new Mock<ICoolingFanActuator>();
             var thermal = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
                 [new SwitchPortDto(1, "Fan", Value: 0, Min: 0, Max: 1, CanWrite: true)]);
@@ -193,6 +202,64 @@ namespace OpenAstroAra.Test {
             Assert.That(ex!.Message, Does.Contain("cooling fan could not be started"));
             Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None),
                 "cooler-off must still complete (the warm ramp's final step) even if the fan-off write fails");
+        }
+
+        [Test]
+        public async Task A_failed_fan_write_with_the_cooler_already_on_is_a_fault_not_a_refusal_so_the_warm_ramp_completes() {
+            // Review of #1084: the §58 unattended warm ramp calls SetCoolerAsync(true, setpoint) once
+            // a minute while the cooler is ON. A fan write failing mid-ramp must not throw — that
+            // would abort the ramp and leave the TEC cooling at a mid-ramp set-point overnight.
+            // The scripted camera answers "true" for CoolerOn: the cooler is already on.
+            await using var box = ScriptedAlpacaDevice.Start(_ => null);
+            var actuator = new Mock<ICoolingFanActuator>();
+            var thermal = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
+                [new SwitchPortDto(1, "Fan", Value: 0, Min: 0, Max: 1, CanWrite: true)]);
+            actuator.Setup(a => a.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<SwitchDto> { thermal });
+            actuator.Setup(a => a.SetFanValueAsync(It.IsAny<string>(), It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new TimeoutException("bridge did not answer the fan write"));
+            var faults = new List<EquipmentFaultEvent>();
+            var sink = new Mock<IEquipmentFaultSink>();
+            sink.Setup(f => f.Publish(It.IsAny<EquipmentFaultEvent>())).Callback<EquipmentFaultEvent>(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new CameraService(faults: sink.Object, fan: () => actuator.Object);
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box, DeviceType.Camera, "Bench Camera")), null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.Runtime.CoolerOn == true,
+                TimeSpan.FromSeconds(15), "camera never connected with its cooler reported on");
+
+            Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -5, CancellationToken.None),
+                "a ramp step (cooler already on) survives a failed fan write");
+            actuator.Verify(a => a.SetFanValueAsync("sw-5", It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()), Times.Once,
+                "the fan-on is still attempted on every cooler-on (a stale cached value never skips it)");
+            lock (faults) {
+                Assert.That(faults, Has.Count.EqualTo(1));
+                Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.OpError));
+                Assert.That(faults[0].Details, Does.Contain("cooling fan could not be started"));
+            }
+        }
+
+        [Test]
+        public async Task A_thermal_switch_connecting_while_the_camera_cools_has_its_fan_started() {
+            // #1076 — the fan sync only fires on a cooler write, so a Thermal Switch that connects
+            // AFTER the cooler was turned on is caught up at connect: the fan port (reading 0 here)
+            // gets a setswitchvalue PUT to the port's max. Delete the catch-up Task.Run in
+            // ConnectInBackground and no PUT ever reaches the box.
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/maxswitch", StringComparison.Ordinal) ? "1"
+                : path.EndsWith("/getswitchname", StringComparison.Ordinal) ? "\"Fan\""
+                : path.EndsWith("/getswitchdescription", StringComparison.Ordinal) ? "\"\""
+                : path.EndsWith("/getswitchvalue", StringComparison.Ordinal) ? "0"
+                : path.EndsWith("/minswitchvalue", StringComparison.Ordinal) ? "0"
+                : path.EndsWith("/maxswitchvalue", StringComparison.Ordinal) ? "1"
+                : path.EndsWith("/switchstep", StringComparison.Ordinal) ? "1"
+                : path.EndsWith("/canwrite", StringComparison.Ordinal) ? "true"
+                : null);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Camera(coolerOn: true));
+            using var svc = await ConnectedThermalSwitchAsync(box, camera);
+
+            await WaitForAsync(() => Task.FromResult(box.Puts.Any(p => p.Path.EndsWith("/setswitchvalue", StringComparison.Ordinal))),
+                TimeSpan.FromSeconds(10), "the fan was never started for the already-cooling camera");
+            var put = box.Puts.First(p => p.Path.EndsWith("/setswitchvalue", StringComparison.Ordinal)).Body;
+            Assert.That(put, Does.Contain("Id=0").And.Contain("Value=1"), "the Fan port (0) is driven to its max (1)");
         }
     }
 }

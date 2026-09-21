@@ -120,7 +120,7 @@ namespace OpenAstroAra.Test {
         public void Cooler_state_for_the_interlock_is_unknown_on_error_or_an_unreadable_read_and_off_when_disconnected() {
             static CameraDto Cam(EquipmentConnectionState state, bool on, bool known = true) =>
                 new("cam", "Cam", state, Capabilities: null, Runtime: new CameraStateDto("idle", null, null, on, null, CoolerStateKnown: known));
-            Assert.That(CoolingFanInterlock.CoolerStateFor(null), Is.Null, "no DTO → unknown");
+            Assert.That(CoolingFanInterlock.CoolerStateFor(null), Is.False, "no DTO (no camera device ever configured) → no TEC this daemon started");
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, true)), Is.True);
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, false)), Is.False);
             Assert.That(CoolingFanInterlock.CoolerStateFor(Cam(EquipmentConnectionState.Connected, false, known: false)), Is.Null, "CoolerOn read threw → unknown");

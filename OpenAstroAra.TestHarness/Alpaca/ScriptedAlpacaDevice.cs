@@ -14,7 +14,9 @@
 
 using OpenAstroAra.TestHarness.Net;
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -38,6 +40,10 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
     private volatile Func<string, string?>? _responder;
+
+    /// <summary>Every PUT the device received, as (lower-cased path, form body) — for tests that
+    /// assert a write reached the device (the scripted GETs never reflect a write).</summary>
+    public ConcurrentQueue<(string Path, string Body)> Puts { get; } = new();
 
     private ScriptedAlpacaDevice(HttpListener listener, int port, Func<string, string?>? responder) {
         BaseUri = new Uri($"http://127.0.0.1:{port}/");
@@ -74,6 +80,9 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                 if (scripted is not null) {
                     value = scripted;
                 }
+            } else if (ctx.Request.HttpMethod == "PUT") {
+                using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+                Puts.Enqueue((ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "", await reader.ReadToEndAsync().ConfigureAwait(false)));
             }
             var body = Encoding.UTF8.GetBytes(
                 $$"""{"Value":{{value}},"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":0,"ErrorMessage":""}""");

@@ -287,7 +287,8 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     }
 
     /// <summary>The camera's cooler state for the interlock (#1076): null = unknown (no probe wired,
-    /// the probe threw, no DTO, camera in Error, or an unreadable CoolerOn this pass) — fail closed.</summary>
+    /// the probe threw, camera in Error, or an unreadable CoolerOn this pass) — fail closed. No DTO
+    /// (no camera device ever configured) reads as off, like a Disconnected camera.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Interlock probe boundary: a failing camera status read must read as unknown (fail closed), never surface as a 500 from a switch write. CA1031's log-and-recover boundary applies.")]
     private async Task<bool?> ProbeCoolerStateAsync(CancellationToken ct) {
