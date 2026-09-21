@@ -60,6 +60,15 @@ namespace OpenAstroAra.Test {
             Assert.That(off!.Value.Request, Is.EqualTo(new SwitchValueRequestDto(1, 10)));
             // No fan-capable switch (most rigs) → nothing to write.
             Assert.That(CoolingFanInterlock.FanSyncRequest([], cooling: true), Is.Null);
+            // Already at the target (the warm ramp's minute-by-minute cooler calls) → no redundant write.
+            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 100, min: 10, max: 100))], cooling: true), Is.Null);
+            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 0))], cooling: false), Is.Null);
+        }
+
+        [Test]
+        public void Thermal_switch_device_rule_matches_the_port_rule() {
+            Assert.That(CoolingFanInterlock.IsThermalSwitchDevice(Thermal(Fan())), Is.True);
+            Assert.That(CoolingFanInterlock.IsThermalSwitchDevice(Thermal(Fan(), name: "Pegasus UPBv2")), Is.False);
         }
 
         [Test]

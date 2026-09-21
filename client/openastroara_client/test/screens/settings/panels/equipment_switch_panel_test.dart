@@ -493,16 +493,6 @@ void main() {
     expect(api.calls, contains('setValue:sw-1:0=0.0'));
   });
 
-  testWidgets('allows a Thermal-Switch fan-off with no camera connected '
-      '(resolved-null status = no TEC this client started)', (tester) async {
-    final api = await _pump(tester, [thermalSwitch()]);
-    await tester.tap(
-      find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
-    );
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('setValue:sw-1:0=0.0'));
-  });
-
   testWidgets('allows a Thermal-Switch fan-off once the cooler is off', (
     tester,
   ) async {

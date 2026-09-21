@@ -44,9 +44,14 @@ public static class CoolingFanInterlock {
     /// actuated (or blocked) by camera cooling. Mirrors the client's
     /// <c>isThermalSwitchFanPort</c>.</summary>
     public static bool IsThermalSwitchFanPort(SwitchDto device, SwitchPortDto port) {
-        ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(port);
-        return device.Name.Contains("Thermal Switch", StringComparison.Ordinal) && port.Name == "Fan";
+        return IsThermalSwitchDevice(device) && port.Name == "Fan";
+    }
+
+    /// <summary>The bridge's ToupTek Thermal Switch itself (the device that carries the fan port).</summary>
+    public static bool IsThermalSwitchDevice(SwitchDto device) {
+        ArgumentNullException.ThrowIfNull(device);
+        return device.Name.Contains("Thermal Switch", StringComparison.Ordinal);
     }
 
     /// <summary>The first CONNECTED switch that carries a writable cooling-fan port, or null.</summary>
@@ -68,14 +73,19 @@ public static class CoolingFanInterlock {
     /// <summary>The fan write that follows a cooler change: the port's own max (full fan) after
     /// cooler-on, its min (off) after cooler-off. Bounds, not a literal 1/0: on a PWM port
     /// (0–100) a hard-coded 1.0 would set ~1% speed while the TEC cools. Null when no fan port is
-    /// connected (most rigs).</summary>
+    /// connected (most rigs), or when the cached port already holds the target — the §58 warm ramp
+    /// calls the cooler once a minute and must not re-issue the same fan write each time.</summary>
     public static (string DeviceId, SwitchValueRequestDto Request)? FanSyncRequest(IEnumerable<SwitchDto> switches, bool cooling) {
         var fan = FindThermalSwitchFanPort(switches);
         if (fan is null) {
             return null;
         }
         var (device, port) = fan.Value;
-        return (device.DeviceId, new SwitchValueRequestDto(port.Id, cooling ? port.Max : port.Min));
+        var target = cooling ? port.Max : port.Min;
+        if (Math.Abs(port.Value - target) < 1e-9) {
+            return null;
+        }
+        return (device.DeviceId, new SwitchValueRequestDto(port.Id, target));
     }
 
     /// <summary>Whether <paramref name="value"/> takes the port to "off" — its own minimum, so a

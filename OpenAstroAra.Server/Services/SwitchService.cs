@@ -269,9 +269,19 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         lock (_gate) {
             device = _connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null;
         }
-        var port = device?.Ports.FirstOrDefault(p => p.Id == request.PortId);
-        if (device is null || port is null || !CoolingFanInterlock.IsThermalSwitchFanPort(device, port)
-                || !CoolingFanInterlock.IsFanOff(port, request.Value)) {
+        if (device is null) {
+            return null; // not connected: the write path's own "not connected" refusal applies
+        }
+        var port = device.Ports.FirstOrDefault(p => p.Id == request.PortId);
+        if (port is null) {
+            // Connected but the port snapshot has not been read yet (one Alpaca round trip after
+            // connect). A Thermal Switch in that window might be getting its Fan port stopped and
+            // we cannot tell — fail CLOSED rather than let the write through unexamined.
+            return device.Ports.Count == 0 && CoolingFanInterlock.IsThermalSwitchDevice(device)
+                ? CoolingFanInterlock.FanOffRefusal(null)
+                : null;
+        }
+        if (!CoolingFanInterlock.IsThermalSwitchFanPort(device, port) || !CoolingFanInterlock.IsFanOff(port, request.Value)) {
             return null;
         }
         bool? coolerOn;
