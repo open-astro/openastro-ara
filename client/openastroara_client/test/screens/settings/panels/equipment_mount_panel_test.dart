@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,9 +42,17 @@ class _FakeProfileApi extends ProfileApi {
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
-  _FakeMountApi(this.status);
+  _FakeMountApi(this.status, {this.moveAxisError, this.moveAxisStopError});
   MountStatus? status;
   final List<String> calls = [];
+
+  /// Thrown by a moveaxis START (rate != 0) when set — the daemon's refusal.
+  final Object? moveAxisError;
+
+  /// Thrown by a moveaxis STOP (rate 0) when set. A DIFFERENT error from the
+  /// start's, so the pad's per-press dedupe cannot mask it: only the
+  /// rate != 0 guard keeps the release silent.
+  final Object? moveAxisStopError;
   @override
   Future<MountStatus?> getStatus() async => status;
   @override
@@ -52,13 +61,19 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   @override
   Future<void> disconnect() async => calls.add('disconnect');
   @override
-  Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
-      // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
-      calls.add(
-        body != null && body.containsKey('rate')
-            ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
-            : 'command:$subpath:enabled=${body?['enabled']}',
-      );
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
+    // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
+    calls.add(
+      body != null && body.containsKey('rate')
+          ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
+          : 'command:$subpath:enabled=${body?['enabled']}',
+    );
+    if (subpath == 'moveaxis') {
+      final stopping = (body?['rate'] ?? 0) == 0;
+      final err = stopping ? moveAxisStopError : moveAxisError;
+      if (err != null) throw err;
+    }
+  }
   @override
   void close() {}
 }
@@ -389,5 +404,116 @@ void main() {
       isTrue,
     );
     await hold.up();
+  });
+
+  DioException refusal(String detail) => DioException(
+        requestOptions: RequestOptions(path: '/moveaxis'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/moveaxis'),
+          statusCode: 409,
+          data: {'detail': detail},
+        ),
+        type: DioExceptionType.badResponse,
+      );
+
+  testWidgets('a refused diagonal press (two starts, same refusal) toasts once',
+      (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+      moveAxisError: refusal('mount is not connected'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          mountApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+    await tester.pump();
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.north_west)),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      api.calls.where((c) => c.startsWith('command:moveaxis') && !c.endsWith('rate=0.0')).length,
+      2,
+      reason: 'a diagonal press starts both axes',
+    );
+    expect(find.textContaining('mount is not connected'), findsOneWidget,
+        reason: 'two identical refusals → one toast (delete the dedupe and the second queues)');
+    await hold.up();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('mount is not connected'), findsNothing,
+        reason: 'no second identical toast surfaces once the first dismisses');
+  });
+
+  testWidgets('a refused nudge (409) is shown once per press; the release stays silent',
+      (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+      moveAxisError: refusal('Mount reports no MoveAxis rate for this axis (or its '
+          'capabilities are still being read); manual nudge refused.'),
+      // A distinct refusal on the STOP: if the rate != 0 guard were missing it
+      // would queue a second, different toast that surfaces once the first
+      // one auto-dismisses.
+      moveAxisStopError: refusal('STOP REFUSED — must never be shown'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          mountApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+    await tester.pump();
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.north)),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('manual nudge refused'), findsOneWidget,
+        reason: 'the daemon\'s 409 detail reaches the user');
+    await hold.up();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      api.calls.where((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0')),
+      isNotEmpty,
+      reason: 'the stop still goes out',
+    );
+    // Let the start's SnackBar auto-dismiss (~4 s) so a queued second toast
+    // would now be built: with the guard nothing more ever appears.
+    // The SnackBar's auto-dismiss timer only starts once its entrance animation
+    // completed: one pump to finish that, one past the ~4 s duration, then settle.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('STOP REFUSED'), findsNothing,
+        reason: 'the release (rate 0) is refused too but never toasts');
+    expect(find.textContaining('manual nudge refused'), findsNothing,
+        reason: 'the start toast has been dismissed and nothing replaced it');
   });
 }
