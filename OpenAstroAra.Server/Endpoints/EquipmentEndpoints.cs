@@ -451,6 +451,12 @@ public static partial class EquipmentEndpoints {
         // falls back to manual entry, never an error state.
         guider.MapGet("/camerapixelsize", async (string? host, int? port, int? device, IGuiderService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetAlpacaCameraPixelSizeAsync(host, port, device, ct)));
+        // §63.20 / #1067 — real Alpaca device names for the wizard's labels, read by the DAEMON off the
+        // Alpaca server's management API (the client used to call the host directly — its one bypass of
+        // the daemon). Always 200 with {names}; unreachable host → empty map (labels stay generic);
+        // empty host / bad port → 400.
+        guider.MapGet("/alpacadevicenames", async (string? host, int? port, IAlpacaManagementClient alpaca, CancellationToken ct) =>
+            await GetAlpacaDeviceNamesAsync(host, port, alpaca, ct));
         // §63.17 daemon-side Alpaca discovery — deliberately synchronous (a picker-button action, not a §60.5
         // 202 background job): the combined sweep is capped server-side at 60 s (PHD2Guider.
         // DiscoverMaxSweepSeconds), so the request always answers well inside common client HTTP timeouts.
@@ -629,6 +635,20 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
+    }
+
+    // §63.20 / #1067 Alpaca device-name lookup (extracted for the error-mapping tests). 200 with the
+    // {names} map (empty on an unreachable host); empty host or out-of-range port → 400.
+    public static async Task<IResult> GetAlpacaDeviceNamesAsync(
+            string? host, int? port, IAlpacaManagementClient alpaca, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(alpaca);
+        try {
+            AlpacaManagementClient.ManagementUri(host ?? string.Empty, port ?? 0);
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+        var names = await alpaca.GetConfiguredDeviceNamesAsync(host!, port!.Value, ct).ConfigureAwait(false);
+        return Results.Ok(new AlpacaDeviceNamesResponseDto(names));
     }
 
     // §63.17 daemon-side Alpaca discovery (extracted for the error-mapping tests). 200 with the discovered

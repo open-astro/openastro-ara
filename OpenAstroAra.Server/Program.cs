@@ -429,6 +429,9 @@ public partial class Program {
             // rather than silently following it. If redirects are ever needed, re-validate the Location scheme.
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
+        // §63.20 / #1067 — the wizard's Alpaca device-name lookup, proxied through the daemon.
+        builder.Services.AddSingleton<IAlpacaManagementClient>(sp =>
+            new AlpacaManagementClient(sp.GetService<ILogger<AlpacaManagementClient>>()));
         var skyDataRoot = System.IO.Path.Combine(profileDir, "sky-data");
         // §36-2 startup polish: reclaim any .staging-*/.backup-* scratch dirs orphaned by a download worker
         // hard-killed mid-extract (a daemon crash) — a graceful drain can't catch that case. Best-effort + synchronous
