@@ -318,20 +318,19 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         }
         var magnitude = Math.Abs(requested);
         // ReadAxisBands returns the bands ascending by Min; no re-sort on the press leg.
-        var ordered = bands;
-        var top = ordered.Max(b => b.Max);
-        var bottom = ordered.Min(b => b.Min);
+        var top = bands.Max(b => b.Max);
+        var bottom = bands.Min(b => b.Min);
         double snapped;
         if (magnitude >= top) {
             snapped = top;
         } else if (magnitude <= bottom) {
             snapped = bottom;
-        } else if (ordered.Any(b => magnitude >= b.Min && magnitude <= b.Max)) {
+        } else if (bands.Any(b => magnitude >= b.Min && magnitude <= b.Max)) {
             snapped = magnitude;
         } else {
             // In a gap: nearest edge — the max of the band below or the min of the band above.
-            var below = ordered.Where(b => b.Max < magnitude).Max(b => b.Max);
-            var above = ordered.Where(b => b.Min > magnitude).Min(b => b.Min);
+            var below = bands.Where(b => b.Max < magnitude).Max(b => b.Max);
+            var above = bands.Where(b => b.Min > magnitude).Min(b => b.Min);
             snapped = magnitude - below <= above - magnitude ? below : above;
         }
         return requested < 0 ? -snapped : snapped;
@@ -342,7 +341,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private static partial void LogAxisRatesUnknown(ILogger logger, double? primary, double? secondary, string reason);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information,
-        Message = "MoveAxis: the secondary axis reported no usable rate bands; borrowing the primary axis's bands for N/S nudges this session (#1078).")]
+        Message = "MoveAxis: the secondary axis's AxisRates never answered; borrowing the primary axis's bands for N/S nudges this session (#1078).")]
     private static partial void LogSecondaryBandsBorrowed(ILogger logger);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
