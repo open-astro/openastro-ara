@@ -317,7 +317,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 "Mount reports no MoveAxis rate for this axis (or its capabilities are still being read); manual nudge refused.");
         }
         var magnitude = Math.Abs(requested);
-        var ordered = bands.OrderBy(b => b.Min).ToList();
+        // ReadAxisBands returns the bands ascending by Min; no re-sort on the press leg.
+        var ordered = bands;
         var top = ordered.Max(b => b.Max);
         var bottom = ordered.Min(b => b.Min);
         double snapped;
@@ -337,7 +338,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
-        Message = "MoveAxis rate cache settled with an axis still unknown (primary max={Primary}, secondary max={Secondary}): {Reason}. Manual nudge on an unknown axis is refused (409) for this session (#1064).")]
+        Message = "MoveAxis rate cache settled with an axis still unknown (primary max={Primary}, secondary max={Secondary}): {Reason}. A nudge on an unknown primary is refused (409) for this session; an unanswered secondary borrows the primary's bands (#1064/#1078).")]
     private static partial void LogAxisRatesUnknown(ILogger logger, double? primary, double? secondary, string reason);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information,
@@ -900,7 +901,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
                     _axisRatesSettled = false;
                     _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
-                    Volatile.Write(ref _secondaryFallbackLogged, 0);
+                    Interlocked.Exchange(ref _secondaryFallbackLogged, 0); // same primitive as the read side
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
