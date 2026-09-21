@@ -581,8 +581,9 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
     }
   }
 
-  // One toast per press: a held button keeps the same refusal until released,
-  // so a second identical message while one is showing is dropped.
+  // One toast per press: a diagonal press issues two starts (both axes) and
+  // a rapid repeat press re-issues one, each refused with the same sentence —
+  // an identical message while one is showing is dropped.
   String? _shownRefusal;
   void _showNudgeRefusal(Object e) {
     final text = "Couldn't nudge the mount: ${describeEquipmentError(e)}";

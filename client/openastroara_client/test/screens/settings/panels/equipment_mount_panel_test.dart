@@ -416,6 +416,50 @@ void main() {
         type: DioExceptionType.badResponse,
       );
 
+  testWidgets('a refused diagonal press (two starts, same refusal) toasts once',
+      (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+      moveAxisError: refusal('mount is not connected'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          mountApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+    await tester.pump();
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.north_west)),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      api.calls.where((c) => c.startsWith('command:moveaxis') && !c.endsWith('rate=0.0')).length,
+      2,
+      reason: 'a diagonal press starts both axes',
+    );
+    expect(find.textContaining('mount is not connected'), findsOneWidget,
+        reason: 'two identical refusals → one toast (delete the dedupe and the second queues)');
+    await hold.up();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('mount is not connected'), findsNothing,
+        reason: 'no second identical toast surfaces once the first dismisses');
+  });
+
   testWidgets('a refused nudge (409) is shown once per press; the release stays silent',
       (tester) async {
     await _wideSurface(tester);
