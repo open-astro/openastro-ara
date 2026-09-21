@@ -326,19 +326,23 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // never fails the cooler call: the cooler DID change, and a caller such as the warm ramp
         // must go on to its final cooler-off (review of #1070). It is published as an OpError
         // equipment fault (→ notification center) and logged instead.
-        await SyncCoolingFanAsync(enabled, ct).ConfigureAwait(false);
+        // CancellationToken.None, not ct (review of #1070): the fan-ON write after cooler-on is the
+        // safety half of the interlock, and Task.Run with an already-cancelled request token never
+        // runs its body — a client timeout during the blocking cooler write must not leave the TEC
+        // cooling with the fan off. Same reasoning as AbortExposureAsync.
+        await SyncCoolingFanAsync(enabled).ConfigureAwait(false);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fan-sync boundary: a switch-list read or fan write failure must never fail the committed cooler change (the §58 warm ramp would otherwise skip its final cooler-off) — it is published as an equipment fault and logged. CA1031's log-and-recover boundary applies.")]
-    private async Task SyncCoolingFanAsync(bool cooling, CancellationToken ct) {
+    private async Task SyncCoolingFanAsync(bool cooling) {
         var actuator = _fan?.Invoke();
         if (actuator is null) {
             return;
         }
         (string DeviceId, SwitchValueRequestDto Request)? sync;
         try {
-            sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(ct).ConfigureAwait(false), cooling);
+            sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(CancellationToken.None).ConfigureAwait(false), cooling);
         } catch (Exception ex) {
             // Whether a fan-capable switch even exists is unknown here — most rigs have none, and
             // the switch list is a separate subsystem. A list-read failure is a no-op, not an alarm
@@ -350,7 +354,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return;
         }
         try {
-            await actuator.SetFanValueAsync(sync.Value.DeviceId, sync.Value.Request, ct).ConfigureAwait(false);
+            await actuator.SetFanValueAsync(sync.Value.DeviceId, sync.Value.Request, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogFanSyncFailed(_logger, ex, cooling);
             _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, sync.Value.DeviceId, null,

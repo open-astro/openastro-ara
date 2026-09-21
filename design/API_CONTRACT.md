@@ -112,7 +112,7 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 
 ### 2026-09-20 — #1065 cooling-fan interlock moves daemon-side
 
-**Endpoint(s) or area:** `POST /api/v1/equipment/camera/cooler` (now also syncs the fan; new 409 reason); `POST /api/v1/equipment/switch/{id}/value` (new 409 refusal).
+**Endpoint(s) or area:** `POST /api/v1/equipment/camera/cooler` (now also syncs the fan; a failed sync is an `equipment.fault`, the call's own status is unchanged); `POST /api/v1/equipment/switch/{id}/value` (new 409 refusal).
 
 **Decision:**
 - After a committed cooler write the daemon writes the first connected switch whose name contains "Thermal Switch" and which exposes a writable port named "Fan" to that port's own `max` (cooler on) or `min` (cooler off). No such switch = no-op. A failed fan write never fails the cooler call (the cooler change has landed, and the §58 warm ramp must reach its final cooler-off): it is published as an `equipment.fault` of kind `op_error` for the switch ("the cooler is on|off, but the cooling fan could not be synced (…) — check the fan") and logged.

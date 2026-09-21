@@ -6,6 +6,7 @@ import '../../models/server.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
 import 'equipment_device_state.dart';
+import 'switch_state.dart';
 
 /// Builds an [EquipmentDeviceClient] for the Camera on a server. Overridable in
 /// tests so a pure fake can be injected. (Distinct from `cameraGeometryApi`, which
@@ -50,11 +51,24 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
   Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) async {
     // §25.5.6 / #1065 — the cooling fan follows the cooler DAEMON-side: the
     // server syncs the bridge's Thermal-Switch Fan port after the cooler write
-    // and reports a failed sync as a 409 whose reason surfaces in the toast.
-    return performAction((api) => api.command('cooler', {
+    // (a failed sync is an equipment fault in the notification center).
+    final performed = await performAction((api) => api.command('cooler', {
           'enabled': enabled,
           'target_temperature_c': targetTemperatureC,
         }));
+    if (performed) {
+      // The switch list is pull-on-demand (no value push from the daemon), so
+      // re-read it once the cooler command landed: FanSwitchRow and the
+      // Switches panel then show the fan value the daemon just wrote instead
+      // of going stale until the next visit. Best-effort — a failed re-read
+      // must not turn a committed cooler change into an error.
+      try {
+        await ref.read(switchListProvider.notifier).refresh();
+      } catch (_) {
+        // The list keeps its last read; the cooler change itself succeeded.
+      }
+    }
+    return performed;
   }
 
   /// §25.5.5 — select a readout mode by index into capabilities.readoutModes.
