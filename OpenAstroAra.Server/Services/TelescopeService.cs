@@ -230,10 +230,39 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
         // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
         // backstop that halts all axes.
+        // #1064 — the daemon is the guard on hardware motion, not the client's speed picker: a
+        // nonzero rate is clamped to the axis's reported maximum (sign preserved), and an axis that
+        // reports no usable rate refuses the nudge (409) rather than forwarding an unbounded rate.
+        // A stop (rate 0) is never gated — it must always reach the driver.
+        var axisEnum = (TelescopeAxis)axis;
+        var effective = ClampMoveAxisRate(rate, rate == 0 ? null : ReadAxisMaxRate(client, axisEnum));
+        if (effective != rate) {
+            LogMoveAxisRateClamped(_logger, axis, rate, effective);
+        }
         NoteMountCommand(w => w.NoteMotionCommanded());
-        await Task.Run(() => client.MoveAxis((TelescopeAxis)axis, rate), CancellationToken.None).ConfigureAwait(false);
+        await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
+
+    /// <summary>Clamp a MoveAxis request to the axis's reported maximum. <c>0</c> (stop) passes
+    /// through untouched. A nonzero rate with no readable maximum throws — the driver would either
+    /// reject it or, worse, honour it. Internal for direct unit testing (the rate read itself sits
+    /// behind a sealed Alpaca client).</summary>
+    internal static double ClampMoveAxisRate(double requested, double? axisMax) {
+        if (requested == 0 || double.IsNaN(requested)) {
+            return 0;
+        }
+        if (axisMax is not > 0) {
+            throw new InvalidOperationException(
+                "Mount reports no MoveAxis rate for this axis; manual nudge refused.");
+        }
+        var magnitude = Math.Min(Math.Abs(requested), axisMax.Value);
+        return requested < 0 ? -magnitude : magnitude;
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "MoveAxis rate {Requested} deg/s on axis {Axis} exceeds the mount's maximum; clamped to {Effective} deg/s.")]
+    private static partial void LogMoveAxisRateClamped(ILogger logger, int axis, double requested, double effective);
 
     public async Task AbortSlewAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
