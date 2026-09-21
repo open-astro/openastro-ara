@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -233,6 +235,47 @@ namespace OpenAstroAra.Test {
             // The stub now reports 2 (a known position) — the retired home must not follow.
             await Task.Delay(TimeSpan.FromSeconds(5));
             Assert.That(stub.PositionWrites, Is.Empty, "the explicit slot is never overridden by the first-connect home");
+            await DisconnectAsync(svc);
+        }
+
+        private static async Task WaitForSlotsAsync(FilterWheelService svc) {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (DateTime.UtcNow < deadline && (await svc.GetAsync(CancellationToken.None))?.Slots.Count == 0) {
+                await Task.Delay(50);
+            }
+        }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_sequence_SwitchFilter_before_the_first_known_position_retires_the_home_too() {
+            // Review of #1073: the mediator path (a sequence's SwitchFilter) must retire the pending
+            // home exactly like the REST path — delete RetirePendingHome() in the mediator and the
+            // wheel is pulled to 0 behind the sequence.
+            await using var stub = StubWheel.Start(position: -1);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            await WaitForSlotsAsync(svc);
+            var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
+            Assert.That(result.Position, Is.EqualTo(2), "the sequence's change is confirmed on the requested slot");
+            Assert.That(stub.PositionWrites.TryDequeue(out var first) && first == 2, Is.True);
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            Assert.That(stub.PositionWrites, Is.Empty, "the first-connect home never lands on top of a sequence's filter");
+            await DisconnectAsync(svc);
+        }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_wheel_that_never_reports_a_position_within_the_window_is_left_alone() {
+            // Review of #1073: the pending window is bounded (seed + MaxPendingHomeTicks ticks). A wheel
+            // that reports -1 past it is not "just connected" any more — once it finally reports a
+            // known position off 0, no home fires.
+            await using var stub = StubWheel.Start(position: -1);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            // Refresh cadence is 2 s; sit well past seed + 4 ticks.
+            await Task.Delay(TimeSpan.FromSeconds(13));
+            stub.Position = 3;
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the home window expired — the wheel is left where it is");
             await DisconnectAsync(svc);
         }
     }
