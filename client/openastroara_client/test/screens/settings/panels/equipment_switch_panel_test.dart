@@ -434,8 +434,8 @@ void main() {
     expect(find.textContaining("Couldn't do that"), findsNothing);
   });
 
-  // §25.5.6 — the fan-off interlock must also cover this generic panel, not
-  // just the FanSwitchRow in Settings → Camera (both reach the same port).
+  // §25.5.6 / #1065 — the fan-off interlock lives in the daemon; this generic
+  // panel sends the write and shows the server's refusal verbatim.
   SwitchDevice thermalSwitch({double fanValue = 1.0}) => SwitchDevice(
     deviceId: 'sw-1',
     alpacaDeviceNumber: 1,

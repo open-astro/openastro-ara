@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/camera_status.dart';
 import '../settings/equipment_connection_state.dart';
 import '../../models/server.dart';
+import '../../models/switch_device.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
 import 'equipment_device_state.dart';
@@ -56,12 +57,14 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
           'enabled': enabled,
           'target_temperature_c': targetTemperatureC,
         }));
-    if (performed) {
+    if (performed && _hasKnownFanPort()) {
       // The switch list is pull-on-demand (no value push from the daemon), so
       // re-read it once the cooler command landed: FanSwitchRow and the
       // Switches panel then show the fan value the daemon just wrote instead
-      // of going stale until the next visit. Best-effort — a failed re-read
-      // must not turn a committed cooler change into an error.
+      // of going stale until the next visit. Only when the last read showed a
+      // fan port at all (most rigs have none — no extra GET for them).
+      // Best-effort — a failed re-read must not turn a committed cooler
+      // change into an error.
       try {
         await ref.read(switchListProvider.notifier).refresh();
       } catch (_) {
@@ -69,6 +72,14 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
       }
     }
     return performed;
+  }
+
+  bool _hasKnownFanPort() {
+    final switches = ref.read(switchListProvider).maybeWhen(
+          data: (v) => v,
+          orElse: () => const <SwitchDevice>[],
+        );
+    return findThermalSwitchFanPort(switches) != null;
   }
 
   /// §25.5.5 — select a readout mode by index into capabilities.readoutModes.
