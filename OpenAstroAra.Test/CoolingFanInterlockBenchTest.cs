@@ -208,6 +208,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_fan_write_with_an_unreadable_cooler_state_still_refuses_to_start_cooling() {
+            // Review of #1084: CoolerOn unreadable this pass (CoolerStateKnown=false, CoolerOn=false
+            // by fallback) must NOT count as "already cooling" — the cooler may well be off, and
+            // starting the TEC with the fan down is the hazard. Fail closed: refuse.
+            // CoolerOn answers "false" through connect (the capability probe must see a cooler), then
+            // the responder is swapped so the runtime read throws — CoolerStateKnown goes false.
+            await using var box = ScriptedAlpacaDevice.Start(path => path.EndsWith("/cooleron", StringComparison.Ordinal) ? "false" : null);
+            var actuator = new Mock<ICoolingFanActuator>();
+            var thermal = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
+                [new SwitchPortDto(1, "Fan", Value: 0, Min: 0, Max: 1, CanWrite: true)]);
+            actuator.Setup(a => a.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<SwitchDto> { thermal });
+            actuator.Setup(a => a.SetFanValueAsync(It.IsAny<string>(), It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new TimeoutException("bridge did not answer the fan write"));
+            using var svc = new CameraService(fan: () => actuator.Object);
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box, DeviceType.Camera, "Bench Camera")), null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+                TimeSpan.FromSeconds(15), "camera never connected");
+            box.Respond(path => path.EndsWith("/cooleron", StringComparison.Ordinal) ? "\"not-a-bool\"" : null);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.Runtime is { CoolerStateKnown: false },
+                TimeSpan.FromSeconds(15), "the cooler state never became unreadable on a refresh");
+
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -10, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("cooling fan could not be started"));
+            Assert.That(box.Puts.Select(p => p.Path), Has.None.EndsWith("/cooleron"), "nothing committed to the camera");
+        }
+
+        [Test]
         public async Task A_failed_fan_write_with_the_cooler_already_on_is_a_fault_not_a_refusal_so_the_warm_ramp_completes() {
             // Review of #1084: the §58 unattended warm ramp calls SetCoolerAsync(true, setpoint) once
             // a minute while the cooler is ON. A fan write failing mid-ramp must not throw — that

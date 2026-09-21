@@ -81,8 +81,13 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                     value = scripted;
                 }
             } else if (ctx.Request.HttpMethod == "PUT") {
-                using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
-                Puts.Enqueue((ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "", await reader.ReadToEndAsync().ConfigureAwait(false)));
+                try {
+                    using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+                    Puts.Enqueue((ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "", await reader.ReadToEndAsync().ConfigureAwait(false)));
+                } catch (HttpListenerException) {
+                    // client aborted mid-PUT — irrelevant to the test, and the loop must keep serving
+                } catch (ObjectDisposedException) {
+                }
             }
             var body = Encoding.UTF8.GetBytes(
                 $$"""{"Value":{{value}},"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":0,"ErrorMessage":""}""");

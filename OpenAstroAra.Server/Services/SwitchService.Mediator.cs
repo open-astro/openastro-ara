@@ -179,7 +179,12 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
         // REST write: a SetSwitchValue that would stop the Thermal Switch's fan while the camera
         // cools (or its state is unknown) fails the instruction with the refusal, so Attempts /
         // instruction_failed engage instead of the fan silently stopping mid-cooling.
-        var refusal = await FanOffRefusalForSequencerAsync(deviceId, portId, value, ct).ConfigureAwait(false);
+        string? refusal;
+        try {
+            refusal = await FanOffRefusalForSequencerAsync(deviceId, portId, value, ct).ConfigureAwait(false);
+        } catch (ObjectDisposedException) {
+            return; // a Dispose landing between the two gate blocks: the documented logged no-op, not a fault
+        }
         if (refusal is not null) {
             throw new SequenceEntityFailedException(refusal);
         }
