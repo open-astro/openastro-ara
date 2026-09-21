@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,9 +13,10 @@ import 'package:openastroara/widgets/equipment/fan_switch_row.dart';
 
 class _FakeSwitchClient implements SwitchClient {
   final List<SwitchDevice> devices;
-  _FakeSwitchClient(this.devices, {this.throwOnSet = false});
+  _FakeSwitchClient(this.devices, {this.throwOnSet = false, this.setError});
   final List<String> calls = [];
   final bool throwOnSet;
+  final Object? setError;
   @override
   Future<List<SwitchDevice>> getAll() async => devices;
   @override
@@ -31,7 +33,7 @@ class _FakeSwitchClient implements SwitchClient {
     required int portId,
     required double value,
   }) async {
-    if (throwOnSet) throw Exception('device rejected the write');
+    if (throwOnSet) throw setError ?? Exception('device rejected the write');
     calls.add('setValue:$deviceId:$portId:$value');
   }
 
@@ -141,26 +143,38 @@ void main() {
     expect(find.textContaining("Couldn't set the fan"), findsOneWidget);
   });
 
-  testWidgets(
-      'refuses fan-off when the cooler state is unknown (camera read failed) '
-      '— the interlock fails closed', (tester) async {
+  testWidgets('fan-off is sent even while cooling — the daemon owns the '
+      'interlock (#1065)', (tester) async {
     final fake = await _pump(
-      tester,
-      switches: [_fanDevice(value: 1.0)],
-      cameraFails: true,
-    );
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('cooler state is unknown'), findsOneWidget);
-    expect(fake.calls, isEmpty); // no write went through
-  });
-
-  testWidgets('refuses fan-off while the cooler is cooling', (tester) async {
-    await _pump(
       tester,
       switches: [_fanDevice(value: 1.0)],
       camera: FakeCameraStatus(coolerOn: true),
     );
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(fake.calls, contains('setValue:switch-5:1:0.0'));
+  });
+
+  testWidgets("the daemon's fan-off refusal (409 detail) is shown verbatim",
+      (tester) async {
+    final sw = _FakeSwitchClient(
+      [_fanDevice(value: 1.0)],
+      throwOnSet: true,
+      setError: DioException(
+        requestOptions: RequestOptions(path: '/switch'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/switch'),
+          statusCode: 409,
+          data: const {
+            'detail': 'Turn the cooler off before stopping the fan — cooling '
+                'with the fan off can damage the camera.'
+          },
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+    await _pump(tester, switches: sw.devices, switchClient: sw,
+        camera: FakeCameraStatus(coolerOn: true));
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.textContaining('damage the camera'), findsOneWidget);

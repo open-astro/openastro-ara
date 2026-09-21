@@ -109,3 +109,18 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Endpoints/ImageEndpoints.cs`, `Endpoints/SystemEndpoints.cs`, `Services/{DataManagerService,SkyCatalogService,SkyCatalogReader,PreviewCacheMaintenance,ThumbnailWarmerService}.cs`, `packaging/{build-deb.sh,seed-manifest.tsv}`. openapi.yaml still pending its refresh (PORT_TODO).
 
 **Related:** branch library-photos-redesign, CHANGELOG [Unreleased]
+
+### 2026-09-20 — #1065 cooling-fan interlock moves daemon-side
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/camera/cooler` (now also syncs the fan; new 409 reason); `POST /api/v1/equipment/switch/{id}/value` (new 409 refusal).
+
+**Decision:**
+- After a committed cooler write the daemon writes the first connected switch whose name contains "Thermal Switch" and which exposes a writable port named "Fan" to that port's own `max` (cooler on) or `min` (cooler off). No such switch = no-op. A failed fan write returns 409 with `detail` = "the cooler is on|off, but the cooling fan could not be synced (…) — check the fan"; the cooler change itself has already landed.
+- A switch-value write that takes that same Fan port to `value <= min` is refused with 409 unless the camera resolved with `runtime.cooler_on == false` (a not-connected camera also reads as off). Cooler on, or an unreadable state, refuses — fails closed. The refusal `detail` is the user-facing sentence the client used to generate locally.
+- The client's own fan sync and fan-off pre-check are deleted; it renders the server's `detail` verbatim.
+
+**Reasoning:** the client-side interlock only covered the client's own buttons — a sequence CoolCamera/WarmCamera step, the §58 unattended shutdown, a second client or a direct API call all bypassed it. The daemon is the one place every cooler path goes through. The camera's `GetAsync` is the probe (cached runtime state), resolved lazily (`Func<>`) to break the CameraService ↔ SwitchService construction cycle; the camera's own post-cooler fan write bypasses the interlock (`ICoolingFanActuator`) because the cached cooler state may still read on for one tick.
+
+**Spec ref:** `Services/CoolingFanInterlock.cs`, `Services/CameraService.cs` (`SyncCoolingFanAsync`), `Services/SwitchService.cs` (`FanOffRefusalForAsync`), `Endpoints/EquipmentEndpoints.cs`.
+
+**Related:** #1065 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]

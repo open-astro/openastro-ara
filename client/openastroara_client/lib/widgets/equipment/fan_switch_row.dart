@@ -11,10 +11,9 @@ import '../../state/equipment/switch_state.dart';
 /// ToupTek Thermal Switch element (the ATR2600M's `TOUPCAM_OPTION_FAN` port).
 ///
 /// Hidden entirely when no connected switch has a "Fan" port. Safety: turning
-/// the fan off while the TEC is cooling is refused — the fan vents the TEC's
-/// heat sink, and cooling with the fan off can damage the camera. The check
-/// fails CLOSED: an unknown cooler state (camera status still loading, or a
-/// failed read) also refuses fan-off rather than assuming "not cooling".
+/// the fan off while the TEC is cooling is refused by the DAEMON (#1065 — the
+/// fan vents the TEC's heat sink, and cooling with the fan off can damage the
+/// camera); the 409's reason is what this row shows. The row itself is UX only.
 class FanSwitchRow extends ConsumerWidget {
   const FanSwitchRow({super.key});
 
@@ -67,21 +66,6 @@ class FanSwitchRow extends ConsumerWidget {
     bool on,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    // Hardware-damage interlock — shared with the generic Switches panel
-    // (fanOffRefusal), fails CLOSED on an unknown cooler state.
-    final refusal = on
-        ? null
-        : fanOffRefusal(
-            await coolerOnTriState(ref.read(cameraStatusProvider.future)));
-    if (refusal != null) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(refusal),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
-      return;
-    }
     try {
       final ok = await ref
           .read(switchListProvider.notifier)

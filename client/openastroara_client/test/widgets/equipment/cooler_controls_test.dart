@@ -228,22 +228,13 @@ void main() {
         contains('command:cooler:enabled=true:target=-10.0:fan=null'));
   });
 
-  testWidgets('turning the cooler on syncs the fan switch port (single write)',
-      (tester) async {
+  testWidgets('turning the cooler on never writes the fan from the client '
+      '(the daemon syncs it — #1065)', (tester) async {
     final sw = _FakeSwitchClient([_fanDevice(value: 0.0)]);
     await _pump(tester, _status(coolerOn: false), switchClient: sw);
     await tester.tap(find.byType(Switch).first); // cooler switch
     await tester.pumpAndSettle();
-    expect(sw.calls, contains('setValue:switch-5:1:1.0'));
-  });
-
-  testWidgets('turning the cooler off syncs the fan switch port off',
-      (tester) async {
-    final sw = _FakeSwitchClient([_fanDevice(value: 1.0)]);
-    await _pump(tester, _status(coolerOn: true), switchClient: sw);
-    await tester.tap(find.byType(Switch).first); // cooler switch
-    await tester.pumpAndSettle();
-    expect(sw.calls, contains('setValue:switch-5:1:0.0'));
+    expect(sw.calls, isEmpty);
   });
 
   testWidgets(

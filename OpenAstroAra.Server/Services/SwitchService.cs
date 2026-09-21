@@ -47,7 +47,7 @@ namespace OpenAstroAra.Server.Services;
 /// switch as its "primary" — see <c>SwitchService.Mediator.cs</c>. Per-device sequencer targeting is a
 /// follow-up.
 /// </summary>
-public sealed partial class SwitchService : ISwitchService, IDisposable {
+public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IDisposable {
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
@@ -113,12 +113,14 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     }
 
     public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null) {
+            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null,
+            Func<ICameraService?>? cameraProbe = null) {
         _logger = logger ?? NullLogger<SwitchService>.Instance;
         _events = events;
         _faults = faults;
         _profileStore = profileStore;
         _ws = ws;
+        _cameraProbe = cameraProbe;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -238,9 +240,66 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         return Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
     }
 
+    // #1065 — lazily resolved (Func<>) to break the CameraService ↔ SwitchService construction
+    // cycle: the camera syncs the fan through this service, this service asks the camera whether
+    // it is cooling before it lets the fan stop.
+    private readonly Func<ICameraService?>? _cameraProbe;
+
     public async Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
         ArgumentNullException.ThrowIfNull(request);
+        // §25.5.6 / #1065 fan-off interlock, daemon-side: a write that would stop the cooling fan
+        // is refused (→ 409) unless the camera's cooler is KNOWN to be off. Checked against the
+        // cached port snapshot (name + min) before the connection lookup so the refusal reads the
+        // same whether or not the write would have succeeded.
+        var refusal = await FanOffRefusalForAsync(deviceId, request, ct).ConfigureAwait(false);
+        if (refusal is not null) {
+            throw new InvalidOperationException(refusal);
+        }
+        await SetValueCoreAsync(deviceId, request, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The interlock decision for one write: null when it is not a fan-off (or the port is
+    /// not the cooling fan), else the refusal reason. Fails CLOSED: no camera probe wired, or a
+    /// probe that throws, both read as "unknown" and refuse.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Interlock probe boundary: a failing camera status read must refuse the fan-off (fail closed), never surface as a 500 from a switch write. CA1031's log-and-recover boundary applies.")]
+    private async Task<string?> FanOffRefusalForAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        SwitchDto? device;
+        lock (_gate) {
+            device = _connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null;
+        }
+        var port = device?.Ports.FirstOrDefault(p => p.Id == request.PortId);
+        if (device is null || port is null || !CoolingFanInterlock.IsThermalSwitchFanPort(device, port)
+                || !CoolingFanInterlock.IsFanOff(port, request.Value)) {
+            return null;
+        }
+        bool? coolerOn;
+        try {
+            var camera = _cameraProbe?.Invoke();
+            coolerOn = camera is null
+                ? null
+                : (await camera.GetAsync(ct).ConfigureAwait(false))?.Runtime.CoolerOn ?? false;
+        } catch (Exception ex) {
+            LogFanInterlockProbeFailed(_logger, ex);
+            coolerOn = null;
+        }
+        return CoolingFanInterlock.FanOffRefusal(coolerOn);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Cooling-fan interlock: camera cooler state could not be read; refusing the fan-off (fail closed).")]
+    private static partial void LogFanInterlockProbeFailed(ILogger logger, Exception ex);
+
+    /// <summary>The camera's post-cooler fan sync (<see cref="ICoolingFanActuator"/>): the plain
+    /// write, no fan-off interlock — the cooler-off that motivates it has just been committed.</summary>
+    public Task SetFanValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        ArgumentNullException.ThrowIfNull(request);
+        return SetValueCoreAsync(deviceId, request, ct);
+    }
+
+    private async Task SetValueCoreAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
         // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
         // -32768). Checked before the connection lookup so the range contract holds regardless of state.
