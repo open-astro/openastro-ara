@@ -183,7 +183,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         [Category("bench")]
-        public async Task Already_at_slot_0_counts_as_homed_and_an_unknown_position_does_not_claim() {
+        public async Task Already_at_slot_0_counts_as_homed_and_a_moving_wheel_is_homed_once_its_position_is_known() {
             await using var stub = StubWheel.Start(position: FilterWheelService.DefaultSlot);
             using var svc = new FilterWheelService();
 
@@ -196,15 +196,21 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "…so a later reconnect never re-homes");
             await DisconnectAsync(svc);
 
-            // A DIFFERENT wheel that reports "moving" (-1) at seed: skipped without claiming, so its
-            // next connect with a known position still homes.
+            // A DIFFERENT wheel that reports "moving" (-1) at connect (a driver repositioning to
+            // its last slot): the claim is taken at connect, the decision waits for the first
+            // known position on a later refresh tick of the SAME connection…
             stub.Position = -1;
             await ConnectAsync(svc, stub, uniqueId: "second-wheel");
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "unknown position at seed — don't fight the hardware");
-            await DisconnectAsync(svc);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "position unknown — nothing to decide yet");
             stub.Position = 3;
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "the home fires once the position becomes known");
+            Assert.That(stub.PositionWrites.TryDequeue(out var target) && target == FilterWheelService.DefaultSlot, Is.True);
+            await DisconnectAsync(svc);
+
+            // …and because it was claimed at connect, a reconnect mid-sequence (parked on Ha) is left alone.
+            stub.Position = 2;
             await ConnectAsync(svc, stub, uniqueId: "second-wheel");
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "the unclaimed wheel homes on its next known-position connect");
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "claimed at first connect — a reconnect never homes");
             await DisconnectAsync(svc);
         }
     }
