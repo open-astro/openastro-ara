@@ -57,7 +57,7 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
           'enabled': enabled,
           'target_temperature_c': targetTemperatureC,
         }));
-    if (performed && _hasKnownFanPort()) {
+    if (performed && await _hasKnownFanPort()) {
       // The switch list is pull-on-demand (no value push from the daemon), so
       // re-read it once the cooler command landed: FanSwitchRow and the
       // Switches panel then show the fan value the daemon just wrote instead
@@ -74,12 +74,20 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
     return performed;
   }
 
-  bool _hasKnownFanPort() {
-    final switches = ref.read(switchListProvider).maybeWhen(
-          data: (v) => v,
-          orElse: () => const <SwitchDevice>[],
-        );
-    return findThermalSwitchFanPort(switches) != null;
+  /// Awaits the list (on first use the provider is AsyncLoading and a
+  /// synchronous read would see an empty list and skip the re-read), BOUNDED:
+  /// Riverpod 3 auto-retries a failing provider and `.future` stays pending
+  /// across retries, so an unreachable switch list must not hang the cooler
+  /// toggle. Unknown reads as "no fan port" — no extra GET.
+  Future<bool> _hasKnownFanPort() async {
+    try {
+      final switches = await ref
+          .read(switchListProvider.future)
+          .timeout(const Duration(seconds: 2));
+      return findThermalSwitchFanPort(switches) != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// §25.5.5 — select a readout mode by index into capabilities.readoutModes.
