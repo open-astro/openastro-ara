@@ -65,6 +65,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     // reports -1 and would otherwise never be parked). Cleared on disconnect/connection loss.
     private bool _pendingHome;
     private string _pendingHomeDevice = string.Empty;
+    // Bounded window: the seed read plus a few 2 s ticks. A driver that reports -1 for longer is
+    // not "just connected" any more; the decision is dropped (and logged) rather than homing the
+    // wheel minutes later.
+    private int _pendingHomeTicks;
+    private const int MaxPendingHomeTicks = 4;
 
     public FilterWheelService(
         ILogger<FilterWheelService>? logger = null,
@@ -161,6 +166,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             throw new InvalidOperationException("filter wheel is not connected");
         }
         var position = request.Position;
+        // #1066 — an explicitly requested slot is a deliberate position: it retires the pending
+        // first-connect home, so the change's own follow-up refresh can never override it with 0.
+        RetirePendingHome();
         _ = Task.Run(() => ChangeInBackground(client, position), CancellationToken.None);
         return Task.FromResult(Accepted("filter-wheel.change", idempotencyKey));
     }
@@ -199,6 +207,15 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     [LoggerMessage(Level = LogLevel.Information,
         Message = "FilterWheel '{Device}' disconnected before it ever reported a known position; the first-connect home to slot 0 was never issued and will not be retried this session (#1066)")]
     private partial void LogHomeNeverDecided(string device);
+
+    /// <summary>An explicit filter change (REST or a sequence SwitchFilter) retires the pending
+    /// first-connect home: the user or the plan chose a slot, so the daemon must not park the wheel
+    /// on 0 behind their back.</summary>
+    private void RetirePendingHome() {
+        lock (_gate) {
+            _pendingHome = false;
+        }
+    }
 
     // Caller holds _gate. A connection ending with the home still pending is logged so a wheel that
     // never parked on L leaves a trace in the journal.
@@ -246,6 +263,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             var slots = needSlots ? ReadSlots(client) : null;
             var adoptedSlots = false;
             int? homeFrom = null;
+            string homeDevice = string.Empty;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -255,18 +273,23 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                     }
                     // #1066 — the first KNOWN position settles this session's home decision, whether
                     // or not a move is needed (already-at-0 counts as homed). Unknown (-1 / unreadable)
-                    // leaves it pending for the next tick.
-                    if (_pendingHome && runtime.CurrentSlot is int slot) {
-                        _pendingHome = false;
-                        if (NeedsHomeToDefaultSlot(slot)) {
-                            homeFrom = slot;
+                    // leaves it pending for a few more ticks, then it is dropped.
+                    if (_pendingHome) {
+                        if (runtime.CurrentSlot is int slot) {
+                            _pendingHome = false;
+                            if (NeedsHomeToDefaultSlot(slot)) {
+                                homeFrom = slot;
+                                homeDevice = _pendingHomeDevice;
+                            }
+                        } else if (++_pendingHomeTicks > MaxPendingHomeTicks) {
+                            ClearPendingHomeLocked();
                         }
                     }
                 }
             }
             if (homeFrom is int from) {
                 // Daemon policy: happens with no client attached (boot auto-connect), never on a reconnect.
-                LogHomingToDefault(_pendingHomeDevice, from);
+                LogHomingToDefault(homeDevice, from);
                 _ = Task.Run(() => ChangeInBackground(client, DefaultSlot), CancellationToken.None);
             }
             if (adoptedSlots) {
@@ -340,6 +363,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                     // later reconnect of this wheel (auto or manual) can never home it.
                     _pendingHome = ClaimFirstConnectHome(device.UniqueId);
                     _pendingHomeDevice = device.Name;
+                    _pendingHomeTicks = 0;
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
