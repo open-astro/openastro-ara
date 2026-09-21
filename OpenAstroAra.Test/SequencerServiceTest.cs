@@ -129,6 +129,12 @@ namespace OpenAstroAra.Test {
                                         && e.Payload.TryGetProperty("estimated_remaining_seconds", out _)),
                 Is.True, "every run-lifecycle frame carries both estimate fields");
             Assert.That(frames.Last().Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.EqualTo(0));
+            // The worker's finally releases the tree (SetRoot(null)) after the terminal state is
+            // observable; the retained estimate must survive that. Give the finally time to run.
+            await Task.Delay(500);
+            var later = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(later!.EstimatedTotalSeconds, Is.EqualTo(state.EstimatedTotalSeconds),
+                "the final estimate is retained after the run tree is released");
         }
 
         [Test]
@@ -153,6 +159,10 @@ namespace OpenAstroAra.Test {
             var failed = records.Where(e => e.Type == "sequence.instruction_failed").ToList();
             Assert.That(failed, Has.Count.EqualTo(1), "exactly one event per failed leaf, no duplicates from tick + final scans");
             Assert.That(failed[0].Payload.GetProperty("failed_instruction_index").GetInt32(), Is.EqualTo(1));
+            // #1068 — the failure frame carries the estimate fields too (delete them in
+            // EmitInstructionFailedAsync and this fails).
+            Assert.That(failed[0].Payload.TryGetProperty("estimated_total_seconds", out _), Is.True);
+            Assert.That(failed[0].Payload.TryGetProperty("estimated_remaining_seconds", out _), Is.True);
             // The headless factory maps the unregistered ExternalScript to UnknownSequenceItem,
             // whose Name is the original serialized type token — a realistic FAILED leaf (an
             // imported sequence carrying an instruction this daemon doesn't know).
