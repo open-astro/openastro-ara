@@ -473,6 +473,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             var trackingVerdict = TrackingWatchVerdict.Idle;
             var slewVerdict = new SlewEventWatch.Verdict(SlewEventWatch.Kind.None);
             DiscoveredDeviceDto? watchedDevice = null;
+            string? axisMaxUnknownReason = null;
+            (double? Primary, double? Secondary) axisMaxUnknownValues = default;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     // §57.9 — mask the stale post-Park/Home target; the latch self-releases
@@ -494,8 +496,14 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                         if (ShouldSettleAxisMax(axisReadsCompleted, mountCannotMoveAxis, _axisRateReadPasses)) {
                             _axisMaxRead = true; // settled: no more AxisRates reads this session
                             if (_axisMaxDegPerSec[0] is null || _axisMaxDegPerSec[1] is null) {
-                                LogAxisMaxUnknown(_logger, _axisMaxDegPerSec[0], _axisMaxDegPerSec[1],
-                                    mountCannotMoveAxis ? "CanMoveAxis is false" : axisReadsCompleted ? "the mount reported no rates" : "AxisRates kept throwing");
+                                // Logged after the lock (below): the nudge/stop path takes _gate too.
+                                axisMaxUnknownReason = (mountCannotMoveAxis, axisReadsCompleted) switch {
+                                    (true, true) => "CanMoveAxis is false and the mount reported no rates",
+                                    (true, false) => "CanMoveAxis is false",
+                                    (false, true) => "the mount reported no rates",
+                                    _ => "AxisRates kept throwing",
+                                };
+                                axisMaxUnknownValues = (_axisMaxDegPerSec[0], _axisMaxDegPerSec[1]);
                             }
                         }
                     }
@@ -512,6 +520,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     slewVerdict = SlewWatch.Observe(runtime.State == "slewing");
                     watchedDevice = _device;
                 }
+            }
+            if (axisMaxUnknownReason is not null) {
+                LogAxisMaxUnknown(_logger, axisMaxUnknownValues.Primary, axisMaxUnknownValues.Secondary, axisMaxUnknownReason);
             }
             if (slewVerdict.Kind == SlewEventWatch.Kind.Started) {
                 PublishSlewEvent(WsEventCatalog.TelescopeSlewStarted, new System.Text.Json.Nodes.JsonObject {
