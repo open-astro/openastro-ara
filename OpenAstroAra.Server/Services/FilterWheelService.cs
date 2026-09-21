@@ -209,7 +209,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private partial void LogHomeNeverDecided(string device);
 
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "FilterWheel '{Device}' still reported no known position {Ticks} refresh ticks after connect; the first-connect home to slot 0 is dropped and will not be retried this session (#1066)")]
+        Message = "FilterWheel '{Device}' still reported no known position on refresh {Ticks} after connect (seed read = 1); the first-connect home to slot 0 is dropped and will not be retried this session (#1066)")]
     private partial void LogHomeWindowExpired(string device, int ticks);
 
     /// <summary>An explicit filter change (REST or a sequence SwitchFilter) retires the pending
@@ -287,7 +287,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                             }
                         } else if (++_pendingHomeTicks > MaxPendingHomeTicks) {
                             _pendingHome = false;
-                            LogHomeWindowExpired(_pendingHomeDevice, MaxPendingHomeTicks);
+                            LogHomeWindowExpired(_pendingHomeDevice, _pendingHomeTicks); // the refresh that dropped it
                         }
                     }
                 }
