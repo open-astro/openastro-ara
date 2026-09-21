@@ -11,17 +11,14 @@ import 'package:openastroara/state/settings/settings_nav.dart';
 /// test says so (the real notifier's async poll cycle would clobber direct
 /// state writes).
 class _FakeWheelNotifier extends FilterWheelNotifier {
-  /// Positions the controller commanded (e.g. the home-to-L move).
+  /// Positions the controller commanded — none expected: the first-connect
+  /// home to slot 0 is daemon policy now (#1066).
   final List<int> changeCalls = [];
-  bool dropHome = false; // home (slot 0) is dropped by re-entrancy
-  bool failHome = false; // home (slot 0) throws a driver error
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
   Future<bool> changeFilter(int position) async {
     changeCalls.add(position);
-    if (position == 0 && dropHome) return false;
-    if (position == 0 && failHome) throw StateError('home failed');
     return true;
   }
 
@@ -283,113 +280,22 @@ void main() {
       expect(container.read(exposureControllerProvider).filterSlot, 'G');
     });
 
-    test('first connect homes the wheel to slot 0 (L)', () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      // Wheel connects already parked on slot 3 (B) — first connect homes L.
-      wheel.park(_wheelAt(3));
-      await _settle();
-      expect(wheel.changeCalls, [0],
-          reason: 'first launch moves the wheel to the default L slot');
-    });
-
-    test('first-connect home shows homing until the wheel is observed at 0',
+    test('the client never homes the wheel — that is daemon policy (#1066)',
         () async {
       container.read(exposureControllerProvider);
       final wheel = await _initWheel(container);
+      // Wheel connects already parked on slot 3 (B): the picker follows it.
       wheel.park(_wheelAt(3));
       await _settle();
-      expect(container.read(exposureControllerProvider).homing, isTrue,
-          reason: 'homing the wheel to L is visible as busy');
-      // The home move completes — the wheel is observed on slot 0.
+      expect(wheel.changeCalls, isEmpty,
+          reason: 'no client-side home command on first connect');
+      expect(container.read(exposureControllerProvider).filterSlot, 'B');
+      // The daemon homes it: observed moving, then on slot 0 — the picker
+      // follows like any other move.
       wheel.park(_wheelAt(0));
       await _settle();
-      expect(container.read(exposureControllerProvider).homing, isFalse,
-          reason: 'homing clears once the wheel is on L');
-    });
-
-    test('home fires once the wheel position becomes known', () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      // First status: connected but the driver hasn't reported the position
-      // yet — home must NOT fire (and must not be skipped forever).
-      wheel.park(FilterWheelStatus(
-        deviceId: 'fw',
-        name: 'FILTERWHEEL',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: null,
-        slots: const [
-          FilterSlot(position: 0, name: 'L', focusOffset: 0),
-          FilterSlot(position: 3, name: 'B', focusOffset: 0),
-        ],
-      ));
-      await _settle();
-      expect(wheel.changeCalls, isEmpty,
-          reason: 'position unknown — nothing to home yet');
-      expect(container.read(exposureControllerProvider).homing, isFalse);
-
-      // The position arrives (on slot 3 = B) — the first-connect home fires.
-      wheel.park(_wheelAt(3));
-      await _settle();
-      expect(wheel.changeCalls, [0],
-          reason: 'the home must fire once the position is known, not be '
-              'silently skipped because the first sighting had no position');
-      expect(container.read(exposureControllerProvider).homing, isTrue);
-    });
-
-    test('a wheel already at L on first connect never re-homes on reconnect',
-        () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      // First connect already at slot 0 — the home is a no-op, but the
-      // session's home decision is settled.
-      wheel.park(_wheelAt(0));
-      await _settle();
-      expect(wheel.changeCalls, isEmpty,
-          reason: 'already at L — nothing to home');
-
-      // Disconnect; while offline the wheel is parked elsewhere (slot 2).
-      wheel.park(_wheelAt(0, connected: false));
-      await _settle();
-      wheel.park(_wheelAt(2));
-      await _settle();
-      expect(wheel.changeCalls, isEmpty,
-          reason: 'a reconnect must NOT re-home when the first connect was '
-              'already at L');
-    });
-
-    test('a dropped home command does not leave the picker busy', () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      wheel.dropHome = true; // home (slot 0) dropped by re-entrancy
-      wheel.park(_wheelAt(3));
-      await _settle();
-      expect(container.read(exposureControllerProvider).homing, isFalse,
-          reason: 'a dropped home must not leave the picker disabled forever');
-    });
-
-    test('a failed home command clears homing too', () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      wheel.failHome = true; // home throws a driver error
-      wheel.park(_wheelAt(3));
-      await _settle();
-      expect(container.read(exposureControllerProvider).homing, isFalse,
-          reason: 'a failed home must not leave the picker disabled forever');
-    });
-
-    test('reconnect does not re-home an already-homed wheel', () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      wheel.park(_wheelAt(3)); // first connect -> home to 0
-      await _settle();
-      wheel.park(_wheelAt(0, connected: false)); // disconnect
-      await _settle();
-      wheel.park(_wheelAt(2)); // reconnect at 2 — already homed this session
-      await _settle();
-      expect(wheel.changeCalls, [0],
-          reason: 'only the first connect of a session homes the wheel');
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+      expect(wheel.changeCalls, isEmpty);
     });
 
     test('a different wheel device resets the latch too', () async {
