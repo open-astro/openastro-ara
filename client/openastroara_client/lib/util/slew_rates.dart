@@ -12,6 +12,10 @@
 ///   itself, so no separate MAX entry is needed.
 /// - **Every option is <= the mount's max** — the UI can never ask a mount to
 ///   slew faster than it advertises. Zero/negative rates are dropped.
+///
+/// This picker is UX only: the daemon clamps every MoveAxis rate to the axis's
+/// reported maximum itself (#1064), so a rate over the max is never the
+/// client's to guard.
 library;
 
 /// Slew-speed presets as fractions of the mount's max rate.

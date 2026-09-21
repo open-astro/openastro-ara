@@ -182,18 +182,8 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted();
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
-        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) => {
-            // ASCOM axes: 0 = Primary, 1 = Secondary, 2 = Tertiary. Reject out-of-range up front (400)
-            // so an invalid enum cast can't surface as a driver 500. Rate is intentionally NOT clamped
-            // here: the UI speed picker constrains it to the mount's reported AxisRates, a direct API
-            // caller owns its choice of rate, and the driver clamps/rejects anything it can't honour.
-            if (request.Axis is < 0 or > 2) {
-                return Results.Problem($"axis must be 0, 1, or 2 (got {request.Axis}).",
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-            await svc.MoveAxisAsync(request.Axis, request.Rate, ct);
-            return Results.Accepted();
-        });
+        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) =>
+            await MoveAxisAsync(request, svc, ct));
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
         });
@@ -628,6 +618,31 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    // Manual nudge (extracted for the error-mapping tests). ASCOM axes: 0 = Primary, 1 = Secondary —
+    // the only two the direction pad drives; Tertiary (2) and anything else is a 400 up front so an
+    // invalid enum cast can't surface as a driver 500 and a non-pad axis is never refused as a 409
+    // mystery. A non-finite rate is a 400 too. The rate is clamped by the service to the mount's
+    // reported AxisRates (#1064) — the UI speed picker is UX only, never the guard; not connected,
+    // or an axis with no usable rate, refuses the nudge (409).
+    public static async Task<IResult> MoveAxisAsync(MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(svc);
+        if (request.Axis is < 0 or > 1) {
+            return Results.Problem($"axis must be 0 (primary) or 1 (secondary) (got {request.Axis}).",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        if (!double.IsFinite(request.Rate)) {
+            return Results.Problem("rate must be a finite number of degrees per second.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        try {
+            await svc.MoveAxisAsync(request.Axis, request.Rate, ct).ConfigureAwait(false);
+            return Results.Accepted();
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 
