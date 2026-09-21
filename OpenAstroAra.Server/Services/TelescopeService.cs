@@ -65,11 +65,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     // session so the nudge start path stays a single driver call: an inline AxisRates GET on the
     // press leg let a fast release's MoveAxis(0) overtake the start and leave the axis running
     // (review of #1069). Filled from the SAME two AxisRates reads the capabilities pass makes for
-    // the pad's rate list; re-read on later passes only until both reads have COMPLETED once
-    // (_axisMaxRead) — a thrown read retries, an honestly-empty axis is terminal (no cap known →
-    // that axis stays refused). Never read on the 2 s poll path once settled.
+    // the pad's rate list; re-read on later passes only until SETTLED (_axisMaxRead): both reads
+    // completed (an honestly-empty axis is terminal — no cap known → that axis stays refused), the
+    // mount reports CanMoveAxis false (its AxisRates throw by spec), or a bounded number of passes
+    // (MaxAxisRateReadPasses) went by with a read still throwing. Never read on the 2 s poll path
+    // once settled; settling with an axis still unknown is logged once.
     private double?[]? _axisMaxDegPerSec;
     private bool _axisMaxRead;
+    private int _axisRateReadPasses;
+    private const int MaxAxisRateReadPasses = 3;
     private TelescopeStateDto _runtime = IdleRuntime;
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
     // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member; Other is the
@@ -277,6 +281,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "MoveAxis clamp settled with an unknown maximum (primary={Primary}, secondary={Secondary}): {Reason}. Manual nudge on an unknown axis is refused (409) for this session (#1064).")]
+    private static partial void LogAxisMaxUnknown(ILogger logger, double? primary, double? secondary, string reason);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
         Message = "MoveAxis rate {Requested} deg/s on axis {Axis} exceeds the mount's maximum; clamped to {Effective} deg/s.")]
     private static partial void LogMoveAxisRateClamped(ILogger logger, int axis, double requested, double effective);
 
@@ -452,6 +460,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             var caps = needCaps ? ReadCapabilities(client, pad) : null;
             var axisMax = needAxisMax ? AxisMaxFrom(pad) : null;
             var axisReadsCompleted = needAxisMax && pad.Primary is not null && pad.Secondary is not null;
+            var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false;
             // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
@@ -474,8 +483,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                         for (var i = 0; i < axisMax.Length; i++) {
                             _axisMaxDegPerSec[i] ??= axisMax[i];
                         }
-                        if (axisReadsCompleted) {
+                        _axisRateReadPasses++;
+                        if (axisReadsCompleted || mountCannotMoveAxis || _axisRateReadPasses >= MaxAxisRateReadPasses) {
                             _axisMaxRead = true; // settled: no more AxisRates reads this session
+                            if (_axisMaxDegPerSec[0] is null || _axisMaxDegPerSec[1] is null) {
+                                LogAxisMaxUnknown(_logger, _axisMaxDegPerSec[0], _axisMaxDegPerSec[1],
+                                    mountCannotMoveAxis ? "CanMoveAxis is false" : axisReadsCompleted ? "the mount reported no rates" : "AxisRates kept throwing");
+                            }
                         }
                     }
                     if (equatorialSystem is not null) {
@@ -802,6 +816,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _capabilities = null;       // re-read for the new device
                     _axisMaxDegPerSec = null;   // #1064 — per-axis clamp re-read for the new device
                     _axisMaxRead = false;
+                    _axisRateReadPasses = 0;
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
