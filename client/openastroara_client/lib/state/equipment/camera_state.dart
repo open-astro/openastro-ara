@@ -50,9 +50,11 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
 
   /// Turn the cooler on/off and, when on, set the target CCD temperature (°C).
   Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) async {
-    // §25.5.6 / #1065 — the cooling fan follows the cooler DAEMON-side: the
-    // server syncs the bridge's Thermal-Switch Fan port after the cooler write
-    // (a failed sync is an equipment fault in the notification center).
+    // §25.5.6 / #1065 / #1076 — the cooling fan follows the cooler DAEMON-side:
+    // the server starts the bridge's Thermal-Switch Fan port BEFORE a cooler-on
+    // (a fan that cannot be started refuses to start cooling, a 409 rendered
+    // via the error detail) and stops it after a cooler-off (a failed fan-off
+    // is an equipment fault in the notification center).
     final performed = await performAction((api) => api.command('cooler', {
           'enabled': enabled,
           'target_temperature_c': targetTemperatureC,

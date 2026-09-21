@@ -322,9 +322,13 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             // still be empty here and the fan port unidentifiable. Wait for the first ports read
             // (the next 2 s tick at the latest) rather than deciding on an empty snapshot and
             // never coming back — this is a one-shot task.
+            var connected = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
+            if (connected is null || !CoolingFanInterlock.IsThermalSwitchDevice(connected)) {
+                return; // not the fan switch (most rigs) — decided on the name, before any wait
+            }
             var device = await WaitForPortsAsync(deviceId, PortsWaitBudget).ConfigureAwait(false);
             if (device is null || CoolingFanInterlock.FindThermalSwitchFanPort([device]) is null) {
-                return; // not the fan switch (most rigs), or its ports never read
+                return; // no Fan port, or the ports never read
             }
             if (await ProbeCoolerStateAsync(CancellationToken.None).ConfigureAwait(false) != true) {
                 return; // the camera is not (known to be) cooling — nothing to catch up
