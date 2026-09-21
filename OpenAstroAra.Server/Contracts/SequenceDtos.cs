@@ -109,7 +109,11 @@ public sealed record SequenceRunStateDto(
     DateTimeOffset? CompletedUtc,
     int InstructionsCompleted,
     int InstructionsTotal,
-    string? CurrentInstructionDescription);
+    string? CurrentInstructionDescription,
+    // #1068 — the sequencer's own duration model (see RunEtaEstimator), so the client no longer
+    // re-derives an ETA from the stored body. Null until the run tree has loaded.
+    double? EstimatedTotalSeconds = null,
+    double? EstimatedRemainingSeconds = null);
 
 /// <summary>Per-instruction progress payload (WS sequence.instruction_started / _complete / _failed).</summary>
 public sealed record InstructionProgressDto(
