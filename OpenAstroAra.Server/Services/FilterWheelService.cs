@@ -63,7 +63,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     // #1066 — the first-connect home is CLAIMED at connect (so a reconnect can never home) and
     // DECIDED on the first refresh tick that reads a known position (a wheel mid-move at connect
     // reports -1 and would otherwise never be parked). Cleared, without a home, by: disconnect /
-    // connection loss / a newer connect (ClearPendingHomeLocked, logged), an explicit filter change
+    // connection loss / a newer connect (TakePendingHomeNeverDecidedLocked, logged), an explicit filter change
     // (RetirePendingHome — the requested slot wins), and the tick bound (logged).
     private bool _pendingHome;
     private string _pendingHomeDevice = string.Empty;
@@ -122,12 +122,13 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
         AlpacaFilterWheel? client;
+        string? neverDecided;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             _connectGeneration++;
             client = _client;
             _client = null;
-            ClearPendingHomeLocked();
+            neverDecided = TakePendingHomeNeverDecidedLocked();
             // Clear the slot list too: it must not outlive the connection, so a ChangeFilterAsync
             // while disconnected validates against the live (absent) slots and reports "not
             // connected" rather than an ArgumentOutOfRange against a prior session's slots.
@@ -135,6 +136,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
+        }
+        if (neverDecided is not null) {
+            LogHomeNeverDecided(neverDecided); // outside the gate
         }
         if (client is not null) {
             _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
@@ -471,6 +475,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     // and this trip must never flip the NEW, healthy session to Error (review finding).
     private void TripConnectionLost(AlpacaFilterWheel probed) {
         DiscoveredDeviceDto? device;
+        string? neverDecided;
         lock (_gate) {
             if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
                 return;
@@ -478,7 +483,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             device = _device;
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
-            ClearPendingHomeLocked();
+            neverDecided = TakePendingHomeNeverDecidedLocked();
+        }
+        if (neverDecided is not null) {
+            LogHomeNeverDecided(neverDecided);
         }
         LogConnectionLost(device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.FilterWheel, device?.UniqueId, device?.Name,
