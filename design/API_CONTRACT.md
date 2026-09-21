@@ -169,3 +169,15 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Services/TelescopeService.cs` (`SnapMoveAxisRate`, `ShouldSettleAxisRates`, `ReadAxisBands`, `EndpointsOf`), `OpenAstroAra.Test/TelescopeMoveAxisClampTest.cs`.
 
 **Related:** #1072, #1078 (from the #1069 reviews), CHANGELOG [Unreleased]
+
+### 2026-09-21 — #1079 in-flight home token; SwitchFilter before the slot list
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/filterwheel/change` and the sequencer's `SwitchFilter` (mediator `ChangeFilter`); no wire change.
+
+**Decision:** the first-connect home carries a generation token when dispatched; every explicit change (REST or `SwitchFilter`), disconnect, connection loss, newer connect and dispose bump it, and the home task re-checks it under the gate right before its `Position = 0` write and steps aside (logged) if it moved — so a change accepted after the decision but before that re-check is never followed by the home (the token check and the device write are not one atomic step — no device I/O runs under the gate — so a change that lands in the microseconds between them is the one residual window). A `SwitchFilter` retires the pending/in-flight home first, before anything else it does and whether or not the change itself goes ahead; one that arrives before the wheel's slot list has been read then waits up to 6 s for it (polling the cache, no device I/O of its own) instead of being skipped. Dispose logs a still-pending home like disconnect does.
+
+**Reasoning:** #1073's review scoped the guarantee to "accepted while the decision is pending"; the sub-millisecond dispatch window and the boot-auto-connect-then-first-SwitchFilter case both let the daemon park on 0 behind a sequence that believed it had switched.
+
+**Spec ref:** `Services/FilterWheelService.cs` (`HomeInBackground`, `HomeStillWanted`, `RetirePendingHome`), `Services/FilterWheelService.Mediator.cs` (`WaitForSlotsAsync`), `OpenAstroAra.Test/FilterWheelFirstConnectHomeTest.cs`.
+
+**Related:** #1079 (from the #1073 reviews), CHANGELOG [Unreleased]

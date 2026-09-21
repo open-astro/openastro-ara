@@ -110,16 +110,27 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             slots = _slots;
         }
         var target = inputFilter.Position;
-        // slots == null means the first slot read hasn't landed yet (fresh connect): without the
-        // slot count the upper bound can't be validated, so skip explicitly rather than writing a
-        // possibly-out-of-range position to the device.
+        if (client is not null) {
+            // #1066/#1079 — a sequence's SwitchFilter is a deliberate position: retire the
+            // first-connect home (and any in-flight one) FIRST, before the slot-list wait below
+            // and whether or not the change itself goes ahead, so the seed refresh that lands
+            // during the wait can neither decide a home nor write one behind the sequence.
+            // (Retiring before the wait also keeps a different wheel adopted mid-wait out of
+            // it: the retire applies to the client captured at entry, never a later one.)
+            RetirePendingHome();
+        }
+        // slots == null means the first slot read hasn't landed yet (fresh connect — a boot
+        // auto-connect followed by a sequence's first SwitchFilter is the common case, #1079):
+        // give the seed refresh a bounded moment to land rather than skipping the change.
+        if (client is not null && slots is null) {
+            slots = await WaitForSlotsAsync(client, token).ConfigureAwait(false);
+        }
+        // Without the slot count the upper bound can't be validated, so skip explicitly rather than
+        // writing a possibly-out-of-range position to the device.
         if (client is null || slots is null || target < 0 || target >= slots.Count) {
             LogFilterChangeSkipped(inputFilter.Name, target);
             return inputFilter;
         }
-        // #1066 — a sequence's SwitchFilter is a deliberate position: retire the first-connect home
-        // so it can never land on top of (or after) this change.
-        RetirePendingHome();
         var reached = await RunFilterChangeAsync(client, target, token).ConfigureAwait(false);
         if (!reached) {
             // §42.2: the wheel never confirmed the slot (jam / stalled write / dropped link) —
@@ -133,6 +144,34 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
             return ResolveFilter(profileSnapshot, _slots, target) ?? inputFilter;
+        }
+    }
+
+    /// <summary>#1079 — the first slot read lands on the seed refresh or the next 2 s tick; wait up
+    /// to <see cref="SlotsWaitBudget"/> for it (polling the cache, no device I/O of our own) so a
+    /// SwitchFilter issued right after connect is honoured instead of skipped.</summary>
+    private static readonly TimeSpan SlotsWaitBudget = TimeSpan.FromSeconds(6);
+
+    private async Task<IReadOnlyList<FilterSlotDto>?> WaitForSlotsAsync(AlpacaFilterWheel client, CancellationToken ct) {
+        var deadline = DateTimeOffset.UtcNow + SlotsWaitBudget;
+        while (DateTimeOffset.UtcNow < deadline) {
+            IReadOnlyList<FilterSlotDto>? slots;
+            lock (_gate) {
+                if (_disposed || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client)) {
+                    return null;
+                }
+                slots = _slots;
+            }
+            if (slots is not null) {
+                return slots;
+            }
+            await Task.Delay(200, ct).ConfigureAwait(false);
+        }
+        lock (_gate) {
+            // Same liveness guard as inside the loop: a different wheel adopted in the final
+            // 200 ms must not have its slot list validated against and then written to the
+            // captured (now disposed) client.
+            return !_disposed && _state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client) ? _slots : null;
         }
     }
 

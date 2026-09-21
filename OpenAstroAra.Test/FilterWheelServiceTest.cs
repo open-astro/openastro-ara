@@ -40,6 +40,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_in_flight_home_is_only_wanted_while_no_change_or_reconnect_bumped_the_generation() {
+            Assert.That(FilterWheelService.HomeStillWanted(dispatched: 3, current: 3), Is.True);
+            Assert.That(FilterWheelService.HomeStillWanted(dispatched: 3, current: 4), Is.False, "a change/disconnect/newer connect retires it");
+        }
+
+        [Test]
         public void First_connect_home_is_claimed_once_per_device_per_session() {
             using var svc = new FilterWheelService();
             Assert.That(svc.ClaimFirstConnectHome("fw-a"), Is.True, "first connect homes");
