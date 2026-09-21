@@ -61,19 +61,22 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private TelescopeCapabilitiesDto? _capabilities;
-    // #1064 — per-axis MoveAxis maximum (deg/s; index = ASCOM TelescopeAxis), cached for the
-    // session so the nudge start path stays a single driver call: an inline AxisRates GET on the
-    // press leg let a fast release's MoveAxis(0) overtake the start and leave the axis running
-    // (review of #1069). Filled from the SAME two AxisRates reads the capabilities pass makes for
-    // the pad's rate list; re-read on later passes only until SETTLED (_axisMaxRead): both reads
-    // completed (an honestly-empty axis is terminal — no cap known → that axis stays refused), the
-    // mount reports CanMoveAxis false (its AxisRates throw by spec), or a bounded number of passes
-    // (MaxAxisRateReadPasses) went by with a read still throwing. Never read on the 2 s poll path
-    // once settled; settling with an axis still unknown is logged once.
-    private double?[]? _axisMaxDegPerSec;
-    private bool _axisMaxRead;
-    private int _axisRateReadPasses;
-    private const int MaxAxisRateReadPasses = 3;
+    // #1064/#1072/#1078 — per-axis MoveAxis rate BANDS (deg/s, ASCOM AxisRates [Min,Max] pairs;
+    // index = TelescopeAxis), cached for the session so the nudge start path stays a single driver
+    // call: an inline AxisRates GET on the press leg let a fast release's MoveAxis(0) overtake the
+    // start and leave the axis running (review of #1069). Filled from the SAME two AxisRates reads
+    // the capabilities pass makes for the pad's rate list; re-read on later passes only until
+    // SETTLED (_axisRatesSettled): both reads completed (an honestly-empty axis is terminal), the
+    // mount reports CanMoveAxis false (its AxisRates throw by spec), or AxisRatesSettleWindow of
+    // wall clock passed since connect with a read still throwing (time-based, so a burst of
+    // command-triggered refreshes cannot burn the retries in a second). Never read on the 2 s poll
+    // path once settled; settling with an axis still unknown is logged once. null = unknown,
+    // empty = the mount offers no rates for that axis.
+    private IReadOnlyList<(double Min, double Max)>?[]? _axisBands;
+    private bool _axisRatesSettled;
+    private DateTimeOffset _axisRatesDeadline;
+    private static readonly TimeSpan AxisRatesSettleWindow = TimeSpan.FromSeconds(30);
+    private int _secondaryFallbackLogged;
     private TelescopeStateDto _runtime = IdleRuntime;
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
     // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member; Other is the
@@ -243,57 +246,107 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
         // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
         // backstop that halts all axes.
-        // #1064 — the daemon is the guard on hardware motion, not the client's speed picker: a
-        // nonzero rate is clamped to the axis's reported maximum (sign preserved), and an axis that
-        // reports no usable rate refuses the nudge (409) rather than forwarding an unbounded rate.
-        // A stop (rate 0) is never gated — it must always reach the driver.
-        // The cap comes from the session cache (read with the capabilities), never a device
+        // #1064/#1072 — the daemon is the guard on hardware motion, not the client's speed picker: a
+        // nonzero rate is SNAPPED into the axis's reported rate bands (sign preserved): above the top
+        // band → its max; below the lowest band → its min; in a gap between bands → the nearest band
+        // edge. An axis with no usable rate refuses the nudge (409) rather than forwarding an
+        // unbounded rate. A stop (rate 0) is never gated — it must always reach the driver.
+        // The bands come from the session cache (read with the capabilities), never a device
         // round-trip here: the press leg must reach the driver as fast as the release leg.
-        double? axisMax;
+        // #1078 — a secondary axis whose AxisRates never answered (driver bug: CanMoveAxis true,
+        // AxisRates(Secondary) throws) borrows the primary's bands rather than losing N/S for the
+        // session (BandsForAxis); the picker applies the same "primary set as-is" fallback.
+        IReadOnlyList<(double Min, double Max)>? bands;
+        bool borrowedPrimary;
         lock (_gate) {
-            axisMax = _axisMaxDegPerSec is { } cached && axis >= 0 && axis < cached.Length ? cached[axis] : null;
+            bands = BandsForAxis(_axisBands, axis, out borrowedPrimary);
         }
         var axisEnum = (TelescopeAxis)axis;
-        var effective = ClampMoveAxisRate(rate, axisMax);
+        var effective = SnapMoveAxisRate(rate, bands);
+        if (borrowedPrimary && rate != 0 && Interlocked.Exchange(ref _secondaryFallbackLogged, 1) == 0) {
+            LogSecondaryBandsBorrowed(_logger);
+        }
         if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
-            LogMoveAxisRateClamped(_logger, axis, rate, effective);
+            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
         }
         NoteMountCommand(w => w.NoteMotionCommanded());
         await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
 
-    /// <summary>The #1064 clamp-cache settle rule: stop re-reading AxisRates once both pad-axis reads
-    /// completed (an empty answer is the mount's and terminal), once the mount reports CanMoveAxis
-    /// false (its AxisRates throw by spec), or after <see cref="MaxAxisRateReadPasses"/> passes with a
-    /// read still throwing. Internal static so the rule is unit-testable like the clamp itself.</summary>
-    internal static bool ShouldSettleAxisMax(bool readsCompleted, bool mountCannotMoveAxis, int passes) =>
-        readsCompleted || mountCannotMoveAxis || passes >= MaxAxisRateReadPasses;
+    /// <summary>#1078 — the bands the nudge on <paramref name="axis"/> is snapped into: the axis's own
+    /// when known; for the secondary axis whose AxisRates never ANSWERED (null — a driver that
+    /// throws on it while CanMoveAxis is true) the primary's bands are borrowed (<paramref name="borrowed"/>).
+    /// An honestly EMPTY secondary (the mount says it offers no rates) is not borrowed for: by spec
+    /// MoveAxis(Secondary) throws on such a mount, so the nudge must stay refused (409). Null when
+    /// nothing usable is known. Internal static so the rule is unit-testable.</summary>
+    internal static IReadOnlyList<(double Min, double Max)>? BandsForAxis(IReadOnlyList<(double Min, double Max)>?[]? cached, int axis, out bool borrowed) {
+        borrowed = false;
+        if (cached is null || axis < 0 || axis >= cached.Length) {
+            return null;
+        }
+        var own = cached[axis];
+        if (axis == 1 && own is null && cached[0] is { Count: > 0 } primary) {
+            borrowed = true;
+            return primary;
+        }
+        return own;
+    }
 
-    /// <summary>Clamp a MoveAxis request to the axis's reported maximum. <c>0</c> (stop) passes
-    /// through untouched. A nonzero rate with no known maximum (the axis reports no rates, or the
-    /// capabilities have not been read yet) throws — the driver would either reject it or, worse,
-    /// honour it. Internal for direct unit testing (the rate read itself sits behind a sealed
-    /// Alpaca client).</summary>
-    internal static double ClampMoveAxisRate(double requested, double? axisMax) {
+    /// <summary>The #1064 rate-cache settle rule: stop re-reading AxisRates once both pad-axis reads
+    /// completed (an empty answer is the mount's and terminal), once the mount reports CanMoveAxis
+    /// false (its AxisRates throw by spec), or once <see cref="AxisRatesSettleWindow"/> of wall clock
+    /// has passed since connect with a read still throwing (#1078: time-based, not pass-counted).
+    /// Internal static so the rule is unit-testable like the snap itself.</summary>
+    internal static bool ShouldSettleAxisRates(bool readsCompleted, bool mountCannotMoveAxis, bool windowElapsed) =>
+        readsCompleted || mountCannotMoveAxis || windowElapsed;
+
+    /// <summary>Snap a MoveAxis request into the axis's reported rate bands (#1064/#1072). <c>0</c>
+    /// (stop) passes through untouched. A nonzero rate with no known bands (the axis reports none,
+    /// or the capabilities have not been read yet) throws — the driver would either reject it or,
+    /// worse, honour it. Otherwise the magnitude is kept when a band contains it, capped at the top
+    /// band's max, raised to the lowest band's min, or moved to the nearest edge of a gap between
+    /// bands (a discrete-rate mount has Min == Max bands). Sign preserved. Internal for direct unit
+    /// testing (the rate read itself sits behind a sealed Alpaca client).</summary>
+    internal static double SnapMoveAxisRate(double requested, IReadOnlyList<(double Min, double Max)>? bands) {
         if (requested == 0 || double.IsNaN(requested)) {
             return 0;
         }
-        if (axisMax is not > 0) {
+        if (bands is not { Count: > 0 }) {
             throw new InvalidOperationException(
                 "Mount reports no MoveAxis rate for this axis (or its capabilities are still being read); manual nudge refused.");
         }
-        var magnitude = Math.Min(Math.Abs(requested), axisMax.Value);
-        return requested < 0 ? -magnitude : magnitude;
+        var magnitude = Math.Abs(requested);
+        // ReadAxisBands returns the bands ascending by Min; no re-sort on the press leg.
+        var top = bands.Max(b => b.Max);
+        var bottom = bands.Min(b => b.Min);
+        double snapped;
+        if (magnitude >= top) {
+            snapped = top;
+        } else if (magnitude <= bottom) {
+            snapped = bottom;
+        } else if (bands.Any(b => magnitude >= b.Min && magnitude <= b.Max)) {
+            snapped = magnitude;
+        } else {
+            // In a gap: nearest edge — the max of the band below or the min of the band above.
+            var below = bands.Where(b => b.Max < magnitude).Max(b => b.Max);
+            var above = bands.Where(b => b.Min > magnitude).Min(b => b.Min);
+            snapped = magnitude - below <= above - magnitude ? below : above;
+        }
+        return requested < 0 ? -snapped : snapped;
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
-        Message = "MoveAxis clamp settled with an unknown maximum (primary={Primary}, secondary={Secondary}): {Reason}. Manual nudge on an unknown axis is refused (409) for this session (#1064).")]
-    private static partial void LogAxisMaxUnknown(ILogger logger, double? primary, double? secondary, string reason);
+        Message = "MoveAxis rate cache settled with an axis still unknown (primary max={Primary}, secondary max={Secondary}): {Reason}. A nudge on an unknown primary is refused (409) for this session; an unanswered secondary borrows the primary's bands (#1064/#1078).")]
+    private static partial void LogAxisRatesUnknown(ILogger logger, double? primary, double? secondary, string reason);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information,
+        Message = "MoveAxis: the secondary axis's AxisRates never answered; borrowing the primary axis's bands for N/S nudges this session (#1078).")]
+    private static partial void LogSecondaryBandsBorrowed(ILogger logger);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
-        Message = "MoveAxis rate {Requested} deg/s on axis {Axis} exceeds the mount's maximum; clamped to {Effective} deg/s.")]
-    private static partial void LogMoveAxisRateClamped(ILogger logger, int axis, double requested, double effective);
+        Message = "MoveAxis rate {Requested} deg/s on axis {Axis} is outside the mount's rate bands; snapped to {Effective} deg/s.")]
+    private static partial void LogMoveAxisRateSnapped(ILogger logger, int axis, double requested, double effective);
 
     public async Task AbortSlewAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
@@ -432,7 +485,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try {
             AlpacaTelescope? client;
             bool needCaps;
-            bool needAxisMax;
+            bool needAxisRates;
             bool needEquatorialSystem;
             lock (_gate) {
                 if (_disposed || _state != EquipmentConnectionState.Connected) {
@@ -440,9 +493,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 }
                 client = _client;
                 needCaps = _capabilities is null;
-                // #1064 — retried only until both pad-axis AxisRates reads have completed once (a
-                // thrown read is transient; an empty result is the mount's answer and terminal).
-                needAxisMax = !_axisMaxRead;
+                // #1064 — retried only until settled (see _axisRatesSettled): a thrown read is
+                // transient; an empty result is the mount's answer and terminal.
+                needAxisRates = !_axisRatesSettled;
                 needEquatorialSystem = !_equatorialSystemKnown;
             }
             if (client is null) {
@@ -463,18 +516,17 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             var runtime = ReadRuntime(client);
             // The two pad-axis AxisRates reads feed BOTH the caps DTO's rate list and the #1064
             // clamp cache — one pair of GETs, only while either still needs them.
-            var pad = needCaps || needAxisMax ? ReadPadAxisRateSets(client) : default;
+            var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
             var caps = needCaps ? ReadCapabilities(client, pad) : null;
-            var axisMax = needAxisMax ? AxisMaxFrom(pad) : null;
-            var axisReadsCompleted = needAxisMax && pad.Primary is not null && pad.Secondary is not null;
+            var axisReadsCompleted = needAxisRates && pad.Primary is not null && pad.Secondary is not null;
             // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
             var trackingVerdict = TrackingWatchVerdict.Idle;
             var slewVerdict = new SlewEventWatch.Verdict(SlewEventWatch.Kind.None);
             DiscoveredDeviceDto? watchedDevice = null;
-            string? axisMaxUnknownReason = null;
-            (double? Primary, double? Secondary) axisMaxUnknownValues = default;
+            string? axisRatesUnknownReason = null;
+            (double? Primary, double? Secondary) axisRatesUnknownValues = default;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     // §57.9 — mask the stale post-Park/Home target; the latch self-releases
@@ -485,25 +537,31 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     if (caps is not null) {
                         _capabilities = caps;
                     }
-                    if (axisMax is not null) {
+                    if (needAxisRates) {
                         // Keep any axis already known; fill the rest from this pass.
-                        _axisMaxDegPerSec ??= new double?[3];
-                        for (var i = 0; i < axisMax.Length; i++) {
-                            _axisMaxDegPerSec[i] ??= axisMax[i];
-                        }
-                        _axisRateReadPasses++;
+                        _axisBands ??= new IReadOnlyList<(double Min, double Max)>?[3];
+                        // Keep an axis once it answered with bands; a null (threw) or empty read
+                        // never overwrites a known set, and an empty read is not latched — a later
+                        // pass may still return the bands (AxisRates is static per mount, so this
+                        // is belt-and-braces, not a retry path).
+                        _axisBands[0] = _axisBands[0] is { Count: > 0 } ? _axisBands[0] : pad.Primary ?? _axisBands[0];
+                        _axisBands[1] = _axisBands[1] is { Count: > 0 } ? _axisBands[1] : pad.Secondary ?? _axisBands[1];
                         var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false; // under _gate like every caps read
-                        if (ShouldSettleAxisMax(axisReadsCompleted, mountCannotMoveAxis, _axisRateReadPasses)) {
-                            _axisMaxRead = true; // settled: no more AxisRates reads this session
-                            if (_axisMaxDegPerSec[0] is null || _axisMaxDegPerSec[1] is null) {
+                        var windowElapsed = DateTimeOffset.UtcNow >= _axisRatesDeadline;
+                        // Both axes known across passes (primary on one, secondary on a later one)
+                        // counts as completed too — no point re-reading until the window closes.
+                        var bothKnown = _axisBands[0] is { Count: > 0 } && _axisBands[1] is { Count: > 0 };
+                        if (ShouldSettleAxisRates(axisReadsCompleted || bothKnown, mountCannotMoveAxis, windowElapsed)) {
+                            _axisRatesSettled = true; // settled: no more AxisRates reads this session
+                            if (_axisBands[0] is not { Count: > 0 } || _axisBands[1] is not { Count: > 0 }) {
                                 // Logged after the lock (below): the nudge/stop path takes _gate too.
-                                axisMaxUnknownReason = (mountCannotMoveAxis, axisReadsCompleted) switch {
+                                axisRatesUnknownReason = (mountCannotMoveAxis, axisReadsCompleted) switch {
                                     (true, true) => "CanMoveAxis is false and the mount reported no rates",
                                     (true, false) => "CanMoveAxis is false",
                                     (false, true) => "the mount reported no rates",
-                                    _ => "AxisRates kept throwing",
+                                    _ => $"AxisRates kept throwing for {AxisRatesSettleWindow.TotalSeconds:0} s after connect",
                                 };
-                                axisMaxUnknownValues = (_axisMaxDegPerSec[0], _axisMaxDegPerSec[1]);
+                                axisRatesUnknownValues = (MaxOf(_axisBands[0]), MaxOf(_axisBands[1]));
                             }
                         }
                     }
@@ -521,8 +579,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     watchedDevice = _device;
                 }
             }
-            if (axisMaxUnknownReason is not null) {
-                LogAxisMaxUnknown(_logger, axisMaxUnknownValues.Primary, axisMaxUnknownValues.Secondary, axisMaxUnknownReason);
+            if (axisRatesUnknownReason is not null) {
+                LogAxisRatesUnknown(_logger, axisRatesUnknownValues.Primary, axisRatesUnknownValues.Secondary, axisRatesUnknownReason);
             }
             if (slewVerdict.Kind == SlewEventWatch.Kind.Started) {
                 PublishSlewEvent(WsEventCatalog.TelescopeSlewStarted, new System.Text.Json.Nodes.JsonObject {
@@ -676,7 +734,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported capability property throws; each flag falls back to false (and the rate list to empty) rather than failing the whole capability read. The RA/Dec range is fixed, so there is no essential field whose failure should null the whole DTO. CA1031's log-and-recover boundary applies.")]
-    private static TelescopeCapabilitiesDto ReadCapabilities(AlpacaTelescope c, (SortedSet<double>? Primary, SortedSet<double>? Secondary) pad) {
+    private static TelescopeCapabilitiesDto ReadCapabilities(AlpacaTelescope c, (IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) pad) {
         // Read each slew capability in its OWN try: an older driver can THROW NotImplemented from
         // CanSlewAsync, and a combined `CanSlewAsync || CanSlew` in one try would then fall to false
         // even when sync CanSlew is true. CanSlew is true if the mount supports either goto mode.
@@ -723,21 +781,37 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             MoveAxisRatesDegPerSec: AxisRatesFrom(pad));
     }
 
-    /// <summary>The direction pad's two AxisRates reads (Primary, Secondary), each null when the
-    /// read threw (transient or NotImplemented) and empty when the mount answered with no bands.
-    /// Read once per need by RefreshPass and shared by the caps DTO and the #1064 clamp cache.</summary>
-    private static (SortedSet<double>? Primary, SortedSet<double>? Secondary) ReadPadAxisRateSets(AlpacaTelescope c) =>
-        (ReadAxisRateSet(c, TelescopeAxis.Primary), ReadAxisRateSet(c, TelescopeAxis.Secondary));
+    /// <summary>The direction pad's two AxisRates reads (Primary, Secondary) as [Min,Max] bands, each
+    /// null when the read threw (transient or NotImplemented) and empty when the mount answered with
+    /// no bands. Read once per need by RefreshPass and shared by the caps DTO and the #1064 rate
+    /// cache. Tertiary is never read (it throws on most mounts and the pad never drives it).</summary>
+    private static (IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) ReadPadAxisBands(AlpacaTelescope c) =>
+        (ReadAxisBands(c, TelescopeAxis.Primary), ReadAxisBands(c, TelescopeAxis.Secondary));
 
-    private static List<double> AxisRatesFrom((SortedSet<double>? Primary, SortedSet<double>? Secondary) pad) {
+    // Both endpoints of every band (discrete rate → Min==Max), ascending + deduped, positive only —
+    // the shape the picker consumes.
+    internal static SortedSet<double> EndpointsOf(IReadOnlyList<(double Min, double Max)> bands) {
+        var rates = new SortedSet<double>();
+        foreach (var (min, max) in bands) {
+            if (min > 0) {
+                rates.Add(min);
+            }
+            if (max > 0) {
+                rates.Add(max);
+            }
+        }
+        return rates;
+    }
+
+    private static List<double> AxisRatesFrom((IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) pad) {
         // The direction pad drives BOTH axes with the same picked rate, but ASCOM allows each axis its
         // own rate range, so a primary-only rate could be rejected on the secondary (N/S). Offer only
         // rates the secondary axis can also honour: take the primary set, cap it at the secondary's
         // max. A thrown/empty secondary applies no cap (the primary set is offered as-is).
-        var primary = pad.Primary;
-        if (primary is null || primary.Count == 0) {
+        if (pad.Primary is not { Count: > 0 }) {
             return [];
         }
+        var primary = EndpointsOf(pad.Primary);
         var secondaryMax = MaxOf(pad.Secondary);
         var usable = secondaryMax is > 0
             ? primary.Where(r => r <= secondaryMax.Value + 1e-9).ToList()
@@ -747,36 +821,30 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         return usable.Count > 0 ? usable : [.. primary];
     }
 
-    // Both [Minimum, Maximum] endpoints of every rate band for one axis (discrete rate → Min==Max),
-    // ascending + deduped; empty when the mount answers with no bands; NULL when the read threw
-    // (NotImplemented or a transient failure) so the #1064 cache can retry a throw but settle on an
-    // honest empty answer.
+    // Every [Minimum, Maximum] rate band for one axis (discrete rate → Min==Max), ascending by Min,
+    // bands with a non-positive maximum dropped; empty when the mount answers with no bands; NULL
+    // when the read threw (NotImplemented or a transient failure) so the #1064 cache can retry a
+    // throw but settle on an honest empty answer.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis for the axis; null is the honest degraded result — the caps DTO offers no speeds for it and the #1064 clamp cache retries on the next pass. CA1031's log-and-recover boundary applies.")]
-    private static SortedSet<double>? ReadAxisRateSet(AlpacaTelescope c, TelescopeAxis axis) {
-        var rates = new SortedSet<double>();
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis for the axis; null is the honest degraded result — the caps DTO offers no speeds for it and the #1064 rate cache retries on the next pass. CA1031's log-and-recover boundary applies.")]
+    private static List<(double Min, double Max)>? ReadAxisBands(AlpacaTelescope c, TelescopeAxis axis) {
+        var bands = new List<(double Min, double Max)>();
         try {
             foreach (IRate rate in c.AxisRates(axis)) {
-                if (rate.Minimum > 0) {
-                    rates.Add(rate.Minimum);
-                }
-                if (rate.Maximum > 0) {
-                    rates.Add(rate.Maximum);
+                // Finite, positive maximum only: a NaN endpoint would reach the gap branch and throw.
+                if (double.IsFinite(rate.Maximum) && rate.Maximum > 0) {
+                    var min = double.IsFinite(rate.Minimum) ? Math.Max(0, Math.Min(rate.Minimum, rate.Maximum)) : rate.Maximum;
+                    bands.Add((min, rate.Maximum));
                 }
             }
         } catch (Exception) {
             return null;
         }
-        return rates;
+        return bands.OrderBy(b => b.Min).ToList();
     }
 
-    // #1064 — the per-axis maximum for the two direction-pad axes (index = ASCOM TelescopeAxis) from
-    // the shared pad reads. Tertiary is never read (it throws on most mounts and the pad never drives
-    // it) — a Tertiary nudge stays refused (409) by design.
-    private static double?[] AxisMaxFrom((SortedSet<double>? Primary, SortedSet<double>? Secondary) pad) =>
-        [MaxOf(pad.Primary), MaxOf(pad.Secondary), null];
-
-    private static double? MaxOf(SortedSet<double>? rates) => rates is { Count: > 0 } ? rates.Max : null;
+    private static double? MaxOf(IReadOnlyList<(double Min, double Max)>? bands) =>
+        bands is { Count: > 0 } ? bands.Max(b => b.Max) : null;
 
     /// <summary>Convert an ASCOM optics property (metres) to mm for the wire, or
     /// null when the driver reports a non-positive value (an unconfigured 0 / a
@@ -832,9 +900,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     _capabilities = null;       // re-read for the new device
-                    _axisMaxDegPerSec = null;   // #1064 — per-axis clamp re-read for the new device
-                    _axisMaxRead = false;
-                    _axisRateReadPasses = 0;
+                    _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
+                    _axisRatesSettled = false;
+                    _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
+                    Interlocked.Exchange(ref _secondaryFallbackLogged, 0); // same primitive as the read side
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
