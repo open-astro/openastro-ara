@@ -51,6 +51,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Clamp_cache_settles_on_completed_reads_CanMoveAxis_false_or_the_pass_bound() {
+            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: true, mountCannotMoveAxis: false, passes: 1), Is.True);
+            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: false, mountCannotMoveAxis: true, passes: 1), Is.True);
+            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: false, mountCannotMoveAxis: false, passes: 1), Is.False, "a thrown read retries");
+            Assert.That(TelescopeService.ShouldSettleAxisMax(readsCompleted: false, mountCannotMoveAxis: false, passes: 3), Is.True, "bounded: never on the poll path for the session");
+        }
+
+        [Test]
         public void NaN_is_treated_as_stop() {
             Assert.That(TelescopeService.ClampMoveAxisRate(double.NaN, 6.0), Is.EqualTo(0));
         }

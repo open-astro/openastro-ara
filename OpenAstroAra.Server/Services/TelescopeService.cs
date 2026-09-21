@@ -263,6 +263,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         RefreshCacheOnce();
     }
 
+    /// <summary>The #1064 clamp-cache settle rule: stop re-reading AxisRates once both pad-axis reads
+    /// completed (an empty answer is the mount's and terminal), once the mount reports CanMoveAxis
+    /// false (its AxisRates throw by spec), or after <see cref="MaxAxisRateReadPasses"/> passes with a
+    /// read still throwing. Internal static so the rule is unit-testable like the clamp itself.</summary>
+    internal static bool ShouldSettleAxisMax(bool readsCompleted, bool mountCannotMoveAxis, int passes) =>
+        readsCompleted || mountCannotMoveAxis || passes >= MaxAxisRateReadPasses;
+
     /// <summary>Clamp a MoveAxis request to the axis's reported maximum. <c>0</c> (stop) passes
     /// through untouched. A nonzero rate with no known maximum (the axis reports no rates, or the
     /// capabilities have not been read yet) throws — the driver would either reject it or, worse,
@@ -460,7 +467,6 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             var caps = needCaps ? ReadCapabilities(client, pad) : null;
             var axisMax = needAxisMax ? AxisMaxFrom(pad) : null;
             var axisReadsCompleted = needAxisMax && pad.Primary is not null && pad.Secondary is not null;
-            var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false;
             // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
@@ -484,7 +490,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                             _axisMaxDegPerSec[i] ??= axisMax[i];
                         }
                         _axisRateReadPasses++;
-                        if (axisReadsCompleted || mountCannotMoveAxis || _axisRateReadPasses >= MaxAxisRateReadPasses) {
+                        var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false; // under _gate like every caps read
+                        if (ShouldSettleAxisMax(axisReadsCompleted, mountCannotMoveAxis, _axisRateReadPasses)) {
                             _axisMaxRead = true; // settled: no more AxisRates reads this session
                             if (_axisMaxDegPerSec[0] is null || _axisMaxDegPerSec[1] is null) {
                                 LogAxisMaxUnknown(_logger, _axisMaxDegPerSec[0], _axisMaxDegPerSec[1],
