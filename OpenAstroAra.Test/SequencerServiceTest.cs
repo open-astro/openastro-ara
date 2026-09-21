@@ -107,6 +107,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Run_state_and_progress_frames_carry_the_sequencers_estimated_seconds() {
+            // #1068 — the wiring, not the estimator: the DTO and the WS payloads must actually
+            // carry the numbers (delete the EstimatedSeconds() calls and this fails).
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "note" }); // no own estimate -> nominal 15 s
+                c.Items.Add(new WaitForTimeSpan { Time = 0 });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state, Is.Not.Null);
+            Assert.That(state!.EstimatedTotalSeconds, Is.Not.Null.And.GreaterThan(0), "the DTO carries the sequencer's total");
+            Assert.That(state.EstimatedRemainingSeconds, Is.EqualTo(0), "a completed run has nothing left");
+            var frames = ws.Records.Where(e => e.Type == "sequence.progress" || e.Type == "sequence.complete").ToList();
+            Assert.That(frames, Is.Not.Empty);
+            Assert.That(frames.All(e => e.Payload.TryGetProperty("estimated_total_seconds", out _)
+                                        && e.Payload.TryGetProperty("estimated_remaining_seconds", out _)),
+                Is.True, "every run-lifecycle frame carries both estimate fields");
+            Assert.That(frames.Last().Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.EqualTo(0));
+        }
+
+        [Test]
         public async Task A_failed_instruction_emits_one_instruction_failed_event_before_the_terminal() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();

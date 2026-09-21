@@ -92,7 +92,7 @@ public static class RunEtaEstimator {
     // condition counts (a container carries at most one in practice).
     private static int Iterations(ISequenceContainer container) {
         if (container is IConditionable c) {
-            foreach (var condition in c.Conditions) {
+            foreach (var condition in c.GetConditionsSnapshot()) {
                 if (condition is LoopCondition loop && loop.Iterations > 0) {
                     return loop.Iterations;
                 }
@@ -103,7 +103,7 @@ public static class RunEtaEstimator {
 
     private static int CompletedIterations(ISequenceContainer container) {
         if (container is IConditionable c) {
-            foreach (var condition in c.Conditions) {
+            foreach (var condition in c.GetConditionsSnapshot()) {
                 if (condition is LoopCondition loop && loop.Iterations > 0) {
                     return Math.Max(0, loop.CompletedIterations);
                 }
