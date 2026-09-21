@@ -79,8 +79,15 @@ public static class RunEtaEstimator {
         return passRemaining + passesLeft * passFull;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Estimate boundary: GetEstimatedDuration runs arbitrary instruction code (WaitForTime builds a DateTime from stored fields and can throw on an out-of-range value); an estimate must never turn run-state polling into a 500 — the nominal cost is the honest fallback. CA1031's log-and-recover boundary applies.")]
     private static double LeafCost(ISequenceItem leaf) {
-        var seconds = leaf.GetEstimatedDuration().TotalSeconds;
+        double seconds;
+        try {
+            seconds = leaf.GetEstimatedDuration().TotalSeconds;
+        } catch (Exception) {
+            seconds = 0;
+        }
         return seconds > 0 ? seconds : NominalInstructionSeconds;
     }
 
@@ -88,12 +95,13 @@ public static class RunEtaEstimator {
         status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED
                or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.DISABLED;
 
-    // A container without a LoopCondition runs its children once. Only the first loop
-    // condition counts (a container carries at most one in practice).
+    // A container without a (live) LoopCondition runs its children once. Only the first
+    // enabled loop condition counts (a container carries at most one in practice); a DISABLED
+    // one never gates the container, so it must not multiply.
     private static int Iterations(ISequenceContainer container) {
         if (container is IConditionable c) {
             foreach (var condition in c.GetConditionsSnapshot()) {
-                if (condition is LoopCondition loop && loop.Iterations > 0) {
+                if (condition is LoopCondition { Iterations: > 0 } loop && loop.Status != SequenceEntityStatus.DISABLED) {
                     return loop.Iterations;
                 }
             }
@@ -104,7 +112,7 @@ public static class RunEtaEstimator {
     private static int CompletedIterations(ISequenceContainer container) {
         if (container is IConditionable c) {
             foreach (var condition in c.GetConditionsSnapshot()) {
-                if (condition is LoopCondition loop && loop.Iterations > 0) {
+                if (condition is LoopCondition { Iterations: > 0 } loop && loop.Status != SequenceEntityStatus.DISABLED) {
                     return Math.Max(0, loop.CompletedIterations);
                 }
             }

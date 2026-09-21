@@ -69,6 +69,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_throwing_estimate_costs_the_nominal_and_a_disabled_loop_does_not_multiply() {
+            var throwing = new Mock<ISequenceItem>();
+            throwing.SetupProperty(i => i.Status, SequenceEntityStatus.CREATED);
+            throwing.Setup(i => i.GetEstimatedDuration()).Throws(new ArgumentOutOfRangeException("hour"));
+            var root = new SequentialContainer();
+            root.Add(throwing.Object);
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(root), Is.EqualTo(RunEtaEstimator.NominalInstructionSeconds));
+
+            var loop = Loop(10, 0, Leaf(120));
+            ((LoopCondition)loop.Conditions[0]).Status = SequenceEntityStatus.DISABLED;
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(loop), Is.EqualTo(120), "a disabled loop condition runs the block once");
+        }
+
+        [Test]
         public void Finished_disabled_and_skipped_cost_nothing_and_never_go_negative() {
             var root = new SequentialContainer();
             root.Add(Leaf(100, SequenceEntityStatus.FINISHED));
