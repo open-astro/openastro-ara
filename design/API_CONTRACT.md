@@ -146,3 +146,15 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Services/CoolingFanInterlock.cs`, `Services/CameraService.cs` (`SyncCoolingFanAsync`), `Services/SwitchService.cs` (`FanOffRefusalForAsync`), `Endpoints/EquipmentEndpoints.cs`.
 
 **Related:** #1065 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
+
+### 2026-09-21 — #1079 in-flight home token; SwitchFilter before the slot list
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/filterwheel/change` and the sequencer's `SwitchFilter` (mediator `ChangeFilter`); no wire change.
+
+**Decision:** the first-connect home carries a generation token when dispatched; every explicit change (REST or `SwitchFilter`), disconnect, connection loss, newer connect and dispose bump it, and the home task re-checks it under the gate right before its `Position = 0` write and steps aside (logged) if it moved — so a change accepted after the decision but before the write can no longer be followed by the home. A `SwitchFilter` that arrives before the wheel's slot list has been read waits up to 6 s for it (polling the cache, no device I/O of its own) instead of being skipped, and retires the pending/in-flight home whether or not the change itself goes ahead. Dispose logs a still-pending home like disconnect does.
+
+**Reasoning:** #1073's review scoped the guarantee to "accepted while the decision is pending"; the sub-millisecond dispatch window and the boot-auto-connect-then-first-SwitchFilter case both let the daemon park on 0 behind a sequence that believed it had switched.
+
+**Spec ref:** `Services/FilterWheelService.cs` (`HomeInBackground`, `HomeStillWanted`, `RetirePendingHome`), `Services/FilterWheelService.Mediator.cs` (`WaitForSlotsAsync`), `OpenAstroAra.Test/FilterWheelFirstConnectHomeTest.cs`.
+
+**Related:** #1079 (from the #1073 reviews), CHANGELOG [Unreleased]

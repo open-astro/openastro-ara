@@ -21,6 +21,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -45,8 +46,13 @@ namespace OpenAstroAra.Test {
             private readonly CancellationTokenSource _cts = new();
             private readonly Task _loop;
             private int _position;
+            private long _namesAvailableAtTicks;
 
             public readonly ConcurrentQueue<int> PositionWrites = new();
+
+            /// <summary>Until this instant the stub answers <c>names</c>/<c>focusoffsets</c> with an
+            /// Alpaca error, so the service's slot read fails and <c>_slots</c> stays null (#1079).</summary>
+            public DateTime NamesAvailableAt { set => Volatile.Write(ref _namesAvailableAtTicks, value.Ticks); }
 
             private StubWheel(HttpListener listener, int port, int position) {
                 BaseUri = new Uri($"http://127.0.0.1:{port}/");
@@ -78,6 +84,11 @@ namespace OpenAstroAra.Test {
                     var leaf = ctx.Request.Url!.AbsolutePath.TrimEnd('/');
                     leaf = leaf[(leaf.LastIndexOf('/') + 1)..].ToUpperInvariant();
                     string value = "true";
+                    var errorNumber = 0;
+                    if (ctx.Request.HttpMethod != "PUT" && (leaf == "NAMES" || leaf == "FOCUSOFFSETS")
+                            && DateTime.UtcNow.Ticks < Volatile.Read(ref _namesAvailableAtTicks)) {
+                        errorNumber = 1024; // not ready yet
+                    }
                     if (ctx.Request.HttpMethod == "PUT") {
                         using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
                         var body = await reader.ReadToEndAsync().ConfigureAwait(false);
@@ -101,7 +112,7 @@ namespace OpenAstroAra.Test {
                         };
                     }
                     var bytes = Encoding.UTF8.GetBytes(
-                        $"{{\"Value\":{value},\"ClientTransactionID\":0,\"ServerTransactionID\":0,\"ErrorNumber\":0,\"ErrorMessage\":\"\"}}");
+                        $"{{\"Value\":{value},\"ClientTransactionID\":0,\"ServerTransactionID\":0,\"ErrorNumber\":{errorNumber.ToString(CultureInfo.InvariantCulture)},\"ErrorMessage\":\"{(errorNumber == 0 ? "" : "not ready")}\"}}");
                     try {
                         ctx.Response.ContentType = "application/json";
                         ctx.Response.ContentLength64 = bytes.Length;
@@ -277,6 +288,28 @@ namespace OpenAstroAra.Test {
             await Task.Delay(TimeSpan.FromSeconds(13));
             stub.Position = 3;
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the home window expired — the wheel is left where it is");
+            await DisconnectAsync(svc);
+        }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_sequence_SwitchFilter_issued_before_the_slots_land_is_honoured_and_retires_the_home() {
+            // #1079: boot auto-connect immediately followed by a sequence's first SwitchFilter. The
+            // stub withholds the slot list for a few seconds, so ChangeFilter finds _slots null —
+            // it must wait for them (not skip) and move to the requested slot; the first-connect
+            // home (which needs no slot list and may already have been written) must never land
+            // AFTER it, so the wheel ends where the sequence asked.
+            await using var stub = StubWheel.Start(position: 3);
+            stub.NamesAvailableAt = DateTime.UtcNow.AddSeconds(3);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
+            Assert.That(result.Position, Is.EqualTo(2), "the change waited for the slot list and was honoured");
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            var writes = stub.PositionWrites.ToArray();
+            Assert.That(writes, Does.Contain(2));
+            Assert.That(writes[^1], Is.EqualTo(2), "nothing — not the first-connect home — lands behind the sequence's change");
+            Assert.That(writes.Count(w => w == FilterWheelService.DefaultSlot), Is.LessThanOrEqualTo(1), "the home is written at most once");
             await DisconnectAsync(svc);
         }
     }
