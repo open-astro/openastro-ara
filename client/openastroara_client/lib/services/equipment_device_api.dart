@@ -16,7 +16,9 @@ String describeEquipmentError(Object? e) {
     final code = e.response?.statusCode;
     final data = e.response?.data;
     if ((code == 400 || code == 409) && data is Map && data['detail'] is String) {
-      final detail = (data['detail'] as String).trim();
+      // First line only: a framework-shaped 400 detail can carry a
+      // "(Parameter 'x')\nActual value was …" tail that is not for people.
+      final detail = (data['detail'] as String).trim().split('\n').first.trim();
       if (detail.isNotEmpty) return detail;
     }
     if (code != null) return 'server returned $code';
