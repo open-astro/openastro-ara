@@ -9,14 +9,16 @@ import '../models/server.dart';
 String describeEquipmentError(Object? e) {
   if (e == null) return 'unknown error';
   if (e is DioException) {
-    // The daemon speaks human in its Problem responses (a 409 refusal carries
-    // the reason in `detail`) — prefer its words over a bare status code.
+    // The daemon speaks human in its 400/409 Problem responses (a refusal
+    // carries the reason in `detail`) — prefer those words over a bare status
+    // code. Other statuses keep the code: their detail is not written for
+    // people.
+    final code = e.response?.statusCode;
     final data = e.response?.data;
-    if (data is Map && data['detail'] is String) {
+    if ((code == 400 || code == 409) && data is Map && data['detail'] is String) {
       final detail = (data['detail'] as String).trim();
       if (detail.isNotEmpty) return detail;
     }
-    final code = e.response?.statusCode;
     if (code != null) return 'server returned $code';
     return e.message ?? 'network error';
   }

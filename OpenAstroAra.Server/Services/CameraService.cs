@@ -321,14 +321,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 $"the camera rejected the cooler write ({ex.GetType().Name}) — it may not support cooling", ex);
         }
         RefreshCacheOnce();
-        // §25.5.6 / #1065 — sync the fan AFTER the cooler write is committed and reflected, so a
-        // fan failure reads as "cooler changed, fan sync failed" (409 with that reason), never as
-        // "nothing happened". Every cooler path (REST, unattended shutdown, other clients) gets it.
+        // §25.5.6 / #1065 — sync the fan AFTER the cooler write is committed and reflected. Every
+        // cooler path (REST, the §58 unattended warm ramp, other clients) gets it. A fan failure
+        // never fails the cooler call: the cooler DID change, and a caller such as the warm ramp
+        // must go on to its final cooler-off (review of #1070). It is published as an OpError
+        // equipment fault (→ notification center) and logged instead.
         await SyncCoolingFanAsync(enabled, ct).ConfigureAwait(false);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Fan-sync boundary: a switch-list read or fan write failure must surface as one clean 409 reason after the committed cooler change, never as a 500. CA1031's log-and-recover boundary applies.")]
+        Justification = "Fan-sync boundary: a switch-list read or fan write failure must never fail the committed cooler change (the §58 warm ramp would otherwise skip its final cooler-off) — it is published as an equipment fault and logged. CA1031's log-and-recover boundary applies.")]
     private async Task SyncCoolingFanAsync(bool cooling, CancellationToken ct) {
         var actuator = _fan?.Invoke();
         if (actuator is null) {
@@ -351,8 +353,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             await actuator.SetFanValueAsync(sync.Value.DeviceId, sync.Value.Request, ct).ConfigureAwait(false);
         } catch (Exception ex) {
             LogFanSyncFailed(_logger, ex, cooling);
-            throw new InvalidOperationException(
-                $"the cooler is {(cooling ? "on" : "off")}, but the cooling fan could not be synced ({ex.Message}) — check the fan", ex);
+            _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, sync.Value.DeviceId, null,
+                EquipmentFaultKind.OpError,
+                $"the cooler is {(cooling ? "on" : "off")}, but the cooling fan could not be synced ({ex.GetType().Name}) — check the fan",
+                DateTimeOffset.UtcNow));
         }
     }
 

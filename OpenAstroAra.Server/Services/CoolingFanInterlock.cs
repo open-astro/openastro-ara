@@ -23,9 +23,11 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// §25.5.6 / #1065 — the camera-cooling fan interlock, daemon-side. The bridge exposes the
 /// ToupTek "Thermal Switch" whose "Fan" port vents the TEC's heat sink; two rules keep the
-/// camera safe and they now live HERE so every path to the cooler and the fan (REST, a
-/// sequence CoolCamera/WarmCamera step, the §58 unattended shutdown, any other client) gets
-/// them, not just the Flutter UI's own buttons:
+/// camera safe and they now live HERE so every path to the cooler and the fan that goes through
+/// these services (REST from any client, the §58 unattended shutdown's warm ramp) gets them, not
+/// just the Flutter UI's own buttons. Not yet covered (#1076): the sequencer's SetSwitchValue
+/// instruction writes the switch raw, and its CoolCamera/WarmCamera mediator stubs never reach
+/// SetCoolerAsync.
 /// <list type="number">
 /// <item><b>The fan follows the cooler.</b> <see cref="CameraService.SetCoolerAsync"/> writes the
 /// fan port to its max after cooler-on and to its min after cooler-off.</item>

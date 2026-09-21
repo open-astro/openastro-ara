@@ -23,15 +23,15 @@ class FanSwitchRow extends ConsumerWidget {
         data: (v) => v,
         orElse: () => const <SwitchDevice>[],
       );
-    // Shared lookup with CameraStatusNotifier's cooler auto-sync — the row
-    // must interlock the exact device the sync actuates.
+    // The same device/port rule the daemon's CoolingFanInterlock applies, so
+    // this row shows exactly the port the server syncs and guards.
     final fan = findThermalSwitchFanPort(switches);
     // Only a boolean (on/off, range [0,1]) Fan port renders as a toggle — a
     // PWM/value fan port would be silently forced to full on/off otherwise.
     if (fan == null || !fan.port.isBoolean) return const SizedBox.shrink();
 
-    // Label only — the safety refusal in _toggle() re-reads the state and
-    // fails CLOSED on unknown; here an unknown state just drops the hint.
+    // Label only — the fan-off refusal lives in the daemon (409 shown by
+    // _toggle); here an unknown cooler state just drops the hint.
     final cooling = ref.watch(cameraStatusProvider).maybeWhen(
           data: (v) => v?.coolerOn ?? false,
           orElse: () => false,

@@ -330,9 +330,9 @@ class _SwitchCard extends ConsumerWidget {
     );
   }
 
-  /// Writes one port. Presentation lives in [SwitchDeviceBody]; the safety
-  /// interlock and error reporting stay here, next to the device identity the
-  /// interlock is scoped to.
+  /// Writes one port. Presentation lives in [SwitchDeviceBody]; error
+  /// reporting stays here (the daemon's fan-off refusal arrives as a 409 whose
+  /// reason is shown verbatim, #1065).
   ///
   /// Returns whether the write actually committed. Every failure path reports
   /// itself to the user AND answers false, so an optimistic control can snap
