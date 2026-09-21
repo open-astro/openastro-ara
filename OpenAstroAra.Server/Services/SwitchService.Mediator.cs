@@ -151,7 +151,10 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     /// writable collection (the instruction's addressing scheme). Not-connected / out-of-range
     /// resolve to a logged no-op — the instruction's Validate has already blocked both, so a race
     /// (e.g. a disconnect between Validate and Execute) degrades gracefully instead of faulting the
-    /// run. Genuine sequencer cancellation propagates.
+    /// run. A write the cooling-fan interlock refuses (#1076: the Thermal Switch's fan to its floor
+    /// while the camera cools, or its cooler state is unknown) fails the instruction with a
+    /// <see cref="SequenceEntityFailedException"/> carrying the refusal. Genuine sequencer
+    /// cancellation propagates.
     /// </summary>
     public Task SetSwitchValue(short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
         SetSwitchValue(alpacaDeviceNumber: -1, switchIndex, value, progress, ct);

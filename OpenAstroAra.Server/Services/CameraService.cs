@@ -313,9 +313,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             lock (_gate) {
                 // Only a cooler KNOWN to be on skips the refusal. Unknown (the CoolerOn read
                 // threw this pass) refuses like off — the hazard this guards is "TEC on, fan
-                // off", so it fails closed (review of #1084). The §58 ramp's own final
-                // cooler-off is protected by WarmCoolerAsync, which never lets a ramp step's
-                // exception skip it.
+                // off", so it fails closed (review of #1084). The §58 ramp survives that:
+                // WarmCoolerAsync catches a failing ramp step and still issues its final
+                // cooler-off (pinned by A_failing_ramp_step_still_ends_with_the_cooler_off).
                 alreadyCooling = _state == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
             }
             var fanFailure = await SyncCoolingFanAsync(cooling: true).ConfigureAwait(false);

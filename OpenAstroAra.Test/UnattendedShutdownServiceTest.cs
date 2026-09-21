@@ -452,6 +452,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failing_ramp_step_still_ends_with_the_cooler_off() {
+            // Review of #1084: a ramp step SetCoolerAsync(true, setpoint) can now be refused by
+            // the camera service (fan interlock with the cooler state unreadable) or rejected by
+            // the driver. The final cooler-off and the disconnect must run regardless — an
+            // aborted ramp would leave the TEC cooling at a mid-ramp set-point overnight.
+            camera.Setup(c => c.SetCoolerAsync(true, It.IsAny<double?>(), It.IsAny<CancellationToken>()))
+                .Callback<bool, double?, CancellationToken>((on, t, _) => { lock (coolerCalls) coolerCalls.Add((on, t)); })
+                .ThrowsAsync(new InvalidOperationException("the cooling fan could not be started (TimeoutException) — check the fan"));
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
+
+            lock (coolerCalls) {
+                Assert.That(coolerCalls.Count(c => c.on), Is.EqualTo(1), "the ramp stops at the first failing step");
+                Assert.That(coolerCalls[^1].on, Is.False, "the cooler still ends OFF");
+            }
+            Assert.That(published[0].Message, Does.Contain("warm-up step").And.Contain("FAILED"));
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once,
+                "the camera still disconnects after the early cut-off");
+        }
+
+        [Test]
         public async Task Cooler_already_off_skips_the_ramp_but_camera_still_disconnects() {
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Camera(coolerOn: false, temperature: 15));
