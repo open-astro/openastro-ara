@@ -130,7 +130,8 @@ public static class WsEventCatalog {
     public const string SequenceProgress = "sequence.progress";
     // §38.9 — a live mid-run edit (add/remove/move of a pending item) was applied
     // to the executing plan and persisted; payload { sequence_id, run_id, op,
-    // instructions_completed, instructions_total }. Clients re-fetch the sequence
+    // instructions_completed, instructions_total, estimated_total_seconds,
+    // estimated_remaining_seconds } (#1068). Clients re-fetch the sequence
     // detail (the body changed) and refresh run progress totals.
     public const string SequenceRunItemsChanged = "sequence.run_items_changed";
     public const string SequenceImported = "sequence.imported";

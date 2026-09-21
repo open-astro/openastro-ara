@@ -344,6 +344,11 @@ class SequenceRunStateInfo {
   final int instructionsCompleted;
   final int instructionsTotal;
   final String? currentInstructionDescription;
+  /// #1068 — the sequencer's own duration model (`RunEtaEstimator` server-side),
+  /// published in run state + every `sequence.progress` frame. Null until the
+  /// run tree has loaded; the client never re-derives these from the body.
+  final double? estimatedTotalSeconds;
+  final double? estimatedRemainingSeconds;
 
   const SequenceRunStateInfo({
     this.sequenceId = '',
@@ -356,6 +361,8 @@ class SequenceRunStateInfo {
     this.instructionsCompleted = 0,
     this.instructionsTotal = 0,
     this.currentInstructionDescription,
+    this.estimatedTotalSeconds,
+    this.estimatedRemainingSeconds,
   });
 
   factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
@@ -370,8 +377,13 @@ class SequenceRunStateInfo {
       instructionsCompleted: _int(json['instructions_completed']),
       instructionsTotal: _int(json['instructions_total']),
       currentInstructionDescription: _str(json['current_instruction_description']),
+      estimatedTotalSeconds: _doubleOrNull(json['estimated_total_seconds']),
+      estimatedRemainingSeconds:
+          _doubleOrNull(json['estimated_remaining_seconds']),
     );
   }
+
+  static double? _doubleOrNull(Object? v) => v is num ? v.toDouble() : null;
 
   /// Fold a live `sequence.*` WS frame onto this snapshot. The WS payload carries
   /// only the fast-changing fields (state, instruction index, frame counts, run
@@ -396,6 +408,13 @@ class SequenceRunStateInfo {
           _intOrNull(payload['instructions_completed']) ?? instructionsCompleted,
       instructionsTotal: _intOrNull(payload['instructions_total']) ?? instructionsTotal,
       currentInstructionDescription: currentInstructionDescription,
+      // Present on every progress frame; keep the last-known value if a frame
+      // ever omits them.
+      estimatedTotalSeconds:
+          _doubleOrNull(payload['estimated_total_seconds']) ?? estimatedTotalSeconds,
+      estimatedRemainingSeconds:
+          _doubleOrNull(payload['estimated_remaining_seconds']) ??
+              estimatedRemainingSeconds,
     );
   }
 
@@ -413,7 +432,9 @@ class SequenceRunStateInfo {
       other.completedUtc == completedUtc &&
       other.instructionsCompleted == instructionsCompleted &&
       other.instructionsTotal == instructionsTotal &&
-      other.currentInstructionDescription == currentInstructionDescription;
+      other.currentInstructionDescription == currentInstructionDescription &&
+      other.estimatedTotalSeconds == estimatedTotalSeconds &&
+      other.estimatedRemainingSeconds == estimatedRemainingSeconds;
 
   @override
   int get hashCode => Object.hash(
@@ -426,7 +447,9 @@ class SequenceRunStateInfo {
       completedUtc,
       instructionsCompleted,
       instructionsTotal,
-      currentInstructionDescription);
+      currentInstructionDescription,
+      estimatedTotalSeconds,
+      estimatedRemainingSeconds);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.
