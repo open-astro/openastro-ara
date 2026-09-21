@@ -100,8 +100,8 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           ),
         // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom
         // target, shared with the Imaging tab. The cooling-fan sync is
-        // daemon-side (#1065): the server syncs the Thermal-Switch Fan port
-        // after every cooler write.
+        // daemon-side (#1065/#1076): the server starts the Thermal-Switch Fan
+        // port before a cooler-on and stops it after a cooler-off.
         // Always built: CoolerControls itself renders the sensor-temperature
         // row + a "Does not support cooling" note for uncooled cameras.
         const CoolerControls(),
