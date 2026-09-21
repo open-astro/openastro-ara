@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,9 +42,12 @@ class _FakeProfileApi extends ProfileApi {
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
-  _FakeMountApi(this.status);
+  _FakeMountApi(this.status, {this.moveAxisError});
   MountStatus? status;
   final List<String> calls = [];
+
+  /// Thrown by a moveaxis START (rate != 0) when set — the daemon's refusal.
+  final Object? moveAxisError;
   @override
   Future<MountStatus?> getStatus() async => status;
   @override
@@ -52,13 +56,18 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   @override
   Future<void> disconnect() async => calls.add('disconnect');
   @override
-  Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
-      // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
-      calls.add(
-        body != null && body.containsKey('rate')
-            ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
-            : 'command:$subpath:enabled=${body?['enabled']}',
-      );
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
+    // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
+    calls.add(
+      body != null && body.containsKey('rate')
+          ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
+          : 'command:$subpath:enabled=${body?['enabled']}',
+    );
+    final err = moveAxisError;
+    if (err != null && subpath == 'moveaxis' && (body?['rate'] ?? 0) != 0) {
+      throw err;
+    }
+  }
   @override
   void close() {}
 }
@@ -389,5 +398,59 @@ void main() {
       isTrue,
     );
     await hold.up();
+  });
+
+  testWidgets('a refused nudge (409) is shown once per press; the release stays silent',
+      (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+      moveAxisError: DioException(
+        requestOptions: RequestOptions(path: '/moveaxis'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/moveaxis'),
+          statusCode: 409,
+          data: const {
+            'detail': 'Mount reports no MoveAxis rate for this axis (or its '
+                'capabilities are still being read); manual nudge refused.'
+          },
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          serverLinkUpProvider.overrideWith((ref) => true),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          mountApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+    await tester.pump();
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.north)),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('manual nudge refused'), findsOneWidget,
+        reason: 'the daemon\'s 409 detail reaches the user');
+    await hold.up();
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('manual nudge refused'), findsOneWidget,
+        reason: 'the release (rate 0) adds no second toast');
+    expect(
+      api.calls.where((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0')),
+      isNotEmpty,
+      reason: 'the stop still goes out',
+    );
   });
 }
