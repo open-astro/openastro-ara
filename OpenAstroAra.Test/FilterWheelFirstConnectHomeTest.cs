@@ -315,6 +315,29 @@ namespace OpenAstroAra.Test {
 
         [Test]
         [Category("bench")]
+        public async Task A_sequence_SwitchFilter_retires_the_home_even_when_the_change_itself_is_skipped() {
+            // #1079 — the retire happens before the slot-list wait and whether or not the change
+            // goes ahead: the wheel is mid-rotation at connect (home pending, undecided) and the
+            // slot list never arrives, so ChangeFilter waits out its budget and skips the change;
+            // once the wheel then reports a position, the pending home must NOT fire. Restore the
+            // old post-validation retire and the wheel is pulled to 0 behind the sequence.
+            await using var stub = StubWheel.Start(position: -1);
+            stub.NamesAvailableAt = DateTime.UtcNow.AddMinutes(5);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            var started = DateTime.UtcNow;
+            var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
+            Assert.That(result.Position, Is.EqualTo(2), "a skipped change hands back the requested filter");
+            Assert.That(DateTime.UtcNow - started, Is.GreaterThan(TimeSpan.FromSeconds(4)).And.LessThan(TimeSpan.FromSeconds(20)), "the slot wait is bounded");
+            Assert.That(stub.PositionWrites, Is.Empty, "no slot list → nothing is written to the wheel");
+            // The wheel now reports a known, off-0 position: a still-pending home would fire here.
+            stub.Position = 3;
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the sequence's SwitchFilter retired the home even though its own change was skipped");
+            await DisconnectAsync(svc);
+        }
+
+        [Test]
+        [Category("bench")]
         public async Task A_dispatched_home_steps_aside_when_a_change_bumped_its_token_before_the_write() {
             // #1079 — deterministic version of the sub-millisecond race: the wheel is parked off 0
             // and its home has (notionally) been dispatched with the generation as it was; a

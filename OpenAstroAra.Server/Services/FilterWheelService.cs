@@ -251,13 +251,17 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
         Justification = "Background home boundary: same as ChangeInBackground — a throwing Position write or a client disposed mid-write must be contained and logged, never fault the fire-and-forget task. CA1031's log-and-recover boundary applies.")]
     internal void HomeInBackground(AlpacaFilterWheel client, long dispatched) {
         try {
+            bool superseded;
             lock (_gate) {
                 // Re-check under the gate right before the write: a change accepted after the
-                // decision (or a disconnect / newer connect) makes this home stale.
-                if (!HomeStillWanted(dispatched, _homeGeneration) || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client)) {
-                    LogHomeSuperseded();
-                    return;
-                }
+                // decision (or a disconnect / newer connect) makes this home stale. The log line
+                // is emitted after the gate is released (a slow log sink must never sit on the
+                // device lock — same rule as LogHomeNeverDecided / LogConnectionLost).
+                superseded = !HomeStillWanted(dispatched, _homeGeneration) || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client);
+            }
+            if (superseded) {
+                LogHomeSuperseded();
+                return;
             }
             client.Position = (short)DefaultSlot; // Position reads -1 while moving
             RefreshCacheOnce();

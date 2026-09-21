@@ -110,17 +110,20 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             slots = _slots;
         }
         var target = inputFilter.Position;
+        if (client is not null) {
+            // #1066/#1079 — a sequence's SwitchFilter is a deliberate position: retire the
+            // first-connect home (and any in-flight one) FIRST, before the slot-list wait below
+            // and whether or not the change itself goes ahead, so the seed refresh that lands
+            // during the wait can neither decide a home nor write one behind the sequence.
+            // (Retiring before the wait also keeps a different wheel adopted mid-wait out of
+            // it: the retire applies to the client captured at entry, never a later one.)
+            RetirePendingHome();
+        }
         // slots == null means the first slot read hasn't landed yet (fresh connect — a boot
         // auto-connect followed by a sequence's first SwitchFilter is the common case, #1079):
         // give the seed refresh a bounded moment to land rather than skipping the change.
         if (client is not null && slots is null) {
             slots = await WaitForSlotsAsync(client, token).ConfigureAwait(false);
-        }
-        if (client is not null) {
-            // #1066/#1079 — a sequence's SwitchFilter is a deliberate position: retire the
-            // first-connect home (and any in-flight one) even if the change itself is skipped
-            // below, so the daemon never parks on 0 behind a sequence that asked for a slot.
-            RetirePendingHome();
         }
         // Without the slot count the upper bound can't be validated, so skip explicitly rather than
         // writing a possibly-out-of-range position to the device.
