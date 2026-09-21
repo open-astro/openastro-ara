@@ -10,12 +10,18 @@
 ///   (logarithmic-ish steps — fine at the low end for centering, coarse at the
 ///   top; six options per HIG's short-choice guidance). 100% is the max
 ///   itself, so no separate MAX entry is needed.
-/// - **Every option is <= the mount's max** — the UI can never ask a mount to
-///   slew faster than it advertises. Zero/negative rates are dropped.
+/// - **Every option is <= the mount's max** — the UI never *asks* for a rate
+///   above what the mount advertises. Zero/negative rates are dropped.
 ///
-/// This picker is UX only: the daemon clamps every MoveAxis rate to the axis's
-/// reported maximum itself (#1064), so a rate over the max is never the
-/// client's to guard.
+/// This picker is UX only: the daemon is the guard on hardware motion. It
+/// snaps every MoveAxis rate into the axis's reported AxisRates bands
+/// (#1064/#1072) — a rate over the top band is capped at its max, a rate
+/// *below* the lowest band is RAISED to its min, and one in a gap between
+/// discrete steps moves to the nearest step. So a percentage preset is a
+/// request, not a promise: on a mount whose lowest band starts high (a single
+/// discrete band, say), a small preset is driven at that band's minimum, and
+/// the effective rate can be well above the chip's label (#1085 tracks
+/// bounding that snap-up and showing the effective rate).
 library;
 
 /// Slew-speed presets as fractions of the mount's max rate.
