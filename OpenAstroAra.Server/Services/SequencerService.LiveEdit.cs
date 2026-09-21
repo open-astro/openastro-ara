@@ -374,6 +374,9 @@ public sealed partial class SequencerService {
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
             };
+            var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
+            payload["estimated_total_seconds"] = estimatedTotal;
+            payload["estimated_remaining_seconds"] = estimatedRemaining;
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(WsEventCatalog.SequenceRunItemsChanged, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {

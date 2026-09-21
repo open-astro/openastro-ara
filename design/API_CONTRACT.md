@@ -110,6 +110,17 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 
 **Related:** branch library-photos-redesign, CHANGELOG [Unreleased]
 
+### 2026-09-20 — #1068 run ETA published by the sequencer
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` (`SequenceRunStateDto`), WS `sequence.progress` (and the other run-lifecycle frames `EmitAsync` publishes), `sequence.instruction_failed` and `sequence.run_items_changed` payloads.
+
+**Decision:** two optional fields, `estimated_total_seconds` and `estimated_remaining_seconds` (double, null until the run tree has loaded), computed by `RunEtaEstimator` from the LIVE tree: a leaf costs its own `GetEstimatedDuration()` (TakeExposure = exposure time, WaitForTime = the wait, …) or a flat 15 s when it reports none; a container multiplies its children by its `LoopCondition.Iterations`; remaining credits terminal leaves (finished/failed/skipped/disabled), completed loop passes, and counts only the unfinished children of the pass in progress. The client's `estimateRunEta` body walk is deleted; its header keeps only the display blend (observed elapsed rate once ≥10 % and ≥2 leaves are done, else the daemon's remaining figure, else nothing is shown).
+
+**Reasoning:** the client re-implemented a cruder copy of the sequencer's duration model (exposure × iterations + 15 s/instruction) because run state never exposed it — a duplicate of execution-side logic that drifted as instructions gained real estimates. The daemon owns the tree and its statuses, so it is the only place a remaining figure that credits completed passes can be computed.
+
+**Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSeconds`, `EmitAsync`), `Services/SequencerService.LiveEdit.cs`, `Contracts/SequenceDtos.cs`. openapi.yaml still pending its refresh (PORT_TODO).
+
+**Related:** #1068 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
 ### 2026-09-20 — #1067 Alpaca device-name lookup proxied through the daemon
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/guider/alpacadevicenames?host=<host>&port=<1..65535>` (new).

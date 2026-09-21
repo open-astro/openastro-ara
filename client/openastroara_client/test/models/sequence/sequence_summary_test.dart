@@ -38,4 +38,29 @@ void main() {
       expect(SequenceRunState.failed.isAnyPaused, isFalse);
     });
   });
+
+  group('SequenceRunStateInfo estimated seconds (#1068)', () {
+    test('parses the daemon estimate from run state and keeps it on WS frames',
+        () {
+      final info = SequenceRunStateInfo.fromJson({
+        'sequence_id': 's',
+        'run_id': 'r',
+        'state': 'running',
+        'instructions_completed': 1,
+        'instructions_total': 10,
+        'estimated_total_seconds': 1215.0,
+        'estimated_remaining_seconds': 1100,
+      });
+      expect(info.estimatedTotalSeconds, 1215);
+      expect(info.estimatedRemainingSeconds, 1100);
+      final next = info.applyWsProgress({
+        'instructions_completed': 2,
+        'estimated_remaining_seconds': 980.5,
+      });
+      expect(next.estimatedTotalSeconds, 1215, reason: 'kept when omitted');
+      expect(next.estimatedRemainingSeconds, 980.5);
+      expect(SequenceRunStateInfo.fromJson(const {}).estimatedTotalSeconds,
+          isNull, reason: 'null until the run tree has loaded');
+    });
+  });
 }
