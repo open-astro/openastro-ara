@@ -30,6 +30,22 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class FilterWheelServiceTest {
 
+        // #1066 — the first-connect home to the default slot is daemon policy (moved from the
+        // Flutter client). These pin the decision helpers ConnectInBackground uses.
+        [Test]
+        public void First_connect_home_only_moves_a_wheel_parked_off_the_default_slot() {
+            Assert.That(FilterWheelService.NeedsHomeToDefaultSlot(FilterWheelService.DefaultSlot), Is.False);
+            Assert.That(FilterWheelService.NeedsHomeToDefaultSlot(3), Is.True);
+        }
+
+        [Test]
+        public void First_connect_home_is_claimed_once_per_device_per_session() {
+            using var svc = new FilterWheelService();
+            Assert.That(svc.ClaimFirstConnectHome("fw-a"), Is.True, "first connect homes");
+            Assert.That(svc.ClaimFirstConnectHome("fw-a"), Is.False, "a reconnect never re-homes");
+            Assert.That(svc.ClaimFirstConnectHome("fw-b"), Is.True, "a different wheel gets its own first connect");
+        }
+
         [Test]
         public async Task GetAsync_is_null_before_any_device_is_selected() {
             using var svc = new FilterWheelService();

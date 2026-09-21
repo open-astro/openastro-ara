@@ -87,7 +87,6 @@ class ExposureControlsPanel extends ConsumerWidget {
             _FilterDropdown(
               value: params.filterSlot,
               onChanged: ctrl.setFilterSlot,
-              homing: params.homing,
             ),
             DropdownButtonFormField<FrameKind>(
               initialValue: params.frameKind,
@@ -345,13 +344,9 @@ enum _FilterPhase { idle, changing, updated }
 class _FilterDropdown extends ConsumerStatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
-  /// True while the wheel is being homed to slot 0 (L) on first launch — the
-  /// picker shows the same busy state as a picker-initiated move.
-  final bool homing;
   const _FilterDropdown({
     required this.value,
     required this.onChanged,
-    this.homing = false,
   });
 
   @override
@@ -402,27 +397,6 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
     );
   }
 
-  @override
-  void didUpdateWidget(_FilterDropdown oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // The first-launch home-to-L runs outside the picker: mirror it as a
-    // busy state so the stale pre-home slot isn't shown as if current.
-    if (widget.homing && !oldWidget.homing) {
-      setState(() {
-        _phase = _FilterPhase.changing;
-        _flash.value = 0;
-        _flash.repeat(reverse: true);
-      });
-    } else if (!widget.homing &&
-        oldWidget.homing &&
-        _phase == _FilterPhase.changing &&
-        _pendingTargetPosition == null) {
-      setState(() {
-        _phase = _FilterPhase.idle;
-        _flash.stop();
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -613,7 +587,7 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
     ];
     if (!names.contains(widget.value)) names.insert(0, widget.value);
 
-    final busy = _phase == _FilterPhase.changing || widget.homing;
+    final busy = _phase == _FilterPhase.changing;
     final blink = _blinkColor;
     final decoration = InputDecoration(
       labelText: 'Filter',

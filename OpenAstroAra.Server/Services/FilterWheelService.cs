@@ -56,6 +56,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private int _refreshing;
     private long _connectGeneration;
     private bool _disposed;
+    // #1066 — devices already homed to the default slot this daemon session (by UniqueId). Only the
+    // FIRST connect of a wheel homes it: an auto-reconnect after a link blip must never yank a
+    // running sequence's filter back to L.
+    private readonly HashSet<string> _homedDevices = [];
 
     public FilterWheelService(
         ILogger<FilterWheelService>? logger = null,
@@ -165,6 +169,26 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             LogChangeFailed(ex, position);
         }
     }
+
+    /// <summary>The slot a freshly connected wheel is parked on: 0, conventionally L(uminance).</summary>
+    internal const int DefaultSlot = 0;
+
+    /// <summary>Whether a wheel seeded on <paramref name="currentSlot"/> needs the first-connect
+    /// home. Only a KNOWN, non-default position does; already-at-default is a no-op that still
+    /// counts as homed.</summary>
+    internal static bool NeedsHomeToDefaultSlot(int currentSlot) => currentSlot != DefaultSlot;
+
+    /// <summary>Claim the once-per-session first-connect home for <paramref name="deviceId"/>:
+    /// true the first time, false on every later (re)connect of the same wheel.</summary>
+    internal bool ClaimFirstConnectHome(string deviceId) {
+        lock (_gate) {
+            return _homedDevices.Add(deviceId);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "FilterWheel '{Device}' first connect: homing from slot {Slot} to the default slot 0 (#1066)")]
+    private partial void LogHomingToDefault(string device, int slot);
 
     private void RefreshTick(object? state) => RefreshCacheOnce();
 
@@ -286,14 +310,27 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                 SafeDisconnectDispose(client);
                 return;
             }
+            var adoptedClient = client;
             client = null; // ownership transferred to _client
             RefreshCacheOnce(); // seed slots + runtime through the guarded path
             bool stillConnected;
+            int? seededSlot;
             lock (_gate) {
                 stillConnected = _state == EquipmentConnectionState.Connected;
+                seededSlot = _runtime.CurrentSlot;
             }
             if (stillConnected) {
                 LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+                // #1066 — home to the default slot (0, "L") on the FIRST connect of this session.
+                // Daemon policy, so it happens with no client attached (boot auto-connect) and
+                // never on a reconnect. Skipped (and NOT claimed) while the position is unknown —
+                // a wheel that reports -1/unreadable at seed is mid-move or degraded; fighting
+                // it is worse than a later connect homing it.
+                if (seededSlot is int slot && ClaimFirstConnectHome(device.UniqueId)
+                        && NeedsHomeToDefaultSlot(slot)) {
+                    LogHomingToDefault(device.Name, slot);
+                    _ = Task.Run(() => ChangeInBackground(adoptedClient, DefaultSlot), CancellationToken.None);
+                }
             }
         } catch (Exception ex) {
             if (!adopted) {

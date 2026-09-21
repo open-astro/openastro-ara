@@ -109,3 +109,15 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Endpoints/ImageEndpoints.cs`, `Endpoints/SystemEndpoints.cs`, `Services/{DataManagerService,SkyCatalogService,SkyCatalogReader,PreviewCacheMaintenance,ThumbnailWarmerService}.cs`, `packaging/{build-deb.sh,seed-manifest.tsv}`. openapi.yaml still pending its refresh (PORT_TODO).
 
 **Related:** branch library-photos-redesign, CHANGELOG [Unreleased]
+
+### 2026-09-20 — #1066 filter-wheel first-connect home moves daemon-side
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/filterwheel/connect` (side effect); no wire change.
+
+**Decision:** on the FIRST successful connect of a given wheel (by Alpaca UniqueId) per daemon session, once the seeded position is known and is not slot 0, the daemon commands `Position = 0` in the background (the same path as `POST /filterwheel/change`). Already-at-0 counts as homed. A later (re)connect of the same wheel — including the §42.3 auto-reconnect — never re-homes. An unknown/moving position at seed skips the home without claiming it. The client's own first-launch home (`ExposureController._homeToSlot0`) and its `homing` UI flag are deleted; the picker follows the wheel's observed `current_slot` like any other move.
+
+**Reasoning:** unrequested hardware motion was client policy, so it only happened when a client was attached and once per app session — the daemon is the hardware orchestrator (PORT_DECISIONS 2026-07-15) and the once-per-session guard there also protects a running sequence from a reconnect-triggered re-home.
+
+**Spec ref:** `Services/FilterWheelService.cs` (`ConnectInBackground`, `ClaimFirstConnectHome`, `NeedsHomeToDefaultSlot`).
+
+**Related:** #1066 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
