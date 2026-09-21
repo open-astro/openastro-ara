@@ -112,7 +112,7 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 
 ### 2026-09-20 — #1068 run ETA published by the sequencer
 
-**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` (`SequenceRunStateDto`), WS `sequence.progress` / `sequence.instruction_*` / `sequence.run_items_changed` payloads.
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` (`SequenceRunStateDto`), WS `sequence.progress` (and the other run-lifecycle frames `EmitAsync` publishes), `sequence.instruction_failed` and `sequence.run_items_changed` payloads.
 
 **Decision:** two optional fields, `estimated_total_seconds` and `estimated_remaining_seconds` (double, null until the run tree has loaded), computed by `RunEtaEstimator` from the LIVE tree: a leaf costs its own `GetEstimatedDuration()` (TakeExposure = exposure time, WaitForTime = the wait, …) or a flat 15 s when it reports none; a container multiplies its children by its `LoopCondition.Iterations`; remaining credits terminal leaves (finished/failed/skipped/disabled), completed loop passes, and counts only the unfinished children of the pass in progress. The client's `estimateRunEta` body walk is deleted; its header keeps only the display blend (observed elapsed rate once ≥10 % and ≥2 leaves are done, else the daemon's remaining figure, else the static scale).
 

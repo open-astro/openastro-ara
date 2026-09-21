@@ -1002,6 +1002,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
             };
+            var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
+            payload["estimated_total_seconds"] = estimatedTotal;
+            payload["estimated_remaining_seconds"] = estimatedRemaining;
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(WsEventCatalog.SequenceInstructionFailed, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {
@@ -1162,8 +1165,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public ISequenceRootContainer? Root { get { lock (_gate) { return _root; } } }
         public ISequenceContainer? BodyTop { get { lock (_gate) { return _bodyTop; } } }
         public void SetRoot(ISequenceRootContainer? root, ISequenceContainer? bodyTop = null) {
-            lock (_gate) { _root = root; _bodyTop = bodyTop ?? root; }
+            lock (_gate) {
+                if (root is null) {
+                    // #1068 — the tree is released at run end; keep its final estimate so a
+                    // terminal run state still reports the total (and remaining = what was left).
+                    _finalEstimate = EstimatedSecondsLocked();
+                }
+                _root = root;
+                _bodyTop = bodyTop ?? root;
+            }
         }
+
+        private (double? Total, double? Remaining) _finalEstimate;
 
         // §38.9 — serializes competing live-edit requests against each other,
         // ACROSS the persist await (review #871: an object lock can't span the
@@ -1264,7 +1277,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         private (double? Total, double? Remaining) EstimatedSecondsLocked() {
             var top = (ISequenceItem?)_bodyTop ?? _root;
             if (top is null) {
-                return (null, null);
+                return _finalEstimate; // (null, null) before the tree loads; the last walk after it is released
             }
             return (RunEtaEstimator.EstimateTotalSeconds(top), RunEtaEstimator.EstimateRemainingSeconds(top));
         }
