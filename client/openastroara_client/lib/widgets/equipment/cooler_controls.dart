@@ -17,10 +17,12 @@ import '../settings/settings_row.dart';
 /// + the 8pt spacing grid) so the block reads identically wherever it's
 /// embedded. The cooling-fan coordination is DAEMON-side (#1065): the server
 /// syncs the bridge's Thermal-Switch Fan port after every cooler write (on →
-/// fan on, off → fan off) and reports a failed sync as a 409 whose reason the
-/// toast shows; a manual fan-off while the cooler is running (or its state is
-/// unknown) is refused by the server on every path to the port. The client
-/// only displays those outcomes.
+/// fan on, off → fan off); a failed sync never fails the cooler call — it is
+/// published as an `equipment.fault` (notification center), not a toast. A
+/// manual fan-off while the cooler is running (or its state is unknown) is
+/// refused (409) by the server's switch-value route, which every client path
+/// uses; the sequencer's raw SetSwitchValue instruction is not yet covered
+/// (#1076). The client only displays those outcomes.
 class CoolerControls extends ConsumerStatefulWidget {
   /// [compact] renders only the target picker (presets + custom field) — used
   /// by the Imaging tab, where the readouts and on/off toggles live in
