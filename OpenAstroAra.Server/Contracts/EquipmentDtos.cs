@@ -125,7 +125,11 @@ public sealed record CameraStateDto(
     double? CoolerSetpointC = null,
     // §25.5.5 — the CURRENT readout mode's display name (from the driver's ReadoutModes list);
     // null when the camera has no readout-mode support.
-    string? ReadoutMode = null);
+    string? ReadoutMode = null,
+    // #1076 — false when the CoolerOn property read threw this pass: CoolerOn then reads false by
+    // fallback, and the cooling-fan interlock must treat the state as UNKNOWN (refuse a fan-off),
+    // not as "off".
+    bool CoolerStateKnown = true);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +

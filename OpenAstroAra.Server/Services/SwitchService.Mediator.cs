@@ -151,7 +151,10 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     /// writable collection (the instruction's addressing scheme). Not-connected / out-of-range
     /// resolve to a logged no-op — the instruction's Validate has already blocked both, so a race
     /// (e.g. a disconnect between Validate and Execute) degrades gracefully instead of faulting the
-    /// run. Genuine sequencer cancellation propagates.
+    /// run. A write the cooling-fan interlock refuses (#1076: the Thermal Switch's fan to its floor
+    /// while the camera cools, or its cooler state is unknown) fails the instruction with a
+    /// <see cref="SequenceEntityFailedException"/> carrying the refusal. Genuine sequencer
+    /// cancellation propagates.
     /// </summary>
     public Task SetSwitchValue(short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
         SetSwitchValue(alpacaDeviceNumber: -1, switchIndex, value, progress, ct);
@@ -163,6 +166,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     public async Task SetSwitchValue(int alpacaDeviceNumber, short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         AlpacaSwitch? client;
         short portId;
+        string deviceId;
         lock (_gate) {
             var target = _disposed ? null : TargetConnectionLocked(alpacaDeviceNumber);
             client = target?.Client;
@@ -172,6 +176,20 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
                 return;
             }
             portId = id.Value;
+            deviceId = target!.Key;
+        }
+        // §25.5.6 / #1076 — the sequencer's write goes through the same fan-off interlock as the
+        // REST write: a SetSwitchValue that would stop the Thermal Switch's fan while the camera
+        // cools (or its state is unknown) fails the instruction with the refusal, so Attempts /
+        // instruction_failed engage instead of the fan silently stopping mid-cooling.
+        string? refusal;
+        try {
+            refusal = await FanOffRefusalForSequencerAsync(deviceId, portId, value, ct).ConfigureAwait(false);
+        } catch (ObjectDisposedException) {
+            return; // a Dispose landing between the two gate blocks: the documented logged no-op, not a fault
+        }
+        if (refusal is not null) {
+            throw new SequenceEntityFailedException(refusal);
         }
         await RunSwitchWriteAsync(client, portId, value, ct).ConfigureAwait(false);
         RefreshCacheOnce();
