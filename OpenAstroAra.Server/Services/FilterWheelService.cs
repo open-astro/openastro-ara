@@ -66,6 +66,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     // connection loss / a newer connect (TakePendingHomeNeverDecidedLocked, logged), an explicit filter change
     // (RetirePendingHome — the requested slot wins), and the tick bound (logged).
     private bool _pendingHome;
+    // #1079 — the in-flight home token: the home's Position write is dispatched on a Task.Run after
+    // the decision is taken under _gate, and a change accepted in that window used to race it. The
+    // dispatch captures this generation; every explicit change, (dis)connect and the next connect
+    // bump it, and the home task re-checks it right before its write and steps aside if it moved.
+    private long _homeGeneration;
     private string _pendingHomeDevice = string.Empty;
     // Bounded window: the seed read plus a few 2 s ticks. A driver that reports -1 for longer is
     // not "just connected" any more; the decision is dropped (and logged) rather than homing the
@@ -129,6 +134,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             client = _client;
             _client = null;
             neverDecided = TakePendingHomeNeverDecidedLocked();
+            _homeGeneration++; // #1079
             // Clear the slot list too: it must not outlive the connection, so a ChangeFilterAsync
             // while disconnected validates against the live (absent) slots and reports "not
             // connected" rather than an ArgumentOutOfRange against a prior session's slots.
@@ -224,8 +230,49 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private void RetirePendingHome() {
         lock (_gate) {
             _pendingHome = false;
+            _homeGeneration++; // #1079 — an already-dispatched home steps aside too
         }
     }
+
+    /// <summary>#1079 — whether a home dispatched at <paramref name="dispatched"/> is still wanted
+    /// now that the generation reads <paramref name="current"/>: any explicit change, disconnect,
+    /// connection loss, newer connect or dispose in between retires it.</summary>
+    internal static bool HomeStillWanted(long dispatched, long current) => dispatched == current;
+
+    /// <summary>The current home generation and live client, for the bench test that invokes
+    /// <see cref="HomeInBackground"/> with a stale token.</summary>
+    internal (long Generation, AlpacaFilterWheel? Client) HomeTokenForTest() {
+        lock (_gate) {
+            return (_homeGeneration, _client);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background home boundary: same as ChangeInBackground — a throwing Position write or a client disposed mid-write must be contained and logged, never fault the fire-and-forget task. CA1031's log-and-recover boundary applies.")]
+    internal void HomeInBackground(AlpacaFilterWheel client, long dispatched) {
+        try {
+            bool superseded;
+            lock (_gate) {
+                // Re-check under the gate right before the write: a change accepted after the
+                // decision (or a disconnect / newer connect) makes this home stale. The log line
+                // is emitted after the gate is released (a slow log sink must never sit on the
+                // device lock — same rule as LogHomeNeverDecided / LogConnectionLost).
+                superseded = !HomeStillWanted(dispatched, _homeGeneration) || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client);
+            }
+            if (superseded) {
+                LogHomeSuperseded();
+                return;
+            }
+            client.Position = (short)DefaultSlot; // Position reads -1 while moving
+            RefreshCacheOnce();
+        } catch (Exception ex) {
+            LogChangeFailed(ex, DefaultSlot);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "FilterWheel first-connect home to slot 0 stepped aside: a filter change (or a (dis)connect) arrived before its write was issued (#1079)")]
+    private partial void LogHomeSuperseded();
 
     // Caller holds _gate. A connection ending with the home still pending leaves a trace in the
     // journal so a wheel that never parked on L is diagnosable; the line itself is emitted by the
@@ -276,6 +323,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             var adoptedSlots = false;
             int? homeFrom = null;
             string homeDevice = string.Empty;
+            long homeGeneration = 0;
             (string Device, int Ticks)? windowExpired = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
@@ -293,6 +341,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                             if (NeedsHomeToDefaultSlot(slot)) {
                                 homeFrom = slot;
                                 homeDevice = _pendingHomeDevice;
+                                homeGeneration = _homeGeneration; // #1079 — the token the write re-checks
                             }
                         } else if (++_pendingHomeTicks > MaxPendingHomeTicks) {
                             _pendingHome = false;
@@ -307,7 +356,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             if (homeFrom is int from) {
                 // Daemon policy: happens with no client attached (boot auto-connect), never on a reconnect.
                 LogHomingToDefault(homeDevice, from);
-                _ = Task.Run(() => ChangeInBackground(client, DefaultSlot), CancellationToken.None);
+                _ = Task.Run(() => HomeInBackground(client, homeGeneration), CancellationToken.None);
             }
             if (adoptedSlots) {
                 // First slot read for this connection: import the device's filter list into the
@@ -382,6 +431,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                     // wheel's still-pending decision is superseded (and its journal line kept).
                     neverDecided = TakePendingHomeNeverDecidedLocked();
                     _pendingHome = ClaimFirstConnectHome(device.UniqueId);
+                    _homeGeneration++; // #1079 — a previous wheel's in-flight home is stale now
                     _pendingHomeDevice = device.Name;
                     _pendingHomeTicks = 0;
                     SetState(EquipmentConnectionState.Connected);
@@ -484,6 +534,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
             neverDecided = TakePendingHomeNeverDecidedLocked();
+            _homeGeneration++; // #1079 — an in-flight home for a wheel that stopped answering is stale
         }
         if (neverDecided is not null) {
             LogHomeNeverDecided(neverDecided);
@@ -522,6 +573,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     public void Dispose() {
         AlpacaFilterWheel? client;
+        string? neverDecided;
         lock (_gate) {
             if (_disposed) {
                 return;
@@ -529,6 +581,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             _disposed = true;
             client = _client;
             _client = null;
+            neverDecided = TakePendingHomeNeverDecidedLocked(); // #1079 — daemon shutdown leaves the same trace
+            _homeGeneration++;
+        }
+        if (neverDecided is not null) {
+            LogHomeNeverDecided(neverDecided);
         }
         _refreshTimer.Dispose();
         // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy

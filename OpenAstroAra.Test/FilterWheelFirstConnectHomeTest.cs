@@ -21,6 +21,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -45,8 +46,13 @@ namespace OpenAstroAra.Test {
             private readonly CancellationTokenSource _cts = new();
             private readonly Task _loop;
             private int _position;
+            private long _namesAvailableAtTicks;
 
             public readonly ConcurrentQueue<int> PositionWrites = new();
+
+            /// <summary>Until this instant the stub answers <c>names</c>/<c>focusoffsets</c> with an
+            /// Alpaca error, so the service's slot read fails and <c>_slots</c> stays null (#1079).</summary>
+            public DateTime NamesAvailableAt { set => Volatile.Write(ref _namesAvailableAtTicks, value.Ticks); }
 
             private StubWheel(HttpListener listener, int port, int position) {
                 BaseUri = new Uri($"http://127.0.0.1:{port}/");
@@ -78,6 +84,11 @@ namespace OpenAstroAra.Test {
                     var leaf = ctx.Request.Url!.AbsolutePath.TrimEnd('/');
                     leaf = leaf[(leaf.LastIndexOf('/') + 1)..].ToUpperInvariant();
                     string value = "true";
+                    var errorNumber = 0;
+                    if (ctx.Request.HttpMethod != "PUT" && (leaf == "NAMES" || leaf == "FOCUSOFFSETS")
+                            && DateTime.UtcNow.Ticks < Volatile.Read(ref _namesAvailableAtTicks)) {
+                        errorNumber = 1024; // not ready yet
+                    }
                     if (ctx.Request.HttpMethod == "PUT") {
                         using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
                         var body = await reader.ReadToEndAsync().ConfigureAwait(false);
@@ -101,7 +112,7 @@ namespace OpenAstroAra.Test {
                         };
                     }
                     var bytes = Encoding.UTF8.GetBytes(
-                        $"{{\"Value\":{value},\"ClientTransactionID\":0,\"ServerTransactionID\":0,\"ErrorNumber\":0,\"ErrorMessage\":\"\"}}");
+                        $"{{\"Value\":{value},\"ClientTransactionID\":0,\"ServerTransactionID\":0,\"ErrorNumber\":{errorNumber.ToString(CultureInfo.InvariantCulture)},\"ErrorMessage\":\"{(errorNumber == 0 ? "" : "not ready")}\"}}");
                     try {
                         ctx.Response.ContentType = "application/json";
                         ctx.Response.ContentLength64 = bytes.Length;
@@ -277,6 +288,83 @@ namespace OpenAstroAra.Test {
             await Task.Delay(TimeSpan.FromSeconds(13));
             stub.Position = 3;
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the home window expired — the wheel is left where it is");
+            await DisconnectAsync(svc);
+        }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_sequence_SwitchFilter_issued_before_the_slots_land_is_honoured_and_retires_the_home() {
+            // #1079: boot auto-connect immediately followed by a sequence's first SwitchFilter. The
+            // stub withholds the slot list for a few seconds, so ChangeFilter finds _slots null —
+            // it must wait for them (not skip) and move to the requested slot; the first-connect
+            // home (which needs no slot list and may already have been written) must never land
+            // AFTER it, so the wheel ends where the sequence asked.
+            await using var stub = StubWheel.Start(position: 3);
+            stub.NamesAvailableAt = DateTime.UtcNow.AddSeconds(3);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
+            Assert.That(result.Position, Is.EqualTo(2), "the change waited for the slot list and was honoured");
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            var writes = stub.PositionWrites.ToArray();
+            Assert.That(writes, Does.Contain(2));
+            Assert.That(writes[^1], Is.EqualTo(2), "nothing — not the first-connect home — lands behind the sequence's change");
+            Assert.That(writes.Count(w => w == FilterWheelService.DefaultSlot), Is.LessThanOrEqualTo(1), "the home is written at most once");
+            await DisconnectAsync(svc);
+        }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_sequence_SwitchFilter_retires_the_home_even_when_the_change_itself_is_skipped() {
+            // #1079 — the retire happens before the slot-list wait and whether or not the change
+            // goes ahead: the wheel is mid-rotation at connect (home pending, undecided) and the
+            // slot list never arrives, so ChangeFilter waits out its budget and skips the change;
+            // once the wheel then reports a position, the pending home must NOT fire. Restore the
+            // old post-validation retire and the wheel is pulled to 0 behind the sequence.
+            await using var stub = StubWheel.Start(position: -1);
+            stub.NamesAvailableAt = DateTime.UtcNow.AddMinutes(5);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            var started = DateTime.UtcNow;
+            var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
+            Assert.That(result.Position, Is.EqualTo(2), "a skipped change hands back the requested filter");
+            Assert.That(DateTime.UtcNow - started, Is.GreaterThan(TimeSpan.FromSeconds(4)).And.LessThan(TimeSpan.FromSeconds(20)), "the slot wait is bounded");
+            Assert.That(stub.PositionWrites, Is.Empty, "no slot list → nothing is written to the wheel");
+            // The wheel now reports a known, off-0 position: a still-pending home would fire here.
+            stub.Position = 3;
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the sequence's SwitchFilter retired the home even though its own change was skipped");
+            await DisconnectAsync(svc);
+        }
+
+        [Test]
+        [Category("bench")]
+        public async Task A_dispatched_home_steps_aside_when_a_change_bumped_its_token_before_the_write() {
+            // #1079 — deterministic version of the sub-millisecond race: the wheel is parked off 0
+            // and its home has (notionally) been dispatched with the generation as it was; a
+            // change then bumps the generation; invoking the home task with the STALE token must
+            // issue no Position write.
+            await using var stub = StubWheel.Start(position: 3);
+            using var svc = new FilterWheelService();
+            await ConnectAsync(svc, stub);
+            // The real first-connect home lands first (position known at seed); let it settle.
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True);
+            while (stub.PositionWrites.TryDequeue(out _)) { }
+            await WaitForSlotsAsync(svc);
+            var (stale, client) = svc.HomeTokenForTest();
+            Assert.That(client, Is.Not.Null);
+            // An explicit change bumps the token (and moves the wheel to 2).
+            await svc.ChangeFilterAsync(new FilterChangeRequestDto(2), idempotencyKey: null, CancellationToken.None);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True);
+            while (stub.PositionWrites.TryDequeue(out _)) { }
+            // The stale home task runs now: it must step aside.
+            svc.HomeInBackground(client!, stale);
+            await Task.Delay(500);
+            Assert.That(stub.PositionWrites, Is.Empty, "a home whose token moved never writes Position = 0");
+            // And the CURRENT token still homes (proves the guard is the token, not the connection checks).
+            var (current, _) = svc.HomeTokenForTest();
+            svc.HomeInBackground(client!, current);
+            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(5)), Is.True);
+            Assert.That(stub.PositionWrites.TryDequeue(out var w) && w == FilterWheelService.DefaultSlot, Is.True);
             await DisconnectAsync(svc);
         }
     }
