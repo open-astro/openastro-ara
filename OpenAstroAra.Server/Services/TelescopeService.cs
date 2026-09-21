@@ -549,7 +549,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                         _axisBands[1] = _axisBands[1] is { Count: > 0 } ? _axisBands[1] : pad.Secondary ?? _axisBands[1];
                         var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false; // under _gate like every caps read
                         var windowElapsed = DateTimeOffset.UtcNow >= _axisRatesDeadline;
-                        if (ShouldSettleAxisRates(axisReadsCompleted, mountCannotMoveAxis, windowElapsed)) {
+                        // Both axes known across passes (primary on one, secondary on a later one)
+                        // counts as completed too — no point re-reading until the window closes.
+                        var bothKnown = _axisBands[0] is { Count: > 0 } && _axisBands[1] is { Count: > 0 };
+                        if (ShouldSettleAxisRates(axisReadsCompleted || bothKnown, mountCannotMoveAxis, windowElapsed)) {
                             _axisRatesSettled = true; // settled: no more AxisRates reads this session
                             if (_axisBands[0] is not { Count: > 0 } || _axisBands[1] is not { Count: > 0 }) {
                                 // Logged after the lock (below): the nudge/stop path takes _gate too.
