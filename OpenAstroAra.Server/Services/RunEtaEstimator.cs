@@ -32,8 +32,10 @@ namespace OpenAstroAra.Server.Services;
 /// iterations already completed and every leaf already terminal.</summary>
 public static class RunEtaEstimator {
 
-    /// <summary>Charged to an instruction whose own estimate is zero. Matches the constant the
-    /// client used while this lived there, so the header's numbers did not jump on the move.</summary>
+    /// <summary>Charged to an instruction that has no duration model of its own (its estimate is
+    /// the base class's <c>Zero</c> placeholder); an instruction that does have one and reports zero
+    /// costs zero (#1080). Matches the constant the client used while this lived there, so the
+    /// header's numbers did not jump on the move.</summary>
     public const double NominalInstructionSeconds = 15;
 
     /// <summary>Estimated seconds for the whole plan as it stands (live edits included).</summary>
