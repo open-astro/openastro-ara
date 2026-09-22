@@ -36,10 +36,17 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task QueryStatusAsync_returns_a_defined_status_and_never_throws() {
             var supervisor = NewSupervisor();
-            // On a host without the openastro-phd2 unit (every dev/CI box) this is Unknown or Inactive;
+            // On a host without the openastro-guider unit (every dev/CI box) this is Unknown or Inactive;
             // the contract under test is simply "a valid enum, no exception".
             var status = await supervisor.QueryStatusAsync(CancellationToken.None);
             Assert.That(Enum.IsDefined(status), Is.True);
+        }
+
+        [Test]
+        public void Unit_is_the_one_the_guider_deb_ships() {
+            // openastro-guider's debian/ ships openastro-guider.service; the old "openastro-phd2" name
+            // made every is-active read Unknown and every restart a silent no-op on a real Pi.
+            Assert.That(SystemctlGuiderProcessSupervisor.Unit, Is.EqualTo("openastro-guider"));
         }
 
         [Test]

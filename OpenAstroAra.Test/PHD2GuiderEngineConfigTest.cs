@@ -119,12 +119,15 @@ namespace OpenAstroAra.Test {
             Assert.That(setup.Parameters!.FocalLength, Is.EqualTo(250));
             Assert.That(setup.Parameters.PixelSize, Is.EqualTo(2.9));
 
-            // Four algo params: ra/dec × aggressiveness + ra/dec × minMove, with the profile values.
+            // Four algo params: ra/dec × aggression (PHD2's wire name for ARA's aggressiveness) +
+            // ra/dec × minMove, with the profile values.
             var algo = msgs.OfType<Phd2SetAlgoParam>().ToList();
             Assert.That(algo.Count, Is.EqualTo(4));
-            var raAgg = algo.Single(a => a.Parameters!.Axis == "ra" && a.Parameters.Name == "aggressiveness");
+            Assert.That(algo.Select(a => a.Parameters!.Name), Has.None.EqualTo("aggressiveness"),
+                "the daemon has no such param; it answers 'could not set param'");
+            var raAgg = algo.Single(a => a.Parameters!.Axis == "ra" && a.Parameters.Name == "aggression");
             Assert.That(raAgg.Parameters!.Value, Is.EqualTo(0.7));
-            var decAgg = algo.Single(a => a.Parameters!.Axis == "dec" && a.Parameters.Name == "aggressiveness");
+            var decAgg = algo.Single(a => a.Parameters!.Axis == "dec" && a.Parameters.Name == "aggression");
             Assert.That(decAgg.Parameters!.Value, Is.EqualTo(0.65));
             var minMoves = algo.Where(a => a.Parameters!.Name == "minMove").ToList();
             Assert.That(minMoves.Count, Is.EqualTo(2));

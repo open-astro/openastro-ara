@@ -1,0 +1,23 @@
+// Allow the openastroara service user to start/restart the sibling guider unit
+// (§63.3 crash recovery + POST /api/v1/equipment/guider/restart). systemctl asks
+// systemd over D-Bus and polkit authorises it here — the daemon's unit runs with
+// NoNewPrivileges=true, so sudo/setuid cannot be used for this. Scoped to exactly
+// one unit and two verbs; stop, mask, edit and every other unit stay NOT_HANDLED
+// (which falls through to the default: admin auth, i.e. denied for a service user).
+// Same shape as AlpacaBridge's 50-alpacabridge-wifi.rules.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "openastroara") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.lookup("unit") !== "openastro-guider.service") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var verb = action.lookup("verb");
+    if (verb === "start" || verb === "restart") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
