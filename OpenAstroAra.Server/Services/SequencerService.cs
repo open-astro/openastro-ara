@@ -1129,6 +1129,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// false when another writer got there first. Used by the pause paths so
         /// entering/leaving Paused can never clobber a concurrent Abort/Stop
         /// (whose unconditional write always wins over a failed CAS).
+        /// #1080 — deliberately does NOT bump <c>_treeVersion</c> (unlike the <see cref="State"/>
+        /// setter): pause/resume change nothing in the tree, and the ETA cache's TTL covers the
+        /// frame that announces them. Do not route this through the setter to "fix" that.
         /// </summary>
         public bool TryTransition(SequenceRunState from, SequenceRunState to) =>
             Interlocked.CompareExchange(ref _state, (int)to, (int)from) == (int)from;
