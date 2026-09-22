@@ -301,13 +301,21 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     internal static bool ShouldSettleAxisRates(bool readsCompleted, bool mountCannotMoveAxis, bool windowElapsed) =>
         readsCompleted || mountCannotMoveAxis || windowElapsed;
 
+    /// <summary>#1085 — how far below the lowest band's minimum a request may sit and still be
+    /// raised to it. A request slower than <c>Min / SnapUpBoundFactor</c> is refused instead: on a
+    /// mount whose lowest band starts high (a single band <c>(2.0, 6.0)</c>, say) the picker's 1 %
+    /// preset would otherwise become a press-and-hold many times faster than the user chose, with
+    /// only a daemon log to say so.</summary>
+    internal const double SnapUpBoundFactor = 4.0;
+
     /// <summary>Snap a MoveAxis request into the axis's reported rate bands (#1064/#1072). <c>0</c>
     /// (stop) passes through untouched. A nonzero rate with no known bands (the axis reports none,
     /// or the capabilities have not been read yet) throws — the driver would either reject it or,
     /// worse, honour it. Otherwise the magnitude is kept when a band contains it, capped at the top
-    /// band's max, raised to the lowest band's min, or moved to the nearest edge of a gap between
-    /// bands (a discrete-rate mount has Min == Max bands). Sign preserved. Internal for direct unit
-    /// testing (the rate read itself sits behind a sealed Alpaca client).</summary>
+    /// band's max, raised to the lowest band's min while it is within <see cref="SnapUpBoundFactor"/>
+    /// of it (#1085: any slower is refused rather than sped up), or moved to the nearest edge of a
+    /// gap between bands (a discrete-rate mount has Min == Max bands). Sign preserved. Internal for
+    /// direct unit testing (the rate read itself sits behind a sealed Alpaca client).</summary>
     internal static double SnapMoveAxisRate(double requested, IReadOnlyList<(double Min, double Max)>? bands) {
         if (requested == 0 || double.IsNaN(requested)) {
             return 0;
@@ -324,6 +332,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         if (magnitude >= top) {
             snapped = top;
         } else if (magnitude <= bottom) {
+            if (magnitude * SnapUpBoundFactor < bottom) {
+                throw new InvalidOperationException(
+                    $"Requested rate {magnitude:0.####} deg/s is more than {SnapUpBoundFactor:0}x slower than the mount's slowest rate ({bottom:0.####} deg/s); manual nudge refused. Pick a faster speed.");
+            }
             snapped = bottom;
         } else if (bands.Any(b => magnitude >= b.Min && magnitude <= b.Max)) {
             snapped = magnitude;

@@ -48,9 +48,28 @@ namespace OpenAstroAra.Test {
         public void Rate_over_the_top_band_is_capped_and_below_the_lowest_is_raised() {
             Assert.That(TelescopeService.SnapMoveAxisRate(50, OneBand), Is.EqualTo(6.016));
             Assert.That(TelescopeService.SnapMoveAxisRate(-50, OneBand), Is.EqualTo(-6.016));
-            // #1072 — the client's 1 % preset can land below the lowest band's minimum.
-            Assert.That(TelescopeService.SnapMoveAxisRate(0.0001, OneBand), Is.EqualTo(0.001));
-            Assert.That(TelescopeService.SnapMoveAxisRate(-0.0001, Discrete), Is.EqualTo(-0.002));
+            // #1072 — the client's 1 % preset can land below the lowest band's minimum; #1085 — it
+            // is raised only while within SnapUpBoundFactor (4x) of that minimum.
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.0005, OneBand), Is.EqualTo(0.001));
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.00025, OneBand), Is.EqualTo(0.001), "exactly 4x slower is still raised");
+            Assert.That(TelescopeService.SnapMoveAxisRate(-0.001, Discrete), Is.EqualTo(-0.002));
+        }
+
+        [Test]
+        public void Rate_more_than_the_bound_factor_below_the_lowest_band_is_refused_not_raised() {
+            // #1085 — the exact case from the issue: a mount whose only band starts at 2 deg/s and the
+            // picker's 1 % preset of its 6 deg/s max (0.06). Snapping would drive 2 deg/s, 33x faster
+            // than picked; the daemon refuses instead (409 at the endpoint).
+            IReadOnlyList<(double Min, double Max)> highFloor = [(2.0, 6.0)];
+            var ex = Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, highFloor));
+            Assert.That(ex!.Message, Does.Contain("4x slower").And.Contain("2 deg/s"));
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(-0.06, highFloor));
+            // Within the bound (0.5 = min / 4) it is still raised, sign preserved.
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.5, highFloor), Is.EqualTo(2.0));
+            Assert.That(TelescopeService.SnapMoveAxisRate(-0.6, highFloor), Is.EqualTo(-2.0));
+            // Just past the bound is refused, on a discrete ladder too.
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.0001, OneBand));
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(-0.0001, Discrete));
         }
 
         [Test]
