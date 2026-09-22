@@ -103,13 +103,13 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
     public void RequestStart() => RequestVerb("start");
 
     private void RequestVerb(string verb) {
-        // `sudo -n systemctl <verb> <unit>`, fire-and-forget. The openastroara user is not root and
-        // the guider .deb ships no polkit rule, so a bare systemctl is refused by the bus; ARA's own
-        // .deb ships the NOPASSWD sudoers line for exactly these two verbs on this one unit
-        // (packaging/debian/etc/sudoers.d/openastroara). `-n` never prompts: a missing rule fails
-        // fast and is logged rather than hanging a fire-and-forget process on a password read.
+        // Bare `systemctl <verb> <unit>`, fire-and-forget. systemctl asks systemd over D-Bus, and
+        // polkit authorises the openastroara user for start/restart of exactly this unit via the
+        // rule ARA's .deb ships (packaging/debian/usr/share/polkit-1/rules.d/50-openastroara-guider.rules).
+        // NOT sudo: the unit runs with NoNewPrivileges=true, which makes every setuid binary fail
+        // ("no new privileges flag is set") — verified on a Pi. D-Bus authorisation is unaffected.
         try {
-            using var _ = Process.Start(new ProcessStartInfo("sudo", $"-n systemctl {verb} {Unit}") {
+            using var _ = Process.Start(new ProcessStartInfo("systemctl", $"{verb} {Unit}") {
                 UseShellExecute = false,
                 CreateNoWindow = true,
             });
