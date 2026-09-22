@@ -41,8 +41,9 @@ namespace OpenAstroAra.Server.Services;
 /// own background JSON-RPC listener, so <see cref="GetAsync"/> reads it directly.
 ///
 /// RMS (<c>RmsTotal/Ra/Dec</c>) is left null for now — TODO(§63): accumulate it from the guider's
-/// <c>GuideEvent</c> stream (guider-b). Mediator unification (<c>IGuiderMediator</c> so the sequencer
-/// drives the live guider) is a separate follow-up that replaces <c>HeadlessGuiderMediator</c>.
+/// <c>GuideEvent</c> stream (guider-b). This same singleton also serves the sequencer's
+/// <c>IGuiderMediator</c> (see <c>GuiderService.Mediator.cs</c>; registered as the mediator in
+/// Program.cs, replacing <c>HeadlessGuiderMediator</c>).
 /// </summary>
 public sealed partial class GuiderService : IGuiderService, IDisposable {
 
