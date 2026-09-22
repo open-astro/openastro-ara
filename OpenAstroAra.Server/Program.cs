@@ -284,7 +284,7 @@ public partial class Program {
         // §14e — seventh real device service: live flat device / CoverCalibrator (cover + light)
         // + apply. REST-only; the mediator unification is a follow-up.
         builder.Services.AddSingleton<IFlatDeviceService, FlatDeviceService>();
-        // §63.3 guider-d — crash detection + auto-restart of the sibling openastro-phd2 unit.
+        // §63.3 guider-d — crash detection + auto-restart of the sibling openastro-guider unit.
         builder.Services.AddSingleton<IGuiderProcessSupervisor, SystemctlGuiderProcessSupervisor>();
         builder.Services.AddSingleton<GuiderRecoveryCoordinator>();
         // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's

@@ -56,12 +56,12 @@ namespace OpenAstroAra.Test {
         [Test]
         public void SetAlgoParam_uses_axis_name_value() {
             var json = Serialize(new Phd2SetAlgoParam {
-                Parameters = new() { Axis = "ra", Name = "aggressiveness", Value = 0.75 },
+                Parameters = new() { Axis = "ra", Name = "aggression", Value = 0.75 },
             });
             Assert.That(json["method"]!.Value<string>(), Is.EqualTo("set_algo_param"));
             var p = json["params"]!;
             Assert.That(p["axis"]!.Value<string>(), Is.EqualTo("ra"));
-            Assert.That(p["name"]!.Value<string>(), Is.EqualTo("aggressiveness"));
+            Assert.That(p["name"]!.Value<string>(), Is.EqualTo("aggression"));
             Assert.That(p["value"]!.Value<double>(), Is.EqualTo(0.75));
         }
 

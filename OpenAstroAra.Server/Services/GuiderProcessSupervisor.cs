@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// Service-level health of the sibling <c>openastro-phd2</c> systemd unit, as reported by
+/// Service-level health of the sibling <c>openastro-guider</c> systemd unit, as reported by
 /// <c>systemctl is-active</c>. <see cref="Unknown"/> means we couldn't ask systemd at all — the
 /// daemon host isn't a systemd box (e.g. the macOS dev machine), so the guider can't be supervised.
 /// </summary>
@@ -42,7 +42,7 @@ public enum GuiderProcessStatus {
 
 /// <summary>
 /// §63.1/§63.3 process supervisor for the guider daemon. ARA does not own the
-/// <c>openastro-phd2</c> systemd unit (the <c>openastro-guider</c> .deb ships it), but it can read
+/// <c>openastro-guider</c> systemd unit (the <c>openastro-guider</c> .deb ships it), but it can read
 /// its service-level health and request a restart — the seam the §63.3 crash-recovery decision tree
 /// drives. This is the only place that shells out to <c>systemctl</c>.
 /// </summary>
@@ -69,10 +69,11 @@ public interface IGuiderProcessSupervisor {
 /// </summary>
 public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSupervisor {
 
-    // The guider daemon's systemd unit. The openastro-guider repo ships debian/openastro-phd2.service
-    // (the unit name kept the openastro-phd2 lineage even though the project is now openastro-guider),
-    // matching playbook §63.1.
-    internal const string Unit = "openastro-phd2";
+    // The guider daemon's systemd unit. The openastro-guider .deb ships debian/openastro-guider.service
+    // (verified on a Pi: `systemctl list-units` shows openastro-guider.service and nothing named
+    // openastro-phd2 — the old lineage name this constant carried made every is-active read Unknown
+    // and every start/restart a silent no-op, #1093).
+    internal const string Unit = "openastro-guider";
 
     private readonly ILogger<SystemctlGuiderProcessSupervisor> _logger;
 
@@ -102,8 +103,11 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
     public void RequestStart() => RequestVerb("start");
 
     private void RequestVerb(string verb) {
-        // Mirror §13: bare `systemctl <verb>`, fire-and-forget. Privileged via the §63.1 NOPASSWD
-        // sudoers / polkit drop-in the openastro-phd2 .deb installs for the openastroara user.
+        // Bare `systemctl <verb> <unit>`, fire-and-forget. systemctl asks systemd over D-Bus, and
+        // polkit authorises the openastroara user for start/restart of exactly this unit via the
+        // rule ARA's .deb ships (packaging/debian/usr/share/polkit-1/rules.d/50-openastroara-guider.rules).
+        // NOT sudo: the unit runs with NoNewPrivileges=true, which makes every setuid binary fail
+        // ("no new privileges flag is set") — verified on a Pi. D-Bus authorisation is unaffected.
         try {
             using var _ = Process.Start(new ProcessStartInfo("systemctl", $"{verb} {Unit}") {
                 UseShellExecute = false,
