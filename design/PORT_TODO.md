@@ -16,6 +16,8 @@ the other design docs.
 
 ## §14e astrometry natives — follow-ups (2026-09-22, from the #1092 review)
 
+- **No Docker-side equivalent of the `build-deb.sh` natives guard.** A local `docker build .` from a publish dir that skipped `scripts/build-astrometry-natives.sh` silently produces a broken image; CI catches it via the arm64 e2e boot-log grep, a local build does not. A `RUN test -f libsofa.so -a -f libnovas31.so` in the Dockerfile (needs a non-chiseled build stage, since the chiseled runtime-deps image has no shell) or a pre-build check script would close it.
+- **PORT_PLAYBOOK §11 (line ~989, "Copy `publish/arm64/` to `/opt/openastroara/`")** has the same natives gap as the DEPLOY.md recipe #1092 fixed, but §11 is the historical Phase-10 plan and already diverged (still shows the `aspnet:10.0-bookworm-slim` base and an x64 publish). Reconcile or mark it superseded by DEPLOY.md when next touched.
 - **glibc floor of the cross-built natives.** `libsofa.so`/`libnovas31.so` are built on `ubuntu-latest` (noble, glibc 2.39) while `packaging/debian/DEBIAN/control.template` carries an unversioned `Depends: libc6`. Debian 13 Trixie (2.41, the DEPLOY.md target) is fine; on a bookworm-based Pi OS the `.deb` installs and then `dlopen` fails on a `GLIBC_2.3x` symbol, and the boot probe reports the file as MISSING although it is on disk. If pre-Trixie is meant to be supported: build in a bookworm container (or with `-D_FORTIFY_SOURCE=0` + an older sysroot) and/or version the `libc6` dependency.
 ## §29.2 pointing headers — follow-ups (2026-09-22, from the #1091 review)
 

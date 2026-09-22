@@ -35,19 +35,27 @@ namespace OpenAstroAra.Astrometry {
             : ("libsofa.so", "libnovas31.so");
 
         /// <summary>True for each library that loads from the assembly's directory or the
-        /// platform's default probe path. Never throws.</summary>
+        /// platform's default probe path AND exports the entry point the managed side calls first
+        /// (a library built from a partial source set would dlopen fine and fail on first use).
+        /// Never throws.</summary>
         public static (bool Sofa, bool Novas) Probe() {
             var (sofaName, novasName) = OperatingSystem.IsWindows()
                 ? ("SOFAlib.dll", "NOVAS31lib.dll")
                 : ("sofa", "novas31");
-            return (TryLoad(sofaName), TryLoad(novasName));
+            // iauAtci13: the J2000→JNOW transform (Coordinates.TransformToJNOW); julian_date: what
+            // every transform's TT date goes through (AstroUtil.GetJulianDate). Names match the
+            // DllImport EntryPoints in SOFA.cs / NOVAS.cs.
+            return (TryLoad(sofaName, "iauAtci13"), TryLoad(novasName, "julian_date"));
         }
 
-        private static bool TryLoad(string name) {
+        private static bool TryLoad(string name, string export) {
             try {
                 if (NativeLibrary.TryLoad(name, typeof(AstrometryNatives).Assembly, searchPath: null, out var handle)) {
-                    NativeLibrary.Free(handle);
-                    return true;
+                    try {
+                        return NativeLibrary.TryGetExport(handle, export, out _);
+                    } finally {
+                        NativeLibrary.Free(handle);
+                    }
                 }
             } catch (Exception ex) when (ex is DllNotFoundException or BadImageFormatException or ArgumentException) {
                 // fall through — "absent" is the answer
