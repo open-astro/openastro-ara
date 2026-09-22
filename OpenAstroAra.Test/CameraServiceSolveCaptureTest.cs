@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Model;
 
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Threading;
@@ -87,12 +88,51 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Capture_with_no_legacy_profile_wired_says_so() {
+        public void Capture_without_a_legacy_profile_still_reaches_the_camera_check() {
+            // The profile is only read by render paths the solver never calls, so its absence must
+            // not be a failure mode of its own.
             using var svc = new CameraService();
             var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
             var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
                 svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
-            Assert.That(ex!.Message, Does.Contain("profile"));
+            Assert.That(ex!.Message, Does.Contain("not connected"));
+        }
+
+        [Test]
+        public void Wrapped_frame_exposes_raw_pixels_metadata_and_an_8bit_render() {
+            var pixels = new ushort[4 * 3];
+            for (var i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(i * 5000);
+            var at = new DateTimeOffset(2026, 9, 22, 4, 0, 0, TimeSpan.Zero);
+            var frame = new AnalysisFrame(pixels, 4, 3, at);
+            var request = new ExposureRequestDto(ExposureSec: 3.5, Gain: 120, BinX: 2, BinY: 2, CameraOffset: 30);
+
+            var rendered = CameraService.RenderForSolve(frame, request, isBayered: false, cameraName: "Sim", profile: null);
+
+            Assert.Multiple(() => {
+                Assert.That(rendered.RawImageData.Properties.Width, Is.EqualTo(4));
+                Assert.That(rendered.RawImageData.Properties.Height, Is.EqualTo(3));
+                Assert.That(rendered.RawImageData.Properties.BitDepth, Is.EqualTo(16));
+                Assert.That(rendered.RawImageData.Properties.IsBayered, Is.False);
+                Assert.That(rendered.RawImageData.Data.FlatArray, Is.EqualTo(pixels));
+                Assert.That(rendered.RawImageData.MetaData.Image.ExposureTime, Is.EqualTo(3.5));
+                Assert.That(rendered.RawImageData.MetaData.Image.ExposureStart, Is.EqualTo(at.UtcDateTime));
+                Assert.That(rendered.RawImageData.MetaData.Camera.Gain, Is.EqualTo(120));
+                Assert.That(rendered.RawImageData.MetaData.Camera.Offset, Is.EqualTo(30));
+                Assert.That(rendered.RawImageData.MetaData.Camera.BinX, Is.EqualTo(2));
+                Assert.That(rendered.RawImageData.MetaData.Camera.Name, Is.EqualTo("Sim"));
+                // One grayscale byte per pixel — the invariant GetThumbnail asserts on.
+                Assert.That(rendered.Image.Length, Is.EqualTo(pixels.Length));
+            });
+        }
+
+        [Test]
+        public void Wrapped_frame_thumbnail_encodes() {
+            var frame = new AnalysisFrame(new ushort[64 * 48], 64, 48, DateTimeOffset.UtcNow);
+            var request = new ExposureRequestDto(ExposureSec: 1, Gain: null);
+            var rendered = CameraService.RenderForSolve(frame, request, isBayered: true, cameraName: null, profile: null);
+            var jpeg = rendered.GetThumbnail().GetAwaiter().GetResult();
+            Assert.That(jpeg, Is.Not.Empty);
+            Assert.That(rendered.RawImageData.Properties.IsBayered, Is.True);
         }
 
         [Test]

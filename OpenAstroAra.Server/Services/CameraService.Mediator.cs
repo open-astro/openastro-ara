@@ -186,16 +186,35 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     // thumbnail. The frame is deliberately not catalogued (SNAPSHOT semantics).
     public async Task<IRenderedImage> CaptureAndPrepareImage(CaptureSequence sequence, PrepareImageParameters parameters, CancellationToken token, IProgress<ApplicationStatus>? progress) {
         ArgumentNullException.ThrowIfNull(sequence);
-        var legacyProfile = _legacyProfile?.Invoke()
-            ?? throw new InvalidOperationException(
-                "plate-solve capture needs the legacy profile service (the solver writes its temp FITS through it); none is wired into CameraService");
         var request = SolveCaptureRequest(sequence);
         if (request.ExposureSec <= 0 || double.IsNaN(request.ExposureSec) || double.IsInfinity(request.ExposureSec)) {
             throw new ArgumentOutOfRangeException(nameof(sequence), request.ExposureSec,
                 "plate-solve exposure must be a positive, finite number of seconds (Options → Plate solving → Exposure time)");
         }
+        // Same caps check as the autofocus probe: ApplyExposureSettings' TrySet logs-and-skips an
+        // unsupported binning, so the frame would come back unbinned while PlateSolveParameter
+        // still hands the solver a binned pixel scale — an opaque solver failure instead of this.
+        CameraCapabilitiesDto? caps;
+        lock (_gate) {
+            caps = _capabilities;
+        }
+        if (caps is not null && caps.MaxBinX > 0 && caps.MaxBinY > 0
+                && (request.BinX > caps.MaxBinX || request.BinY > caps.MaxBinY)) {
+            throw new ArgumentOutOfRangeException(nameof(sequence), $"{request.BinX}x{request.BinY}",
+                $"plate-solve binning exceeds the camera's supported maximum ({caps.MaxBinX}x{caps.MaxBinY}) — lower it in Options → Plate solving → Binning");
+        }
         var frame = await CaptureUnpersistedAsync(request, token).ConfigureAwait(false);
-        return await RenderForSolveAsync(frame, request, legacyProfile, token).ConfigureAwait(false);
+        // Hardware binning mixes the CFA cells, so only a 1×1 OSC frame is still a Bayer mosaic.
+        // Metadata-only on this path: the solver's temp FITS carries no BAYERPAT card (the persisted
+        // capture path stamps that header itself); the CLI solvers work on the raw mosaic regardless.
+        var isBayered = caps?.BayerPattern is not null && request.BinX == 1 && request.BinY == 1;
+        // The legacy profile is only read by BaseImageData.RenderImage / RenderedImage.Stretch,
+        // neither of which the solve path calls (SaveToDisk does not touch it) — so null is fine.
+        var profile = _legacyProfile?.Invoke();
+        var cameraName = _device?.Name;
+        // The AutoSTF render is ~50-200 ms on a full frame; keep it off the caller's thread.
+        return await Task.Run(() => RenderForSolve(frame, request, isBayered, cameraName, profile), token)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -215,12 +234,15 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             CameraOffset: sequence.Offset >= 0 ? sequence.Offset : null);
     }
 
-    private async Task<IRenderedImage> RenderForSolveAsync(AnalysisFrame frame, ExposureRequestDto request,
-            OpenAstroAra.Profile.Interfaces.IProfileService legacyProfile, CancellationToken token) {
+    /// <summary>
+    /// Wrap an unpersisted frame for the solver: the raw 16-bit pixels as <see cref="IImageData"/>
+    /// (what <c>ImageSolver</c> hands the CLI solver, which writes its own temp FITS) plus an
+    /// AutoSTF 8-bit render whose only consumer is <c>CaptureSolver</c>'s progress thumbnail.
+    /// Static and side-effect free so the wrap is unit-testable without a camera.
+    /// </summary>
+    internal static IRenderedImage RenderForSolve(AnalysisFrame frame, ExposureRequestDto request, bool isBayered,
+            string? cameraName, OpenAstroAra.Profile.Interfaces.IProfileService? profile) {
         var pixels = frame.Pixels.ToArray();
-        // Hardware binning mixes the CFA cells, so only a 1×1 OSC frame is still a Bayer mosaic
-        // (same rule as the BAYERPAT header on the persisted path).
-        var isBayered = _capabilities?.BayerPattern is not null && request.BinX == 1 && request.BinY == 1;
         var meta = new ImageMetaData();
         meta.Image.ExposureTime = request.ExposureSec;
         meta.Image.ImageType = "SNAPSHOT";
@@ -229,17 +251,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         meta.Camera.BinY = request.BinY;
         meta.Camera.Gain = request.Gain ?? -1;
         meta.Camera.Offset = request.CameraOffset ?? -1;
-        if (_device?.Name is string cam && cam.Length > 0) {
-            meta.Camera.Name = cam;
+        if (!string.IsNullOrEmpty(cameraName)) {
+            meta.Camera.Name = cameraName;
         }
         var raw = new BaseImageData(pixels, frame.Width, frame.Height, bitDepth: 16, isBayered: isBayered,
-            meta, legacyProfile, null!, null!);
-        // The 8-bit display buffer only feeds CaptureSolver's progress thumbnail; AutoSTF is what
-        // the §65 preview uses, and it's ~50-200 ms on a full frame, so keep it off the caller.
-        var display = await Task.Run(
-            () => OpenAstroAra.Stretch.Stretcher.Apply(OpenAstroAra.Stretch.StretchAlgorithm.AutoStf, pixels), token)
-            .ConfigureAwait(false);
-        return RenderedImage.Create(display, raw, legacyProfile, null!, null!);
+            meta, profile!, null!, null!);
+        var display = OpenAstroAra.Stretch.Stretcher.Apply(OpenAstroAra.Stretch.StretchAlgorithm.AutoStf, pixels);
+        return RenderedImage.Create(display, raw, profile!, null!, null!);
     }
 
     // ── Unported IImagingMediator surface — the §2105 image pipeline lands these ────────────────
