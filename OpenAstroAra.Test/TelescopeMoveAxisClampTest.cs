@@ -63,6 +63,9 @@ namespace OpenAstroAra.Test {
             IReadOnlyList<(double Min, double Max)> highFloor = [(2.0, 6.0)];
             var ex = Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, highFloor));
             Assert.That(ex!.Message, Does.Contain("4x slower").And.Contain("2 deg/s"));
+            // A tiny request is still printed as a number the user can act on, never "0 deg/s".
+            var tiny = Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.00001, OneBand));
+            Assert.That(tiny!.Message, Does.Contain("1E-05 deg/s").And.Not.Contain("rate 0 deg/s"));
             Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(-0.06, highFloor));
             // Within the bound (0.5 = min / 4) it is still raised, sign preserved.
             Assert.That(TelescopeService.SnapMoveAxisRate(0.5, highFloor), Is.EqualTo(2.0));

@@ -248,9 +248,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // backstop that halts all axes.
         // #1064/#1072 — the daemon is the guard on hardware motion, not the client's speed picker: a
         // nonzero rate is SNAPPED into the axis's reported rate bands (sign preserved): above the top
-        // band → its max; below the lowest band → its min; in a gap between bands → the nearest band
-        // edge. An axis with no usable rate refuses the nudge (409) rather than forwarding an
-        // unbounded rate. A stop (rate 0) is never gated — it must always reach the driver.
+        // band → its max; below the lowest band → its min while within 4x of it (#1085: any slower
+        // is refused rather than sped up); in a gap between bands → the nearest band edge. An axis
+        // with no usable rate refuses the nudge (409) rather than forwarding an unbounded rate. A
+        // stop (rate 0) is never gated — it must always reach the driver.
         // The bands come from the session cache (read with the capabilities), never a device
         // round-trip here: the press leg must reach the driver as fast as the release leg.
         // #1078 — a secondary axis whose AxisRates never answered (driver bug: CanMoveAxis true,
@@ -334,7 +335,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         } else if (magnitude <= bottom) {
             if (magnitude * SnapUpBoundFactor < bottom) {
                 throw new InvalidOperationException(
-                    $"Requested rate {magnitude:0.####} deg/s is more than {SnapUpBoundFactor:0}x slower than the mount's slowest rate ({bottom:0.####} deg/s); manual nudge refused. Pick a faster speed.");
+                    $"Requested rate {magnitude:G4} deg/s is more than {SnapUpBoundFactor:0}x slower than the mount's slowest rate ({bottom:G4} deg/s); manual nudge refused. Pick a faster speed.");
             }
             snapped = bottom;
         } else if (bands.Any(b => magnitude >= b.Min && magnitude <= b.Max)) {
