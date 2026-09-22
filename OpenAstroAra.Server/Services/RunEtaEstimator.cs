@@ -16,6 +16,8 @@ using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using System;
 
 namespace OpenAstroAra.Server.Services;
@@ -49,14 +51,28 @@ public static class RunEtaEstimator {
     }
 
     private static double Full(ISequenceItem item) {
+        // #1080 — a DISABLED or SKIPPED subtree never runs: it is not part of the total either
+        // (Remaining already credits it), so total and remaining count the same items.
+        if (item.Status is SequenceEntityStatus.DISABLED or SequenceEntityStatus.SKIPPED) {
+            return 0;
+        }
         if (item is not ISequenceContainer container) {
             return LeafCost(item);
         }
-        double sum = 0;
-        foreach (var child in container.GetItemsSnapshot()) {
-            sum += Full(child);
+        var children = container.GetItemsSnapshot();
+        // #1080 — a ParallelContainer runs its children concurrently: its pass costs the longest
+        // child, not the sum.
+        double pass = 0;
+        if (container is ParallelContainer) {
+            foreach (var child in children) {
+                pass = Math.Max(pass, Full(child));
+            }
+        } else {
+            foreach (var child in children) {
+                pass += Full(child);
+            }
         }
-        return sum * Iterations(container);
+        return pass * Iterations(container);
     }
 
     private static double Remaining(ISequenceItem item) {
@@ -69,11 +85,18 @@ public static class RunEtaEstimator {
         if (item.Status == SequenceEntityStatus.CREATED) {
             return Full(item);
         }
-        // RUNNING: the pass in progress plus every pass still to come.
+        // RUNNING: the pass in progress plus every pass still to come (a parallel block's pass
+        // is its longest child, #1080).
         double passRemaining = 0, passFull = 0;
+        var parallel = container is ParallelContainer;
         foreach (var child in container.GetItemsSnapshot()) {
-            passRemaining += Remaining(child);
-            passFull += Full(child);
+            if (parallel) {
+                passRemaining = Math.Max(passRemaining, Remaining(child));
+                passFull = Math.Max(passFull, Full(child));
+            } else {
+                passRemaining += Remaining(child);
+                passFull += Full(child);
+            }
         }
         var passesLeft = Math.Max(0, Iterations(container) - CompletedIterations(container) - 1);
         return passRemaining + passesLeft * passFull;
@@ -88,8 +111,19 @@ public static class RunEtaEstimator {
         } catch (Exception) {
             seconds = 0;
         }
+        // #1080 — zero is a real answer from an instruction with a duration model of its own (a
+        // bias set has ExposureTime 0; a WaitForTime whose target already passed waits nothing),
+        // not "no estimate": only instructions without one get the nominal.
+        if (seconds <= 0 && HasOwnDurationModel(leaf)) {
+            return 0;
+        }
         return seconds > 0 ? seconds : NominalInstructionSeconds;
     }
+
+    // The instructions whose GetEstimatedDuration is a real figure (so zero means zero) rather
+    // than the base class's TimeSpan.Zero placeholder (so zero means "no estimate").
+    private static bool HasOwnDurationModel(ISequenceItem leaf) =>
+        leaf is TakeExposure or WaitForTime or WaitForTimeSpan;
 
     private static bool IsTerminal(SequenceEntityStatus status) =>
         status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED

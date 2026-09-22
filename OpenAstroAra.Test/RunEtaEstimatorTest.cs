@@ -18,6 +18,10 @@ using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Services;
 using System;
 
@@ -80,6 +84,29 @@ namespace OpenAstroAra.Test {
             var loop = Loop(10, 0, Leaf(120));
             ((LoopCondition)loop.Conditions[0]).Status = SequenceEntityStatus.DISABLED;
             Assert.That(RunEtaEstimator.EstimateTotalSeconds(loop), Is.EqualTo(120), "a disabled loop condition runs the block once");
+        }
+
+        [Test]
+        public void Disabled_subtrees_are_out_of_the_total_a_parallel_block_costs_its_longest_child_and_a_zero_exposure_is_zero() {
+            // #1080 — total and remaining count the same items.
+            var root = new SequentialContainer();
+            root.Add(Leaf(100));
+            root.Add(Leaf(100, SequenceEntityStatus.DISABLED));
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(root), Is.EqualTo(100), "a DISABLED block is not in the total");
+            var par = new ParallelContainer();
+            par.Add(Leaf(30));
+            par.Add(Leaf(120));
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(par), Is.EqualTo(120), "parallel children run concurrently");
+            Assert.That(RunEtaEstimator.EstimateRemainingSeconds(par), Is.EqualTo(120));
+            var bias = new SequentialContainer();
+            var camera = new Mock<ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new CameraInfo { Connected = true }); // Validate() runs on attach
+            var exposure = new TakeExposure(camera.Object, new Mock<IImagingMediator>().Object) { ExposureTime = 0 };
+            bias.Add(exposure);
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(bias), Is.EqualTo(0), "a bias frame's zero exposure is zero, not the nominal");
+            var wait = new SequentialContainer();
+            wait.Add(new WaitForTimeSpan { Time = 0 });
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(wait), Is.EqualTo(0), "an elapsed wait costs nothing, not the nominal");
         }
 
         [Test]
