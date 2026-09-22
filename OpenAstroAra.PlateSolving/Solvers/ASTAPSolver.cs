@@ -60,6 +60,12 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         public string? EffectiveDatabaseLocation =>
             databaseLocation is not null && Directory.Exists(databaseLocation) ? databaseLocation : null;
 
+        /// <summary>Test seam: the exact argument string a solve would run with (the class is sealed,
+        /// so the protected builder cannot be reached by subclassing from the test project).</summary>
+        internal string ArgumentsFor(string imageFilePath, string outputFilePath, PlateSolveParameter parameter,
+                PlateSolveImageProperties imageProperties) =>
+            GetArguments(imageFilePath, outputFilePath, parameter, imageProperties);
+
         // ASTAP's documented command-line exit codes — lets the §42.2 exit-code warning
         // distinguish a clean no-solution (1) from an environment problem (16/32/33, which no
         // amount of per-solve retrying fixes) and from an outright crash (anything else).

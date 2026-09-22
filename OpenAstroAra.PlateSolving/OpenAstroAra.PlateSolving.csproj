@@ -56,7 +56,4 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
-  <ItemGroup>
-    <InternalsVisibleTo Include="OpenAstroAra.Test" />
-  </ItemGroup>
 </Project>

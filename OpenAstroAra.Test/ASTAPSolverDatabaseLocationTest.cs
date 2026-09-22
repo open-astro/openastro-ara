@@ -27,14 +27,11 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class ASTAPSolverDatabaseLocationTest {
 
-        private sealed class Probe : ASTAPSolver {
-            public Probe(string exe, string? db) : base(exe, db) { }
-            public string Args() {
-                var parameter = new PlateSolveParameter { FocalLength = 400, PixelSize = 3.75, DownSampleFactor = 2, MaxObjects = 500, SearchRadius = 30 };
-                var image = new OpenAstroAra.Image.ImageData.BaseImageData(new ushort[64 * 48], 64, 48, bitDepth: 16, isBayered: false,
-                    new OpenAstroAra.Image.ImageData.ImageMetaData(), new OpenAstroAra.Server.Services.HeadlessProfileService(), null!, null!);
-                return GetArguments("/tmp/x.fits", "/tmp/x.ini", parameter, PlateSolveImageProperties.Create(parameter, image));
-            }
+        private static string Args(ASTAPSolver solver) {
+            var parameter = new PlateSolveParameter { FocalLength = 400, PixelSize = 3.75, DownSampleFactor = 2, MaxObjects = 500, SearchRadius = 30 };
+            var image = new OpenAstroAra.Image.ImageData.BaseImageData(new ushort[64 * 48], 64, 48, bitDepth: 16, isBayered: false,
+                new OpenAstroAra.Image.ImageData.ImageMetaData(), new OpenAstroAra.Server.Services.HeadlessProfileService(), null!, null!);
+            return solver.ArgumentsFor("/tmp/x.fits", "/tmp/x.ini", parameter, PlateSolveImageProperties.Create(parameter, image));
         }
 
         [Test]
@@ -42,9 +39,9 @@ namespace OpenAstroAra.Test {
             var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             try {
-                var solver = new Probe("/usr/bin/astap_cli", dir);
+                var solver = new ASTAPSolver("/usr/bin/astap_cli", dir);
                 Assert.That(solver.EffectiveDatabaseLocation, Is.EqualTo(dir));
-                Assert.That(solver.Args(), Does.Contain($"-d \"{dir}\""));
+                Assert.That(Args(solver), Does.Contain($"-d \"{dir}\""));
             } finally {
                 Directory.Delete(dir);
             }
@@ -52,15 +49,15 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Missing_database_directory_falls_back_to_default_lookup() {
-            var solver = new Probe("/usr/bin/astap_cli", "/nonexistent/ara-astap-" + Guid.NewGuid().ToString("N"));
+            var solver = new ASTAPSolver("/usr/bin/astap_cli", "/nonexistent/ara-astap-" + Guid.NewGuid().ToString("N"));
             Assert.That(solver.EffectiveDatabaseLocation, Is.Null);
-            Assert.That(solver.Args(), Does.Not.Contain("-d "));
+            Assert.That(Args(solver), Does.Not.Contain("-d "));
         }
 
         [Test]
         public void Unset_database_directory_passes_nothing() {
-            Assert.That(new Probe("/usr/bin/astap_cli", null).Args(), Does.Not.Contain("-d "));
-            Assert.That(new Probe("/usr/bin/astap_cli", "  ").Args(), Does.Not.Contain("-d "));
+            Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", null)), Does.Not.Contain("-d "));
+            Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", "  ")), Does.Not.Contain("-d "));
         }
     }
 }
