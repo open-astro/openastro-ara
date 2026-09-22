@@ -27,8 +27,12 @@ sudo apt install openastroara-server
 #    very narrow ones H17/H18 (playbook §18.I). The package creates /var/lib/astap
 #    owned by the service user; the daemon passes it to astap_cli with -d
 #    (Options → Plate solving → index path).
-curl -L -o /tmp/d80.zip https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.zip/download
-sudo -u openastroara unzip -q /tmp/d80.zip -d /var/lib/astap && rm /tmp/d80.zip
+#    D80 is published only as a Debian package (its payload is the d80_*.1476 files);
+#    extract it into the daemon's directory rather than installing it, so the files
+#    land where the profile's index path points.
+curl -L -o /tmp/d80.deb https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.deb/download
+dpkg-deb -x /tmp/d80.deb /tmp/d80 && sudo find /tmp/d80 -type f -name 'd80_*' -exec mv -t /var/lib/astap/ {} +
+sudo chown -R openastroara:openastroara /var/lib/astap && rm -rf /tmp/d80 /tmp/d80.deb
 
 # 4. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
