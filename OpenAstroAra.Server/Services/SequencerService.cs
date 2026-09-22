@@ -1113,7 +1113,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         public SequenceRunState State {
             get => (SequenceRunState)Volatile.Read(ref _state);
-            set => Volatile.Write(ref _state, (int)value);
+            set {
+                Volatile.Write(ref _state, (int)value);
+                // #1080 — a lifecycle transition changes what is left; the frame that announces it
+                // must not carry a remaining figure cached from before it.
+                Interlocked.Increment(ref _treeVersion);
+            }
         }
 
         /// <summary>
@@ -1169,7 +1174,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 if (root is null) {
                     // #1068 — the tree is released at run end; keep its final estimate so a
                     // terminal run state still reports the total (and remaining = what was left).
-                    _finalEstimate = EstimatedSecondsLocked();
+                    _finalEstimate = EstimatedSecondsLocked(fresh: true);
                 }
                 _root = root;
                 _bodyTop = bodyTop ?? root;
@@ -1226,8 +1231,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// <summary>Set the instruction total + completed count + current index as one consistent snapshot.</summary>
         public void UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
+                var clamped = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
+                if (total != InstructionCount || clamped != InstructionsCompleted || runningIndex != CurrentInstructionIndex) {
+                    // #1080 — a leaf changed status (not merely reported another tick): the cached
+                    // estimate is stale whatever its age.
+                    Interlocked.Increment(ref _treeVersion);
+                }
                 InstructionCount = total;
-                InstructionsCompleted = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
+                InstructionsCompleted = clamped;
                 CurrentInstructionIndex = runningIndex;
             }
         }
@@ -1273,13 +1284,33 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
         }
 
+        // #1080 — the two tree walks run on the per-report checkpoint path as well as every WS
+        // publish and GET /state. The pair is cached against a tree version (bumped when a leaf
+        // changes status or the run changes state, never on a same-status progress tick) plus a
+        // short TTL for the time-based estimates (WaitForTime counts down between status changes).
+        // The final capture at tree release walks fresh (fresh: true) so a terminal state never
+        // reports a stale "remaining".
+        private static readonly TimeSpan EstimateCacheTtl = TimeSpan.FromMilliseconds(250);
+        private long _treeVersion;
+        private long _cachedEstimateVersion = -1;
+        private (double? Total, double? Remaining) _cachedEstimate;
+        private DateTimeOffset _cachedEstimateAt = DateTimeOffset.MinValue;
+
         // Caller holds _gate.
-        private (double? Total, double? Remaining) EstimatedSecondsLocked() {
+        private (double? Total, double? Remaining) EstimatedSecondsLocked(bool fresh = false) {
             var top = (ISequenceItem?)_bodyTop ?? _root;
             if (top is null) {
                 return _finalEstimate; // (null, null) before the tree loads; the last walk after it is released
             }
-            return (RunEtaEstimator.EstimateTotalSeconds(top), RunEtaEstimator.EstimateRemainingSeconds(top));
+            var now = DateTimeOffset.UtcNow;
+            var version = Interlocked.Read(ref _treeVersion);
+            if (!fresh && version == _cachedEstimateVersion && now - _cachedEstimateAt < EstimateCacheTtl) {
+                return _cachedEstimate;
+            }
+            _cachedEstimate = (RunEtaEstimator.EstimateTotalSeconds(top), RunEtaEstimator.EstimateRemainingSeconds(top));
+            _cachedEstimateAt = now;
+            _cachedEstimateVersion = version;
+            return _cachedEstimate;
         }
 
         public SequenceRunStateDto ToDto(Guid sequenceId) {
