@@ -10259,9 +10259,9 @@ Notes for ARA:
 ARA's Pi-side integration with the service:
 
 - **Connection target:** `localhost:4400` (PHD2 default JSON-RPC port)
-- **Restart authority:** ARA can request restart via `systemctl restart openastro-phd2` (privileged via NOPASSWD sudoers drop-in, similar to §33.5 update.sh pattern)
-- **Stop authority:** ARA can request stop via `systemctl stop openastro-phd2` (rare; mostly used by tests)
-- **Status observation:** ARA polls `systemctl is-active openastro-phd2` for service-level health alongside the JSON-RPC ping
+- **Restart authority:** ARA can request restart via `systemctl restart openastro-guider`. Authorised by a **polkit rule** ARA's .deb ships (`usr/share/polkit-1/rules.d/50-openastroara-guider.rules`: `org.freedesktop.systemd1.manage-units`, this unit, verbs start/restart, user openastroara) — NOT sudo: the daemon's unit runs with `NoNewPrivileges=true`, under which sudo refuses to run (verified on the Pi, #1093)
+- **Stop authority:** none granted — the polkit rule deliberately excludes `stop` (an admin's `systemctl stop openastro-guider` must not be undoable by the daemon); tests drive the fake guider instead
+- **Status observation:** ARA polls `systemctl is-active openastro-guider` for service-level health alongside the JSON-RPC ping (unprivileged; note `is-active` on a unit that does not exist prints `inactive`, which is how the old `openastro-phd2` name went unnoticed)
 
 ### 63.2 Connection lifecycle (ARA's PHD2 client state machine)
 
@@ -10291,10 +10291,10 @@ systemd's `Restart=on-failure` handles basic crash recovery. ARA layers addition
 
 - ARA's PHD2 client polls `get_app_state` every 10 s when idle, every 2 s during guiding
 - 3 consecutive RPC failures → ARA classifies PHD2 as **down**
-- ARA queries `systemctl status openastro-phd2`:
+- ARA queries `systemctl is-active openastro-guider`:
   - If `activating` (systemd restarting) → wait with backoff (1s → 5s → 15s → 30s → 60s → 120s)
   - If `failed` (systemd gave up) → ARA fires **urgent** notification, guider-dependent ops disabled
-  - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-phd2`
+  - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-guider`
 - Mid-guiding crash → §42.2 fault flow: pause sequence at safe point, critical notification, systemd auto-restarts
 
 ### 63.4 Per-ARA-profile to PHD2-profile mapping
@@ -10330,8 +10330,8 @@ Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accep
 | Guide scope focal length | `set_profile_setup({focal_length: ...})` |
 | Mount (paired to ARA's mount selection) | `set_selected_mount` (Alpaca path uses `set_alpaca_server` + `set_selected_alpaca_device`) |
 | Calibration step size | Auto-computed from FL/pixel scale; pushed via `set_profile_setup({calibration_step_ms: ...})` |
-| RA aggressiveness | `set_algo_param(axis="ra", name="aggressiveness", value=0.75)` |
-| Dec aggressiveness | `set_algo_param(axis="dec", name="aggressiveness", value=0.65)` |
+| RA aggressiveness | `set_algo_param(axis="ra", name="aggression", value=0.75)` — PHD2's wire name is `aggression` (`get_algo_param_names`: algorithmName, minMove, hysteresis/fastSwitch, aggression); "aggressiveness" is rejected with "could not set param" (#1093) |
+| Dec aggressiveness | `set_algo_param(axis="dec", name="aggression", value=0.65)` |
 | Min motion (RA + Dec) | `set_algo_param` per axis |
 | Dec guide mode (auto / always-positive / always-negative) | `set_dec_guide_mode` |
 
@@ -10430,7 +10430,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 | RPC connect fails repeatedly | Backoff (1/5/15/30/60/120 s); after all fail, treat as hung, restart service |
 | `set_connected(true)` fails (equipment not present after profile push) | Per §42.3 hot-reconnect; surface to wizard as "Equipment not connected in PHD2 — check that the camera/mount you selected is reachable" |
 | Mid-session crash | Pause sequence per §42.2; critical notification; systemd auto-restarts; ARA reconnects |
-| Hung mid-guiding (RPC unresponsive, process alive) | Force `systemctl restart openastro-phd2`; treat as star_lost during recovery |
+| Hung mid-guiding (RPC unresponsive, process alive) | Force `systemctl restart openastro-guider`; treat as star_lost during recovery |
 | `build_dark_library` fails | Surface specific error (no camera / capture active / save failure); user retries from Settings |
 | Profile push fails (precondition violation) | Retry: send `set_connected(false)` first, then re-push; if still fails, surface explicit error |
 
@@ -10441,7 +10441,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
-| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-phd2`; idempotent per §60.5 |
+| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5 |
 | `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence |
 | `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
 | `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
@@ -12013,7 +12013,7 @@ ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsf
 **Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
 
 ```
-Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10
+Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd
 ```
 
 `libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.
