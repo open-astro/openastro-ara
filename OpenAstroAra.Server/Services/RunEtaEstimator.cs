@@ -28,9 +28,10 @@ namespace OpenAstroAra.Server.Services;
 /// the stored body. Each leaf costs its own <see cref="ISequenceItem.GetEstimatedDuration"/>
 /// (TakeExposure = exposure time, WaitForTime = the wait, …) or a flat nominal cost when the
 /// instruction reports none (slew, autofocus, dither: crude, but exposure time dominates a real
-/// session and the client blends this with the observed elapsed rate anyway). A container
-/// multiplies its children by its LoopCondition iterations; the remaining estimate credits the
-/// iterations already completed and every leaf already terminal.</summary>
+/// session; since #1080 the client shows this figure as-is and falls back to its observed
+/// elapsed rate only when the daemon sent none). A container multiplies its children by its
+/// LoopCondition iterations (a parallel block costs its longest child); the remaining estimate
+/// credits the iterations already completed and every leaf already terminal.</summary>
 public static class RunEtaEstimator {
 
     /// <summary>Charged to an instruction that has no duration model of its own (its estimate is
@@ -115,7 +116,9 @@ public static class RunEtaEstimator {
         try {
             seconds = leaf.GetEstimatedDuration().TotalSeconds;
         } catch (Exception) {
-            seconds = 0;
+            // A throwing model (a WaitForTime with an out-of-range stored time) is "no estimate",
+            // never an honest zero: the nominal applies whatever the instruction type.
+            return NominalInstructionSeconds;
         }
         // #1080 — zero is a real answer from an instruction with a duration model of its own (an
         // unset or invalid ExposureTime of 0; a WaitForTime whose target already passed waits
