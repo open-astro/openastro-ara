@@ -137,9 +137,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // service in Program.cs.
     private readonly Func<ITelescopeMediator?>? _telescope;
 
-    /// <summary>A frame's pointing as written to its header: J2000 when the epoch transform
-    /// succeeded, else the mount's native epoch (see <see cref="PointingFrom"/>).</summary>
-    internal readonly record struct FramePointing(double RaHours, double DecDegrees, bool IsJ2000);
+    /// <summary>A frame's pointing as written to its header, with the epoch the numbers are in:
+    /// J2000 when the transform succeeded, else the mount's native epoch (see
+    /// <see cref="PointingFrom"/>). Carrying the epoch (not a bool) lets EQUINOX name the right
+    /// one for a B1950/J2050 mount instead of lumping it with "JNOW; transform unavailable".</summary>
+    internal readonly record struct FramePointing(double RaHours, double DecDegrees, OpenAstroAra.Astrometry.Epoch Epoch) {
+        public bool IsJ2000 => Epoch == OpenAstroAra.Astrometry.Epoch.J2000;
+    }
 
     /// <summary>
     /// The mount's reported position, in J2000 when the SOFA transform is available. A missing
@@ -155,20 +159,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         var coords = info.Coordinates;
         if (coords.Epoch == OpenAstroAra.Astrometry.Epoch.J2000) {
-            return new FramePointing(coords.RA, coords.Dec, IsJ2000: true);
+            return new FramePointing(coords.RA, coords.Dec, coords.Epoch);
         }
         // Coordinates.Transform only knows the JNOW→J2000 math: a B1950/J2050 SOURCE would be run
         // through it silently and land ~1° off while claiming J2000. Same clamp as MapSlewEpoch —
         // record such a (vanishingly rare) mount's position in its own epoch, flagged as such.
         if (coords.Epoch != OpenAstroAra.Astrometry.Epoch.JNOW) {
-            return new FramePointing(coords.RA, coords.Dec, IsJ2000: false);
+            return new FramePointing(coords.RA, coords.Dec, coords.Epoch);
         }
         try {
             var j2000 = coords.Transform(OpenAstroAra.Astrometry.Epoch.J2000);
-            return new FramePointing(j2000.RA, j2000.Dec, IsJ2000: true);
+            return new FramePointing(j2000.RA, j2000.Dec, OpenAstroAra.Astrometry.Epoch.J2000);
         } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
                 or BadImageFormatException or TypeInitializationException) {
-            return new FramePointing(coords.RA, coords.Dec, IsJ2000: false);
+            return new FramePointing(coords.RA, coords.Dec, coords.Epoch);
         }
     }
 
@@ -1235,9 +1239,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     /// <summary>
     /// OBJCTRA/OBJCTDEC in NINA's sexagesimal FITS form ("HH MM SS" / "+DD MM SS"), RA/DEC in
-    /// decimal degrees, and EQUINOX. J2000 is the normal case; when the epoch transform was
-    /// unavailable the cards carry the mount's own epoch and EQUINOX says so (the capture's
-    /// Julian year) rather than claiming 2000.0 for a position that isn't.
+    /// decimal degrees, and EQUINOX. J2000 is the normal case; otherwise the cards carry the
+    /// mount's own epoch and EQUINOX names it (the capture's Julian year for JNOW, 1950.0 / 2050.0
+    /// for a B1950 / J2050 mount) rather than claiming 2000.0 for a position that isn't.
     /// </summary>
     internal static void WritePointingHeaders(FitsImage fits, FramePointing pt, DateTimeOffset capturedAt) {
         var raDeg = OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(pt.RaHours);
@@ -1245,8 +1249,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         fits.SetHeader("OBJCTDEC", OpenAstroAra.Astrometry.AstroUtil.DegreesToFitsDMS(pt.DecDegrees), "Dec of mount pointing (D M S)");
         fits.SetHeader("RA", Math.Round(raDeg, 6), "RA of mount pointing deg");
         fits.SetHeader("DEC", Math.Round(pt.DecDegrees, 6), "Dec of mount pointing deg");
-        var equinox = pt.IsJ2000 ? 2000.0 : Math.Round(JulianYear(capturedAt), 2);
-        fits.SetHeader("EQUINOX", equinox, pt.IsJ2000 ? "J2000" : "mount epoch (JNOW; transform unavailable)");
+        var (equinox, note) = pt.Epoch switch {
+            OpenAstroAra.Astrometry.Epoch.J2000 => (2000.0, "J2000"),
+            OpenAstroAra.Astrometry.Epoch.B1950 => (1950.0, "mount epoch (B1950)"),
+            OpenAstroAra.Astrometry.Epoch.J2050 => (2050.0, "mount epoch (J2050)"),
+            _ => (Math.Round(JulianYear(capturedAt), 2), "mount epoch (JNOW; transform unavailable)"),
+        };
+        fits.SetHeader("EQUINOX", equinox, note);
     }
 
     // Julian epoch year: J2000.0 is JD 2451545.0 and a Julian year is 365.25 days.

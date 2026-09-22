@@ -56,7 +56,7 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(pt!.Value.RaHours, Is.EqualTo(0.7123).Within(1e-9));
                 Assert.That(pt.Value.DecDegrees, Is.EqualTo(41.269).Within(1e-9));
-                Assert.That(pt.Value.IsJ2000, Is.True);
+                Assert.That(pt.Value.Epoch, Is.EqualTo(Epoch.J2000));
             });
         }
 
@@ -86,8 +86,29 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(pt!.Value.RaHours, Is.EqualTo(0.7123).Within(1e-9));
                 Assert.That(pt.Value.DecDegrees, Is.EqualTo(41.269).Within(1e-9));
-                Assert.That(pt.Value.IsJ2000, Is.False);
+                Assert.That(pt.Value.Epoch, Is.EqualTo(Epoch.B1950));
             });
+        }
+
+        [Test]
+        public void B1950_pointing_writes_EQUINOX_1950_not_the_capture_year() {
+            var dir = Path.Combine(Path.GetTempPath(), "ara-pointing-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "frame.fits");
+            try {
+                using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
+                    fits.WriteImageData(new ushort[16]);
+                    CameraService.WritePointingHeaders(fits,
+                        new CameraService.FramePointing(RaHours: 1, DecDegrees: 1, Epoch.B1950),
+                        new DateTimeOffset(2026, 9, 22, 4, 0, 0, TimeSpan.Zero));
+                    fits.Complete();
+                }
+                using var read = FitsImage.Open(path);
+                var equinox = double.Parse(read.ReadHeaders()["EQUINOX"], System.Globalization.CultureInfo.InvariantCulture);
+                Assert.That(equinox, Is.EqualTo(1950.0));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
         }
 
         [Test]
@@ -106,7 +127,7 @@ namespace OpenAstroAra.Test {
                 using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
                     fits.WriteImageData(new ushort[16]);
                     CameraService.WritePointingHeaders(fits,
-                        new CameraService.FramePointing(RaHours: 0.7123, DecDegrees: -41.269, IsJ2000: true),
+                        new CameraService.FramePointing(RaHours: 0.7123, DecDegrees: -41.269, Epoch.J2000),
                         new DateTimeOffset(2026, 9, 22, 4, 0, 0, TimeSpan.Zero));
                     fits.Complete();
                 }
@@ -140,7 +161,7 @@ namespace OpenAstroAra.Test {
                 using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
                     fits.WriteImageData(new ushort[16]);
                     CameraService.WritePointingHeaders(fits,
-                        new CameraService.FramePointing(RaHours: 1, DecDegrees: 1, IsJ2000: false),
+                        new CameraService.FramePointing(RaHours: 1, DecDegrees: 1, Epoch.JNOW),
                         new DateTimeOffset(2026, 9, 22, 4, 0, 0, TimeSpan.Zero));
                     fits.Complete();
                 }
