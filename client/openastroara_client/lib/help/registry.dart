@@ -934,7 +934,7 @@ const Map<String, Help> helpRegistry = {
         '* Camera — USB link power-up only\n'
         '* Mount — sidereal tracking comes on\n'
         '* Focuser, rotator — position read on connect, no movement\n'
-        '* Filter wheel — the first time the wheel connects after Ara starts up on the rig (auto or manual) Ara itself parks it on slot 0, conventionally L, unless a filter change is requested first; a later reconnect leaves the wheel where it is. Drivers may also reposition on connect (driver-dependent).\n'
+        '* Filter wheel — the first time the wheel connects after Ara starts up on the rig (auto or manual) Ara itself parks it on slot 0, conventionally L, unless a filter change is requested first or "Park on slot 0 on first connect" is off; a later reconnect leaves the wheel where it is. Drivers may also reposition on connect (driver-dependent).\n'
         '* Flat panel (CoverCalibrator) — does not change cover position\n'
         '* Safety monitor — recommended on for unattended observatories\n\n'
         '*Manual-connect by default* (driver may actuate hardware on connect):\n'
@@ -942,6 +942,16 @@ const Map<String, Help> helpRegistry = {
         '* Dome — some drivers move shutter or rotate to home on connect\n'
         '* Weather station — keeps the polling loop quiet until you opt in\n\n'
         'Override per device based on your hardware\'s behaviour.',
+  ),
+
+  // #1075 — the first-connect home as a profile policy.
+  'eq.filterwheel.home_on_first_connect': Help(
+    key: 'eq.filterwheel.home_on_first_connect',
+    title: 'Park on slot 0 on first connect',
+    body:
+        'The first time your filter wheel connects after Ara starts up on the rig — whether it auto-connected on boot or you connected it by hand — Ara parks it on slot 0 (its first position, conventionally your luminance filter) so a session always starts from a known filter.\n\n'
+        'It happens once per rig start: a reconnect after a link blip leaves the wheel where it is, and a filter change you or a sequence request first always wins.\n\n'
+        'Turn this off if you want the wheel left exactly where the driver reports it, for example a mono rig that lives on Hα. Turning it back on takes effect the next time Ara starts on the rig: a wheel that already connected this session is not parked by the change.',
   ),
 
   'eq.switch.readings': Help(

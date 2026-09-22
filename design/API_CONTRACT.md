@@ -175,7 +175,7 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (behaviour of the rate guard; no wire change).
 
-**Decision:** the daemon caches each pad axis's AxisRates as `[Min, Max]` bands (read with the capabilities, never on the nudge path). A nonzero rate is SNAPPED (sign preserved): inside a band → unchanged; above the top band → that max; below the lowest band → that min; in a gap between bands (a discrete-rate mount has `Min == Max` steps) → the nearest band edge. An axis with no known bands still refuses (409). A secondary axis whose AxisRates never answered (unknown) while the primary's are known borrows the primary's bands (logged once per session) instead of losing N/S for the session; an honestly empty secondary (the mount offers no rates) stays refused, since MoveAxis on it throws by spec. The cache settles when both reads completed, when `CanMoveAxis` is false, or 30 s of wall clock after connect with a read still throwing — a burst of command-triggered refreshes can no longer exhaust the retries in a second. The capabilities' `move_axis_rates_deg_per_sec` list is unchanged (both endpoints of every band, capped at the secondary's max).
+**Decision:** the daemon caches each pad axis's AxisRates as `[Min, Max]` bands (read with the capabilities, never on the nudge path). A nonzero rate is SNAPPED (sign preserved): inside a band → unchanged; above the top band → that max; ~~below the lowest band → that min~~ (since #1085, raised only while within 4× of it, refused with 409 when slower — see the #1085 entry below); in a gap between bands (a discrete-rate mount has `Min == Max` steps) → the nearest band edge. An axis with no known bands still refuses (409). A secondary axis whose AxisRates never answered (unknown) while the primary's are known borrows the primary's bands (logged once per session) instead of losing N/S for the session; an honestly empty secondary (the mount offers no rates) stays refused, since MoveAxis on it throws by spec. The cache settles when both reads completed, when `CanMoveAxis` is false, or 30 s of wall clock after connect with a read still throwing — a burst of command-triggered refreshes can no longer exhaust the retries in a second. The capabilities' `move_axis_rates_deg_per_sec` list is unchanged (both endpoints of every band, capped at the secondary's max).
 
 **Reasoning:** #1064 capped only the maximum, so a picker preset under a band's minimum or in a gap between discrete steps was forwarded verbatim and rejected by the driver as a 500-shaped InvalidValue; #1069's review flagged the pass-counted settle and the secondary-axis regression. Snapping keeps every forwarded rate one the mount advertised.
 
@@ -194,6 +194,30 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Services/FilterWheelService.cs` (`HomeInBackground`, `HomeStillWanted`, `RetirePendingHome`), `Services/FilterWheelService.Mediator.cs` (`WaitForSlotsAsync`), `OpenAstroAra.Test/FilterWheelFirstConnectHomeTest.cs`.
 
 **Related:** #1079 (from the #1073 reviews), CHANGELOG [Unreleased]
+
+### 2026-09-21 — #1085 bounded snap-up on MoveAxis; presets respect the reported minimum
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (behaviour of the rate guard; no wire change); the client's speed-preset ladder.
+
+**Decision:** a requested magnitude below the axis's lowest band minimum is raised to that minimum only while it is within `SnapUpBoundFactor` (4×) of it; anything slower is refused with 409 ("… more than 4x slower than the mount's slowest rate … Pick a faster speed") rather than turned into a nudge many times faster than picked. Client: the daemon publishes both ends of every band in `move_axis_rates_deg_per_sec`, so two reported rates are read as one band `[min, max]`: the percentage presets of `max` drop every value under `min`, and when any was dropped the minimum itself is offered as the slowest chip ("min · 2°/s"; a preset landing exactly on `min` keeps its percentage label). A single rate keeps the plain preset ladder; a driver ladder of three or more rates is still shown verbatim (previously two rates were shown verbatim as two chips).
+
+**Reasoning:** #1082's reviews: on a mount whose lowest band starts high, the 1 % preset snapped up to the band minimum moved the mount 17–33× faster than the user picked with only a server-side log.
+
+**Spec ref:** `Services/TelescopeService.cs` (`SnapMoveAxisRate`, `SnapUpBoundFactor`), `client/…/lib/util/slew_rates.dart`, tests in `TelescopeMoveAxisClampTest` and `slew_rates_test.dart`.
+
+**Related:** #1085, CHANGELOG [Unreleased]
+
+### 2026-09-21 — #1075 filter-wheel policy section (home on first connect)
+
+**Endpoint(s) or area:** `GET/PUT /api/v1/profile/filter-wheel/policy` (new); `profile.json` gains `filter_wheel_policy` (optional, back-filled to the default by the normalizer).
+
+**Decision:** `{ "home_on_first_connect": bool }` (default `true`). `FilterWheelService.ConnectInBackground` reads the policy off the gate at connect; when off, the once-per-session claim is still consumed but no home is decided (logged), so turning the policy on later never homes an already-connected or reconnecting wheel mid-session. A failing policy read falls back to the default (home on), logged. Whole-section PUT like every other profile section; no validation beyond the JSON shape.
+
+**Reasoning:** #1073's reviews: the daemon-side home moved hardware on a manual connect too with no user-facing switch; a mono rig that lives on Hα had no way to opt out.
+
+**Spec ref:** `Contracts/ProfileDtos.cs` (`FilterWheelPolicyDto`), `Contracts/ProfileSnapshotDto.cs`, `Services/ProfileSnapshotNormalizer.cs`, `Services/{File,InMemory}ProfileStore.cs`, `Endpoints/ProfileEndpoints.cs`, `Services/FilterWheelService.cs` (`HomeOnFirstConnectEnabled`), client `state/settings/filter_wheel_policy_state.dart`, settings/help registry `eq.filterwheel.home_on_first_connect`.
+
+**Related:** #1075 (from the #1073 reviews), CHANGELOG [Unreleased]
 
 ### 2026-09-21 — #1076 cooling-fan interlock: sequencer path, fail-closed states, fan-first, late connect
 

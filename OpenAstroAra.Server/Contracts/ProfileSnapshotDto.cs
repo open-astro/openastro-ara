@@ -76,4 +76,7 @@ public sealed record ProfileSnapshotDto(
     CalibrationStateDto? CalibrationState = null,
     // §45.12 polar-alignment settings. Optional so older profile.json keeps deserializing; the
     // normalizer back-fills null to the all-defaults section.
-    PolarAlignSettingsDto? PolarAlign = null);
+    PolarAlignSettingsDto? PolarAlign = null,
+    // #1075 filter-wheel policy (home on first connect). Optional so older profile.json keeps
+    // deserializing; the normalizer back-fills null to the default (home on).
+    FilterWheelPolicyDto? FilterWheelPolicy = null);

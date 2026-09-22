@@ -89,6 +89,7 @@ public static class ProfileSnapshotNormalizer {
             CalibrationState = NormalizeCalibrationState(snap.CalibrationState),
             // §45.12 — a pre-§45 file back-fills to the all-defaults section.
             PolarAlign = (PolarAlignSettingsDto?)snap.PolarAlign ?? new PolarAlignSettingsDto(),
+            FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
         };
     }
 

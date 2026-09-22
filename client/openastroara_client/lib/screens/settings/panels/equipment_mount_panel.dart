@@ -383,8 +383,9 @@ class _ManualMovePad extends ConsumerStatefulWidget {
 
 class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   double? _rate;
-  // Slew-speed options: the mount's own rates when it reports several, else
-  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
+  // Slew-speed options: the mount's own ladder when it reports three or more
+  // rates, else percentage presets of the max (1/5/10/25/50/100%) from the
+  // band's minimum up (#1085). Never exceeds the max.
   List<SlewRateOption> _rateOptions = const [];
 
   static const int _primary = 0; // RA / Azimuth (E/W)
@@ -465,8 +466,9 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   }
 
   // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
-  // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
-  // multi-rate mounts). The selected rate is what the direction pad sends at
+  // the max, from the band's minimum up, for a mount reporting one rate or one
+  // band; the driver's own ladder for three or more rates, #1085). The
+  // selected rate is what the direction pad sends at
   // press time; it defaults to the middle option, so a fresh connect never
   // lurches at full speed.
   Widget _speedPicker(List<SlewRateOption> options) {
