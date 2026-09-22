@@ -19,13 +19,20 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/opena
   | sudo tee /etc/apt/sources.list.d/openastro.list
 sudo apt update
 
-# 2. Install (apt resolves libcfitsio10 transitively)
+# 2. Install (apt resolves libcfitsio10 and astap-cli transitively)
 sudo apt install openastroara-server
 
-# 3. The systemd unit auto-starts on first install
+# 3. Star database for the plate solver (one-time, ~1.7 GB). ASTAP's D80 covers every
+#    field of view from wide-field to long focal length; the daemon passes this
+#    directory to astap_cli with -d (Options → Plate solving → index path).
+sudo mkdir -p /var/lib/astap && sudo chown "$USER" /var/lib/astap
+curl -L -o /tmp/d80.zip https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.zip/download
+unzip -q /tmp/d80.zip -d /var/lib/astap && rm /tmp/d80.zip
+
+# 4. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
 
-# 4. Verify the daemon is responding
+# 5. Verify the daemon is responding
 curl http://$(hostname -s).local:5555/healthz   # expect "ok"
 ```
 
@@ -46,6 +53,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | Path | Purpose | Owner |
 |---|---|---|
 | `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `libsofa.so` / `libnovas31.so` astrometry natives | `openastroara:openastroara` |
+| `/var/lib/astap/` | ASTAP star database (you download it, step 3 above; the solver binary itself is the `astap-cli` package) | you |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |

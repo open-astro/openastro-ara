@@ -306,6 +306,19 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        private string aSTAPDatabaseLocation = string.Empty;
+
+        [DataMember]
+        public string ASTAPDatabaseLocation {
+            get => Environment.ExpandEnvironmentVariables(aSTAPDatabaseLocation);
+            set {
+                if (aSTAPDatabaseLocation != value) {
+                    aSTAPDatabaseLocation = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
         private int downSampleFactor;
 
         [DataMember]

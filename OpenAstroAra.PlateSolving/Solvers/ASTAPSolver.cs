@@ -40,8 +40,25 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         public ASTAPSolver(string executableLocation)
-            : base(executableLocation) {
+            : this(executableLocation, databaseLocation: null) {
         }
+
+        /// <param name="databaseLocation">Directory of the star database files, passed to
+        /// <c>astap_cli</c> as <c>-d</c>. Null/empty leaves ASTAP to its own default lookup (the
+        /// executable's directory and a couple of fixed system paths) — which on the Pi package is
+        /// nowhere, since the daemon ships the database under the profile's index path.</param>
+        public ASTAPSolver(string executableLocation, string? databaseLocation)
+            : base(executableLocation) {
+            this.databaseLocation = string.IsNullOrWhiteSpace(databaseLocation) ? null : databaseLocation.Trim();
+        }
+
+        private readonly string? databaseLocation;
+        private int databaseMissingWarned;
+
+        /// <summary>The <c>-d</c> directory this solver will pass, or null when unset or absent on disk.
+        /// Exposed for tests and for the settings panel's "database found" check.</summary>
+        public string? EffectiveDatabaseLocation =>
+            databaseLocation is not null && Directory.Exists(databaseLocation) ? databaseLocation : null;
 
         // ASTAP's documented command-line exit codes — lets the §42.2 exit-code warning
         // distinguish a clean no-solution (1) from an environment problem (16/32/33, which no
@@ -149,6 +166,16 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             //File location to solve
             args.Add($"-f \"{imageFilePath}\"");
+
+            // Star database directory. Without -d, astap_cli only looks next to itself and in a few
+            // fixed paths, none of which the daemon populates; a configured directory that is not on
+            // disk falls back to that default lookup (logged once) rather than forcing exit 32.
+            if (EffectiveDatabaseLocation is string db) {
+                args.Add($"-d \"{db}\"");
+            } else if (databaseLocation is not null
+                    && System.Threading.Interlocked.CompareExchange(ref databaseMissingWarned, 1, 0) == 0) {
+                Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' does not exist; leaving ASTAP to its default lookup. Download a database into it (see DEPLOY.md) or fix Options → Plate solving.");
+            }
 
             //Field height of image
             var fov = Math.Round(imageProperties.FoVH, 6);

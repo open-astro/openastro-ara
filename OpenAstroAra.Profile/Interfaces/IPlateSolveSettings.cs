@@ -38,6 +38,8 @@ namespace OpenAstroAra.Profile.Interfaces {
         int NumberOfAttempts { get; set; }
         string AspsLocation { get; set; }
         string ASTAPLocation { get; set; }
+        /// <summary>Directory holding the ASTAP star database files (passed as <c>-d</c>); empty = the solver's own default lookup.</summary>
+        string ASTAPDatabaseLocation { get; set; }
         int DownSampleFactor { get; set; }
         int MaxObjects { get; set; }
         bool Sync { get; set; }
