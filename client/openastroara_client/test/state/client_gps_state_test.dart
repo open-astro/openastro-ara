@@ -51,8 +51,9 @@ class _FakeSource implements SerialGpsSource {
 
 class _FakeApi implements TimeSyncClient {
   final pushes = <Map<String, Object?>>[];
+  TimeSyncState? state;
   @override
-  Future<TimeSyncState> getState() async => throw UnimplementedError();
+  Future<TimeSyncState> getState() async => state ?? (throw StateError('no state'));
   @override
   Future<void> pushClientTime(DateTime utcNow) async {}
   @override
@@ -146,6 +147,50 @@ void main() {
       expect(status.lastPushAt, isNotNull);
       expect(status.lastError, isNull);
       expect(status.freshFix(DateTime.now().toUtc()), isTrue);
+    });
+
+    test('a rig already synced by its own dongle is not stepped', () async {
+      final source = _FakeSource([_rmc, _gga]);
+      final api = _FakeApi()
+        ..state = const TimeSyncState(
+            synced: true, source: 'gps-internal', trust: 'high', systemTimeOffsetSeconds: 0,
+            location: null, internetAvailableOnPi: false, internalGpsAvailable: true, syncedAtUtc: null);
+      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNotNull, reason: 'the fix is still read for Fill from GPS');
+      expect(api.pushes, isEmpty, reason: 'a relayed fix is a fallback, not an override');
+      expect(c.read(clientGpsProvider).value!.lastError, isNull);
+    });
+
+    test('a second read while one is in flight returns the last fix without opening the port again', () async {
+      final source = _FakeSource([]); // never emits: the read stays busy for the whole window
+      final api = _FakeApi();
+      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      final n = c.read(clientGpsProvider.notifier);
+      final first = n.syncNow();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(c.read(clientGpsProvider).value!.busy, isTrue);
+      final opensDuring = source.opens;
+      await n.syncNow();
+      expect(source.opens, opensDuring);
+      await first;
+    });
+
+    test('a failed read clears the stale fix from the status', () async {
+      final source = _FakeSource([_rmc, _gga]);
+      final api = _FakeApi();
+      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(c.read(clientGpsProvider).value!.lastFix, isNotNull);
+      source.script.clear();
+      await c.read(clientGpsProvider.notifier).syncNow();
+      final st = c.read(clientGpsProvider).value!;
+      expect(st.lastFix, isNull);
+      expect(st.lastError, contains('No GPS fix'));
     });
 
     test('enabled without a port reports what to do instead of opening anything', () async {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/client_gps_prefs_service.dart';
 import '../services/serial_gps_source.dart';
+import '../services/time_sync_api.dart';
 import '../util/nmea_parser.dart';
 import 'time_sync_state.dart';
 
@@ -31,6 +32,7 @@ class ClientGpsStatus {
   const ClientGpsStatus({
     required this.prefs,
     required this.supported,
+    this.ports = const [],
     this.lastFix,
     this.lastFixAt,
     this.lastPushAt,
@@ -40,6 +42,10 @@ class ClientGpsStatus {
 
   final ClientGpsPrefs prefs;
   final bool supported;
+
+  /// Serial ports as of the last enumeration (build, toggle, port change,
+  /// read) — cached so the settings pane never enumerates on every rebuild.
+  final List<String> ports;
   final NmeaFix? lastFix;
   final DateTime? lastFixAt;
   final DateTime? lastPushAt;
@@ -55,18 +61,21 @@ class ClientGpsStatus {
 
   ClientGpsStatus copyWith({
     ClientGpsPrefs? prefs,
+    List<String>? ports,
     NmeaFix? lastFix,
     DateTime? lastFixAt,
     DateTime? lastPushAt,
     String? lastError,
     bool clearError = false,
+    bool clearFix = false,
     bool? busy,
   }) =>
       ClientGpsStatus(
         prefs: prefs ?? this.prefs,
         supported: supported,
-        lastFix: lastFix ?? this.lastFix,
-        lastFixAt: lastFixAt ?? this.lastFixAt,
+        ports: ports ?? this.ports,
+        lastFix: clearFix ? null : (lastFix ?? this.lastFix),
+        lastFixAt: clearFix ? null : (lastFixAt ?? this.lastFixAt),
         lastPushAt: lastPushAt ?? this.lastPushAt,
         lastError: clearError ? null : (lastError ?? this.lastError),
         busy: busy ?? this.busy,
@@ -92,7 +101,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     ref.onDispose(() => _timer?.cancel());
     final source = ref.watch(serialGpsSourceProvider);
     final prefs = await ref.watch(clientGpsPrefsServiceProvider).load();
-    final status = ClientGpsStatus(prefs: prefs, supported: source.supported);
+    final status = ClientGpsStatus(prefs: prefs, supported: source.supported, ports: _ports(source));
     if (status.enabled) {
       // Not immediate: state is still loading inside build(), and a read that finished before
       // build() returned would have its status overwritten by the return value. A zero-length
@@ -105,12 +114,15 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   ClientGpsStatus get _current =>
       state.value ?? ClientGpsStatus(prefs: const ClientGpsPrefs(), supported: ref.read(serialGpsSourceProvider).supported);
 
-  List<String> availablePorts() => ref.read(serialGpsSourceProvider).availablePorts();
+  static List<String> _ports(SerialGpsSource source) => source.supported ? source.availablePorts() : const [];
+
+  /// Re-enumerate serial ports (the pane's refresh); cached in the status.
+  void refreshPorts() => state = AsyncData(_current.copyWith(ports: _ports(ref.read(serialGpsSourceProvider))));
 
   Future<void> setEnabled(bool enabled) async {
     final prefs = _current.prefs.copyWith(enabled: enabled);
     await ref.read(clientGpsPrefsServiceProvider).save(prefs);
-    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true));
+    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true, ports: _ports(ref.read(serialGpsSourceProvider))));
     if (enabled) {
       _schedule(kClientGpsUnsyncedInterval, immediate: true);
     } else {
@@ -122,15 +134,15 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   Future<void> setPort(String? port) async {
     final prefs = _current.prefs.copyWith(port: port, clearPort: port == null);
     await ref.read(clientGpsPrefsServiceProvider).save(prefs);
-    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true));
+    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true, ports: _ports(ref.read(serialGpsSourceProvider))));
     if (_current.enabled) _schedule(kClientGpsUnsyncedInterval, immediate: true);
   }
 
-  void _schedule(Duration after, {bool immediate = false, ClientGpsStatus? initial}) {
+  void _schedule(Duration after, {bool immediate = false}) {
     _timer?.cancel();
     final gen = ++_gen;
     if (immediate) {
-      unawaited(syncNow(gen: gen, initial: initial));
+      unawaited(syncNow(gen: gen));
     } else {
       _timer = Timer(after, () => unawaited(syncNow(gen: gen)));
     }
@@ -139,9 +151,12 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   /// Read one fix and push it. Returns the fix (position may be null when the
   /// receiver has time but no position yet). Public so "Fill from GPS" and the
   /// panel's "Read now" share the one code path.
-  Future<NmeaFix?> syncNow({int? gen, ClientGpsStatus? initial}) async {
-    final s = initial ?? _current;
+  Future<NmeaFix?> syncNow({int? gen}) async {
+    final s = _current;
     if (!s.enabled) return null;
+    // One reader per port: a second caller (Read now, Fill from GPS) during the
+    // background window would only get "device busy"; hand it the last fix.
+    if (s.busy) return s.lastFix;
     final port = s.prefs.port;
     if (port == null || port.isEmpty) {
       state = AsyncData(s.copyWith(lastError: 'Choose the serial port the GPS dongle is on.'));
@@ -151,38 +166,58 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     NmeaFix? fix;
     String? error;
     var pushed = false;
+    var alreadySynced = false;
     try {
       fix = await acquireFix(ref.read(serialGpsSourceProvider), port, ref.read(clientGpsListenWindowProvider));
       if (fix == null) {
         error = 'No GPS fix on $port yet — the receiver needs a clear view of the sky.';
+      } else if (gen != null && gen != _gen) {
+        // Disabled or re-pointed while reading: keep the fix locally, never relay it.
       } else {
         final api = ref.read(timeSyncApiProvider);
         if (api == null) {
           error = 'Fix read; not pushed — connect to your rig first.';
         } else {
-          await api.pushGpsFix(timeUtc: fix.timeUtc!, lat: fix.latitudeDeg, lng: fix.longitudeDeg, alt: fix.altitudeM);
-          pushed = true;
-          ref.invalidate(timeSyncStatusProvider);
+          // Don't step a rig that already has a sync as good as ours (its own
+          // dongle) — a relayed fix is a fallback, not an override.
+          alreadySynced = await _daemonAlreadyHigh(api);
+          if (!alreadySynced) {
+            await api.pushGpsFix(timeUtc: fix.timeUtc!, lat: fix.latitudeDeg, lng: fix.longitudeDeg, alt: fix.altitudeM);
+            pushed = true;
+            ref.invalidate(timeSyncStatusProvider);
+          }
         }
       }
     } catch (e) {
       error = 'GPS read failed on $port: $e';
       debugPrint('[client-gps] $error');
     }
-    if (gen != null && gen != _gen) return fix; // superseded by a toggle/port change
     final t = now();
-    state = AsyncData((state.value ?? s).copyWith(
+    state = AsyncData(_current.copyWith(
       busy: false,
       lastFix: fix,
       lastFixAt: fix != null ? t : null,
+      clearFix: fix == null,
       lastPushAt: pushed ? t : null,
       lastError: error,
       clearError: error == null,
     ));
-    if ((state.value ?? s).enabled && gen != null) {
-      _schedule(pushed ? kClientGpsSyncedInterval : kClientGpsUnsyncedInterval);
+    if (gen != null && gen != _gen) return fix; // superseded: the newer generation owns the timer
+    if (_current.enabled && gen != null) {
+      _schedule(pushed || alreadySynced ? kClientGpsSyncedInterval : kClientGpsUnsyncedInterval);
     }
     return fix;
+  }
+
+  /// True when the daemon already holds a fresh high-trust sync from its own
+  /// receiver; a state read failure counts as "not synced" so the push proceeds.
+  static Future<bool> _daemonAlreadyHigh(TimeSyncClient api) async {
+    try {
+      final st = await api.getState();
+      return st.synced && st.trust == 'high' && st.source == 'gps-internal';
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Listen on [port] for up to [window] and combine sentences into one fix:

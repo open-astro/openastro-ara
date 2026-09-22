@@ -378,7 +378,7 @@ class _ClientGpsBlock extends ConsumerWidget {
     if (status == null || !status.supported) return const SizedBox.shrink();
     final notifier = ref.read(clientGpsProvider.notifier);
     final theme = Theme.of(context);
-    final ports = notifier.availablePorts();
+    final ports = status.ports;
     final selected = status.prefs.port;
     final fix = status.lastFix;
     final fixText = fix == null
@@ -416,6 +416,12 @@ class _ClientGpsBlock extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                IconButton(
+                  key: const ValueKey('client_gps_refresh_ports'),
+                  tooltip: 'Rescan serial ports',
+                  onPressed: notifier.refreshPorts,
+                  icon: const Icon(Icons.refresh, size: 18),
+                ),
                 OutlinedButton.icon(
                   key: const ValueKey('client_gps_read_now'),
                   onPressed: status.busy ? null : () => notifier.syncNow(),
@@ -443,7 +449,7 @@ class _ClientGpsBlock extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
-                'No serial ports found — plug the dongle in and reopen this panel.',
+                'No serial ports found — plug the dongle in and rescan.',
                 style: theme.textTheme.bodySmall,
               ),
             ),
