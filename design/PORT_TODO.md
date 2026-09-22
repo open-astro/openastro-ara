@@ -1838,3 +1838,41 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   dead-by-default until a faster chip is tapped. Cheap client mitigation while bands-on-the-wire
   is pending: default to the first chip >= max / 4.
 
+## Run ETA honest zeros (2026-09-22, from the #1088 review notes)
+
+- `RunEtaEstimator.HasOwnDurationModel` is a hand-maintained list (`TakeExposure`,
+  `WaitForTime`, `WaitForTimeSpan`). Other overriders of `GetEstimatedDuration()` fall into
+  two groups: `CoolCamera`, `WarmCamera`, `SkyFlats`, `FlatPanelFlats` and `Dither` never
+  return a non-positive value with a realistic profile (`CoolCamera` with `Duration = 0`
+  costs its 1 min floor, not the nominal), so adding them to the list would change nothing
+  today but would let a future zero silently drop a cool-to-setpoint to 0 s; `SetReadoutMode`
+  and `SetUSBLimit` truthfully return `TimeSpan.Zero` (instant operations) and ARE charged the
+  15 s nominal, which is the concrete honest-zero gap #1088 leaves. The right shape is a
+  nullable estimate on the interface (null = no model, zero = zero) rather than a wider list;
+  out of #1088's scope.
+- `run_eta.dart`'s `completed >= total` guard short-circuits before the daemon figure:
+  `instructions_total` is the leaf count, so at the end of every loop pass
+  `CountTerminalLeaves` transiently equals the total (before `ResetProgress`), and a frame or
+  `GET /state` in that window blanks "~X left" and shows the bar at 100 % although the daemon
+  has a remaining figure for the passes still to come. Pre-existing from #1068; since #1088 it
+  vetoes the figure the client now treats as authoritative. Fix: let a present daemon figure
+  win before the guard.
+- The ETA cache's version bump rides on `UpdateProgress` seeing a count/index change, so a
+  live-edit `move` (no count change) and any future in-place update op (exposure time on a
+  live run) can publish `sequence.run_items_changed` with a pair up to one TTL stale. Bump
+  `_treeVersion` explicitly from the live-edit path when an update op lands.
+- `RunEtaEstimator.Iterations()` multiplies a `ParallelContainer` by its `LoopCondition`, but
+  `ParallelStrategy.Execute` runs each child once and returns: it never loops. Pre-existing
+  (#1068), not reachable from a default sequence; the fix is to ignore loop conditions on a
+  parallel block (or, better, ask the strategy).
+- The run header now always shows the daemon figure, and `Remaining()` charges a RUNNING
+  `TakeExposure` its full exposure, so "~X left" freezes for a whole sub and drops in one step.
+  Follow-up: subtract the in-flight instruction's elapsed time (needs a start stamp per leaf).
+- `instructions_total` (the progress-bar denominator) still counts DISABLED leaves while
+  `estimated_total_seconds` excludes them; the two header numbers describe slightly different
+  plans. Pre-existing denominator, newly divergent after #1088.
+- `TimeCondition.CalculateRemainingTime()` (`OpenAstroAra.Sequencer/Conditions/TimeCondition.cs`)
+  still assigns the observable `RolloverTime` from a read path, the pattern #1088 removed from
+  `WaitForTime.GetEstimatedDuration()`. Unreachable from `RunEtaEstimator` today (only
+  `LoopCondition.Iterations` is read off conditions); fix before conditions join the walk.
+

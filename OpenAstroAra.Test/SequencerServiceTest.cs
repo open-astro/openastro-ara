@@ -138,6 +138,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_estimate_cache_is_refreshed_by_leaf_status_changes_not_only_by_its_ttl() {
+            // #1080 — with the TTL pushed out to an hour, the tree-version bump in UpdateProgress
+            // is the only thing that can refresh the cached pair: the progress frames must still
+            // count down as leaves finish (dropping the bump makes every frame report the initial
+            // remaining figure), and the terminal frame must reach 0 through the State setter's bump.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                // Four 0.5 s waits: CoreUtil.Wait reports every 100 ms, so even a loaded runner
+                // whose CoalescingAsyncPublisher collapses most reports still publishes at least
+                // one frame after the first leaf finishes.
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+            }), ws: ws);
+            svc.EstimateCacheTtlMsForTests = 3_600_000;
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state, Is.Not.Null);
+
+            var progress = ws.Records
+                .Where(e => e.Type == "sequence.progress")
+                .Select(e => e.Payload.GetProperty("estimated_remaining_seconds").GetDouble())
+                .ToList();
+            Assert.That(progress, Is.Not.Empty);
+            Assert.That(progress, Is.Ordered.Descending, "a cached estimate never goes back up");
+            // The terminal frame is refreshed by the State setter's bump regardless, so the mid-run
+            // countdown is asserted on the progress frames alone: without the UpdateProgress bump
+            // every one of them reports the initial 2 s.
+            Assert.That(progress.Distinct().Count(), Is.GreaterThanOrEqualTo(2), "progress frames counted down as leaves finished, not served from the cache for the whole TTL");
+            var complete = ws.Records.Single(e => e.Type == "sequence.complete");
+            Assert.That(complete.Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.EqualTo(0), "the terminal frame walks fresh");
+        }
+
+        [Test]
         public async Task A_failed_instruction_emits_one_instruction_failed_event_before_the_terminal() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();

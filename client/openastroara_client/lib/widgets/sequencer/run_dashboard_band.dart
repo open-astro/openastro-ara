@@ -60,8 +60,9 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
     final progress = total > 0 ? (completed / total).clamp(0.0, 1.0) : null;
     final needsAttention = state == SequenceRunState.pausedAwaitingUser;
 
-    // #1068 — the daemon publishes the sequencer's own estimate; the band only
-    // blends it with the observed elapsed rate for display.
+    // #1068/#1080 — the daemon publishes the sequencer's own estimate and the
+    // band shows it as-is; the observed elapsed rate is only the fallback for
+    // a daemon that sent none.
 
     return StreamBuilder<void>(
       stream: _ticker,

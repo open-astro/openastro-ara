@@ -2,30 +2,40 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/run_eta.dart';
 
 void main() {
-  test('early in the run the daemon\'s remaining estimate is shown (#1068)', () {
-    final r = estimateRemainingSeconds(
+  test('the daemon\'s remaining estimate is shown whenever it sent one (#1080)', () {
+    final early = estimateRemainingSeconds(
         serverRemainingSeconds: 640,
         completed: 0,
         total: 10,
         elapsed: const Duration(seconds: 30));
-    expect(r, 640);
+    expect(early, 640);
+    // …and it outranks the observed rate even once that would be trusted — a
+    // 30× exposure loop is ONE leaf, and elapsed includes pauses (reversing the
+    // two branches fails this).
+    final late = estimateRemainingSeconds(
+        serverRemainingSeconds: 640,
+        completed: 4,
+        total: 10,
+        elapsed: const Duration(minutes: 40));
+    expect(late, 640);
+    // A daemon zero is honest (#1080: the last unfinished leaf is a wait whose
+    // target has passed) and is shown as zero, not replaced by the observed
+    // rate (a `> 0` predicate falls through to 3600 here).
+    final zero = estimateRemainingSeconds(
+        serverRemainingSeconds: 0,
+        completed: 4,
+        total: 10,
+        elapsed: const Duration(minutes: 40));
+    expect(zero, 0);
   });
 
-  test('remaining prefers observed rate once ≥10% and ≥2 leaves are done', () {
+  test('without a daemon estimate the observed rate is used once ≥10% and ≥2 leaves are done', () {
     // 4/10 done in 40 min → 10 min/leaf → 60 min left.
     final r = estimateRemainingSeconds(
         completed: 4,
         total: 10,
         elapsed: const Duration(minutes: 40));
     expect(r, 3600);
-    // …and the observed rate outranks a daemon figure once it is trusted — the
-    // precedence API_CONTRACT documents (reversing the two branches fails this).
-    final competing = estimateRemainingSeconds(
-        serverRemainingSeconds: 640,
-        completed: 4,
-        total: 10,
-        elapsed: const Duration(minutes: 40));
-    expect(competing, 3600);
   });
 
   test('no daemon estimate early in the run → nothing to show (0)', () {

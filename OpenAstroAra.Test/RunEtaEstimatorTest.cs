@@ -18,6 +18,10 @@ using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Services;
 using System;
 
@@ -69,7 +73,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_throwing_estimate_costs_the_nominal_and_a_disabled_loop_does_not_multiply() {
+        public void A_throwing_estimate_on_an_instruction_without_a_duration_model_costs_the_nominal_and_a_disabled_loop_does_not_multiply() {
             var throwing = new Mock<ISequenceItem>();
             throwing.SetupProperty(i => i.Status, SequenceEntityStatus.CREATED);
             throwing.Setup(i => i.GetEstimatedDuration()).Throws(new ArgumentOutOfRangeException("hour"));
@@ -80,6 +84,53 @@ namespace OpenAstroAra.Test {
             var loop = Loop(10, 0, Leaf(120));
             ((LoopCondition)loop.Conditions[0]).Status = SequenceEntityStatus.DISABLED;
             Assert.That(RunEtaEstimator.EstimateTotalSeconds(loop), Is.EqualTo(120), "a disabled loop condition runs the block once");
+        }
+
+        [Test]
+        public void Disabled_subtrees_are_out_of_the_total_a_parallel_block_costs_its_longest_child_and_a_zero_exposure_is_zero() {
+            // #1080 — total and remaining count the same items.
+            var root = new SequentialContainer();
+            root.Add(Leaf(100));
+            root.Add(Leaf(100, SequenceEntityStatus.DISABLED));
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(root), Is.EqualTo(100), "a DISABLED block is not in the total");
+            var par = new ParallelContainer();
+            par.Add(Leaf(30));
+            par.Add(Leaf(120));
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(par), Is.EqualTo(120), "parallel children run concurrently");
+            Assert.That(RunEtaEstimator.EstimateRemainingSeconds(par), Is.EqualTo(120));
+            // The pass-in-progress branch of Remaining(): a RUNNING parallel block with both
+            // children RUNNING is still its longest child (summing gives 150).
+            var running = new ParallelContainer();
+            running.Add(Leaf(30, SequenceEntityStatus.RUNNING));
+            running.Add(Leaf(120, SequenceEntityStatus.RUNNING));
+            running.Status = SequenceEntityStatus.RUNNING;
+            Assert.That(RunEtaEstimator.EstimateRemainingSeconds(running), Is.EqualTo(120), "a running parallel pass is its longest unfinished child");
+            var bias = new SequentialContainer();
+            var camera = new Mock<ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new CameraInfo { Connected = true }); // Validate() runs on attach
+            var exposure = new TakeExposure(camera.Object, new Mock<IImagingMediator>().Object) { ExposureTime = 0 };
+            bias.Add(exposure);
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(bias), Is.EqualTo(0), "a zero exposure (unset/invalid) is zero, not the nominal");
+            var wait = new SequentialContainer();
+            wait.Add(new WaitForTimeSpan { Time = 0 });
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(wait), Is.EqualTo(0), "an elapsed wait costs nothing, not the nominal");
+            // A model that THROWS is "no estimate", not an honest zero, whatever the type.
+            var throwing = new Mock<WaitForTimeSpan>();
+            throwing.Setup(w => w.GetEstimatedDuration()).Throws<ArgumentOutOfRangeException>();
+            var corrupt = new SequentialContainer();
+            corrupt.Add(throwing.Object);
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(corrupt), Is.EqualTo(RunEtaEstimator.NominalInstructionSeconds), "a throwing duration model costs the nominal even on a typed instruction");
+        }
+
+        [Test]
+        public void A_skip_credits_the_pass_in_progress_but_stays_in_the_total() {
+            // #1080 review — SKIPPED is reset to CREATED between loop passes (ResetProgress), so a
+            // leaf skipped in pass 3 of 10 still runs in passes 4..10: the total must not move and
+            // remaining drops by exactly the one skipped pass.
+            var loop = Loop(10, 2, Leaf(300, SequenceEntityStatus.SKIPPED), Leaf(10, SequenceEntityStatus.RUNNING));
+            loop.Status = SequenceEntityStatus.RUNNING;
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(loop), Is.EqualTo(3100), "the plan's total is stable across a skip");
+            Assert.That(RunEtaEstimator.EstimateRemainingSeconds(loop), Is.EqualTo(10 + 7 * 310), "this pass: the running leaf only; 7 full passes to come");
         }
 
         [Test]
