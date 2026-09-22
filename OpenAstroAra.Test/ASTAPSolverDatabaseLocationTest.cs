@@ -38,10 +38,25 @@ namespace OpenAstroAra.Test {
         public void Existing_database_directory_is_passed_as_d() {
             var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "d80_0101.1476"), new byte[] { 1 });
             try {
                 var solver = new ASTAPSolver("/usr/bin/astap_cli", dir);
                 Assert.That(solver.EffectiveDatabaseLocation, Is.EqualTo(dir));
                 Assert.That(Args(solver), Does.Contain($"-d \"{dir}\""));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public void Empty_database_directory_counts_as_missing() {
+            // The .deb's tmpfiles entry creates /var/lib/astap before any database is downloaded into it.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try {
+                var solver = new ASTAPSolver("/usr/bin/astap_cli", dir);
+                Assert.That(solver.EffectiveDatabaseLocation, Is.Null);
+                Assert.That(Args(solver), Does.Not.Contain("-d "));
             } finally {
                 Directory.Delete(dir);
             }

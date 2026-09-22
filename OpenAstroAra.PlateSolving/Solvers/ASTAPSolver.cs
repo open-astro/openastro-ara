@@ -53,12 +53,24 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         private readonly string? databaseLocation;
-        private int databaseMissingWarned;
+        // Process-wide: the factory builds a new solver per solve, so an instance flag would warn on
+        // every attempt of every centering loop.
+        private static int databaseMissingWarned;
 
-        /// <summary>The <c>-d</c> directory this solver will pass, or null when unset or absent on disk.
-        /// Exposed for tests and for the settings panel's "database found" check.</summary>
+        /// <summary>The <c>-d</c> directory this solver will pass, or null when unset, absent on disk,
+        /// or empty (the .deb's tmpfiles entry creates the directory before any database is downloaded
+        /// into it, so "exists" alone would hand ASTAP an empty dir and exit 32). Touches the file
+        /// system on every read — fine per solve; a polled UI check should cache it.</summary>
         public string? EffectiveDatabaseLocation =>
-            databaseLocation is not null && Directory.Exists(databaseLocation) ? databaseLocation : null;
+            databaseLocation is not null && DirectoryHasFiles(databaseLocation) ? databaseLocation : null;
+
+        private static bool DirectoryHasFiles(string dir) {
+            try {
+                return Directory.Exists(dir) && Directory.EnumerateFiles(dir).Any();
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return false;
+            }
+        }
 
         /// <summary>Test seam: the exact argument string a solve would run with (the class is sealed,
         /// so the protected builder cannot be reached by subclassing from the test project).</summary>
@@ -174,13 +186,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             args.Add($"-f \"{imageFilePath}\"");
 
             // Star database directory. Without -d, astap_cli only looks next to itself and in a few
-            // fixed paths, none of which the daemon populates; a configured directory that is not on
-            // disk falls back to that default lookup (logged once) rather than forcing exit 32.
+            // fixed paths, none of which the daemon populates; a configured directory that is missing
+            // or empty falls back to that default lookup (logged once per process) rather than
+            // forcing exit 32.
             if (EffectiveDatabaseLocation is string db) {
                 args.Add($"-d \"{db}\"");
             } else if (databaseLocation is not null
                     && System.Threading.Interlocked.CompareExchange(ref databaseMissingWarned, 1, 0) == 0) {
-                Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' does not exist; leaving ASTAP to its default lookup. Download a database into it (see DEPLOY.md) or fix Options → Plate solving.");
+                Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' is missing or empty; leaving ASTAP to its default lookup. Download a database into it (see DEPLOY.md) or fix Options → Plate solving.");
             }
 
             //Field height of image
