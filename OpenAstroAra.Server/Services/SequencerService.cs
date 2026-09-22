@@ -557,7 +557,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// provably never disposed.
     /// </summary>
     private RunState? TryReserveRun(Guid id) {
-        var run = new RunState();
+        var run = new RunState { EstimateCacheTtlMs = EstimateCacheTtlMsForTests };
         var reserved = _runs.AddOrUpdate(id, run, (_, existing) => IsTerminal(existing.State) ? run : existing);
         if (ReferenceEquals(reserved, run)) {
             return run;
@@ -1026,6 +1026,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // bench can trip the watchdog in milliseconds without a fake clock.
     internal TimeSpan RuntimeCapPollInterval { get; set; } = TimeSpan.FromSeconds(60);
     internal TimeSpan? RuntimeCapOverrideForTests { get; set; }
+    // #1080 — the ETA cache's TTL, copied into each new RunState. A test sets it to an hour so
+    // the tree-version bump is the only thing that can refresh the estimate.
+    internal long EstimateCacheTtlMsForTests { get; set; } = 250;
 
     // §37.5 — stop a run that has exceeded the profile's max-sequence-runtime
     // cap. Reads the cap EVERY tick (a mid-run Settings change applies without a
@@ -1292,7 +1295,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // status changes).
         // The final capture at tree release walks fresh (fresh: true) so a terminal state never
         // reports a stale "remaining".
-        private const long EstimateCacheTtlMs = 250;
+        public long EstimateCacheTtlMs { get; init; } = 250;
         private long _treeVersion;
         private long _cachedEstimateVersion = -1;
         private (double? Total, double? Remaining) _cachedEstimate;
