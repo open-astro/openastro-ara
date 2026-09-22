@@ -30,6 +30,7 @@ the other design docs.
 ## §18.I star database provisioning — follow-ups (2026-09-22, found live on the Pi)
 
 - **The star database is still a manual download** (DEPLOY.md step 3, ~1.7 GB D80). The playbook §36/§18 plan (PORT_PLAYBOOK ~line 5034) is server-side downloads through the Data Manager with FOV-aware selection (`W08`/`V50`/`H17`/`H18`) and a "Solve a test image" button; none of that exists. Until it does, a fresh install that skips step 3 fails every solve with ASTAP exit 32 — the settings panel should at least show "database: N files found in <path>" from `ASTAPSolver.EffectiveDatabaseLocation`.
+- **Existing installs are not migrated to `astap_cli`.** A `profile.json` written before #1094 keeps `path_or_endpoint: /usr/bin/astap`; only the defaults moved. Add a one-time normalizer migration (`/usr/bin/astap` absent + `/usr/bin/astap_cli` present → rewrite) or a boot warning when the configured solver binary is missing.
 - **`-D <abbreviation>` is not passed**, so with more than one database in the directory ASTAP picks on its own. Fine while DEPLOY.md installs one (D80); revisit with the FOV-aware selection above.
 ## sudo helpers vs NoNewPrivileges — the storage and update flows cannot escalate on the Pi (2026-09-22, found live)
 
