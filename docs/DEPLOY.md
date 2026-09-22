@@ -170,6 +170,11 @@ sudo apt install libcfitsio10
 
 # 3. Copy your linux-arm64 publish output into /opt/openastroara/
 # (built via `dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -p:PublishAot=false -o ./publish/arm64`)
+# The SOFA/NOVAS31 astrometry natives are NOT produced by `dotnet publish`; build them into the
+# same directory first (on the Pi itself: `sudo apt install build-essential`; cross-compiling
+# from x86-64: `sudo apt install gcc-aarch64-linux-gnu` and prefix with `CC=aarch64-linux-gnu-gcc`).
+scripts/build-astrometry-natives.sh ./publish/arm64
+ls publish/arm64/libsofa.so publish/arm64/libnovas31.so   # both must exist
 sudo cp -r publish/arm64/* /opt/openastroara/
 sudo chown -R openastroara:openastroara /opt/openastroara
 
