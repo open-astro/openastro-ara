@@ -30,6 +30,12 @@ SOURCE_TREE="$SCRIPT_DIR/debian"
 # Validate inputs.
 [ -d "$PUBLISH_DIR" ] || { echo "error: publish dir not found: $PUBLISH_DIR" >&2; exit 1; }
 [ -x "$PUBLISH_DIR/OpenAstroAra.Server" ] || { echo "error: OpenAstroAra.Server ELF not found in $PUBLISH_DIR" >&2; exit 1; }
+# §14e — the astrometry natives must ride along (scripts/build-astrometry-natives.sh into the
+# publish dir, cross-compiled for arm64). A .deb without them boots but faults on the first
+# altitude condition / polar-align solve; refuse to package one.
+for lib in libsofa.so libnovas31.so; do
+  [ -f "$PUBLISH_DIR/$lib" ] || { echo "error: $lib not found in $PUBLISH_DIR — run 'CC=aarch64-linux-gnu-gcc scripts/build-astrometry-natives.sh $PUBLISH_DIR' first" >&2; exit 1; }
+done
 [ -d "$SOURCE_TREE/DEBIAN" ] || { echo "error: $SOURCE_TREE/DEBIAN missing — corrupted checkout?" >&2; exit 1; }
 
 mkdir -p "$OUTPUT_DIR"

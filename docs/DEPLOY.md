@@ -45,7 +45,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 
 | Path | Purpose | Owner |
 |---|---|---|
-| `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary | `openastroara:openastroara` |
+| `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `libsofa.so` / `libnovas31.so` astrometry natives | `openastroara:openastroara` |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |
@@ -53,6 +53,12 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | `/etc/systemd/system/openastroara-server.service` | systemd unit | root |
 
 The daemon runs as the dedicated `openastroara` system user; it never runs as root.
+
+The first lines of the log say `Astrometry natives loaded (SOFA + NOVAS31)`. A
+`Astrometry natives incomplete` warning there means the package is broken (or a manual
+install skipped `scripts/build-astrometry-natives.sh`): slews still work, but altitude,
+sun and moon conditions, the meridian-flip projection and polar-align solving fail until
+the two `.so` files are next to the binary.
 
 ---
 

@@ -674,6 +674,23 @@ jobs:
           set -e
           file ./publish/arm64/OpenAstroAra.Server | tee /dev/stderr | grep -q 'aarch64'
 
+      # §14e — the SOFA/NOVAS31 astrometry natives ship WITH the daemon. The test job builds
+      # them for the host to exercise the real transforms; this builds them for the Pi (arm64
+      # cross-compiler on the x64 runner) and stages them next to the published binary, so the
+      # Docker image and the .deb both carry them. Without them the slew epoch transform only
+      # degrades, but altitude/sun/moon conditions, the flip projection and polar-align solving
+      # fault on first use. Program.cs logs their presence at boot; build-deb.sh refuses a
+      # publish dir that lacks them.
+      - name: Build astrometry natives (SOFA + NOVAS31) for linux-arm64
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
+          for lib in libsofa.so libnovas31.so; do
+            file "./publish/arm64/$lib" | tee /dev/stderr | grep -q 'ARM aarch64'
+          done
+
       # Build the arm64 Docker image via buildx. Buildx + qemu lets the
       # x64 runner cross-build arm64 images without a real Pi.
       - name: Set up QEMU
