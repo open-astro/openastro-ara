@@ -549,7 +549,14 @@ public partial class Program {
                 // weather source is connected.
                 weather: sp.GetService<IObservingConditionsService>(),
                 // #1065 — the cooling fan follows the cooler (Func<>: construction-cycle breaker).
-                fan: () => sp.GetService<ICoolingFanActuator>()));
+                fan: () => sp.GetService<ICoolingFanActuator>(),
+                // §28 — the legacy profile the plate-solve capture's wrapped IImageData carries for
+                // render paths the solve loop never takes; optional (Func<>: registered later in
+                // this file).
+                legacyProfile: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                // §29.2 — the mount's RA/Dec at readout for the OBJCTRA/OBJCTDEC/RA/DEC cards
+                // (Func<>: the telescope mediator is registered later in this file).
+                telescope: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -778,8 +785,12 @@ public partial class Program {
         // SlewScopeToRaDec drive the live Alpaca mount.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(
             sp => sp.GetRequiredService<TelescopeService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
+        // §63 guider-c — the real GuiderService backs IGuiderMediator too (replaces
+        // HeadlessGuiderMediator), so StartGuiding / StopGuiding / Dither and the flip
+        // executor's guide pause/resume drive the live PHD2 link instead of no-op stubs
+        // that reported success while nothing guided.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(
+            sp => sp.GetRequiredService<GuiderService>());
         // §14e — the real FocuserService backs IFocuserMediator too (replaces HeadlessFocuserMediator),
         // so the MoveFocuser* sequence instructions drive the live Alpaca focuser.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(

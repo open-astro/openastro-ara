@@ -101,7 +101,9 @@ public interface IFrameRepository {
 
     /// <summary>
     /// §18.I — read a catalogued frame's own pointing from its <c>OBJCTRA</c>/<c>OBJCTDEC</c> FITS headers
-    /// (both in J2000), to seed a near-solve when the caller supplies no explicit hint. Returns null when the
+    /// (the mount's position at readout, nominally J2000 — a rig without the astrometry natives stamps the
+    /// mount's own epoch and says so in EQUINOX, which this hint ignores as ≤~0.4° is well inside the search
+    /// radius), to seed a near-solve when the caller supplies no explicit hint. Returns null when the
     /// frame row/file is missing or the headers are absent/unparseable — the solve then falls back to blind.
     /// RA is returned in degrees (not hours) so both header and body hints build coordinates uniformly.
     /// </summary>

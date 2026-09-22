@@ -713,9 +713,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     public async Task<(double RaDegrees, double DecDegrees)?> TryReadTargetCoordinatesAsync(Guid id, CancellationToken ct) {
         // §18.I — a header-only read (no pixel decode) of the frame's stored pointing. OBJCTRA/OBJCTDEC are
-        // written by the capture path as FITS "H M S" / "D M S" strings from the target's J2000 coordinates
-        // (FITSHeader.cs). AstroUtil.HMSToDegrees/DMSToDegrees invert those formats; a frame with no target
-        // (e.g. a manually-framed light, or any frame that predates targeted capture) simply lacks the cards.
+        // written by the capture path as FITS "H M S" / "D M S" strings from the MOUNT's position at readout
+        // (CameraService.WritePointingHeaders), J2000 unless EQUINOX says otherwise (a rig without the
+        // astrometry natives stamps the mount's own epoch — ≤~0.4° off today, well inside the default search
+        // radius, so this reader deliberately ignores EQUINOX). AstroUtil.HMSToDegrees/DMSToDegrees invert
+        // those formats; a frame taken with no mount connected (or one that predates #1091) lacks the cards.
         var (filePath, _) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return null;
@@ -737,7 +739,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     }
 
     /// <summary>
-    /// §18.I — parse a frame's OBJCTRA/OBJCTDEC FITS cards ("H M S" / "D M S", J2000) into (RA°, Dec°), or
+    /// §18.I — parse a frame's OBJCTRA/OBJCTDEC FITS cards ("H M S" / "D M S", nominally J2000) into (RA°, Dec°), or
     /// null when they aren't a usable pointing. The digit guard is load-bearing: <c>AstroUtil.DMSToDegrees</c>
     /// returns 0 rather than throwing when its regex finds no numbers, so a blank/"N/A"/garbage card would
     /// otherwise resolve to a bogus (0h, 0°) hint instead of falling through to a blind solve. A parsed value

@@ -5384,7 +5384,7 @@ Every captured frame's FITS header includes the complete equipment state at capt
 | `OFFSET` | Sensor offset |
 | `XBINNING` / `YBINNING` | Binning |
 | `OBJECT` | Target name (from sequence) |
-| `OBJCTRA` / `OBJCTDEC` | Target RA / Dec |
+| `OBJCTRA` / `OBJCTDEC` | Mount RA / Dec at readout (J2000; see `EQUINOX`) — what NINA writes too |
 | `OBJCTROT` | Target rotation angle |
 | `IMAGETYP` | `LIGHT` / `DARK` / `BIAS` / `FLAT` |
 | `SESSIONID` | UUID linking to Pi's session database row |
