@@ -1393,7 +1393,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['path', 'endpoint', 'executable', 'url', 'solver'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.path(),
-    defaultValue: '/usr/bin/astap',
+    defaultValue: '/usr/bin/astap_cli',
     profilePath: 'platesolve.path_or_endpoint',
   ),
   Setting(

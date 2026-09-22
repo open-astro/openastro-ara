@@ -829,7 +829,7 @@ class ProfileApi {
     Map<String, dynamic> j,
   ) => PlateSolveSettings(
     engine: _plateSolveEngineFromString(j['engine'] as String?),
-    pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap',
+    pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap_cli',
     indexDownloadPath:
         (j['index_download_path'] as String?) ?? '/var/lib/astap',
     searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,

@@ -32,7 +32,8 @@ namespace OpenAstroAra.Test {
     public class PlateSolverFactoryTest {
 
         // Concrete (internal) solver class names asserted below — pinned here so a rename is a single-point
-        // update. GetType().Name is used because the classes aren't visible to this assembly.
+        // update. GetType().Name predates InternalsVisibleTo (#1094) and is kept: the factory contract is
+        // "which backend", not a type reference.
         private const string AstapSolver = "ASTAPSolver";
         private const string LocalSolver = "LocalPlateSolver";
 
