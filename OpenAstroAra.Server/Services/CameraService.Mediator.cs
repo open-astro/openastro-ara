@@ -42,9 +42,11 @@ namespace OpenAstroAra.Server.Services;
 /// camera-control instructions' guards) and <see cref="IImagingMediator"/>, whose
 /// <see cref="CaptureImage"/> runs the SAME §14e pipeline as the REST endpoint (expose → download →
 /// §72 FITS → §28 catalog) and returns an inert <see cref="IExposureData"/> sentinel — the frame is
-/// already persisted server-side, and the WPF-era in-memory image pipeline
-/// (<see cref="CaptureAndPrepareImage"/>/<see cref="PrepareImage(IImageData, PrepareImageParameters, CancellationToken)"/>/live view)
-/// stays <see cref="NotSupportedException"/> until the §2105 image pipeline lands.
+/// already persisted server-side. <see cref="CaptureAndPrepareImage"/> (the §28 plate-solve
+/// capture) is real: it captures an unpersisted frame and hands the solver the raw pixels. The
+/// remaining WPF-era in-memory members
+/// (<see cref="PrepareImage(IImageData, PrepareImageParameters, CancellationToken)"/>/live view)
+/// stay <see cref="NotSupportedException"/> until the §2105 image pipeline lands.
 /// </summary>
 public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
@@ -175,9 +177,105 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 "The captured frame was persisted to the §28 catalog server-side; the in-memory image pipeline is not ported (§2105)."));
     }
 
+    // ── §28 plate-solve capture ──────────────────────────────────────────────────────────────────
+    // CaptureSolver's only image source. Before this landed it threw NotSupported, which took down
+    // every centering caller (CenterAndRotate, POST /platesolve/center, the §58.4 flip recenter,
+    // the §35 safety re-center) on the first exposure. Rides the same unpersisted capture core as
+    // the §59 autofocus probe: expose → download → wrap the raw 16-bit frame as IImageData (the
+    // CLI solvers write it to a temp FITS themselves) → an AutoSTF 8-bit render for the progress
+    // thumbnail. The frame is deliberately not catalogued (SNAPSHOT semantics).
+    public async Task<IRenderedImage> CaptureAndPrepareImage(CaptureSequence sequence, PrepareImageParameters parameters, CancellationToken token, IProgress<ApplicationStatus>? progress) {
+        ArgumentNullException.ThrowIfNull(sequence);
+        var request = SolveCaptureRequest(sequence);
+        if (request.ExposureSec <= 0 || double.IsNaN(request.ExposureSec) || double.IsInfinity(request.ExposureSec)) {
+            throw new ArgumentOutOfRangeException(nameof(sequence), request.ExposureSec,
+                "plate-solve exposure must be a positive, finite number of seconds (Options → Plate solving → Exposure time)");
+        }
+        // Same caps check as the autofocus probe: ApplyExposureSettings' TrySet logs-and-skips an
+        // unsupported binning, so the frame would come back unbinned while PlateSolveParameter
+        // still hands the solver a binned pixel scale — an opaque solver failure instead of this.
+        CameraCapabilitiesDto? caps;
+        lock (_gate) {
+            caps = _capabilities;
+        }
+        if (caps is not null && caps.MaxBinX > 0 && caps.MaxBinY > 0
+                && (request.BinX > caps.MaxBinX || request.BinY > caps.MaxBinY)) {
+            throw new ArgumentOutOfRangeException(nameof(sequence), $"{request.BinX}x{request.BinY}",
+                $"plate-solve binning exceeds the camera's supported maximum ({caps.MaxBinX}x{caps.MaxBinY}) — lower it in Options → Plate solving → Binning");
+        }
+        // Same shape for the exposure: outside the camera's range it would surface as an opaque
+        // StartExposure device fault instead of this.
+        if (caps is not null && caps.MaxExposureSec > 0
+                && (request.ExposureSec < caps.MinExposureSec || request.ExposureSec > caps.MaxExposureSec)) {
+            throw new ArgumentOutOfRangeException(nameof(sequence), request.ExposureSec,
+                $"plate-solve exposure is outside the camera's supported range ({caps.MinExposureSec}–{caps.MaxExposureSec} s) — change it in Options → Plate solving → Exposure time");
+        }
+        var frame = await CaptureUnpersistedAsync(request, "plate-solve", token).ConfigureAwait(false);
+        // Hardware binning mixes the CFA cells, so only a 1×1 OSC frame is still a Bayer mosaic.
+        // Metadata-only on this path: the solver's temp FITS carries no BAYERPAT card (the persisted
+        // capture path stamps that header itself); the CLI solvers work on the raw mosaic regardless.
+        var isBayered = caps?.BayerPattern is not null && request.BinX == 1 && request.BinY == 1;
+        // The legacy profile is only CARRIED by the wrap (RenderImage hands it to the RenderedImage,
+        // which reads it in Stretch/DetectStars); the solve path never calls those and SaveToDisk
+        // does not touch it — so null is fine.
+        var profile = _legacyProfile?.Invoke();
+        var cameraName = _device?.Name;
+        // The AutoSTF render is ~50-200 ms on a full frame; keep it off the caller's thread.
+        return await Task.Run(() => RenderForSolve(frame, request, isBayered, cameraName, profile), token)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The exposure the solve sequence asks for, in the daemon's own request shape. NINA's
+    /// CaptureSequence uses -1 for "leave gain/offset at the camera's current value"; ARA's DTO
+    /// says that with null. Binning below 1 (an unset BinningMode) reads as 1×1. FilterName is
+    /// carried for completeness only: ApplyExposureSettings does not drive the wheel from it (both
+    /// centering call sites pass no filter, and CaptureSolver owns the filter restore).
+    /// </summary>
+    internal static ExposureRequestDto SolveCaptureRequest(CaptureSequence sequence) {
+        var binX = Math.Max(1, (int)(sequence.Binning?.X ?? 1));
+        var binY = Math.Max(1, (int)(sequence.Binning?.Y ?? 1));
+        return new ExposureRequestDto(
+            ExposureSec: sequence.ExposureTime,
+            Gain: sequence.Gain >= 0 ? sequence.Gain : null,
+            BinX: binX,
+            BinY: binY,
+            FilterName: sequence.FilterType?.Name,
+            CameraOffset: sequence.Offset >= 0 ? sequence.Offset : null);
+    }
+
+    /// <summary>
+    /// Wrap an unpersisted frame for the solver: the raw 16-bit pixels as <see cref="IImageData"/>
+    /// (what <c>ImageSolver</c> hands the CLI solver, which writes its own temp FITS) plus an
+    /// AutoSTF 8-bit render whose only consumer is <c>CaptureSolver</c>'s progress thumbnail.
+    /// Static and side-effect free so the wrap is unit-testable without a camera.
+    /// </summary>
+    internal static IRenderedImage RenderForSolve(AnalysisFrame frame, ExposureRequestDto request, bool isBayered,
+            string? cameraName, OpenAstroAra.Profile.Interfaces.IProfileService? profile) {
+        // AnalysisFrame owns the only reference to the downloaded buffer; reuse it rather than
+        // copying a full frame (~120 MB on a 60 MP sensor) per solve attempt.
+        var pixels = System.Runtime.InteropServices.MemoryMarshal.TryGetArray(frame.Pixels, out var segment)
+                && segment.Offset == 0 && segment.Array is { } arr && segment.Count == arr.Length
+            ? arr
+            : frame.Pixels.ToArray();
+        var meta = new ImageMetaData();
+        meta.Image.ExposureTime = request.ExposureSec;
+        meta.Image.ImageType = "SNAPSHOT";
+        meta.Image.ExposureStart = frame.CapturedAt.UtcDateTime;
+        meta.Camera.BinX = request.BinX;
+        meta.Camera.BinY = request.BinY;
+        meta.Camera.Gain = request.Gain ?? -1;
+        meta.Camera.Offset = request.CameraOffset ?? -1;
+        if (!string.IsNullOrEmpty(cameraName)) {
+            meta.Camera.Name = cameraName;
+        }
+        var raw = new BaseImageData(pixels, frame.Width, frame.Height, bitDepth: 16, isBayered: isBayered,
+            meta, profile!, null!, null!);
+        // The one AutoSTF display render the codebase has, so the two paths cannot drift.
+        return raw.RenderImage();
+    }
+
     // ── Unported IImagingMediator surface — the §2105 image pipeline lands these ────────────────
-    public Task<IRenderedImage> CaptureAndPrepareImage(CaptureSequence sequence, PrepareImageParameters parameters, CancellationToken token, IProgress<ApplicationStatus>? progress) =>
-        Task.FromException<IRenderedImage>(new NotSupportedException("the in-memory render pipeline is not ported (§2105)"));
     public Task<IRenderedImage> PrepareImage(IImageData imageData, PrepareImageParameters parameters, CancellationToken token) =>
         Task.FromException<IRenderedImage>(new NotSupportedException("the in-memory render pipeline is not ported (§2105)"));
     public Task<IRenderedImage> PrepareImage(IExposureData imageData, PrepareImageParameters parameters, CancellationToken token) =>

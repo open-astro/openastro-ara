@@ -89,6 +89,25 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             BinY: bin,
             FilterName: null,
             CameraOffset: null);
+        return await CaptureUnpersistedAsync(request, "analysis", ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The shared "expose, download, hand back the pixels, persist nothing" core behind the §59
+    /// autofocus probe and the §28 plate-solve capture (<c>CaptureAndPrepareImage</c>). Callers
+    /// validate their own request; this only owns the gate discipline and the device round-trip.
+    /// <paramref name="kind"/> ("analysis", "plate-solve") labels the log lines so an operator
+    /// triaging a failed centering exposure is not told an autofocus probe failed.
+    /// </summary>
+    private async Task<AnalysisFrame> CaptureUnpersistedAsync(ExposureRequestDto request, string kind, CancellationToken ct) {
+        AlpacaCamera? client;
+        lock (_gate) {
+            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("camera is not connected");
+        }
+        var exposureSec = request.ExposureSec;
 
         // Same gate discipline as the sequencer capture path (CaptureImage): WAIT for an in-flight
         // capture rather than fail — an AF sweep runs inside sequences and must queue behind a
@@ -109,16 +128,16 @@ public sealed partial class CameraService : IAnalysisFrameSource {
                 client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
             }
             if (client is null) {
-                throw new InvalidOperationException("camera disconnected while the analysis capture was queued");
+                throw new InvalidOperationException($"camera disconnected while the {kind} capture was queued");
             }
             var frameId = Guid.NewGuid(); // log correlation only — nothing is persisted under it
             var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
             if (exposed is null) {
                 throw new InvalidOperationException(
-                    "analysis capture failed — see the daemon log for the cause (device timeout or disconnect)");
+                    $"{kind} capture failed — see the daemon log for the cause (device timeout or disconnect)");
             }
             var (pixels, width, height, capturedAt) = exposed.Value;
-            LogAnalysisCaptureComplete(frameId, width, height, exposureSec);
+            LogUnpersistedCaptureComplete(kind, frameId, width, height, exposureSec);
             return new AnalysisFrame(pixels, width, height, capturedAt);
         } finally {
             Interlocked.Exchange(ref _captureInFlight, 0);
@@ -127,6 +146,6 @@ public sealed partial class CameraService : IAnalysisFrameSource {
     }
 
     [Microsoft.Extensions.Logging.LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information,
-        Message = "Analysis capture {FrameId} complete: {Width}x{Height} at {ExposureSec}s (not persisted)")]
-    private partial void LogAnalysisCaptureComplete(Guid frameId, int width, int height, double exposureSec);
+        Message = "{Kind} capture {FrameId} complete: {Width}x{Height} at {ExposureSec}s (not persisted)")]
+    private partial void LogUnpersistedCaptureComplete(string kind, Guid frameId, int width, int height, double exposureSec);
 }

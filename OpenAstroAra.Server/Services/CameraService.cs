@@ -100,9 +100,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         IEquipmentFaultSink? faults = null,
         IObservingConditionsService? weather = null,
         Func<ICoolingFanActuator?>? fan = null,
+        Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? legacyProfile = null,
         Func<ITelescopeMediator?>? telescope = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _fan = fan;
+        _legacyProfile = legacyProfile;
         _telescope = telescope;
         _events = events;
         _faults = faults;
@@ -126,6 +128,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly IObservingConditionsService? _weather;
 
     private readonly IFocuserMediator? _focuser;
+    // §28 — the Equipment-layer profile the plate-solve capture's wrapped IImageData carries for
+    // render paths the solve loop never takes (RenderImage/Stretch); SaveToDisk does not read it,
+    // so it is optional. Func<>: it is registered after this service.
+    private readonly Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? _legacyProfile;
     // §29.2 pointing — where the mount says it was looking when the frame was taken, for the
     // OBJCTRA/OBJCTDEC/RA/DEC cards. Func<>: the telescope mediator is registered after this
     // service in Program.cs.

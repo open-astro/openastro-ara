@@ -275,9 +275,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // IProfileService (filter list) + IFilterWheelMediator.
                 new SwitchFilter(profileService, filterWheelMediator),
                 // §38 NINA import fidelity — autofocus + center-and-rotate steps (one per target in
-                // real plans). No equipment deps to construct the prototype; execution into the §59
-                // AF / §28 centering services is a run-engine follow-up (their Execute fails loudly
-                // for now rather than silently skipping focus/centering).
+                // real plans). Execution goes through the §59 AutofocusSweepService and the §28
+                // CenteringService (Program.cs wires both); a null executor keeps the prototype
+                // JSON-resolvable and its Execute fails loudly rather than skipping focus/centering.
                 new RunAutofocus(autofocusExecutor),
                 new CenterAndRotate(centeringExecutor, rotatorMediator),
                 // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
