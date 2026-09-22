@@ -553,7 +553,10 @@ public partial class Program {
                 // §28 — the legacy profile the plate-solve capture's wrapped IImageData carries for
                 // render paths the solve loop never takes; optional (Func<>: registered later in
                 // this file).
-                legacyProfile: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>()));
+                legacyProfile: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                // §29.2 — the mount's RA/Dec at readout for the OBJCTRA/OBJCTDEC/RA/DEC cards
+                // (Func<>: the telescope mediator is registered later in this file).
+                telescope: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).

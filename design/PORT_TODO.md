@@ -14,6 +14,10 @@ the other design docs.
 
 ---
 
+## §29.2 pointing headers — follow-ups (2026-09-22, from the #1091 review)
+
+- **`AstroUtil.HoursToHMS` can emit `24 00 00`.** An RA within ~0.5 s of 24h rounds its seconds up into the hour field, which `SqliteFrameRepository.ParseTargetCoordinates` then rejects (≥360°) and which is a non-standard card for external tools. Pre-existing formatter behaviour, now reachable from the capture path's `OBJCTRA` card. Wrap at 24h in the formatter (and add the boundary case to `AstroUtilTest`).
+- **`TelescopeService.MapEpoch` treats `EquatorialCoordinateType.Other` as JNOW — and `Other` is also the "not read yet" sentinel** set in `ConnectInBackground`. A capture (or slew) in the window before the first successful equatorial-system read runs an already-J2000 position through the JNOW→J2000 transform: the frame gets `EQUINOX 2000.0` on numbers ~0.36° off, and a slew target is pre-precessed the wrong way. Pre-existing mapping shared with the slew path; #1091 only made it observable in headers. Distinguish "unknown" from "Other" (skip the transform and flag the pointing until the type is read).
 ## §28 plate-solve capture — follow-ups (2026-09-22, from the #1090 review)
 
 - **No unit seam for `CameraService._capabilities`.** The new solve-path guards (binning and exposure vs the camera's caps in `CaptureAndPrepareImage`) mirror the autofocus probe's but have no test: caps are only settable via a real Alpaca connect. A small internal `WithCapabilitiesForTest(...)` (or a caps-source `Func<>`) would let both guard sets be unit-tested; the AF probe's guards are in the same boat.
