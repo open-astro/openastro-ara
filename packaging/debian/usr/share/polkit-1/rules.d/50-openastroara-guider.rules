@@ -1,0 +1,9 @@
+// ARA may start/restart only its companion guider. No interactive authentication.
+polkit.addRule(function(action, subject) {
+    if (subject.user === "openastroara" &&
+        action.id === "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") === "openastro-guider.service" &&
+        (action.lookup("verb") === "start" || action.lookup("verb") === "restart")) {
+        return polkit.Result.YES;
+    }
+});

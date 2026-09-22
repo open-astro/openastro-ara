@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// Service-level health of the sibling <c>openastro-phd2</c> systemd unit, as reported by
+/// Service-level health of the sibling <c>openastro-guider</c> systemd unit, as reported by
 /// <c>systemctl is-active</c>. <see cref="Unknown"/> means we couldn't ask systemd at all — the
 /// daemon host isn't a systemd box (e.g. the macOS dev machine), so the guider can't be supervised.
 /// </summary>
@@ -42,7 +42,7 @@ public enum GuiderProcessStatus {
 
 /// <summary>
 /// §63.1/§63.3 process supervisor for the guider daemon. ARA does not own the
-/// <c>openastro-phd2</c> systemd unit (the <c>openastro-guider</c> .deb ships it), but it can read
+/// <c>openastro-guider</c> systemd unit (the <c>openastro-guider</c> .deb ships it), but it can read
 /// its service-level health and request a restart — the seam the §63.3 crash-recovery decision tree
 /// drives. This is the only place that shells out to <c>systemctl</c>.
 /// </summary>
@@ -69,10 +69,10 @@ public interface IGuiderProcessSupervisor {
 /// </summary>
 public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSupervisor {
 
-    // The guider daemon's systemd unit. The openastro-guider repo ships debian/openastro-phd2.service
-    // (the unit name kept the openastro-phd2 lineage even though the project is now openastro-guider),
-    // matching playbook §63.1.
-    internal const string Unit = "openastro-phd2";
+    // Canonical unit shipped by the openastro-guider package.
+    internal const string Unit = "openastro-guider";
+    internal TimeSpan CommandTimeout { get; set; } = TimeSpan.FromSeconds(10);
+    internal Func<ProcessStartInfo, CancellationToken, Task<(int ExitCode, string Output, string Error)>> CommandRunner { get; set; } = RunProcessAsync;
 
     private readonly ILogger<SystemctlGuiderProcessSupervisor> _logger;
 
@@ -101,41 +101,35 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
 
     public void RequestStart() => RequestVerb("start");
 
-    private void RequestVerb(string verb) {
-        // Mirror §13: bare `systemctl <verb>`, fire-and-forget. Privileged via the §63.1 NOPASSWD
-        // sudoers / polkit drop-in the openastro-phd2 .deb installs for the openastroara user.
+    private void RequestVerb(string verb) => _ = RequestVerbAsync(verb);
+
+    internal async Task RequestVerbAsync(string verb) {
         try {
-            using var _ = Process.Start(new ProcessStartInfo("systemctl", $"{verb} {Unit}") {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
-            LogVerbRequested(verb);
+            var result = await RunCommandAsync(verb, CancellationToken.None).ConfigureAwait(false);
+            if (result.ExitCode != 0) {
+                LogCommandFailed(verb, Unit, result.ExitCode, result.Error.Trim());
+                return;
+            }
+            LogVerbCompleted(verb, Unit);
+        } catch (OperationCanceledException) {
+            LogCommandTimedOut(verb, Unit);
         } catch (Exception ex) when (ex is Win32Exception or InvalidOperationException
                                          or PlatformNotSupportedException or IOException) {
-            // No systemctl on PATH (non-Linux dev) or no permission — nothing useful to do.
             LogSystemctlUnavailable(ex);
         }
     }
 
     private async Task<string?> RunIsActiveAsync(CancellationToken ct) {
         try {
-            var psi = new ProcessStartInfo("systemctl", $"is-active {Unit}") {
-                RedirectStandardOutput = true,
-                // Deliberately NOT redirecting stderr: we never read it, and a redirected-but-unread
-                // stderr pipe would deadlock WaitForExit if systemctl writes enough to it (e.g. a
-                // "Failed to connect to bus" error). Errors surface via the exception filter / a
-                // non-"active" stdout instead; stderr just inherits the daemon's.
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(psi);
-            if (process is null) {
-                return null;
-            }
-            // Read stdout to completion before waiting so a full pipe can't deadlock the exit.
-            var stdout = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
-            return stdout;
+            var result = await RunCommandAsync("is-active", ct).ConfigureAwait(false);
+            // systemctl prints inactive/failed even with a nonzero exit code.
+            return result.Output;
+        } catch (OperationCanceledException) {
+            // Preserve the never-throws status contract for both the command
+            // deadline and caller cancellation. Caller cancellation is normal
+            // during shutdown; only the internal deadline is a timeout signal.
+            if (!ct.IsCancellationRequested) LogCommandTimedOut("is-active", Unit);
+            return null;
         } catch (Exception ex) when (ex is Win32Exception or InvalidOperationException
                                          or PlatformNotSupportedException or IOException) {
             LogSystemctlUnavailable(ex);
@@ -143,9 +137,46 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Requested systemctl {Verb} of the guider unit")]
-    partial void LogVerbRequested(string verb);
+    private async Task<(int ExitCode, string Output, string Error)> RunCommandAsync(string verb, CancellationToken ct) {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(CommandTimeout);
+        var start = new ProcessStartInfo("systemctl") {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        start.ArgumentList.Add("--no-ask-password");
+        start.ArgumentList.Add(verb);
+        start.ArgumentList.Add(Unit);
+        return await CommandRunner(start, deadline.Token).ConfigureAwait(false);
+    }
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "systemctl unavailable — guider process supervision is a no-op on this host")]
+    private static async Task<(int ExitCode, string Output, string Error)> RunProcessAsync(ProcessStartInfo start, CancellationToken ct) {
+        using var process = Process.Start(start) ?? throw new IOException("Could not start systemctl");
+        // Drain both pipes concurrently: neither may fill while waiting on the other.
+        var output = process.StandardOutput.ReadToEndAsync(ct);
+        var error = process.StandardError.ReadToEndAsync(ct);
+        try {
+            await Task.WhenAll(output, error, process.WaitForExitAsync(ct)).ConfigureAwait(false);
+            return (process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
+        } catch (OperationCanceledException) {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* already exited */ }
+            catch (Win32Exception) { /* process exited or cannot be killed */ }
+            throw;
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "systemctl {Verb} completed for {Unit}")]
+    partial void LogVerbCompleted(string verb, string unit);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "systemctl {Verb} {Unit} failed with exit {ExitCode}: {Error}")]
+    partial void LogCommandFailed(string verb, string unit, int exitCode, string error);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "systemctl {Verb} {Unit} timed out")]
+    partial void LogCommandTimedOut(string verb, string unit);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "systemctl unavailable — guider process supervision failed")]
     partial void LogSystemctlUnavailable(Exception ex);
 }

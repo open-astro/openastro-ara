@@ -906,11 +906,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     NoDelay = true,
                 };
 
-                await client.ConnectAsync(phd2Ip, profileService.ActiveProfile.GuiderSettings.PHD2ServerPort);
+                // One deadline covers connection establishment, write and every response line.
+                using var cts = new CancellationTokenSource(receiveTimeout > 0 ? receiveTimeout : 60000);
+                await client.ConnectAsync(phd2Ip, profileService.ActiveProfile.GuiderSettings.PHD2ServerPort, cts.Token).ConfigureAwait(false);
                 var stream = client.GetStream();
                 var data = Encoding.ASCII.GetBytes(serializedMessage + Environment.NewLine);
 
-                await stream.WriteAsync(data);
+                await stream.WriteAsync(data, cts.Token).ConfigureAwait(false);
 
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 string line;
@@ -919,8 +921,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 // ReadLineAsync. Without an explicit token a guider that never returns a matching
                 // response (wrong id, or silent) would hang this call — and the connect handshake —
                 // forever. Bound the wait so a non-responsive guider fails the call instead.
-                using var cts = new CancellationTokenSource(receiveTimeout > 0 ? receiveTimeout : 60000);
-
                 while ((line = await reader.ReadLineAsync(cts.Token).ConfigureAwait(false)) != null) {
                     var o = JObject.Parse(line);
                     string phdevent = "";
