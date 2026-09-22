@@ -99,9 +99,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         ImageHistoryService? imageHistory = null,
         IEquipmentFaultSink? faults = null,
         IObservingConditionsService? weather = null,
-        Func<ICoolingFanActuator?>? fan = null) {
+        Func<ICoolingFanActuator?>? fan = null,
+        Func<ITelescopeMediator?>? telescope = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _fan = fan;
+        _telescope = telescope;
         _events = events;
         _faults = faults;
         _frames = frames;
@@ -124,6 +126,52 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly IObservingConditionsService? _weather;
 
     private readonly IFocuserMediator? _focuser;
+    // §29.2 pointing — where the mount says it was looking when the frame was taken, for the
+    // OBJCTRA/OBJCTDEC/RA/DEC cards. Func<>: the telescope mediator is registered after this
+    // service in Program.cs.
+    private readonly Func<ITelescopeMediator?>? _telescope;
+
+    /// <summary>A frame's pointing as written to its header: J2000 when the epoch transform
+    /// succeeded, else the mount's native epoch (see <see cref="PointingFrom"/>).</summary>
+    internal readonly record struct FramePointing(double RaHours, double DecDegrees, bool IsJ2000);
+
+    /// <summary>
+    /// The mount's reported position, in J2000 when the SOFA transform is available. A missing
+    /// native library degrades to the mount's own epoch (tens of arcminutes of precession drift
+    /// today — still a perfectly good solve hint), never to "no pointing". Null when there is no
+    /// connected mount or it hasn't reported a position yet.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort header metadata: a native-load failure in the epoch transform must degrade to the untransformed position, never fail the frame. Log-and-recover boundary.")]
+    internal static FramePointing? PointingFrom(OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo? info) {
+        if (info is not { Connected: true } || info.Coordinates is null) {
+            return null;
+        }
+        var coords = info.Coordinates;
+        if (coords.Epoch == OpenAstroAra.Astrometry.Epoch.J2000) {
+            return new FramePointing(coords.RA, coords.Dec, IsJ2000: true);
+        }
+        try {
+            var j2000 = coords.Transform(OpenAstroAra.Astrometry.Epoch.J2000);
+            return new FramePointing(j2000.RA, j2000.Dec, IsJ2000: true);
+        } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
+                or BadImageFormatException or TypeInitializationException or NotSupportedException) {
+            return new FramePointing(coords.RA, coords.Dec, IsJ2000: false);
+        }
+    }
+
+    // Snapshotted right after pixel readout, like the focuser position: the mount tracks during
+    // the exposure, so its post-readout RA/Dec is the frame's pointing to well within a pixel.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recording pointing is best-effort metadata; a mediator/transport fault must not fail a capture whose image is already downloaded. Log-and-recover boundary.")]
+    private FramePointing? ReadPointing() {
+        try {
+            return PointingFrom(_telescope?.Invoke()?.GetInfo());
+        } catch (Exception ex) {
+            LogPointingSnapshotFailed(ex);
+            return null;
+        }
+    }
 
     // Snapshotted just after pixel readout (the focuser is stationary during an
     // exposure, so post-readout == shutter-open for this metadata). A focuser
@@ -643,13 +691,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
+        var pointing = ReadPointing();
         double? sensorTemp = null, tempSetPoint = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
-            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions);
+            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
+            pointing: pointing);
         var writeMs = storeTiming.ElapsedMilliseconds;
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
@@ -956,7 +1006,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
@@ -998,7 +1048,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
-        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt);
+        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt, pointing);
         fits.Complete(); // §28.7 atomic finish
         return path;
     }
@@ -1047,7 +1097,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt) {
+    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -1058,6 +1108,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
                 fits.SetHeader("OBJECT", targetName!, "target name");
+            }
+            // Where the mount was pointed: the solve hint (§18.I reads OBJCTRA/OBJCTDEC back), the
+            // stacker's target grouping, and the only record of pointing on a manually framed
+            // light. Always written when a mount is connected — pointing says nothing about where
+            // the observer lives, unlike the Site group.
+            if (pointing is FramePointing pt) {
+                WritePointingHeaders(fits, pt, capturedAt);
             }
             if (_device?.Name is string cam && cam.Length > 0) {
                 fits.SetHeader("INSTRUME", cam, "camera");
@@ -1160,6 +1217,26 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogHeaderEnrichmentFailed(ex);
         }
     }
+
+    /// <summary>
+    /// OBJCTRA/OBJCTDEC in NINA's sexagesimal FITS form ("HH MM SS" / "+DD MM SS"), RA/DEC in
+    /// decimal degrees, and EQUINOX. J2000 is the normal case; when the epoch transform was
+    /// unavailable the cards carry the mount's own epoch and EQUINOX says so (the capture's
+    /// Julian year) rather than claiming 2000.0 for a position that isn't.
+    /// </summary>
+    internal static void WritePointingHeaders(FitsImage fits, FramePointing pt, DateTimeOffset capturedAt) {
+        var raDeg = OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(pt.RaHours);
+        fits.SetHeader("OBJCTRA", OpenAstroAra.Astrometry.AstroUtil.HoursToFitsHMS(pt.RaHours), "RA of mount pointing (H M S)");
+        fits.SetHeader("OBJCTDEC", OpenAstroAra.Astrometry.AstroUtil.DegreesToFitsDMS(pt.DecDegrees), "Dec of mount pointing (D M S)");
+        fits.SetHeader("RA", Math.Round(raDeg, 6), "RA of mount pointing deg");
+        fits.SetHeader("DEC", Math.Round(pt.DecDegrees, 6), "Dec of mount pointing deg");
+        var equinox = pt.IsJ2000 ? 2000.0 : Math.Round(JulianYear(capturedAt), 2);
+        fits.SetHeader("EQUINOX", equinox, pt.IsJ2000 ? "J2000" : "mount epoch (JNOW; transform unavailable)");
+    }
+
+    // Julian epoch year: J2000.0 is JD 2451545.0 and a Julian year is 365.25 days.
+    internal static double JulianYear(DateTimeOffset at) =>
+        2000.0 + (at.UtcDateTime - new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc)).TotalDays / 365.25;
 
     /// <summary>
     /// SUNALT / MOONALT / MOONILL / MOONPHSE at the moment of capture, from
@@ -1978,6 +2055,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
     private partial void LogFocuserSnapshotFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Mount pointing snapshot failed; recording the frame without RA/Dec")]
+    private partial void LogPointingSnapshotFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Camera connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);

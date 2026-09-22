@@ -54,6 +54,12 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
       FitsHeaderEntry('SWCREATE', 'Software that took the frame',
           'OpenAstro Ara'),
       FitsHeaderEntry('OBJECT', 'Target name (when a target is set)', 'M 31'),
+      FitsHeaderEntry('OBJCTRA', 'Mount RA at readout (H M S, when a mount is connected)',
+          '00 42 44'),
+      FitsHeaderEntry('OBJCTDEC', 'Mount Dec at readout (D M S)', '+41 16 09'),
+      FitsHeaderEntry('RA', 'Mount RA at readout in degrees', '10.6847'),
+      FitsHeaderEntry('DEC', 'Mount Dec at readout in degrees', '41.2692'),
+      FitsHeaderEntry('EQUINOX', 'Epoch of the pointing cards', '2000.0'),
     ],
   ),
   FitsHeaderGroup(
