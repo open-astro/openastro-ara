@@ -154,8 +154,9 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   Future<NmeaFix?> syncNow({int? gen}) async {
     final s = _current;
     if (!s.enabled) return null;
-    // One reader per port: a second caller (Read now, Fill from GPS) during the
-    // background window would only get "device busy"; hand it the last fix.
+    // One reader per port: a second caller (Read now, Fill from GPS, or a re-armed
+    // timer) during the window would only get "device busy"; hand it the last fix.
+    // The in-flight read re-arms the loop when it finishes (see the tail below).
     if (s.busy) return s.lastFix;
     final port = s.prefs.port;
     if (port == null || port.isEmpty) {
@@ -202,8 +203,15 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       lastError: error,
       clearError: error == null,
     ));
-    if (gen != null && gen != _gen) return fix; // superseded: the newer generation owns the timer
-    if (_current.enabled && gen != null) {
+    if (gen == null) return fix; // a manual read: the background timer is untouched
+    if (gen != _gen) {
+      // Superseded mid-read (toggle or port change). The newer generation's own read bailed on
+      // `busy` above without arming anything, so the loop would otherwise stop here for the rest
+      // of the session: re-arm at once so the (possibly new) port is read right away.
+      if (_current.enabled) _schedule(Duration.zero);
+      return fix;
+    }
+    if (_current.enabled) {
       _schedule(pushed || alreadySynced ? kClientGpsSyncedInterval : kClientGpsUnsyncedInterval);
     }
     return fix;

@@ -31,6 +31,7 @@ class _FakeSource implements SerialGpsSource {
   final bool supported;
   final List<String> ports = const ['/dev/cu.usbserial-1'];
   int opens = 0;
+  String? lastPort;
 
   @override
   List<String> availablePorts() => ports;
@@ -38,6 +39,7 @@ class _FakeSource implements SerialGpsSource {
   @override
   Stream<String> lines(String port) {
     opens++;
+    lastPort = port;
     // Like the real port: emits its lines and then stays open until cancelled.
     final c = StreamController<String>();
     Future<void>.microtask(() {
@@ -177,6 +179,21 @@ void main() {
       await n.syncNow();
       expect(source.opens, opensDuring);
       await first;
+    });
+
+    test('changing the port during an in-flight read re-arms the loop and reads the new port', () async {
+      final source = _FakeSource([]); // no fix: each read holds busy for the whole window
+      final api = _FakeApi();
+      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/old'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(source.lastPort, '/dev/old');
+      final n = c.read(clientGpsProvider.notifier);
+      await n.setPort('/dev/new'); // its immediate read bails on busy
+      // The in-flight read finishes (150 ms window) and must re-arm for the new port.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(source.lastPort, '/dev/new', reason: 'the superseded read re-armed the loop');
+      expect(source.opens, greaterThanOrEqualTo(2));
     });
 
     test('a failed read clears the stale fix from the status', () async {
