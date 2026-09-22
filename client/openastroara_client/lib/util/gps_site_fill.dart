@@ -120,16 +120,38 @@ String get _noFixHint => noFixHint(clientPlatform);
 
 String get _permissionHint => permissionHint(clientPlatform);
 
-/// Try to fill an observing site from GPS, in this order: (1) a USB GPS
-/// dongle on the server machine (§31.3 time-sync state); (2) a USB GPS dongle
-/// on THIS computer when "GPS on this computer" is enabled (a fresh fix from
-/// the background loop, or one read now); (3) **the client machine's own
+/// Try to fill an observing site from GPS, in this order: (0) a fresh fix from
+/// a USB GPS dongle on THIS computer when "GPS on this computer" is enabled;
+/// (1) a USB GPS dongle on the server machine (§31.3 time-sync state); (2) the
+/// client dongle read fresh when it had no recent fix; (3) **the client machine's own
 /// location** (macOS/Windows/Android/iOS; Linux has no registered geolocator
 /// backend), accepting only a fix less than ten minutes old. This one routine
 /// is shared by the wizard (profile creation) and the Safety → Site panel
 /// (editing), so every "Fill from GPS" behaves the same everywhere.
 Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
-  // 1) Preferred: the server's USB GPS dongle fix.
+  // 0) A fresh fix from a dongle on THIS computer beats asking the server: once the
+  // loop has pushed, the server would only echo that same fix back (rounded to 2 dp)
+  // labelled as its own.
+  ClientGpsStatus? clientGps;
+  try {
+    clientGps = await ref
+        .read(clientGpsProvider.future)
+        .then<ClientGpsStatus?>((v) => v)
+        .timeout(const Duration(seconds: 3), onTimeout: () => null);
+  } catch (_) {
+    clientGps = null; // prefs unreadable → treat as disabled
+  }
+  if (clientGps != null && clientGps.enabled && clientGps.freshFix(DateTime.now().toUtc())) {
+    final fix = clientGps.lastFix!;
+    return GpsSiteFill.success(
+      lat: fix.latitudeDeg!,
+      lng: fix.longitudeDeg!,
+      alt: fix.altitudeM,
+      sourceLabel: 'the GPS dongle on $_thisDevice',
+    );
+  }
+
+  // 1) The server's USB GPS dongle fix.
   final api = ref.read(timeSyncApiProvider);
   var dongleReadFailed = false;
   if (api != null) {
@@ -151,24 +173,13 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     }
   }
 
-  // 2) A USB GPS dongle on THIS computer (Settings → Site → GPS on this
-  // computer). Reuse a fresh fix the background loop already has; otherwise
-  // read one now. Ahead of the device-location fallback because a receiver
-  // fix is better than a Wi-Fi geolocation guess.
-  // Awaited, not `.value`: the provider builds lazily (it reads a prefs file), so
-  // the first Fill from GPS of a session would otherwise see "loading" and skip.
-  ClientGpsStatus? clientGps;
-  try {
-    clientGps = await ref
-        .read(clientGpsProvider.future)
-        .then<ClientGpsStatus?>((v) => v)
-        .timeout(const Duration(seconds: 3), onTimeout: () => null);
-  } catch (_) {
-    clientGps = null; // prefs unreadable → treat as disabled
-  }
+  // 2) A USB GPS dongle on THIS computer with no fresh fix yet: read one now.
+  // Ahead of the device-location fallback because a receiver fix is better
+  // than a Wi-Fi geolocation guess. (The provider was awaited, not `.value`-read,
+  // above: it builds lazily from a prefs file, so the first Fill from GPS of a
+  // session would otherwise see "loading" and skip.)
   if (clientGps != null && clientGps.enabled) {
-    final notifier = ref.read(clientGpsProvider.notifier);
-    final fix = clientGps.freshFix(DateTime.now().toUtc()) ? clientGps.lastFix : await notifier.syncNow();
+    final fix = await ref.read(clientGpsProvider.notifier).syncNow();
     if (fix != null && fix.hasPosition) {
       return GpsSiteFill.success(
         lat: fix.latitudeDeg!,

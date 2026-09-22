@@ -405,7 +405,9 @@ class _ClientGpsBlock extends ConsumerWidget {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     key: const ValueKey('client_gps_port'),
-                    initialValue: selected != null && (ports.contains(selected)) ? selected : null,
+                    // The saved port stays selected even when unplugged — its item is labelled
+                    // "(not present)" below — so the user sees what the loop is trying to read.
+                    initialValue: selected,
                     decoration: const InputDecoration(labelText: 'Serial port', isDense: true),
                     items: [
                       for (final p in ports) DropdownMenuItem(value: p, child: Text(p)),

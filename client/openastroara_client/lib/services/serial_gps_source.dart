@@ -59,8 +59,10 @@ class LibSerialPortGpsSource implements SerialGpsSource {
     SerialPortReader? reader;
     StreamSubscription<String>? sub;
 
-    void stop() {
-      sub?.cancel();
+    Future<void> stop() async {
+      // Order matters: the reader isolate must be out of its read before the
+      // port handle is closed and disposed under it.
+      await sub?.cancel();
       reader?.close();
       if (sp != null && sp!.isOpen) sp!.close();
       sp?.dispose();
@@ -82,6 +84,7 @@ class LibSerialPortGpsSource implements SerialGpsSource {
             ..stopBits = 1
             ..setFlowControl(SerialPortFlowControl.none);
           sp!.config = cfg;
+          cfg.dispose(); // the port copies the config on assignment
           reader = SerialPortReader(sp!, timeout: 1000);
           sub = reader!.stream
               .map<List<int>>((chunk) => chunk)
