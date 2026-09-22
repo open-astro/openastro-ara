@@ -11,6 +11,8 @@ import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
+import 'package:openastroara/widgets/settings/editable_field.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -114,6 +116,22 @@ void main() {
           ],
         ));
     expect(find.textContaining('focus offset'), findsNothing);
+  });
+
+  testWidgets('the first-connect home policy toggle is shown and flips the setting (#1075)',
+      (tester) async {
+    await _pump(tester, null);
+    final rowText = find.text('Park on slot 0 on first connect');
+    expect(rowText, findsOneWidget);
+    final container = ProviderScope.containerOf(tester.element(rowText));
+    expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isTrue);
+    final toggle = find.ancestor(of: rowText, matching: find.byType(SettingsSwitchRow));
+    await tester.tap(find.descendant(of: toggle, matching: find.byType(Switch)));
+    await tester.pump();
+    expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isFalse);
+    // The optimistic update fires a best-effort PUT at the (unreachable) test
+    // server; let its transport timers run out so none outlive the test.
+    await tester.pump(const Duration(seconds: 20));
   });
 
   testWidgets('hides the Slot labels section while a wheel is connected',

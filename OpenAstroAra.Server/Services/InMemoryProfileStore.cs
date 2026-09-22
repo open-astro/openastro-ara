@@ -404,6 +404,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1075 filter-wheel policy — home on first connect, on by default.
+    private FilterWheelPolicyDto _filterWheelPolicy = FilterWheelPolicyDto.Default;
+
+    public FilterWheelPolicyDto GetFilterWheelPolicy() {
+        lock (_lock) { return _filterWheelPolicy; }
+    }
+
+    public void PutFilterWheelPolicy(FilterWheelPolicyDto value) {
+        lock (_lock) { _filterWheelPolicy = value; }
+        RaiseChanged();
+    }
+
     // §36 custom terrain horizon — empty until entered.
     private CustomHorizonDto _customHorizon = new(Points: []);
 

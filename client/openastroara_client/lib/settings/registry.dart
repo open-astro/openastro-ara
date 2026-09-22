@@ -1120,6 +1120,19 @@ const List<Setting> settingsRegistry = [
     profilePath: 'filterwheel.slot_labels',
   ),
 
+  // #1075 — the daemon's first-connect home (#1066) as a profile policy.
+  // State lives in `filterWheelPolicyProvider`.
+  Setting(
+    id: 'eq.filterwheel.home_on_first_connect',
+    label: 'Park on slot 0 on first connect',
+    description: 'The first time the filter wheel connects after Ara starts on the rig (auto or manual), park it on slot 0 (its first position, usually L) unless a filter change is requested first. Off leaves the wheel wherever the driver reports it.',
+    keywords: ['filter wheel', 'efw', 'home', 'park', 'slot 0', 'luminance', 'first connect', 'startup', 'boot'],
+    path: ['Settings', 'Equipment', 'Filter Wheel'],
+    type: SettingType.bool(),
+    defaultValue: true,
+    profilePath: 'filter_wheel_policy.home_on_first_connect',
+  ),
+
   // §52.1 connection lifecycle — per-device-type auto-connect toggles. 10
   // individual entries (vs one composite) so ⌘K "guider connect" /
   // "dome boot" / "weather auto" all resolve to the specific panel.
@@ -1160,7 +1173,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.filterwheel.auto_connect',
     label: 'Filter wheel auto-connect on boot',
-    description: 'Connect to the filter wheel when Ara starts. Moves to last-known slot on connect.',
+    description: 'Connect to the filter wheel when Ara starts. On its first connect after Ara starts, Ara parks the wheel on slot 0 unless "Park on slot 0 on first connect" is off.',
     keywords: ['filter wheel', 'efw', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
