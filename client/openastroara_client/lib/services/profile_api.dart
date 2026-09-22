@@ -468,7 +468,7 @@ class ProfileApi {
   }
 
   /// GET the active profile's filter-wheel policy (#1075): whether Ara parks
-  /// the wheel on slot 1 (L) the first time it connects after the daemon
+  /// the wheel on slot 0 (L) the first time it connects after the daemon
   /// starts.
   Future<FilterWheelPolicy> getFilterWheelPolicy() async {
     final res = await _dio.get<Map<String, dynamic>>(

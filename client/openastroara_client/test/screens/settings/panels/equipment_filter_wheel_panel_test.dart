@@ -121,7 +121,7 @@ void main() {
   testWidgets('the first-connect home policy toggle is shown and flips the setting (#1075)',
       (tester) async {
     await _pump(tester, null);
-    final rowText = find.text('Park on slot 1 when the wheel first connects');
+    final rowText = find.text('Park on slot 0 when the wheel first connects');
     expect(rowText, findsOneWidget);
     final container = ProviderScope.containerOf(tester.element(rowText));
     expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isTrue);

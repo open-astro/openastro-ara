@@ -1124,9 +1124,9 @@ const List<Setting> settingsRegistry = [
   // State lives in `filterWheelPolicyProvider`.
   Setting(
     id: 'eq.filterwheel.home_on_first_connect',
-    label: 'Park on slot 1 when the wheel first connects',
-    description: 'The first time the filter wheel connects after Ara starts on the rig (auto or manual), park it on slot 1 (usually L) unless a filter change is requested first. Off leaves the wheel wherever the driver reports it.',
-    keywords: ['filter wheel', 'efw', 'home', 'park', 'slot 1', 'luminance', 'first connect', 'startup', 'boot'],
+    label: 'Park on slot 0 when the wheel first connects',
+    description: 'The first time the filter wheel connects after Ara starts on the rig (auto or manual), park it on slot 0 (its first position, usually L) unless a filter change is requested first. Off leaves the wheel wherever the driver reports it.',
+    keywords: ['filter wheel', 'efw', 'home', 'park', 'slot 0', 'luminance', 'first connect', 'startup', 'boot'],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
     defaultValue: true,
@@ -1173,7 +1173,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.filterwheel.auto_connect',
     label: 'Filter wheel auto-connect on boot',
-    description: 'Connect to the filter wheel when Ara starts. On its first connect after Ara starts, Ara parks the wheel on slot 1 unless "Park on slot 1 when the wheel first connects" is off.',
+    description: 'Connect to the filter wheel when Ara starts. On its first connect after Ara starts, Ara parks the wheel on slot 0 unless "Park on slot 0 when the wheel first connects" is off.',
     keywords: ['filter wheel', 'efw', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
