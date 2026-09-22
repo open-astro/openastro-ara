@@ -1832,4 +1832,8 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
 - `instructions_total` (the progress-bar denominator) still counts DISABLED leaves while
   `estimated_total_seconds` excludes them; the two header numbers describe slightly different
   plans. Pre-existing denominator, newly divergent after #1088.
+- `TimeCondition.CalculateRemainingTime()` (`OpenAstroAra.Sequencer/Conditions/TimeCondition.cs`)
+  still assigns the observable `RolloverTime` from a read path, the pattern #1088 removed from
+  `WaitForTime.GetEstimatedDuration()`. Unreachable from `RunEtaEstimator` today (only
+  `LoopCondition.Iterations` is read off conditions); fix before conditions join the walk.
 

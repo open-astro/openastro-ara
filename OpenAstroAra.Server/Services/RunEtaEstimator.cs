@@ -109,7 +109,7 @@ public static class RunEtaEstimator {
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Estimate boundary: GetEstimatedDuration runs arbitrary instruction code (WaitForTime builds a DateTime from stored fields and can throw on an out-of-range value); an estimate must never turn run-state polling into a 500 — the nominal cost is the honest fallback. CA1031's log-and-recover boundary applies.")]
+        Justification = "Estimate boundary: GetEstimatedDuration runs arbitrary instruction code (WaitForTime builds a DateTime from stored fields and can throw on an out-of-range value); an estimate must never turn run-state polling into a 500 — the fallback is the nominal cost for an instruction without a duration model and zero for one that has one (#1080). CA1031's log-and-recover boundary applies.")]
     private static double LeafCost(ISequenceItem leaf) {
         double seconds;
         try {

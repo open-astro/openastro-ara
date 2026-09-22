@@ -73,7 +73,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_throwing_estimate_costs_the_nominal_and_a_disabled_loop_does_not_multiply() {
+        public void A_throwing_estimate_on_an_instruction_without_a_duration_model_costs_the_nominal_and_a_disabled_loop_does_not_multiply() {
             var throwing = new Mock<ISequenceItem>();
             throwing.SetupProperty(i => i.Status, SequenceEntityStatus.CREATED);
             throwing.Setup(i => i.GetEstimatedDuration()).Throws(new ArgumentOutOfRangeException("hour"));
