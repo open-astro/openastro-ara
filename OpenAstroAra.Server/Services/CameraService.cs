@@ -151,17 +151,25 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         if (coords.Epoch == OpenAstroAra.Astrometry.Epoch.J2000) {
             return new FramePointing(coords.RA, coords.Dec, IsJ2000: true);
         }
+        // Coordinates.Transform only knows the JNOW→J2000 math: a B1950/J2050 SOURCE would be run
+        // through it silently and land ~1° off while claiming J2000. Same clamp as MapSlewEpoch —
+        // record such a (vanishingly rare) mount's position in its own epoch, flagged as such.
+        if (coords.Epoch != OpenAstroAra.Astrometry.Epoch.JNOW) {
+            return new FramePointing(coords.RA, coords.Dec, IsJ2000: false);
+        }
         try {
             var j2000 = coords.Transform(OpenAstroAra.Astrometry.Epoch.J2000);
             return new FramePointing(j2000.RA, j2000.Dec, IsJ2000: true);
         } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
-                or BadImageFormatException or TypeInitializationException or NotSupportedException) {
+                or BadImageFormatException or TypeInitializationException) {
             return new FramePointing(coords.RA, coords.Dec, IsJ2000: false);
         }
     }
 
-    // Snapshotted right after pixel readout, like the focuser position: the mount tracks during
-    // the exposure, so its post-readout RA/Dec is the frame's pointing to well within a pixel.
+    // Snapshotted right after pixel readout, like the focuser position. It is the §32.4 cache
+    // (refreshed every ~2 s), not a live read: while tracking the RA/Dec is constant, so the card
+    // is the frame's pointing to well within a pixel; with tracking off or a slew started right
+    // at readout it can be up to one refresh stale — fine for a solve hint.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Recording pointing is best-effort metadata; a mediator/transport fault must not fail a capture whose image is already downloaded. Log-and-recover boundary.")]
     private FramePointing? ReadPointing() {

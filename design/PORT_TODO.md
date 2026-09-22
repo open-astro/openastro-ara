@@ -14,6 +14,11 @@ the other design docs.
 
 ---
 
+## §29.2 pointing headers — follow-ups (2026-09-22, from the #1091 review)
+
+- **`AstroUtil.HoursToHMS` can emit `24 00 00`.** An RA within ~0.5 s of 24h rounds its seconds up into the hour field, which `SqliteFrameRepository.ParseTargetCoordinates` then rejects (≥360°) and which is a non-standard card for external tools. Pre-existing formatter behaviour, now reachable from the capture path's `OBJCTRA` card. Wrap at 24h in the formatter (and add the boundary case to `AstroUtilTest`).
+- **PORT_PLAYBOOK §39.3 header table** still documents `OBJCTRA`/`OBJCTDEC` as "Target RA / Dec"; since #1091 they are the mount's pointing at readout (what NINA writes too). Reconcile when that section is next touched.
+
 ## Android + iOS platforms — follow-ups (2026-09-20, from the #1063 review)
 
 - CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-build` job

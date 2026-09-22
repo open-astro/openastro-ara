@@ -76,6 +76,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void B1950_mount_position_is_kept_in_its_own_epoch_never_mislabelled_J2000() {
+            // Transform only knows JNOW→J2000; running a B1950 source through it would land ~1° off
+            // while claiming J2000. Mirror MapSlewEpoch's clamp instead.
+            var info = new TelescopeInfo { Connected = true };
+            info.Coordinates = new Coordinates(Angle.ByHours(0.7123), Angle.ByDegree(41.269), Epoch.B1950);
+            var pt = CameraService.PointingFrom(info);
+            Assert.That(pt, Is.Not.Null);
+            Assert.Multiple(() => {
+                Assert.That(pt!.Value.RaHours, Is.EqualTo(0.7123).Within(1e-9));
+                Assert.That(pt.Value.DecDegrees, Is.EqualTo(41.269).Within(1e-9));
+                Assert.That(pt.Value.IsJ2000, Is.False);
+            });
+        }
+
+        [Test]
         public void Julian_year_is_2000_at_J2000_epoch_and_advances_by_365_25_days() {
             var j2000 = new DateTimeOffset(2000, 1, 1, 12, 0, 0, TimeSpan.Zero);
             Assert.That(CameraService.JulianYear(j2000), Is.EqualTo(2000.0).Within(1e-9));
