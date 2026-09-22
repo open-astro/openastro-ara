@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/client_gps_state.dart';
 import '../state/time_sync_state.dart';
 
 /// The outcome of a "Fill from GPS" attempt: where it succeeded (or exactly why
@@ -92,7 +93,8 @@ String permissionHint(ClientPlatform p) => switch (p) {
         'apps to access your location, then click Fill from GPS again.',
   ClientPlatform.linux =>
     'On Linux there is no system location service to fall back on — '
-        'plug a USB GPS dongle into the machine running Ara Server.',
+        'plug a USB GPS dongle into this computer (Settings → Site → GPS on '
+        'this computer) or into the machine running Ara Server.',
   ClientPlatform.android =>
     'Open Settings → Apps → OpenAstro Ara → Permissions → Location and '
         'allow it while using the app, then tap Fill from GPS again.',
@@ -110,7 +112,8 @@ String noFixHint(ClientPlatform p) => switch (p) {
         'sky, or plug a USB GPS dongle into the machine running Ara Server.',
   _ =>
     'Desktop location needs a network connection — connect to one, or '
-        'plug a USB GPS dongle into the machine running Ara Server.',
+        'plug a USB GPS dongle into this computer (Settings → Site → GPS on '
+        'this computer) or into the machine running Ara Server.',
 };
 
 String get _noFixHint => noFixHint(clientPlatform);
@@ -148,7 +151,25 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     }
   }
 
-  // 2) Fallback: this machine's own location (a fresh fix is required).
+  // 2) A USB GPS dongle on THIS computer (Settings → Site → GPS on this
+  // computer). Reuse a fresh fix the background loop already has; otherwise
+  // read one now. Ahead of the device-location fallback because a receiver
+  // fix is better than a Wi-Fi geolocation guess.
+  final clientGps = ref.read(clientGpsProvider).value;
+  if (clientGps != null && clientGps.enabled) {
+    final notifier = ref.read(clientGpsProvider.notifier);
+    final fix = clientGps.freshFix(DateTime.now().toUtc()) ? clientGps.lastFix : await notifier.syncNow();
+    if (fix != null && fix.hasPosition) {
+      return GpsSiteFill.success(
+        lat: fix.latitudeDeg!,
+        lng: fix.longitudeDeg!,
+        alt: fix.altitudeM,
+        sourceLabel: 'the GPS dongle on $_thisDevice',
+      );
+    }
+  }
+
+  // 3) Fallback: this machine's own location (a fresh fix is required).
   final baseNote = api == null
       ? 'No server connected, '
       : dongleReadFailed

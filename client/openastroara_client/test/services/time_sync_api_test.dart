@@ -95,6 +95,32 @@ void main() {
     expect(state.location!.alt, isNull, reason: 'unknown altitude stays null, never 0');
   });
 
+  test('pushGpsFix sends a high-trust gps-client sync with the receiver time and fix', () async {
+    final adapter = _StubAdapter(const {'location_updated': true, 'clock_set': true});
+    final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+
+    final r = await api.pushGpsFix(timeUtc: DateTime.utc(2026, 9, 22, 4, 19, 26), lat: 38.854, lng: -77.0435, alt: 120.5);
+
+    expect(adapter.lastRequest!.method, 'POST');
+    expect(adapter.lastRequest!.path, endsWith('/api/v1/server/time-sync'));
+    final body = adapter.lastBody as Map<String, dynamic>;
+    expect(body['source'], 'gps-client');
+    expect(body['trust'], 'high');
+    expect(body['time_utc'], '2026-09-22T04:19:26.000Z');
+    expect(body['location'], {'lat': 38.854, 'lng': -77.0435, 'alt': 120.5});
+    expect(r.locationUpdated, isTrue);
+  });
+
+  test('pushGpsFix omits the location when the receiver has time but no position', () async {
+    final adapter = _StubAdapter(const {'location_updated': false, 'clock_set': true});
+    final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+    await api.pushGpsFix(timeUtc: DateTime.utc(2026, 9, 22));
+    final body = adapter.lastBody as Map<String, dynamic>;
+    expect(body.containsKey('location'), isFalse);
+  });
+
   test('pushClientTime sends a medium-trust client sync with an ISO instant', () async {
     final adapter = _StubAdapter(const {'location_updated': false});
     final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),

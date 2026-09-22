@@ -125,6 +125,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Gps_client_is_an_external_gps_at_high_trust() {
+            // A USB dongle on the client computer relays the receiver's own UTC + fix — trusted like
+            // the Pi-side dongle, unlike gps-mobile (phone clock timestamps, medium).
+            var svc = NewService();
+            await svc.PushAsync(new TimeSyncPushRequestDto("gps-client", T0, new TimeSyncLocationDto(38.85, -77.04, 120), Trust: "high"), CancellationToken.None);
+            var state = await svc.GetStateAsync(CancellationToken.None);
+            Assert.Multiple(() => {
+                Assert.That(state.Source, Is.EqualTo("gps-external"));
+                Assert.That(state.Trust, Is.EqualTo("high"));
+                Assert.That(state.Synced, Is.True);
+                Assert.That(state.Location?.Lat, Is.EqualTo(38.85));
+            });
+        }
+
+        [Test]
         public void An_unknown_source_throws_the_422_exception() {
             var svc = NewService();
             Assert.That(async () => await svc.PushAsync(new TimeSyncPushRequestDto("ntp", T0), CancellationToken.None),

@@ -148,9 +148,14 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         var (stateSource, maxTrust) = request.Source?.Trim().ToLowerInvariant() switch {
             "client" => ("client", "medium"),
             "gps-mobile" => ("gps-external", "medium"),
+            // A USB GPS dongle on the client computer: the client reads NMEA itself and relays the
+            // receiver's UTC + fix. Same trust as a dongle on the Pi (the LAN hop is milliseconds),
+            // which is why it is a separate wire source from gps-mobile (a phone's own location
+            // service, whose timestamp is the phone clock, stays medium).
+            "gps-client" => ("gps-external", "high"),
             "manual" => ("manual", "low"),
             _ => throw new TimeSyncInvalidSourceException(
-                $"Unknown time-sync source '{request.Source}' — expected client, gps-mobile or manual."),
+                $"Unknown time-sync source '{request.Source}' — expected client, gps-client, gps-mobile or manual."),
         };
         var trust = ClampTrust(request.Trust, maxTrust);
         return Task.FromResult(ApplyCore(stateSource, trust, request.TimeUtc, request.Location));
