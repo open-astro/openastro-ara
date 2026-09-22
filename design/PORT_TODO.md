@@ -1813,3 +1813,20 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   would make the guard read "already proposed" and the whole run go quiet,
   which is the #997 failure mode the watcher exists to prevent. One-line fix,
   out of #1017's stated scope.
+
+## MoveAxis rate bands on the wire (2026-09-22, from the #1087 review notes)
+
+- **Product decision, out of #1087's scope:** `move_axis_rates_deg_per_sec` publishes the
+  endpoints of every band flattened (`EndpointsOf`), so the client cannot tell two discrete
+  rates `[(0.004,0.004),(2.0,2.0)]` from one band `(0.004, 2.0)` — #1087's "two rates are
+  one band" rule offers percentage presets on the former that the daemon snaps to a step
+  many times off the label, and drops the 0.004 chip. Likewise one endpoint cannot be told
+  apart as `(6.0, 6.0)` (discrete: every sub-25 % preset now 409s, including the pad's 10 %
+  default) versus `(0, 6.0)`. The fix is publishing bands, not endpoints (a wire change with
+  a client-side reader), and deciding whether a lone endpoint reads as `min == max`.
+- **Diagonal press with asymmetric per-axis bands** (primary `(0.001, 6)`, secondary
+  `(2.0, 6)`): a slow corner press moves one axis and 409s the other, so the mount tracks a
+  line rather than the diagonal. Release always sends 0 to both axes, so no stranding; the
+  toast fires. Newly reachable since #1087 (the slow leg used to be snapped up). Needs the
+  same bands-on-the-wire change so the picker can cap presets to the slower axis's floor.
+

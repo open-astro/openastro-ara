@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Moq;
 using NUnit.Framework;
+using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
@@ -60,6 +61,19 @@ namespace OpenAstroAra.Test {
                 .ThrowsAsync(new InvalidOperationException("Mount reports no MoveAxis rate for this axis"));
             var result = await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 1.0), svc.Object, CancellationToken.None);
             Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+        }
+
+        [Test]
+        public async Task A_rate_beyond_the_snap_up_bound_is_409_with_the_service_message_verbatim() {
+            // #1085 — the real service throw (not a stand-in), so the text the client's toast renders
+            // is exactly what SnapMoveAxisRate wrote.
+            var svc = new Mock<ITelescopeService>();
+            svc.Setup(s => s.MoveAxisAsync(0, 0.06, It.IsAny<CancellationToken>()))
+                .Returns(() => throw Assert.Throws<InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, [(2.0, 6.0)]))!);
+            var result = await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 0.06), svc.Object, CancellationToken.None);
+            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+            var problem = (result as IValueHttpResult)?.Value as ProblemDetails;
+            Assert.That(problem?.Detail, Does.Contain("more than 4x slower than the mount's slowest rate").And.Contain("Pick a faster speed"));
         }
     }
 }
