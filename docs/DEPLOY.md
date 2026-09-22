@@ -45,7 +45,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 
 | Path | Purpose | Owner |
 |---|---|---|
-| `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary | `openastroara:openastroara` |
+| `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `libsofa.so` / `libnovas31.so` astrometry natives | `openastroara:openastroara` |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |
@@ -53,6 +53,12 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | `/etc/systemd/system/openastroara-server.service` | systemd unit | root |
 
 The daemon runs as the dedicated `openastroara` system user; it never runs as root.
+
+The first lines of the log say `Astrometry natives loaded (SOFA + NOVAS31)`. A
+`Astrometry natives incomplete` warning there means the package is broken (or a manual
+install skipped `scripts/build-astrometry-natives.sh`): slews still work, but altitude,
+sun and moon conditions, the meridian-flip projection and polar-align solving fail until
+the two `.so` files are next to the binary.
 
 ---
 
@@ -164,6 +170,11 @@ sudo apt install libcfitsio10
 
 # 3. Copy your linux-arm64 publish output into /opt/openastroara/
 # (built via `dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -p:PublishAot=false -o ./publish/arm64`)
+# The SOFA/NOVAS31 astrometry natives are NOT produced by `dotnet publish`; build them into the
+# same directory first (on the Pi itself: `sudo apt install build-essential`; cross-compiling
+# from x86-64: `sudo apt install gcc-aarch64-linux-gnu` and prefix with `CC=aarch64-linux-gnu-gcc`).
+scripts/build-astrometry-natives.sh ./publish/arm64
+ls publish/arm64/libsofa.so publish/arm64/libnovas31.so   # both must exist
 sudo cp -r publish/arm64/* /opt/openastroara/
 sudo chown -R openastroara:openastroara /opt/openastroara
 

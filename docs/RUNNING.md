@@ -122,6 +122,28 @@ The build doesn't need CFITSIO, but the capture path resolves it at runtime
 
 ---
 
+
+### Astrometry natives (SOFA + NOVAS31)
+
+The cross-epoch transforms, rise/set bodies and Julian-date helpers P/Invoke two
+C libraries built from the vendored sources. They are not checked in and not built
+by `dotnet build`. The daemon logs `Astrometry natives loaded` or an
+`Astrometry natives incomplete` warning in its first lines, and the test suite
+fails seven NOVAS/SOFA-dependent tests without them. Stage them once per output
+directory (a `dotnet clean` wipes them):
+
+```bash
+# daemon
+scripts/build-astrometry-natives.sh OpenAstroAra.Server/bin/Debug/net10.0/    # or bin/Release/…
+# tests
+scripts/build-astrometry-natives.sh OpenAstroAra.Test/bin/Release/net10.0/
+```
+
+Needs a C compiler (`cc`): Xcode command-line tools on macOS, `build-essential` on
+Debian/Ubuntu. CI builds them for the host on the test job and cross-compiles them
+for linux-arm64 into the publish directory, so the Docker image and the `.deb` ship
+them. Windows keeps the inherited `SOFAlib.dll` / `NOVAS31lib.dll` probing (untested).
+
 ## 2. Run the client
 
 Common first step on every OS:
