@@ -3671,7 +3671,7 @@ Response:
 
 POST /api/v1/server/time-sync
 {
-  "source": "client|gps-mobile|manual",
+  "source": "client|gps-client|gps-mobile|manual",
   "time_utc": "2026-05-19T03:14:15.123Z",
   "location": { "lat": 30.27, "lng": -97.74, "alt": 165.0 },
   "trust": "medium"

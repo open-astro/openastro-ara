@@ -12,6 +12,7 @@ import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
 import 'widgets/plan_offline_button.dart';
 import 'services/window_mode.dart';
+import 'state/client_gps_state.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
@@ -32,6 +33,9 @@ class OpenAstroAraApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // §31 — start the "GPS on this computer" loop with the app, not when the
+    // settings pane is first opened; it is a no-op while the pref is off.
+    ref.watch(clientGpsProvider);
     final night = switch (ref.watch(nightModeProvider)) {
       AsyncData(:final value) => value,
       _ => false,

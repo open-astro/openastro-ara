@@ -39,7 +39,8 @@ public sealed record TimeSyncStateDto(
     DateTimeOffset? SyncedAtUtc);
 
 /// <summary>§31.3 — <c>POST /api/v1/server/time-sync</c>: a client-pushed time (+ optional
-/// location). <c>Source</c> is one of <c>client|gps-mobile|manual</c>; the requested
+/// location). <c>Source</c> is one of <c>client|gps-client|gps-mobile|manual</c> (<c>gps-client</c>
+/// = a USB receiver on the client computer, relayed verbatim, high-trust ceiling); the requested
 /// <c>Trust</c> is clamped server-side to the source's §31.2 ceiling.</summary>
 public sealed record TimeSyncPushRequestDto(
     string Source,

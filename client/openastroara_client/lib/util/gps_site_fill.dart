@@ -120,12 +120,12 @@ String get _noFixHint => noFixHint(clientPlatform);
 
 String get _permissionHint => permissionHint(clientPlatform);
 
-/// Try to fill an observing site from GPS. **Preferred** source is a USB GPS
-/// dongle on the server machine (§31.3 time-sync state); when that's absent
-/// (no server, or no fix yet) it falls back to **the client machine's own
+/// Try to fill an observing site from GPS, in this order: (1) a USB GPS
+/// dongle on the server machine (§31.3 time-sync state); (2) a USB GPS dongle
+/// on THIS computer when "GPS on this computer" is enabled (a fresh fix from
+/// the background loop, or one read now); (3) **the client machine's own
 /// location** (macOS/Windows/Android/iOS; Linux has no registered geolocator
-/// backend), accepting
-/// only a fix less than ten minutes old. This one routine
+/// backend), accepting only a fix less than ten minutes old. This one routine
 /// is shared by the wizard (profile creation) and the Safety → Site panel
 /// (editing), so every "Fill from GPS" behaves the same everywhere.
 Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
@@ -155,7 +155,17 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
   // computer). Reuse a fresh fix the background loop already has; otherwise
   // read one now. Ahead of the device-location fallback because a receiver
   // fix is better than a Wi-Fi geolocation guess.
-  final clientGps = ref.read(clientGpsProvider).value;
+  // Awaited, not `.value`: the provider builds lazily (it reads a prefs file), so
+  // the first Fill from GPS of a session would otherwise see "loading" and skip.
+  ClientGpsStatus? clientGps;
+  try {
+    clientGps = await ref
+        .read(clientGpsProvider.future)
+        .then<ClientGpsStatus?>((v) => v)
+        .timeout(const Duration(seconds: 3), onTimeout: () => null);
+  } catch (_) {
+    clientGps = null; // prefs unreadable → treat as disabled
+  }
   if (clientGps != null && clientGps.enabled) {
     final notifier = ref.read(clientGpsProvider.notifier);
     final fix = clientGps.freshFix(DateTime.now().toUtc()) ? clientGps.lastFix : await notifier.syncNow();
