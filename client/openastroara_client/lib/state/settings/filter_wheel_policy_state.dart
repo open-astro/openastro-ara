@@ -7,7 +7,7 @@ import '../saved_server_state.dart';
 
 /// #1075 — the profile's filter-wheel policy, daemon-backed
 /// (`/api/v1/profile/filter-wheel/policy`): whether Ara parks the wheel on
-/// slot 1 (L) the first time it connects after the daemon starts (#1066).
+/// slot 0 (L) the first time it connects after the daemon starts (#1066).
 /// Same shape as [EquipmentConnectionNotifier]: one-shot hydrate on build,
 /// optimistic local update + fire-and-forget PUT on change, silent failure
 /// (best-effort, trusted LAN).
