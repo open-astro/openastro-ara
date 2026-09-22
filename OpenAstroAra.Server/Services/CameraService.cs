@@ -126,8 +126,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly IObservingConditionsService? _weather;
 
     private readonly IFocuserMediator? _focuser;
-    // §28 — the Equipment-layer profile the plate-solve capture wraps its frame with (the CLI
-    // solvers write their temp FITS through it). Func<>: it is registered after this service.
+    // §28 — the Equipment-layer profile the plate-solve capture's wrapped IImageData carries for
+    // render paths the solve loop never takes (RenderImage/Stretch); SaveToDisk does not read it,
+    // so it is optional. Func<>: it is registered after this service.
     private readonly Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? _legacyProfile;
 
     // Snapshotted just after pixel readout (the focuser is stationary during an

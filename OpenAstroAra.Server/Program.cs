@@ -550,9 +550,9 @@ public partial class Program {
                 weather: sp.GetService<IObservingConditionsService>(),
                 // #1065 — the cooling fan follows the cooler (Func<>: construction-cycle breaker).
                 fan: () => sp.GetService<ICoolingFanActuator>(),
-                // §28 — the plate-solve capture (CaptureAndPrepareImage) wraps its frame with the
-                // legacy profile the CLI solvers write their temp FITS through (Func<>: registered
-                // later in this file).
+                // §28 — the legacy profile the plate-solve capture's wrapped IImageData carries for
+                // render paths the solve loop never takes; optional (Func<>: registered later in
+                // this file).
                 legacyProfile: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
