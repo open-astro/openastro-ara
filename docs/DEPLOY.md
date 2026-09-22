@@ -19,13 +19,27 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/opena
   | sudo tee /etc/apt/sources.list.d/openastro.list
 sudo apt update
 
-# 2. Install (apt resolves libcfitsio10 transitively)
+# 2. Install (apt resolves libcfitsio10 and astap-cli transitively)
 sudo apt install openastroara-server
 
-# 3. The systemd unit auto-starts on first install
+# 3. Star database for the plate solver (one-time, ~1.7 GB). ASTAP's D80 covers the
+#    usual range of fields (roughly 0.25° to 30°); very wide fields want W08/G05 and
+#    very narrow ones H17/H18 (playbook §18.I). The package creates /var/lib/astap
+#    owned by the service user; the daemon passes it to astap_cli with -d
+#    (Options → Plate solving → index path).
+#    D80 is published only as a Debian package (its payload is the d80_*.1476 files);
+#    extract it into the daemon's directory rather than installing it, so the files
+#    land where the profile's index path points.
+#    Not via /tmp: on Raspberry Pi OS it is a ~2 GB tmpfs and this package is 1.2 GB.
+curl -L -o ~/d80.deb https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.deb/download
+dpkg-deb --fsys-tarfile ~/d80.deb \
+  | sudo tar -x -C /var/lib/astap --strip-components=3 --wildcards './opt/astap/d80_*'
+sudo chown -R openastroara:openastroara /var/lib/astap && rm ~/d80.deb
+
+# 4. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
 
-# 4. Verify the daemon is responding
+# 5. Verify the daemon is responding
 curl http://$(hostname -s).local:5555/healthz   # expect "ok"
 ```
 
@@ -46,6 +60,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | Path | Purpose | Owner |
 |---|---|---|
 | `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `libsofa.so` / `libnovas31.so` astrometry natives | `openastroara:openastroara` |
+| `/var/lib/astap/` | ASTAP star database (you download it, step 3 above; the solver binary itself is the `astap-cli` package) | `openastroara:openastroara` |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |

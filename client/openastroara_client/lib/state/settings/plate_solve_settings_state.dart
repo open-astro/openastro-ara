@@ -25,7 +25,7 @@ class PlateSolveSettings {
 
   const PlateSolveSettings({
     this.engine = PlateSolveEngine.astap,
-    this.pathOrEndpoint = '/usr/bin/astap',
+    this.pathOrEndpoint = '/usr/bin/astap_cli',
     this.indexDownloadPath = '/var/lib/astap',
     this.searchRadiusDeg = 30,
     this.downsampleFactor = 2,

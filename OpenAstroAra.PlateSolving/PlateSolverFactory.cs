@@ -73,7 +73,7 @@ namespace OpenAstroAra.PlateSolving {
                 // (BlindSolver.AstrometryNet → PlateSolver.AstrometryNet) both funnel here — doesn't resolve to a
                 // different backend than configured without a trace.
                 PlateSolver.AstrometryNet => CreateAstapForRemovedAstrometryNet(plateSolveSettings),
-                _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation),
+                _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation, plateSolveSettings.ASTAPDatabaseLocation),
             };
         }
 
@@ -85,7 +85,7 @@ namespace OpenAstroAra.PlateSolving {
             if (Interlocked.CompareExchange(ref astrometryNetSubstitutionWarned, 1, 0) == 0) {
                 Logger.Warning("Plate solve - solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP instead.");
             }
-            return new ASTAPSolver(plateSolveSettings.ASTAPLocation);
+            return new ASTAPSolver(plateSolveSettings.ASTAPLocation, plateSolveSettings.ASTAPDatabaseLocation);
         }
 
         public static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings) {

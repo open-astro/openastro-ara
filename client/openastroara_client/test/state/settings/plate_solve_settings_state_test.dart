@@ -11,7 +11,7 @@ void main() {
     test('defaults match playbook §37.10', () {
       final s = container.read(plateSolveSettingsProvider);
       expect(s.engine, PlateSolveEngine.astap);
-      expect(s.pathOrEndpoint, '/usr/bin/astap');
+      expect(s.pathOrEndpoint, '/usr/bin/astap_cli');
       expect(s.indexDownloadPath, '/var/lib/astap');
       expect(s.searchRadiusDeg, 30);
       expect(s.downsampleFactor, 2);
@@ -43,7 +43,7 @@ void main() {
       n.setIndexDownloadPath('');
       n.setIndexDownloadPath('\t\n');
       final s = container.read(plateSolveSettingsProvider);
-      expect(s.pathOrEndpoint, '/usr/bin/astap');
+      expect(s.pathOrEndpoint, '/usr/bin/astap_cli');
       expect(s.indexDownloadPath, '/var/lib/astap');
       n.setPathOrEndpoint('  http://nova.astrometry.net  ');
       expect(container.read(plateSolveSettingsProvider).pathOrEndpoint,
