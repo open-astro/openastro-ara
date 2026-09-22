@@ -1818,8 +1818,12 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
 
 - `RunEtaEstimator.HasOwnDurationModel` is a hand-maintained list (`TakeExposure`,
   `WaitForTime`, `WaitForTimeSpan`); `CoolCamera`, `WarmCamera`, `SkyFlats`,
-  `FlatPanelFlats`, `Dither` and `SetReadoutMode` also override `GetEstimatedDuration()`,
+  `FlatPanelFlats`, `Dither`, `SetReadoutMode` and `SetUSBLimit` also override `GetEstimatedDuration()`,
   so a `CoolCamera` with `Duration = 0` still costs the 15 s nominal. The right shape is a
   nullable estimate on the interface (null = no model, zero = zero) rather than a wider
   list; out of #1088's scope.
+- `RunEtaEstimator.Iterations()` multiplies a `ParallelContainer` by its `LoopCondition`, but
+  `ParallelStrategy.Execute` runs each child once and returns: it never loops. Pre-existing
+  (#1068), not reachable from a default sequence; the fix is to ignore loop conditions on a
+  parallel block (or, better, ask the strategy).
 

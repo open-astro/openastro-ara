@@ -1286,15 +1286,19 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         // #1080 — the two tree walks run on the per-report checkpoint path as well as every WS
         // publish and GET /state. The pair is cached against a tree version (bumped when a leaf
-        // changes status or the run changes state, never on a same-status progress tick) plus a
-        // short TTL for the time-based estimates (WaitForTime counts down between status changes).
+        // changes status or the run reaches a lifecycle state through the State setter; pause and
+        // resume go through TryTransition and rely on the TTL; never on a same-status progress
+        // tick) plus a short TTL for the time-based estimates (WaitForTime counts down between
+        // status changes).
         // The final capture at tree release walks fresh (fresh: true) so a terminal state never
         // reports a stale "remaining".
-        private static readonly TimeSpan EstimateCacheTtl = TimeSpan.FromMilliseconds(250);
+        private const long EstimateCacheTtlMs = 250;
         private long _treeVersion;
         private long _cachedEstimateVersion = -1;
         private (double? Total, double? Remaining) _cachedEstimate;
-        private DateTimeOffset _cachedEstimateAt = DateTimeOffset.MinValue;
+        // Monotonic (Environment.TickCount64), not wall clock: a backwards NTP step on an RTC-less
+        // Pi must not serve the cache past its TTL and freeze a WaitForTime countdown.
+        private long _cachedEstimateAtMs = long.MinValue / 2;
 
         // Caller holds _gate.
         private (double? Total, double? Remaining) EstimatedSecondsLocked(bool fresh = false) {
@@ -1302,13 +1306,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (top is null) {
                 return _finalEstimate; // (null, null) before the tree loads; the last walk after it is released
             }
-            var now = DateTimeOffset.UtcNow;
+            var now = Environment.TickCount64;
             var version = Interlocked.Read(ref _treeVersion);
-            if (!fresh && version == _cachedEstimateVersion && now - _cachedEstimateAt < EstimateCacheTtl) {
+            if (!fresh && version == _cachedEstimateVersion && now - _cachedEstimateAtMs < EstimateCacheTtlMs) {
                 return _cachedEstimate;
             }
             _cachedEstimate = (RunEtaEstimator.EstimateTotalSeconds(top), RunEtaEstimator.EstimateRemainingSeconds(top));
-            _cachedEstimateAt = now;
+            _cachedEstimateAtMs = now;
             _cachedEstimateVersion = version;
             return _cachedEstimate;
         }
