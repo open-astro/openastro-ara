@@ -89,6 +89,23 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             BinY: bin,
             FilterName: null,
             CameraOffset: null);
+        return await CaptureUnpersistedAsync(request, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The shared "expose, download, hand back the pixels, persist nothing" core behind the §59
+    /// autofocus probe and the §28 plate-solve capture (<c>CaptureAndPrepareImage</c>). Callers
+    /// validate their own request; this only owns the gate discipline and the device round-trip.
+    /// </summary>
+    private async Task<AnalysisFrame> CaptureUnpersistedAsync(ExposureRequestDto request, CancellationToken ct) {
+        AlpacaCamera? client;
+        lock (_gate) {
+            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("camera is not connected");
+        }
+        var exposureSec = request.ExposureSec;
 
         // Same gate discipline as the sequencer capture path (CaptureImage): WAIT for an in-flight
         // capture rather than fail — an AF sweep runs inside sequences and must queue behind a

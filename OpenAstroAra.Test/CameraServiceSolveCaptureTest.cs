@@ -1,0 +1,106 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using NUnit.Framework;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Model;
+
+using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// §28 — the plate-solve capture seam (<c>IImagingMediator.CaptureAndPrepareImage</c>) that
+    /// <c>CaptureSolver</c> depends on. It used to throw NotSupported unconditionally, which failed
+    /// every centering caller on its first exposure.
+    /// </summary>
+    [TestFixture]
+    public class CameraServiceSolveCaptureTest {
+
+        [Test]
+        public void Solve_request_maps_the_sequence_exposure_binning_gain_and_filter() {
+            var seq = new CaptureSequence(6.5, ImageTypes.SNAPSHOT,
+                new FilterInfo { Name = "L", Position = 0 }, new BinningMode(2, 2), exposureCount: 1) {
+                Gain = 120,
+                Offset = 30,
+            };
+            var req = CameraService.SolveCaptureRequest(seq);
+            Assert.Multiple(() => {
+                Assert.That(req.ExposureSec, Is.EqualTo(6.5));
+                Assert.That(req.BinX, Is.EqualTo(2));
+                Assert.That(req.BinY, Is.EqualTo(2));
+                Assert.That(req.Gain, Is.EqualTo(120));
+                Assert.That(req.CameraOffset, Is.EqualTo(30));
+                Assert.That(req.FilterName, Is.EqualTo("L"));
+            });
+        }
+
+        [Test]
+        public void Unset_gain_offset_and_filter_leave_the_camera_at_its_current_values() {
+            // NINA's -1 sentinel means "don't touch"; the daemon's DTO says that with null.
+            var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1) {
+                Gain = -1,
+                Offset = -1,
+            };
+            var req = CameraService.SolveCaptureRequest(seq);
+            Assert.Multiple(() => {
+                Assert.That(req.Gain, Is.Null);
+                Assert.That(req.CameraOffset, Is.Null);
+                Assert.That(req.FilterName, Is.Null);
+                Assert.That(req.BinX, Is.EqualTo(1));
+                Assert.That(req.BinY, Is.EqualTo(1));
+            });
+        }
+
+        [Test]
+        public void Zero_binning_reads_as_one_by_one() {
+            var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(0, 0), exposureCount: 1);
+            var req = CameraService.SolveCaptureRequest(seq);
+            Assert.That((req.BinX, req.BinY), Is.EqualTo((1, 1)));
+        }
+
+        [Test]
+        public void Capture_without_a_camera_fails_as_not_connected_not_not_supported() {
+            // The whole point: a disconnected camera is an ordinary equipment failure the
+            // centering loop's attempt policy understands — not a "feature missing" throw.
+            using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
+            var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
+                svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
+            Assert.That(ex!.Message, Does.Contain("not connected"));
+        }
+
+        [Test]
+        public void Capture_with_no_legacy_profile_wired_says_so() {
+            using var svc = new CameraService();
+            var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
+                svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
+            Assert.That(ex!.Message, Does.Contain("profile"));
+        }
+
+        [Test]
+        public void Non_positive_exposure_is_rejected_before_touching_the_camera() {
+            using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
+            var seq = new CaptureSequence(0, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
+        }
+    }
+}
