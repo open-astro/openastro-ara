@@ -156,9 +156,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return epoch is Epoch.J2000 or Epoch.JNOW ? epoch : Epoch.JNOW;
     }
 
-    // Cross-epoch transforms P/Invoke the SOFA/NOVAS natives, which are not yet packaged for
-    // linux/macOS (PORT_TODO §14e: libnovas.so/libsofa.so). Until they ship, a missing/broken native
-    // must degrade to the untransformed target (≤ ~arcminutes of precession drift J2000↔JNOW today,
+    // Cross-epoch transforms P/Invoke the SOFA/NOVAS natives. The Pi package ships them (#1092)
+    // and Program.cs logs their presence at boot, but a dev box or a hand-rolled install can still
+    // lack them, so a missing/broken native must degrade to the untransformed target (≤ ~arcminutes of precession drift J2000↔JNOW today,
     // within a typical pointing model's slop) instead of failing the instruction. Only the
     // native-load failure modes are caught — a genuine astrometry error still surfaces (and is then
     // contained by RunMountOpAsync's op boundary). Internal for direct unit testing.
@@ -194,9 +194,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
         // Transform to the mount's native coordinate system (a J2000 sequence target sent raw to a
         // JNOW mount would be off by the precession drift, ~arcminutes). Best-effort: the cross-epoch
-        // path P/Invokes SOFA/NOVAS, whose non-Windows natives are a known packaging gap (PORT_TODO:
-        // libnovas.so/libsofa.so is a §14e follow-up) — a missing native falls back to the
-        // untransformed target rather than failing the run (same-epoch transforms are pure managed).
+        // path P/Invokes SOFA/NOVAS (shipped with the Pi package since #1092, but absent on an
+        // unstaged dev box) — a missing native falls back to the untransformed target rather than
+        // failing the run (same-epoch transforms are pure managed).
         var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem));
         var targetRa = target.RA;
         var targetDec = target.Dec;

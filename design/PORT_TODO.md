@@ -14,6 +14,10 @@ the other design docs.
 
 ---
 
+## §14e astrometry natives — follow-ups (2026-09-22, from the #1092 review)
+
+- **glibc floor of the cross-built natives.** `libsofa.so`/`libnovas31.so` are built on `ubuntu-latest` (noble, glibc 2.39) while `packaging/debian/DEBIAN/control.template` carries an unversioned `Depends: libc6`. Debian 13 Trixie (2.41, the DEPLOY.md target) is fine; on a bookworm-based Pi OS the `.deb` installs and then `dlopen` fails on a `GLIBC_2.3x` symbol, and the boot probe reports the file as MISSING although it is on disk. If pre-Trixie is meant to be supported: build in a bookworm container (or with `-D_FORTIFY_SOURCE=0` + an older sysroot) and/or version the `libc6` dependency.
+
 ## Android + iOS platforms — follow-ups (2026-09-20, from the #1063 review)
 
 - CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-build` job

@@ -27,19 +27,20 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Probe_never_throws_and_names_platform_files() {
-            var (sofa, novas) = AstrometryNatives.Probe();
+            Assert.DoesNotThrow(() => AstrometryNatives.Probe());
             var (sofaName, novasName) = AstrometryNatives.ExpectedFileNames;
             Assert.Multiple(() => {
                 Assert.That(sofaName, Does.Contain("sofa").IgnoreCase);
                 Assert.That(novasName, Does.Contain("novas").IgnoreCase);
-                Assert.That(sofa, Is.TypeOf<bool>());
-                Assert.That(novas, Is.TypeOf<bool>());
             });
         }
 
         [Test]
         public void Probe_agrees_with_a_real_transform() {
-            var (sofa, _) = AstrometryNatives.Probe();
+            // Transform needs BOTH: SOFA for the frame math and NOVAS for the Julian date
+            // (Coordinates.GetJdTT → AstroUtil.GetJulianDate → NOVAS.JulianDate).
+            var (sofa, novas) = AstrometryNatives.Probe();
+            var both = sofa && novas;
             var coords = new Coordinates(Angle.ByHours(1), Angle.ByDegree(10), Epoch.J2000);
             bool transformWorks;
             try {
@@ -50,7 +51,7 @@ namespace OpenAstroAra.Test {
             } catch (System.DllNotFoundException) {
                 transformWorks = false;
             }
-            Assert.That(sofa, Is.EqualTo(transformWorks));
+            Assert.That(both, Is.EqualTo(transformWorks));
         }
     }
 }
