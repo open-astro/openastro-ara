@@ -466,8 +466,9 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   }
 
   // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
-  // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
-  // multi-rate mounts). The selected rate is what the direction pad sends at
+  // the max, from the band's minimum up, for a mount reporting one rate or one
+  // band; the driver's own ladder for three or more rates, #1085). The
+  // selected rate is what the direction pad sends at
   // press time; it defaults to the middle option, so a fresh connect never
   // lurches at full speed.
   Widget _speedPicker(List<SlewRateOption> options) {
