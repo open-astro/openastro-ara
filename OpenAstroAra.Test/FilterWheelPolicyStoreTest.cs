@@ -26,6 +26,25 @@ namespace OpenAstroAra.Test {
     public class FilterWheelPolicyStoreTest {
 
         [Test]
+        public void The_section_rides_the_whole_profile_snapshot_both_ways() {
+            // The multi-profile bridge clones the live store with Capture and loads a saved profile
+            // with Apply: a section missing from either half leaks across profiles (Rig A's "off"
+            // survives a select of Rig B) and is never saved or exported with its profile.
+            var live = new InMemoryProfileStore();
+            live.PutFilterWheelPolicy(new FilterWheelPolicyDto(HomeOnFirstConnect: false));
+            var captured = ProfileStoreSnapshot.Capture(live);
+            Assert.That(captured.FilterWheelPolicy, Is.Not.Null, "Capture carries the section");
+            Assert.That(captured.FilterWheelPolicy!.HomeOnFirstConnect, Is.False);
+
+            var rigB = ProfileStoreSnapshot.Capture(new InMemoryProfileStore());
+            ProfileStoreSnapshot.Apply(live, rigB);
+            Assert.That(live.GetFilterWheelPolicy().HomeOnFirstConnect, Is.True, "selecting a profile that never turned the home off turns it back on");
+
+            ProfileStoreSnapshot.Apply(live, rigB with { FilterWheelPolicy = null });
+            Assert.That(live.GetFilterWheelPolicy().HomeOnFirstConnect, Is.True, "a pre-#1075 snapshot back-fills the default");
+        }
+
+        [Test]
         public void Round_trips_and_defaults_to_home_on() {
             var dir = Path.Combine(Path.GetTempPath(), "ara-wheel-policy-" + Path.GetRandomFileName());
             Directory.CreateDirectory(dir);
