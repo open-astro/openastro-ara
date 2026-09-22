@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -68,7 +69,7 @@ public static class RunEtaEstimator {
         // #1080 — a ParallelContainer runs its children concurrently: its pass costs the longest
         // child, not the sum.
         double pass = 0;
-        if (container is ParallelContainer) {
+        if (IsParallel(container)) {
             foreach (var child in children) {
                 pass = Math.Max(pass, Full(child));
             }
@@ -93,7 +94,7 @@ public static class RunEtaEstimator {
         // RUNNING: the pass in progress plus every pass still to come (a parallel block's pass
         // is its longest child, #1080).
         double passRemaining = 0, passFull = 0;
-        var parallel = container is ParallelContainer;
+        var parallel = IsParallel(container);
         foreach (var child in container.GetItemsSnapshot()) {
             if (parallel) {
                 passRemaining = Math.Max(passRemaining, Remaining(child));
@@ -124,6 +125,10 @@ public static class RunEtaEstimator {
         }
         return seconds > 0 ? seconds : NominalInstructionSeconds;
     }
+
+    // Parallelism is decided by the container's execution strategy, not its concrete type, so a
+    // future container built on ParallelStrategy is not silently summed.
+    private static bool IsParallel(ISequenceContainer container) => container.Strategy is ParallelStrategy;
 
     // The instructions whose GetEstimatedDuration is a real figure (so zero means zero) rather
     // than the base class's TimeSpan.Zero placeholder (so zero means "no estimate").

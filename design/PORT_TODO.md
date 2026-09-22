@@ -1826,4 +1826,10 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   `ParallelStrategy.Execute` runs each child once and returns: it never loops. Pre-existing
   (#1068), not reachable from a default sequence; the fix is to ignore loop conditions on a
   parallel block (or, better, ask the strategy).
+- The run header now always shows the daemon figure, and `Remaining()` charges a RUNNING
+  `TakeExposure` its full exposure, so "~X left" freezes for a whole sub and drops in one step.
+  Follow-up: subtract the in-flight instruction's elapsed time (needs a start stamp per leaf).
+- `instructions_total` (the progress-bar denominator) still counts DISABLED leaves while
+  `estimated_total_seconds` excludes them; the two header numbers describe slightly different
+  plans. Pre-existing denominator, newly divergent after #1088.
 
