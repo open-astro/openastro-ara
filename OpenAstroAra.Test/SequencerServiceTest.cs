@@ -146,9 +146,13 @@ namespace OpenAstroAra.Test {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();
             var svc = BuildService(id, BuildBody(c => {
-                c.Items.Add(new WaitForTimeSpan { Time = 0.3 });
-                c.Items.Add(new WaitForTimeSpan { Time = 0.3 });
-                c.Items.Add(new WaitForTimeSpan { Time = 0.3 });
+                // Four 0.5 s waits: CoreUtil.Wait reports every 100 ms, so even a loaded runner
+                // whose CoalescingAsyncPublisher collapses most reports still publishes at least
+                // one frame after the first leaf finishes.
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
             }), ws: ws);
             svc.EstimateCacheTtlMsForTests = 3_600_000;
 
@@ -164,7 +168,7 @@ namespace OpenAstroAra.Test {
             Assert.That(progress, Is.Ordered.Descending, "a cached estimate never goes back up");
             // The terminal frame is refreshed by the State setter's bump regardless, so the mid-run
             // countdown is asserted on the progress frames alone: without the UpdateProgress bump
-            // every one of them reports the initial 0.9 s.
+            // every one of them reports the initial 2 s.
             Assert.That(progress.Distinct().Count(), Is.GreaterThanOrEqualTo(2), "progress frames counted down as leaves finished, not served from the cache for the whole TTL");
             var complete = ws.Records.Single(e => e.Type == "sequence.complete");
             Assert.That(complete.Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.EqualTo(0), "the terminal frame walks fresh");

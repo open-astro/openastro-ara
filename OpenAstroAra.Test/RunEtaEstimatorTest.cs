@@ -114,6 +114,12 @@ namespace OpenAstroAra.Test {
             var wait = new SequentialContainer();
             wait.Add(new WaitForTimeSpan { Time = 0 });
             Assert.That(RunEtaEstimator.EstimateTotalSeconds(wait), Is.EqualTo(0), "an elapsed wait costs nothing, not the nominal");
+            // A model that THROWS is "no estimate", not an honest zero, whatever the type.
+            var throwing = new Mock<WaitForTimeSpan>();
+            throwing.Setup(w => w.GetEstimatedDuration()).Throws<ArgumentOutOfRangeException>();
+            var corrupt = new SequentialContainer();
+            corrupt.Add(throwing.Object);
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(corrupt), Is.EqualTo(RunEtaEstimator.NominalInstructionSeconds), "a throwing duration model costs the nominal even on a typed instruction");
         }
 
         [Test]
