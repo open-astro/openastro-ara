@@ -645,9 +645,10 @@ public static partial class EquipmentEndpoints {
     // the only two the direction pad drives; Tertiary (2) and anything else is a 400 up front so an
     // invalid enum cast can't surface as a driver 500 and a non-pad axis is never refused as a 409
     // mystery. A non-finite rate is a 400 too. The rate is snapped by the service into the mount's
-    // reported AxisRates bands (#1064/#1072: capped above the top band, raised below the lowest,
-    // moved to the nearest discrete step in a gap) — the UI speed picker is UX only, never the
-    // guard; not connected, or an axis with no usable rate, refuses the nudge (409).
+    // reported AxisRates bands (#1064/#1072: capped above the top band, raised below the lowest
+    // while within 4x of it, moved to the nearest discrete step in a gap) — the UI speed picker is
+    // UX only, never the guard; not connected, an axis with no usable rate, or a rate more than 4x
+    // slower than the lowest band (#1085) refuses the nudge (409).
     public static async Task<IResult> MoveAxisAsync(MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(svc);

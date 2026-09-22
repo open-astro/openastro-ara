@@ -2,26 +2,29 @@
 /// presets of the mount's reported max MoveAxis rate, capped at it.
 ///
 /// Rules:
-/// - The mount's own reported rates are honored when it reports more than one
-///   (deduped, ascending, plain deg/s labels — the driver's ladder needs no
-///   re-interpretation).
+/// - The mount's own reported ladder is honored when it reports three or
+///   more rates (deduped, ascending, plain deg/s labels — the driver's ladder
+///   needs no re-interpretation).
+/// - Two reported rates are one band `[min, max]` — the daemon publishes both
+///   ends of every AxisRates band — so a percentage ladder of `max` is
+///   generated and every preset under `min` is replaced by `min` itself as the
+///   slowest chip ("min · 2°/s") (#1085). A preset that lands exactly on `min`
+///   keeps its percentage label.
 /// - With a single reported rate (typically the max — e.g. the AM5N's
-///   6.016 °/s), a percentage ladder is generated: 1 / 5 / 10 / 25 / 50 / 100%
-///   (logarithmic-ish steps — fine at the low end for centering, coarse at the
-///   top; six options per HIG's short-choice guidance). 100% is the max
-///   itself, so no separate MAX entry is needed.
+///   6.016 °/s), the same percentage ladder is generated:
+///   1 / 5 / 10 / 25 / 50 / 100% (logarithmic-ish steps — fine at the low end
+///   for centering, coarse at the top; six options per HIG's short-choice
+///   guidance). 100% is the max itself, so no separate MAX entry is needed.
 /// - **Every option is <= the mount's max** — the UI never *asks* for a rate
 ///   above what the mount advertises. Zero/negative rates are dropped.
 ///
 /// This picker is UX only: the daemon is the guard on hardware motion. It
 /// snaps every MoveAxis rate into the axis's reported AxisRates bands
 /// (#1064/#1072) — a rate over the top band is capped at its max, a rate
-/// *below* the lowest band is RAISED to its min, and one in a gap between
+/// *below* the lowest band is RAISED to its min while it is within 4× of it
+/// and REFUSED (409) when slower than that (#1085), and one in a gap between
 /// discrete steps moves to the nearest step. So a percentage preset is a
-/// request, not a promise: on a mount whose lowest band starts high (a single
-/// discrete band, say), a small preset is driven at that band's minimum, and
-/// the effective rate can be well above the chip's label (#1085 tracks
-/// bounding that snap-up and showing the effective rate).
+/// request, not a promise: it may be driven up to 4× faster than its label.
 library;
 
 /// Slew-speed presets as fractions of the mount's max rate.
@@ -49,21 +52,39 @@ List<SlewRateOption> buildSlewRateOptions(List<double> mountRates) {
   final rates = mountRates.where((r) => r > 0).toSet().toList()..sort();
   if (rates.isEmpty) return const [];
 
-  // A mount reporting its own ladder (2+ rates) keeps it verbatim with plain
+  // A mount reporting its own ladder (3+ rates) keeps it verbatim with plain
   // deg/s labels — the driver's own choices need no re-interpretation.
-  if (rates.length >= 2) {
+  if (rates.length >= 3) {
     return [for (final r in rates) SlewRateOption(r, _fmtDeg(r))];
   }
 
-  // Single reported rate (typically the max — e.g. the AM5N's 6.016 °/s):
-  // percentage presets of it, labelled "25% · 1.5°/s".
+  // Two rates are one band [min, max] (#1085); one is the max alone. Either
+  // way: percentage presets of the max, labelled "25% · 1.5°/s".
   final maxRate = rates.last;
+  final minRate = rates.length == 2 ? rates.first : 0.0;
   final options = <SlewRateOption>[];
   final seen = <double>{};
+  var droppedUnderMin = false;
   for (final f in kSlewRatePresetFractions) {
     final r = maxRate * f;
     if (r <= 0 || r > maxRate || !seen.add(r)) continue;
+    if (r < minRate * (1 - 1e-9)) {
+      // The daemon would raise (or, past 4×, refuse) this one — never offer it.
+      // The relative epsilon keeps a preset that lands exactly on the minimum
+      // (1 ulp under it from the multiply) as a percentage chip, not a
+      // dropped preset plus a near-identical "min" chip.
+      droppedUnderMin = true;
+      continue;
+    }
     options.add(SlewRateOption(r, _pctLabel(f, r)));
+  }
+  // The band's own minimum stands in for the presets that fell under it, so
+  // the slowest speed the mount actually offers is always a chip.
+  // A preset within rounding of the minimum already stands for it.
+  final minAlreadyOffered =
+      options.any((o) => (o.rateDegPerSec - minRate).abs() <= minRate * 1e-9);
+  if (droppedUnderMin && !minAlreadyOffered) {
+    options.add(SlewRateOption(minRate, 'min · ${_fmtDeg(minRate)}'));
   }
   options.sort((a, b) => a.rateDegPerSec.compareTo(b.rateDegPerSec));
   return options;
