@@ -14,6 +14,10 @@ the other design docs.
 
 ---
 
+## §28 plate-solve capture — follow-ups (2026-09-22, from the #1090 review)
+
+- **No unit seam for `CameraService._capabilities`.** The new solve-path guards (binning and exposure vs the camera's caps in `CaptureAndPrepareImage`) mirror the autofocus probe's but have no test: caps are only settable via a real Alpaca connect. A small internal `WithCapabilitiesForTest(...)` (or a caps-source `Func<>`) would let both guard sets be unit-tested; the AF probe's guards are in the same boat.
+
 ## §63 guider mediator — follow-ups (2026-09-22, from the #1089 review)
 
 - **No DI-composition test guards the mediator aliases.** `BuildServiceProvider` appears nowhere in `OpenAstroAra.Test/` and `Program.Main` has no test seam, so nothing fails when `IGuiderMediator` (or any of the eight sibling `IXxxMediator` aliases) silently reverts to a headless stub — which is exactly how #1089's gap survived since #346. Wanted: a container smoke test that resolves every mediator interface and asserts it is the live `XxxService` singleton. Needs a small harness that builds the Program.cs service graph without `app.Run()`.
@@ -1416,7 +1420,7 @@ Deferred during the §38k-13…18 equipment-mediator stub layer (PR #315). Each 
 
 - ✅ **`Dither` + `SwitchFilter`** — **resolved in §38k-22 (#318)**: a `HeadlessProfileService` stub satisfies their `IProfileService` dependency for prototype construction; both registered.
 - ✅ **`SynchronizeDome`** — **resolved in §38k-21 (#317)**: added a `HeadlessDomeFollower` stub (the one non-mediator equipment dependency) and registered the instruction. `Enable`/`DisableDomeSynchronization` (dome + telescope only) landed earlier in §38k-18.
-- ✅ **Full `TakeExposure` capture path** — **resolved in §14e capture-path PRa+PRb (#343 + follow-up)**: real `CameraService` pipeline (expose → download → §72 FITS → §28 catalog) + re-ported `TakeExposure` executing through `IImagingMediator.CaptureImage` on the same pipeline. The #315 capture-block note is addressed: `IsFreeToCapture` truthfully reflects the shared in-flight capture gate (Register/Release stay inert — no headless consumer registers blocks). Still §2105-gated: the in-memory render path (`CaptureAndPrepareImage`/`PrepareImage`/live view, OpenCvSharp4 + libraw) — `TakeExposure` deliberately discards the returned `IExposureData`.
+- ✅ **Full `TakeExposure` capture path** — **resolved in §14e capture-path PRa+PRb (#343 + follow-up)**: real `CameraService` pipeline (expose → download → §72 FITS → §28 catalog) + re-ported `TakeExposure` executing through `IImagingMediator.CaptureImage` on the same pipeline. The #315 capture-block note is addressed: `IsFreeToCapture` truthfully reflects the shared in-flight capture gate (Register/Release stay inert — no headless consumer registers blocks). Still §2105-gated: the in-memory render members `PrepareImage`/live view (OpenCvSharp4 + libraw) — `TakeExposure` deliberately discards the returned `IExposureData`. `CaptureAndPrepareImage` is no longer gated: #1090 (2026-09-22) made it a real unpersisted capture, which is what finally makes the §28 centering entry above ("drives the real … live `CameraService` capture") true — before #1090 that seam threw NotSupported on the first exposure.
 - ✅ **Connect/Disconnect/SwitchProfile capstone** (`ConnectAllEquipment`, etc.) — **resolved in §38k-22 (#318)**: registered all five via the `HeadlessProfileService` stub; `DisconnectAllEquipment`/`DisconnectEquipment` flipped `internal`→`public` (CA1002 on their `Devices` property fixed to `IReadOnlyList<string>`).
 
 ## §26 / §2105 OpenCvSharp4 — version-pin BLOCKER (found 2026-06-10)
