@@ -46,6 +46,15 @@ void main() {
       expect(options.any((o) => o.label.startsWith('min')), isFalse);
     });
 
+    test('a preset within rounding of the minimum counts as landing on it', () {
+      // 0.1 * max rounds a ulp away from min when min == max / 10 (either
+      // side): no dropped preset, no near-duplicate "min" chip.
+      const max = 3.3;
+      final options = buildSlewRateOptions(const [max / 10, max]);
+      expect(options.where((o) => o.label.startsWith('min')), isEmpty);
+      expect(options.first.label, startsWith('10%'));
+    });
+
     test('a minimum below every preset adds no chip', () {
       // AM5N-style band (0.001, 6.016): nothing falls under the minimum, so
       // the six-preset ladder is unchanged.

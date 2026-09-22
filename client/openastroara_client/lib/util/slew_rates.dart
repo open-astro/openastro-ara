@@ -68,8 +68,11 @@ List<SlewRateOption> buildSlewRateOptions(List<double> mountRates) {
   for (final f in kSlewRatePresetFractions) {
     final r = maxRate * f;
     if (r <= 0 || r > maxRate || !seen.add(r)) continue;
-    if (r < minRate) {
+    if (r < minRate * (1 - 1e-9)) {
       // The daemon would raise (or, past 4×, refuse) this one — never offer it.
+      // The relative epsilon keeps a preset that lands exactly on the minimum
+      // (1 ulp under it from the multiply) as a percentage chip, not a
+      // dropped preset plus a near-identical "min" chip.
       droppedUnderMin = true;
       continue;
     }
@@ -77,7 +80,10 @@ List<SlewRateOption> buildSlewRateOptions(List<double> mountRates) {
   }
   // The band's own minimum stands in for the presets that fell under it, so
   // the slowest speed the mount actually offers is always a chip.
-  if (droppedUnderMin && seen.add(minRate)) {
+  // A preset within rounding of the minimum already stands for it.
+  final minAlreadyOffered =
+      options.any((o) => (o.rateDegPerSec - minRate).abs() <= minRate * 1e-9);
+  if (droppedUnderMin && !minAlreadyOffered) {
     options.add(SlewRateOption(minRate, 'min · ${_fmtDeg(minRate)}'));
   }
   options.sort((a, b) => a.rateDegPerSec.compareTo(b.rateDegPerSec));

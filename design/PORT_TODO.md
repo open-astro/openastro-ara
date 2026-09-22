@@ -1829,4 +1829,12 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   line rather than the diagonal. Release always sends 0 to both axes, so no stranding; the
   toast fires. Newly reachable since #1087 (the slow leg used to be snapped up). Needs the
   same bands-on-the-wire change so the picker can cap presets to the slower axis's floor.
+- `help/registry.dart` `eq.mount.manual_move` still says "Rates are in multiples of sidereal
+  speed: low rates (0.5–1×) for fine centering"; the picker shows percent-of-max deg/s chips
+  (and, since #1087, a "min ·" chip). Pre-existing copy drift; rewrite with the hardware-help
+  sync.
+- Default chip on a positive-floor single-rate mount (`(6.0, 6.0)` publishes `[6.0]`):
+  `_defaultRate` picks 10 % = 0.6 °/s, which the #1085 bound refuses, so the pad is
+  dead-by-default until a faster chip is tapped. Cheap client mitigation while bands-on-the-wire
+  is pending: default to the first chip >= max / 4.
 
