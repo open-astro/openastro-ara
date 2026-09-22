@@ -1094,7 +1094,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// (CCD-TEMP/SET-TEMP). Everything is best-effort: a header that's
     /// sometimes absent beats a capture that can fail on a flaky read, so
     /// each source is guarded and zero/unset profile values are skipped.
-    /// RA/DEC need the mount and land with the pointing follow-up.
+    /// Where the mount was pointed (OBJCTRA/OBJCTDEC/RA/DEC/EQUINOX) is written
+    /// by <see cref="WritePointingHeaders"/> whenever a mount is connected.
     /// </summary>
     /// <summary>All-on when the profile can't be read — a rich header is the
     /// safe default for everything except a capture failure.</summary>
