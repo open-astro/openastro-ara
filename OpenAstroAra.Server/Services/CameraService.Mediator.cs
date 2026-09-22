@@ -215,8 +215,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         // Metadata-only on this path: the solver's temp FITS carries no BAYERPAT card (the persisted
         // capture path stamps that header itself); the CLI solvers work on the raw mosaic regardless.
         var isBayered = caps?.BayerPattern is not null && request.BinX == 1 && request.BinY == 1;
-        // The legacy profile is only read by BaseImageData.RenderImage / RenderedImage.Stretch,
-        // neither of which the solve path calls (SaveToDisk does not touch it) — so null is fine.
+        // The legacy profile is only CARRIED by the wrap (RenderImage hands it to the RenderedImage,
+        // which reads it in Stretch/DetectStars); the solve path never calls those and SaveToDisk
+        // does not touch it — so null is fine.
         var profile = _legacyProfile?.Invoke();
         var cameraName = _device?.Name;
         // The AutoSTF render is ~50-200 ms on a full frame; keep it off the caller's thread.
@@ -227,7 +228,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// <summary>
     /// The exposure the solve sequence asks for, in the daemon's own request shape. NINA's
     /// CaptureSequence uses -1 for "leave gain/offset at the camera's current value"; ARA's DTO
-    /// says that with null. Binning below 1 (an unset BinningMode) reads as 1×1.
+    /// says that with null. Binning below 1 (an unset BinningMode) reads as 1×1. FilterName is
+    /// carried for completeness only: ApplyExposureSettings does not drive the wheel from it (both
+    /// centering call sites pass no filter, and CaptureSolver owns the filter restore).
     /// </summary>
     internal static ExposureRequestDto SolveCaptureRequest(CaptureSequence sequence) {
         var binX = Math.Max(1, (int)(sequence.Binning?.X ?? 1));
