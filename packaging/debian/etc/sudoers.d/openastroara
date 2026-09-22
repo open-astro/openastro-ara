@@ -1,9 +1,15 @@
-# openastroara user gets passwordless sudo for two specific scripts only.
+# openastroara user gets passwordless sudo for two specific scripts and two
+# systemctl verbs on the sibling guider unit only.
 # Validated by `visudo -cf` during package build per §34.3.
 #
 # update.sh   — invoked by the WILMA-push update flow (§33)
 # configure-storage.sh — invoked by the storage-config flow (§29.1.4)
+# systemctl start|restart openastro-guider — §63.3 guider crash recovery and the
+#   POST /api/v1/equipment/guider/restart endpoint (SystemctlGuiderProcessSupervisor).
+#   Exact argv only: no wildcards, no stop, no other unit.
 #
 # Mode 0440, owned by root:root, as Debian sudoers requires.
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
+openastroara ALL=(root) NOPASSWD: /usr/bin/systemctl start openastro-guider
+openastroara ALL=(root) NOPASSWD: /usr/bin/systemctl restart openastro-guider

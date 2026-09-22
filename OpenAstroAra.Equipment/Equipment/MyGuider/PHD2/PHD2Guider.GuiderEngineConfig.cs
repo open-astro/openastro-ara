@@ -200,11 +200,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // sensible value with a harmful one — aggressiveness 0 disables corrections, minMove 0 makes the
             // mount chase noise (PHD2 defaults ~0.2px). Profiles default to non-zero (0.7 / 0.15), so this only
             // skips an explicit/leaked 0, leaving PHD2's value in that edge case.
+            // PHD2's parameter is named "aggression" (get_algo_param_names → algorithmName, minMove,
+            // hysteresis|fastSwitch, aggression — verified against openastro-guider 2.1.0). ARA's
+            // profile calls it aggressiveness; the wire name must be the daemon's or set_algo_param
+            // answers "could not set param" and the value never lands (#1093).
             if (guider.RAAggressiveness > 0) {
-                messages.Add(AlgoParam("ra", "aggressiveness", guider.RAAggressiveness));
+                messages.Add(AlgoParam("ra", "aggression", guider.RAAggressiveness));
             }
             if (guider.DecAggressiveness > 0) {
-                messages.Add(AlgoParam("dec", "aggressiveness", guider.DecAggressiveness));
+                messages.Add(AlgoParam("dec", "aggression", guider.DecAggressiveness));
             }
             if (guider.MinimumMove > 0) {
                 messages.Add(AlgoParam("ra", "minMove", guider.MinimumMove));
