@@ -68,7 +68,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         // #1075 — the daemon's first-connect home (#1066) is a profile policy
         // the user can turn off; the daemon reads it at connect time.
         SettingsSwitchRow(
-          label: 'Park on slot 0 when the wheel first connects',
+          label: 'Park on slot 0 on first connect',
           helpKey: 'eq.filterwheel.home_on_first_connect',
           value: policy.homeOnFirstConnect,
           onChanged: policyN.setHomeOnFirstConnect,
