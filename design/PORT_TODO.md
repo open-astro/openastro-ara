@@ -14,6 +14,10 @@ the other design docs.
 
 ---
 
+## §28 plate-solve capture — follow-ups (2026-09-22, from the #1090 review)
+
+- **No unit seam for `CameraService._capabilities`.** The new solve-path guards (binning and exposure vs the camera's caps in `CaptureAndPrepareImage`) mirror the autofocus probe's but have no test: caps are only settable via a real Alpaca connect. A small internal `WithCapabilitiesForTest(...)` (or a caps-source `Func<>`) would let both guard sets be unit-tested; the AF probe's guards are in the same boat.
+
 ## §63 guider mediator — follow-ups (2026-09-22, from the #1089 review)
 
 - **No DI-composition test guards the mediator aliases.** `BuildServiceProvider` appears nowhere in `OpenAstroAra.Test/` and `Program.Main` has no test seam, so nothing fails when `IGuiderMediator` (or any of the eight sibling `IXxxMediator` aliases) silently reverts to a headless stub — which is exactly how #1089's gap survived since #346. Wanted: a container smoke test that resolves every mediator interface and asserts it is the live `XxxService` singleton. Needs a small harness that builds the Program.cs service graph without `app.Run()`.

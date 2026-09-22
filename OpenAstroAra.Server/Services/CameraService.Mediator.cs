@@ -203,7 +203,14 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             throw new ArgumentOutOfRangeException(nameof(sequence), $"{request.BinX}x{request.BinY}",
                 $"plate-solve binning exceeds the camera's supported maximum ({caps.MaxBinX}x{caps.MaxBinY}) — lower it in Options → Plate solving → Binning");
         }
-        var frame = await CaptureUnpersistedAsync(request, token).ConfigureAwait(false);
+        // Same shape for the exposure: outside the camera's range it would surface as an opaque
+        // StartExposure device fault instead of this.
+        if (caps is not null && caps.MaxExposureSec > 0
+                && (request.ExposureSec < caps.MinExposureSec || request.ExposureSec > caps.MaxExposureSec)) {
+            throw new ArgumentOutOfRangeException(nameof(sequence), request.ExposureSec,
+                $"plate-solve exposure is outside the camera's supported range ({caps.MinExposureSec}–{caps.MaxExposureSec} s) — change it in Options → Plate solving → Exposure time");
+        }
+        var frame = await CaptureUnpersistedAsync(request, "plate-solve", token).ConfigureAwait(false);
         // Hardware binning mixes the CFA cells, so only a 1×1 OSC frame is still a Bayer mosaic.
         // Metadata-only on this path: the solver's temp FITS carries no BAYERPAT card (the persisted
         // capture path stamps that header itself); the CLI solvers work on the raw mosaic regardless.
@@ -242,7 +249,12 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     internal static IRenderedImage RenderForSolve(AnalysisFrame frame, ExposureRequestDto request, bool isBayered,
             string? cameraName, OpenAstroAra.Profile.Interfaces.IProfileService? profile) {
-        var pixels = frame.Pixels.ToArray();
+        // AnalysisFrame owns the only reference to the downloaded buffer; reuse it rather than
+        // copying a full frame (~120 MB on a 60 MP sensor) per solve attempt.
+        var pixels = System.Runtime.InteropServices.MemoryMarshal.TryGetArray(frame.Pixels, out var segment)
+                && segment.Offset == 0 && segment.Array is { } arr && segment.Count == arr.Length
+            ? arr
+            : frame.Pixels.ToArray();
         var meta = new ImageMetaData();
         meta.Image.ExposureTime = request.ExposureSec;
         meta.Image.ImageType = "SNAPSHOT";
@@ -256,8 +268,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         }
         var raw = new BaseImageData(pixels, frame.Width, frame.Height, bitDepth: 16, isBayered: isBayered,
             meta, profile!, null!, null!);
-        var display = OpenAstroAra.Stretch.Stretcher.Apply(OpenAstroAra.Stretch.StretchAlgorithm.AutoStf, pixels);
-        return RenderedImage.Create(display, raw, profile!, null!, null!);
+        // The one AutoSTF display render the codebase has, so the two paths cannot drift.
+        return raw.RenderImage();
     }
 
     // ── Unported IImagingMediator surface — the §2105 image pipeline lands these ────────────────
