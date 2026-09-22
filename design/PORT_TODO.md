@@ -1813,3 +1813,13 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   would make the guard read "already proposed" and the whole run go quiet,
   which is the #997 failure mode the watcher exists to prevent. One-line fix,
   out of #1017's stated scope.
+
+## Run ETA honest zeros (2026-09-22, from the #1088 review notes)
+
+- `RunEtaEstimator.HasOwnDurationModel` is a hand-maintained list (`TakeExposure`,
+  `WaitForTime`, `WaitForTimeSpan`); `CoolCamera`, `WarmCamera`, `SkyFlats`,
+  `FlatPanelFlats`, `Dither` and `SetReadoutMode` also override `GetEstimatedDuration()`,
+  so a `CoolCamera` with `Duration = 0` still costs the 15 s nominal. The right shape is a
+  nullable estimate on the interface (null = no model, zero = zero) rather than a wider
+  list; out of #1088's scope.
+
