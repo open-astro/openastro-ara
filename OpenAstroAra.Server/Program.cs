@@ -782,8 +782,12 @@ public partial class Program {
         // SlewScopeToRaDec drive the live Alpaca mount.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(
             sp => sp.GetRequiredService<TelescopeService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
+        // §63 guider-c — the real GuiderService backs IGuiderMediator too (replaces
+        // HeadlessGuiderMediator), so StartGuiding / StopGuiding / Dither and the flip
+        // executor's guide pause/resume drive the live PHD2 link instead of no-op stubs
+        // that reported success while nothing guided.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(
+            sp => sp.GetRequiredService<GuiderService>());
         // §14e — the real FocuserService backs IFocuserMediator too (replaces HeadlessFocuserMediator),
         // so the MoveFocuser* sequence instructions drive the live Alpaca focuser.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(
