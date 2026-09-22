@@ -294,7 +294,8 @@ void main() {
       expect(find.text('Manual control'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'GoTo'), findsOneWidget);
       expect(find.text('Speed'), findsOneWidget);
-      expect(find.text('4°/s'), findsOneWidget); // a reported rate chip
+      // [1, 4] is one band: presets of 4 from its minimum up (#1085).
+      expect(find.text('100% · 4°/s'), findsOneWidget);
       expect(
         find.byIcon(Icons.north),
         findsOneWidget,

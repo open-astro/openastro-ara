@@ -383,8 +383,9 @@ class _ManualMovePad extends ConsumerStatefulWidget {
 
 class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   double? _rate;
-  // Slew-speed options: the mount's own rates when it reports several, else
-  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
+  // Slew-speed options: the mount's own ladder when it reports three or more
+  // rates, else percentage presets of the max (1/5/10/25/50/100%) from the
+  // band's minimum up (#1085). Never exceeds the max.
   List<SlewRateOption> _rateOptions = const [];
 
   static const int _primary = 0; // RA / Azimuth (E/W)
