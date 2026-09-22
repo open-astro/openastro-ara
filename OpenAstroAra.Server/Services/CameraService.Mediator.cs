@@ -42,9 +42,11 @@ namespace OpenAstroAra.Server.Services;
 /// camera-control instructions' guards) and <see cref="IImagingMediator"/>, whose
 /// <see cref="CaptureImage"/> runs the SAME §14e pipeline as the REST endpoint (expose → download →
 /// §72 FITS → §28 catalog) and returns an inert <see cref="IExposureData"/> sentinel — the frame is
-/// already persisted server-side, and the WPF-era in-memory image pipeline
-/// (<see cref="CaptureAndPrepareImage"/>/<see cref="PrepareImage(IImageData, PrepareImageParameters, CancellationToken)"/>/live view)
-/// stays <see cref="NotSupportedException"/> until the §2105 image pipeline lands.
+/// already persisted server-side. <see cref="CaptureAndPrepareImage"/> (the §28 plate-solve
+/// capture) is real: it captures an unpersisted frame and hands the solver the raw pixels. The
+/// remaining WPF-era in-memory members
+/// (<see cref="PrepareImage(IImageData, PrepareImageParameters, CancellationToken)"/>/live view)
+/// stay <see cref="NotSupportedException"/> until the §2105 image pipeline lands.
 /// </summary>
 public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
