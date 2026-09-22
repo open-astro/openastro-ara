@@ -121,6 +121,19 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSeconds`, `EmitAsync`), `Services/SequencerService.LiveEdit.cs`, `Contracts/SequenceDtos.cs`. openapi.yaml still pending its refresh (PORT_TODO).
 
 **Related:** #1068 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
+
+### 2026-09-21 — #1080 run ETA follow-ups: blend order, item sets, side effects, per-tick cost
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` (`estimated_total_seconds` / `estimated_remaining_seconds`, no wire change); the client's run-header blend.
+
+**Decision:** (1) the client shows the daemon's remaining figure whenever it is present (a non-negative number); the observed elapsed rate is only the fallback for a daemon that sent none. This reverses the #1068 blend order. (2) `estimated_total_seconds` and `estimated_remaining_seconds` count the same items: a DISABLED or SKIPPED subtree is out of both; a `ParallelContainer` pass costs its longest child, not the sum. (3) An instruction with a duration model of its own (`TakeExposure`, `WaitForTime`, `WaitForTimeSpan`) that estimates zero costs zero (a bias set, an already-passed wait); only an instruction whose base estimate is the `Zero` placeholder gets the 15 s nominal. (4) `WaitForTime.GetEstimatedDuration()` no longer assigns `RolloverTime`: an estimate never writes the live tree. (5) The two tree walks are cached against a run tree version (bumped when a leaf changes status or the run changes state, never on a same-status progress tick) plus a 250 ms TTL for the time-based estimates, so the per-report checkpoint, every WS publish and every `GET …/state` share one walk per tick and a lifecycle frame is never stale. Known limits, unchanged: a loop gated only by a `TimeCondition`/`TimeSpanCondition`/horizon (no `LoopCondition`) counts as one pass; `estimated_total_seconds` is not constant across a run when the body holds a `WaitForTime` (it estimates time-until-target), so a consumer must not treat the total as fixed.
+
+**Reasoning:** the observed rate counts leaves, not loop passes (a SmartExposure of 60×120 s is two leaves) and its elapsed time includes pauses, so it was worst on exactly the loop-heavy sequences the daemon figure was built for; a total that counted disabled blocks the remaining figure credited read as progress that never happened; the estimator ran per capture tick on ARM64.
+
+**Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSecondsLocked`), `OpenAstroAra.Sequencer/SequenceItem/Utility/WaitForTime.cs`, `client/…/lib/models/sequence/run_eta.dart`; tests in `RunEtaEstimatorTest` and `run_eta_test.dart`.
+
+**Related:** #1080 (from the #1077 reviews), CHANGELOG [Unreleased]
+
 ### 2026-09-20 — #1067 Alpaca device-name lookup proxied through the daemon
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/guider/alpacadevicenames?host=<host>&port=<1..65535>` (new).
