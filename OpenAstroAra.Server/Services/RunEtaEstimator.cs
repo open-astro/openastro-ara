@@ -51,9 +51,12 @@ public static class RunEtaEstimator {
     }
 
     private static double Full(ISequenceItem item) {
-        // #1080 — a DISABLED or SKIPPED subtree never runs: it is not part of the total either
-        // (Remaining already credits it), so total and remaining count the same items.
-        if (item.Status is SequenceEntityStatus.DISABLED or SequenceEntityStatus.SKIPPED) {
+        // #1080 — a DISABLED subtree never runs in any pass: it is not part of the total either
+        // (Remaining already credits it), so total and remaining count the same items. SKIPPED is
+        // NOT durable: ResetProgress() turns it back into CREATED between loop passes, so a leaf
+        // skipped this pass runs in every later one and stays in the total (Remaining credits it
+        // for the pass in progress only).
+        if (item.Status == SequenceEntityStatus.DISABLED) {
             return 0;
         }
         if (item is not ISequenceContainer container) {
@@ -111,9 +114,9 @@ public static class RunEtaEstimator {
         } catch (Exception) {
             seconds = 0;
         }
-        // #1080 — zero is a real answer from an instruction with a duration model of its own (a
-        // bias set has ExposureTime 0; a WaitForTime whose target already passed waits nothing),
-        // not "no estimate": only instructions without one get the nominal.
+        // #1080 — zero is a real answer from an instruction with a duration model of its own (an
+        // unset or invalid ExposureTime of 0; a WaitForTime whose target already passed waits
+        // nothing), not "no estimate": only instructions without one get the nominal.
         if (seconds <= 0 && HasOwnDurationModel(leaf)) {
             return 0;
         }
