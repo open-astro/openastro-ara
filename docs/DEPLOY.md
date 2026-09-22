@@ -30,9 +30,11 @@ sudo apt install openastroara-server
 #    D80 is published only as a Debian package (its payload is the d80_*.1476 files);
 #    extract it into the daemon's directory rather than installing it, so the files
 #    land where the profile's index path points.
-curl -L -o /tmp/d80.deb https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.deb/download
-dpkg-deb -x /tmp/d80.deb /tmp/d80 && sudo find /tmp/d80 -type f -name 'd80_*' -exec mv -t /var/lib/astap/ {} +
-sudo chown -R openastroara:openastroara /var/lib/astap && rm -rf /tmp/d80 /tmp/d80.deb
+#    Not via /tmp: on Raspberry Pi OS it is a ~2 GB tmpfs and this package is 1.2 GB.
+curl -L -o ~/d80.deb https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.deb/download
+dpkg-deb --fsys-tarfile ~/d80.deb \
+  | sudo tar -x -C /var/lib/astap --strip-components=3 --wildcards './opt/astap/d80_*'
+sudo chown -R openastroara:openastroara /var/lib/astap && rm ~/d80.deb
 
 # 4. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
