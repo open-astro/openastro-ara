@@ -44,7 +44,8 @@ public static class ProfileStoreSnapshot {
         CustomHorizon: s.GetCustomHorizon(),
         FocusCalibration: s.GetFocusCalibration(),
         CalibrationState: s.GetCalibrationState(),
-        PolarAlign: s.GetPolarAlignSettings());
+        PolarAlign: s.GetPolarAlignSettings(),
+        FilterWheelPolicy: s.GetFilterWheelPolicy());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -78,5 +79,8 @@ public static class ProfileStoreSnapshot {
         s.PutCalibrationState(snap.CalibrationState ?? CalibrationStateDto.Empty);
         // §45.12 — all fields carry their playbook defaults; a pre-§45 snapshot back-fills to them.
         s.PutPolarAlignSettings(snap.PolarAlign ?? new PolarAlignSettingsDto());
+        // #1075 — a pre-policy snapshot back-fills the default (home on); a profile that never turned
+        // the home off must turn it back on when selected, never inherit the previous rig's "off".
+        s.PutFilterWheelPolicy(snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default);
     }
 }

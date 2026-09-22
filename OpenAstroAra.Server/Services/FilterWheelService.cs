@@ -48,6 +48,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     // the connected wheel's slot list into ActiveProfile.FilterWheelSettings.FilterWheelFilters
     // (NINA's import-on-connect semantics) so SwitchFilter can resolve its filter by name/position.
     private readonly OpenAstroAra.Profile.Interfaces.IProfileService? _profileService;
+    // #1075 — the Ara profile store (null in REST-only unit tests): the first-connect home is a
+    // profile policy (FilterWheelPolicyDto.HomeOnFirstConnect) the user can turn off.
+    private readonly IProfileStore? _profileStore;
     private AlpacaFilterWheel? _client;
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
@@ -82,8 +85,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
         ILogger<FilterWheelService>? logger = null,
         OpenAstroAra.Profile.Interfaces.IProfileService? profileService = null,
         EquipmentEventPublisher? events = null,
-        IEquipmentFaultSink? faults = null) {
+        IEquipmentFaultSink? faults = null,
+        IProfileStore? profileStore = null) {
         _logger = logger ?? NullLogger<FilterWheelService>.Instance;
+        _profileStore = profileStore;
         _events = events;
         _faults = faults;
         _profileService = profileService;
@@ -198,6 +203,28 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     /// <summary>The slot a freshly connected wheel is parked on: 0, conventionally L(uminance).</summary>
     internal const int DefaultSlot = 0;
+
+    /// <summary>#1075 — the profile's first-connect home policy; on when no store is wired (the
+    /// pre-#1075 behaviour) or the read fails (never let a profile hiccup change hardware policy
+    /// silently — the default is the documented one).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Profile read boundary: a throwing store must fall back to the documented default, never fault the connect. CA1031's log-and-recover boundary applies.")]
+    private bool HomeOnFirstConnectEnabled() {
+        try {
+            return _profileStore?.GetFilterWheelPolicy().HomeOnFirstConnect ?? true;
+        } catch (Exception ex) {
+            LogPolicyReadFailed(ex);
+            return true;
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "FilterWheel '{Device}' first connect: the profile's home-on-first-connect policy is off; leaving the wheel where it is (#1075)")]
+    private partial void LogHomeSkippedByPolicy(string device);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "FilterWheel policy read failed; assuming home-on-first-connect (#1075)")]
+    private partial void LogPolicyReadFailed(Exception ex);
 
     /// <summary>Whether a wheel seeded on <paramref name="currentSlot"/> needs the first-connect
     /// home. Only a KNOWN, non-default position does; already-at-default is a no-op that still
@@ -410,6 +437,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
         AlpacaFilterWheel? client = null;
         var adopted = false;
         string? neverDecided = null;
+        var homeSkippedByPolicy = false;
         try {
             var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
             if (string.IsNullOrWhiteSpace(host)) {
@@ -420,6 +448,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
             client.Connected = true;
+            // #1075 — read the policy off the gate (the store has its own lock). The claim is
+            // consumed either way: turning the policy on later never homes an already-connected
+            // (or reconnecting) wheel mid-session.
+            var homeEnabled = HomeOnFirstConnectEnabled();
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
@@ -430,7 +462,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                     // later reconnect of this wheel (auto or manual) can never home it. A previous
                     // wheel's still-pending decision is superseded (and its journal line kept).
                     neverDecided = TakePendingHomeNeverDecidedLocked();
-                    _pendingHome = ClaimFirstConnectHome(device.UniqueId);
+                    var claimed = ClaimFirstConnectHome(device.UniqueId);
+                    _pendingHome = claimed && homeEnabled;
+                    if (claimed && !homeEnabled) {
+                        homeSkippedByPolicy = true;
+                    }
                     _homeGeneration++; // #1079 — a previous wheel's in-flight home is stale now
                     _pendingHomeDevice = device.Name;
                     _pendingHomeTicks = 0;
@@ -444,6 +480,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             }
             if (neverDecided is not null) {
                 LogHomeNeverDecided(neverDecided); // outside the gate, like LogConnectionLost
+            }
+            if (homeSkippedByPolicy) {
+                LogHomeSkippedByPolicy(device.Name);
             }
             client = null; // ownership transferred to _client
             // Seed slots + runtime through the guarded path; the #1066 first-connect home is decided
