@@ -1224,7 +1224,8 @@ ReadWritePaths=/var/run/openastroara
 ReadWritePaths=/etc/openastroara
 
 # Network restrictions
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK: .NET lists interfaces over netlink (getifaddrs); Alpaca discovery needs it (#1096)
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 # Capability restrictions (CAP_SYS_TIME for §31 time sync; nothing else)
 CapabilityBoundingSet=CAP_SYS_TIME

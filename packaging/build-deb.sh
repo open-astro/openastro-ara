@@ -137,6 +137,13 @@ if command -v systemd-analyze > /dev/null; then
         2>&1 | grep -v 'systemd does not run with system instance' || true
 fi
 
+# §13 — the unit must keep AF_NETLINK: .NET's interface enumeration (which Alpaca
+# discovery does before every broadcast) opens a netlink socket, and losing it
+# silently breaks equipment auto-detect on every packaged install (#1096).
+# systemd-analyze verify passes either way, so assert it explicitly.
+grep -Eq '^RestrictAddressFamilies=.*\bAF_NETLINK\b' "$STAGE/etc/systemd/system/openastroara-server.service" \
+  || { echo "error: openastroara-server.service must list AF_NETLINK in RestrictAddressFamilies" >&2; exit 1; }
+
 # Build the .deb. dpkg-deb requires GNU tar in PATH; both Debian + Ubuntu
 # CI runners satisfy this out of the box.
 DEB_NAME="openastroara-server_${VERSION}_arm64.deb"
