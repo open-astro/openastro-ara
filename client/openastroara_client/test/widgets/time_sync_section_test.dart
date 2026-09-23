@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/time_sync_api.dart';
+import 'package:openastroara/services/client_gps_prefs_service.dart';
+import 'package:openastroara/services/serial_gps_source.dart';
+import 'package:openastroara/state/client_gps_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/widgets/settings/time_sync_section.dart';
@@ -34,6 +37,14 @@ class _FakeTimeSyncClient implements TimeSyncClient {
   }
 
   @override
+  Future<TimeSyncPushResult> pushGpsFix({
+    required DateTime timeUtc,
+    double? lat,
+    double? lng,
+    double? alt,
+  }) async => const TimeSyncPushResult(locationUpdated: true, clockSet: true);
+
+  @override
   Future<TimeSyncPushResult> pushManual({
     required DateTime timeUtc,
     double? lat,
@@ -51,12 +62,36 @@ class _FakeTimeSyncClient implements TimeSyncClient {
   void close() {}
 }
 
-Future<void> _pump(WidgetTester tester, _FakeTimeSyncClient api) async {
+class _MemoryPrefs extends ClientGpsPrefsService {
+  _MemoryPrefs(this._prefs) : super(supportDir: () async => throw UnsupportedError('unused'));
+  ClientGpsPrefs _prefs;
+  @override
+  Future<ClientGpsPrefs> load() async => _prefs;
+  @override
+  Future<void> save(ClientGpsPrefs prefs) async => _prefs = prefs;
+}
+
+class _NoDongleSource implements SerialGpsSource {
+  _NoDongleSource({this.supported = true, this.ports = const []});
+  @override
+  final bool supported;
+  final List<String> ports;
+  @override
+  Future<List<String>> availablePorts() async => ports;
+  @override
+  Stream<String> lines(String port) => const Stream.empty();
+}
+
+Future<void> _pump(WidgetTester tester, _FakeTimeSyncClient api,
+    {SerialGpsSource? dongle, ClientGpsPrefs gpsPrefs = const ClientGpsPrefs()}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
         timeSyncApiFactoryProvider.overrideWithValue((_) => api),
+        // In-memory prefs: real file I/O never completes in a widget test's fake-async zone.
+        clientGpsPrefsServiceProvider.overrideWithValue(_MemoryPrefs(gpsPrefs)),
+        serialGpsSourceProvider.overrideWithValue(dongle ?? _NoDongleSource()),
       ],
       child: const MaterialApp(
         home: Scaffold(body: SingleChildScrollView(child: TimeSyncSection())),
@@ -68,6 +103,24 @@ Future<void> _pump(WidgetTester tester, _FakeTimeSyncClient api) async {
 }
 
 void main() {
+  testWidgets('GPS on this computer is hidden where serial is unsupported', (tester) async {
+    final api = _FakeTimeSyncClient(const TimeSyncState(synced: true));
+    await _pump(tester, api, dongle: _NoDongleSource(supported: false));
+    expect(find.byKey(const ValueKey('client_gps_enabled')), findsNothing);
+  });
+
+  testWidgets('an enabled dongle with an unplugged saved port shows it as not present, with rescan and Read now',
+      (tester) async {
+    final api = _FakeTimeSyncClient(const TimeSyncState(synced: true));
+    await _pump(tester, api,
+        dongle: _NoDongleSource(ports: const ['/dev/cu.usbserial-2']),
+        gpsPrefs: const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+    expect(find.byKey(const ValueKey('client_gps_enabled')), findsOneWidget);
+    expect(find.textContaining('(not present)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('client_gps_refresh_ports')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client_gps_read_now')), findsOneWidget);
+  });
+
   testWidgets('an unsynced server renders the plug-a-GPS guidance', (
     tester,
   ) async {

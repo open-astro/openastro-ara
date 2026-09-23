@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/time_sync_api.dart';
+import '../../state/client_gps_state.dart';
 import '../../state/time_sync_state.dart';
+import 'editable_field.dart';
 import 'settings_row.dart';
 import '../../util/friendly_error.dart';
 
@@ -55,6 +57,8 @@ class TimeSyncSection extends ConsumerWidget {
                 ]
               : _statusRows(context, s),
         ),
+        const SizedBox(height: 8),
+        const _ClientGpsBlock(),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -356,6 +360,102 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
           onPressed: _applying ? null : _apply,
           child: Text(_applying ? 'Applying…' : 'Apply'),
         ),
+      ],
+    );
+  }
+}
+
+/// §31 — "GPS on this computer": a USB GPS dongle plugged into the machine
+/// running the client (frees a Pi USB port; the client is next to the mount
+/// during setup and polar alignment, so its fix is the rig's). Desktop only;
+/// phones and tablets use their own GPS through Fill from GPS.
+class _ClientGpsBlock extends ConsumerWidget {
+  const _ClientGpsBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(clientGpsProvider).value;
+    if (status == null || !status.supported) return const SizedBox.shrink();
+    final notifier = ref.read(clientGpsProvider.notifier);
+    final theme = Theme.of(context);
+    final ports = status.ports;
+    final selected = status.prefs.port;
+    final fix = status.lastFix;
+    final fixText = fix == null
+        ? (status.busy ? 'reading…' : 'no fix yet')
+        : '${fix.latitudeDeg?.toStringAsFixed(4) ?? '?'}°, ${fix.longitudeDeg?.toStringAsFixed(4) ?? '?'}°'
+            '${fix.altitudeM == null ? '' : ', ${fix.altitudeM!.toStringAsFixed(0)} m'}'
+            ' at ${fix.timeUtc?.toIso8601String().substring(11, 19) ?? '?'} UTC';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SettingsSwitchRow(
+          key: const ValueKey('client_gps_enabled'),
+          label: 'GPS on this computer',
+          helpKey: 'timesync.client_gps.enabled',
+          value: status.prefs.enabled,
+          onChanged: (v) => notifier.setEnabled(v),
+        ),
+        if (status.prefs.enabled) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: const ValueKey('client_gps_port'),
+                    // The saved port stays selected even when unplugged — its item is labelled
+                    // "(not present)" below — so the user sees what the loop is trying to read.
+                    initialValue: selected,
+                    decoration: const InputDecoration(labelText: 'Serial port', isDense: true),
+                    items: [
+                      for (final p in ports) DropdownMenuItem(value: p, child: Text(p)),
+                      if (selected != null && !ports.contains(selected))
+                        DropdownMenuItem(value: selected, child: Text('$selected (not present)')),
+                    ],
+                    onChanged: (p) => notifier.setPort(p),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  key: const ValueKey('client_gps_refresh_ports'),
+                  tooltip: 'Rescan serial ports',
+                  onPressed: notifier.refreshPorts,
+                  icon: const Icon(Icons.refresh, size: 18),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('client_gps_read_now'),
+                  onPressed: status.busy ? null : () => notifier.syncNow(),
+                  icon: const Icon(Icons.gps_fixed, size: 16),
+                  label: const Text('Read now'),
+                ),
+              ],
+            ),
+          ),
+          SettingsRow(label: 'Dongle fix', value: fixText, helpKey: 'timesync.client_gps.port'),
+          if (status.lastPushAt != null)
+            SettingsRow(
+              label: 'Last push (UTC)',
+              value: status.lastPushAt!.toIso8601String().substring(0, 19),
+            ),
+          if (status.lastError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                status.lastError!,
+                style: theme.textTheme.bodySmall!.copyWith(color: theme.colorScheme.error),
+              ),
+            ),
+          if (ports.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'No serial ports found — plug the dongle in and rescan.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+        ],
       ],
     );
   }
