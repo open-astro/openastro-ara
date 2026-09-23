@@ -1449,9 +1449,18 @@ function wireTouch() {
     var rect = canvas.getBoundingClientRect();
     for (var i = 0; i < e.changedTouches.length; i++) {
       var t = e.changedTouches[i];
+      var x = t.pageX - rect.left, y = t.pageY - rect.top;
       var slot = slotFor(t.identifier, allocate);
+      if (slot < 0 && state === -1) {
+        // A finger denied a slot at touchstart (three down) claims one the moment
+        // it frees up — otherwise a thumb that lands third keeps the pinch dead
+        // until every finger lifts. The engine hears it as a fresh press here.
+        slot = slotFor(t.identifier, true);
+        if (slot >= 0) stel._core_on_mouse(slot, 1, x, y, 1);
+        continue;
+      }
       if (slot < 0) continue;              // a third finger: ignored
-      stel._core_on_mouse(slot, state, t.pageX - rect.left, t.pageY - rect.top, 1);
+      stel._core_on_mouse(slot, state, x, y, 1);
       if (release) delete slots[t.identifier];
     }
     // No fingers down at all: forget every slot. A release the platform view
