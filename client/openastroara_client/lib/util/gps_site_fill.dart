@@ -188,6 +188,18 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
         sourceLabel: 'the GPS dongle on $_thisDevice',
       );
     }
+  } else if (clientGps != null && clientGps.supported) {
+    // Not configured (first run, the profile wizard): try the ports a dongle
+    // appears on. A fix adopts that port — the setting is switched on for them.
+    final fix = await ref.read(clientGpsProvider.notifier).probeAndAdopt();
+    if (fix != null && fix.hasPosition) {
+      return GpsSiteFill.success(
+        lat: fix.latitudeDeg!,
+        lng: fix.longitudeDeg!,
+        alt: fix.altitudeM,
+        sourceLabel: 'the GPS dongle on $_thisDevice (now enabled in Settings → Site → Time sync)',
+      );
+    }
   }
 
   // 3) Fallback: this machine's own location (a fresh fix is required).

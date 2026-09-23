@@ -9,6 +9,7 @@ import 'package:openastroara/screens/settings/panels/safety_site_panel.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/client_gps_prefs_service.dart';
 import 'package:openastroara/services/serial_gps_source.dart';
+import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/state/client_gps_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
@@ -41,7 +42,7 @@ class _DongleSource implements SerialGpsSource {
   @override
   bool get supported => true;
   @override
-  List<String> availablePorts() => const ['/dev/cu.usbserial-1'];
+  Future<List<String>> availablePorts() async => const ['/dev/cu.usbserial-1'];
   @override
   Stream<String> lines(String port) {
     final c = StreamController<String>();
@@ -51,6 +52,24 @@ class _DongleSource implements SerialGpsSource {
     });
     return c.stream;
   }
+}
+
+/// A daemon that already holds a location (e.g. the 2-dp echo of an earlier push).
+class _ServerWithLocation implements TimeSyncClient {
+  _ServerWithLocation(this.location);
+  final TimeSyncLocation location;
+  @override
+  Future<TimeSyncState> getState() async => TimeSyncState(synced: true, source: 'gps-external', trust: 'high', location: location);
+  @override
+  Future<void> pushClientTime(DateTime utcNow) async {}
+  @override
+  Future<TimeSyncPushResult> pushGpsFix({required DateTime timeUtc, double? lat, double? lng, double? alt}) async =>
+      const TimeSyncPushResult(locationUpdated: true, clockSet: true);
+  @override
+  Future<TimeSyncPushResult> pushManual({required DateTime timeUtc, double? lat, double? lng, double? alt}) async =>
+      const TimeSyncPushResult(locationUpdated: false, clockSet: false);
+  @override
+  Future<void> close() async {}
 }
 
 /// In-memory prefs: real file I/O never completes inside a widget test's
@@ -66,7 +85,7 @@ class _MemoryPrefs extends ClientGpsPrefsService {
 
 void main() {
   Future<ProviderContainer> pumpPanel(WidgetTester tester,
-      {SerialGpsSource? dongle, ClientGpsPrefsService? donglePrefs}) async {
+      {SerialGpsSource? dongle, ClientGpsPrefsService? donglePrefs, TimeSyncClient? server}) async {
     // The settings pane is a wide desktop surface; the default 800x600 test
     // viewport overflows the pre-existing editable rows.
     tester.view.physicalSize = const Size(1600, 1000);
@@ -77,8 +96,8 @@ void main() {
       ProviderScope(
         overrides: [
           savedServerServiceProvider.overrideWithValue(_NoServers()),
-          // No server → no dongle fix → the Mac fallback path runs.
-          timeSyncApiProvider.overrideWithValue(null),
+          // No server → no dongle fix → the Mac fallback path runs (unless a test passes one).
+          timeSyncApiProvider.overrideWithValue(server),
           if (dongle != null) serialGpsSourceProvider.overrideWithValue(dongle),
           // Always in-memory (see _MemoryPrefs); disabled unless a test enables it.
           clientGpsPrefsServiceProvider.overrideWithValue(donglePrefs ?? _MemoryPrefs(const ClientGpsPrefs())),
@@ -150,6 +169,51 @@ void main() {
     expect(s.longitudeDeg, closeTo(-77.04, 1e-9));
     expect(s.elevationM, closeTo(120.5, 1e-9));
     expect(find.textContaining('Filled from the GPS dongle on this'), findsOneWidget);
+  });
+
+  testWidgets('a fresh client-dongle fix beats the server echo of a fix (step 0 before step 1)',
+      (tester) async {
+    debugMacLocationProvider = () async => null;
+    addTearDown(() => debugMacLocationProvider = null);
+    final prefs = _MemoryPrefs(const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+    // The server reports Austin (its 2-dp echo of an older push); the dongle says Washington.
+    final container = await pumpPanel(tester,
+        dongle: _DongleSource(),
+        donglePrefs: prefs,
+        server: _ServerWithLocation(const TimeSyncLocation(lat: 30.27, lng: -97.74)));
+    // Let the background loop take its first read so a FRESH fix exists before the tap.
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.ensureVisible(find.text('Fill from GPS'));
+    await tester.tap(find.text('Fill from GPS'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    final s = container.read(siteSettingsProvider);
+    expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'the dongle, not the server echo');
+    expect(find.textContaining('Filled from the GPS dongle on this'), findsOneWidget);
+  });
+
+  testWidgets('with the setting off, Fill from GPS probes a plausible port, uses the fix and enables the setting',
+      (tester) async {
+    debugMacLocationProvider = () async =>
+        const (lat: 30.5, lng: -97.75, alt: 240.0); // would be the fallback
+    addTearDown(() => debugMacLocationProvider = null);
+    final prefs = _MemoryPrefs(const ClientGpsPrefs()); // never turned on
+    final container = await pumpPanel(tester, dongle: _DongleSource(), donglePrefs: prefs);
+    await tester.ensureVisible(find.text('Fill from GPS'));
+    await tester.tap(find.text('Fill from GPS'));
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    final s = container.read(siteSettingsProvider);
+    expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'the probed dongle, not the device location');
+    expect(s.elevationM, closeTo(120.5, 1e-9));
+    expect(find.textContaining('now enabled in Settings'), findsOneWidget);
+    final saved = await prefs.load();
+    expect(saved.enabled, isTrue);
+    expect(saved.port, '/dev/cu.usbserial-1');
   });
 
   testWidgets('Mac fallback unavailable → clear message, fields untouched',

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/serial_gps_source.dart';
 import 'package:openastroara/util/nmea_parser.dart';
 
 void main() {
@@ -70,6 +71,16 @@ void main() {
       // Sanity for the fixtures: the first test's literal was produced this way.
       expect(_withChecksum(r'GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A'),
           r'$GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A*79');
+    });
+  });
+
+  group('OsSerialGpsSource.parseWindowsModeOutput', () {
+    test('finds COM ports whatever language mode speaks', () {
+      const de = 'Status für Gerät COM3:\n-----------------\n    Baudrate: 9600\n\nStatus für Gerät COM10:\n';
+      const en = 'Status for device COM4:\n---\nStatus for device CON:\n';
+      expect(OsSerialGpsSource.parseWindowsModeOutput(de), ['COM3', 'COM10']);
+      expect(OsSerialGpsSource.parseWindowsModeOutput(en), ['COM4']);
+      expect(OsSerialGpsSource.parseWindowsModeOutput('nothing here'), isEmpty);
     });
   });
 }

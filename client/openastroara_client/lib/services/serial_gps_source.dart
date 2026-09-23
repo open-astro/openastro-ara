@@ -9,8 +9,9 @@ abstract interface class SerialGpsSource {
   bool get supported;
 
   /// Serial ports currently present, as the OS names them
-  /// (`/dev/cu.usbserial-…`, `COM3`, `/dev/ttyUSB0`).
-  List<String> availablePorts();
+  /// (`/dev/cu.usbserial-…`, `COM3`, `/dev/ttyUSB0`). Async: on Windows this
+  /// spawns `mode`, which must not block the UI isolate.
+  Future<List<String>> availablePorts();
 
   /// NMEA lines from [port] at 9600-8N1 until the subscription is cancelled.
   /// Errors (port busy, unplugged mid-read) surface on the stream.
@@ -30,16 +31,16 @@ class OsSerialGpsSource implements SerialGpsSource {
   bool get supported => Platform.isMacOS || Platform.isWindows || Platform.isLinux;
 
   @override
-  List<String> availablePorts() {
+  Future<List<String>> availablePorts() async {
     if (!supported) return const [];
     try {
-      if (Platform.isWindows) return _windowsPorts();
-      final names = Directory('/dev')
-          .listSync(followLinks: false)
+      if (Platform.isWindows) return await _windowsPorts();
+      final names = await Directory('/dev')
+          .list(followLinks: false)
           .map((e) => e.path)
           .where(_isCandidatePosixPort)
-          .toList()
-        ..sort((a, b) => _rank(a).compareTo(_rank(b)) != 0 ? _rank(a).compareTo(_rank(b)) : a.compareTo(b));
+          .toList();
+      names.sort((a, b) => _rank(a) != _rank(b) ? _rank(a).compareTo(_rank(b)) : a.compareTo(b));
       return names;
     } catch (_) {
       return const [];
@@ -61,13 +62,25 @@ class OsSerialGpsSource implements SerialGpsSource {
     return 1;
   }
 
-  // `mode` with no arguments lists every device it can address; COM ports show
-  // as "Status for device COMn:". Cheap and needs no registry access.
-  static List<String> _windowsPorts() {
-    final r = Process.runSync('mode', const [], runInShell: true);
-    final out = '${r.stdout}';
-    final ports = RegExp(r'Status for device (COM\d+):').allMatches(out).map((m) => m.group(1)!).toSet().toList()..sort();
+  // `mode` with no arguments lists every device it can address. Its wording is
+  // localised ("Status for device COM3:", "Status für Gerät COM3:", …), so only
+  // the COMn token is matched. Cheap and needs no registry access.
+  static Future<List<String>> _windowsPorts() async {
+    final r = await Process.run('mode', const [], runInShell: true);
+    final ports = parseWindowsModeOutput('${r.stdout}');
     return ports;
+  }
+
+  /// Pure — unit-testable: every distinct `COMn` mentioned in `mode`'s output,
+  /// in numeric order, whatever language the headings are in.
+  static List<String> parseWindowsModeOutput(String out) {
+    final found = RegExp(r'\b(COM\d+)\b', caseSensitive: false)
+        .allMatches(out)
+        .map((m) => m.group(1)!.toUpperCase())
+        .toSet()
+        .toList();
+    found.sort((a, b) => int.parse(a.substring(3)).compareTo(int.parse(b.substring(3))));
+    return found;
   }
 
   @override
@@ -96,16 +109,27 @@ class OsSerialGpsSource implements SerialGpsSource {
     return controller.stream;
   }
 
-  /// 9600-8N1, raw, no echo, no flow control, and (POSIX) `clocal` so the
-  /// open never waits for a carrier line a GPS dongle does not drive.
+  /// How long the POSIX read waits for bytes before returning empty (VTIME, in
+  /// tenths of a second). A GPS dongle never pauses this long between sentence
+  /// bursts, so this only ends reads on a SILENT port — which matters because
+  /// dart:io cannot cancel a blocking read: without it every read of a silent or
+  /// wrong port would leak a file descriptor and pin an I/O worker for good.
+  /// A read that returns empty reads as end-of-stream, and `lines()` closes.
+  static const int _posixReadTimeoutTenths = 20;
+
+  /// 9600-8N1, raw, no echo, no flow control, (POSIX) `clocal` so the open
+  /// never waits for a carrier line a GPS dongle does not drive, and the read
+  /// timeout above (`min 0 time 20`, after `raw`, which would otherwise pin
+  /// `min 1`). Windows: `mode` cannot set ReadFile timeouts, so a silent COM
+  /// port is held until the dongle speaks or the app exits.
   static Future<void> _configure(String port) async {
     final ProcessResult r;
     if (Platform.isWindows) {
       r = await Process.run('mode', ['$port:', 'BAUD=9600', 'PARITY=n', 'DATA=8', 'STOP=1', 'to=off', 'xon=off', 'octs=off', 'rts=off', 'dtr=on'], runInShell: true);
     } else if (Platform.isMacOS) {
-      r = await Process.run('stty', ['-f', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts']);
+      r = await Process.run('stty', ['-f', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts', 'min', '0', 'time', '$_posixReadTimeoutTenths']);
     } else {
-      r = await Process.run('stty', ['-F', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts']);
+      r = await Process.run('stty', ['-F', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts', 'min', '0', 'time', '$_posixReadTimeoutTenths']);
     }
     if (r.exitCode != 0) {
       throw StateError('${'${r.stderr}'.trim().isEmpty ? r.stdout : r.stderr}'.trim());

@@ -77,7 +77,7 @@ class _NoDongleSource implements SerialGpsSource {
   final bool supported;
   final List<String> ports;
   @override
-  List<String> availablePorts() => ports;
+  Future<List<String>> availablePorts() async => ports;
   @override
   Stream<String> lines(String port) => const Stream.empty();
 }

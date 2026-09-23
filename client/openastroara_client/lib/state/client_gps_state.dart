@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/client_gps_prefs_service.dart';
 import '../services/serial_gps_source.dart';
 import '../services/time_sync_api.dart';
+import '../util/friendly_error.dart';
 import '../util/nmea_parser.dart';
 import 'time_sync_state.dart';
 
@@ -109,7 +111,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     ref.onDispose(() => _timer?.cancel());
     final source = ref.watch(serialGpsSourceProvider);
     final prefs = await ref.watch(clientGpsPrefsServiceProvider).load();
-    final status = ClientGpsStatus(prefs: prefs, supported: source.supported, ports: _ports(source));
+    final status = ClientGpsStatus(prefs: prefs, supported: source.supported, ports: await _ports(source));
     if (status.enabled) {
       // Not immediate: state is still loading inside build(), and a read that finished before
       // build() returned would have its status overwritten by the return value. A zero-length
@@ -122,15 +124,20 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   ClientGpsStatus get _current =>
       state.value ?? ClientGpsStatus(prefs: const ClientGpsPrefs(), supported: ref.read(serialGpsSourceProvider).supported);
 
-  static List<String> _ports(SerialGpsSource source) => source.supported ? source.availablePorts() : const [];
+  static Future<List<String>> _ports(SerialGpsSource source) async =>
+      source.supported ? await source.availablePorts() : const [];
 
   /// Re-enumerate serial ports (the pane's refresh); cached in the status.
-  void refreshPorts() => state = AsyncData(_current.copyWith(ports: _ports(ref.read(serialGpsSourceProvider))));
+  Future<void> refreshPorts() async {
+    final ports = await _ports(ref.read(serialGpsSourceProvider));
+    if (!ref.mounted) return;
+    state = AsyncData(_current.copyWith(ports: ports));
+  }
 
   Future<void> setEnabled(bool enabled) async {
     final prefs = _current.prefs.copyWith(enabled: enabled);
     await ref.read(clientGpsPrefsServiceProvider).save(prefs);
-    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true, ports: _ports(ref.read(serialGpsSourceProvider))));
+    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true, ports: await _ports(ref.read(serialGpsSourceProvider))));
     if (enabled) {
       _schedule(kClientGpsUnsyncedInterval, immediate: true);
     } else {
@@ -142,7 +149,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   Future<void> setPort(String? port) async {
     final prefs = _current.prefs.copyWith(port: port, clearPort: port == null);
     await ref.read(clientGpsPrefsServiceProvider).save(prefs);
-    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true, ports: _ports(ref.read(serialGpsSourceProvider))));
+    state = AsyncData(_current.copyWith(prefs: prefs, clearError: true, ports: await _ports(ref.read(serialGpsSourceProvider))));
     if (_current.enabled) _schedule(kClientGpsUnsyncedInterval, immediate: true);
   }
 
@@ -184,8 +191,9 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       fix = await acquireFix(ref.read(serialGpsSourceProvider), port, ref.read(clientGpsListenWindowProvider));
       if (fix == null) {
         error = 'No GPS fix on $port yet — the receiver needs a clear view of the sky.';
-      } else if (gen != null && gen != _gen) {
-        // Disabled or re-pointed while reading: keep the fix locally, never relay it.
+      } else if ((gen != null && gen != _gen) || !ref.mounted || !_current.enabled) {
+        // Disabled or re-pointed while reading (timer read: generation moved; manual
+        // read: the switch is now off): keep the fix locally, never relay it.
       } else {
         final api = ref.read(timeSyncApiProvider);
         if (api == null) {
@@ -202,9 +210,15 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
         }
       }
     } catch (e) {
-      error = 'GPS read failed on $port: $e';
+      error = fix == null
+          ? 'GPS read failed on $port: $e'
+          // The read worked; the daemon refused the push. A 422 here is a rig running a
+          // daemon that predates client-side GPS (it does not know source gps-client).
+          : 'Fix read, but the rig refused it: ${friendlyError(e, action: 'push the GPS fix')}'
+              '${e is DioException && e.response?.statusCode == 422 ? ' — update Ara Server on the rig; this daemon predates GPS on this computer.' : ''}';
       debugPrint('[client-gps] $error');
     }
+    if (!ref.mounted) return fix; // the container went away mid-read (tests, hot restart)
     final t = now();
     state = AsyncData(_current.copyWith(
       busy: false,
@@ -238,6 +252,50 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Fill-from-GPS on a machine where "GPS on this computer" was never turned
+  /// on (the profile wizard is the usual case): try the ports a dongle appears
+  /// on, briefly, and on a fix adopt that port — enable the setting and start
+  /// the loop — so the user never has to find the switch first. Returns null
+  /// when no port yields a fix in time.
+  Future<NmeaFix?> probeAndAdopt({Duration perPort = const Duration(seconds: 8)}) async {
+    final source = ref.read(serialGpsSourceProvider);
+    if (!source.supported) return null;
+    final s = _current;
+    if (s.enabled || s.busy) return null;
+    final ports = await _ports(source);
+    if (!ref.mounted) return null;
+    state = AsyncData(_current.copyWith(ports: ports, busy: true, clearError: true));
+    try {
+      for (final port in ports.where(looksLikeGpsPort)) {
+        NmeaFix? fix;
+        try {
+          fix = await acquireFix(source, port, perPort);
+        } catch (_) {
+          continue; // busy/unopenable port: try the next
+        }
+        if (fix == null || !fix.hasPosition) continue;
+        if (!ref.mounted) return fix;
+        final prefs = _current.prefs.copyWith(enabled: true, port: port);
+        await ref.read(clientGpsPrefsServiceProvider).save(prefs);
+        if (!ref.mounted) return fix;
+        state = AsyncData(_current.copyWith(prefs: prefs, busy: false, lastFix: fix, lastFixAt: now(), clearError: true));
+        _schedule(Duration.zero); // push it and keep the loop alive from here on
+        return fix;
+      }
+      return null;
+    } finally {
+      if (ref.mounted && _current.busy) state = AsyncData(_current.copyWith(busy: false));
+    }
+  }
+
+  /// The names a USB GPS dongle presents under; anything else (Bluetooth ports,
+  /// debug consoles, arbitrary COM ports) is skipped by the opportunistic probe
+  /// so it never holds a mount's or focuser's serial line.
+  static bool looksLikeGpsPort(String port) {
+    final l = port.toLowerCase();
+    return l.contains('usbserial') || l.contains('usbmodem') || l.contains('ttyusb') || l.contains('ttyacm');
   }
 
   /// Listen on [port] for up to [window] and combine sentences into one fix:

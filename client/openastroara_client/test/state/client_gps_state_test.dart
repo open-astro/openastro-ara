@@ -34,7 +34,7 @@ class _FakeSource implements SerialGpsSource {
   String? lastPort;
 
   @override
-  List<String> availablePorts() => ports;
+  Future<List<String>> availablePorts() async => ports;
 
   @override
   Stream<String> lines(String port) {
