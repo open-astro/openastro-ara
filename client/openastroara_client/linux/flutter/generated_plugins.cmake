@@ -4,7 +4,6 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
-  flutter_libserialport
   flutter_secure_storage_linux
   url_launcher_linux
   webview_all_linux

@@ -10,7 +10,7 @@ import '../util/nmea_parser.dart';
 import 'time_sync_state.dart';
 
 /// Injection seams (tests override with a canned source / temp-dir prefs).
-final serialGpsSourceProvider = Provider<SerialGpsSource>((_) => const LibSerialPortGpsSource());
+final serialGpsSourceProvider = Provider<SerialGpsSource>((_) => const OsSerialGpsSource());
 final clientGpsPrefsServiceProvider = Provider<ClientGpsPrefsService>((_) => ClientGpsPrefsService());
 
 /// How long one read listens for a fix (tests override with milliseconds).

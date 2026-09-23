@@ -2,11 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_libserialport/flutter_libserialport.dart';
-
 /// §31 — where NMEA lines come from on the client computer. An interface so the
-/// GPS sync logic is testable with a canned sentence stream, and so the serial
-/// plugin (desktop-only FFI) never has to load in tests or on mobile.
+/// GPS sync logic is testable with a canned sentence stream.
 abstract interface class SerialGpsSource {
   /// True when this platform can read a USB serial GPS at all (desktop).
   bool get supported;
@@ -20,11 +17,14 @@ abstract interface class SerialGpsSource {
   Stream<String> lines(String port);
 }
 
-/// The real thing: libserialport via flutter_libserialport. 9600-8N1 is the
-/// NMEA 0183 default virtually every USB GPS dongle ships with (the daemon's
-/// Pi-side reader uses the same).
-class LibSerialPortGpsSource implements SerialGpsSource {
-  const LibSerialPortGpsSource();
+/// The real thing, with no native code of our own and no third-party serial
+/// library: the OS configures the port (`stty` on macOS/Linux, `mode` on
+/// Windows) and dart:io streams the device file. Read-only NMEA at 9600-8N1
+/// — the default virtually every USB GPS dongle ships with, and what the
+/// daemon's Pi-side reader uses — needs nothing more. Keeps the app free of
+/// LGPL serial bindings and of a CocoaPods/CMake native build.
+class OsSerialGpsSource implements SerialGpsSource {
+  const OsSerialGpsSource();
 
   @override
   bool get supported => Platform.isMacOS || Platform.isWindows || Platform.isLinux;
@@ -33,71 +33,82 @@ class LibSerialPortGpsSource implements SerialGpsSource {
   List<String> availablePorts() {
     if (!supported) return const [];
     try {
-      final ports = SerialPort.availablePorts;
-      // Prefer the names a GPS dongle actually appears under; keep the rest so a
-      // user with an odd adapter can still pick it.
-      ports.sort((a, b) => _rank(a).compareTo(_rank(b)));
-      return ports;
+      if (Platform.isWindows) return _windowsPorts();
+      final names = Directory('/dev')
+          .listSync(followLinks: false)
+          .map((e) => e.path)
+          .where(_isCandidatePosixPort)
+          .toList()
+        ..sort((a, b) => _rank(a).compareTo(_rank(b)) != 0 ? _rank(a).compareTo(_rank(b)) : a.compareTo(b));
+      return names;
     } catch (_) {
       return const [];
     }
   }
 
+  static bool _isCandidatePosixPort(String p) {
+    final n = p.split('/').last;
+    if (Platform.isMacOS) {
+      // cu.* are the call-out devices (open without waiting for carrier); tty.* would block.
+      return n.startsWith('cu.') && !n.startsWith('cu.Bluetooth') && !n.startsWith('cu.debug');
+    }
+    return n.startsWith('ttyUSB') || n.startsWith('ttyACM');
+  }
+
   static int _rank(String p) {
     final l = p.toLowerCase();
-    if (l.contains('usbserial') || l.contains('usbmodem') || l.contains('ttyusb') || l.contains('ttyacm')) {
-      return 0;
-    }
-    if (l.startsWith('com')) return 1;
-    return 2;
+    if (l.contains('usbserial') || l.contains('usbmodem') || l.contains('ttyusb') || l.contains('ttyacm')) return 0;
+    return 1;
+  }
+
+  // `mode` with no arguments lists every device it can address; COM ports show
+  // as "Status for device COMn:". Cheap and needs no registry access.
+  static List<String> _windowsPorts() {
+    final r = Process.runSync('mode', const [], runInShell: true);
+    final out = '${r.stdout}';
+    final ports = RegExp(r'Status for device (COM\d+):').allMatches(out).map((m) => m.group(1)!).toSet().toList()..sort();
+    return ports;
   }
 
   @override
   Stream<String> lines(String port) {
     late StreamController<String> controller;
-    SerialPort? sp;
-    SerialPortReader? reader;
     StreamSubscription<String>? sub;
-
-    Future<void> stop() async {
-      // Order matters: the reader isolate must be out of its read before the
-      // port handle is closed and disposed under it.
-      await sub?.cancel();
-      reader?.close();
-      if (sp != null && sp!.isOpen) sp!.close();
-      sp?.dispose();
-    }
-
     controller = StreamController<String>(
-      onListen: () {
+      onListen: () async {
         try {
-          sp = SerialPort(port);
-          if (!sp!.openRead()) {
-            controller.addError(StateError('could not open $port: ${SerialPort.lastError?.message ?? 'unknown error'}'));
-            controller.close();
-            return;
-          }
-          final cfg = sp!.config
-            ..baudRate = 9600
-            ..bits = 8
-            ..parity = SerialPortParity.none
-            ..stopBits = 1
-            ..setFlowControl(SerialPortFlowControl.none);
-          sp!.config = cfg;
-          cfg.dispose(); // the port copies the config on assignment
-          reader = SerialPortReader(sp!, timeout: 1000);
-          sub = reader!.stream
-              .map<List<int>>((chunk) => chunk)
+          await _configure(port);
+          final path = Platform.isWindows ? r'\\.\' + port : port;
+          sub = File(path)
+              .openRead()
               .transform(const Utf8Decoder(allowMalformed: true))
               .transform(const LineSplitter())
               .listen(controller.add, onError: controller.addError, onDone: controller.close);
         } catch (e) {
-          controller.addError(e);
-          controller.close();
+          controller.addError(StateError('could not open $port: $e'));
+          await controller.close();
         }
       },
-      onCancel: stop,
+      onCancel: () async {
+        await sub?.cancel(); // closes the device file
+      },
     );
     return controller.stream;
+  }
+
+  /// 9600-8N1, raw, no echo, no flow control, and (POSIX) `clocal` so the
+  /// open never waits for a carrier line a GPS dongle does not drive.
+  static Future<void> _configure(String port) async {
+    final ProcessResult r;
+    if (Platform.isWindows) {
+      r = await Process.run('mode', ['$port:', 'BAUD=9600', 'PARITY=n', 'DATA=8', 'STOP=1', 'to=off', 'xon=off', 'octs=off', 'rts=off', 'dtr=on'], runInShell: true);
+    } else if (Platform.isMacOS) {
+      r = await Process.run('stty', ['-f', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts']);
+    } else {
+      r = await Process.run('stty', ['-F', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts']);
+    }
+    if (r.exitCode != 0) {
+      throw StateError('${'${r.stderr}'.trim().isEmpty ? r.stdout : r.stderr}'.trim());
+    }
   }
 }
