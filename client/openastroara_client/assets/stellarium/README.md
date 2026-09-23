@@ -194,3 +194,17 @@ dimmed + desaturated (Pillow, brightness ×0.16, colour ×0.28) so the ground
 reads as a clean dark silhouette instead of a bright daytime photo — the
 panorama brightness is driven by the engine's global sky-brightness model, not a
 runtime tint, so it has to be baked into the images.
+
+## Runtime gotchas in `index.html` (survive a rebuild of the engine)
+
+- **Touch delivery is taken over by the page.** `wireTouch()` in `index.html`
+  registers *capture* touch listeners on the canvas and calls
+  `stopImmediatePropagation()` so the engine's own glue (`setupMouse` in the
+  built `.js`) never sees the raw events: the glue forwards each touch's raw
+  `identifier` as the engine's touch slot and ignores `touchcancel`, which on a
+  Flutter platform view means phantom fingers and a pinch that runs the FOV to
+  360° (#1097). This relies on capture listeners on the *target* firing before
+  its non-capture ones (DOM spec). If the engine is ever re-vendored with
+  **capture** listeners in its glue, both paths deliver and the raw-identifier
+  bug returns silently — re-check `wireTouch()` against the new glue.
+

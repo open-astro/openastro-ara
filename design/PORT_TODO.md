@@ -1908,4 +1908,22 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   still assigns the observable `RolloverTime` from a read path, the pattern #1088 removed from
   `WaitForTime.GetEstimatedDuration()`. Unreachable from `RunEtaEstimator` today (only
   `LoopCondition.Iterations` is read off conditions); fix before conditions join the walk.
+- `client/openastroara_client/tool/stellarium_bridge_test/test_bridge.js` still drives
+  `window.araStel` (`setLocation`/`zoomBy`/`panBy`), which `index.html` no longer defines, so
+  the only headless harness for the planetarium page fails at its readiness poll and can't
+  reach the loopback `zoom` command / FOV guard added in #1097. Not wired into CI, so nothing is
+  red; the JS half of that page has no reachable test surface until the harness is re-pointed
+  at the `/aracmd` channel. (Review note on #1097.)
+- Planetarium page: "Slew sent ✓" is shown on the daemon's 202 for
+  `/equipment/telescope/slew`, before the background op runs, so a mount command that then
+  fails (e.g. the bridge's latched "Mount communications compromised") still reads as sent.
+  Watch the operation or the telescope state after the 202. Pre-existing; found on #1097.
+- AlpacaBridge latches "Mount communications compromised" after three timeouts on the iOptron
+  Wi-Fi link and never recovers on its own; every client then fails until the telescope is
+  disconnected and reconnected through the daemon. The daemon could auto-reconnect when the
+  bridge reports the latched fault. Pre-existing; found on #1097 (2026-09-22 on the Pi rig).
+- `StellariumView` reads `Platform.isAndroid || Platform.isIOS` inline in `build()` and its
+  `_SearchBar` is private, so the touch-only zoom row (#1097) can't be pinned by a widget test;
+  route the gate through the existing `clientPlatform` seam (`lib/util/gps_site_fill.dart`) and
+  make the bar package-visible. Review note on #1097.
 
