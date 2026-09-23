@@ -539,6 +539,12 @@ function wireSelection() {
     followFrame();
   });
   setInterval(syncSelection, 150);
+  (function guard() { clampFov(); window.requestAnimationFrame(guard); })();
+  // Diagnostic telemetry to Flutter (debug builds only; see DEBUG).
+  if (DEBUG) setInterval(function () {
+    var c = document.getElementById('stel-canvas');
+    debugEvent({ fov: stel ? stel.core.fov / D2R : null, cw: c.width, ch: c.height, dpr: window.devicePixelRatio });
+  }, 1000);
   updateStarScale();
 
   document.getElementById('i-close').onclick = function () { stel.core.selection = 0; };
@@ -1343,14 +1349,60 @@ function addFrameToSequence() {
   });
 }
 
+// On-screen zoom for touch platforms (Android/iOS tablets have no wheel or
+// trackpad, and a pinch that overshoots to the widest FOV leaves the user with
+// no way back). factor < 1 zooms in, > 1 zooms out; anything unusable resets to
+// the 90° opening view. Clamped so a run of taps can't wedge the engine at a
+// degenerate FOV either way.
+// FOV bounds. The engine itself lets a pinch run past its projection's usable
+// range — the sky collapses to a tunnel — and its fov attribute can then read 0
+// or non-finite (Android tablet, 2026-09-22). zoomTo ANIMATES from the current
+// FOV, so from a degenerate start it never lands anywhere. So: remember the last
+// usable FOV, and whenever the engine's reading is unusable, assign core.fov
+// back to that directly instead of trusting the engine's value.
+var MIN_FOV = 0.05 * D2R, MAX_FOV = 120 * D2R;
+var lastGoodFov = 90 * D2R;
+function fovIsUsable(fov) { return isFinite(fov) && fov >= MIN_FOV && fov <= MAX_FOV; }
+// Diagnostics reach Flutter only when it asked (debug builds pass ?debug=1).
+var DEBUG = qp('debug', '') === '1';
+function debugEvent(obj) {
+  if (!DEBUG) return;
+  fetch('/araevent', { method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(Object.assign({ type: 'debug' }, obj)) }).catch(function () {});
+}
+function zoomBy(factor) {
+  if (!stel) return;
+  var f = Number(factor);
+  var cur = stel.core.fov;
+  var base = fovIsUsable(cur) ? cur : lastGoodFov;
+  var target = (f > 0) ? Math.max(MIN_FOV, Math.min(MAX_FOV, base * f)) : 90 * D2R;
+  debugEvent({ zoom: f, from: cur / D2R, to: target / D2R });
+  if (fovIsUsable(cur)) stel.zoomTo(target, 0.3);
+  else stel.core.fov = target;
+  lastGoodFov = target;
+}
+// Per-frame guard (engine-internal gesture changes don't reliably fire stel.change):
+// an overshot or degenerate FOV snaps back to the nearest usable value.
+function clampFov() {
+  if (!stel) return;
+  var cur = stel.core.fov;
+  if (fovIsUsable(cur)) { lastGoodFov = cur; return; }
+  var fixed = (isFinite(cur) && cur > MAX_FOV) ? MAX_FOV : lastGoodFov;
+  debugEvent({ clamp: true, from: isFinite(cur) ? cur / D2R : String(cur), to: fixed / D2R });
+  stel.core.fov = fixed;
+}
+window.onerror = function (msg, src, line) { debugEvent({ error: String(msg), line: line }); };
+
 // Poll the loopback server for Flutter-originated commands (search, Tonight,
-// goto) and dispatch them. ~3/sec is plenty and stays cheap on loopback.
+// goto, zoom) and dispatch them. ~3/sec is plenty and stays cheap on loopback.
 function pollCmd() {
   fetch('/aracmd', { cache: 'no-store', headers: araHeaders() })
     .then(function (r) { return r.json(); })
     .then(function (c) {
       if (!c || !c.type) return;
+      debugEvent({ cmd: c.type });
       if (c.type === 'search') doSearch(c.q || '');
+      else if (c.type === 'zoom') zoomBy(c.factor);
       else if (c.type === 'goto' && c.ra != null) {
         stel.core.selection = 0;
         // A framing goto (Tonight's Sky row tap) opens the framing overlay so
@@ -1361,6 +1413,43 @@ function pollCmd() {
       }
     })
     .catch(function () {});
+}
+
+// Take over touch delivery to the engine. Its own glue forwards each touch's
+// raw `identifier` as the engine's touch slot and never handles touchcancel.
+// Inside a Flutter platform view on Android the identifiers are arbitrary
+// (large, ever-increasing) and cancels are routine, so the engine saw phantom
+// fingers and its pinch maths exploded — the FOV jumped 120° → 300° → 170° in
+// tenths of a second (telemetry, 2026-09-22). Remap identifiers onto slots 0/1,
+// release a slot on end AND cancel, and stop the engine's own listeners from
+// seeing the raw events (capture listeners on the target run first).
+function wireTouch() {
+  var canvas = document.getElementById('stel-canvas');
+  var slots = {};           // identifier → 0 | 1
+  function slotFor(id, allocate) {
+    if (id in slots) return slots[id];
+    if (!allocate) return -1;
+    var used = Object.keys(slots).map(function (k) { return slots[k]; });
+    var free = used.indexOf(0) < 0 ? 0 : (used.indexOf(1) < 0 ? 1 : -1);
+    if (free >= 0) slots[id] = free;
+    return free;
+  }
+  function forward(e, state, allocate, release) {
+    e.stopImmediatePropagation();
+    if (state !== 1) e.preventDefault();
+    var rect = canvas.getBoundingClientRect();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      var slot = slotFor(t.identifier, allocate);
+      if (slot < 0) continue;              // a third finger: ignored
+      stel._core_on_mouse(slot, state, t.pageX - rect.left, t.pageY - rect.top, 1);
+      if (release) delete slots[t.identifier];
+    }
+  }
+  canvas.addEventListener('touchstart', function (e) { forward(e, 1, true, false); }, { capture: true, passive: true });
+  canvas.addEventListener('touchmove', function (e) { forward(e, -1, false, false); }, { capture: true, passive: false });
+  canvas.addEventListener('touchend', function (e) { forward(e, 0, false, true); }, { capture: true, passive: false });
+  canvas.addEventListener('touchcancel', function (e) { forward(e, 0, false, true); }, { capture: true, passive: false });
 }
 
 function wireCmds() {
@@ -1481,6 +1570,7 @@ StelWebEngine({
     core.observer.longitude = LON * D2R;
     core.observer.elevation = ELEV;
     setObserverTime();
+    wireTouch();
     wireControls();
     wireSelection();
     wireCmds();
