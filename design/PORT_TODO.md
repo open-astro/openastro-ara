@@ -1908,4 +1908,9 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   still assigns the observable `RolloverTime` from a read path, the pattern #1088 removed from
   `WaitForTime.GetEstimatedDuration()`. Unreachable from `RunEtaEstimator` today (only
   `LoopCondition.Iterations` is read off conditions); fix before conditions join the walk.
-
+- `client/openastroara_client/tool/stellarium_bridge_test/test_bridge.js` still drives
+  `window.araStel` (`setLocation`/`zoomBy`/`panBy`), which `index.html` no longer defines, so
+  the only headless harness for the planetarium page fails at its readiness poll and can't
+  reach the loopback `zoom` command / FOV guard added in #1097. Not wired into CI, so nothing is
+  red; the JS half of that page has no reachable test surface until the harness is re-pointed
+  at the `/aracmd` channel. (Review note on #1097.)

@@ -1360,9 +1360,12 @@ function addFrameToSequence() {
 // FOV, so from a degenerate start it never lands anywhere. So: remember the last
 // usable FOV, and whenever the engine's reading is unusable, assign core.fov
 // back to that directly instead of trusting the engine's value.
+// MIN_FOV bounds only the on-screen buttons; the guard has NO floor (any positive
+// finite value is usable) so a desktop wheel-zoom deep into a target is never
+// fought by it — the reported failure was the wide end only.
 var MIN_FOV = 0.05 * D2R, MAX_FOV = 120 * D2R;
 var lastGoodFov = 90 * D2R;
-function fovIsUsable(fov) { return isFinite(fov) && fov >= MIN_FOV && fov <= MAX_FOV; }
+function fovIsUsable(fov) { return isFinite(fov) && fov > 0 && fov <= MAX_FOV; }
 // Diagnostics reach Flutter only when it asked (debug builds pass ?debug=1).
 var DEBUG = qp('debug', '') === '1';
 function debugEvent(obj) {
@@ -1383,12 +1386,18 @@ function zoomBy(factor) {
 }
 // Per-frame guard (engine-internal gesture changes don't reliably fire stel.change):
 // an overshot or degenerate FOV snaps back to the nearest usable value.
+var lastClampReport = 0;
 function clampFov() {
   if (!stel) return;
   var cur = stel.core.fov;
   if (fovIsUsable(cur)) { lastGoodFov = cur; return; }
   var fixed = (isFinite(cur) && cur > MAX_FOV) ? MAX_FOV : lastGoodFov;
-  debugEvent({ clamp: true, from: isFinite(cur) ? cur / D2R : String(cur), to: fixed / D2R });
+  // Runs per frame: report at most once a second, matching the sampler.
+  var now = Date.now();
+  if (now - lastClampReport >= 1000) {
+    lastClampReport = now;
+    debugEvent({ clamp: true, from: isFinite(cur) ? cur / D2R : String(cur), to: fixed / D2R });
+  }
   stel.core.fov = fixed;
 }
 window.onerror = function (msg, src, line) { debugEvent({ error: String(msg), line: line }); };
@@ -1445,6 +1454,10 @@ function wireTouch() {
       stel._core_on_mouse(slot, state, t.pageX - rect.left, t.pageY - rect.top, 1);
       if (release) delete slots[t.identifier];
     }
+    // No fingers down at all: forget every slot. A release the platform view
+    // swallowed (view detach mid-gesture) would otherwise pin both slots and
+    // every later pinch would be dropped as "a third finger".
+    if (e.touches.length === 0) slots = {};
   }
   canvas.addEventListener('touchstart', function (e) { forward(e, 1, true, false); }, { capture: true, passive: true });
   canvas.addEventListener('touchmove', function (e) { forward(e, -1, false, false); }, { capture: true, passive: false });

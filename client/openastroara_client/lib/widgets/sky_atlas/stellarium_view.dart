@@ -174,9 +174,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             );
           } on Object catch (_) {}
         }
-        await controller.loadRequest(Uri.parse(url));
-        if (!mounted) return;
+        // Publish the controller BEFORE the load, fire-and-forget as it always
+        // was: on a platform whose loadRequest only completes once the platform
+        // view exists, awaiting it here would be a permanent loading screen.
         setState(() => _controller = controller);
+        unawaited(controller.loadRequest(Uri.parse(url)));
         // Apply any already-active night mode once the Stellarium page is up.
         _applyNightOnWeb(switch (ref.read(nightModeProvider)) {
           AsyncData(:final value) => value,
