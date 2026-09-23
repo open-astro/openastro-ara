@@ -16,6 +16,10 @@ final clientGpsPrefsServiceProvider = Provider<ClientGpsPrefsService>((_) => Cli
 /// How long one read listens for a fix (tests override with milliseconds).
 final clientGpsListenWindowProvider = Provider<Duration>((_) => kClientGpsListenWindow);
 
+/// When a timer tick lands while a manual read (Read now / Fill from GPS) holds
+/// the port, the tick re-arms itself after this delay instead of dying.
+final clientGpsBusyRetryProvider = Provider<Duration>((_) => const Duration(seconds: 20));
+
 /// How long one acquisition listens for a usable RMC (+ GGA for altitude).
 /// A warm receiver emits RMC every second; a cold one needs a minute or more
 /// under open sky, which the periodic loop covers by retrying.
@@ -96,6 +100,10 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   /// Injectable clock for tests.
   DateTime Function() now = () => DateTime.now().toUtc();
 
+  /// The current timer generation (tests simulate a tick with it).
+  @visibleForTesting
+  int get generation => _gen;
+
   @override
   Future<ClientGpsStatus> build() async {
     ref.onDispose(() => _timer?.cancel());
@@ -154,10 +162,14 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
   Future<NmeaFix?> syncNow({int? gen}) async {
     final s = _current;
     if (!s.enabled) return null;
-    // One reader per port: a second caller (Read now, Fill from GPS, or a re-armed
-    // timer) during the window would only get "device busy"; hand it the last fix.
-    // The in-flight read re-arms the loop when it finishes (see the tail below).
-    if (s.busy) return s.lastFix;
+    // One reader per port: a second caller during the window would only get
+    // "device busy"; hand it the last fix. A TIMER tick that lands on a manual read
+    // must re-arm itself, though: the manual read never touches the timer, so the
+    // tick would otherwise be the loop's last (#1095 r3).
+    if (s.busy) {
+      if (gen != null && gen == _gen) _schedule(ref.read(clientGpsBusyRetryProvider));
+      return s.lastFix;
+    }
     final port = s.prefs.port;
     if (port == null || port.isEmpty) {
       state = AsyncData(s.copyWith(lastError: 'Choose the serial port the GPS dongle is on.'));
@@ -203,7 +215,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       lastError: error,
       clearError: error == null,
     ));
-    if (gen == null) return fix; // a manual read: the background timer is untouched
+    if (gen == null) return fix; // a manual read: the timer is untouched (a tick that hit `busy` re-armed itself)
     if (gen != _gen) {
       // Superseded mid-read (toggle or port change). The newer generation's own read bailed on
       // `busy` above without arming anything, so the loop would otherwise stop here for the rest
@@ -261,8 +273,9 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       await done.future;
     } finally {
       timer.cancel();
-      // Not awaited: a source that is slow to release the port must not hold up the fix.
-      unawaited(sub.cancel());
+      // Give the port a moment to be released (a Read now right after a read would
+      // otherwise see "busy"), but never let a stuck source hold up the fix.
+      await sub.cancel().timeout(const Duration(seconds: 1), onTimeout: () {});
     }
     if (rmc == null) return null;
     return NmeaFix(timeUtc: rmc!.timeUtc, latitudeDeg: rmc!.latitudeDeg, longitudeDeg: rmc!.longitudeDeg, altitudeM: alt);

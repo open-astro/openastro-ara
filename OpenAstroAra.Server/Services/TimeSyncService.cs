@@ -29,7 +29,7 @@ public interface ITimeSyncService {
 
     /// <summary>Apply a client-pushed sync (§31.1 waterfall steps 1/3/5). Throws
     /// <see cref="TimeSyncInvalidSourceException"/> for a source outside
-    /// <c>client|gps-mobile|manual</c> (→ 422 at the endpoint).</summary>
+    /// <c>client|gps-client|gps-mobile|manual</c> (→ 422 at the endpoint).</summary>
     Task<TimeSyncPushResultDto> PushAsync(TimeSyncPushRequestDto request, CancellationToken ct);
 }
 
@@ -300,7 +300,7 @@ public class TimeSyncInvalidRequestException : Exception {
     public TimeSyncInvalidRequestException(string message, Exception innerException) : base(message, innerException) { }
 }
 
-/// <summary>A source outside the §31.3 wire set (<c>client|gps-mobile|manual</c>).</summary>
+/// <summary>A source outside the §31.3 wire set (<c>client|gps-client|gps-mobile|manual</c>).</summary>
 public sealed class TimeSyncInvalidSourceException : TimeSyncInvalidRequestException {
     public TimeSyncInvalidSourceException() { }
     public TimeSyncInvalidSourceException(string message) : base(message) { }

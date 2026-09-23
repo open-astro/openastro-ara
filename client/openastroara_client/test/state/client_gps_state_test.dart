@@ -93,6 +93,7 @@ void main() {
       timeSyncApiFactoryProvider.overrideWithValue((_) => api),
       savedServerServiceProvider.overrideWithValue(_FakeServers()),
       clientGpsListenWindowProvider.overrideWithValue(const Duration(milliseconds: 150)),
+      clientGpsBusyRetryProvider.overrideWithValue(const Duration(milliseconds: 50)),
     ]);
     addTearDown(c.dispose);
     return c;
@@ -194,6 +195,24 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       expect(source.lastPort, '/dev/new', reason: 'the superseded read re-armed the loop');
       expect(source.opens, greaterThanOrEqualTo(2));
+    });
+
+    test('a timer tick landing on a manual read re-arms instead of ending the loop', () async {
+      final source = _FakeSource([]); // no fix: every read holds busy for the whole window
+      final api = _FakeApi();
+      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 250)); // first background read done
+      final n = c.read(clientGpsProvider.notifier);
+      final manual = n.syncNow(); // holds the port for 150 ms
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final tick = await n.syncNow(gen: n.generation); // the armed tick lands on the manual read
+      expect(tick, isNull);
+      await manual;
+      final opensAfterManual = source.opens;
+      // The tick re-armed itself (50 ms retry in tests): another background read follows.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(source.opens, greaterThan(opensAfterManual), reason: 'the loop is still alive');
     });
 
     test('a failed read clears the stale fix from the status', () async {
