@@ -388,6 +388,37 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['safety.policies.weather_triggers'],
     keywords: ['dew', 'dew point', 'fog', 'delta', 'condensation'],
   ),
+  'timesync.client_gps.enabled': Help(
+    key: 'timesync.client_gps.enabled',
+    title: 'GPS on this computer',
+    body:
+        'Plug a cheap USB GPS dongle into the computer running this app instead '
+        'of into the Pi, and the app reads the satellite fix and sends the '
+        'receiver\'s exact UTC time plus your latitude, longitude and elevation '
+        'to the rig. It counts as a high-trust time sync (the same as a dongle on '
+        'the Pi) and fills the site coordinates that polar alignment and '
+        'plate solving need. The app keeps re-reading while it is open: every '
+        'couple of minutes until the first fix has been sent, then about hourly. '
+        'You are next to the mount during setup and polar alignment, so the '
+        'fix is the rig\'s position for every purpose that matters. Desktop '
+        'only; phones and tablets use their built-in GPS through Fill from GPS.',
+    relatedSettings: ['timesync.client_gps.enabled', 'timesync.client_gps.port'],
+    keywords: ['gps', 'dongle', 'time sync', 'site'],
+  ),
+  'timesync.client_gps.port': Help(
+    key: 'timesync.client_gps.port',
+    title: 'GPS serial port',
+    body:
+        'Which serial port the dongle is on. Most dongles show up as '
+        '/dev/cu.usbserial-… or /dev/cu.usbmodem… on a Mac, COM3 (or similar) on '
+        'Windows and /dev/ttyUSB0 or /dev/ttyACM0 on Linux; the list puts those '
+        'first. The dongle speaks NMEA at 9600 baud, which is what nearly every '
+        'receiver ships with. "No fix yet" with the port right just means the '
+        'receiver has not found enough satellites — give it a clear view of the '
+        'sky; a cold receiver can take a few minutes.',
+    relatedSettings: ['timesync.client_gps.port', 'timesync.client_gps.enabled'],
+    keywords: ['gps', 'serial', 'port', 'nmea'],
+  ),
   'safety.policies.auto_resume': Help(
     key: 'safety.policies.auto_resume',
     title: 'Auto-resume',
