@@ -20,7 +20,8 @@ for w in list where (w["kCGWindowLayer"] as? Int) == 0 {
 SWIFT
   swiftc -O -o "$CACHE" "$SRC"
 fi
-WID=$("$CACHE" | awk -F'\t' -v o="$OWNER" 'tolower($2)==tolower(o){print $1; exit}')
+# No `exit` in the awk: under pipefail an early consumer exit can SIGPIPE the producer.
+WID=$("$CACHE" | awk -F'\t' -v o="$OWNER" 'tolower($2)==tolower(o) && !found {print $1; found=1}')
 if [ -z "$WID" ]; then echo "no on-screen window owned by '$OWNER'" >&2; "$CACHE" >&2; exit 2; fi
 open -a "$OWNER" 2>/dev/null || true      # bring it front so nothing overlaps
 sleep 0.5

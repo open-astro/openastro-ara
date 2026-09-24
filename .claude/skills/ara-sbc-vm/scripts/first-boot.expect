@@ -18,8 +18,8 @@ spawn {*}$argv
 # the login ("Login incorrect"). Everything else we care about is set below.
 expect {
     -re "Press any key to proceed" { send "\r"; exp_continue }
-    -re "Please enter the new root password\[^\r\n\]*: " { sleep 0.5; send "$rootpw\r"; exp_continue }
-    -re "Please enter the new (system locale|locale|keymap|keyboard|timezone|hostname)\[^\r\n\]*: " { sleep 0.3; send "\r"; exp_continue }
+    -re "Please enter (the )?(new )?root password\[^\r\n\]*: " { sleep 0.5; send "$rootpw\r"; exp_continue }
+    -re "Please enter (the )?(new )?(system locale|locale|keymap|keyboard|timezone|hostname)\[^\r\n\]*: " { sleep 0.3; send "\r"; exp_continue }
     -re "login: $" { send "root\r" }
     eof { puts "\nQEMU_EXITED_DURING_BOOT: [wait]"; exit 1 }
     timeout { puts "\nno login prompt"; exit 1 }

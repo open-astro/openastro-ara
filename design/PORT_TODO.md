@@ -1927,3 +1927,6 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   route the gate through the existing `clientPlatform` seam (`lib/util/gps_site_fill.dart`) and
   make the bar package-visible. Review note on #1097.
 
+- Playbook §19.5 says "Do not edit `.git/`, `.claude/`", written for the port driver; maintainer
+  skill PRs (#1101 added two skills with helper scripts) are the sanctioned exception per the
+  2026-09-24 PORT_DECISIONS entry. Add the carve-out to §19.5 wording. Review note on #1101.
