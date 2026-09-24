@@ -587,8 +587,16 @@ class InertTreesTest(unittest.TestCase):
     # `config.yml` and issue-form templates are read by nothing but
     # github.com, and nothing under that directory can be a workflow or a
     # composite action (those live in workflows/ and actions/).
+    # `.claude/skills/` may hold the helper scripts a skill drives by hand on
+    # the maintainer's Mac (bash, Swift, expect) and its eval prompts (json):
+    # no workflow, build, test or package step reads anything under
+    # `.claude/` (that is the whole basis for its INERT_DIRS entry above), so
+    # a script there cannot be a build input any more than the SKILL.md next
+    # to it. Keyed on the sub-prefix so `.claude/commands/` and the rest of
+    # `.claude/` stay prose-only.
     EXTRA_BY_PREFIX = {
         ".github/ISSUE_TEMPLATE/": {".yml", ".yaml"},
+        ".claude/skills/": {".sh", ".swift", ".expect", ".json"},
     }
 
     @classmethod
@@ -630,14 +638,22 @@ class InertTreesTest(unittest.TestCase):
     def test_every_extra_by_prefix_key_is_an_inert_dir(self):
         # A per-prefix allowance for a directory the classifier does not
         # treat as inert would be dead text at best and misleading at worst.
+        # A key may narrow an inert dir to one of its subtrees (`.claude/skills/`)
+        # but never name a tree outside them.
         for prefix in self.EXTRA_BY_PREFIX:
             with self.subTest(prefix=prefix):
-                self.assertIn(prefix, self.m.INERT_DIRS)
+                self.assertTrue(
+                    any(prefix.startswith(inert) for inert in self.m.INERT_DIRS),
+                    f"{prefix} is not under any INERT_DIRS entry",
+                )
 
     def test_the_per_prefix_allowance_does_not_leak(self):
         # `.yml` is allowed under ISSUE_TEMPLATE/ only; the same name under
         # design/ or docs/ would be a build input nobody classified.
         self.assertIn(".yml", self.allowed(".github/ISSUE_TEMPLATE/config.yml"))
+        self.assertIn(".sh", self.allowed(".claude/skills/ara-sbc-vm/scripts/vm.sh"))
+        self.assertNotIn(".sh", self.allowed(".claude/commands/pr-checker.sh"))
+        self.assertNotIn(".sh", self.allowed("docs/deploy.sh"))
         self.assertIn(".yaml", self.allowed(".github/ISSUE_TEMPLATE/form.yaml"))
         self.assertNotIn(".yml", self.allowed("design/something.yml"))
         self.assertNotIn(".yml", self.allowed("docs/something.yml"))
