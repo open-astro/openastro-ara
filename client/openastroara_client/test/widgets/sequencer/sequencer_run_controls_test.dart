@@ -103,6 +103,13 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
 SequenceRunStateInfo _info(SequenceRunState s, {int done = 0, int total = 0}) =>
     SequenceRunStateInfo(state: s, instructionsCompleted: done, instructionsTotal: total);
 
+/// The toolbar folds utilities into a "More" menu when narrow; give it a
+/// desktop-width surface so every button is inline for these tests.
+Future<void> wideSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(2000, 800));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
 void main() {
   group('run-state provider', () {
     test('null when nothing selected', () async {
@@ -154,6 +161,7 @@ void main() {
 
     testWidgets('the status line counts INSTRUCTIONS, never "frames" (r1 on the '
         'frames_*→instructions_* rename)', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.running, done: 3, total: 9));
       expect(find.textContaining('3/9 instructions'), findsOneWidget,
           reason: 'the counters are sequence-tree leaves — slews and autofocus '
@@ -162,6 +170,7 @@ void main() {
     });
 
     testWidgets('no active run → Run enabled, Pause/Abort disabled', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: null);
       expect(btn(tester, 'Run').onPressed, isNotNull);
       expect(btn(tester, 'Pause').onPressed, isNull);
@@ -169,6 +178,7 @@ void main() {
     });
 
     testWidgets('running → Pause + Abort enabled, Run disabled', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.running));
       expect(btn(tester, 'Run').onPressed, isNull);
       expect(btn(tester, 'Pause').onPressed, isNotNull);
@@ -177,6 +187,7 @@ void main() {
 
     testWidgets('paused → Run shows Resume (enabled), Abort enabled, Pause disabled',
         (tester) async {
+      await wideSurface(tester);
       // The daemon's §38 instruction-boundary pause is real now: Paused means
       // the engine actually suspended, Resume releases it.
       await pump(tester, run: _info(SequenceRunState.paused));
@@ -189,6 +200,7 @@ void main() {
     testWidgets(
         'pausedAwaitingUser → Resume enabled, needs-attention status, Pause disabled',
         (tester) async {
+      await wideSurface(tester);
       // §58.12 — the engine paused ITSELF after an urgent failure (a failed
       // meridian flip, mount in safe rest). Same controls as an operator
       // pause — Resume releases the same gate — but the status line says the
@@ -202,6 +214,7 @@ void main() {
     });
 
     testWidgets('starting → Run + Pause disabled, Abort enabled', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.starting));
       expect(btn(tester, 'Run').onPressed, isNull);
       expect(btn(tester, 'Pause').onPressed, isNull);
@@ -209,12 +222,14 @@ void main() {
     });
 
     testWidgets('aborting → Abort disabled (already aborting)', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.aborting));
       expect(btn(tester, 'Abort').onPressed, isNull);
       expect(btn(tester, 'Run').onPressed, isNull);
     });
 
     testWidgets('completed → Run re-enabled (re-run), Pause disabled', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.completed));
       expect(btn(tester, 'Run').onPressed, isNotNull);
       expect(btn(tester, 'Pause').onPressed, isNull);
@@ -222,22 +237,26 @@ void main() {
     });
 
     testWidgets('running → Skip enabled', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.running));
       expect(btn(tester, 'Skip').onPressed, isNotNull);
     });
 
     testWidgets('no active run → Skip disabled', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: null);
       expect(btn(tester, 'Skip').onPressed, isNull);
     });
 
     testWidgets('aborting → Skip disabled (teardown already underway)',
         (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.aborting));
       expect(btn(tester, 'Skip').onPressed, isNull);
     });
 
     testWidgets('paused → Skip enabled (parity with Abort)', (tester) async {
+      await wideSurface(tester);
       // Skip shares Abort's gate exactly: paused is an active state, so both
       // controls stay enabled there. (The daemon never actually reaches paused
       // today — pause is a no-op — but the gate is pinned so the decision is
@@ -248,6 +267,7 @@ void main() {
     });
 
     testWidgets('pressing Skip fires skip-current', (tester) async {
+      await wideSurface(tester);
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(_FakeClient()),
         sequenceRunStateProvider
@@ -267,6 +287,7 @@ void main() {
     });
 
     testWidgets('a command in flight disables the controls', (tester) async {
+      await wideSurface(tester);
       final container = await pump(tester, run: null);
       // Run is enabled at rest...
       expect(btn(tester, 'Run').onPressed, isNotNull);
@@ -277,6 +298,7 @@ void main() {
     });
 
     testWidgets('pressing Run starts the sequence', (tester) async {
+      await wideSurface(tester);
       final container = await pump(tester, run: null);
       // Invoke the handler directly (the button is in a horizontal scroll view
       // and may be off the test viewport, so a hit-test tap is unreliable).
@@ -293,6 +315,7 @@ void main() {
 
     testWidgets('an aligned session starts without the pre-flight confirm',
         (tester) async {
+      await wideSurface(tester);
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(_FakeClient()),
         sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
@@ -314,6 +337,7 @@ void main() {
 
     testWidgets('a non-Dio lifecycle failure surfaces a SnackBar, not a crash',
         (tester) async {
+      await wideSurface(tester);
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(_FakeClient(throwOnStart: true)),
         sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
@@ -335,6 +359,7 @@ void main() {
     });
 
     testWidgets('Abort asks for confirmation; Keep running cancels', (tester) async {
+      await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.running, done: 1, total: 9));
       btn(tester, 'Abort').onPressed!();
       await tester.pumpAndSettle();
@@ -380,6 +405,7 @@ void main() {
 
     testWidgets('the default action resumes with re-center only',
         (tester) async {
+      await wideSurface(tester);
       final client = await pumpPaused(tester);
       await tapResume(tester);
       await tester.tap(find.text('Resume & re-center'));
@@ -389,6 +415,7 @@ void main() {
     });
 
     testWidgets("'Re-center + refocus' sends both flags", (tester) async {
+      await wideSurface(tester);
       final client = await pumpPaused(tester);
       await tapResume(tester);
       await tester.tap(find.text('Re-center + refocus'));
@@ -397,6 +424,7 @@ void main() {
     });
 
     testWidgets("'Just resume' declines both", (tester) async {
+      await wideSurface(tester);
       final client = await pumpPaused(tester);
       await tapResume(tester);
       await tester.tap(find.text('Just resume'));
@@ -406,6 +434,7 @@ void main() {
 
     testWidgets('dismissing the dialog resumes nothing (user backed out)',
         (tester) async {
+      await wideSurface(tester);
       final client = await pumpPaused(tester);
       await tapResume(tester);
       await tester.tapAt(const Offset(5, 5)); // barrier

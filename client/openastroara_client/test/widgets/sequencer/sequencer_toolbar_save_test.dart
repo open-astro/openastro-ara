@@ -149,13 +149,22 @@ TextButton _saveButton(WidgetTester tester) => tester.widget<TextButton>(
       find.ancestor(of: find.text('Save'), matching: find.byType(TextButton)),
     );
 
+/// The toolbar folds utilities into a "More" menu when narrow; give it a
+/// desktop-width surface so every button is inline for these tests.
+Future<void> wideSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(2000, 800));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
 void main() {
   testWidgets('Save is disabled when the editor is not dirty', (tester) async {
+    await wideSurface(tester);
     await _pump(tester, _SaveClient(), dirty: false);
     expect(_saveButton(tester).onPressed, isNull);
   });
 
   testWidgets('Import (NINA) is present and enabled while connected', (tester) async {
+    await wideSurface(tester);
     await _pump(tester, _SaveClient(), dirty: false);
     final importBtn = tester.widget<TextButton>(
       find.ancestor(of: find.text('Import'), matching: find.byType(TextButton)),
@@ -164,6 +173,7 @@ void main() {
   });
 
   testWidgets('Import is disabled when disconnected', (tester) async {
+    await wideSurface(tester);
     final container = ProviderContainer(overrides: [
       sequenceApiProvider.overrideWithValue(null),
     ]);
@@ -180,6 +190,7 @@ void main() {
   });
 
   testWidgets('Validate reports a valid sequence', (tester) async {
+    await wideSurface(tester);
     final client = _SaveClient();
     await _pump(tester, client, dirty: false);
     await tester.ensureVisible(find.text('Validate'));
@@ -190,6 +201,7 @@ void main() {
   });
 
   testWidgets('Validate surfaces the validator reason when invalid', (tester) async {
+    await wideSurface(tester);
     final client = _SaveClient(
         validateResult: const SequenceValidationResult(
             valid: false, reason: 'needs a capturable instruction'));
@@ -202,6 +214,7 @@ void main() {
 
   testWidgets('Save PATCHes the body, rebaselines dirty, and confirms',
       (tester) async {
+    await wideSurface(tester);
     final client = _SaveClient();
     final container = await _pump(tester, client, dirty: true);
     expect(_saveButton(tester).onPressed, isNotNull); // enabled while dirty
@@ -220,6 +233,7 @@ void main() {
   });
 
   testWidgets('a 422 surfaces the validator message', (tester) async {
+    await wideSurface(tester);
     final client = _SaveClient(
         throwStatus: 422, throwData: {'detail': 'needs a capturable instruction'});
     final container = await _pump(tester, client, dirty: true);
@@ -235,6 +249,7 @@ void main() {
 
   testWidgets('a non-422 failure shows a generic error and keeps edits dirty',
       (tester) async {
+    await wideSurface(tester);
     final client = _SaveClient(throwStatus: 500);
     final container = await _pump(tester, client, dirty: true);
 
@@ -248,6 +263,7 @@ void main() {
 
   testWidgets('a non-Dio exception is caught (generic error, edits kept)',
       (tester) async {
+    await wideSurface(tester);
     final client = _SaveClient(throwGeneric: true);
     final container = await _pump(tester, client, dirty: true);
 

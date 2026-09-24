@@ -100,6 +100,116 @@ class SequencerToolbar extends ConsumerWidget {
     // accepted no-op.
     final canSkip = hasSelection && isActive && !isAborting;
 
+    // Every action as data, so the toolbar can decide per-width which ones
+    // sit inline and which fold into the overflow menu (see _ToolbarLayout).
+    final utilities = <_ToolAction>[
+      _ToolAction(
+        icon: Icons.note_add_outlined,
+        label: 'New',
+        // Enabled once connected; opens the template picker.
+        onPressed: connected ? () => SequenceNewDialog.show(context) : null,
+      ),
+      _ToolAction(
+        icon: Icons.folder_open_outlined,
+        label: 'Load',
+        // Always enabled: offline the picker still lists the local
+        // drafts (§2); the server section shows its no-server state.
+        onPressed: () => SequenceLoadDialog.show(context),
+      ),
+      _ToolAction(
+        icon: Icons.file_download_outlined,
+        label: 'Import',
+        // Browse to a NINA-exported .json and import it via the §38
+        // import path (file pick → read → POST /sequences/import). The
+        // helper handles errors, lossy-translation warnings, and
+        // selecting the imported sequence. Disabled while another
+        // command is in-flight, and brackets the busy fence like Save.
+        onPressed: (connected && !busy) ? () => _import(context, ref) : null,
+      ),
+      _ToolAction(
+        icon: Icons.save_outlined,
+        label: 'Save',
+        onPressed: canSave ? () => _save(context, ref) : null,
+      ),
+      _ToolAction(
+        icon: Icons.ios_share,
+        label: 'Export',
+        // Export the selected sequence to a NINA-compatible .json.
+        // Enabled whenever a DAEMON sequence is selected (independent
+        // of run state — exporting is read-only). Excludes drafts:
+        // exportSequence fetches by id from the daemon, which never
+        // saw a draft: id (review #845). Local draft export is a
+        // tracked follow-up.
+        onPressed: (connected && selectedId != null && !isDraft)
+            ? () => exportSequence(context, ref,
+                id: selectedId, name: selectedName ?? selectedId)
+            : null,
+      ),
+      _ToolAction(
+        icon: Icons.fact_check_outlined,
+        label: 'Validate',
+        // Dry-run the working body through the daemon's schema
+        // validator and report valid / the first problem.
+        onPressed: canValidate ? () => _validate(context, ref) : null,
+      ),
+      _ToolAction(
+        icon: Icons.delete_outline,
+        label: 'Delete',
+        // Delete the OPEN sequence right from the tab (the Load
+        // dialog's per-row trash covers the rest). The shared flow
+        // confirms, stop-and-deletes an active run, and clears the
+        // selection + editor.
+        onPressed: hasSelection
+            ? () => _delete(context, ref, selectedId, selectedName)
+            : null,
+      ),
+    ];
+
+    // ── Lifecycle cluster (run-redesign S2): the run verbs get
+    // semantic colour + weight so the tab's most important action
+    // reads as one — filled green Run/Resume, amber Pause, and a
+    // destructive red-outline Abort behind a confirm. Labels stay
+    // identical so test finders and muscle memory survive.
+    final lifecycle = <_ToolAction>[
+      _ToolAction(
+        icon: Icons.play_arrow,
+        label: isPaused ? 'Resume' : 'Run',
+        kind: _LifecycleKind.primary,
+        onPressed: canRunOrResume
+            ? () => isPaused
+                // §38.10 — resuming offers the pointing/focus
+                // refinement choice before imaging continues.
+                ? promptAndResumeSequence(context, ref)
+                : preflightAndRunSequence(context, ref)
+            : null,
+      ),
+      _ToolAction(
+        icon: Icons.pause,
+        label: 'Pause',
+        kind: _LifecycleKind.caution,
+        onPressed: canPause
+            ? () => runSequenceLifecycle(
+                context, ref, (api, id) => api.pause(id))
+            : null,
+      ),
+      _ToolAction(
+        icon: Icons.skip_next,
+        label: 'Skip',
+        // Skip the current target/item (e.g. one that's dropped below the
+        // horizon) so the run advances to the next without aborting.
+        onPressed: canSkip
+            ? () => runSequenceLifecycle(
+                context, ref, (api, id) => api.skipCurrent(id))
+            : null,
+      ),
+      _ToolAction(
+        icon: Icons.stop,
+        label: 'Abort',
+        kind: _LifecycleKind.destructive,
+        onPressed: canAbort ? () => _confirmAbort(context, ref) : null,
+      ),
+    ];
+
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -107,128 +217,150 @@ class SequencerToolbar extends ConsumerWidget {
         color: AraColors.bgPanel,
         border: Border(bottom: BorderSide(color: AraColors.border)),
       ),
-      child: Row(
-        children: [
-          // Buttons in a horizontally-scrollable row so the toolbar stays
-          // usable on narrow window widths (≤ ~700px). The status line
-          // gets the remaining flexible space on the right.
-          Flexible(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                _ToolButton(
-                  icon: Icons.note_add_outlined,
-                  label: 'New',
-                  // Enabled once connected; opens the template picker.
-                  onPressed:
-                      connected ? () => SequenceNewDialog.show(context) : null,
-                ),
-                _ToolButton(
-                  icon: Icons.folder_open_outlined,
-                  label: 'Load',
-                  // Always enabled: offline the picker still lists the local
-                  // drafts (§2); the server section shows its no-server state.
-                  onPressed: () => SequenceLoadDialog.show(context),
-                ),
-                _ToolButton(
-                  icon: Icons.file_download_outlined,
-                  label: 'Import',
-                  // Browse to a NINA-exported .json and import it via the §38
-                  // import path (file pick → read → POST /sequences/import). The
-                  // helper handles errors, lossy-translation warnings, and
-                  // selecting the imported sequence. Disabled while another
-                  // command is in-flight, and brackets the busy fence like Save.
-                  onPressed:
-                      (connected && !busy) ? () => _import(context, ref) : null,
-                ),
-                _ToolButton(
-                  icon: Icons.save_outlined,
-                  label: 'Save',
-                  onPressed: canSave ? () => _save(context, ref) : null,
-                ),
-                _ToolButton(
-                  icon: Icons.ios_share,
-                  label: 'Export',
-                  // Export the selected sequence to a NINA-compatible .json.
-                  // Enabled whenever a DAEMON sequence is selected (independent
-                  // of run state — exporting is read-only). Excludes drafts:
-                  // exportSequence fetches by id from the daemon, which never
-                  // saw a draft: id (review #845). Local draft export is a
-                  // tracked follow-up.
-                  onPressed: (connected && selectedId != null && !isDraft)
-                      ? () => exportSequence(context, ref,
-                          id: selectedId, name: selectedName ?? selectedId)
-                      : null,
-                ),
-                _ToolButton(
-                  icon: Icons.fact_check_outlined,
-                  label: 'Validate',
-                  // Dry-run the working body through the daemon's schema
-                  // validator and report valid / the first problem.
-                  onPressed:
-                      canValidate ? () => _validate(context, ref) : null,
-                ),
-                _ToolButton(
-                  icon: Icons.delete_outline,
-                  label: 'Delete',
-                  // Delete the OPEN sequence right from the tab (the Load
-                  // dialog's per-row trash covers the rest). The shared flow
-                  // confirms, stop-and-deletes an active run, and clears the
-                  // selection + editor.
-                  onPressed: hasSelection
-                      ? () => _delete(context, ref, selectedId, selectedName)
-                      : null,
-                ),
-                const VerticalDivider(width: 16, indent: 8, endIndent: 8),
-                // ── Lifecycle cluster (run-redesign S2): the run verbs get
-                // semantic colour + weight so the tab's most important action
-                // reads as one — filled green Run/Resume, amber Pause, and a
-                // destructive red-outline Abort behind a confirm. Labels stay
-                // identical so test finders and muscle memory survive.
-                _LifecycleButton(
-                  icon: Icons.play_arrow,
-                  label: isPaused ? 'Resume' : 'Run',
-                  kind: _LifecycleKind.primary,
-                  onPressed: canRunOrResume
-                      ? () => isPaused
-                          // §38.10 — resuming offers the pointing/focus
-                          // refinement choice before imaging continues.
-                          ? promptAndResumeSequence(context, ref)
-                          : preflightAndRunSequence(context, ref)
-                      : null,
-                ),
-                _LifecycleButton(
-                  icon: Icons.pause,
-                  label: 'Pause',
-                  kind: _LifecycleKind.caution,
-                  onPressed: canPause
-                      ? () => runSequenceLifecycle(context, ref, (api, id) => api.pause(id))
-                      : null,
-                ),
-                _ToolButton(
-                  icon: Icons.skip_next,
-                  label: 'Skip',
-                  // Skip the current target/item (e.g. one that's dropped below the
-                  // horizon) so the run advances to the next without aborting.
-                  onPressed: canSkip
-                      ? () => runSequenceLifecycle(
-                          context, ref, (api, id) => api.skipCurrent(id))
-                      : null,
-                ),
-                _LifecycleButton(
-                  icon: Icons.stop,
-                  label: 'Abort',
-                  kind: _LifecycleKind.destructive,
-                  onPressed: canAbort
-                      ? () => _confirmAbort(context, ref)
-                      : null,
-                ),
-              ]),
-            ),
-          ),
+      child: LayoutBuilder(
+        builder: (context, constraints) => _ToolbarLayout(
+          width: constraints.maxWidth,
+          utilities: utilities,
+          lifecycle: lifecycle,
+          status: _statusLine(connected, selectedId, selectedName, runInfo),
+        ),
+      ),
+    );
+  }
+}
+
+/// One toolbar action, kept as data so the same button can render inline or
+/// as an overflow-menu row depending on the width the toolbar gets.
+class _ToolAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  /// Null for a utility button; set for the run verbs.
+  final _LifecycleKind? kind;
+  const _ToolAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.kind,
+  });
+}
+
+/// Width-aware arrangement of the toolbar. The old horizontal scroll view hid
+/// whatever didn't fit — on a phone or a half-width window Delete, Validate
+/// and Export simply weren't there, with no hint that the row scrolled. Now:
+///
+/// * the lifecycle cluster (Run / Pause / Skip / Abort) is ALWAYS on screen —
+///   labelled when there's room, icon-only with tooltips when not;
+/// * utility buttons fill from the left in their usual order, and whichever
+///   don't fit fold into a trailing "More" (⋯) menu, so every action stays
+///   one tap away at any width;
+/// * the status line takes what's left and simply disappears on the
+///   narrowest layouts (the run band above the tree carries the run state).
+///
+/// Widths are estimated from the label text (see [_estimateWidth]) rather
+/// than measured, so the fit is greedy-but-safe: a small slack per button
+/// keeps the row from ever overflowing.
+class _ToolbarLayout extends StatelessWidget {
+  final double width;
+  final List<_ToolAction> utilities;
+  final List<_ToolAction> lifecycle;
+  final String status;
+  const _ToolbarLayout({
+    required this.width,
+    required this.utilities,
+    required this.lifecycle,
+    required this.status,
+  });
+
+  /// Nominal width of the "More" (⋯) overflow button.
+  static const double _moreWidth = 48;
+  /// Width of the divider between the utility and lifecycle clusters.
+  static const double _dividerWidth = 16;
+  /// The status line only earns space once the buttons have theirs; below
+  /// this reserve it's dropped rather than squeezed to an unreadable stub.
+  static const double _statusReserve = 140;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelLarge;
+    final scaler = MediaQuery.textScalerOf(context);
+    double labelWidth(String label) => _estimateWidth(label, style, scaler);
+
+    // Utility TextButton.icon: 12 leading + 16 icon + 8 gap + text + 16
+    // trailing (52px measured) plus slack.
+    double utilityWidth(_ToolAction a) => labelWidth(a.label) + 52 + 4;
+    // Lifecycle buttons: ±2 outer padding plus the widest chrome (Abort's
+    // outline: 64px measured) and a little slack.
+    double lifecycleWidth(_ToolAction a) => labelWidth(a.label) + 68 + 4;
+    // Icon-only lifecycle: a 40×40 IconButton with the same ±2 outer padding.
+    const double lifecycleIconWidth = 44;
+
+    final labelledLifecycle =
+        lifecycle.fold<double>(0, (sum, a) => sum + lifecycleWidth(a));
+    const compactLifecycle = lifecycleIconWidth * 4;
+
+    // Step 1 — can the lifecycle cluster keep its labels? It needs room for
+    // itself plus at least the More button (the utilities' minimum footprint).
+    final lifecycleLabelled =
+        width >= labelledLifecycle + _dividerWidth + _moreWidth;
+    final lifecycleSpan =
+        lifecycleLabelled ? labelledLifecycle : compactLifecycle;
+
+    // Step 2 — greedily place utilities from the left. Reserve the More
+    // button's width unless EVERY utility fits without it.
+    final available = width - lifecycleSpan - _dividerWidth;
+    final allWidth =
+        utilities.fold<double>(0, (sum, a) => sum + utilityWidth(a));
+    final List<_ToolAction> inline;
+    final List<_ToolAction> overflow;
+    if (allWidth <= available) {
+      inline = utilities;
+      overflow = const [];
+    } else {
+      var used = _moreWidth;
+      var count = 0;
+      for (final a in utilities) {
+        final w = utilityWidth(a);
+        if (used + w > available) break;
+        used += w;
+        count++;
+      }
+      inline = utilities.sublist(0, count);
+      overflow = utilities.sublist(count);
+    }
+
+    // Step 3 — the status line gets the remainder, if it's worth showing.
+    final usedByButtons =
+        inline.fold<double>(0, (s, a) => s + utilityWidth(a)) +
+            (overflow.isEmpty ? 0 : _moreWidth) +
+            _dividerWidth +
+            lifecycleSpan;
+    final showStatus = width - usedByButtons >= _statusReserve;
+
+    return Row(
+      children: [
+        for (final a in inline)
+          _ToolButton(icon: a.icon, label: a.label, onPressed: a.onPressed),
+        if (overflow.isNotEmpty) _MoreMenu(actions: overflow),
+        const VerticalDivider(width: _dividerWidth, indent: 8, endIndent: 8),
+        for (final a in lifecycle)
+          if (a.kind != null)
+            _LifecycleButton(
+              icon: a.icon,
+              label: a.label,
+              kind: a.kind!,
+              onPressed: a.onPressed,
+              compact: !lifecycleLabelled,
+            )
+          else if (lifecycleLabelled)
+            _ToolButton(icon: a.icon, label: a.label, onPressed: a.onPressed)
+          else
+            _CompactToolButton(
+                icon: a.icon, label: a.label, onPressed: a.onPressed),
+        if (showStatus)
           Expanded(
             child: Text(
-              _statusLine(connected, selectedId, selectedName, runInfo),
+              status,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AraColors.textDisabled,
                   ),
@@ -236,8 +368,83 @@ class SequencerToolbar extends ConsumerWidget {
               maxLines: 1,
               textAlign: TextAlign.right,
             ),
+          )
+        else
+          const Spacer(),
+      ],
+    );
+  }
+
+  static double _estimateWidth(
+      String label, TextStyle? style, TextScaler scaler) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    final w = painter.width;
+    painter.dispose();
+    return w;
+  }
+}
+
+/// The ⋯ overflow menu holding the utility actions that didn't fit inline.
+/// Rows keep the button's icon + label and its enabled state, so a disabled
+/// Delete reads the same way in the menu as it would on the bar.
+class _MoreMenu extends StatelessWidget {
+  final List<_ToolAction> actions;
+  const _MoreMenu({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_ToolAction>(
+      tooltip: 'More actions',
+      icon: const Icon(Icons.more_horiz, size: 20, color: AraColors.textPrimary),
+      color: AraColors.bgPanel,
+      onSelected: (a) => a.onPressed?.call(),
+      itemBuilder: (context) => [
+        for (final a in actions)
+          PopupMenuItem<_ToolAction>(
+            value: a,
+            enabled: a.onPressed != null,
+            child: Row(children: [
+              Icon(a.icon,
+                  size: 18,
+                  color: a.onPressed != null
+                      ? AraColors.textPrimary
+                      : AraColors.textDisabled),
+              const SizedBox(width: 12),
+              Text(a.label),
+            ]),
           ),
-        ],
+      ],
+    );
+  }
+}
+
+/// Icon-only utility button for the narrowest layouts (tooltip carries the
+/// label so the action is still discoverable).
+class _CompactToolButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  const _CompactToolButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: label,
+      icon: Icon(icon, size: 18),
+      visualDensity: VisualDensity.compact,
+      style: IconButton.styleFrom(
+        foregroundColor: AraColors.textPrimary,
+        disabledForegroundColor: AraColors.textDisabled,
       ),
     );
   }
@@ -635,15 +842,47 @@ class _LifecycleButton extends StatelessWidget {
   final String label;
   final _LifecycleKind kind;
   final VoidCallback? onPressed;
+  /// Icon-only (tooltip carries the label) for the narrowest toolbar widths.
+  final bool compact;
   const _LifecycleButton({
     required this.icon,
     required this.label,
     required this.kind,
     required this.onPressed,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      final enabled = onPressed != null;
+      final (Color fg, Color? bg) = switch (kind) {
+        _LifecycleKind.primary => (Colors.black, AraColors.accentConnected),
+        _LifecycleKind.caution => (AraColors.accentBusy, null),
+        _LifecycleKind.destructive => (AraColors.accentError, null),
+      };
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: IconButton(
+          onPressed: onPressed,
+          tooltip: label,
+          icon: Icon(icon, size: 18),
+          visualDensity: VisualDensity.compact,
+          style: IconButton.styleFrom(
+            foregroundColor: fg,
+            backgroundColor: bg,
+            disabledForegroundColor: AraColors.textDisabled,
+            disabledBackgroundColor: bg == null ? null : AraColors.bgInput,
+            side: kind == _LifecycleKind.destructive
+                ? BorderSide(
+                    color: enabled
+                        ? AraColors.accentError.withValues(alpha: 0.6)
+                        : AraColors.border)
+                : null,
+          ),
+        ),
+      );
+    }
     final child = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: switch (kind) {

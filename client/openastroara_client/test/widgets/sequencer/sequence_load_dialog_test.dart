@@ -112,6 +112,13 @@ SequenceListItem _item(String id, String name, {SequenceRunState? runState}) =>
         targetCount: 1,
         currentRunState: runState);
 
+/// The toolbar folds utilities into a "More" menu when narrow; give it a
+/// desktop-width surface so every button is inline for these tests.
+Future<void> wideSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(2000, 800));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
 void main() {
   Future<ProviderContainer> pumpDialog(
     WidgetTester tester, {
@@ -364,17 +371,20 @@ void main() {
 
     testWidgets('enabled with no server — offline drafts are still loadable (§2)',
         (tester) async {
+      await wideSurface(tester);
       await pumpToolbar(tester, connected: false);
       expect(loadButton(tester).onPressed, isNotNull);
     });
 
     testWidgets('enabled once connected', (tester) async {
+      await wideSurface(tester);
       await pumpToolbar(tester, connected: true);
       expect(loadButton(tester).onPressed, isNotNull);
     });
 
     testWidgets('Delete acts on the open sequence: disabled with none, '
         'deletes + clears selection with one', (tester) async {
+      await wideSurface(tester);
       final client = _FakeClient();
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(client),
@@ -415,6 +425,7 @@ void main() {
     });
 
     testWidgets('status line names the selected sequence', (tester) async {
+      await wideSurface(tester);
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(_FakeClient()),
         sequenceListProvider.overrideWith(
