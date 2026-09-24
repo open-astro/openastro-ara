@@ -571,10 +571,10 @@ class InertTreesTest(unittest.TestCase):
     """INERT_DIRS is a claim about the repo, so check the repo (#1024 item 2).
 
     `design/*`, `docs/*`, `.claude/*` are prefix-allowlisted as "no build
-    input of any kind". The first .py, .json or fixture added under one of
-    them would silently lose the full matrix; this fails the Sanity job at
-    that moment instead. Add an extension here only with a reason it cannot
-    be a build input.
+    input of any kind". The first .py or fixture added under one of them
+    would silently lose the full matrix; this fails the Sanity job at that
+    moment instead. Add an extension here only with a reason it cannot be a
+    build input (EXTRA_BY_PREFIX below scopes a few to one subtree).
     """
 
     PROSE_OR_IMAGE = {
@@ -587,8 +587,16 @@ class InertTreesTest(unittest.TestCase):
     # `config.yml` and issue-form templates are read by nothing but
     # github.com, and nothing under that directory can be a workflow or a
     # composite action (those live in workflows/ and actions/).
+    # `.claude/skills/` may hold the helper scripts a skill drives by hand on
+    # the maintainer's Mac (bash, Swift, expect) and its eval prompts (json):
+    # no workflow, build, test or package step reads anything under
+    # `.claude/` (that is the whole basis for its INERT_DIRS entry above), so
+    # a script there cannot be a build input any more than the SKILL.md next
+    # to it. Keyed on the sub-prefix so `.claude/commands/` and the rest of
+    # `.claude/` stay prose-only.
     EXTRA_BY_PREFIX = {
         ".github/ISSUE_TEMPLATE/": {".yml", ".yaml"},
+        ".claude/skills/": {".sh", ".swift", ".expect", ".json"},
     }
 
     @classmethod
@@ -630,14 +638,26 @@ class InertTreesTest(unittest.TestCase):
     def test_every_extra_by_prefix_key_is_an_inert_dir(self):
         # A per-prefix allowance for a directory the classifier does not
         # treat as inert would be dead text at best and misleading at worst.
+        # A key may narrow an inert dir to one of its subtrees (`.claude/skills/`)
+        # but never name a tree outside them.
         for prefix in self.EXTRA_BY_PREFIX:
             with self.subTest(prefix=prefix):
-                self.assertIn(prefix, self.m.INERT_DIRS)
+                self.assertTrue(
+                    any(prefix.startswith(inert) for inert in self.m.INERT_DIRS),
+                    f"{prefix} is not under any INERT_DIRS entry",
+                )
 
     def test_the_per_prefix_allowance_does_not_leak(self):
         # `.yml` is allowed under ISSUE_TEMPLATE/ only; the same name under
         # design/ or docs/ would be a build input nobody classified.
         self.assertIn(".yml", self.allowed(".github/ISSUE_TEMPLATE/config.yml"))
+        for ext in (".sh", ".swift", ".expect", ".json"):
+            with self.subTest(ext=ext):
+                self.assertIn(ext, self.allowed(f".claude/skills/ara-sbc-vm/scripts/x{ext}"))
+                self.assertNotIn(ext, self.allowed(f".claude/commands/pr-checker{ext}"))
+                self.assertNotIn(ext, self.allowed(f".claude/hooks/x{ext}"))
+                self.assertNotIn(ext, self.allowed(f"docs/x{ext}"))
+                self.assertNotIn(ext, self.allowed(f"design/x{ext}"))
         self.assertIn(".yaml", self.allowed(".github/ISSUE_TEMPLATE/form.yaml"))
         self.assertNotIn(".yml", self.allowed("design/something.yml"))
         self.assertNotIn(".yml", self.allowed("docs/something.yml"))

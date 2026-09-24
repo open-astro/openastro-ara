@@ -1,0 +1,60 @@
+#!/usr/bin/expect -f
+# First boot of the Debian nocloud image: log in as root on the serial console
+# (nocloud = root, no password, no cloud-init) and turn it into a Pi-like box:
+# astro/astro user with sudo + SSH key, sshd enabled, root fs grown to the
+# resized disk, hostname ara-vm. Then power off. Every later boot goes via SSH.
+# Usage: first-boot.expect <qemu command...>   (env PUBKEY = ssh public key line)
+set timeout 900
+log_user 1
+set pubkey $env(PUBKEY)
+# Root is locked in the trixie nocloud image until systemd-firstboot's
+# password prompt sets one; the console is the only place it matters.
+set rootpw astro
+spawn {*}$argv
+# Debian 13's nocloud image runs systemd-firstboot interactively on the
+# console before getty: "Press any key", then locale / keymap / timezone /
+# hostname / root password prompts. Enter accepts the default for each except
+# the root password, which must be set or root stays locked and getty refuses
+# the login ("Login incorrect"). Everything else we care about is set below.
+expect {
+    -re "Press any key to proceed" { send "\r"; exp_continue }
+    -re "Please enter (the )?(new )?root password\[^\r\n\]*: " { sleep 0.5; send "$rootpw\r"; exp_continue }
+    -re "Please enter (the )?(new )?(system locale|locale|keymap|keyboard|timezone|hostname)\[^\r\n\]*: " { sleep 0.3; send "\r"; exp_continue }
+    -re "login: $" { send "root\r" }
+    eof { puts "\nQEMU_EXITED_DURING_BOOT: [wait]"; exit 1 }
+    timeout { puts "\nno login prompt"; exit 1 }
+}
+# The nocloud root account has an empty password; getty still asks.
+expect {
+    -re "Password: ?$" { sleep 0.5; send "$rootpw\r"; exp_continue }
+    -re "Login incorrect" { puts "\nroot login refused"; exit 1 }
+    -re "# $" {}
+    eof { puts "\nQEMU_EXITED_AT_LOGIN: [wait]"; exit 1 }
+    timeout { puts "\nno shell prompt after login"; exit 1 }
+}
+proc run {cmd} {
+    send "$cmd\r"
+    expect {
+        -re "# $" {}
+        eof { puts "\nQEMU_EXITED_DURING_PROVISION: [wait]"; exit 1 }
+        timeout { puts "\ntimeout waiting for prompt after: $cmd"; exit 1 }
+    }
+}
+run "export DEBIAN_FRONTEND=noninteractive"
+run "hostnamectl set-hostname ara-vm; sed -i 's/^127.0.1.1.*/127.0.1.1 ara-vm/' /etc/hosts; grep -q ara-vm /etc/hosts || echo '127.0.1.1 ara-vm' >> /etc/hosts"
+run "apt-get update -qq"
+run "apt-get install -y -qq openssh-server sudo curl ca-certificates cloud-guest-utils avahi-daemon >/dev/null"
+run "id astro >/dev/null 2>&1 || useradd -m -s /bin/bash astro"
+run "echo astro:astro | chpasswd; usermod -aG sudo astro"
+run "echo 'astro ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/astro; chmod 440 /etc/sudoers.d/astro"
+run "install -d -m 700 -o astro -g astro /home/astro/.ssh"
+run "printf '%s\\n' '$pubkey' > /home/astro/.ssh/authorized_keys; chown astro:astro /home/astro/.ssh/authorized_keys; chmod 600 /home/astro/.ssh/authorized_keys"
+run "systemctl enable ssh avahi-daemon >/dev/null 2>&1"
+# Grow root into the resized qcow2 (nocloud ships a ~2 GB filesystem).
+run "ROOTDEV=\$(findmnt -no SOURCE /); DISK=/dev/\$(lsblk -no PKNAME \$ROOTDEV); PART=\$(echo \$ROOTDEV | grep -o '\[0-9\]*\$'); growpart \$DISK \$PART || true; resize2fs \$ROOTDEV || true; df -h /"
+run "echo PROVISION_OK"
+send "poweroff\r"
+expect {
+    eof { exit 0 }
+    timeout { exit 0 }
+}

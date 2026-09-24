@@ -307,3 +307,11 @@ rewritten in place: playbook §77.
 **Reason:** the files there are the merge gate's rulebook, which made the inherited classification worth a conscious look. But no CI job has ever read them; `claude-review.yml` runs on every PR regardless of paths; and §19.1's protection for a rulebook change is the `claude[bot]` review body, which the path gate does not touch. Running the .NET and Flutter matrix on a SKILL.md edit would exercise nothing the edit can affect. The tree's prose-only status is now enforced by a Sanity-job test rather than assumed, so a future non-prose file under `.claude/` (a hook script, say) fails the build until it is classified deliberately.
 
 **Encoded in:** `scripts/classify-changed-paths.py` (`INERT_DIRS` comment), `scripts/tests/test_classify_changed_paths.py` (`InertTreesTest`), `.github/workflows/codeql.yml` (`paths-ignore`).
+
+## 2026-09-24 — `.claude/skills/` may hold helper scripts; the inert-tree guard is scoped, not dropped
+
+**Decision:** `scripts/tests/test_classify_changed_paths.py`'s `InertTreesTest` gains a per-prefix allowance so `.sh`, `.swift`, `.expect` and `.json` files may live under `.claude/skills/` (#1101). `.claude/` stays in `INERT_DIRS`; `.claude/commands/` and the rest of the tree stay prose-only; an allowance key may narrow an inert dir to one subtree but never name a tree outside them.
+
+**Reason:** the `ara-pr-investigation` and `ara-sbc-vm` skills drive real tools (PR facts, window capture, a QEMU VM) and need scripts a maintainer runs by hand on their machine. The 2026-09-20 basis for `.claude/` being inert — no CI job reads anything under it — holds for those scripts exactly as it does for the SKILL.md beside them, so they cannot be build inputs. The prose-only wording of the 2026-09-20 entry is superseded for that one subtree; the enforcement it describes is unchanged.
+
+**Encoded in:** `scripts/tests/test_classify_changed_paths.py` (`EXTRA_BY_PREFIX`, `test_every_extra_by_prefix_key_is_an_inert_dir`, `test_the_per_prefix_allowance_does_not_leak`).
