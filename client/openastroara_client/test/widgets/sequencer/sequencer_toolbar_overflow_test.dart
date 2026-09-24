@@ -14,7 +14,12 @@ Future<void> pumpAt(WidgetTester tester, double width) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [sequenceApiProvider.overrideWithValue(null)],
-      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      // Keyed by width so each pump builds a FRESH toolbar subtree: the
+      // overflow indicator reports once per render object, so reusing one
+      // Row across widths would surface only the first overflow.
+      child: MaterialApp(
+        home: Scaffold(body: SequencerToolbar(key: ValueKey(width))),
+      ),
     ),
   );
   await tester.pump();
@@ -125,6 +130,9 @@ void main() {
   });
 
   testWidgets('nothing overflows the row at any width', (tester) async {
+    // 320 px is the documented floor (the smallest phone the client targets).
+    // Below ~240 px the fixed More + divider + four icon buttons cluster
+    // does overflow; a desktop window dragged that narrow is not a target.
     for (final w in [320.0, 360.0, 480.0, 640.0, 800.0, 1024.0, 1280.0]) {
       await pumpAt(tester, w);
       expect(tester.takeException(), isNull, reason: 'width $w');

@@ -292,6 +292,19 @@ void main() {
       expect(btn(tester, 'Run').onPressed, isNull);
     });
 
+    testWidgets('the icon-only Run (phone width) starts the sequence too',
+        (tester) async {
+      // The compact _LifecycleButton branch must wire onPressed like the
+      // labelled one: tap the tooltip'd icon and expect the same pre-flight.
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester, run: null);
+      expect(find.text('Run'), findsNothing); // icon-only at this width
+      await tester.tap(find.byTooltip('Run'));
+      await tester.pumpAndSettle();
+      expect(find.text('Not polar aligned — run anyway?'), findsOneWidget);
+    });
+
     testWidgets('pressing Run starts the sequence', (tester) async {
       await wideSurface(tester);
       final container = await pump(tester, run: null);
