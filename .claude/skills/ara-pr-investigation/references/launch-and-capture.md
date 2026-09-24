@@ -9,7 +9,7 @@ output never collides with `master`'s.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-git fetch origin "pull/$PR/head:refs/pr/$PR"
+git fetch origin "+pull/$PR/head:refs/pr/$PR"     # forced: the ref may be stale from an earlier run
 WT="$SCRATCH/pr-$PR"                       # $SCRATCH = the session scratchpad dir
 git worktree add --detach "$WT" "refs/pr/$PR"
 ```

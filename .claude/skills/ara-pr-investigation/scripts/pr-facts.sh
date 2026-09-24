@@ -34,7 +34,8 @@ echo; echo "=== Review bot ==="
 gh pr view "$PR" --json comments,reviews,isCrossRepository,labels -q '
   (.comments + (.reviews | map({author: .author, body: .body, createdAt: .submittedAt})))
   | map(select(.author.login == "claude[bot]" or .author.login == "github-actions[bot]"))
-  | if length == 0 then "no bot review posted" else (.[-1] | "last bot verdict \(.createdAt):\n\(.body[0:1500])") end'
+  | sort_by(.createdAt)
+  | if length == 0 then "no bot review posted" else (last | "last bot verdict \(.createdAt):\n\(.body[0:1500])") end'
 gh pr view "$PR" --json isCrossRepository,labels -q '
   if .isCrossRepository and (([.labels[].name] | index("safe-to-review")) == null)
   then "NOTE: fork PR without the safe-to-review label -> claude[bot] will not run. This investigation is the only review it has."
@@ -47,7 +48,10 @@ echo; echo "=== Commits ==="
 gh pr view "$PR" --json commits -q '.commits[] | "\(.oid[0:9])  \(.messageHeadline)"'
 
 echo; echo "=== Behind base? ==="
-git fetch -q origin "pull/$PR/head:refs/pr/$PR" master 2>/dev/null || true
+# Forced refspec: a stale refs/pr/<n> from an earlier run is a non-fast-forward
+# update after a contributor force-push, and an unforced fetch rejects it —
+# every number below would then describe the previous head. Let a failure show.
+git fetch -q origin "+pull/$PR/head:refs/pr/$PR" master || { echo "error: could not fetch pull/$PR/head" >&2; exit 1; }
 if git rev-parse -q --verify "refs/pr/$PR" >/dev/null; then
   BASE=$(git merge-base "refs/pr/$PR" origin/master)
   echo "merge-base $(git rev-parse --short "$BASE"); origin/master is $(git rev-list --count "$BASE..origin/master") commits ahead of the PR base"
