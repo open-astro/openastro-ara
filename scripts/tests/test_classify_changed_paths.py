@@ -571,10 +571,10 @@ class InertTreesTest(unittest.TestCase):
     """INERT_DIRS is a claim about the repo, so check the repo (#1024 item 2).
 
     `design/*`, `docs/*`, `.claude/*` are prefix-allowlisted as "no build
-    input of any kind". The first .py, .json or fixture added under one of
-    them would silently lose the full matrix; this fails the Sanity job at
-    that moment instead. Add an extension here only with a reason it cannot
-    be a build input.
+    input of any kind". The first .py or fixture added under one of them
+    would silently lose the full matrix; this fails the Sanity job at that
+    moment instead. Add an extension here only with a reason it cannot be a
+    build input (EXTRA_BY_PREFIX below scopes a few to one subtree).
     """
 
     PROSE_OR_IMAGE = {
@@ -651,9 +651,13 @@ class InertTreesTest(unittest.TestCase):
         # `.yml` is allowed under ISSUE_TEMPLATE/ only; the same name under
         # design/ or docs/ would be a build input nobody classified.
         self.assertIn(".yml", self.allowed(".github/ISSUE_TEMPLATE/config.yml"))
-        self.assertIn(".sh", self.allowed(".claude/skills/ara-sbc-vm/scripts/vm.sh"))
-        self.assertNotIn(".sh", self.allowed(".claude/commands/pr-checker.sh"))
-        self.assertNotIn(".sh", self.allowed("docs/deploy.sh"))
+        for ext in (".sh", ".swift", ".expect", ".json"):
+            with self.subTest(ext=ext):
+                self.assertIn(ext, self.allowed(f".claude/skills/ara-sbc-vm/scripts/x{ext}"))
+                self.assertNotIn(ext, self.allowed(f".claude/commands/pr-checker{ext}"))
+                self.assertNotIn(ext, self.allowed(f".claude/hooks/x{ext}"))
+                self.assertNotIn(ext, self.allowed(f"docs/x{ext}"))
+                self.assertNotIn(ext, self.allowed(f"design/x{ext}"))
         self.assertIn(".yaml", self.allowed(".github/ISSUE_TEMPLATE/form.yaml"))
         self.assertNotIn(".yml", self.allowed("design/something.yml"))
         self.assertNotIn(".yml", self.allowed("docs/something.yml"))

@@ -8,7 +8,8 @@
 set -euo pipefail
 OWNER="${1:?owner name, e.g. openastroara}"; OUT="${2:?output png}"
 CACHE="${TMPDIR:-/tmp}/ara-winlist"
-if [ ! -x "$CACHE" ]; then
+# Rebuild when this script (which embeds the Swift source) is newer than the cached binary.
+if [ ! -x "$CACHE" ] || [ "${BASH_SOURCE[0]}" -nt "$CACHE" ]; then
   SRC="$(mktemp -t winlist).swift"
   cat > "$SRC" <<'SWIFT'
 import CoreGraphics
@@ -23,7 +24,9 @@ fi
 # No `exit` in the awk: under pipefail an early consumer exit can SIGPIPE the producer.
 WID=$("$CACHE" | awk -F'\t' -v o="$OWNER" 'tolower($2)==tolower(o) && !found {print $1; found=1}')
 if [ -z "$WID" ]; then echo "no on-screen window owned by '$OWNER'" >&2; "$CACHE" >&2; exit 2; fi
-open -a "$OWNER" 2>/dev/null || true      # bring it front so nothing overlaps
+# Bring it front so nothing overlaps. $OWNER is the window owner's display name, which
+# `open -a` does not resolve; System Events does (needs Accessibility; harmless if refused).
+osascript -e "tell application \"System Events\" to set frontmost of process \"$OWNER\" to true" >/dev/null 2>&1 || true
 sleep 0.5
 screencapture -x -l "$WID" "$OUT"
 echo "$OUT (window $WID)"

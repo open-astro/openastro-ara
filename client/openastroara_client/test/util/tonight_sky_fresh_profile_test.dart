@@ -74,8 +74,9 @@ void main() {
   }
 
   test('a (0, 0) site is the "not set" sentinel and is handled upstream', () {
-    // tonight_sky_state.dart short-circuits before ranking; the ranking itself
-    // still copes if called directly so a stale cache can never crash it.
+    // tonight_sky_state.dart short-circuits before ranking. This only checks
+    // that calling the ranking directly with the sentinel does not throw, so a
+    // stale cache can never crash the panel; it says nothing about the result.
     final list = computeTonightSkyLocal(
       site: const SiteSettings(),
       optics: const OpticsSettings(),

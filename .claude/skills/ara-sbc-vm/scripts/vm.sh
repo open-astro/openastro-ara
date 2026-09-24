@@ -77,9 +77,12 @@ check_ports() {
     return 0
 }
 
-SSH_OPTS=(-p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
+# BatchMode: a key that does not match must fail at once, never sit at the guest's
+# password prompt for 90 tries. -i names the key whose .pub was installed at setup.
+SSH_OPTS=(-p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes)
+[ -f "${PUBKEY_FILE%.pub}" ] && SSH_OPTS+=(-i "${PUBKEY_FILE%.pub}")
 vssh() { ssh "${SSH_OPTS[@]}" astro@localhost "$@"; }
-vscp() { scp -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"; }
+vscp() { scp -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes "$@"; }
 
 wait_ssh() {
     local i
