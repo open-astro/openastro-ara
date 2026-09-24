@@ -111,6 +111,19 @@ void main() {
     }
   });
 
+  testWidgets('selecting a folded row runs the action (Load opens its dialog)',
+      (tester) async {
+    // Without this, _MoreMenu.onSelected could be dropped and every other
+    // test would still pass while the folded actions did nothing.
+    await pumpAt(tester, 400);
+    await tester.tap(moreMenu());
+    await tester.pumpAndSettle();
+    expect(find.text('Load sequence'), findsNothing);
+    await tester.tap(menuRow('Load'));
+    await tester.pumpAndSettle();
+    expect(find.text('Load sequence'), findsOneWidget);
+  });
+
   testWidgets('nothing overflows the row at any width', (tester) async {
     for (final w in [320.0, 360.0, 480.0, 640.0, 800.0, 1024.0, 1280.0]) {
       await pumpAt(tester, w);

@@ -444,14 +444,19 @@ class _CompactToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      tooltip: label,
-      icon: Icon(icon, size: 18),
-      visualDensity: VisualDensity.compact,
-      style: IconButton.styleFrom(
-        foregroundColor: AraColors.textPrimary,
-        disabledForegroundColor: AraColors.textDisabled,
+    // Same ±2 outer padding as the compact _LifecycleButton so Skip sits on
+    // the same rhythm as its neighbours in the icon-only cluster.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        icon: Icon(icon, size: 18),
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          foregroundColor: AraColors.textPrimary,
+          disabledForegroundColor: AraColors.textDisabled,
+        ),
       ),
     );
   }

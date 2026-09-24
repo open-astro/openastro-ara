@@ -12,6 +12,8 @@ import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 
+import 'toolbar_surface.dart';
+
 SequenceDetail _detail(String id) => SequenceDetail(
       id: id,
       name: id,
@@ -148,13 +150,6 @@ Future<ProviderContainer> _pump(WidgetTester tester, _SaveClient client,
 TextButton _saveButton(WidgetTester tester) => tester.widget<TextButton>(
       find.ancestor(of: find.text('Save'), matching: find.byType(TextButton)),
     );
-
-/// The toolbar folds utilities into a "More" menu when narrow; give it a
-/// desktop-width surface so every button is inline for these tests.
-Future<void> wideSurface(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(2000, 800));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
-}
 
 void main() {
   testWidgets('Save is disabled when the editor is not dirty', (tester) async {

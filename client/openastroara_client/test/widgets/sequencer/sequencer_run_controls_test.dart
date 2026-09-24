@@ -10,6 +10,8 @@ import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 
+import 'toolbar_surface.dart';
+
 /// Connected client; getRunState returns whatever's configured. Lifecycle calls
 /// record which action fired so the gating wiring can be asserted.
 class _FakeClient implements SequenceClient {
@@ -102,13 +104,6 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
 
 SequenceRunStateInfo _info(SequenceRunState s, {int done = 0, int total = 0}) =>
     SequenceRunStateInfo(state: s, instructionsCompleted: done, instructionsTotal: total);
-
-/// The toolbar folds utilities into a "More" menu when narrow; give it a
-/// desktop-width surface so every button is inline for these tests.
-Future<void> wideSurface(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(2000, 800));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
-}
 
 void main() {
   group('run-state provider', () {
