@@ -1,0 +1,23 @@
+{
+  "skill_name": "ara-pr-investigation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Can you check PR 991 from Jewber11? It's the Tonight's Sky one. I want to see what it actually does in the app before I decide anything.",
+      "expected_output": "A report with a verdict, claims-vs-code table, screenshots of the Planning/Tonight's Sky panel from a build of the PR head (info button, details dialog, an edge case), a note that the fork PR has no bot review and is ~57 commits behind master with two overlapping files, findings with file:line, and a recommended next step. No merge, label, or comment performed.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "look at #990 (guider service recovery) — that one touches the daemon and I run it on the pi so I need the full breakdown of what changes server side",
+      "expected_output": "A report whose server-impact section explains the systemd/unit supervision and RPC deadline changes in terms of a running Pi daemon (hardening interactions, state on disk, rollback), states what could and could not be exercised locally, and gives findings and a next step. Client launch skipped or minimal with an explicit reason.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "go through all the open PRs from Jewber11 and tell me which ones are worth taking",
+      "expected_output": "One section per open PR (991, 990, 989, 896, 895) in updated-order, each with a verdict and next step, plus a cross-PR summary noting overlaps or conflicts between them.",
+      "files": []
+    }
+  ]
+}
