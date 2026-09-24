@@ -12,6 +12,8 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_load_dialog.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 
+import 'toolbar_surface.dart';
+
 /// Pins sequenceListProvider to a chosen async result.
 class _FakeListNotifier extends SequenceListNotifier {
   _FakeListNotifier(this._build);
@@ -364,17 +366,20 @@ void main() {
 
     testWidgets('enabled with no server — offline drafts are still loadable (§2)',
         (tester) async {
+      await wideSurface(tester);
       await pumpToolbar(tester, connected: false);
       expect(loadButton(tester).onPressed, isNotNull);
     });
 
     testWidgets('enabled once connected', (tester) async {
+      await wideSurface(tester);
       await pumpToolbar(tester, connected: true);
       expect(loadButton(tester).onPressed, isNotNull);
     });
 
     testWidgets('Delete acts on the open sequence: disabled with none, '
         'deletes + clears selection with one', (tester) async {
+      await wideSurface(tester);
       final client = _FakeClient();
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(client),
@@ -397,10 +402,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(deleteButton().onPressed, isNotNull);
 
-      // The toolbar row is horizontally scrollable and Delete sits past the
-      // test surface's 800px — bring it on screen before tapping.
-      await tester.ensureVisible(find.text('Delete'));
-      await tester.pumpAndSettle();
+      // wideSurface pinned a desktop width, so Delete is inline (not folded
+      // into the More menu) and tappable as-is.
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
       expect(find.text('Delete sequence?'), findsOneWidget);
@@ -415,6 +418,7 @@ void main() {
     });
 
     testWidgets('status line names the selected sequence', (tester) async {
+      await wideSurface(tester);
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(_FakeClient()),
         sequenceListProvider.overrideWith(
