@@ -30,7 +30,12 @@ PUBKEY_FILE="${ARA_VM_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 # Loopback only. An empty hostaddr binds 0.0.0.0, which would put a guest with a
 # published password and passwordless sudo — and the unauthenticated daemon —
 # on whatever LAN the Mac is joined to. The client connects on localhost anyway.
-FWD="hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22,hostfwd=tcp:127.0.0.1:5555-:5555,hostfwd=tcp:127.0.0.1:6800-:6800,hostfwd=tcp:127.0.0.1:4400-:4400,hostfwd=tcp:127.0.0.1:8080-:8080"
+# ssh and the daemon are required; the bridge/guider ports are only needed once
+# those are installed in the guest, so a busy one is dropped with a warning
+# rather than refusing to boot (8080 is taken by half the dev servers on a Mac).
+REQUIRED_PORTS="$SSH_PORT 5555"
+OPTIONAL_PORTS="6800 4400 8080"
+FWD=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log()  { printf '\033[1m[ara-vm]\033[0m %s\n' "$*" >&2; }
@@ -67,11 +72,23 @@ qemu_base() {
 
 running() { [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
 
+port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+
+# Fails on a busy required port; builds $FWD from the required ports plus
+# whichever optional ones are free.
 check_ports() {
     local p
-    for p in $SSH_PORT 5555 6800 4400 8080; do
-        if lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+    FWD="hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22,hostfwd=tcp:127.0.0.1:5555-:5555"
+    for p in $REQUIRED_PORTS; do
+        if port_busy "$p"; then
             fail "port $p is already in use on this Mac (a local daemon? 'lsof -nP -iTCP:$p'); free it first"
+        fi
+    done
+    for p in $OPTIONAL_PORTS; do
+        if port_busy "$p"; then
+            log "port $p is busy on this Mac; not forwarding it (bridge/guider on the VM will not be reachable on it)"
+        else
+            FWD="$FWD,hostfwd=tcp:127.0.0.1:$p-:$p"
         fi
     done
     return 0
@@ -197,7 +214,10 @@ cmd_deploy() {
     # unit's ReadWritePaths= hard-requires the path to exist (no "-" prefix),
     # so without it the service fails with 226/NAMESPACE. The VM has no drive:
     # a plain directory stands in for the mount (found 2026-09-24).
-    vssh 'sudo mkdir -p /media/openastroara && sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/ara.deb 2>&1 | tail -3 && sudo chown openastroara:openastroara /media/openastroara && sudo systemctl restart openastroara-server'
+    # pipefail on the remote side: without it `apt-get | tail` reports tail's
+    # status and a failed install would fall through to the restart.
+    vssh 'set -o pipefail; sudo mkdir -p /media/openastroara && sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/ara.deb 2>&1 | tail -3 && sudo chown openastroara:openastroara /media/openastroara && sudo systemctl restart openastroara-server' \
+        || fail "package install failed on the VM (see output above)"
     local i
     for i in $(seq 1 30); do curl -sf -m 3 http://localhost:5555/healthz >/dev/null 2>&1 && break; sleep 2; done
     curl -sf -m 3 http://localhost:5555/healthz >/dev/null || { vssh 'sudo journalctl -u openastroara-server -n 30 --no-pager'; fail "daemon not healthy after install"; }
@@ -220,7 +240,7 @@ cmd_build_pr() {
     (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh SOFA NOVAS31 packaging) | vssh "tar -xf - -C ~/build"
     (cd "$out" && tar -cf - publish) | vssh "tar -xf - -C ~/build"
     log "building natives + .deb inside the VM"
-    vssh "set -e; cd ~/build; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential dpkg-dev curl >/dev/null; \
+    vssh "set -eo pipefail; cd ~/build; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential dpkg-dev curl >/dev/null; \
           bash scripts/build-astrometry-natives.sh publish >/dev/null; \
           bash packaging/build-deb.sh publish '$version' dist 2>&1 | tail -3"
     vscp "astro@localhost:~/build/dist/openastroara-server_${version}_arm64.deb" "$out/"

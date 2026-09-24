@@ -1927,3 +1927,14 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   route the gate through the existing `clientPlatform` seam (`lib/util/gps_site_fill.dart`) and
   make the bar package-visible. Review note on #1097.
 
+- `packaging/debian/etc/systemd/system/openastroara-server.service` has
+  `ReadWritePaths=/media/openastroara` without a `-` prefix and nothing in the package creates
+  the path, so a fresh install crash-loops with `226/NAMESPACE` until DEPLOY.md's storage step
+  runs (found by the first `ara-sbc-vm` deploy, #1101). Either prefix it `-` or create the
+  directory in postinst/tmpfiles. Review note on #1101.
+- "No CI job reads anything under `.claude/`" is stated in `scripts/classify-changed-paths.py`
+  (`INERT_DIRS` comment), `scripts/tests/test_classify_changed_paths.py` (EXTRA_BY_PREFIX comment)
+  and the 2026-09-20 / 2026-09-24 PORT_DECISIONS entries, but
+  `scripts/tests/test_port_driver_guards.py` reads the port-driver SKILL.md and pr-checker.md
+  under the Sanity job. The conclusion holds (Sanity is not classifier-gated); reword all four as
+  "no classifier-gated job reads it". Review note on #1101.

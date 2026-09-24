@@ -7,10 +7,13 @@
 # Exit 2 if no on-screen window belongs to that owner (app not running / not launched yet).
 set -euo pipefail
 OWNER="${1:?owner name, e.g. openastroara}"; OUT="${2:?output png}"
-CACHE="${TMPDIR:-/tmp}/ara-winlist"
+# Private, user-owned cache (see click.sh for why not $TMPDIR/tmp).
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/openastro-ara-skills"
+mkdir -p "$CACHE_DIR"; chmod 700 "$CACHE_DIR"
+CACHE="$CACHE_DIR/winlist"
 # Rebuild when this script (which embeds the Swift source) is newer than the cached binary.
 if [ ! -x "$CACHE" ] || [ "${BASH_SOURCE[0]}" -nt "$CACHE" ]; then
-  SRC="$(mktemp -t winlist).swift"
+  SRC="$CACHE_DIR/winlist.swift"
   cat > "$SRC" <<'SWIFT'
 import CoreGraphics
 import Foundation
@@ -20,6 +23,7 @@ for w in list where (w["kCGWindowLayer"] as? Int) == 0 {
 }
 SWIFT
   swiftc -O -o "$CACHE" "$SRC"
+  rm -f "$SRC"
 fi
 # No `exit` in the awk: under pipefail an early consumer exit can SIGPIPE the producer.
 WID=$("$CACHE" | awk -F'\t' -v o="$OWNER" 'tolower($2)==tolower(o) && !found {print $1; found=1}')

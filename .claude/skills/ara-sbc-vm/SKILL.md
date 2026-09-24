@@ -27,7 +27,7 @@ artifacts). Nothing in the repo changes.
 |---|---|
 | `ssh -p 2222 astro@localhost` (key + password `astro`, passwordless sudo, like the Pi) | user `astro`, hostname `ara-vm` |
 | `http://localhost:5555` | the daemon (`openastroara-server.service`) |
-| `:6800`, `:4400`, `:8080` | forwarded for AlpacaBridge / guider if you install them later |
+| `:6800`, `:4400`, `:8080` | forwarded for AlpacaBridge / guider if you install them later (skipped with a warning when the Mac already has something on that port) |
 
 All forwards bind to 127.0.0.1 only: the guest has a published password and
 passwordless sudo, so it must never be reachable from the Mac's LAN.
