@@ -27,7 +27,10 @@ SERIAL="$VM_DIR/serial.log"
 MONITOR="$VM_DIR/monitor.sock"
 SSH_PORT=2222
 PUBKEY_FILE="${ARA_VM_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
-FWD="hostfwd=tcp::${SSH_PORT}-:22,hostfwd=tcp::5555-:5555,hostfwd=tcp::6800-:6800,hostfwd=tcp::4400-:4400,hostfwd=tcp::8080-:8080"
+# Loopback only. An empty hostaddr binds 0.0.0.0, which would put a guest with a
+# published password and passwordless sudo — and the unauthenticated daemon —
+# on whatever LAN the Mac is joined to. The client connects on localhost anyway.
+FWD="hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22,hostfwd=tcp:127.0.0.1:5555-:5555,hostfwd=tcp:127.0.0.1:6800-:6800,hostfwd=tcp:127.0.0.1:4400-:4400,hostfwd=tcp:127.0.0.1:8080-:8080"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log()  { printf '\033[1m[ara-vm]\033[0m %s\n' "$*" >&2; }
@@ -170,7 +173,7 @@ latest_master_deb() {
     mkdir -p "$dir"; rm -rf "$dir/run-$run"
     log "downloading arm64 .deb from CI run $run"
     gh run download "$run" -p '*arm64-deb' -D "$dir/run-$run" >/dev/null
-    find "$dir/run-$run" -name '*.deb' | head -1
+    find "$dir/run-$run" -name '*.deb' -print -quit
 }
 
 cmd_deploy() {

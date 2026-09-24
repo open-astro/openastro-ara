@@ -29,6 +29,8 @@ artifacts). Nothing in the repo changes.
 | `http://localhost:5555` | the daemon (`openastroara-server.service`) |
 | `:6800`, `:4400`, `:8080` | forwarded for AlpacaBridge / guider if you install them later |
 
+All forwards bind to 127.0.0.1 only: the guest has a published password and
+passwordless sudo, so it must never be reachable from the Mac's LAN.
 mDNS does not cross QEMU's user-mode network, so the client will not
 discover it. On the client's connect screen enter host `localhost`, port
 `5555` by hand.
