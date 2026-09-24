@@ -300,8 +300,8 @@ void main() {
     testWidgets('pressing Run starts the sequence', (tester) async {
       await wideSurface(tester);
       final container = await pump(tester, run: null);
-      // Invoke the handler directly (the button is in a horizontal scroll view
-      // and may be off the test viewport, so a hit-test tap is unreliable).
+      // Invoke the handler directly: this test is about what Run DOES, and
+      // the gating tests above already cover that the button is enabled.
       btn(tester, 'Run').onPressed!();
       await tester.pumpAndSettle();
       // §25 flow redesign: no polar alignment this session → the soft

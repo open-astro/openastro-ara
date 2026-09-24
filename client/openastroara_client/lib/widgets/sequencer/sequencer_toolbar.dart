@@ -289,15 +289,22 @@ class _ToolbarLayout extends StatelessWidget {
     // Utility TextButton.icon: 12 leading + 16 icon + 8 gap + text + 16
     // trailing (52px measured) plus slack.
     double utilityWidth(_ToolAction a) => labelWidth(a.label) + 52 + 4;
-    // Lifecycle buttons: ±2 outer padding plus the widest chrome (Abort's
-    // outline: 64px measured) and a little slack.
-    double lifecycleWidth(_ToolAction a) => labelWidth(a.label) + 68 + 4;
+    // Lifecycle buttons, measured in a widget test: the filled / text
+    // variants and the plain Skip come to label + 52 (14+14 or 12+16 padding,
+    // 16 icon, 8 gap); the outlined Abort is label + 64 (its border adds a
+    // 1px stroke plus the outlined default padding). Both carry ±2 outer
+    // padding; +4 slack on top so a font-hinting rounding can't overflow.
+    double lifecycleWidth(_ToolAction a) =>
+        labelWidth(a.label) +
+        (a.kind == _LifecycleKind.destructive ? 64 : 52) +
+        4 +
+        4;
     // Icon-only lifecycle: a 40×40 IconButton with the same ±2 outer padding.
     const double lifecycleIconWidth = 44;
 
     final labelledLifecycle =
         lifecycle.fold<double>(0, (sum, a) => sum + lifecycleWidth(a));
-    const compactLifecycle = lifecycleIconWidth * 4;
+    final compactLifecycle = lifecycleIconWidth * lifecycle.length;
 
     // Step 1 — can the lifecycle cluster keep its labels? It needs room for
     // itself plus at least the More button (the utilities' minimum footprint).

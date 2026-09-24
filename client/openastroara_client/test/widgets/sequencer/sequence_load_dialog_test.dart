@@ -407,10 +407,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(deleteButton().onPressed, isNotNull);
 
-      // The toolbar row is horizontally scrollable and Delete sits past the
-      // test surface's 800px — bring it on screen before tapping.
-      await tester.ensureVisible(find.text('Delete'));
-      await tester.pumpAndSettle();
+      // wideSurface pinned a desktop width, so Delete is inline (not folded
+      // into the More menu) and tappable as-is.
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
       expect(find.text('Delete sequence?'), findsOneWidget);

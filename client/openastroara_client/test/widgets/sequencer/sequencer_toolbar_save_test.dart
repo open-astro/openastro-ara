@@ -193,7 +193,6 @@ void main() {
     await wideSurface(tester);
     final client = _SaveClient();
     await _pump(tester, client, dirty: false);
-    await tester.ensureVisible(find.text('Validate'));
     await tester.tap(find.text('Validate'));
     await tester.pumpAndSettle();
     expect(client.validatedBody, isNotNull); // the editor body was sent
@@ -206,7 +205,6 @@ void main() {
         validateResult: const SequenceValidationResult(
             valid: false, reason: 'needs a capturable instruction'));
     await _pump(tester, client, dirty: false);
-    await tester.ensureVisible(find.text('Validate'));
     await tester.tap(find.text('Validate'));
     await tester.pumpAndSettle();
     expect(find.textContaining('needs a capturable instruction'), findsOneWidget);
@@ -219,8 +217,6 @@ void main() {
     final container = await _pump(tester, client, dirty: true);
     expect(_saveButton(tester).onPressed, isNotNull); // enabled while dirty
     expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
-
-    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -237,8 +233,6 @@ void main() {
     final client = _SaveClient(
         throwStatus: 422, throwData: {'detail': 'needs a capturable instruction'});
     final container = await _pump(tester, client, dirty: true);
-
-    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -252,8 +246,6 @@ void main() {
     await wideSurface(tester);
     final client = _SaveClient(throwStatus: 500);
     final container = await _pump(tester, client, dirty: true);
-
-    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -266,8 +258,6 @@ void main() {
     await wideSurface(tester);
     final client = _SaveClient(throwGeneric: true);
     final container = await _pump(tester, client, dirty: true);
-
-    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
