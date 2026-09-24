@@ -281,6 +281,21 @@ void main() {
       expect(fake.calls, contains('skip-current'));
     });
 
+    testWidgets('the icon-only Skip (phone width) fires skip-current too',
+        (tester) async {
+      // Skip is the one run verb rendered by _CompactToolButton below the
+      // labelled threshold; prove that branch forwards onPressed.
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final container =
+          await pump(tester, run: _info(SequenceRunState.running));
+      expect(find.text('Skip'), findsNothing); // icon-only at this width
+      await tester.tap(find.byTooltip('Skip'));
+      await tester.pumpAndSettle();
+      final fake = container.read(sequenceApiProvider) as _FakeClient;
+      expect(fake.calls, contains('skip-current'));
+    });
+
     testWidgets('a command in flight disables the controls', (tester) async {
       await wideSurface(tester);
       final container = await pump(tester, run: null);
