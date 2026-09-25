@@ -40,6 +40,12 @@ class ServerDiscoveryService {
   /// sweep fallback starts alongside it.
   static const Duration mdnsGracePeriod = Duration(milliseconds: 2500);
 
+  /// A-record collection per rig: close after this long with no new record
+  /// (the same tolerance for the first record as the old `.first.timeout`),
+  /// and never run longer than [_aRecordDeadline] in total.
+  static const Duration _aRecordIdleWindow = Duration(milliseconds: 800);
+  static const Duration _aRecordDeadline = Duration(milliseconds: 1500);
+
   /// Test seams: the real strategies are network-bound, so tests inject
   /// deterministic streams here. Production callers use the default ctor.
   ServerDiscoveryService({
@@ -185,6 +191,8 @@ class ServerDiscoveryService {
     final mdns = MDnsClient();
     try {
       await mdns.start();
+      // One interface enumeration per pass, not one per rig resolved.
+      final local = await _localIPv4Addresses();
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
@@ -197,33 +205,64 @@ class ServerDiscoveryService {
           // the .local hostname instead locks the saved server to mDNS
           // resolution forever — on a flaky-multicast network the daemon
           // then reads as "down" even though it answers by IP.
-          final String host;
+          //
+          // The daemon advertises EVERY address it holds, and an SBC running
+          // its own hotspot has two (eth0 on the house LAN + ap0 on the
+          // hotspot). Taking the first A record to arrive picked whichever
+          // the Pi listed first — the unreachable hotspot address when the
+          // laptop is on the LAN. Collect the whole answer set and prefer the
+          // address that shares a /24 with a local interface.
+          final candidates = <String>[];
           try {
-            final a = await mdns
+            // The lookup stream only closes on the library's own long
+            // timeout; an idle window gathers the burst of A records that
+            // answer one query without wedging later PTR/SRV records (r1:
+            // without a timeout this nested await wedged EVERY later record
+            // and kept the stream from closing). The idle window is a floor
+            // on every resolution and rigs resolve serially, so an overall
+            // cap keeps several rigs inside [mdnsGracePeriod].
+            final sub = mdns
                 .lookup<IPAddressResourceRecord>(
                   ResourceRecordQuery.addressIPv4(srv.target),
                 )
-                .first
-                .timeout(const Duration(milliseconds: 800));
-            host = a.address.address;
-            // Broad on purpose: `.first` throws StateError (an Error, not
-            // Exception) on an empty stream, and a dropped A-record reply is
-            // the exact flaky-multicast mode this file survives — without
-            // the timeout this nested await wedged EVERY later PTR/SRV
-            // record and kept the merged stream from ever closing (r1).
+                .map((a) => a.address.address)
+                .timeout(
+                  _aRecordIdleWindow,
+                  onTimeout: (sink) => sink.close(),
+                )
+                .listen(candidates.add);
+            // A cancellable Timer, not Future.delayed: a deadline that
+            // outlives the subscription would leave a timer pending on
+            // every resolution (and trip FakeAsync once this path is
+            // under test).
+            final deadline = Completer<void>();
+            final timer = Timer(_aRecordDeadline, deadline.complete);
+            try {
+              await Future.any<void>([sub.asFuture<void>(), deadline.future]);
+            } finally {
+              timer.cancel();
+              await sub.cancel();
+            }
+            // Broad on purpose: a dropped A-record reply is the exact
+            // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
           } catch (_) {
+            continue;
+          }
+          if (candidates.isEmpty) {
             // Unresolved: do NOT emit the .local name — a saved entry keyed
             // on it reintroduces the outage this PR fixes, and it would
             // duplicate the sweep's IP entry for the same daemon (r2). The
             // sweep surfaces this host by IP instead.
             continue;
           }
-          yield AraServer(
-            hostname: host,
-            port: srv.port,
-            mdnsName: ptr.domainName,
-          );
+          for (final host in preferLocalSubnet(candidates, local)) {
+            yield AraServer(
+              hostname: host,
+              port: srv.port,
+              mdnsName: ptr.domainName,
+            );
+          }
         }
       }
       // Deliberately broad: raw-socket mDNS fails in environment-specific
@@ -301,6 +340,74 @@ class ServerDiscoveryService {
     yield* run.attach();
   }
 
+  /// Keep the addresses one daemon advertised that a local interface can reach.
+  ///
+  /// Dart exposes no netmask, so "same subnet" means the same /24 as a local
+  /// interface — the assumption the sweep already makes. When one or more
+  /// candidates match, only those are returned (the rest are that rig's
+  /// other networks and would show as dead rows). When none match — a /16
+  /// LAN, a routed segment — every candidate is returned in the order
+  /// received so the user can still pick.
+  @visibleForTesting
+  static List<String> preferLocalSubnet(
+    List<String> candidates,
+    Iterable<String> localAddresses,
+  ) {
+    final localBases = {
+      for (final a in localAddresses) _slash24(a),
+    }..remove(null);
+    final onSubnet = [
+      for (final c in candidates)
+        if (localBases.contains(_slash24(c))) c,
+    ];
+    return onSubnet.isNotEmpty ? onSubnet : List.of(candidates);
+  }
+
+  static String? _slash24(String address) {
+    final parts = address.split('.');
+    return parts.length == 4 ? parts.sublist(0, 3).join('.') : null;
+  }
+
+  /// Physical LANs only (review r3): a VPN/tunnel interface's subnet is not
+  /// one a rig on the desk is reachable through, and sweeping it fires ~254
+  /// unsolicited probes into a corporate network — exactly the kind of
+  /// traffic that trips internal scanning alerts. Name prefixes cover the
+  /// common tunnel drivers across macOS/Linux/Windows.
+  static const List<String> _tunnelPrefixes = [
+    'utun',
+    'tun',
+    'tap',
+    'ppp',
+    'wg',
+    'zt',
+    'ipsec',
+    'gpd',
+  ];
+
+  static bool _isTunnel(NetworkInterface i) {
+    final name = i.name.toLowerCase();
+    return _tunnelPrefixes.any(name.startsWith);
+  }
+
+  /// IPv4 addresses of the local non-tunnel interfaces; empty when the
+  /// enumeration is unavailable (sandbox?).
+  static Future<List<String>> _localIPv4Addresses() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      return [
+        for (final i in interfaces)
+          if (!_isTunnel(i))
+            for (final a in i.addresses) a.address,
+      ];
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Probe every host of every local /24 for an Ara daemon on [defaultPort],
   /// in bounded batches. Worst case (silent-drop hosts) a batch rides its
   /// slowest probe's timeouts, so the sweep can take several seconds on
@@ -321,22 +428,7 @@ class ServerDiscoveryService {
     final bases = <String>{};
     final own = <String>{};
     for (final i in interfaces) {
-      // Physical LANs only (review r3): sweeping a VPN/tunnel interface fires
-      // ~254 unsolicited probes into a corporate network — exactly the kind
-      // of traffic that trips internal scanning alerts. Name prefixes cover
-      // the common tunnel drivers across macOS/Linux/Windows.
-      final name = i.name.toLowerCase();
-      const tunnelPrefixes = [
-        'utun',
-        'tun',
-        'tap',
-        'ppp',
-        'wg',
-        'zt',
-        'ipsec',
-        'gpd',
-      ];
-      if (tunnelPrefixes.any(name.startsWith)) continue;
+      if (_isTunnel(i)) continue;
       for (final a in i.addresses) {
         final parts = a.address.split('.');
         if (parts.length == 4) {

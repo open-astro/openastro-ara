@@ -8,6 +8,7 @@ AraServer _s(String host, {int port = 5555, String? name}) =>
     AraServer(hostname: host, port: port, mdnsName: name);
 
 void main() {
+  _preferLocalSubnetTests();
   group('ServerDiscoveryService.discover', () {
     test('sweep does NOT run when mDNS produced a result', () async {
       var sweepRan = false;
@@ -354,6 +355,59 @@ void main() {
       );
       // Completes (doesn't hang) — closure bookkeeping is correct.
       await svc.discover().toList().timeout(const Duration(seconds: 5));
+    });
+  });
+}
+
+void _preferLocalSubnetTests() {
+  group('ServerDiscoveryService.preferLocalSubnet', () {
+    // The Pi advertises eth0 (house LAN) and ap0 (its own hotspot); the
+    // laptop on the LAN must be offered the eth0 address, not whichever
+    // A record happened to arrive first.
+    test('keeps only the address sharing a /24 with a local interface', () {
+      expect(
+        ServerDiscoveryService.preferLocalSubnet(
+          ['172.24.1.1', '192.168.1.234'],
+          ['192.168.1.50'],
+        ),
+        ['192.168.1.234'],
+      );
+    });
+
+    test('a laptop on the hotspot gets the hotspot address', () {
+      expect(
+        ServerDiscoveryService.preferLocalSubnet(
+          ['172.24.1.1', '192.168.1.234'],
+          ['172.24.1.7'],
+        ),
+        ['172.24.1.1'],
+      );
+    });
+
+    test('no subnet match returns every candidate in received order', () {
+      expect(
+        ServerDiscoveryService.preferLocalSubnet(
+          ['172.24.1.1', '10.0.5.2'],
+          ['192.168.1.50'],
+        ),
+        ['172.24.1.1', '10.0.5.2'],
+      );
+    });
+
+    test('no local interfaces returns every candidate', () {
+      expect(ServerDiscoveryService.preferLocalSubnet(['10.0.0.1'], const []), [
+        '10.0.0.1',
+      ]);
+    });
+
+    test('several on-subnet candidates are all kept', () {
+      expect(
+        ServerDiscoveryService.preferLocalSubnet(
+          ['192.168.1.2', '172.24.1.1', '192.168.1.3'],
+          ['192.168.1.50', '10.9.9.9'],
+        ),
+        ['192.168.1.2', '192.168.1.3'],
+      );
     });
   });
 }
