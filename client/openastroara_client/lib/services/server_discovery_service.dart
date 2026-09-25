@@ -40,6 +40,11 @@ class ServerDiscoveryService {
   /// sweep fallback starts alongside it.
   static const Duration mdnsGracePeriod = Duration(milliseconds: 2500);
 
+  /// A-record collection per rig: close after this long with no new record,
+  /// and never run longer than [_aRecordDeadline] in total.
+  static const Duration _aRecordIdleWindow = Duration(milliseconds: 400);
+  static const Duration _aRecordDeadline = Duration(milliseconds: 1000);
+
   /// Test seams: the real strategies are network-bound, so tests inject
   /// deterministic streams here. Production callers use the default ctor.
   ServerDiscoveryService({
@@ -185,6 +190,8 @@ class ServerDiscoveryService {
     final mdns = MDnsClient();
     try {
       await mdns.start();
+      // One interface enumeration per pass, not one per rig resolved.
+      final local = await _localIPv4Addresses();
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
@@ -204,23 +211,33 @@ class ServerDiscoveryService {
           // the Pi listed first — the unreachable hotspot address when the
           // laptop is on the LAN. Collect the whole answer set and prefer the
           // address that shares a /24 with a local interface.
-          final List<String> candidates;
+          final candidates = <String>[];
           try {
-            candidates = await mdns
+            // The lookup stream only closes on the library's own long
+            // timeout; an idle window gathers the burst of A records that
+            // answer one query without wedging later PTR/SRV records (r1:
+            // without a timeout this nested await wedged EVERY later record
+            // and kept the stream from closing). The idle window is a floor
+            // on every resolution and rigs resolve serially, so an overall
+            // cap keeps several rigs inside [mdnsGracePeriod].
+            final sub = mdns
                 .lookup<IPAddressResourceRecord>(
                   ResourceRecordQuery.addressIPv4(srv.target),
                 )
                 .map((a) => a.address.address)
-                // The lookup stream only closes on the library's own long
-                // timeout; a short window gathers the burst of A records
-                // that answer one query without wedging later PTR/SRV
-                // records (r1: without a timeout this nested await wedged
-                // EVERY later record and kept the stream from closing).
                 .timeout(
-                  const Duration(milliseconds: 800),
+                  _aRecordIdleWindow,
                   onTimeout: (sink) => sink.close(),
                 )
-                .toList();
+                .listen(candidates.add);
+            try {
+              await Future.any<void>([
+                sub.asFuture<void>(),
+                Future<void>.delayed(_aRecordDeadline),
+              ]);
+            } finally {
+              await sub.cancel();
+            }
             // Broad on purpose: a dropped A-record reply is the exact
             // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
@@ -234,10 +251,7 @@ class ServerDiscoveryService {
             // sweep surfaces this host by IP instead.
             continue;
           }
-          for (final host in preferLocalSubnet(
-            candidates,
-            await _localIPv4Addresses(),
-          )) {
+          for (final host in preferLocalSubnet(candidates, local)) {
             yield AraServer(
               hostname: host,
               port: srv.port,
@@ -321,7 +335,7 @@ class ServerDiscoveryService {
     yield* run.attach();
   }
 
-  /// Order the addresses one daemon advertised so the reachable one leads.
+  /// Keep the addresses one daemon advertised that a local interface can reach.
   ///
   /// Dart exposes no netmask, so "same subnet" means the same /24 as a local
   /// interface — the assumption the sweep already makes. When one or more

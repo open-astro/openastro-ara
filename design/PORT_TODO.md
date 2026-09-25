@@ -1938,3 +1938,12 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   `scripts/tests/test_port_driver_guards.py` reads the port-driver SKILL.md and pr-checker.md
   under the Sanity job. The conclusion holds (Sanity is not classifier-gated); reword all four as
   "no classifier-gated job reads it". Review note on #1101.
+- `ServerDiscoveryService.preferLocalSubnet` filters rather than ranks: a local non-tunnel
+  interface that shares a /24 with the rig's *other* network (docker0/virbr0/bridge100/vmnet*
+  sit in 172.17–172.31, the same pool as a Pi hotspot) hides the reachable address entirely.
+  Rank on-subnet first and keep the rest after, and extend `_isTunnel` to bridge/VM interfaces.
+  Review note on #1103.
+- `_mdnsDiscover` builds `MDnsClient` inline, so the A-record collection path (collect the
+  burst, idle window + overall deadline) has no unit test; the `mdnsSource` seam bypasses the
+  whole method. A `@visibleForTesting` client factory would make it coverable. Review note on
+  #1103.
