@@ -237,10 +237,9 @@ Manual entry: host `localhost`, port `5555`.
 
 ### Daemon on a different machine (e.g. daemon on a Mac, client on Linux/Windows)
 
-Both machines must be on the same LAN. Use **manual entry with the daemon machine's
-IP address** — prefer it over tapping a discovered row, because discovery connects
-by the daemon host's `.local` mDNS name, which Linux typically can't resolve without
-extra setup (`Temporary failure in name resolution`).
+Both machines must be on the same LAN. A discovered row already carries the daemon's
+numeric LAN IP (never its `.local` mDNS name), so tapping it is fine. If nothing is
+discovered, use **manual entry with the daemon machine's IP address**:
 
 1. Find the daemon machine's LAN IP (macOS: `ipconfig getifaddr en0`; Linux:
    `hostname -I`; Windows: `ipconfig`).
