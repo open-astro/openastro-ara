@@ -40,10 +40,11 @@ class ServerDiscoveryService {
   /// sweep fallback starts alongside it.
   static const Duration mdnsGracePeriod = Duration(milliseconds: 2500);
 
-  /// A-record collection per rig: close after this long with no new record,
+  /// A-record collection per rig: close after this long with no new record
+  /// (the same tolerance for the first record as the old `.first.timeout`),
   /// and never run longer than [_aRecordDeadline] in total.
-  static const Duration _aRecordIdleWindow = Duration(milliseconds: 400);
-  static const Duration _aRecordDeadline = Duration(milliseconds: 1000);
+  static const Duration _aRecordIdleWindow = Duration(milliseconds: 800);
+  static const Duration _aRecordDeadline = Duration(milliseconds: 1500);
 
   /// Test seams: the real strategies are network-bound, so tests inject
   /// deterministic streams here. Production callers use the default ctor.
@@ -230,12 +231,16 @@ class ServerDiscoveryService {
                   onTimeout: (sink) => sink.close(),
                 )
                 .listen(candidates.add);
+            // A cancellable Timer, not Future.delayed: a deadline that
+            // outlives the subscription would leave a timer pending on
+            // every resolution (and trip FakeAsync once this path is
+            // under test).
+            final deadline = Completer<void>();
+            final timer = Timer(_aRecordDeadline, deadline.complete);
             try {
-              await Future.any<void>([
-                sub.asFuture<void>(),
-                Future<void>.delayed(_aRecordDeadline),
-              ]);
+              await Future.any<void>([sub.asFuture<void>(), deadline.future]);
             } finally {
+              timer.cancel();
               await sub.cancel();
             }
             // Broad on purpose: a dropped A-record reply is the exact
