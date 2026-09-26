@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show clockProvider, isDarkNow, skyClockProvider, tonightSkyUpNowProvider;
 import 'package:openastroara/util/imaging_regions.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
 
@@ -566,4 +570,81 @@ void main() {
     // …but the curated WR 134 ring (a nebula) still ranks.
     expect(list.where((o) => o.id == 'REGION-WR134'), hasLength(1));
   });
+
+  test('isDarkNow follows the sun at the site, never for an unset site', () {
+    const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+    // 22:43 MDT on 2026-09-25 = 04:43 UTC on the 26th: well after dusk.
+    expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 26, 4, 43)), isTrue);
+    // 15:00 MDT = 21:00 UTC: broad daylight.
+    expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 25, 21, 0)), isFalse);
+    // The (0, 0) "not set" sentinel is never dark.
+    expect(isDarkNow(const SiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
+        isFalse);
+  });
+
+  test('a tapped Up-now chip stays pinned when the site changes underneath it', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    // Unset site → auto = off.
+    expect(c.read(tonightSkyUpNowProvider), isFalse);
+    c.read(tonightSkyUpNowProvider.notifier).set(true);
+    expect(c.read(tonightSkyUpNowProvider), isTrue);
+    // A site edit re-runs build(); the pin must win over the auto rule
+    // (daylight at this site would otherwise flip it off).
+    c.read(siteSettingsProvider.notifier).setLatitudeDeg(34.0);
+    c.read(siteSettingsProvider.notifier).setLongitudeDeg(-106.0);
+    expect(c.read(tonightSkyUpNowProvider), isTrue);
+  });
+
+  test('Up now switches itself on when the clock crosses into dark, until pinned', () {
+    const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+    var now = DateTime.utc(2026, 9, 25, 21, 0); // 15:00 MDT, daylight
+    final ticks = StreamController<int>.broadcast();
+    addTearDown(ticks.close);
+    final c = ProviderContainer(overrides: [
+      clockProvider.overrideWithValue(() => now),
+      skyClockProvider.overrideWith((ref) => ticks.stream),
+      siteSettingsProvider.overrideWith(() => _SeededSite(belen)),
+    ]);
+    addTearDown(c.dispose);
+    final keep = c.listen(tonightSkyUpNowProvider, (_, _) {});
+    addTearDown(keep.close);
+    expect(c.read(tonightSkyUpNowProvider), isFalse);
+    // The evening passes; the next tick re-evaluates against the new clock.
+    now = DateTime.utc(2026, 9, 26, 4, 43); // 22:43 MDT
+    ticks.add(1);
+    return Future<void>.delayed(Duration.zero).then((_) {
+      expect(c.read(tonightSkyUpNowProvider), isTrue, reason: 'dark now');
+      // A tap pins it; later ticks leave it alone.
+      c.read(tonightSkyUpNowProvider.notifier).set(false);
+      now = DateTime.utc(2026, 9, 26, 5, 30);
+      ticks.add(2);
+      return Future<void>.delayed(Duration.zero);
+    }).then((_) {
+      expect(c.read(tonightSkyUpNowProvider), isFalse, reason: 'pinned');
+    });
+  });
+  test('a Wolf-Rayet star never enters the ranked list, however bright', () {
+    // Review #1105: a WR* row has no size, so the framing score is the
+    // NEUTRAL 0.5 rather than the too-small floor — a mag-8 star with no
+    // photometry outranked real galaxies on a wide-field rig. Orion-ish
+    // coordinates so it is well up on the winter night.
+    const catalog = [
+      PlanningDso(id: 'WR 1', name: 'WR 1', type: 'WR*', magnitude: 8,
+          raDeg: 85, decDeg: -5),
+      PlanningDso(id: 'NGC 1', name: 'small galaxy', type: 'G', magnitude: 11,
+          raDeg: 86, decDeg: -4, sizeMajArcmin: 3, surfaceBrightness: 22.5),
+    ];
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: winterNight, catalog: catalog, limit: 30);
+    expect(list.map((o) => o.id), contains('NGC 1'));
+    expect(list.map((o) => o.id), isNot(contains('WR 1')));
+  });
+}
+
+class _SeededSite extends SiteSettingsNotifier {
+  _SeededSite(this._seed);
+  final SiteSettings _seed;
+  @override
+  SiteSettings build() => _seed;
 }

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../services/tonight_sky_api.dart';
+import 'mosaic_geometry.dart';
 
 /// §36.8 "What-if run" — the session planner behind the Tonight's Sky panel.
 ///
@@ -28,6 +29,22 @@ class SessionPlanTarget {
   final double? subSeconds;
   final int? subCount;
 
+  /// Camera rotation the user dialled for this slot (degrees, clockwise on
+  /// the sky as framed; same convention as the planetarium's framing dial).
+  /// Null = not set → the run keeps a plain slew, exactly like an untouched
+  /// framing dial.
+  final double? positionAngleDeg;
+
+  /// Mosaic grid for this slot (1×1 = a single frame). The slot's hours are
+  /// shared across the panels — see [subsPerPanel].
+  final MosaicGrid mosaic;
+
+  /// Where the frame (or grid) is aimed, as a tangent-plane offset from the
+  /// catalogue centre in arcmin: +east, +north (the gnomonic ξ/η the
+  /// overlay uses). (0, 0) = dead on the object. Dragging the preview sets
+  /// it so the user can put the object low or high in the frame.
+  final (double, double) aimOffsetArcmin;
+
   const SessionPlanTarget({
     required this.object,
     required this.startUtc,
@@ -35,7 +52,51 @@ class SessionPlanTarget {
     required this.hours,
     this.subSeconds,
     this.subCount,
+    this.positionAngleDeg,
+    this.mosaic = singleFrame,
+    this.aimOffsetArcmin = (0.0, 0.0),
   });
+
+  bool get isAimed => aimOffsetArcmin.$1 != 0 || aimOffsetArcmin.$2 != 0;
+
+  /// The J2000 centre the run should slew to: the object plus the offset.
+  ({double raDeg, double decDeg}) get aim => tanToRaDec(
+        aimOffsetArcmin.$1 / 60,
+        aimOffsetArcmin.$2 / 60,
+        object.raDeg,
+        object.decDeg,
+      );
+
+  /// Subs each panel gets when the slot is split evenly across the grid,
+  /// charging one more per-target setup for every extra panel. Null when
+  /// there is no sub figure; 0 when the slot can't feed the grid.
+  int? subsPerPanel(SessionOverheads overheads) {
+    final subS = subSeconds;
+    if (subS == null || subS <= 0) return null;
+    if (!mosaic.isMosaic) return subCount;
+    return overheads.subsIn(hours / mosaic.panelCount, subS);
+  }
+
+  SessionPlanTarget _copy({double? positionAngleDeg, bool clearRotation = false,
+          MosaicGrid? mosaic, (double, double)? aimOffsetArcmin}) =>
+      SessionPlanTarget(
+        object: object,
+        startUtc: startUtc,
+        endUtc: endUtc,
+        hours: hours,
+        subSeconds: subSeconds,
+        subCount: subCount,
+        positionAngleDeg:
+            clearRotation ? null : (positionAngleDeg ?? this.positionAngleDeg),
+        mosaic: mosaic ?? this.mosaic,
+        aimOffsetArcmin: aimOffsetArcmin ?? this.aimOffsetArcmin,
+      );
+
+  SessionPlanTarget withRotation(double? deg) =>
+      _copy(positionAngleDeg: deg, clearRotation: deg == null);
+  SessionPlanTarget withMosaic(MosaicGrid g) => _copy(mosaic: g);
+  SessionPlanTarget withAim((double, double) offsetArcmin) =>
+      _copy(aimOffsetArcmin: offsetArcmin);
 }
 
 /// Real-night overheads charged against each slice so the sub counts describe
@@ -282,4 +343,98 @@ SessionPlan planImagingSession({
     plannedHours: slices.fold(0.0, (sum, t) => sum + t.hours),
     notes: notes,
   );
+}
+/// Alternatives the user could swap into [slice]: every ranked object that is
+/// shootable for at least [minHours] of the slice's interval and isn't already
+/// in [plan]. Ranked order is preserved (best first).
+List<TonightSkyObject> swapCandidates({
+  required List<TonightSkyObject> ranked,
+  required SessionPlan plan,
+  required SessionPlanTarget slice,
+  double minHours = _minSliceHours,
+}) {
+  final used = {for (final t in plan.targets) t.object.id};
+  return [
+    for (final o in ranked)
+      if (!used.contains(o.id))
+        if (_usable(o, slice.startUtc, slice.endUtc) case final (
+              DateTime,
+              DateTime
+            ) u)
+          if (_hoursBetween(u.$1, u.$2) >= minHours) o,
+  ];
+}
+
+/// Replace the object in [plan]'s slice at [index] with [replacement],
+/// keeping the slice's clock times where the replacement is shootable and
+/// clamping to its dark window where it isn't (with a note saying so). Sub
+/// counts are recomputed for the new object's optimal sub. Returns [plan]
+/// unchanged when the replacement can't be shot inside the slice at all.
+SessionPlan swapPlanTarget(
+  SessionPlan plan,
+  int index,
+  TonightSkyObject replacement, {
+  SessionOverheads overheads = const SessionOverheads(),
+}) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final old = plan.targets[index];
+  final usable = _usable(replacement, old.startUtc, old.endUtc);
+  if (usable == null) return plan;
+  final fresh = _slice(replacement, usable.$1, usable.$2, overheads);
+  final notes = [
+    for (final n in plan.notes)
+      if (!n.startsWith('${old.object.name}: ')) n,
+  ];
+  if (fresh.hours < old.hours - 1 / 60) {
+    notes.add(
+      '${replacement.name}: only up for '
+      '${fresh.hours.toStringAsFixed(1)} h of that slot — trimmed to its dark window.',
+    );
+  }
+  final targets = [...plan.targets]..[index] = fresh;
+  return SessionPlan(
+    targets: targets,
+    plannedHours: targets.fold(0.0, (sum, t) => sum + t.hours),
+    notes: notes,
+  );
+}
+
+/// Set (or clear, with null) the camera rotation on [plan]'s slice [index].
+/// Normalised to 0–359; a value of 0 is kept as "explicitly 0" only when the
+/// caller passes it — clear with null to return to "not set".
+SessionPlan setPlanRotation(SessionPlan plan, int index, double? deg) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final norm = deg == null ? null : ((deg.round() % 360) + 360) % 360.0;
+  final targets = [...plan.targets]..[index] = plan.targets[index].withRotation(norm);
+  return SessionPlan(
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
+}
+
+/// Set the mosaic grid on [plan]'s slice [index] (cols/rows clamped 1–8,
+/// overlap 0–50, the framing overlay's bounds).
+SessionPlan setPlanMosaic(SessionPlan plan, int index, MosaicGrid g) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final norm = (
+    cols: g.cols.clamp(1, 8),
+    rows: g.rows.clamp(1, 8),
+    overlapPct: g.overlapPct.clamp(0, 50),
+  );
+  final targets = [...plan.targets]..[index] = plan.targets[index].withMosaic(norm);
+  return SessionPlan(
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
+}
+
+/// Aim [plan]'s slice [index] at a tangent-plane offset (arcmin, +east/+north)
+/// from the catalogue centre; (0, 0) recentres on the object. Clamped to
+/// ±[maxArcmin] per axis so a runaway drag can't aim at another field.
+SessionPlan setPlanAim(SessionPlan plan, int index, (double, double) offsetArcmin,
+    {double maxArcmin = 240}) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final clamped = (
+    offsetArcmin.$1.clamp(-maxArcmin, maxArcmin).toDouble(),
+    offsetArcmin.$2.clamp(-maxArcmin, maxArcmin).toDouble(),
+  );
+  final targets = [...plan.targets]..[index] = plan.targets[index].withAim(clamped);
+  return SessionPlan(
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
 }

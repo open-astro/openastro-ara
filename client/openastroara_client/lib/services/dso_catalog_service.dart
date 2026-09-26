@@ -23,6 +23,10 @@ class PlanningDso {
   final double? posAngleDeg;
   final double? surfaceBrightness;
 
+  /// Overlay membership (bundled catalogs only; null on wire rows).
+  final int? messierNum;
+  final int? caldwellNum;
+
   const PlanningDso({
     required this.id,
     required this.name,
@@ -34,6 +38,8 @@ class PlanningDso {
     this.sizeMinArcmin,
     this.posAngleDeg,
     this.surfaceBrightness,
+    this.messierNum,
+    this.caldwellNum,
   });
 
   /// Wire shape is the daemon's snake_case DsoEntryDto. Null on a malformed

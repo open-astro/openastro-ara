@@ -385,7 +385,12 @@ Still open before the `v0.0.1-ara.1` tag is a real release:
 
 - **DONE (verified 2026-07-02) — `webview_all` is the shipping renderer and `webview_cef` is fully retired.** Completed by the #611 native-webview pivot, which went further than this entry's plan: WKWebView (macOS/iOS) + WebView2 (Windows) via `webview_all`, a native WebKitGTK overlay on Linux (the platform-view GL conflict made the in-tree webview unusable there), the `packages/webview_cef` submodule removed, and the CEF download/helper machinery deleted. All three desktops verified on-device; the `client-build` CI job compiles the native runners. Original entry: The CEF OSR path freezes on macOS (lock-up on Frame in dense fields, idle freeze); the `--dart-define=WEBVIEW_ALL=true` spike (native platform view) is solid. Plan: (a) confirm the idle + Frame stress on WKWebView; (b) **Linux WebKitGTK WebGL2 spike** on Ubuntu 24.04 (the one gating unknown — needs a `linux/runner/my_application.cc` GtkOverlay edit per `webview_all`); (c) flip the default + remove the flag; (d) drop `webview_cef` + the CEF download/helper machinery. See PORT_DECISIONS 2026-06-27. (`flutter_inappwebview` rejected — no Linux; `atomic_webview` — separate window.)
 - **Deep offline star catalogue (mag ~12–14) to replace the reverted online Gaia.** Online Gaia DR2 tiles destabilised CEF OSR and were reverted; the bundled catalogue stops at mag 7. Bundle deeper Norder tiles (offline, no tile churn) sized to taste once the webview pivot settles — WKWebView/WebView2 also handle deeper WebGL2 better than CEF OSR did. (`skydata/stars/properties` is the cap; `display_limit_mag` is the runtime knob.)
-- ✅ **§36 Catalogs-overlay client slice — DONE (2026-07-08).** The planetarium page gained a Catalogs
+- ✅ **§36 Catalogs-overlay client slice — DONE (2026-07-08).** *Superseded 2026-09-26 (#1105): the
+  drawer no longer talks to the daemon. The catalogs are bundled in the client, the page fetches
+  `/aracat` and `/aracat/{id}?limit=500` from the client's own loopback server, and
+  `StellariumView` answers from the bundled set — no server, no network, no revert-on-missing-package.
+  The wire shapes are the daemon's, so the page code below the fetch is unchanged. The rest of this
+  entry is kept as written for history.* The planetarium page gained a Catalogs
   drawer (beside Display): rows from `GET /api/v1/catalogs` grouped Catalogs/Types, each toggle fetches
   `GET /api/v1/catalogs/{id}?limit=500` (brightest-first) and draws ONE stroke-only MultiPolygon of
   magnitude-scaled 12-gon rings per catalog (the mosaic's proven single-feature path; per-catalog colors)
@@ -1768,7 +1773,10 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
   (fetched the deleted /planning/tonight → 404) and only reachable via an aracmd the
   Dart side deliberately never sends (stellarium_view.dart:233) — the docked Flutter
   TonightSkyPanel is the feature.
-- **KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression)**:
+- **(Superseded 2026-09-26, #1105 — the client bundles every catalog with `messierNum`/
+  `caldwellNum` and answers the rings from its own loopback `/aracat`; the daemon endpoints
+  stay for the daemon's own consumers. Re-evaluate whether `/api/v1/catalogs` still has a
+  client caller.)** KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression):
   it is DATA hosting for the deliberate post-2026-06-26 catalog-rings feature (one
   MultiPolygon highlight layer over the engine's native dsos), and the rings need
   OpenNGC's Messier/Caldwell cross-reference columns that the client's dso-catalog
