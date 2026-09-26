@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:path_provider/path_provider.dart';
 
 /// §36 Planetarium — serves the bundled Stellarium Web Engine (the `index.html`
 /// bridge page, the WASM engine, and the ~4.5 MB offline sky data) over a
@@ -14,13 +15,14 @@ import 'package:flutter/services.dart' show rootBundle;
 /// Why a server and not a `file://` URL: the engine fetches its WASM module and
 /// every sky-data file over XHR, and CEF blocks cross-origin `file://` reads — so
 /// the page must be served over http. Everything is read straight from the Flutter
-/// asset bundle (declared under `assets/stellarium/`), so it stays fully offline;
-/// nothing is written to disk.
+/// asset bundle (declared under `assets/stellarium/`), so vector sky data stays
+/// offline. DSS2 photographic tiles use a per-user disk cache; each fetched
+/// resource is capped at 64 MiB.
 ///
 /// One server is started per app run (lazily, on first [start]) and bound to an
 /// ephemeral loopback port. Call [dispose] to stop it.
 class StellariumServer {
-  StellariumServer._(this._server, this.baseUrl, this.token);
+  StellariumServer._(this._server, this.baseUrl, this.token, this._dssCacheDir);
 
   final HttpServer _server;
 
@@ -34,6 +36,43 @@ class StellariumServer {
   /// (which can hit our loopback origin but can't read our page's URL or bypass
   /// same-origin to see it) can't forge these mount-slewing requests.
   final String token;
+
+  /// Local lazy cache for DSS2 HiPS tiles. The page talks to `/dss/` on this
+  /// loopback server instead of CDS directly, so tiles downloaded while online
+  /// remain available when the computer later joins the SBC-only hotspot.
+  final Directory _dssCacheDir;
+
+  /// Where DSS2 tiles are cached (exposed so a test can seed a hit).
+  @visibleForTesting
+  Directory get dssCacheDir => _dssCacheDir;
+  final HttpClient _dssClient = HttpClient();
+  final Map<String, Future<Uint8List?>> _dssFetches = {};
+  DateTime? _dssRetryAfter;
+  DateTime? _dssLastFailure;
+  DateTime? _dssLastSuccess;
+
+  /// True once an upstream fetch has failed more recently than one succeeded:
+  /// the page's Frame panel asks `/dss/status` so it can say why the photo
+  /// backdrop is blank at a dark site even when the manifest is cached.
+  bool get _dssOffline =>
+      _dssLastFailure != null &&
+      (_dssLastSuccess == null || _dssLastFailure!.isAfter(_dssLastSuccess!));
+
+  static const _dssPathPrefix = '/dss/';
+  /// Upstream HiPS root (trailing slash: tile paths resolve beneath it).
+  /// Static + overridable so a test can point the cache at a local stub.
+  @visibleForTesting
+  static Uri dssOrigin = Uri.parse('https://alasky.u-strasbg.fr/DSS/DSSColor/');
+
+  /// Per-resource size cap (a HiPS tile is ~10-60 KiB; Allsky under 2 MiB).
+  @visibleForTesting
+  static int maxDssResourceBytes = 64 * 1024 * 1024;
+
+  /// Deadline for the whole upstream body once headers are in: a stalled TCP
+  /// body (captive-portal hotspot) must not pin the page's fetch, the
+  /// coalescing map entry and the socket until the OS gives up.
+  static const _dssBodyTimeout = Duration(seconds: 30);
+  static final RegExp _dssSegment = RegExp(r'^[A-Za-z0-9._-]+$');
 
   static const String _tokenHeader = 'x-ara-token';
 
@@ -106,10 +145,30 @@ class StellariumServer {
     // Port 0 → the OS picks a free ephemeral port; loopback-only so nothing off
     // this machine can reach the engine/data.
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final dssCacheDir = await _createDssCacheDir();
     final instance = StellariumServer._(
-        server, 'http://127.0.0.1:${server.port}', _mintToken());
+      server,
+      'http://127.0.0.1:${server.port}',
+      _mintToken(),
+      dssCacheDir,
+    );
     unawaited(instance._serve());
     return instance;
+  }
+
+  static Future<Directory> _createDssCacheDir() async {
+    try {
+      final support = await getApplicationSupportDirectory();
+      final dir = Directory('${support.path}/stellarium-dss2');
+      await dir.create(recursive: true);
+      return dir;
+    } catch (_) {
+      // Keep the planetarium usable in a test/headless host where the path
+      // provider plugin is unavailable. A fresh private (mkdtemp, 0700) dir per
+      // run — never a fixed shared path another user could pre-create or
+      // symlink on a multi-user host. Nothing here touches the SBC.
+      return Directory.systemTemp.createTemp('openastroara-dss2-');
+    }
   }
 
   Future<void> _serve() async {
@@ -176,8 +235,11 @@ class StellariumServer {
           return;
         }
         final cmd = _commands.isNotEmpty ? _commands.removeAt(0) : '{}';
-        response.headers.contentType =
-            ContentType('application', 'json', charset: 'utf-8');
+        response.headers.contentType = ContentType(
+          'application',
+          'json',
+          charset: 'utf-8',
+        );
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.write(cmd);
         await response.close();
@@ -210,7 +272,8 @@ class StellariumServer {
           // up front; chunked bodies (contentLength == -1) are bounded by the
           // per-chunk accumulation check below.
           const maxEventBytes = 64 * 1024;
-          if (request.contentLength != -1 && request.contentLength > maxEventBytes) {
+          if (request.contentLength != -1 &&
+              request.contentLength > maxEventBytes) {
             throw const FormatException('event body too large');
           }
           // BytesBuilder(copy: false) keeps each chunk by reference instead of the
@@ -229,10 +292,28 @@ class StellariumServer {
           if (decoded is Map && !_events.isClosed) {
             _events.add(Map<String, Object?>.from(decoded));
           }
-        } catch (_) {/* ignore malformed or oversized event bodies */}
+        } catch (_) {
+          /* ignore malformed or oversized event bodies */
+        }
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.statusCode = HttpStatus.ok;
         await response.close();
+        return;
+      }
+      // DSS2 photographic HiPS tiles are cached on this computer. The page's
+      // data source points at this fixed prefix; a cache miss fetches only the
+      // requested path from the fixed CDS origin, then stores it for offline
+      // use. No arbitrary proxying is allowed.
+      if (path == '/dss' || path.startsWith(_dssPathPrefix)) {
+        // Cache misses cost an upstream fetch and a disk write, so at least
+        // hold this to our own loopback Host like the control channels (a
+        // DNS-rebinding page must not be able to drive the cache).
+        if (!_isLoopbackHost(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
+        await _serveDss(request, path);
         return;
       }
       if (path == '/aracat' || path.startsWith('/aracat/')) {
@@ -277,8 +358,10 @@ class StellariumServer {
         await response.close();
         return;
       }
-      final bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final bytes = data.buffer.asUint8List(
+        data.offsetInBytes,
+        data.lengthInBytes,
+      );
       response.headers.contentType = _contentTypeFor(path);
       // Everything here is read from the local asset bundle over loopback, so a
       // webview cache buys nothing — and WKWebView/WebKitGTK caching a stale
@@ -292,8 +375,10 @@ class StellariumServer {
       final r = _parseRange(range, bytes.length);
       if (r != null) {
         response.statusCode = HttpStatus.partialContent;
-        response.headers.set(HttpHeaders.contentRangeHeader,
-            'bytes ${r.$1}-${r.$2}/${bytes.length}');
+        response.headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes ${r.$1}-${r.$2}/${bytes.length}',
+        );
         response.headers.set(HttpHeaders.contentLengthHeader, r.$2 - r.$1 + 1);
         response.add(bytes.sublist(r.$1, r.$2 + 1));
       } else {
@@ -306,15 +391,157 @@ class StellariumServer {
       try {
         response.statusCode = HttpStatus.internalServerError;
         await response.close();
-      } catch (_) {/* response already closed/detached */}
+      } catch (_) {
+        /* response already closed/detached */
+      }
     }
+  }
+
+  Future<void> _serveDss(HttpRequest request, String path) async {
+    final response = request.response;
+    if (request.method != 'GET' && request.method != 'HEAD') {
+      response.statusCode = HttpStatus.methodNotAllowed;
+      response.headers.set(HttpHeaders.allowHeader, 'GET, HEAD');
+      await response.close();
+      return;
+    }
+    // Page → "is the photo backdrop expected to be blank?" (see [_dssOffline]).
+    if (path == '${_dssPathPrefix}status') {
+      response.headers.contentType =
+          ContentType('application', 'json', charset: 'utf-8');
+      response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+      response.write(jsonEncode({
+        'offline': _dssOffline,
+        'cached': await File('${_dssCacheDir.path}/properties').exists(),
+      }));
+      await response.close();
+      return;
+    }
+    final relative = _dssRelativePath(path);
+    if (relative == null) {
+      response.statusCode = HttpStatus.forbidden;
+      await response.close();
+      return;
+    }
+    final file = File('${_dssCacheDir.path}/$relative');
+    Uint8List? bytes;
+    try {
+      if (await file.exists()) {
+        bytes = await file.readAsBytes();
+      } else if (_dssRetryAfter == null ||
+          DateTime.now().isAfter(_dssRetryAfter!)) {
+        // Coalesce duplicate tile requests from the engine's render workers.
+        final key = relative;
+        final pending = _dssFetches[key] ??= _fetchDss(relative, file);
+        try {
+          bytes = await pending;
+        } finally {
+          if (identical(_dssFetches[key], pending)) _dssFetches.remove(key);
+        }
+      }
+    } catch (e, st) {
+      debugPrint('StellariumServer: DSS cache failed for $relative: $e\n$st');
+    }
+    if (bytes == null) {
+      // A missing offline tile is a normal cache miss. The vector sky and frame
+      // overlay remain usable; the page simply has no photographic backdrop.
+      response.statusCode = HttpStatus.notFound;
+      response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+      await response.close();
+      return;
+    }
+    response.headers.contentType = _contentTypeFor(path);
+    response.headers.set(
+      HttpHeaders.cacheControlHeader,
+      'public, max-age=31536000, immutable',
+    );
+    response.headers.set(HttpHeaders.contentLengthHeader, bytes.length);
+    if (request.method == 'GET') response.add(bytes);
+    await response.close();
+  }
+
+  /// Map a request path under `/dss/` onto the cache-relative tile path, or
+  /// null when it must be refused: anything outside the prefix, an empty or
+  /// dot segment (`/dss//properties`, `..`), or a character outside the HiPS
+  /// name alphabet. Only such a validated path ever reaches the disk or CDS.
+  @visibleForTesting
+  static String? dssRelativePath(String path) => _dssRelativePath(path);
+
+  static String? _dssRelativePath(String path) {
+    if (!path.startsWith(_dssPathPrefix)) return null;
+    final relative = path.substring(_dssPathPrefix.length);
+    if (relative.isEmpty) return null;
+    for (final part in relative.split('/')) {
+      if (part == '.' || part == '..' || !_dssSegment.hasMatch(part)) {
+        return null;
+      }
+    }
+    return relative;
+  }
+
+  Future<Uint8List?> _fetchDss(String relative, File file) async {
+    final uri = dssOrigin.resolve(relative);
+    HttpClientRequest? req;
+    final Uint8List bytes;
+    try {
+      req = await _dssClient.getUrl(uri).timeout(const Duration(seconds: 5));
+      req.headers.set(HttpHeaders.userAgentHeader, 'OpenAstroAra DSS cache');
+      final upstream = await req.close().timeout(const Duration(seconds: 10));
+      if (upstream.statusCode != HttpStatus.ok) {
+        // A 404 is the survey's own answer (a tile outside its coverage), not
+        // a connectivity failure — no backoff, and it counts as "online".
+        await upstream.drain<void>();
+        _dssLastSuccess = DateTime.now();
+        return null;
+      }
+      final body = await _readCapped(upstream).timeout(_dssBodyTimeout);
+      _dssLastSuccess = DateTime.now();
+      if (body == null) return null; // over the cap: refuse, don't persist
+      bytes = body;
+    } on Object catch (e) {
+      // Joining the SBC hotspot removes the Internet route. Avoid making every
+      // visible tile wait through another socket timeout while offline; cached
+      // tiles still serve immediately during the backoff window.
+      _dssLastFailure = DateTime.now();
+      _dssRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+      // A timed-out request/response must not linger on the socket.
+      try {
+        req?.abort();
+      } catch (_) {/* already finished */}
+      debugPrint('StellariumServer: DSS fetch failed for $relative: $e');
+      return null;
+    }
+    // Persist separately: the bytes arrived fine, so a disk problem (full,
+    // read-only) must not arm the "offline" backoff — serve them and move on.
+    try {
+      await file.parent.create(recursive: true);
+      final part = File(
+        '${file.path}.part-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      await part.writeAsBytes(bytes, flush: true);
+      await part.rename(file.path);
+    } catch (e) {
+      debugPrint('StellariumServer: DSS cache write failed for $relative: $e');
+    }
+    return bytes;
+  }
+
+  /// Read the whole upstream body, or null once it exceeds [maxDssResourceBytes].
+  static Future<Uint8List?> _readCapped(HttpClientResponse upstream) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in upstream) {
+      if (builder.length + chunk.length > maxDssResourceBytes) return null;
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
   }
 
   /// Parse a single `bytes=start-end` Range header into inclusive byte offsets,
   /// clamped to the resource length. Returns null for absent/unsatisfiable/multi
   /// ranges (the caller then serves the whole body).
   @visibleForTesting
-  static (int, int)? parseRange(String? header, int length) => _parseRange(header, length);
+  static (int, int)? parseRange(String? header, int length) =>
+      _parseRange(header, length);
 
   static (int, int)? _parseRange(String? header, int length) {
     if (header == null || length <= 0) return null;
@@ -358,6 +585,10 @@ class StellariumServer {
   static ContentType contentTypeFor(String path) => _contentTypeFor(path);
 
   static ContentType _contentTypeFor(String path) {
+    // A HiPS `properties` manifest has no extension.
+    if (path.endsWith('/properties')) {
+      return ContentType('text', 'plain', charset: 'utf-8');
+    }
     final dot = path.lastIndexOf('.');
     final ext = dot < 0 ? '' : path.substring(dot + 1).toLowerCase();
     switch (ext) {
@@ -377,6 +608,9 @@ class StellariumServer {
         return ContentType('image', 'png');
       case 'webp':
         return ContentType('image', 'webp');
+      case 'jpg':
+      case 'jpeg':
+        return ContentType('image', 'jpeg');
       case 'gz':
         return ContentType('application', 'gzip');
       default:
@@ -386,6 +620,7 @@ class StellariumServer {
 
   Future<void> dispose() async {
     await _events.close();
+    _dssClient.close(force: true);
     await _server.close(force: true);
     if (identical(await _instance, this)) _instance = null;
   }

@@ -120,7 +120,8 @@
     background: var(--accent); color: #04222e; }
   #frame #f-add:hover { background: #6fcef9; }
   #frame #f-add:disabled { opacity: .4; cursor: default; background: rgba(255,255,255,0.12); color: var(--dim); }
-  #frame #f-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
+  #frame #f-msg, #frame #f-dss { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
+  #frame #f-dss[hidden] { display: none; }
   #frame .warn { color: #ffb74d; }
   /* Framing centre reticle — marks the mosaic centre (the RA/Dec sent to the Run).
      It's pinned to screen centre, which is where the frame/mosaic is centred, so it
@@ -224,6 +225,7 @@
   <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
   <button id="f-add">Create Run</button>
   <div id="f-msg"></div>
+  <div id="f-dss" hidden></div>
 </div>
 
 
@@ -1237,8 +1239,29 @@ function renderFramePanel() {
   setFrameCoordText();
 }
 
+// Sky photos (DSS2) come through the loopback cache; with no tiles on disk and
+// no Internet the backdrop is simply blank. Say why, once, when framing opens —
+// a HEAD on the HiPS manifest is 200 only when it is cached or fetchable now.
+function probeDssPhotos() {
+  var el = document.getElementById('f-dss');
+  if (!el) return;
+  // Two-step: no manifest cached and none fetchable → blank for sure; manifest
+  // present (cached on the first online zoom) → ask the server whether its last
+  // upstream fetch failed, which is the dark-site case with a warm cache.
+  fetch('./dss/properties', { method: 'HEAD', cache: 'no-store' })
+    .then(function (r) {
+      if (!r.ok) { el.hidden = false; return; }
+      return fetch('./dss/status', { cache: 'no-store' })
+        .then(function (s) { return s.json(); })
+        .then(function (st) { el.hidden = !st.offline; });
+    })
+    .catch(function () { el.hidden = false; });
+  el.textContent = 'No sky photos yet — connect to the Internet once; the areas you view are kept for offline use.';
+}
+
 function toggleFrame(on) {
   frameOn = (on == null) ? !frameOn : on;
+  if (frameOn) probeDssPhotos();
   document.getElementById('frame-btn').classList.toggle('on', frameOn);
   document.getElementById('f-crosshair').classList.toggle('on', frameOn);
   // Explicit 'block' — these cards default to display:none in CSS, so clearing
@@ -1562,11 +1585,13 @@ StelWebEngine({
     core.comets.addDataSource({ url: base + 'CometEls.txt', key: 'mpc_comets' });
     core.satellites.addDataSource({ url: base + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
     // DSS2 colour survey (real photographic sky imagery, shown as you zoom into a
-    // target). This is an online HiPS stream from CDS/STScI — tiles load on demand
-    // and are cached; off-net it simply stays blank and the vector sky is used.
-    // Toggle with the "DSS" layer button; defaults off so off-net users incur no
-    // failed requests until they ask for it.
-    core.dss.addDataSource({ url: 'https://alasky.u-strasbg.fr/DSS/DSSColor' });
+    // target). The loopback server proxies and caches these HiPS tiles under
+    // /dss/, so tiles downloaded once while online remain usable on the SBC-only
+    // hotspot. A cache miss off-net simply leaves the vector sky visible.
+    // NB: no trailing slash — the engine joins `url + '/' + path` verbatim
+    // (hips.c get_url_for), so './dss/' would request '/dss//properties' and
+    // the server's path validator rejects the empty segment.
+    core.dss.addDataSource({ url: './dss' });
     s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
     s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 

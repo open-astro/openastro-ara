@@ -370,6 +370,22 @@ void main() {
     expect(container.read(selectedTonightObjectProvider), isNull);
   });
 
+  testWidgets('info action opens target details without changing atlas command',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pump();
+
+    expect(find.text('Andromeda Galaxy'), findsNWidgets(2));
+    expect(find.textContaining('Coordinates:'), findsOneWidget);
+    expect(find.text('Type: Galaxy'), findsOneWidget);
+    expect(find.text('Tonight score: 88'), findsOneWidget);
+    expect(find.text('• fills the frame (+35)'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+  });
+
   testWidgets('a create failure surfaces an error SnackBar', (tester) async {
     final client = _RecordingClient()..throwOnCreate = true;
     await tester.pumpWidget(_host(client));

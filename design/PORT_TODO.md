@@ -1984,3 +1984,11 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   `Isolate.run` payload and are skipped again in `computeTonightSkyLocal`. Filter `isStarType` on
   the mirror side of the merge in `dso_catalog_state.dart` so the star skip is one rule. Review
   note on #1107.
+
+## DSS2 tile cache housekeeping (2026-09-26, from the #991 review notes)
+
+- The client's `stellarium-dss2` cache is append-only: nothing evicts it and `docs/RUNNING.md`
+  does not say how to prune it. A night of zooming across the sky at Norder 7-8 is tens of MB;
+  months of it is GB. Add a size cap with LRU eviction (or at least a "Clean sky photo cache"
+  button next to the §65.4 preview-cache one in the Storage panel) and document the folder.
+  Review note on #991.

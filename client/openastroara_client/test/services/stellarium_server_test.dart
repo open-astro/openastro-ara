@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/stellarium_server.dart';
@@ -27,6 +28,13 @@ void main() {
     test('serves .webp landscape/art tiles as image/webp', () {
       expect(StellariumServer.contentTypeFor('/skydata/landscapes/guereins/tile.webp').mimeType,
           'image/webp');
+    });
+    test('serves DSS2 JPEG tiles as image/jpeg', () {
+      expect(StellariumServer.contentTypeFor('/dss/Norder3/Dir0/Npix0.jpg').mimeType,
+          'image/jpeg');
+    });
+    test('serves the DSS2 properties manifest as text', () {
+      expect(StellariumServer.contentTypeFor('/dss/properties').mimeType, 'text/plain');
     });
     test('unknown / binary sky-data blobs fall back to octet-stream', () {
       expect(StellariumServer.contentTypeFor('/skydata/dso/Norder0/Dir0/Npix0.eph').mimeType,
@@ -138,6 +146,201 @@ void main() {
       expect((await get('/aracat/nope')).status, HttpStatus.notFound);
       StellariumServer.catalogListResolver = null;
       expect((await get('/aracat')).status, HttpStatus.notFound);
+    });
+  });
+
+  group('StellariumServer.dssRelativePath', () {
+    test('accepts the HiPS manifest, Allsky and tile paths the engine requests', () {
+      expect(StellariumServer.dssRelativePath('/dss/properties'), 'properties');
+      expect(StellariumServer.dssRelativePath('/dss/Norder3/Allsky.jpg'),
+          'Norder3/Allsky.jpg');
+      expect(StellariumServer.dssRelativePath('/dss/Norder7/Dir10000/Npix12345.jpg'),
+          'Norder7/Dir10000/Npix12345.jpg');
+    });
+    test('refuses empty and dot segments and anything outside the prefix', () {
+      // The engine joins `url + "/" + path` verbatim, so a data-source URL
+      // with a trailing slash produced exactly this — and DSS never loaded.
+      expect(StellariumServer.dssRelativePath('/dss//properties'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/../index.html'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/Norder3/./Allsky.jpg'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/a%2f..%2fb'), isNull);
+      expect(StellariumServer.dssRelativePath('/skydata/stars'), isNull);
+    });
+  });
+
+  // Cache HITS and refused paths never leave the machine, so they too can be
+  // black-box tested over loopback. (A miss would fetch from CDS — not here.)
+  group('StellariumServer /dss', () {
+    late StellariumServer server;
+    setUpAll(() async {
+      server = await StellariumServer.start();
+    });
+    tearDownAll(() async => server.dispose());
+
+    // Read the body BEFORE the client is closed: a force-close in `finally`
+    // with the body still in flight is a race the Windows runner loses
+    // ("Connection closed while receiving data"). A HEAD has no body to read.
+    Future<({int status, int length, String? type, List<int> body})> send(
+        String method, String path) async {
+      final client = HttpClient();
+      try {
+        final req = await client.openUrl(
+            method, Uri.parse('${server.baseUrl}$path'));
+        final res = await req.close();
+        final body = method == 'HEAD'
+            ? const <int>[]
+            : await res.fold<List<int>>([], (a, b) => a..addAll(b));
+        return (
+          status: res.statusCode,
+          length: res.contentLength,
+          type: res.headers.contentType?.mimeType,
+          body: body,
+        );
+      } finally {
+        client.close(force: true);
+      }
+    }
+
+    test("refuses the double-slash path a trailing-slash data source produces",
+        () async {
+      expect((await send('GET', '/dss//properties')).status,
+          HttpStatus.forbidden);
+      expect((await send('GET', '/dss/')).status, HttpStatus.forbidden);
+      // (`..` is covered by the dssRelativePath unit test above — Dart's
+      // HttpClient normalises dot segments away before the request is sent.)
+    });
+
+    test('serves a cached tile from disk (GET body, HEAD length only)',
+        () async {
+      final tile = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix1.jpg');
+      await tile.parent.create(recursive: true);
+      await tile.writeAsBytes([0xFF, 0xD8, 0xFF, 0xD9]);
+      try {
+        final get = await send('GET', '/dss/Norder3/Dir0/Npix1.jpg');
+        expect(get.status, HttpStatus.ok);
+        expect(get.type, 'image/jpeg');
+        expect(get.body, [0xFF, 0xD8, 0xFF, 0xD9]);
+        final head = await send('HEAD', '/dss/Norder3/Dir0/Npix1.jpg');
+        expect(head.status, HttpStatus.ok);
+        expect(head.type, 'image/jpeg');
+        expect(head.length, 4);
+      } finally {
+        await tile.delete();
+      }
+    });
+
+    test('rejects methods other than GET/HEAD', () async {
+      expect((await send('POST', '/dss/properties')).status,
+          HttpStatus.methodNotAllowed);
+    });
+  });
+
+  // The download/persist half against a local stub origin: what lands on
+  // disk, what is refused, and what the page's /dss/status probe reports.
+  group('StellariumServer /dss fetch (stub origin)', () {
+    late HttpServer origin;
+    late StellariumServer server;
+    var originHits = 0;
+    final tile = Uint8List.fromList([0xFF, 0xD8, 1, 2, 3, 0xFF, 0xD9]);
+    final savedOrigin = StellariumServer.dssOrigin;
+    final savedCap = StellariumServer.maxDssResourceBytes;
+
+    setUpAll(() async {
+      origin = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      origin.listen((req) async {
+        originHits++;
+        final path = req.uri.path;
+        if (path == '/Norder3/Dir0/Npix7.jpg') {
+          req.response.headers.contentType = ContentType('image', 'jpeg');
+          req.response.add(tile);
+        } else if (path == '/Norder3/Dir0/Npix8.jpg') {
+          req.response.add(List<int>.filled(64, 7)); // over the test cap
+        } else {
+          req.response.statusCode = HttpStatus.notFound;
+        }
+        await req.response.close();
+      });
+      StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
+      StellariumServer.maxDssResourceBytes = 32;
+      server = await StellariumServer.start();
+    });
+    tearDownAll(() async {
+      StellariumServer.dssOrigin = savedOrigin;
+      StellariumServer.maxDssResourceBytes = savedCap;
+      await server.dispose();
+      await origin.close(force: true);
+    });
+
+    Future<({int status, List<int> body})> get(String path) async {
+      final client = HttpClient();
+      try {
+        final res = await (await client.getUrl(Uri.parse('${server.baseUrl}$path'))).close();
+        return (status: res.statusCode, body: await res.fold<List<int>>([], (a, b) => a..addAll(b)));
+      } finally {
+        client.close(force: true);
+      }
+    }
+
+    Future<Map<String, Object?>> status() async =>
+        jsonDecode(utf8.decode((await get('/dss/status')).body)) as Map<String, Object?>;
+
+    test('a miss downloads once, persists atomically, then serves from disk', () async {
+      final before = originHits;
+      final first = await get('/dss/Norder3/Dir0/Npix7.jpg');
+      expect(first.status, HttpStatus.ok);
+      expect(first.body, tile);
+      final file = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix7.jpg');
+      expect(await file.readAsBytes(), tile);
+      expect(file.parent.listSync().where((e) => e.path.contains('.part-')), isEmpty);
+      final second = await get('/dss/Norder3/Dir0/Npix7.jpg');
+      expect(second.body, tile);
+      expect(originHits - before, 1, reason: 'second request must be a cache hit');
+      expect((await status())['offline'], false);
+    });
+
+    test("an upstream 404 is the survey's answer: 404 through, nothing written, still online",
+        () async {
+      expect((await get('/dss/Norder3/Dir0/Npix9.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix9.jpg').existsSync(), isFalse);
+      expect((await status())['offline'], false);
+    });
+
+    test('a body over the cap is refused and not persisted', () async {
+      expect((await get('/dss/Norder3/Dir0/Npix8.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix8.jpg').existsSync(), isFalse);
+    });
+
+    test('an unreachable origin flips /dss/status to offline and arms the backoff', () async {
+      final dead = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final deadPort = dead.port;
+      await dead.close(); // nothing listens here now → connection refused
+      StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:$deadPort/');
+      try {
+        expect((await get('/dss/Norder4/Dir0/Npix1.jpg')).status, HttpStatus.notFound);
+        expect((await status())['offline'], true);
+        // Within the backoff window a further miss is answered from the cache
+        // state alone — the (now restored) origin is not contacted.
+        StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
+        final before = originHits;
+        expect((await get('/dss/Norder4/Dir0/Npix2.jpg')).status, HttpStatus.notFound);
+        expect(originHits, before);
+        // Cache hits still serve during the backoff.
+        expect((await get('/dss/Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
+      } finally {
+        StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
+      }
+    });
+  });
+
+  group('planetarium page DSS data source', () {
+    test('points at the loopback cache WITHOUT a trailing slash', () {
+      // hips.c get_url_for() emits `<url>/<path>`; './dss/' would request
+      // '/dss//properties', which dssRelativePath rightly refuses.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      expect(page, contains("core.dss.addDataSource({ url: './dss' })"));
+      expect(page, isNot(contains("url: './dss/'")));
     });
   });
 }
