@@ -164,6 +164,31 @@ namespace OpenAstroAra.Test {
         private static readonly string[] WrBrightestFirst = { "WR 136", "WR 134", "WR 3-1" };
         private static readonly string[] WrTypeOnly = { "WR*" };
 
+        // Verbatim rows from the pinned sky-data wr.csv (29 columns). WR 21 and WR 30 list
+        // two spectral classifications; the first build separated them with ";" — the
+        // file's own separator — so everything right of Hubble shifted and Identifiers
+        // read as the common name (review #1107: WR 21 became "HD 90657").
+        private const string WrRealHeader =
+            "Name;Type;RA;Dec;Const;MajAx;MinAx;PosAng;B-Mag;V-Mag;J-Mag;H-Mag;K-Mag;SurfBr;Hubble;Pax;Pm-RA;Pm-Dec;RadVel;Redshift;Cstar U-Mag;Cstar B-Mag;Cstar V-Mag;M;NGC;IC;Cstar Names;Identifiers;Common names\n";
+        private const string WrRealRows =
+            "WR 21;WR*;10:26:31.40;-58:38:26.1;;;;;10.16;9.71;8.41;8.22;8.03;;WN5o+O4-6, WN5o+O7V;;;;;;;;;;;;;HD 90657,DR3 5255569549619300096;\n" +
+            "WR 30;WR*;10:51:05.99;-62:17:01.6;;;;;;11.73;10.05;9.76;9.21;;WC6+O6-8, WC6+O7.5;;;;;;;;;;;;;HD 94305,DR3 5241922754918453760,TYC 8961 618 1;Anon (Marston)\n" +
+            "WR 136;WR*;20:12:06.53;+38:21:17.7;;;;;7.65;7.44;6.13;5.90;5.56;;WN6b(h);;;;;;;;;;;;;HD 192163,DR3 2061690233159124352,V1770 Cyg;NGC 6888\n";
+
+        [Test]
+        public void Wr_rows_with_two_spectral_types_keep_their_columns_aligned() {
+            WriteCatalog("NGC0224;G;00:42:44.3;+41:16:09;3.44;4.36;031;;;C 076;;;;;Andromeda Galaxy\n");
+            Directory.CreateDirectory(Path.Combine(_root, "wr-stars"));
+            File.WriteAllText(Path.Combine(_root, "wr-stars", "catalog.csv"), WrRealHeader + WrRealRows);
+            var svc = new SkyCatalogService(_root);
+
+            var byName = svc.GetAllDsos(CancellationToken.None)!.ToDictionary(d => d.Name);
+            Assert.That(byName["WR 21"].CommonName, Is.Null, "Identifiers must not read as the common name");
+            Assert.That(byName["WR 30"].CommonName, Is.EqualTo("Anon (Marston)"));
+            Assert.That(byName["WR 136"].CommonName, Is.EqualTo("NGC 6888"));
+            Assert.That(byName["WR 21"].Magnitude, Is.EqualTo(9.71).Within(1e-6), "V, left of Hubble, never shifted");
+        }
+
         [Test]
         public void GetAllDsos_drops_duplicate_and_nonexistent_stub_rows() {
             WriteMembershipFixture();

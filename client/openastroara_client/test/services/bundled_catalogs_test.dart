@@ -44,6 +44,30 @@ void main() {
         reason: 'the Nebula column rides in as the common name');
   });
 
+  test('no add-on row carries the separator inside a cell (review #1107)', () {
+    // A ";" inside the Hubble cell ("WN5o+O4-6; WN5o+O7V") column-shifted 165
+    // of the 717 WR rows: Identifiers landed in Common names, so WR 21 was
+    // displayed as "HD 90657" and WR 30 lost "Anon (Marston)". The pinned
+    // file now joins alternate spectral types with ", "; this pins the bytes.
+    // (NGC.csv is exempt: OpenNGC's own stray ";" sits inside the quoted
+    // "NED notes" column, right of every column the parser reads.)
+    for (final file in ['abell-pn', 'arp', 'barnard', 'ldn', 'sh2', 'vdb', 'wr']) {
+      final lines = File('assets/catalogs/$file.csv').readAsLinesSync();
+      final width = lines.first.split(';').length;
+      for (var i = 1; i < lines.length; i++) {
+        if (lines[i].isEmpty) continue;
+        expect(lines[i].split(';').length, width,
+            reason: '$file.csv line ${i + 1} has a ";" inside a cell');
+      }
+    }
+    final wr = load('wr.csv');
+    expect(wr.firstWhere((d) => d.id == 'WR 21').name, 'WR 21',
+        reason: 'no common name: the id, not the HD identifier');
+    expect(wr.firstWhere((d) => d.id == 'WR 19').name, 'WR 19');
+    expect(wr.firstWhere((d) => d.id == 'WR 30').name, 'Anon (Marston)',
+        reason: 'a real common name on a two-classification row survives');
+  });
+
   test('planning cull keeps bright + magnitude-less nebulae, drops faint and stars', () {
     const rows = [
       PlanningDso(id: 'a', name: 'a', type: 'G', magnitude: 9, raDeg: 0, decDeg: 0),
