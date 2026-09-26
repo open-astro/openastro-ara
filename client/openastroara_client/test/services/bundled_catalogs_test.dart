@@ -44,15 +44,19 @@ void main() {
         reason: 'the Nebula column rides in as the common name');
   });
 
-  test('planning cull keeps bright + magnitude-less nebulae + WR, drops faint', () {
+  test('planning cull keeps bright + magnitude-less nebulae, drops faint and stars', () {
     const rows = [
       PlanningDso(id: 'a', name: 'a', type: 'G', magnitude: 9, raDeg: 0, decDeg: 0),
       PlanningDso(id: 'b', name: 'b', type: 'G', magnitude: 14, raDeg: 0, decDeg: 0),
       PlanningDso(id: 'c', name: 'c', type: 'HII', magnitude: null, raDeg: 0, decDeg: 0),
       PlanningDso(id: 'd', name: 'd', type: '*', magnitude: null, raDeg: 0, decDeg: 0),
       PlanningDso(id: 'e', name: 'e', type: 'WR*', magnitude: 15, raDeg: 0, decDeg: 0),
+      // Bright stars pass the magnitude bound; the type gate has to drop them
+      // (review #1105: WR 134 at mag 8 outranked galaxies on a wide field).
+      PlanningDso(id: 'f', name: 'f', type: 'WR*', magnitude: 8, raDeg: 0, decDeg: 0),
+      PlanningDso(id: 'g', name: 'g', type: '**', magnitude: 7, raDeg: 0, decDeg: 0),
     ];
-    expect(planningCull(rows).map((d) => d.id), ['a', 'c', 'e']);
+    expect(planningCull(rows).map((d) => d.id), ['a', 'c']);
   });
 
   test('overlays: same sets as the daemon, brightest first, display names', () {

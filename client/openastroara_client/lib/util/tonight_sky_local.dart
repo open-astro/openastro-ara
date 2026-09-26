@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../services/bundled_catalogs.dart' show isStarType;
 import '../services/dso_catalog_service.dart';
 import '../services/tonight_sky_api.dart';
 import '../state/settings/camera_electronics_state.dart';
@@ -309,6 +310,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final scored = <(double, TonightSkyObject)>[];
   final up = List<bool>.filled(sampleCount, false);
   for (final o in objects) {
+    // Stars are culled before they reach the planning catalog (planningCull),
+    // but the daemon mirror rows bypass that cull — a server-side package the
+    // bundle does not know is appended uncut — so the gate is repeated here
+    // for that path. A star has no field to frame; "size unknown" would score
+    // it neutral, ahead of honestly-small galaxies (review #1105).
+    if (isStarType(o.type)) continue;
     // Pre-filter: never clears the horizon at upper culmination → never up.
     final peakAltDeg = _maxAltitudeDeg(o.decDeg, lat);
     if (peakAltDeg < horizon) continue;

@@ -146,17 +146,24 @@ double? decToDeg(String raw) {
 
 /// The planning subset — the same cull the daemon's /dso-catalog applied:
 /// mag ≤ [maxMag], plus magnitude-less nebula types (which legitimately have
-/// no integrated magnitude), plus WR stars (kept for the search; they score
-/// low in the ranker — no size, no surface brightness — and #1107 skips
-/// star types outright). Magnitude-less stars / stubs stay out.
+/// no integrated magnitude). Stars never make it, whatever their magnitude:
+/// a star row carries no size, and the ranker scores "size unknown" as
+/// NEUTRAL (0.5) rather than the too-small floor, so a mag-8 WR star with no
+/// photometry outranked real galaxies on a wide-field rig (review #1105).
+/// Stars stay in the search and the Catalogs overlays, which read the
+/// uncut [bundledCatalogProvider] set.
 List<PlanningDso> planningCull(List<PlanningDso> all, {double maxMag = 12}) => [
       for (final d in all)
-        if (d.type == 'WR*' ||
+        if (!isStarType(d.type) &&
             (d.magnitude != null
                 ? d.magnitude! <= maxMag
                 : isMagnitudelessImagingType(d.type)))
           d,
     ];
+
+/// Single / double / Wolf-Rayet stars — point sources the planner never
+/// ranks (they have no field to frame). OpenNGC `*`, `**`; wr.csv `WR*`.
+bool isStarType(String type) => const {'*', '**', 'WR*'}.contains(type);
 
 bool isMagnitudelessImagingType(String type) => const {
       'HII', 'EmN', 'RfN', 'DrkN', 'Neb', 'Cl+N', 'SNR', 'PN',

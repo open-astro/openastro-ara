@@ -604,6 +604,22 @@ void main() {
       expect(c.read(tonightSkyUpNowProvider), isFalse, reason: 'pinned');
     });
   });
+  test('a Wolf-Rayet star never enters the ranked list, however bright', () {
+    // Review #1105: a WR* row has no size, so the framing score is the
+    // NEUTRAL 0.5 rather than the too-small floor — a mag-8 star with no
+    // photometry outranked real galaxies on a wide-field rig. Orion-ish
+    // coordinates so it is well up on the winter night.
+    const catalog = [
+      PlanningDso(id: 'WR 1', name: 'WR 1', type: 'WR*', magnitude: 8,
+          raDeg: 85, decDeg: -5),
+      PlanningDso(id: 'NGC 1', name: 'small galaxy', type: 'G', magnitude: 11,
+          raDeg: 86, decDeg: -4, sizeMajArcmin: 3, surfaceBrightness: 22.5),
+    ];
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: winterNight, catalog: catalog, limit: 30);
+    expect(list.map((o) => o.id), contains('NGC 1'));
+    expect(list.map((o) => o.id), isNot(contains('WR 1')));
+  });
 }
 
 class _SeededSite extends SiteSettingsNotifier {
