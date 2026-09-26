@@ -213,6 +213,41 @@ Future<ImagingRunResult?> createImagingRun(
         ),
       );
     }
+    // Append to the OPEN draft when there is one, mirroring the online
+    // append: Add all from the session planner (or M 31 then M 42 by hand)
+    // builds ONE multi-target night plan. Before this, offline each target
+    // became its own draft and the Run tab only showed the last — "I added
+    // all 4 and they don't show up in the Run".
+    final selectedId = container.read(selectedSequenceIdProvider);
+    if (selectedId != null && isDraftSequenceId(selectedId)) {
+      final appended = await _appendToDraft(container, selectedId, [
+        for (final p in panels)
+          buildTargetBlock(
+            raDeg: p.raDeg,
+            decDeg: p.decDeg,
+            targetName: p.name,
+            exposureSeconds: exposureSeconds,
+            gain: defaults.defaultGain,
+            offset: defaults.defaultOffset,
+            binning: defaults.defaultBin,
+            frameCount: defaultFrameCount(exposureSeconds,
+                remainingDarkHours: remainingDarkHours),
+            autofocusEveryNExposures: afEvery,
+            positionAngleDeg: positionAngleDeg,
+            filterPlan: choice.filterPlan,
+            startGuiding: choice.guide,
+            ditherEveryNExposures: _ditherCadence(container, choice),
+            manualFilterSwap: choice.manualFilterSwap,
+          ),
+      ]);
+      if (appended) {
+        if (jumpToRun) {
+          container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+        }
+        return ImagingRunResult(selectedId, appended: true, draft: true);
+      }
+      // Draft vanished / not a container → fall through to a fresh draft.
+    }
     final draftId = await container
         .read(draftSequencesProvider.notifier)
         .create(targetName, body);
@@ -568,6 +603,41 @@ Future<Map<String, dynamic>> _openSequenceBaseBody(
 /// After a persisted body mutation: re-sync the editor (not-dirty, at the
 /// saved body) when it holds this sequence so the Run tab shows the change
 /// without a re-select, and refresh the list (ModifiedUtc ordering changed).
+/// Graft [blocks] onto the local draft [id] (before its session-end steps)
+/// and save it; the open editor reloads so the new targets show at once.
+/// False when the draft no longer exists or its root can't take an append.
+Future<bool> _appendToDraft(
+  ProviderContainer container,
+  String id,
+  List<Map<String, dynamic>> blocks,
+) async {
+  final drafts = container.read(draftSequencesProvider).asData?.value ??
+      await container.read(draftSequencesProvider.future);
+  DraftSequence? draft;
+  for (final d in drafts ?? const <DraftSequence>[]) {
+    if (d.id == id) {
+      draft = d;
+      break;
+    }
+  }
+  if (draft == null) return false;
+  Map<String, dynamic> body = draft.body;
+  try {
+    for (final b in blocks) {
+      body = appendTargetToRunBody(body, b);
+    }
+  } on ArgumentError {
+    return false;
+  }
+  await container.read(draftSequencesProvider.notifier).saveBody(id, body);
+  if (container.read(sequenceEditorProvider)?.id == id) {
+    container
+        .read(sequenceEditorProvider.notifier)
+        .load(SequenceDetail(id: id, name: draft.name, body: body));
+  }
+  return true;
+}
+
 void _syncAfterBodyChange(
   ProviderContainer container,
   String id,

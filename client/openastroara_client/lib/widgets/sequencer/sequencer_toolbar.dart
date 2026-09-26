@@ -159,9 +159,14 @@ class SequencerToolbar extends ConsumerWidget {
         // dialog's per-row trash covers the rest). The shared flow
         // confirms, stop-and-deletes an active run, and clears the
         // selection + editor.
+        // An open offline DRAFT is deletable too (it lives on this device,
+        // no daemon involved) — before, Delete was dead for drafts and the
+        // only way out was the Load dialog's per-row trash.
         onPressed: hasSelection
             ? () => _delete(context, ref, selectedId, selectedName)
-            : null,
+            : (isDraft && selectedId != null && !busy)
+                ? () => _deleteDraft(context, ref, selectedId, selectedName)
+                : null,
       ),
     ];
 
@@ -674,6 +679,54 @@ Future<void> _delete(
   busy.setBusy(true);
   try {
     await confirmAndDeleteSequence(context, ref, id: id, name: name ?? '');
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+/// Confirm-then-delete for the open offline draft: removes the local file and
+/// clears the selection + editor so the Run tab isn't editing a ghost.
+Future<void> _deleteDraft(
+    BuildContext context, WidgetRef ref, String id, String? name) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final display = (name == null || name.isEmpty) ? '(untitled draft)' : name;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete draft?'),
+      content: Text('"$display" will be removed from this device. '
+          "This can't be undone."),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel')),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AraColors.accentError),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final container = ProviderScope.containerOf(context, listen: false);
+  final busy = container.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    await container.read(draftSequencesProvider.notifier).delete(id);
+    if (container.read(selectedSequenceIdProvider) == id) {
+      container.read(selectedSequenceIdProvider.notifier).select(null);
+    }
+    if (container.read(sequenceEditorProvider)?.id == id) {
+      container.read(sequenceEditorProvider.notifier).clear();
+    }
+  } catch (e) {
+    debugPrint('[sequencer] draft delete failed: $e');
+    messenger.showSnackBar(const SnackBar(
+      content: Text("Couldn't delete the draft."),
+      backgroundColor: AraColors.accentError,
+    ));
   } finally {
     busy.setBusy(false);
   }

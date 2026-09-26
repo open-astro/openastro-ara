@@ -71,12 +71,14 @@ void main() {
   Future<({ImagingRunResult? result, Object? error})> run(
     WidgetTester tester, {
     required SequenceClient? api,
+    ProviderContainer? container,
   }) async {
-    final container = ProviderContainer(overrides: [
+    final owned = container == null;
+    container ??= ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
       sequenceApiProvider.overrideWith((ref) => api),
     ]);
-    addTearDown(container.dispose);
+    if (owned) addTearDown(container.dispose);
     Future<({ImagingRunResult? result, Object? error})>? pending;
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -111,6 +113,32 @@ void main() {
     expect(drafts.store.values.single.name, 'M 31');
     // The draft body is a real run body, not a placeholder.
     expect(drafts.store.values.single.body, isNotEmpty);
+  });
+
+  testWidgets('no server: a second add APPENDS to the open draft', (tester) async {
+    final container = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(container.dispose);
+    final first = await run(tester, api: null, container: container);
+    final draftId = first.result!.sequenceId;
+    expect(drafts.store, hasLength(1));
+    final before = drafts.store[draftId]!.body.toString();
+
+    // The first create selected its draft; the next target must land IN it
+    // (one multi-target night plan), not as a second draft — the planner's
+    // "Add all" builds the run this way.
+    final second = await run(tester, api: null, container: container);
+    expect(second.error, isNull);
+    expect(second.result!.draft, isTrue);
+    expect(second.result!.appended, isTrue);
+    expect(second.result!.sequenceId, draftId);
+    expect(drafts.store, hasLength(1), reason: 'no second draft');
+    final after = drafts.store[draftId]!.body.toString();
+    expect(after.length, greaterThan(before.length));
+    expect('M 31'.allMatches(after).length,
+        greaterThan('M 31'.allMatches(before).length));
   });
 
   testWidgets(
