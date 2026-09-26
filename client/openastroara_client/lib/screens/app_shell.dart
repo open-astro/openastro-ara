@@ -247,7 +247,7 @@ class _TopEquipmentBar extends StatelessWidget {
           ),
           // Night mode toggle — sits right beside the equipment chips (the
           // DOME chip is the last one) so it's reachable in one tap from any
-          // tab; the same as the N hotkey.
+          // tab; the same as the Ctrl+N / Cmd+N hotkey.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Consumer(

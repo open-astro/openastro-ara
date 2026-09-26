@@ -78,8 +78,9 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
   final optics = ref.watch(opticsSettingsProvider);
   final filterSet = ref.watch(filterSetProvider);
   final electronics = ref.watch(cameraElectronicsProvider);
-  // The mirrored openngc-dso catalog when this machine has one; the
-  // ranker falls back to the 20-object starter list otherwise.
+  // The bundled planning catalog (culled, plus any mirrored daemon rows the
+  // bundle lacks) — never empty, so the ranker's starter-list fallback is
+  // only reached by callers that pass no catalog at all.
   final catalog = await ref.watch(dsoCatalogProvider.future);
   // Plain records so the isolate payload stays model-free.
   final horizonPoints = ref

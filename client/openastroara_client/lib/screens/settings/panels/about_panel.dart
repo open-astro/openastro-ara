@@ -61,7 +61,7 @@ class AboutPanel extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         // Observing-session night display: red overlay/theme, toggleable via
-        // the switch or the N hotkey; persisted across launches.
+        // the switch or the Ctrl+N / Cmd+N hotkey; persisted across launches.
         _NightModeRow(),
         const SizedBox(height: 12),
         // The daemon is the half that actually runs the rig — its build is what
