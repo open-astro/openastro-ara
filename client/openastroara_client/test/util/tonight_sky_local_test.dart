@@ -4,7 +4,8 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
-import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show isDarkNow;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show isDarkNow, tonightSkyUpNowProvider;
 import 'package:openastroara/util/tonight_sky_local.dart';
 
 void main() {
@@ -324,5 +325,19 @@ void main() {
     // The (0, 0) "not set" sentinel is never dark.
     expect(isDarkNow(const SiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
         isFalse);
+  });
+
+  test('a tapped Up-now chip stays pinned when the site changes underneath it', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    // Unset site → auto = off.
+    expect(c.read(tonightSkyUpNowProvider), isFalse);
+    c.read(tonightSkyUpNowProvider.notifier).set(true);
+    expect(c.read(tonightSkyUpNowProvider), isTrue);
+    // A site edit re-runs build(); the pin must win over the auto rule
+    // (daylight at this site would otherwise flip it off).
+    c.read(siteSettingsProvider.notifier).setLatitudeDeg(34.0);
+    c.read(siteSettingsProvider.notifier).setLongitudeDeg(-106.0);
+    expect(c.read(tonightSkyUpNowProvider), isTrue);
   });
 }

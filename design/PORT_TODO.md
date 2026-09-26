@@ -1752,7 +1752,10 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
   (fetched the deleted /planning/tonight → 404) and only reachable via an aracmd the
   Dart side deliberately never sends (stellarium_view.dart:233) — the docked Flutter
   TonightSkyPanel is the feature.
-- **KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression)**:
+- **(Superseded 2026-09-26, #1105 — the client bundles every catalog with `messierNum`/
+  `caldwellNum` and answers the rings from its own loopback `/aracat`; the daemon endpoints
+  stay for the daemon's own consumers. Re-evaluate whether `/api/v1/catalogs` still has a
+  client caller.)** KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression):
   it is DATA hosting for the deliberate post-2026-06-26 catalog-rings feature (one
   MultiPolygon highlight layer over the engine's native dsos), and the rings need
   OpenNGC's Messier/Caldwell cross-reference columns that the client's dso-catalog

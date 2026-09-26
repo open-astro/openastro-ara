@@ -222,6 +222,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   @override
   void dispose() {
     unawaited(_eventSub?.cancel());
+    // The /aracat resolvers capture this widget's ref; a later hit after
+    // dispose would throw into the server's catch (a 500). Clear them.
+    StellariumServer.catalogListResolver = null;
+    StellariumServer.catalogObjectsResolver = null;
     _searchCtrl.dispose();
     // wva.WebViewController has no dispose() in the webview_flutter API; its
     // platform view is torn down with the widget.
