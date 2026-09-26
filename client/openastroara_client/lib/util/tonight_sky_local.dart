@@ -696,6 +696,14 @@ TonightFraming _classifyFraming(
       : TonightFraming.goodFit;
 }
 
+/// The single-frame FOV (width, height arcmin) of the configured optical
+/// train, or null when the train isn't configured enough to know. Public
+/// for the framing overlays drawn on target previews.
+(double, double)? opticsFovArcmin(OpticsSettings optics) {
+  final (w, h) = _fovArcmin(optics);
+  return w.isNaN || h.isNaN ? null : (w, h);
+}
+
 /// FOV (arcmin) of the optical train, enlarged by the mosaic tile count per
 /// axis; (NaN, NaN) when unconfigured.
 (double, double) _fovArcmin(

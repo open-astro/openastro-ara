@@ -1422,6 +1422,13 @@ function pollCmd() {
         // the DSS2 photo layer on so the user sees the real field; the
         // Display panel dot + stored prefs follow, same as a manual toggle.
         if (c.dss && !dispState('dss')) { setLayer('dss', true); renderDisplayPanel(); postDisplayPrefs(); }
+        // `rot` (degrees) presets the framing dial — the session planner's
+        // per-slot rotation lands on the box so the user sees the layout
+        // they dialled, and Create Run here carries the same angle.
+        if (c.rot != null && isFinite(+c.rot)) {
+          frameRotDeg = ((Math.round(+c.rot) % 360) + 360) % 360;
+          renderFramePanel();
+        }
         pointRaDec(c.ra, c.dec, c.name);
       }
     })

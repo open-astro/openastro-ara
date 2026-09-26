@@ -28,6 +28,12 @@ class SessionPlanTarget {
   final double? subSeconds;
   final int? subCount;
 
+  /// Camera rotation the user dialled for this slot (degrees, clockwise on
+  /// the sky as framed; same convention as the planetarium's framing dial).
+  /// Null = not set → the run keeps a plain slew, exactly like an untouched
+  /// framing dial.
+  final double? positionAngleDeg;
+
   const SessionPlanTarget({
     required this.object,
     required this.startUtc,
@@ -35,7 +41,18 @@ class SessionPlanTarget {
     required this.hours,
     this.subSeconds,
     this.subCount,
+    this.positionAngleDeg,
   });
+
+  SessionPlanTarget withRotation(double? deg) => SessionPlanTarget(
+        object: object,
+        startUtc: startUtc,
+        endUtc: endUtc,
+        hours: hours,
+        subSeconds: subSeconds,
+        subCount: subCount,
+        positionAngleDeg: deg,
+      );
 }
 
 /// Real-night overheads charged against each slice so the sub counts describe
@@ -336,4 +353,15 @@ SessionPlan swapPlanTarget(
     plannedHours: targets.fold(0.0, (sum, t) => sum + t.hours),
     notes: notes,
   );
+}
+
+/// Set (or clear, with null) the camera rotation on [plan]'s slice [index].
+/// Normalised to 0–359; a value of 0 is kept as "explicitly 0" only when the
+/// caller passes it — clear with null to return to "not set".
+SessionPlan setPlanRotation(SessionPlan plan, int index, double? deg) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final norm = deg == null ? null : ((deg.round() % 360) + 360) % 360.0;
+  final targets = [...plan.targets]..[index] = plan.targets[index].withRotation(norm);
+  return SessionPlan(
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
 }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -15,7 +16,19 @@ import '../../theme/ara_colors.dart';
 class TargetPreview extends ConsumerWidget {
   final TonightSkyObject object;
   final double size;
-  const TargetPreview({super.key, required this.object, this.size = 72});
+
+  /// The camera's single-frame FOV (width, height arcmin) to draw as a box
+  /// over the field, rotated by [rotationDeg] (clockwise, the planetarium
+  /// dial's convention). Null = no box.
+  final (double, double)? frameFovArcmin;
+  final double rotationDeg;
+  const TargetPreview({
+    super.key,
+    required this.object,
+    this.size = 72,
+    this.frameFovArcmin,
+    this.rotationDeg = 0,
+  });
 
   TargetPreviewKey get _key => (
         id: object.id,
@@ -60,7 +73,23 @@ class TargetPreview extends ConsumerWidget {
             width: size,
             height: size,
             color: Colors.black,
-            child: tile,
+            child: frameFovArcmin == null
+                ? tile
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      tile,
+                      IgnorePointer(
+                        child: CustomPaint(
+                          painter: _FramePainter(
+                            fovArcmin: frameFovArcmin!,
+                            fieldDeg: fov,
+                            rotationDeg: rotationDeg,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -116,4 +145,60 @@ class _NoPreview extends StatelessWidget {
               size: 20, color: AraColors.textDisabled),
         ),
       );
+}
+
+/// The camera frame as a rotated rectangle over a square cutout of
+/// [fieldDeg] degrees across. Scale is honest: a frame wider than the field
+/// simply runs off the tile.
+class _FramePainter extends CustomPainter {
+  final (double, double) fovArcmin;
+  final double fieldDeg;
+  final double rotationDeg;
+  const _FramePainter({
+    required this.fovArcmin,
+    required this.fieldDeg,
+    required this.rotationDeg,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (fieldDeg <= 0) return;
+    final pxPerDeg = size.width / fieldDeg;
+    final w = fovArcmin.$1 / 60 * pxPerDeg;
+    final h = fovArcmin.$2 / 60 * pxPerDeg;
+    final c = size.center(Offset.zero);
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(rotationDeg * math.pi / 180);
+    final rect = Rect.fromCenter(center: Offset.zero, width: w, height: h);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..color = Colors.black.withValues(alpha: 0.6),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = AraColors.accentInfo,
+    );
+    // A tick on the frame's top edge so "which way is up" survives rotation.
+    canvas.drawLine(
+      Offset(0, -h / 2),
+      Offset(0, -h / 2 - 5),
+      Paint()
+        ..strokeWidth = 1.5
+        ..color = AraColors.accentInfo,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_FramePainter old) =>
+      old.fovArcmin != fovArcmin ||
+      old.fieldDeg != fieldDeg ||
+      old.rotationDeg != rotationDeg;
 }
