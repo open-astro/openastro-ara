@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -31,15 +32,30 @@ class TargetPreviewService {
   static const cutoutBase =
       'https://alasky.u-strasbg.fr/hips-image-services/hips2fits';
   static const hips = 'CDS/P/DSS2/color';
-  static const pixels = 320;
 
-  /// Field of view (degrees) that frames an object of [sizeMajArcmin]: 2.5×
-  /// the major axis so the surroundings read, floored at 0.4° so a small
-  /// galaxy isn't a lone smudge, capped at 6° (hips2fits' DSS2 usefulness
-  /// falls off past that, and the big Sharpless/LDN fields are all inside).
+  /// Landscape cutout, roughly a camera sensor's aspect: the width is the
+  /// field of view, the height follows.
+  static const widthPx = 640;
+  static const heightPx = 400;
+  static const aspect = widthPx / heightPx;
+
+  /// Field of view (degrees, across the width) that frames an object of
+  /// [sizeMajArcmin]: 2.5× the major axis so the surroundings read, floored
+  /// at 0.4° so a small galaxy isn't a lone smudge, capped at 8° (past that
+  /// DSS2 is mostly plate edges, and the big Sharpless/LDN fields are inside).
   static double fovDegFor(double? sizeMajArcmin) {
     final size = sizeMajArcmin ?? 0;
-    return (size * 2.5 / 60).clamp(0.4, 6.0);
+    return (size * 2.5 / 60).clamp(0.4, 8.0);
+  }
+
+  /// The field to fetch when a camera frame of [frameFovArcmin] (w, h) is
+  /// drawn over it: wide enough that the frame fits at ANY rotation (its
+  /// diagonal plus margin), never narrower than the object's own field.
+  static double fieldDegFor(double? sizeMajArcmin, (double, double)? frame) {
+    final base = fovDegFor(sizeMajArcmin);
+    if (frame == null) return base;
+    final diagDeg = math.sqrt(frame.$1 * frame.$1 + frame.$2 * frame.$2) / 60;
+    return math.max(base, diagDeg * 1.15).clamp(0.4, 8.0);
   }
 
   static Uri cutoutUri(
@@ -51,8 +67,8 @@ class TargetPreviewService {
         'ra': raDeg.toStringAsFixed(5),
         'dec': decDeg.toStringAsFixed(5),
         'fov': fovDeg.toStringAsFixed(3),
-        'width': '$pixels',
-        'height': '$pixels',
+        'width': '$widthPx',
+        'height': '$heightPx',
         'projection': 'TAN',
         'format': 'jpg',
       });
@@ -71,9 +87,9 @@ class TargetPreviewService {
   }
 
   /// The cached preview bytes, or null when never fetched / unreadable.
-  Future<Uint8List?> cached(String id, {double? sizeMajArcmin}) async {
+  Future<Uint8List?> cached(String id, {required double fieldDeg}) async {
     try {
-      final f = await _file(id, fovDegFor(sizeMajArcmin));
+      final f = await _file(id, fieldDeg);
       if (!await f.exists()) return null;
       final bytes = await f.readAsBytes();
       return bytes.isEmpty ? null : bytes;
@@ -88,10 +104,10 @@ class TargetPreviewService {
     required String id,
     required double raDeg,
     required double decDeg,
-    double? sizeMajArcmin,
+    required double fieldDeg,
   }) async {
-    final fov = fovDegFor(sizeMajArcmin);
-    final hit = await cached(id, sizeMajArcmin: sizeMajArcmin);
+    final fov = fieldDeg;
+    final hit = await cached(id, fieldDeg: fieldDeg);
     if (hit != null) return hit;
     try {
       final r = await _dio.getUri<List<int>>(
