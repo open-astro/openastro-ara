@@ -4,6 +4,7 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/util/imaging_regions.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
 
 void main() {
@@ -229,6 +230,43 @@ void main() {
         catalog: const [stub, galaxy], limit: 50);
     expect(withStub.firstWhere((o) => o.id == 'IC1310').score!,
         lessThan(withStub.firstWhere((o) => o.id == 'NGC7331').score!));
+  });
+
+  test('a curated override keeps its photometry and is a showpiece, never an unknown field', () {
+    // Review #1104: OpenNGC rows with neither V- nor B-Mag exist; the
+    // override rebuilt the row WITHOUT surface brightness, so NGC 7822
+    // (renamed "Question Mark region") fell to the unknown-field ×0.5.
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const nb = FilterSetSettings(filters: [
+      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+    ]);
+    const ngc7822 = PlanningDso(
+        id: 'NGC7822', name: 'NGC7822', type: 'HII', magnitude: null,
+        raDeg: 0.9, decDeg: 68.6, sizeMajArcmin: 30, surfaceBrightness: 22.0);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, filterSet: nb,
+        catalog: const [ngc7822], limit: 50);
+    final row = list.firstWhere((o) => o.id == 'NGC7822');
+    expect(row.name, contains('Question Mark'));
+    expect(row.surfaceBrightness, 22.0, reason: 'the override keeps the SB');
+    final why = row.scoreReasons!.join(' ');
+    expect(why, isNot(contains('not a known imaging field')));
+    expect(why, contains('for Bortle'), reason: 'the SB term scored, not "unknown"');
+    expect(why, isNot(contains('showpiece')),
+        reason: 'a row WITH photometry is scored on it, no tier consulted');
+    // An override with no photometry at all is a showpiece by membership.
+    const california = PlanningDso(
+        id: 'NGC1499', name: 'NGC1499', type: 'HII', magnitude: null,
+        raDeg: 60.0, decDeg: 36.6, sizeMajArcmin: 145);
+    final bare = computeTonightSkyLocal(
+            site: site, optics: optics, atUtc: night, filterSet: nb,
+            catalog: const [california], limit: 50)
+        .firstWhere((o) => o.id == 'NGC1499');
+    expect(bare.scoreReasons!.join(' '), contains('showpiece imaging field (+0)'));
+    // Standalone regions are tier 3 by membership, no table entry needed.
+    expect(photogenicTierOf('REGION-SH2-101'), 3);
+    expect(photogenicTierOf('NGC1499'), 3);
+    expect(photogenicTierOf('Sh2-110'), isNull);
   });
 
   test('a bare OSC (empty filter set) is scored as broadband, harder under bright skies', () {

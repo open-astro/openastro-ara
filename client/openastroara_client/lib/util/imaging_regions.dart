@@ -69,7 +69,9 @@ const Map<String, ImagingRegion> overrides = {
 /// ranker discounts it hard: most Sharpless entries are HII regions that
 /// image as a star field with a faint glow — not what a wide-field rig is
 /// for. This is a stopgap until sky-data carries the Sharpless brightness
-/// class; keep the ids in catalog spelling.
+/// class; keep the ids in catalog spelling. Fields that have a standalone
+/// region (Tulip, Lion, Cave …) are not listed: the raw row is replaced by
+/// the region before scoring and the region is tier 3 by membership.
 const Map<String, int> photogenicTier = {
   // Scorpius / Sagittarius / Serpens.
   'Sh2-8': 3, // Cat's Paw (NGC 6334)
@@ -84,7 +86,6 @@ const Map<String, int> photogenicTier = {
   'Sh2-86': 2, // NGC 6820
   'Sh2-88': 2,
   'Sh2-91': 1, // Cygnus SNR filament — faint
-  'Sh2-101': 3, // Tulip
   'Sh2-104': 2,
   'Sh2-105': 3, // Crescent (NGC 6888)
   'Sh2-106': 2,
@@ -96,13 +97,9 @@ const Map<String, int> photogenicTier = {
   'Sh2-124': 2,
   'Sh2-126': 1, // Lacerta — huge, faint
   // Cepheus / Cassiopeia.
-  'Sh2-129': 3, // Flying Bat + Squid
   'Sh2-131': 3, // IC 1396
-  'Sh2-132': 3, // Lion
   'Sh2-140': 2,
   'Sh2-142': 3, // Wizard (NGC 7380)
-  'Sh2-155': 3, // Cave
-  'Sh2-157': 3, // Lobster Claw
   'Sh2-162': 3, // Bubble (NGC 7635)
   'Sh2-170': 2, // Little Rosette
   'Sh2-171': 3, // NGC 7822
@@ -134,13 +131,20 @@ const Map<String, int> photogenicTier = {
   'Sh2-296': 3, // Seagull (IC 2177)
   'Sh2-298': 3, // Thor's Helmet (NGC 2359)
   'Sh2-302': 2,
-  'Sh2-308': 3, // Dolphin Head
   'Sh2-311': 2, // NGC 2467
 };
 
 /// The tier a photometry-less row earns, or null when it isn't a known
-/// imaging field.
-int? photogenicTierOf(String id) => photogenicTier[id];
+/// imaging field. Membership in the curated layer itself — an [overrides]
+/// key or a standalone region — IS the showpiece tier: that table exists to
+/// promote exactly those fields (review #1104: a magnitude-less OpenNGC
+/// override like NGC 7822 fell to the unknown-field discount).
+int? photogenicTierOf(String id) {
+  if (overrides.containsKey(id) || _standaloneIds.contains(id)) return 3;
+  return photogenicTier[id];
+}
+
+final Set<String> _standaloneIds = {for (final r in standaloneRegions) r.id};
 
 /// The raw catalog row a standalone region replaces (REGION-SH2-101 ↔
 /// Sh2-101), so the Sharpless package's own row doesn't list twice.
@@ -268,6 +272,12 @@ List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
             decDeg: o.decDeg,
             sizeMajArcmin: r.sizeMajArcmin,
             sizeMinArcmin: r.sizeMinArcmin,
+            // The override replaces the NAME, TYPE and imaging extent; the
+            // catalog's measured photometry stays (dropping the surface
+            // brightness silently cost the 12-point SB term and the
+            // integration-budget line, review #1104).
+            posAngleDeg: o.posAngleDeg,
+            surfaceBrightness: o.surfaceBrightness,
           ),
       },
     ...standaloneRegions,
