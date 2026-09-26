@@ -107,9 +107,10 @@ final List<PlanningDso> starterTonightCatalog = [
 ];
 
 /// Rank the starter catalog for [site] + [optics] at [atUtc], mirroring the
-/// daemon's inclusion gate (an object is listed iff it has a non-empty dark
-/// window in ±12 h) and 0–100 score. Returns highest-worth first, capped at
-/// [limit]; id breaks exact ties.
+/// daemon's inclusion gate (a non-star object is listed iff it has a
+/// non-empty dark window in ±12 h; star rows — `WR*`, `*`, `**` — are never
+/// ranked, they ride in the mirror for the search) and 0–100 score. Returns
+/// highest-worth first, capped at [limit]; id breaks exact ties.
 List<TonightSkyObject> computeTonightSkyLocal({
   required SiteSettings site,
   required OpticsSettings optics,
@@ -342,7 +343,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     }
 
     final run = _longestRun(up);
-    if (run.$1 < 0) continue; // no dark window tonight — the only drop
+    if (run.$1 < 0) continue; // no dark window tonight (the star skip above is the other drop)
 
     final windowStart = sampleUtc[run.$1];
     // Each up-sample stands for its whole 5-min slot; the exclusive upper

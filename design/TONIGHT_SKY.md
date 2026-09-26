@@ -75,8 +75,10 @@ For each catalog object, at the active site for tonight's dark window:
 - Sort by `Score` descending — the recommendation.
 - **Do not hard-filter on altitude or window length.** Anything with a non-empty
   window above the site horizon stays in the list; low/short ones fall to the bottom
-  *with their reason visible*. The only drops are "never up tonight" and (optionally) a
-  user-set magnitude floor.
+  *with their reason visible*. The only drops are "never up tonight", (optionally) a
+  user-set magnitude floor, and star rows (`WR*`, `*`, `**`): stars ride in the mirror so the
+  search can resolve them, but they are not imaging targets — the ring nebulae AROUND WR
+  stars are, as nebula rows / curated regions.
 - A bigger panel is fine (user: "It's ok if the screen is bigger"). Default surfaces a
   generous N; the rest are one scroll away, not gone.
 
