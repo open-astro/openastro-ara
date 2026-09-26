@@ -153,7 +153,7 @@ namespace OpenAstroAra.Test {
 
             var wr = svc.GetObjects("wolf-rayet", null, CancellationToken.None)!;
             Assert.That(wr.Select(o => o.Name), Is.EqualTo(WrBrightestFirst),
-                "brightest first; the magnitude-less row sorts last");
+                "brightest first; WR 3-1 has no V but B 16.04, which the parser falls back to");
             Assert.That(svc.GetObjects("ngc", null, CancellationToken.None)!.Select(o => o.Name),
                 Has.No.Member("WR 134"), "WR rows never leak into the NGC set");
             // And the planning entries carry the type the cull + the client ranker key on.

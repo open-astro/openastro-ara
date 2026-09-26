@@ -47,7 +47,7 @@ namespace OpenAstroAra.Server.Services {
         /// catalogs are normalized to it at build time in open-astro/sky-data). Must cover every
         /// id in <see cref="SkyCatalogService.DsoPackages"/> — a package merged into the DSO set but
         /// missing here answers 404 on its own /data-manager/{id}/catalog (review #1107);
-        /// <c>SkyCatalogReaderTest</c> pins the parity.</summary>
+        /// <c>DsoCatalogCullTest.Every_merged_dso_package_has_a_reader_parser</c> pins it (DsoPackages ⊆ parsers).</summary>
         internal static readonly string[] OpenNgcLayoutPackages = {
             "openngc-dso", "sharpless-hii", "ldn-dark", "barnard-dark",
             "vdb-reflection", "abell-pn", "arp-peculiar", "wr-stars",
