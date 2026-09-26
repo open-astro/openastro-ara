@@ -508,7 +508,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // or DSLR; before, it was silently scored as if it had Hα). Under a
         // bright sky the gap widens: unfiltered emission through Bortle 5+
         // is the hardest thing a broadband camera can be pointed at.
-        final bright = site.bortleClass >= 5;
+        final bright = site.bortleClass >= brightSkyBortle;
         adjusted *= bright ? 0.75 : 0.85;
         adjustReasons.add(
           filterSet.filters.isEmpty

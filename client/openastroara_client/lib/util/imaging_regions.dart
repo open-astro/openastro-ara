@@ -77,14 +77,8 @@ const Map<String, int> photogenicTier = {
   // Scorpius / Sagittarius / Serpens.
   'Sh2-8': 3, // Cat's Paw (NGC 6334)
   'Sh2-11': 3, // Lobster (NGC 6357)
-  'Sh2-25': 3, // Lagoon (M8)
-  'Sh2-30': 3, // Trifid (M20)
-  'Sh2-45': 3, // Omega (M17)
-  'Sh2-49': 3, // Eagle (M16)
-  'Sh2-54': 2, // NGC 6604 field
   'Sh2-64': 2, // W40
   // Vulpecula / Cygnus.
-  'Sh2-86': 2, // NGC 6820
   'Sh2-88': 2,
   'Sh2-91': 1, // Cygnus SNR filament — faint
   'Sh2-104': 2,
@@ -112,14 +106,10 @@ const Map<String, int> photogenicTier = {
   'Sh2-252': 3, // Monkey Head (NGC 2174)
   'Sh2-261': 2, // Lower's
   'Sh2-264': 3, // Lambda Orionis ring
-  'Sh2-273': 3, // Cone / Fox Fur (NGC 2264)
   'Sh2-276': 3, // Barnard's Loop
-  'Sh2-277': 3, // Flame / Horsehead field
-  'Sh2-279': 3, // Running Man
   'Sh2-284': 2,
   'Sh2-292': 3, // Seagull head
   'Sh2-296': 3, // Seagull (IC 2177)
-  'Sh2-298': 3, // Thor's Helmet (NGC 2359)
   'Sh2-302': 2,
   'Sh2-311': 2, // NGC 2467
 };
@@ -140,35 +130,47 @@ int? photogenicTierOf(String id) {
 }
 
 final Set<String> _standaloneIds = {for (final r in standaloneRegions) r.id};
-final Set<String> _anchoredSharpless = sharplessAnchors.values.toSet();
+final Set<String> _anchoredSharpless = {for (final a in sharplessAnchors) a.$2};
 
-/// Curated region id → the Sharpless row that is the SAME nebula, so the
+/// Curated region → the Sharpless row that is the SAME nebula, so the
 /// Sharpless package's own row doesn't list beside the region (the Tulip as
-/// "Tulip Nebula" and again as "Sh2-101"; the Crescent as NGC 6888 and as
-/// Sh2-105). A standalone region always stands in; an NGC/IC-keyed override
-/// only when its catalog row is actually present — otherwise the Sharpless
-/// row is the only listing and stays. Review #1104 (both rounds).
-const Map<String, String> sharplessAnchors = {
+/// "Tulip Nebula" and again as "Sh2-101"; the Lagoon as M8 and as Sh2-25).
+/// A standalone region always stands in; an NGC/IC-keyed override only when
+/// its catalog row is actually present — otherwise the Sharpless row is the
+/// only listing and stays (tier 3 by membership). Pairs, not a map: one
+/// override can stand for two Sharpless rows (M42's field is Sh2-281 and
+/// the Running Man's Sh2-279). Review #1104, rounds 1–3.
+const List<(String region, String sharpless)> sharplessAnchors = [
   // Standalone regions.
-  'REGION-SH2-101': 'Sh2-101',
-  'REGION-SH2-129': 'Sh2-129',
-  'REGION-SH2-132': 'Sh2-132',
-  'REGION-SH2-155': 'Sh2-155',
-  'REGION-SH2-157': 'Sh2-157',
-  'REGION-SH2-308': 'Sh2-308',
-  'REGION-SIMEIS-147': 'Sh2-240',
+  ('REGION-SH2-101', 'Sh2-101'),
+  ('REGION-SH2-129', 'Sh2-129'),
+  ('REGION-SH2-132', 'Sh2-132'),
+  ('REGION-SH2-155', 'Sh2-155'),
+  ('REGION-SH2-157', 'Sh2-157'),
+  ('REGION-SH2-308', 'Sh2-308'),
+  ('REGION-SIMEIS-147', 'Sh2-240'),
   // NGC/IC-keyed overrides.
-  'NGC6888': 'Sh2-105',
-  'IC1396': 'Sh2-131',
-  'NGC7380': 'Sh2-142',
-  'NGC7822': 'Sh2-171',
-  'IC1805': 'Sh2-190',
-  'IC1848': 'Sh2-199',
-  'NGC1499': 'Sh2-220',
-  'IC443': 'Sh2-248',
-  'NGC2244': 'Sh2-275',
-  'NGC1976': 'Sh2-281',
-};
+  ('NGC6523', 'Sh2-25'), // Lagoon
+  ('NGC6514', 'Sh2-30'), // Trifid
+  ('NGC6618', 'Sh2-45'), // Omega
+  ('NGC6611', 'Sh2-49'), // Eagle
+  ('NGC6604', 'Sh2-54'),
+  ('NGC6820', 'Sh2-86'),
+  ('NGC6888', 'Sh2-105'), // Crescent
+  ('IC1396', 'Sh2-131'),
+  ('NGC7380', 'Sh2-142'), // Wizard
+  ('NGC7822', 'Sh2-171'),
+  ('IC1805', 'Sh2-190'), // Heart
+  ('IC1848', 'Sh2-199'), // Soul
+  ('NGC1499', 'Sh2-220'), // California
+  ('IC443', 'Sh2-248'), // Jellyfish
+  ('NGC2264', 'Sh2-273'), // Cone
+  ('NGC2244', 'Sh2-275'), // Rosette
+  ('IC434', 'Sh2-277'), // Flame / Horsehead
+  ('NGC1976', 'Sh2-279'), // Running Man
+  ('NGC1976', 'Sh2-281'), // Orion Nebula
+  ('NGC2359', 'Sh2-298'), // Thor's Helmet
+];
 
 /// Region-scale fields with no single catalog anchor. Ids are stable and
 /// namespaced so they can never collide with an OpenNGC name.
@@ -275,8 +277,8 @@ final List<PlanningDso> standaloneRegions = [
 List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
   final present = {for (final o in catalog) o.id};
   final covered = {
-    for (final e in sharplessAnchors.entries)
-      if (_standaloneIds.contains(e.key) || present.contains(e.key)) e.value,
+    for (final a in sharplessAnchors)
+      if (_standaloneIds.contains(a.$1) || present.contains(a.$1)) a.$2,
   };
   final merged = [
     for (final o in catalog)

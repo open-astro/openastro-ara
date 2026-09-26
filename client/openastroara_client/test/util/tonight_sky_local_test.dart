@@ -242,13 +242,15 @@ void main() {
     ]);
     const ngc7822 = PlanningDso(
         id: 'NGC7822', name: 'NGC7822', type: 'HII', magnitude: null,
-        raDeg: 0.9, decDeg: 68.6, sizeMajArcmin: 30, surfaceBrightness: 22.0);
+        raDeg: 0.9, decDeg: 68.6, sizeMajArcmin: 30, surfaceBrightness: 22.0,
+        posAngleDeg: 65.0);
     final list = computeTonightSkyLocal(
         site: site, optics: optics, atUtc: night, filterSet: nb,
         catalog: const [ngc7822], limit: 50);
     final row = list.firstWhere((o) => o.id == 'NGC7822');
     expect(row.name, contains('Question Mark'));
     expect(row.surfaceBrightness, 22.0, reason: 'the override keeps the SB');
+    expect(row.posAngleDeg, 65.0, reason: 'and the position angle');
     final why = row.scoreReasons!.join(' ');
     expect(why, isNot(contains('not a known imaging field')));
     expect(why, contains('for Bortle'), reason: 'the SB term scored, not "unknown"');
@@ -396,6 +398,20 @@ void main() {
     final kept = only.firstWhere((o) => o.id == 'Sh2-105');
     expect(kept.scoreReasons!.join(' '), contains('showpiece'));
     expect(photogenicTierOf('Sh2-240'), 3);
+    // Round 3: the remaining override/Sharpless pairs are anchored too.
+    const sh225 = PlanningDso(
+        id: 'Sh2-25', name: 'Sh2-25', type: 'HII', magnitude: null,
+        raDeg: 270.9, decDeg: -24.4, sizeMajArcmin: 90);
+    const m8 = PlanningDso(
+        id: 'NGC6523', name: 'NGC6523', type: 'HII', magnitude: 6.0,
+        raDeg: 270.9, decDeg: -24.4, sizeMajArcmin: 90);
+    final summer = DateTime.utc(2026, 7, 17, 6);
+    final lagoon = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: summer, catalog: const [sh225, m8], limit: 60);
+    expect(lagoon.where((o) => o.id == 'Sh2-25'), isEmpty);
+    expect(lagoon.firstWhere((o) => o.id == 'NGC6523').name, contains('Lagoon'));
+    expect(photogenicTierOf('Sh2-279'), 3, reason: 'M42 stands for two Sharpless rows');
+    expect(photogenicTierOf('Sh2-281'), 3);
   });
 
   test('curated imaging regions override catalog core-sizes and add fields', () {
