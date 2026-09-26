@@ -4,6 +4,7 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show isDarkNow;
 import 'package:openastroara/util/tonight_sky_local.dart';
 
 void main() {
@@ -312,5 +313,16 @@ void main() {
       expect(c[i].score, a[i].score);
       expect(d[i].score, a[i].score);
     }
+  });
+
+  test('isDarkNow follows the sun at the site, never for an unset site', () {
+    const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+    // 22:43 MDT on 2026-09-25 = 04:43 UTC on the 26th: well after dusk.
+    expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 26, 4, 43)), isTrue);
+    // 15:00 MDT = 21:00 UTC: broad daylight.
+    expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 25, 21, 0)), isFalse);
+    // The (0, 0) "not set" sentinel is never dark.
+    expect(isDarkNow(const SiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
+        isFalse);
   });
 }
