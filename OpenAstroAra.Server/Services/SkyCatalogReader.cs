@@ -43,11 +43,14 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Whether a parser exists for this package id (only catalog packages with a known column layout).</summary>
         public static bool HasParser(string packageId) => packageId is "hyg-stars" || OpenNgcLayoutPackages.Contains(packageId);
 
-        /// <summary>Packages whose catalog.csv uses the OpenNGC column layout (the six §36 add-on
-        /// catalogs are normalized to it at build time in open-astro/sky-data).</summary>
+        /// <summary>Packages whose catalog.csv uses the OpenNGC column layout (the seven §36 add-on
+        /// catalogs are normalized to it at build time in open-astro/sky-data). Must cover every
+        /// id in <see cref="SkyCatalogService.DsoPackages"/> — a package merged into the DSO set but
+        /// missing here answers 404 on its own /data-manager/{id}/catalog (review #1107);
+        /// <c>SkyCatalogReaderTest</c> pins the parity.</summary>
         internal static readonly string[] OpenNgcLayoutPackages = {
             "openngc-dso", "sharpless-hii", "ldn-dark", "barnard-dark",
-            "vdb-reflection", "abell-pn", "arp-peculiar",
+            "vdb-reflection", "abell-pn", "arp-peculiar", "wr-stars",
         };
 
         public static IReadOnlyList<CatalogObjectDto> Read(string packageId, Stream csv, double? maxMag, int? limit,
