@@ -84,6 +84,10 @@ flutter:
     # §35.5 bundled alarm tones (generated sine-synth loops, no third-party
     # audio licensing to carry).
     - assets/audio/
+    # Offline-first sky catalogs (open-astro/sky-data, OpenNGC column layout):
+    # search, Tonight's Sky and the planetarium's Catalogs overlays all read
+    # these — no daemon needed. See lib/services/bundled_catalogs.dart.
+    - assets/catalogs/
     # §36 Planetarium — the Stellarium Web Engine (AGPL, built from pristine
     # source: github.com/Stellarium/stellarium-web-engine; see
     # assets/stellarium/LICENSE-AGPL-3.0.txt) plus the offline sky data served to
