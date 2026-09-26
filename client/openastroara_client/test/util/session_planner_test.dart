@@ -27,6 +27,8 @@ TonightSkyObject obj(
     );
 
 void main() {
+  _swapTests();
+
   final winStart = DateTime.utc(2026, 7, 18, 4); // 22:00 MDT
   final winEnd = DateTime.utc(2026, 7, 18, 7); // 01:00 MDT
 
@@ -202,5 +204,55 @@ void main() {
     );
     expect(plan.targets, isEmpty);
     expect(plan.notes, isNotEmpty);
+  });
+}
+
+void _swapTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  final allNight = (DateTime.utc(2026, 7, 18, 3), DateTime.utc(2026, 7, 18, 9));
+  final ranked = [
+    obj('A', winStart: allNight.$1, winEnd: allNight.$2, hoursFree: 70),
+    obj('B', winStart: allNight.$1, winEnd: allNight.$2, hoursFree: 60),
+    // C sets at 05:30 UTC — only 1.5 h of the 3 h window.
+    obj('C',
+        winStart: allNight.$1,
+        winEnd: DateTime.utc(2026, 7, 18, 5, 30),
+        hoursFree: 50),
+    // D rises after the window closes.
+    obj('D',
+        winStart: DateTime.utc(2026, 7, 18, 8),
+        winEnd: allNight.$2,
+        hoursFree: 90),
+  ];
+
+  test('swap candidates exclude planned objects and unshootable ones', () {
+    final plan = planImagingSession(
+        ranked: ranked, windowStartUtc: winStart, windowEndUtc: winEnd);
+    expect(plan.targets.single.object.id, 'A');
+    final alts = swapCandidates(
+        ranked: ranked, plan: plan, slice: plan.targets.single);
+    expect(alts.map((o) => o.id), ['B', 'C']);
+  });
+
+  test('swapping keeps the slot, recomputes subs, and clamps to the dark window', () {
+    final plan = planImagingSession(
+        ranked: ranked, windowStartUtc: winStart, windowEndUtc: winEnd);
+    final toB = swapPlanTarget(plan, 0, ranked[1]);
+    expect(toB.targets.single.object.id, 'B');
+    expect(toB.targets.single.startUtc, winStart);
+    expect(toB.targets.single.endUtc, winEnd);
+    expect(toB.targets.single.subCount, plan.targets.single.subCount);
+    expect(toB.notes, isEmpty);
+
+    final toC = swapPlanTarget(plan, 0, ranked[2]);
+    expect(toC.targets.single.object.id, 'C');
+    expect(toC.targets.single.hours, closeTo(1.5, 0.01));
+    expect(toC.plannedHours, closeTo(1.5, 0.01));
+    expect(toC.notes.single, contains('trimmed'));
+
+    // D never overlaps the slot — the plan is returned untouched.
+    expect(swapPlanTarget(plan, 0, ranked[3]), same(plan));
+    expect(swapPlanTarget(plan, 5, ranked[1]), same(plan));
   });
 }

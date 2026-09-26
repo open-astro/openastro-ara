@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
+import '../../state/sky_atlas/session_plan_state.dart';
+import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/session_planner.dart';
@@ -14,6 +17,12 @@ import '../../util/session_planner.dart';
 /// ranked list, with Glover-optimal sub counts per slice. Replaces the old
 /// what-if optics dialog (trying a different rig is what launchpad profiles
 /// are for; planning tonight's run is what nobody else does for you).
+///
+/// Each planned target is actionable, not just a card: swap it for another
+/// candidate that fits the same slot, show it on the planetarium (the dialog
+/// closes so the atlas is visible; the plan is kept in [sessionPlanProvider]
+/// and comes back on reopen), or add it to a run sized to its slice. "Add all"
+/// builds one multi-target sequence in slot order.
 class SessionPlanDialog extends ConsumerStatefulWidget {
   const SessionPlanDialog({super.key});
 
@@ -22,11 +31,8 @@ class SessionPlanDialog extends ConsumerStatefulWidget {
 }
 
 class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
-  TimeOfDay _start = const TimeOfDay(hour: 22, minute: 0);
-  TimeOfDay _end = const TimeOfDay(hour: 1, minute: 0);
-  int _targetCount = 1;
-  SessionPlan? _plan;
   bool _planning = false;
+  bool _adding = false;
 
   /// The next occurrence of [t] from now, local — an end time "earlier" than
   /// the start rolls to the next day (22:00 → 01:00 spans midnight).
@@ -41,18 +47,16 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   }
 
   Future<void> _makePlan() async {
-    final start = _nextLocal(_start);
-    final end = _nextLocal(_end, after: start);
-    setState(() {
-      _planning = true;
-      _plan = null;
-    });
+    final s = ref.read(sessionPlanProvider);
+    final start = _nextLocal(s.start);
+    final end = _nextLocal(s.end, after: start);
+    setState(() => _planning = true);
     // Rank around the WINDOW's midpoint, not "now": the base list centres its
     // ±12 h dark-window scan on the current instant, so a plan made in the
     // afternoon would intersect tonight's window with LAST night's windows
     // and find nothing shootable. Rounded to 5 min for a stable family key.
-    final midMs = (start.millisecondsSinceEpoch +
-            end.millisecondsSinceEpoch) ~/ 2;
+    final midMs =
+        (start.millisecondsSinceEpoch + end.millisecondsSinceEpoch) ~/ 2;
     final mid = DateTime.fromMillisecondsSinceEpoch(
         midMs - midMs % (5 * 60 * 1000),
         isUtc: false);
@@ -67,12 +71,14 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     } catch (e) {
       debugPrint('[session-plan] ranking failed: $e');
       if (!mounted) return;
-      setState(() {
-        _planning = false;
-        _plan = const SessionPlan(targets: [], plannedHours: 0, notes: [
-          'Could not rank the sky for that window — try again.'
-        ]);
-      });
+      setState(() => _planning = false);
+      ref.read(sessionPlanProvider.notifier).setPlan(
+            const SessionPlan(targets: [], plannedHours: 0, notes: [
+              'Could not rank the sky for that window — try again.'
+            ]),
+            ranked: const [],
+            overheads: const SessionOverheads(),
+          );
       return;
     } finally {
       keepAlive.close();
@@ -89,32 +95,97 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       ditherSettleSec: phd2.settleTimeSec.toDouble(),
       autofocusEveryHours: af.everyNHours.toDouble(),
     );
-    setState(() {
-      _planning = false;
-      _plan = planImagingSession(
-        ranked: ranked,
-        windowStartUtc: start.toUtc(),
-        windowEndUtc: end.toUtc(),
-        targetCount: _targetCount,
-        overheads: overheads,
-      );
-    });
+    setState(() => _planning = false);
+    ref.read(sessionPlanProvider.notifier).setPlan(
+          planImagingSession(
+            ranked: ranked,
+            windowStartUtc: start.toUtc(),
+            windowEndUtc: end.toUtc(),
+            targetCount: s.targetCount,
+            overheads: overheads,
+          ),
+          ranked: ranked,
+          overheads: overheads,
+        );
   }
 
   Future<void> _pick(bool isStart) async {
+    final s = ref.read(sessionPlanProvider);
     final picked = await showTimePicker(
       context: context,
-      initialTime: isStart ? _start : _end,
+      initialTime: isStart ? s.start : s.end,
     );
     if (picked == null || !mounted) return;
-    setState(() {
-      if (isStart) {
-        _start = picked;
-      } else {
-        _end = picked;
-      }
-      _plan = null; // window changed — the old plan no longer applies
+    final n = ref.read(sessionPlanProvider.notifier);
+    if (isStart) {
+      n.setStart(picked);
+    } else {
+      n.setEnd(picked);
+    }
+  }
+
+  /// Frame the target on the planetarium. The dialog is modal, so it closes
+  /// — the plan lives in the provider and is still there on reopen.
+  void _showOnAtlas(TonightSkyObject o) {
+    ref.read(selectedTonightObjectProvider.notifier).select(o.id);
+    ref.read(planetariumCommandProvider.notifier).send({
+      'type': 'goto',
+      'ra': o.raDeg,
+      'dec': o.decDeg,
+      'name': o.name,
+      'frame': true,
     });
+    Navigator.of(context).pop();
+  }
+
+  /// Add one slice to a run, sized to ITS hours (not the whole dark window).
+  /// The first add creates a sequence and selects it; later adds append to
+  /// it, so adding the plan's targets in order builds one night plan.
+  Future<bool> _addOne(SessionPlanTarget t, ScaffoldMessengerState messenger,
+      {bool quiet = false}) async {
+    final o = t.object;
+    ImagingRunResult? result;
+    try {
+      result = await createImagingRun(
+        ref,
+        raDeg: o.raDeg,
+        decDeg: o.decDeg,
+        targetName: o.name,
+        remainingDarkHours: t.hours,
+        jumpToRun: false,
+      );
+    } catch (e, st) {
+      debugPrint('[session-plan] create-run failed: $e\n$st');
+      showImagingRunFeedback(messenger, targetName: o.name, failed: true);
+      return false;
+    }
+    if (result?.cancelled ?? false) return false;
+    if (!quiet) {
+      showImagingRunFeedback(messenger, targetName: o.name, result: result);
+    }
+    return true;
+  }
+
+  Future<void> _addAll(SessionPlan plan) async {
+    if (_adding) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _adding = true);
+    var added = 0;
+    try {
+      for (final t in plan.targets) {
+        if (!await _addOne(t, messenger, quiet: true)) break;
+        added++;
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+    if (added > 0) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(added == plan.targets.length
+            ? 'Added all ${plan.targets.length} planned targets to the run.'
+            : 'Added $added of ${plan.targets.length} planned targets.'),
+      ));
+    }
   }
 
   String _fmtLocal(DateTime utc) {
@@ -126,13 +197,14 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final plan = _plan;
+    final s = ref.watch(sessionPlanProvider);
+    final plan = s.plan;
 
     return AlertDialog(
       backgroundColor: AraColors.bgPanel,
       title: const Text('Plan tonight\'s session'),
       content: SizedBox(
-        width: 420,
+        width: 440,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -157,7 +229,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                   Expanded(
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.schedule, size: 16),
-                      label: Text('From ${_start.format(context)}'),
+                      label: Text('From ${s.start.format(context)}'),
                       onPressed: () => _pick(true),
                     ),
                   ),
@@ -165,7 +237,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                   Expanded(
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.schedule, size: 16),
-                      label: Text('To ${_end.format(context)}'),
+                      label: Text('To ${s.end.format(context)}'),
                       onPressed: () => _pick(false),
                     ),
                   ),
@@ -183,11 +255,10 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                   ButtonSegment(value: 3, label: Text('3')),
                   ButtonSegment(value: 4, label: Text('4')),
                 ],
-                selected: {_targetCount},
-                onSelectionChanged: (s) => setState(() {
-                  _targetCount = s.first;
-                  _plan = null;
-                }),
+                selected: {s.targetCount},
+                onSelectionChanged: (sel) => ref
+                    .read(sessionPlanProvider.notifier)
+                    .setTargetCount(sel.first),
               ),
               const SizedBox(height: 16),
               Column(
@@ -201,7 +272,11 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                             child:
                                 CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.auto_awesome, size: 16),
-                    label: Text(_planning ? 'Planning…' : 'Plan it'),
+                    label: Text(_planning
+                        ? 'Planning…'
+                        : plan == null
+                            ? 'Plan it'
+                            : 'Plan it again'),
                     onPressed: _planning ? null : _makePlan,
                   ),
                   if (plan != null) ...[
@@ -213,8 +288,23 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                             color: AraColors.textSecondary),
                       )
                     else ...[
-                      for (final t in plan.targets)
-                        _PlanTargetCard(target: t, fmtLocal: _fmtLocal),
+                      for (var i = 0; i < plan.targets.length; i++)
+                        _PlanTargetCard(
+                          target: plan.targets[i],
+                          fmtLocal: _fmtLocal,
+                          alternatives: swapCandidates(
+                            ranked: s.ranked,
+                            plan: plan,
+                            slice: plan.targets[i],
+                          ),
+                          busy: _adding,
+                          onSwap: (o) => ref
+                              .read(sessionPlanProvider.notifier)
+                              .swap(i, o),
+                          onShow: () => _showOnAtlas(plan.targets[i].object),
+                          onAdd: () => _addOne(
+                              plan.targets[i], ScaffoldMessenger.of(context)),
+                        ),
                       if (plan.notes.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
@@ -224,6 +314,22 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                                 color: AraColors.textSecondary),
                           ),
                         ),
+                      if (plan.targets.length > 1) ...[
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          icon: _adding
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                              : const Icon(Icons.playlist_add, size: 16),
+                          label: Text(_adding
+                              ? 'Adding…'
+                              : 'Add all ${plan.targets.length} to a run'),
+                          onPressed: _adding ? null : () => _addAll(plan),
+                        ),
+                      ],
                     ],
                   ],
                 ],
@@ -245,7 +351,20 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
 class _PlanTargetCard extends StatelessWidget {
   final SessionPlanTarget target;
   final String Function(DateTime) fmtLocal;
-  const _PlanTargetCard({required this.target, required this.fmtLocal});
+  final List<TonightSkyObject> alternatives;
+  final bool busy;
+  final ValueChanged<TonightSkyObject> onSwap;
+  final VoidCallback onShow;
+  final VoidCallback onAdd;
+  const _PlanTargetCard({
+    required this.target,
+    required this.fmtLocal,
+    required this.alternatives,
+    required this.busy,
+    required this.onSwap,
+    required this.onShow,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -264,7 +383,7 @@ class _PlanTargetCard extends StatelessWidget {
       color: AraColors.bgPanelAlt,
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -281,6 +400,64 @@ class _PlanTargetCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text('$subs$sho', style: theme.textTheme.bodySmall),
             ],
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                // Swap: the ranked alternatives that fit this slot, best
+                // first, capped so the menu stays a menu.
+                PopupMenuButton<TonightSkyObject>(
+                  tooltip: alternatives.isEmpty
+                      ? 'Nothing else on tonight\'s list fits this slot'
+                      : 'Swap for another target that fits this slot',
+                  enabled: alternatives.isNotEmpty && !busy,
+                  onSelected: onSwap,
+                  itemBuilder: (_) => [
+                    for (final a in alternatives.take(12))
+                      PopupMenuItem(
+                        value: a,
+                        child: Text(
+                          '${a.name}'
+                          '${a.score != null ? '  ·  ${a.score!.round()}' : ''}',
+                        ),
+                      ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.swap_horiz,
+                            size: 16,
+                            color: alternatives.isEmpty
+                                ? AraColors.textSecondary
+                                : theme.colorScheme.primary),
+                        const SizedBox(width: 4),
+                        Text('Swap',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                                color: alternatives.isEmpty
+                                    ? AraColors.textSecondary
+                                    : theme.colorScheme.primary)),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Show on the planetarium',
+                  icon: const Icon(Icons.my_location),
+                  onPressed: busy ? null : onShow,
+                ),
+                IconButton(
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Add to a run (${target.hours.toStringAsFixed(1)} h)',
+                  icon: const Icon(Icons.playlist_add),
+                  onPressed: busy ? null : onAdd,
+                ),
+              ],
+            ),
           ],
         ),
       ),
