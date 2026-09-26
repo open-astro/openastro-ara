@@ -74,8 +74,10 @@ void showImagingRunFeedback(
   } else if (result.draft) {
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Saved "$targetName" as an offline draft — push it to '
-            'the server from Load sequence once connected.'),
+        content: Text(result.appended
+            ? 'Added "$targetName" to the offline draft.'
+            : 'Saved "$targetName" as an offline draft — push it to '
+                'the server from Load sequence once connected.'),
       ),
     );
   } else {
@@ -151,8 +153,8 @@ Future<ImagingRunResult?> createImagingRun(
   // §2 offline planning — no server: build the same run body from whatever the
   // settings notifiers currently hold (no daemon to hydrate from) and save it
   // as a LOCAL draft; it pushes to the daemon from the Load dialog later.
-  // Append-to-open-draft is a tracked follow-up — offline, each target gets
-  // its own draft.
+  // With a draft already open the target is APPENDED to it (below), the same
+  // choreography as the connected append-to-open-sequence path.
   if (api == null) {
     final choice = await _choosePlan(
       ref,
@@ -212,6 +214,41 @@ Future<ImagingRunResult?> createImagingRun(
           manualFilterSwap: choice.manualFilterSwap,
         ),
       );
+    }
+    // Append to the OPEN draft when there is one, mirroring the online
+    // append: Add all from the session planner (or M 31 then M 42 by hand)
+    // builds ONE multi-target night plan. Before this, offline each target
+    // became its own draft and the Run tab only showed the last — "I added
+    // all 4 and they don't show up in the Run".
+    final selectedId = container.read(selectedSequenceIdProvider);
+    if (selectedId != null && isDraftSequenceId(selectedId)) {
+      final appended = await _appendToDraft(container, selectedId, [
+        for (final p in panels)
+          buildTargetBlock(
+            raDeg: p.raDeg,
+            decDeg: p.decDeg,
+            targetName: p.name,
+            exposureSeconds: exposureSeconds,
+            gain: defaults.defaultGain,
+            offset: defaults.defaultOffset,
+            binning: defaults.defaultBin,
+            frameCount: defaultFrameCount(exposureSeconds,
+                remainingDarkHours: remainingDarkHours),
+            autofocusEveryNExposures: afEvery,
+            positionAngleDeg: positionAngleDeg,
+            filterPlan: choice.filterPlan,
+            startGuiding: choice.guide,
+            ditherEveryNExposures: _ditherCadence(container, choice),
+            manualFilterSwap: choice.manualFilterSwap,
+          ),
+      ]);
+      if (appended) {
+        if (jumpToRun) {
+          container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+        }
+        return ImagingRunResult(selectedId, appended: true, draft: true);
+      }
+      // Draft vanished / not a container → fall through to a fresh draft.
     }
     final draftId = await container
         .read(draftSequencesProvider.notifier)
@@ -563,6 +600,50 @@ Future<Map<String, dynamic>> _openSequenceBaseBody(
   final editor = container.read(sequenceEditorProvider);
   if (editor != null && editor.id == id) return editor.body;
   return (await api.getSequenceDetail(id)).body;
+}
+
+/// Graft [blocks] onto the local draft [id] (before its session-end steps)
+/// and save it; the open editor reloads so the new targets show at once.
+/// Same base rule as [_openSequenceBaseBody]: when the editor holds this
+/// draft, the append starts from its WORKING copy so unsaved edits are
+/// persisted along with the new target, not clobbered by the stored body
+/// (which `load()` would then also wipe from undo). False when the draft no
+/// longer exists or its root can't take an append.
+Future<bool> _appendToDraft(
+  ProviderContainer container,
+  String id,
+  List<Map<String, dynamic>> blocks,
+) async {
+  // Unambiguous null handling (the analyzer flagged the one-liner both ways):
+  // the loaded value when the notifier has settled, else await it.
+  final loaded = container.read(draftSequencesProvider).asData?.value;
+  final List<DraftSequence> drafts =
+      loaded ?? await container.read(draftSequencesProvider.future);
+  DraftSequence? draft;
+  for (final d in drafts) {
+    if (d.id == id) {
+      draft = d;
+      break;
+    }
+  }
+  if (draft == null) return false;
+  final editor = container.read(sequenceEditorProvider);
+  Map<String, dynamic> body =
+      (editor != null && editor.id == id) ? editor.body : draft.body;
+  try {
+    for (final b in blocks) {
+      body = appendTargetToRunBody(body, b);
+    }
+  } on ArgumentError {
+    return false;
+  }
+  await container.read(draftSequencesProvider.notifier).saveBody(id, body);
+  if (container.read(sequenceEditorProvider)?.id == id) {
+    container
+        .read(sequenceEditorProvider.notifier)
+        .load(SequenceDetail(id: id, name: draft.name, body: body));
+  }
+  return true;
 }
 
 /// After a persisted body mutation: re-sync the editor (not-dirty, at the
