@@ -7,8 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import '../models/server.dart';
 
 /// One planning-shaped deep-sky object from the daemon's
-/// `GET /api/v1/data-manager/dso-catalog` (the installed DSO catalogs culled
-/// to mag ≤ 12): everything the client-side Tonight's Sky ranker scores on.
+/// `GET /api/v1/data-manager/dso-catalog` (the installed DSO catalogs after
+/// the daemon's cull: mag ≤ 12, plus magnitude-less nebula types and every
+/// `WR*` star so the offline search resolves any WR number; the ranker skips
+/// stars itself): everything the client-side Tonight's Sky ranker scores on.
 /// [magnitude] is null for objects that carry none (dark nebulae, most HII
 /// regions) — the ranker scores those on size/surface brightness instead.
 class PlanningDso {
