@@ -1229,13 +1229,16 @@ function renderFramePanel() {
     msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
     msg.classList.add('warn');
   } else if (!API) {
-    msg.textContent = 'Connect to a server to create a Run from this frame.';
-    msg.classList.add('warn');
+    // No daemon: the app still takes the frame — it saves a local draft run
+    // that pushes to the server on reconnect (§2 offline planning).
+    msg.textContent = 'No server — “Create Run” saves a draft that pushes when you reconnect.';
+    msg.classList.remove('warn');
   } else {
     msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
-  document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
+  document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
+  document.getElementById('f-add').disabled = !(frameRaDeg != null && optics && optics.ok);
   setFrameCoordText();
 }
 
@@ -1349,11 +1352,11 @@ function addFrameToSequence() {
       panels: panels,
     }),
   }).then(function (r) {
-    btn.textContent = r.ok ? 'Created ✓' : "Couldn't create";
+    btn.textContent = r.ok ? (API ? 'Created ✓' : 'Draft saved ✓') : "Couldn't create";
   }).catch(function () {
     btn.textContent = "Couldn't create";
   }).then(function () {
-    setTimeout(function () { btn.textContent = 'Create Run'; renderFramePanel(); }, 1800);
+    setTimeout(function () { renderFramePanel(); }, 1800);
   });
 }
 
