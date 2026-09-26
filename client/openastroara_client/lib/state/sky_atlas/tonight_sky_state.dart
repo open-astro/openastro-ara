@@ -121,3 +121,18 @@ final selectedTonightObjectProvider =
     NotifierProvider.autoDispose<SelectedTonightObjectNotifier, String?>(
       SelectedTonightObjectNotifier.new,
     );
+
+/// Tonight's Sky "Up now" filter: when on, the panel lists only objects
+/// whose dark window is open at this moment. Off by default — the list is
+/// TONIGHT's sky by design (a plan made in the afternoon needs the targets
+/// that rise later), but at 22:40 with the scope out a user reasonably wants
+/// what they can point at right now. Session-scoped.
+class TonightSkyUpNowNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void toggle() => state = !state;
+  void set(bool on) => state = on;
+}
+
+final tonightSkyUpNowProvider =
+    NotifierProvider<TonightSkyUpNowNotifier, bool>(TonightSkyUpNowNotifier.new);
