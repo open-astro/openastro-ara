@@ -1665,10 +1665,14 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   with no daemon. Creating a run from Planning with no server saves a client-managed local
   draft (§28.9, app-support `sequence_drafts/`); drafts list in the Load dialog, open in
   the editor, save locally, and push to the daemon (create + delete local) once connected.
-- **Offline append-to-draft.** Offline, each "Add to Sequence" target creates its own
-  draft; the connected path's append-to-open-sequence choreography
-  (`create_imaging_run.dart`) doesn't yet apply to a selected draft. Fold the target-block
-  append into the draft body when a draft is open.
+- ✅ **Offline append-to-draft — DONE (2026-09-26, #1106).** With a draft selected, an
+  offline "Add to Sequence" grafts the target block(s) onto it (`_appendToDraft` in
+  `create_imaging_run.dart`, starting from the editor's working copy when it holds the
+  draft) instead of creating a second draft; the editor reloads in place.
+- **Load-dialog draft delete leaves the editor on a ghost.** `sequence_load_dialog.dart`'s
+  per-row draft delete doesn't clear the selection/editor the way the toolbar's Delete
+  (#1106) does, so `saveBody`'s resurrect-on-unknown-id brings the draft back on the next
+  Save. Extract one shared confirm-then-delete for both surfaces.
 - **Local profile drafts + sync (§2 "drafts local, sync to Pi").** The §37 wizard still
   requires a live daemon to save (`wizard_save.dart` posts every section). Full offline
   profile authoring means persisting the wizard draft locally and replaying the section
