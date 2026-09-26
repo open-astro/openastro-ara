@@ -55,6 +55,13 @@ const double _hoursSaturationHours = 6.0;
 const double _sbContrastSpanMag = 4.0;
 const double _sbFloorQ = 0.15;
 const double _magFaintFloor = 12.0;
+// Photogenic-type multipliers (post-sum, advisory-sized — see the adjustment
+// block). Dark nebulae get the steepest: with no photometry at all they'd
+// otherwise tie the best emission targets on geometry alone.
+const double _darkNebulaFactor = 0.6;
+// Emission rows with no photometry and no curated tier — see
+// imaging_regions.photogenicTier.
+const double _unknownFieldFactor = 0.5;
 
 const int _windowStepMinutes = 5;
 const int _windowHalfSpanMinutes = 12 * 60;
@@ -450,9 +457,47 @@ List<TonightSkyObject> computeTonightSkyLocal({
     } else if (o.type == 'GCl') {
       adjusted *= 0.95;
       adjustReasons.add('globular cluster (−5%)');
+    } else if (o.type == 'DrkN') {
+      // ~2,100 LDN + Barnard rows carry a size and nothing else, so every one
+      // that transits high scored a flat 90 and the 30-slot list was nothing
+      // but dark nebulae. They're real (dark-site, long broadband) targets,
+      // so they stay listed — just below anything with actual photometry.
+      adjusted *= _darkNebulaFactor;
+      adjustReasons.add(
+        'dark nebula — a silhouette target that needs a dark sky and long '
+        'broadband integration (−40%)',
+      );
+    } else if ((o.type == 'HII' ||
+            o.type == 'EmN' ||
+            o.type == 'Neb' ||
+            o.type == 'Cl+N') &&
+        o.magnitude == null &&
+        o.surfaceBrightness == null) {
+      // Emission rows with NO photometry, whatever catalog they came from:
+      // the Sharpless package (314 rows) carries none at all, and OpenNGC
+      // has magnitude-less nebulae too. A faint smudge that is mostly stars
+      // scored a flat 90 on size alone — "there is nothing there to image
+      // but stars". A curated tier (or membership in the curated regions
+      // layer) says which of them imagers actually frame; the rest are
+      // discounted hard.
+      switch (photogenicTierOf(o.id)) {
+        case 3:
+          adjustReasons.add('a showpiece imaging field (+0)');
+        case 2:
+          adjusted *= 0.9;
+          adjustReasons.add('a good imaging field (−10%)');
+        case 1:
+          adjusted *= 0.7;
+          adjustReasons.add('a faint, specialist field (−30%)');
+        default:
+          adjusted *= _unknownFieldFactor;
+          adjustReasons.add(
+            'no photometry and not a known imaging field — often just a '
+            'faint glow among stars (−50%)',
+          );
+      }
     }
-    if (classifyEmission(o.type) == EmissionClass.emissionLine &&
-        filterSet.filters.isNotEmpty) {
+    if (classifyEmission(o.type) == EmissionClass.emissionLine) {
       final hasNarrowband = filterSet.filters.any(
         (f) =>
             f.kind == FilterKind.ha ||
@@ -465,9 +510,18 @@ List<TonightSkyObject> computeTonightSkyLocal({
         adjusted *= 1.05;
         adjustReasons.add('emission target + narrowband in your wheel (+5%)');
       } else {
-        adjusted *= 0.85;
+        // No narrowband glass — an EMPTY filter set counts too (a bare OSC
+        // or DSLR; before, it was silently scored as if it had Hα). Under a
+        // bright sky the gap widens: unfiltered emission through Bortle 5+
+        // is the hardest thing a broadband camera can be pointed at.
+        final bright = site.bortleClass >= brightSkyBortle;
+        adjusted *= bright ? 0.75 : 0.85;
         adjustReasons.add(
-          'emission target but no narrowband filter in your set (−15%)',
+          filterSet.filters.isEmpty
+              ? 'emission target with no narrowband filter (OSC/broadband'
+                  '${bright ? ', Bortle ${site.bortleClass} sky) (−25%)' : ') (−15%)'}'
+              : 'emission target but no narrowband filter in your set'
+                  '${bright ? ' under a Bortle ${site.bortleClass} sky (−25%)' : ' (−15%)'}',
         );
       }
     }
@@ -651,6 +705,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
     sbTag = contrastMag >= 0
         ? 'bright for Bortle $bortleClass sky'
         : 'faint for Bortle $bortleClass sky';
+  } else if (o.type == 'DrkN') {
+    // A dark nebula is a silhouette: by definition darker than the sky behind
+    // it, so "unknown" must not read as average. The LDN/Barnard rows carry
+    // only a size — scored neutral here they tie the brightest HII regions.
+    sbQ = _sbFloorQ;
+    sbTag = 'dark nebula — no surface brightness, a silhouette on the sky';
   } else {
     sbQ = 0.5;
     sbTag = 'surface brightness unknown';
