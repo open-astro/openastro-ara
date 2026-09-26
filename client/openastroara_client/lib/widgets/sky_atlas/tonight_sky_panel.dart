@@ -536,7 +536,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                             // nobody opened. Tap to enlarge.
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: TargetPreview(object: _object, size: 96),
+                              child: TargetPreview(object: _object),
                             ),
                             for (final r in reasons)
                               Padding(

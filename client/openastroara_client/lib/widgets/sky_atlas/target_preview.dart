@@ -9,44 +9,48 @@ import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/target_preview_state.dart';
 import '../../theme/ara_colors.dart';
 
-/// A square DSS2 thumbnail of [object] — what it actually looks like — with
-/// tap-to-enlarge. Serves the disk cache first; on a dark site with no
-/// internet an uncached target shows a quiet "no preview cached" tile rather
-/// than an error. Never a gate on anything.
+/// A landscape DSS2 cutout of [object] — what it actually looks like —
+/// filling whatever width it is given (sensor-ish 1.6:1 aspect), with the
+/// camera's single frame drawn over it when [frameFovArcmin] is known, turned
+/// by [rotationDeg]. Tap to enlarge. Serves the disk cache first; on a dark
+/// site with no internet an uncached target shows a quiet "no preview
+/// cached" tile rather than an error. Never a gate on anything.
 class TargetPreview extends ConsumerWidget {
   final TonightSkyObject object;
-  final double size;
 
   /// The camera's single-frame FOV (width, height arcmin) to draw as a box
   /// over the field, rotated by [rotationDeg] (clockwise, the planetarium
-  /// dial's convention). Null = no box.
+  /// dial's convention). Null = no box, and the field is sized to the object
+  /// alone.
   final (double, double)? frameFovArcmin;
   final double rotationDeg;
   const TargetPreview({
     super.key,
     required this.object,
-    this.size = 72,
     this.frameFovArcmin,
     this.rotationDeg = 0,
   });
+
+  double get _fieldDeg =>
+      TargetPreviewService.fieldDegFor(object.sizeMajArcmin, frameFovArcmin);
 
   TargetPreviewKey get _key => (
         id: object.id,
         raDeg: object.raDeg,
         decDeg: object.decDeg,
-        sizeMajArcmin: object.sizeMajArcmin,
+        fieldDeg: _fieldDeg,
       );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final preview = ref.watch(targetPreviewProvider(_key));
-    final fov = TargetPreviewService.fovDegFor(object.sizeMajArcmin);
-    final label = '${object.name} preview, ${fov.toStringAsFixed(1)}° field';
+    final fieldDeg = _fieldDeg;
+    final label = '${object.name} preview, ${fieldDeg.toStringAsFixed(1)}° field';
     final Widget tile = preview.when(
       loading: () => const Center(
         child: SizedBox(
-          width: 16,
-          height: 16,
+          width: 18,
+          height: 18,
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
@@ -69,27 +73,40 @@ class TargetPreview extends ConsumerWidget {
         onTap: bytes != null ? () => _enlarge(context, bytes) : null,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(6),
-          child: Container(
-            width: size,
-            height: size,
-            color: Colors.black,
-            child: frameFovArcmin == null
-                ? tile
-                : Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      tile,
-                      IgnorePointer(
-                        child: CustomPaint(
-                          painter: _FramePainter(
-                            fovArcmin: frameFovArcmin!,
-                            fieldDeg: fov,
-                            rotationDeg: rotationDeg,
-                          ),
+          child: AspectRatio(
+            aspectRatio: TargetPreviewService.aspect,
+            child: ColoredBox(
+              color: Colors.black,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  tile,
+                  if (frameFovArcmin != null)
+                    IgnorePointer(
+                      child: CustomPaint(
+                        painter: _FramePainter(
+                          fovArcmin: frameFovArcmin!,
+                          fieldDeg: fieldDeg,
+                          rotationDeg: rotationDeg,
                         ),
                       ),
-                    ],
+                    ),
+                  Positioned(
+                    left: 6,
+                    bottom: 4,
+                    child: Text(
+                      '${fieldDeg.toStringAsFixed(1)}° across · DSS2',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.white70,
+                            shadows: const [
+                              Shadow(color: Colors.black, blurRadius: 3)
+                            ],
+                          ),
+                    ),
                   ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -97,7 +114,7 @@ class TargetPreview extends ConsumerWidget {
   }
 
   void _enlarge(BuildContext context, Uint8List bytes) {
-    final fov = TargetPreviewService.fovDegFor(object.sizeMajArcmin);
+    final fieldDeg = _fieldDeg;
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -109,17 +126,36 @@ class TargetPreview extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480, maxHeight: 480),
+                constraints: const BoxConstraints(maxWidth: 960),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: Image.memory(bytes, fit: BoxFit.contain),
+                  child: AspectRatio(
+                    aspectRatio: TargetPreviewService.aspect,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.memory(bytes, fit: BoxFit.cover),
+                        if (frameFovArcmin != null)
+                          IgnorePointer(
+                            child: CustomPaint(
+                              painter: _FramePainter(
+                                fovArcmin: frameFovArcmin!,
+                                fieldDeg: fieldDeg,
+                                rotationDeg: rotationDeg,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
               Text(object.name, style: Theme.of(ctx).textTheme.bodyMedium),
               Text(
-                '${fov.toStringAsFixed(1)}° field · DSS2 colour survey '
-                '(CDS hips2fits)',
+                '${fieldDeg.toStringAsFixed(1)}° across · DSS2 colour survey '
+                '(CDS hips2fits)'
+                '${frameFovArcmin != null ? ' · frame at ${rotationDeg.round()}°' : ''}',
                 style: Theme.of(ctx)
                     .textTheme
                     .bodySmall
@@ -142,14 +178,14 @@ class _NoPreview extends StatelessWidget {
             'No preview cached — connect to the internet once to fetch it',
         child: Center(
           child: Icon(Icons.image_not_supported_outlined,
-              size: 20, color: AraColors.textDisabled),
+              size: 24, color: AraColors.textDisabled),
         ),
       );
 }
 
-/// The camera frame as a rotated rectangle over a square cutout of
-/// [fieldDeg] degrees across. Scale is honest: a frame wider than the field
-/// simply runs off the tile.
+/// The camera frame as a rotated rectangle over a cutout [fieldDeg] degrees
+/// across. Scale is honest: the field is sized so the frame fits at any
+/// rotation, but a train wider than the 8° cap simply runs off the tile.
 class _FramePainter extends CustomPainter {
   final (double, double) fovArcmin;
   final double fieldDeg;
@@ -171,26 +207,37 @@ class _FramePainter extends CustomPainter {
     canvas.translate(c.dx, c.dy);
     canvas.rotate(rotationDeg * math.pi / 180);
     final rect = Rect.fromCenter(center: Offset.zero, width: w, height: h);
+    // Dim everything outside the frame so the layout reads at a glance.
+    canvas.drawPath(
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(Rect.fromCenter(
+            center: Offset.zero,
+            width: size.longestSide * 4,
+            height: size.longestSide * 4))
+        ..addRect(rect),
+      Paint()..color = Colors.black.withValues(alpha: 0.45),
+    );
     canvas.drawRect(
       rect,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5
+        ..strokeWidth = 3
         ..color = Colors.black.withValues(alpha: 0.6),
     );
     canvas.drawRect(
       rect,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
+        ..strokeWidth = 1.5
         ..color = AraColors.accentInfo,
     );
     // A tick on the frame's top edge so "which way is up" survives rotation.
     canvas.drawLine(
       Offset(0, -h / 2),
-      Offset(0, -h / 2 - 5),
+      Offset(0, -h / 2 - 8),
       Paint()
-        ..strokeWidth = 1.5
+        ..strokeWidth = 2
         ..color = AraColors.accentInfo,
     );
     canvas.restore();

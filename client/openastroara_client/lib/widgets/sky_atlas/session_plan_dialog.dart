@@ -220,7 +220,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       backgroundColor: AraColors.bgPanel,
       title: const Text('Plan tonight\'s session'),
       content: SizedBox(
-        width: 440,
+        width: 560,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -411,41 +411,30 @@ class _PlanTargetCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // What it looks like: a DSS2 cutout, tap to enlarge.
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: TargetPreview(
-                    object: o,
-                    size: 88,
-                    frameFovArcmin: frameFovArcmin,
-                    rotationDeg: target.positionAngleDeg ?? 0,
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(o.name, style: theme.textTheme.bodyMedium),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${fmtLocal(target.startUtc)}–${fmtLocal(target.endUtc)} · '
-                        '${target.hours.toStringAsFixed(1)} h'
-                        '${o.score != null ? ' · score ${o.score!.round()}' : ''}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: AraColors.textSecondary),
-                      ),
-                      if (subs != null) ...[
-                        const SizedBox(height: 4),
-                        Text('$subs$sho', style: theme.textTheme.bodySmall),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+            // What it looks like: a full-width DSS2 cutout with the camera
+            // frame drawn on it at the dialled rotation. Tap to enlarge.
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TargetPreview(
+                object: o,
+                frameFovArcmin: frameFovArcmin,
+                rotationDeg: target.positionAngleDeg ?? 0,
+              ),
             ),
+            const SizedBox(height: 8),
+            Text(o.name, style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 4),
+            Text(
+              '${fmtLocal(target.startUtc)}–${fmtLocal(target.endUtc)} · '
+              '${target.hours.toStringAsFixed(1)} h'
+              '${o.score != null ? ' · score ${o.score!.round()}' : ''}',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
+            ),
+            if (subs != null) ...[
+              const SizedBox(height: 4),
+              Text('$subs$sho', style: theme.textTheme.bodySmall),
+            ],
             // Camera rotation for this slot — the box on the preview turns
             // with it so the layout is judged on the real field. Only drawn
             // when the optical train is configured enough to know the FOV.
@@ -463,7 +452,9 @@ class _PlanTargetCard extends StatelessWidget {
                   Expanded(
                     child: SliderTheme(
                       data: SliderTheme.of(context).copyWith(
-                        trackHeight: 2,
+                        trackHeight: 3,
+                        activeTrackColor: theme.colorScheme.primary,
+                        inactiveTrackColor: AraColors.border,
                         thumbShape:
                             const RoundSliderThumbShape(enabledThumbRadius: 6),
                         overlayShape:

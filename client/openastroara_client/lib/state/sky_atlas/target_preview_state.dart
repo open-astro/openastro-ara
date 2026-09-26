@@ -13,7 +13,7 @@ typedef TargetPreviewKey = ({
   String id,
   double raDeg,
   double decDeg,
-  double? sizeMajArcmin,
+  double fieldDeg,
 });
 
 /// The DSS2 preview bytes for a target, cached on disk after the first
@@ -26,6 +26,6 @@ final targetPreviewProvider =
     id: key.id,
     raDeg: key.raDeg,
     decDeg: key.decDeg,
-    sizeMajArcmin: key.sizeMajArcmin,
+    fieldDeg: key.fieldDeg,
   );
 });

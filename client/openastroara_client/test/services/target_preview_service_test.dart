@@ -43,7 +43,18 @@ void main() {
     expect(TargetPreviewService.fovDegFor(null), 0.4);
     expect(TargetPreviewService.fovDegFor(5), 0.4); // tiny galaxy: floor
     expect(TargetPreviewService.fovDegFor(60), closeTo(2.5, 1e-9));
-    expect(TargetPreviewService.fovDegFor(600), 6.0); // Sh2 field: cap
+    expect(TargetPreviewService.fovDegFor(600), 8.0); // Sh2 field: cap
+  });
+
+  test('the field grows to hold the camera frame at any rotation', () {
+    // RedCat 51 + IMX571: ~187' × 125' — diagonal 3.75°, so a 2° object
+    // field would clip the frame; the field opens to fit it (+15%).
+    const frame = (187.0, 125.0);
+    expect(TargetPreviewService.fieldDegFor(30, frame), closeTo(4.32, 0.02));
+    // A big object still wins when it is wider than the frame.
+    expect(TargetPreviewService.fieldDegFor(180, frame), closeTo(7.5, 0.01));
+    // No frame = the object's own field.
+    expect(TargetPreviewService.fieldDegFor(30, null), closeTo(1.25, 1e-9));
   });
 
   test('cutout URL asks hips2fits for a DSS2 colour JPEG at the target', () {
@@ -54,38 +65,40 @@ void main() {
     expect(u.queryParameters['dec'], '44.90000');
     expect(u.queryParameters['fov'], '1.500');
     expect(u.queryParameters['format'], 'jpg');
+    expect(u.queryParameters['width'], '640');
+    expect(u.queryParameters['height'], '400');
   });
 
   test('fetches once, caches to disk, then serves the cache without network',
       () async {
     final a = _Adapter(bytes: [9, 8, 7]);
     final s = svc(a);
-    final first = await s.load(id: 'Sh2-110', raDeg: 307, decDeg: 44.9, sizeMajArcmin: 30);
+    final first = await s.load(id: 'Sh2-110', raDeg: 307, decDeg: 44.9, fieldDeg: 1.25);
     expect(first, [9, 8, 7]);
     expect(a.calls, 1);
     expect(File('${tmp.path}/target_previews/${TargetPreviewService.cacheName('Sh2-110', 1.25)}').existsSync(), isTrue);
 
-    final again = await s.load(id: 'Sh2-110', raDeg: 307, decDeg: 44.9, sizeMajArcmin: 30);
+    final again = await s.load(id: 'Sh2-110', raDeg: 307, decDeg: 44.9, fieldDeg: 1.25);
     expect(again, [9, 8, 7]);
     expect(a.calls, 1, reason: 'cache hit — no second request');
 
     // A fresh service (new session) over the same dir is still a cache hit.
     final offline = svc(_Adapter(throwIt: true));
-    expect(await offline.load(id: 'Sh2-110', raDeg: 307, decDeg: 44.9, sizeMajArcmin: 30), [9, 8, 7]);
+    expect(await offline.load(id: 'Sh2-110', raDeg: 307, decDeg: 44.9, fieldDeg: 1.25), [9, 8, 7]);
   });
 
   test('offline with nothing cached degrades to null, never throws', () async {
     final s = svc(_Adapter(throwIt: true));
-    expect(await s.load(id: 'LDN 1235', raDeg: 1, decDeg: 2), isNull);
-    expect(await s.cached('LDN 1235'), isNull);
+    expect(await s.load(id: 'LDN 1235', raDeg: 1, decDeg: 2, fieldDeg: 0.4), isNull);
+    expect(await s.cached('LDN 1235', fieldDeg: 0.4), isNull);
   });
 
   test('a non-200 or empty body is not cached', () async {
     final s = svc(_Adapter(status: 500));
-    expect(await s.load(id: 'M31', raDeg: 10.7, decDeg: 41.3, sizeMajArcmin: 178), isNull);
-    expect(await s.cached('M31', sizeMajArcmin: 178), isNull);
+    expect(await s.load(id: 'M31', raDeg: 10.7, decDeg: 41.3, fieldDeg: 7.4), isNull);
+    expect(await s.cached('M31', fieldDeg: 7.4), isNull);
     final empty = svc(_Adapter(bytes: const []));
-    expect(await empty.load(id: 'M31', raDeg: 10.7, decDeg: 41.3, sizeMajArcmin: 178), isNull);
+    expect(await empty.load(id: 'M31', raDeg: 10.7, decDeg: 41.3, fieldDeg: 7.4), isNull);
   });
 
   test('cache names are filename-safe and keyed by framing', () {
