@@ -467,13 +467,16 @@ List<TonightSkyObject> computeTonightSkyLocal({
             o.type == 'Cl+N') &&
         o.magnitude == null &&
         o.surfaceBrightness == null) {
-      // The Sharpless package (314 rows) carries no photometry at all, so a
-      // faint smudge that is mostly stars scored a flat 90 on size alone —
-      // "there is nothing there to image but stars". A curated tier says
-      // which of them imagers actually frame; the rest are discounted hard.
+      // Emission rows with NO photometry, whatever catalog they came from:
+      // the Sharpless package (314 rows) carries none at all, and OpenNGC
+      // has magnitude-less nebulae too. A faint smudge that is mostly stars
+      // scored a flat 90 on size alone — "there is nothing there to image
+      // but stars". A curated tier (or membership in the curated regions
+      // layer) says which of them imagers actually frame; the rest are
+      // discounted hard.
       switch (photogenicTierOf(o.id)) {
         case 3:
-          adjustReasons.add('a showpiece imaging field');
+          adjustReasons.add('a showpiece imaging field (+0)');
         case 2:
           adjusted *= 0.9;
           adjustReasons.add('a good imaging field (−10%)');
