@@ -76,21 +76,18 @@ class OpenAstroAraApp extends ConsumerWidget {
   }
 }
 
-/// Wraps the app root so `N` toggles night mode from anywhere (press & the
-/// whole UI switches). The [Focus] gives the shortcut a target to receive keys.
+/// Wraps the app root so Ctrl+N (Cmd+N on macOS) toggles night mode from
+/// anywhere. It WAS a bare `N` with a "skip while a text field has focus"
+/// guard — which didn't cover every place you can type (typing "ldn" into the
+/// planetarium search flipped the display mid-word). A modified chord can't
+/// collide with typing, so no guard is needed. The [Focus] gives the shortcut
+/// a target to receive keys.
 Widget _withNightHotkey(WidgetRef ref, Widget child) {
+  void toggle() => ref.read(nightModeProvider.notifier).toggle();
   return CallbackShortcuts(
     bindings: <ShortcutActivator, VoidCallback>{
-      const SingleActivator(LogicalKeyboardKey.keyN): () {
-        // Unmodified letter: skip it while a text field has focus, or typing
-        // an 'n' into a target name (or any other field) flips the display.
-        // Same guard the sequencer's plain-key shortcuts use.
-        if (FocusManager.instance.primaryFocus?.context?.widget
-            is EditableText) {
-          return;
-        }
-        ref.read(nightModeProvider.notifier).toggle();
-      },
+      const SingleActivator(LogicalKeyboardKey.keyN, control: true): toggle,
+      const SingleActivator(LogicalKeyboardKey.keyN, meta: true): toggle,
     },
     child: Focus(autofocus: true, child: child),
   );

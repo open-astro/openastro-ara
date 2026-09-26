@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -260,7 +262,9 @@ class _TopEquipmentBar extends StatelessWidget {
                     size: 22,
                     color: night ? AraColors.accentInfo : null,
                   ),
-                  tooltip: night ? 'Night mode on (N)' : 'Night mode (N)',
+                  tooltip: night
+                      ? 'Night mode on (${Platform.isMacOS ? '⌘' : 'Ctrl+'}N)'
+                      : 'Night mode (${Platform.isMacOS ? '⌘' : 'Ctrl+'}N)',
                   onPressed: () =>
                       ref.read(nightModeProvider.notifier).set(!night),
                 );
