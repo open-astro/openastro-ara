@@ -79,6 +79,15 @@ class StellariumServer {
   /// Events the planetarium page posts back to Flutter (e.g. `addToSequence`).
   Stream<Map<String, Object?>> get events => _events.stream;
 
+  // ── catalogs channel ────────────────────────────────────────────────────
+  // The page's Catalogs overlays used to GET the daemon's /api/v1/catalogs;
+  // the catalogs are bundled in the client now, so the page asks THIS server
+  // (`/aracat`, `/aracat/{id}?limit=`) and the view answers from the bundled
+  // set — no daemon, no network. Same wire shapes as the daemon endpoints.
+  static Future<List<Map<String, Object?>>> Function()? catalogListResolver;
+  static Future<List<Map<String, Object?>>?> Function(String id, int limit)?
+      catalogObjectsResolver;
+
   static Future<StellariumServer>? _instance;
 
   /// Start (or return the already-running) loopback asset server.
@@ -223,6 +232,32 @@ class StellariumServer {
         } catch (_) {/* ignore malformed or oversized event bodies */}
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.statusCode = HttpStatus.ok;
+        await response.close();
+        return;
+      }
+      if (path == '/aracat' || path.startsWith('/aracat/')) {
+        if (!_isAuthorized(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
+        Object? payload;
+        if (path == '/aracat') {
+          payload = await catalogListResolver?.call();
+        } else {
+          final id = Uri.decodeComponent(path.substring('/aracat/'.length));
+          final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 500;
+          payload = await catalogObjectsResolver?.call(id, limit);
+        }
+        if (payload == null) {
+          response.statusCode = HttpStatus.notFound;
+          await response.close();
+          return;
+        }
+        response.headers.contentType =
+            ContentType('application', 'json', charset: 'utf-8');
+        response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+        response.write(jsonEncode(payload));
         await response.close();
         return;
       }

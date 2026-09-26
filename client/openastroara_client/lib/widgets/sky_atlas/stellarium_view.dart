@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
+import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../services/planetarium_overlay.dart';
@@ -95,6 +96,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final server = await StellariumServer.start();
         if (!mounted) return;
         _server = server;
+        // Catalogs overlays are answered from the client's bundled set.
+        StellariumServer.catalogListResolver =
+            () async => catalogOverlayInfos();
+        StellariumServer.catalogObjectsResolver = (id, limit) async {
+          final all = await ref.read(bundledCatalogProvider.future);
+          return catalogOverlayObjects(id, all, limit: limit);
+        };
         // Handle events the page posts back (e.g. framing → add-to-sequence).
         _eventSub = server.events.listen(_onPageEvent);
         // The page self-initialises from these query params: the observer site, and
@@ -320,7 +328,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // ring", "Thor's Helmet", "Crescent" — are what people type, and the
     // standalone regions have no mirror row at all). Empty mirror → the
     // regions alone still resolve.
-    final catalog = ref.read(dsoCatalogProvider).value ?? const <PlanningDso>[];
+    // The FULL bundled set (no magnitude cull) — a 15th-magnitude WR star or
+    // a faint Arp galaxy is exactly what someone types into a search box.
+    final catalog = ref.read(bundledCatalogProvider).value ??
+        ref.read(dsoCatalogProvider).value ??
+        const <PlanningDso>[];
     final hit = findCatalogObject(applyImagingRegions(catalog), q);
     if (hit != null) {
       _pushCmd({'type': 'goto', 'ra': hit.raDeg, 'dec': hit.decDeg});

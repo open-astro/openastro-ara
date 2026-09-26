@@ -880,15 +880,8 @@ function catToggle(id, on, skipPost) {
   on = (on == null) ? !catOn[id] : !!on;
   catOn[id] = on;
   if (on && !catRowsCache[id] && !catPending[id]) {
-    if (!API) {
-      setCatMsg('Connect to a server to load catalogs.');
-      catOn[id] = false;
-      if (skipPost) catBootReverted[id] = true;
-      renderCatPanel();
-      return;
-    }
     catPending[id] = true;
-    fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=500')
+    fetch('/aracat/' + encodeURIComponent(id) + '?limit=500', { headers: araHeaders() })
       // 404 = the OpenNGC source isn't installed; a 200 empty array is an
       // installed catalog that genuinely matched nothing — different advice.
       .then(function (r) {
@@ -970,9 +963,9 @@ function renderCatPanel() {
 
 function loadCatalogs() {
   if (catInfos || catInfosPending) return;
-  if (!API) { setCatMsg('Connect to a server to load catalogs.'); return; }
   catInfosPending = true;
-  fetch(API + '/api/v1/catalogs')
+  // Bundled in the client — served by the loopback server, works offline.
+  fetch('/aracat', { headers: araHeaders() })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (infos) {
       catInfosPending = false;
