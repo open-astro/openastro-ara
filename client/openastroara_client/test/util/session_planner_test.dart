@@ -27,6 +27,7 @@ TonightSkyObject obj(
     );
 
 void main() {
+  _rotationTests();
   _swapTests();
 
   final winStart = DateTime.utc(2026, 7, 18, 4); // 22:00 MDT
@@ -204,6 +205,28 @@ void main() {
     );
     expect(plan.targets, isEmpty);
     expect(plan.notes, isNotEmpty);
+  });
+}
+
+void _rotationTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  test('a slot rotation is normalised, kept through the plan, and clearable', () {
+    final plan = planImagingSession(
+        ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
+        windowStartUtc: winStart,
+        windowEndUtc: winEnd);
+    expect(plan.targets.single.positionAngleDeg, isNull);
+    final turned = setPlanRotation(plan, 0, 372);
+    expect(turned.targets.single.positionAngleDeg, 12);
+    expect(setPlanRotation(plan, 0, -15).targets.single.positionAngleDeg, 345);
+    expect(turned.targets.single.subCount, plan.targets.single.subCount);
+    expect(turned.plannedHours, plan.plannedHours);
+    expect(setPlanRotation(turned, 0, null).targets.single.positionAngleDeg, isNull);
+    expect(setPlanRotation(plan, 3, 90), same(plan));
+    // A swap starts the new object fresh — its rotation is not inherited.
+    final swapped = swapPlanTarget(turned, 0, obj('B', winStart: winStart, winEnd: winEnd));
+    expect(swapped.targets.single.positionAngleDeg, isNull);
   });
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
@@ -93,6 +94,8 @@ void main() {
       (tester) async {
     final container = ProviderContainer(overrides: [
       targetPreviewProvider.overrideWith((ref, key) async => null),
+      // A configured train so the rotation control is offered.
+      opticsSettingsProvider.overrideWith(() => _FixedOptics()),
       tonightSkyAtProvider
           .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
     ]);
@@ -117,6 +120,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Test Nebula'), findsOneWidget);
 
+    // Dial a rotation for the slot; it rides along to the atlas.
+    await tester.ensureVisible(find.byType(Slider));
+    expect(find.text('0°'), findsOneWidget);
+    final slider = tester.widget<Slider>(find.byType(Slider));
+    slider.onChanged!(135);
+    await tester.pumpAndSettle();
+    expect(find.text('135°'), findsOneWidget);
+
     await tester.ensureVisible(find.byTooltip('Show on the planetarium'));
     await tester.tap(find.byTooltip('Show on the planetarium'));
     await tester.pumpAndSettle();
@@ -126,11 +137,24 @@ void main() {
     expect(cmd?['frame'], true);
     expect(cmd?['name'], 'Test Nebula');
     expect(cmd?['dss'], true, reason: 'show = see the real field');
+    expect(cmd?['rot'], 135.0, reason: 'the dialled rotation presets the box');
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('Test Nebula'), findsOneWidget,
         reason: 'the plan is kept across close/reopen');
     expect(find.text('Plan it again'), findsOneWidget);
+    expect(find.text('135°'), findsOneWidget, reason: 'rotation kept too');
   });
+}
+
+class _FixedOptics extends OpticsSettingsNotifier {
+  @override
+  OpticsSettings build() => const OpticsSettings(
+      focalLengthMm: 250,
+      reducerFactor: 1,
+      sensorWidthPx: 6248,
+      sensorHeightPx: 4176,
+      pixelSizeUm: 3.76,
+      apertureMm: 51);
 }

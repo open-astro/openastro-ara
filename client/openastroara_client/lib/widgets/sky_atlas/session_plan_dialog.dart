@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/settings/autofocus_settings_state.dart';
+import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/sky_atlas/session_plan_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/session_planner.dart';
+import '../../util/tonight_sky_local.dart' show opticsFovArcmin;
 import 'target_preview.dart';
 
 /// §36.8 "What-if run" — plan an imaging session: the user gives the window
@@ -127,7 +129,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
 
   /// Frame the target on the planetarium. The dialog is modal, so it closes
   /// — the plan lives in the provider and is still there on reopen.
-  void _showOnAtlas(TonightSkyObject o) {
+  void _showOnAtlas(SessionPlanTarget t) {
+    final o = t.object;
     ref.read(selectedTonightObjectProvider.notifier).select(o.id);
     ref.read(planetariumCommandProvider.notifier).send({
       'type': 'goto',
@@ -135,6 +138,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       'dec': o.decDeg,
       'name': o.name,
       'frame': true,
+      // The slot's dialled rotation lands on the framing box.
+      'rot': ?t.positionAngleDeg,
       // The point of "show" is to SEE it: switch the DSS2 photo layer on so
       // the framed field is the real sky, not a hint circle on a star map.
       'dss': true,
@@ -156,6 +161,12 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
         decDeg: o.decDeg,
         targetName: o.name,
         remainingDarkHours: t.hours,
+        // Same rule as the framing overlay: a dialled angle upgrades the
+        // slew to Center and Rotate; not set (or an untouched 0) stays a
+        // plain slew so the run never demands a plate solver by accident.
+        positionAngleDeg: (t.positionAngleDeg ?? 0) != 0
+            ? t.positionAngleDeg
+            : null,
         jumpToRun: false,
       );
     } catch (e, st) {
@@ -203,6 +214,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final theme = Theme.of(context);
     final s = ref.watch(sessionPlanProvider);
     final plan = s.plan;
+    final frameFov = opticsFovArcmin(ref.watch(opticsSettingsProvider));
 
     return AlertDialog(
       backgroundColor: AraColors.bgPanel,
@@ -302,10 +314,14 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                             slice: plan.targets[i],
                           ),
                           busy: _adding,
+                          frameFovArcmin: frameFov,
+                          onRotate: (deg) => ref
+                              .read(sessionPlanProvider.notifier)
+                              .setRotation(i, deg),
                           onSwap: (o) => ref
                               .read(sessionPlanProvider.notifier)
                               .swap(i, o),
-                          onShow: () => _showOnAtlas(plan.targets[i].object),
+                          onShow: () => _showOnAtlas(plan.targets[i]),
                           onAdd: () => _addOne(
                               plan.targets[i], ScaffoldMessenger.of(context)),
                         ),
@@ -357,6 +373,8 @@ class _PlanTargetCard extends StatelessWidget {
   final String Function(DateTime) fmtLocal;
   final List<TonightSkyObject> alternatives;
   final bool busy;
+  final (double, double)? frameFovArcmin;
+  final ValueChanged<double?> onRotate;
   final ValueChanged<TonightSkyObject> onSwap;
   final VoidCallback onShow;
   final VoidCallback onAdd;
@@ -365,6 +383,8 @@ class _PlanTargetCard extends StatelessWidget {
     required this.fmtLocal,
     required this.alternatives,
     required this.busy,
+    required this.frameFovArcmin,
+    required this.onRotate,
     required this.onSwap,
     required this.onShow,
     required this.onAdd,
@@ -397,7 +417,12 @@ class _PlanTargetCard extends StatelessWidget {
                 // What it looks like: a DSS2 cutout, tap to enlarge.
                 Padding(
                   padding: const EdgeInsets.only(right: 10),
-                  child: TargetPreview(object: o),
+                  child: TargetPreview(
+                    object: o,
+                    size: 88,
+                    frameFovArcmin: frameFovArcmin,
+                    rotationDeg: target.positionAngleDeg ?? 0,
+                  ),
                 ),
                 Expanded(
                   child: Column(
@@ -421,7 +446,59 @@ class _PlanTargetCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            // Camera rotation for this slot — the box on the preview turns
+            // with it so the layout is judged on the real field. Only drawn
+            // when the optical train is configured enough to know the FOV.
+            if (frameFovArcmin != null)
+              Row(
+                children: [
+                  Tooltip(
+                    message: 'Camera rotation for this target',
+                    child: Icon(Icons.rotate_right,
+                        size: 16,
+                        color: target.positionAngleDeg == null
+                            ? AraColors.textSecondary
+                            : theme.colorScheme.primary),
+                  ),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2,
+                        thumbShape:
+                            const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        overlayShape:
+                            const RoundSliderOverlayShape(overlayRadius: 12),
+                      ),
+                      child: Slider(
+                        min: 0,
+                        max: 359,
+                        divisions: 359,
+                        value: (target.positionAngleDeg ?? 0).clamp(0, 359),
+                        label: '${(target.positionAngleDeg ?? 0).round()}°',
+                        onChanged: busy ? null : onRotate,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 36,
+                    child: Text(
+                      '${(target.positionAngleDeg ?? 0).round()}°',
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  IconButton(
+                    iconSize: 16,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Reset rotation',
+                    icon: const Icon(Icons.restart_alt),
+                    onPressed: busy || target.positionAngleDeg == null
+                        ? null
+                        : () => onRotate(null),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 2),
             Row(
               children: [
                 // Swap: the ranked alternatives that fit this slot, best

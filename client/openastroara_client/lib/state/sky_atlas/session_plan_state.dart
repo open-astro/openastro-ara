@@ -62,6 +62,13 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
     state = state.copyWith(plan: plan, ranked: ranked, overheads: overheads);
   }
 
+  /// Dial a camera rotation onto slice [index]; null clears it.
+  void setRotation(int index, double? deg) {
+    final plan = state.plan;
+    if (plan == null) return;
+    state = state.copyWith(plan: setPlanRotation(plan, index, deg));
+  }
+
   /// Put [replacement] into slice [index] (see [swapPlanTarget]).
   void swap(int index, TonightSkyObject replacement) {
     final plan = state.plan;
