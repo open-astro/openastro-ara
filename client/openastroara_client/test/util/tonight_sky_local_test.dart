@@ -296,6 +296,13 @@ void main() {
     expect(scoreOf('X', osc, bortle: 6), lessThan(scoreOf('X', osc, bortle: 3)));
     // Continuum targets are untouched by any of it.
     expect(scoreOf('G', osc), scoreOf('G', nb));
+    // The split applies to a declared broadband-only set the same way.
+    const broadOnly = FilterSetSettings(filters: [
+      PlanningFilter(name: 'L', kind: FilterKind.l),
+    ]);
+    expect(scoreOf('X', broadOnly, bortle: 6), lessThan(scoreOf('X', broadOnly, bortle: 3)));
+    expect(scoreOf('X', broadOnly, bortle: 3), closeTo(scoreOf('X', osc, bortle: 3), 1e-9),
+        reason: 'no narrowband is no narrowband, declared or not');
   });
 
   test('a standalone curated region replaces the raw Sharpless row', () {
@@ -339,8 +346,56 @@ void main() {
     final ldnBest = list.firstWhere((o) => o.type == 'DrkN');
     expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'NGC7331').score!));
     expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'Sh2-119').score!));
-    // Still listed (advise, don't dictate), with the why spelled out.
-    expect(ldnBest.scoreReasons!.join(' '), contains('dark nebula'));
+    // Still listed (advise, don't dictate), with the why spelled out — BOTH
+    // halves of the rule: the ×0.6 factor and the SB floor (review #1104:
+    // deleting the floor left every assertion green).
+    final why = ldnBest.scoreReasons!.join(' ');
+    expect(why, contains('dark nebula'));
+    expect(why, contains('silhouette on the sky (+2)'),
+        reason: '12 × 0.15 floor, not the 0.5 neutral (+6)');
+    // Same geometry, same missing photometry: a DrkN scores below a Neb
+    // before the type factor even applies — the floor alone is worth 4 pts.
+    const neb = PlanningDso(
+        id: 'NEB', name: 'NEB', type: 'Neb', magnitude: null,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 120);
+    const drk = PlanningDso(
+        id: 'DRK', name: 'DRK', type: 'DrkN', magnitude: null,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 120);
+    final pair = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: const [neb, drk], limit: 50);
+    final nebWhy = pair.firstWhere((o) => o.id == 'NEB').scoreReasons!.join(' ');
+    expect(nebWhy, contains('surface brightness unknown (+6)'));
+    expect(pair.firstWhere((o) => o.id == 'DRK').scoreReasons!.join(' '),
+        contains('(+2)'));
+  });
+
+  test('a curated region replaces the Sharpless row it stands for — only when present', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const sh2105 = PlanningDso(
+        id: 'Sh2-105', name: 'Sh2-105', type: 'HII', magnitude: null,
+        raDeg: 303.05, decDeg: 38.35, sizeMajArcmin: 20);
+    const ngc6888 = PlanningDso(
+        id: 'NGC6888', name: 'NGC6888', type: 'EmN', magnitude: 7.4,
+        raDeg: 303.05, decDeg: 38.35, sizeMajArcmin: 18);
+    const sh2240 = PlanningDso(
+        id: 'Sh2-240', name: 'Sh2-240', type: 'HII', magnitude: null,
+        raDeg: 85.25, decDeg: 28.1, sizeMajArcmin: 180);
+    // Sharpless installed, OpenNGC too: the Crescent lists once, as NGC 6888.
+    final both = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night,
+        catalog: const [sh2105, ngc6888, sh2240], limit: 60);
+    expect(both.where((o) => o.id == 'Sh2-105'), isEmpty);
+    expect(both.where((o) => o.id == 'NGC6888'), hasLength(1));
+    // Simeis 147 is a STANDALONE region: Sh2-240 is always replaced by it.
+    expect(both.where((o) => o.id == 'Sh2-240'), isEmpty);
+    expect(both.where((o) => o.id == 'REGION-SIMEIS-147'), hasLength(1));
+    // Sharpless only (no NGC row): Sh2-105 is the only Crescent and stays,
+    // as a showpiece by membership.
+    final only = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: const [sh2105], limit: 60);
+    final kept = only.firstWhere((o) => o.id == 'Sh2-105');
+    expect(kept.scoreReasons!.join(' '), contains('showpiece'));
+    expect(photogenicTierOf('Sh2-240'), 3);
   });
 
   test('curated imaging regions override catalog core-sizes and add fields', () {
