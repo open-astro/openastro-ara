@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
+import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 
@@ -31,6 +32,7 @@ void main() {
     DateTime? rankedAt;
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
         tonightSkyAtProvider.overrideWith((ref, at) async {
           rankedAt = at;
           return [_allNight('X', 'Test Nebula', 80)];
@@ -47,8 +49,10 @@ void main() {
     expect(find.text('Test Nebula'), findsOneWidget);
     // Sub counts render (overhead-adjusted, so just assert the shape).
     expect(find.textContaining('subs ×'), findsOneWidget);
-    // Every planned target is actionable.
+    // Every planned target is actionable, and shows what it looks like
+    // (here: the offline placeholder, since the preview is stubbed null).
     expect(find.byTooltip('Show on the planetarium'), findsOneWidget);
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
     expect(find.byTooltip('Add to a run (3.0 h)'), findsOneWidget);
   });
 
@@ -56,6 +60,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
         tonightSkyAtProvider.overrideWith((ref, at) async => [
               _allNight('X', 'Test Nebula', 80),
               _allNight('Y', 'Runner Up', 70),
@@ -87,6 +92,7 @@ void main() {
   testWidgets('Show on atlas closes the dialog and the plan survives reopen',
       (tester) async {
     final container = ProviderContainer(overrides: [
+      targetPreviewProvider.overrideWith((ref, key) async => null),
       tonightSkyAtProvider
           .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
     ]);
@@ -119,6 +125,7 @@ void main() {
     expect(cmd?['type'], 'goto');
     expect(cmd?['frame'], true);
     expect(cmd?['name'], 'Test Nebula');
+    expect(cmd?['dss'], true, reason: 'show = see the real field');
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();

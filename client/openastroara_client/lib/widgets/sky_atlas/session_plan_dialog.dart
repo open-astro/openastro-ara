@@ -10,6 +10,7 @@ import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/session_planner.dart';
+import 'target_preview.dart';
 
 /// §36.8 "What-if run" — plan an imaging session: the user gives the window
 /// they can actually shoot (say 22:00–01:00) and how many targets they want,
@@ -134,6 +135,9 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       'dec': o.decDeg,
       'name': o.name,
       'frame': true,
+      // The point of "show" is to SEE it: switch the DSS2 photo layer on so
+      // the framed field is the real sky, not a hint circle on a star map.
+      'dss': true,
     });
     Navigator.of(context).pop();
   }
@@ -387,19 +391,36 @@ class _PlanTargetCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(o.name, style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 4),
-            Text(
-              '${fmtLocal(target.startUtc)}–${fmtLocal(target.endUtc)} · '
-              '${target.hours.toStringAsFixed(1)} h'
-              '${o.score != null ? ' · score ${o.score!.round()}' : ''}',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // What it looks like: a DSS2 cutout, tap to enlarge.
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: TargetPreview(object: o),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(o.name, style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${fmtLocal(target.startUtc)}–${fmtLocal(target.endUtc)} · '
+                        '${target.hours.toStringAsFixed(1)} h'
+                        '${o.score != null ? ' · score ${o.score!.round()}' : ''}',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: AraColors.textSecondary),
+                      ),
+                      if (subs != null) ...[
+                        const SizedBox(height: 4),
+                        Text('$subs$sho', style: theme.textTheme.bodySmall),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-            if (subs != null) ...[
-              const SizedBox(height: 4),
-              Text('$subs$sho', style: theme.textTheme.bodySmall),
-            ],
             const SizedBox(height: 4),
             Row(
               children: [
