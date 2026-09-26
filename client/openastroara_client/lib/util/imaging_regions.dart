@@ -61,6 +61,93 @@ const Map<String, ImagingRegion> overrides = {
   'NGC7380': ImagingRegion('Wizard Nebula (NGC 7380)', 'HII', 25, 25),
 };
 
+/// Photogenic tier for catalog rows that carry NO photometry (the Sharpless
+/// package has 314 rows with zero magnitudes and zero surface brightness —
+/// the ranker literally cannot tell Sh2-110 from the Tulip). 3 = showpiece,
+/// 2 = a good field, 1 = faint/specialist but worth knowing about. A row not
+/// listed here is "no photometry and not a known imaging field" and the
+/// ranker discounts it hard: most Sharpless entries are HII regions that
+/// image as a star field with a faint glow — not what a wide-field rig is
+/// for. This is a stopgap until sky-data carries the Sharpless brightness
+/// class; keep the ids in catalog spelling.
+const Map<String, int> photogenicTier = {
+  // Scorpius / Sagittarius / Serpens.
+  'Sh2-8': 3, // Cat's Paw (NGC 6334)
+  'Sh2-11': 3, // Lobster (NGC 6357)
+  'Sh2-25': 3, // Lagoon (M8)
+  'Sh2-30': 3, // Trifid (M20)
+  'Sh2-45': 3, // Omega (M17)
+  'Sh2-49': 3, // Eagle (M16)
+  'Sh2-54': 2, // NGC 6604 field
+  'Sh2-64': 2, // W40
+  // Vulpecula / Cygnus.
+  'Sh2-86': 2, // NGC 6820
+  'Sh2-88': 2,
+  'Sh2-91': 1, // Cygnus SNR filament — faint
+  'Sh2-101': 3, // Tulip
+  'Sh2-104': 2,
+  'Sh2-105': 3, // Crescent (NGC 6888)
+  'Sh2-106': 2,
+  'Sh2-108': 3, // Sadr / Butterfly (IC 1318)
+  'Sh2-112': 2,
+  'Sh2-115': 2,
+  'Sh2-117': 3, // North America + Pelican
+  'Sh2-119': 2, // Clamshell
+  'Sh2-124': 2,
+  'Sh2-126': 1, // Lacerta — huge, faint
+  // Cepheus / Cassiopeia.
+  'Sh2-129': 3, // Flying Bat + Squid
+  'Sh2-131': 3, // IC 1396
+  'Sh2-132': 3, // Lion
+  'Sh2-140': 2,
+  'Sh2-142': 3, // Wizard (NGC 7380)
+  'Sh2-155': 3, // Cave
+  'Sh2-157': 3, // Lobster Claw
+  'Sh2-162': 3, // Bubble (NGC 7635)
+  'Sh2-170': 2, // Little Rosette
+  'Sh2-171': 3, // NGC 7822
+  'Sh2-173': 2, // Phantom
+  'Sh2-185': 3, // Ghost of Cassiopeia (IC 59/63)
+  'Sh2-188': 1, // Dolphin — faint
+  'Sh2-190': 3, // Heart (IC 1805)
+  'Sh2-199': 3, // Soul (IC 1848)
+  // Perseus / Auriga / Taurus.
+  'Sh2-216': 1, // giant faint PN
+  'Sh2-220': 3, // California (NGC 1499)
+  'Sh2-224': 1, // faint SNR
+  'Sh2-229': 3, // Flaming Star (IC 405)
+  'Sh2-236': 3, // Tadpoles (IC 410)
+  'Sh2-240': 3, // Spaghetti (Simeis 147)
+  // Gemini / Orion / Monoceros.
+  'Sh2-248': 3, // Jellyfish (IC 443)
+  'Sh2-252': 3, // Monkey Head (NGC 2174)
+  'Sh2-261': 2, // Lower's
+  'Sh2-264': 3, // Lambda Orionis ring
+  'Sh2-273': 3, // Cone / Fox Fur (NGC 2264)
+  'Sh2-275': 3, // Rosette
+  'Sh2-276': 3, // Barnard's Loop
+  'Sh2-277': 3, // Flame / Horsehead field
+  'Sh2-279': 3, // Running Man
+  'Sh2-281': 3, // Orion Nebula (M42)
+  'Sh2-284': 2,
+  'Sh2-292': 3, // Seagull head
+  'Sh2-296': 3, // Seagull (IC 2177)
+  'Sh2-298': 3, // Thor's Helmet (NGC 2359)
+  'Sh2-302': 2,
+  'Sh2-308': 3, // Dolphin Head
+  'Sh2-311': 2, // NGC 2467
+};
+
+/// The tier a photometry-less row earns, or null when it isn't a known
+/// imaging field.
+int? photogenicTierOf(String id) => photogenicTier[id];
+
+/// The raw catalog row a standalone region replaces (REGION-SH2-101 ↔
+/// Sh2-101), so the Sharpless package's own row doesn't list twice.
+String? _anchorOf(String regionId) => regionId.startsWith('REGION-SH2-')
+    ? 'Sh2-${regionId.substring('REGION-SH2-'.length)}'
+    : null;
+
 /// Region-scale fields with no single catalog anchor. Ids are stable and
 /// namespaced so they can never collide with an OpenNGC name.
 final List<PlanningDso> standaloneRegions = [
@@ -164,8 +251,12 @@ final List<PlanningDso> standaloneRegions = [
 /// and append the standalone regions. Pure + cheap — runs inside the ranking
 /// isolate on every recompute.
 List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
+  final covered = {
+    for (final r in standaloneRegions) ?_anchorOf(r.id),
+  };
   final merged = [
     for (final o in catalog)
+      if (!covered.contains(o.id))
       switch (overrides[o.id]) {
         null => o,
         final r => PlanningDso(

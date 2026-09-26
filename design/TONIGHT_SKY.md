@@ -124,6 +124,13 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   multipliers (advisory-sized, targets stay listed): `OCl` ×0.85, `GCl` ×0.95, `DrkN` ×0.6.
   The DrkN factor exists because the LDN + Barnard packages (~2,100 rows) carry a size and
   nothing else — scored neutral they hit a flat 90 and filled every slot of the list.
+  Emission rows (`HII`/`EmN`/`Neb`) with NEITHER magnitude nor surface brightness (all 314
+  Sharpless rows) take a curated photogenic tier from `imaging_regions.photogenicTier`:
+  3 ×1.0, 2 ×0.9, 1 ×0.7, unlisted ×0.5 ("not a known imaging field — often just a faint glow
+  among stars"). Stopgap until sky-data carries the Sharpless brightness class.
+  Filter reality: an emission-line target with no narrowband glass (an EMPTY filter set —
+  a bare OSC/DSLR — counts) is ×0.85, or ×0.75 under a Bortle ≥ 5 sky; narrowband in the
+  set is ×1.05. Continuum targets are untouched.
 
   Score = Σ(weight · q), clamped to [0,100]. Each component emits a short reason tag with
   its rounded point contribution (e.g. `"fills the frame (+35)"`, `"5 h dark window (+21)"`)
