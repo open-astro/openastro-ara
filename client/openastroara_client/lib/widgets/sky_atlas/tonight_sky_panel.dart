@@ -371,8 +371,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final hasReasons = reasons != null && reasons.isNotEmpty;
     // Watch (not read) so the autoDispose sequence API stays alive while the
     // panel is shown — a bare read would let it dispose (closing its Dio) before
-    // an in-flight create() resolves.
-    final canAdd = ref.watch(sequenceApiProvider) != null;
+    // an in-flight create() resolves. Offline the add is NOT gated: with no
+    // server createImagingRun saves a local draft that pushes on reconnect
+    // (§2 offline planning) — the button was dead at the dark site before.
+    final online = ref.watch(sequenceApiProvider) != null;
     // select() so a selection change rebuilds only the two rows whose
     // highlight actually flipped, not every visible row.
     final selected = ref.watch(
@@ -558,9 +560,12 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                       : IconButton(
                           iconSize: 18,
                           visualDensity: VisualDensity.compact,
-                          tooltip: 'Add to a new sequence',
+                          tooltip: online
+                              ? 'Add to a new sequence'
+                              : 'Save as a draft run (no server — pushes '
+                                  'when you reconnect)',
                           icon: const Icon(Icons.playlist_add),
-                          onPressed: canAdd ? _addToSequence : null,
+                          onPressed: _addToSequence,
                         ),
                   IconButton(
                     iconSize: 18,
