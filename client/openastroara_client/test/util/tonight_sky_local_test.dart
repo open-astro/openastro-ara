@@ -551,6 +551,26 @@ void main() {
     }
   });
 
+  test('stars in the mirror (WR package) are searchable, never ranked', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const wr = PlanningDso(
+        id: 'WR 134', name: 'WR 134', type: 'WR*', magnitude: 8.1,
+        raDeg: 302.28, decDeg: 36.18);
+    // OpenNGC's own star rows (bright doubles used to rank on mag ≤ 12).
+    const star = PlanningDso(
+        id: 'NGC0017', name: 'NGC0017', type: '*', magnitude: 9.0,
+        raDeg: 302.0, decDeg: 40.0);
+    const dbl = PlanningDso(
+        id: 'NGC0018', name: 'NGC0018', type: '**', magnitude: 6.0,
+        raDeg: 303.0, decDeg: 41.0);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: const [wr, star, dbl], limit: 50);
+    expect(list.where((o) => o.id == 'WR 134'), isEmpty);
+    expect(list.where((o) => o.type == '*' || o.type == '**'), isEmpty);
+    // …but the curated WR 134 ring (a nebula) still ranks.
+    expect(list.where((o) => o.id == 'REGION-WR134'), hasLength(1));
+  });
+
   test('isDarkNow follows the sun at the site, never for an unset site', () {
     const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
     // 22:43 MDT on 2026-09-25 = 04:43 UTC on the 26th: well after dusk.

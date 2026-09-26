@@ -416,7 +416,7 @@ Remaining Phase 14 work: 14e — Alpaca-simulator pinning + integration tests (d
 
 - Photos-style Image Library (lazy sliver grids, overflow actions, inline search, double-click zoom, palette memory) + §65.4 thumbnail/preview sidecar caching, render gate, boot-time warmer, per-(target,night) §28.8 recovery sessions (rig DB migrated in place).
 - §69 "info buttons are the manual": full helpKey coverage across settings panels + live gear controls; hardware-aware driverNotes matched to the connected Alpaca device; `hardware-help-sync` repo skill audits against openastro.net/docs/supported-drivers.
-- §36 six add-on catalogs (Sh2/LDN/Barnard/vdB/Abell-PN/Arp; open-astro/sky-data @ 9ce09f7) + offline-first .deb seed bundle (seed-manifest.tsv + boot/download seed path) + Data Manager embedded in the Sky Data panel + removal confirm.
+- §36 six add-on catalogs (Sh2/LDN/Barnard/vdB/Abell-PN/Arp; open-astro/sky-data @ 9ce09f7) + a seventh, `wr-stars` (717 Galactic WR stars, type `WR*`; sky-data @ 05404eb, #1107) + offline-first .deb seed bundle (seed-manifest.tsv + boot/download seed path) + Data Manager embedded in the Sky Data panel + removal confirm.
 - Planning fixes: magnitude-less nebulae pass the /dso-catalog cull (1,987 → 4,683 objects); search resolves local catalogs before the Stellarium engine.
 - §65.9 manual stretch removed from the client viewer; server STF-seeds knobless manual renders and echoes applied values via X-Ara-Stretch-* headers. GET/DELETE /api/v1/storage/cache + Storage-panel Clean cache.
 

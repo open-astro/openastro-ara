@@ -7,8 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import '../models/server.dart';
 
 /// One planning-shaped deep-sky object from the daemon's
-/// `GET /api/v1/data-manager/dso-catalog` (the installed DSO catalogs culled
-/// to mag ≤ 12): everything the client-side Tonight's Sky ranker scores on.
+/// `GET /api/v1/data-manager/dso-catalog` (the installed DSO catalogs after
+/// the daemon's cull: mag ≤ 12, plus magnitude-less nebula types and every
+/// `WR*` star so the offline search resolves any WR number; the ranker skips
+/// stars itself): everything the client-side Tonight's Sky ranker scores on.
 /// [magnitude] is null for objects that carry none (dark nebulae, most HII
 /// regions) — the ranker scores those on size/surface brightness instead.
 class PlanningDso {
@@ -158,14 +160,23 @@ class DsoCatalogService {
 /// Exact normalized id/name match wins; otherwise the first object whose
 /// common name contains the query. Null when nothing matches.
 PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
-  String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[\s\-_]'), '');
-  final q = norm(query);
+  // Two normalisations: a dash-PRESERVING one first, because designations
+  // with a suffix collide with plain numbers once dashes go — "WR 2-1" and
+  // "WR 21" both strip to "wr21" (review #1107); then the loose form so
+  // "sh2 129" / "SH2129" / "b 33" still resolve.
+  String tight(String s) => s.toLowerCase().replaceAll(RegExp(r'[\s_]'), '');
+  String loose(String s) => s.toLowerCase().replaceAll(RegExp(r'[\s\-_]'), '');
+  final qt = tight(query);
+  final q = loose(query);
   if (q.isEmpty) return null;
   for (final o in catalog) {
-    if (norm(o.id) == q || norm(o.name) == q) return o;
+    if (tight(o.id) == qt || tight(o.name) == qt) return o;
   }
   for (final o in catalog) {
-    if (norm(o.name).contains(q)) return o;
+    if (loose(o.id) == q || loose(o.name) == q) return o;
+  }
+  for (final o in catalog) {
+    if (loose(o.name).contains(q)) return o;
   }
   return null;
 }

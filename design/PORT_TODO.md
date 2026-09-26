@@ -1975,3 +1975,12 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   burst, idle window + overall deadline) has no unit test; the `mdnsSource` seam bypasses the
   whole method. A `@visibleForTesting` client factory would make it coverable. Review note on
   #1103.
+- `SkyCatalogReader.ParseOpenNgc` names a row by its first common name, so
+  `/data-manager/wr-stars/catalog` returns 14 objects labelled "Anon (Marston)" (plus 5 "Anon IR
+  (Wachter)", 4 "Anon (Chu)") while `/catalogs/wolf-rayet` shows the WR id. Fall back to the
+  catalog id when a common name is not unique within the package. Review note on #1107.
+- The client culls bundled star rows out of the planning set (`planningCull` → `isStarType`),
+  which drops their ids, so all 717 WR rows come straight back from the daemon mirror, ride the
+  `Isolate.run` payload and are skipped again in `computeTonightSkyLocal`. Filter `isStarType` on
+  the mirror side of the merge in `dso_catalog_state.dart` so the star skip is one rule. Review
+  note on #1107.
