@@ -113,7 +113,7 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   **Score weights (0–100, tunable — `TonightSkyService` constants):**
   | Component | Weight | Quality factor `q∈[0,1]` |
   |---|---|---|
-  | Framing fit | **35** | Good → 1.0; Unknown → 0.5 (neutral); off-band graded by how far out (`ratio/0.10` for too-small, `0.80/ratio` for too-big) with a floor of **0.15** so it's never zeroed |
+  | Framing fit | **35** | ratio = object major axis ÷ short FOV side. ≥ 0.40 "fills the frame" → 1.0; 0.15–0.40 "good fit" ramps 0.70 → 1.0; < 0.15 "small" → `0.70·ratio/0.15`; > 0.80 "overflows" → `0.80/ratio`; Unknown → 0.5 (neutral); floor **0.15** so it's never zeroed (§36.8 framing review, 2026-07-17) |
   | Integration hours | **25** | `min(hours / 6, 1)` — linear, saturates at 6 dark hours |
   | Peak altitude / airmass | **20** | `max(0, sin(peakAlt))` — `sin(alt) ≈ 1/airmass` (1 overhead, ~0.5 at 30°, 0 at horizon) |
   | Surface brightness vs Bortle | **12** | `clamp((skyMag − SB + 4) / 4, 0.15, 1)`; `skyMag ≈ 22 − (Bortle−1)·0.5` mag/arcsec². Faint-under-bright penalised, floored at 0.15, never zeroed |
