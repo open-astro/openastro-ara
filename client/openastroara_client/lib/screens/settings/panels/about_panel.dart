@@ -151,7 +151,7 @@ class _NightModeRow extends ConsumerWidget {
     };
     return SettingsSwitchRow(
       label: 'Night mode',
-      hint: 'Red display for dark-site observing (N hotkey)',
+      hint: 'Red display for dark-site observing (Ctrl+N, ⌘N on a Mac)',
       helpKey: 'app.night_mode',
       value: night,
       onChanged: (v) => ref.read(nightModeProvider.notifier).set(v),
