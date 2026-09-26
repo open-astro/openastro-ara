@@ -68,9 +68,10 @@ class SequencerToolbar extends ConsumerWidget {
     final busy = ref.watch(sequenceCommandBusyProvider);
     // §2 offline drafts live client-side: they save locally with no daemon,
     // and never expose actions that send the draft's id to the daemon
-    // (run/pause/skip/abort/delete/export) even while connected — push the
-    // draft to the server first. Validate is the exception: it sends only the
-    // BODY (no id), so pre-push validation of a draft works while connected.
+    // (run/pause/skip/abort/export) even while connected — push the draft to
+    // the server first. Two exceptions: Validate sends only the BODY (no id),
+    // so pre-push validation works while connected; Delete removes the LOCAL
+    // draft (see _deleteDraft) and never talks to the daemon.
     final isDraft = isDraftSequenceId(selectedId);
     final hasSelection = connected && selectedId != null && !busy && !isDraft;
     // Save is enabled only when the open sequence has unsaved edits. A draft
@@ -159,9 +160,14 @@ class SequencerToolbar extends ConsumerWidget {
         // dialog's per-row trash covers the rest). The shared flow
         // confirms, stop-and-deletes an active run, and clears the
         // selection + editor.
+        // An open offline DRAFT is deletable too (it lives on this device,
+        // no daemon involved) — before, Delete was dead for drafts and the
+        // only way out was the Load dialog's per-row trash.
         onPressed: hasSelection
             ? () => _delete(context, ref, selectedId, selectedName)
-            : null,
+            : (isDraft && selectedId != null && !busy)
+                ? () => _deleteDraft(context, ref, selectedId, selectedName)
+                : null,
       ),
     ];
 
@@ -676,6 +682,71 @@ Future<void> _delete(
     await confirmAndDeleteSequence(context, ref, id: id, name: name ?? '');
   } finally {
     busy.setBusy(false);
+  }
+}
+
+/// Confirm-then-delete for the open offline draft: removes the local file and
+/// clears the selection + editor so the Run tab isn't editing a ghost.
+Future<void> _deleteDraft(
+    BuildContext context, WidgetRef ref, String id, String? name) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final display = (name == null || name.isEmpty) ? '(untitled draft)' : name;
+  // Hold the busy fence across the confirm too, like the shared _delete: a
+  // keyboard-driven command while the dialog sits open must not slip past
+  // (review #1106 note).
+  final container = ProviderScope.containerOf(context, listen: false);
+  final busy = container.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    await _deleteDraftConfirmed(context, container, messenger, id, display);
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+Future<void> _deleteDraftConfirmed(
+    BuildContext context,
+    ProviderContainer container,
+    ScaffoldMessengerState messenger,
+    String id,
+    String display) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete draft?'),
+      content: Text('"$display" will be removed from this device. '
+          "This can't be undone."),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel')),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AraColors.accentError),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  try {
+    await container.read(draftSequencesProvider.notifier).delete(id);
+    if (container.read(selectedSequenceIdProvider) == id) {
+      container.read(selectedSequenceIdProvider.notifier).select(null);
+    }
+    if (container.read(sequenceEditorProvider)?.id == id) {
+      container.read(sequenceEditorProvider.notifier).clear();
+    }
+    // Same confirmation the shared delete gives, so the draft doesn't just
+    // silently vanish from the Run tab.
+    messenger.showSnackBar(SnackBar(content: Text('Deleted "$display".')));
+  } catch (e) {
+    debugPrint('[sequencer] draft delete failed: $e');
+    messenger.showSnackBar(const SnackBar(
+      content: Text("Couldn't delete the draft."),
+      backgroundColor: AraColors.accentError,
+    ));
   }
 }
 

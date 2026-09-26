@@ -7,6 +7,7 @@ import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 
@@ -71,12 +72,14 @@ void main() {
   Future<({ImagingRunResult? result, Object? error})> run(
     WidgetTester tester, {
     required SequenceClient? api,
+    ProviderContainer? container,
   }) async {
-    final container = ProviderContainer(overrides: [
+    final owned = container == null;
+    container ??= ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
       sequenceApiProvider.overrideWith((ref) => api),
     ]);
-    addTearDown(container.dispose);
+    if (owned) addTearDown(container.dispose);
     Future<({ImagingRunResult? result, Object? error})>? pending;
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -111,6 +114,82 @@ void main() {
     expect(drafts.store.values.single.name, 'M 31');
     // The draft body is a real run body, not a placeholder.
     expect(drafts.store.values.single.body, isNotEmpty);
+  });
+
+  testWidgets('no server: a second add APPENDS to the open draft', (tester) async {
+    final container = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(container.dispose);
+    final first = await run(tester, api: null, container: container);
+    final draftId = first.result!.sequenceId;
+    expect(drafts.store, hasLength(1));
+    final before = drafts.store[draftId]!.body.toString();
+
+    // The first create selected its draft; the next target must land IN it
+    // (one multi-target night plan), not as a second draft — the planner's
+    // "Add all" builds the run this way.
+    final second = await run(tester, api: null, container: container);
+    expect(second.error, isNull);
+    expect(second.result!.draft, isTrue);
+    expect(second.result!.appended, isTrue);
+    expect(second.result!.sequenceId, draftId);
+    expect(drafts.store, hasLength(1), reason: 'no second draft');
+    final after = drafts.store[draftId]!.body.toString();
+    expect(after.length, greaterThan(before.length));
+    expect('M 31'.allMatches(after).length,
+        greaterThan('M 31'.allMatches(before).length));
+  });
+
+  testWidgets('offline append starts from the editor\'s UNSAVED working copy',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(container.dispose);
+    final first = await run(tester, api: null, container: container);
+    final draftId = first.result!.sequenceId;
+    // The Run tab opens the draft; the user edits it and does NOT save. The
+    // editor's working copy carries a marker the stored body doesn't.
+    final stored = drafts.store[draftId]!;
+    final edited = Map<String, dynamic>.from(stored.body)
+      ..['Name'] = 'EDITED-BUT-UNSAVED';
+    container.read(sequenceEditorProvider.notifier).load(
+        SequenceDetail(id: draftId, name: stored.name, body: edited));
+
+    final second = await run(tester, api: null, container: container);
+    expect(second.result!.appended, isTrue);
+    // The edit survived: the saved draft is the editor's copy + the target.
+    expect(drafts.store[draftId]!.body['Name'], 'EDITED-BUT-UNSAVED');
+    expect(container.read(sequenceEditorProvider)!.body['Name'],
+        'EDITED-BUT-UNSAVED');
+  });
+
+  testWidgets('feedback copy: an appended draft says added, a new one says saved',
+      (tester) async {
+    late ScaffoldMessengerState messenger;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) {
+          messenger = ScaffoldMessenger.of(context);
+          return const SizedBox();
+        }),
+      ),
+    ));
+    showImagingRunFeedback(messenger,
+        targetName: 'M 42',
+        result: const ImagingRunResult('draft:x', appended: true, draft: true));
+    await tester.pump();
+    expect(find.text('Added "M 42" to the offline draft.'), findsOneWidget);
+    messenger.hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    showImagingRunFeedback(messenger,
+        targetName: 'M 31',
+        result: const ImagingRunResult('draft:y', appended: false, draft: true));
+    await tester.pump();
+    expect(find.textContaining('Saved "M 31" as an offline draft'), findsOneWidget);
   });
 
   testWidgets(
