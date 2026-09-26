@@ -119,6 +119,12 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   | Surface brightness vs Bortle | **12** | `clamp((skyMag − SB + 4) / 4, 0.15, 1)`; `skyMag ≈ 22 − (Bortle−1)·0.5` mag/arcsec². Faint-under-bright penalised, floored at 0.15, never zeroed |
   | Magnitude | **8** | `clamp((12 − mag) / 12, 0, 1)` — brighter a touch higher |
 
+  Missing surface brightness scores neutral (0.5) — except for `DrkN`, which takes the 0.15
+  floor: a dark nebula is by definition darker than the sky behind it. Post-sum photogenic-type
+  multipliers (advisory-sized, targets stay listed): `OCl` ×0.85, `GCl` ×0.95, `DrkN` ×0.6.
+  The DrkN factor exists because the LDN + Barnard packages (~2,100 rows) carry a size and
+  nothing else — scored neutral they hit a flat 90 and filled every slot of the list.
+
   Score = Σ(weight · q), clamped to [0,100]. Each component emits a short reason tag with
   its rounded point contribution (e.g. `"fills the frame (+35)"`, `"5 h dark window (+21)"`)
   so the UI can explain *why 90 / why 40*.

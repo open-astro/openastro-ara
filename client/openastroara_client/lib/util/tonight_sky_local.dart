@@ -55,6 +55,10 @@ const double _hoursSaturationHours = 6.0;
 const double _sbContrastSpanMag = 4.0;
 const double _sbFloorQ = 0.15;
 const double _magFaintFloor = 12.0;
+// Photogenic-type multipliers (post-sum, advisory-sized — see the adjustment
+// block). Dark nebulae get the steepest: with no photometry at all they'd
+// otherwise tie the best emission targets on geometry alone.
+const double _darkNebulaFactor = 0.6;
 
 const int _windowStepMinutes = 5;
 const int _windowHalfSpanMinutes = 12 * 60;
@@ -444,6 +448,16 @@ List<TonightSkyObject> computeTonightSkyLocal({
     } else if (o.type == 'GCl') {
       adjusted *= 0.95;
       adjustReasons.add('globular cluster (−5%)');
+    } else if (o.type == 'DrkN') {
+      // ~2,100 LDN + Barnard rows carry a size and nothing else, so every one
+      // that transits high scored a flat 90 and the 30-slot list was nothing
+      // but dark nebulae. They're real (dark-site, long broadband) targets,
+      // so they stay listed — just below anything with actual photometry.
+      adjusted *= _darkNebulaFactor;
+      adjustReasons.add(
+        'dark nebula — a silhouette target that needs a dark sky and long '
+        'broadband integration (−40%)',
+      );
     }
     if (classifyEmission(o.type) == EmissionClass.emissionLine &&
         filterSet.filters.isNotEmpty) {
@@ -645,6 +659,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
     sbTag = contrastMag >= 0
         ? 'bright for Bortle $bortleClass sky'
         : 'faint for Bortle $bortleClass sky';
+  } else if (o.type == 'DrkN') {
+    // A dark nebula is a silhouette: by definition darker than the sky behind
+    // it, so "unknown" must not read as average. The LDN/Barnard rows carry
+    // only a size — scored neutral here they tie the brightest HII regions.
+    sbQ = _sbFloorQ;
+    sbTag = 'dark nebula — no surface brightness, a silhouette on the sky';
   } else {
     sbQ = 0.5;
     sbTag = 'surface brightness unknown';

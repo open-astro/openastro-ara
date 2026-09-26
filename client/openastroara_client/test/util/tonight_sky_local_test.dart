@@ -195,6 +195,39 @@ void main() {
     expect(scoreOf('G', broadOnly), scoreOf('G', nb));
   });
 
+  test('dark nebulae rank below real photometry, never flood the list', () {
+    // The LDN/Barnard packages carry ONLY a major axis: no magnitude, no
+    // surface brightness. Scored neutral on both they hit a flat 90 whenever
+    // they transit high, and ~2,100 of them filled every slot of the
+    // 30-item list — no NGC, no Messier, nothing else.
+    final night = DateTime.utc(2026, 10, 15, 3);
+    PlanningDso ldn(int n) => PlanningDso(
+        id: 'LDN $n', name: 'LDN $n', type: 'DrkN', magnitude: null,
+        raDeg: 314.75 + n * 0.01, decDeg: 44.33,
+        sizeMajArcmin: 120);
+    // A modest galaxy, small in a 250 mm frame, with honest photometry.
+    const galaxy = PlanningDso(
+        id: 'NGC7331', name: 'NGC7331', type: 'G', magnitude: 9.5,
+        raDeg: 339.267, decDeg: 34.416,
+        sizeMajArcmin: 10.5, sizeMinArcmin: 3.7, surfaceBrightness: 22.5);
+    // An emission region from Sharpless: also magnitude-less, size only.
+    const sh2 = PlanningDso(
+        id: 'Sh2-101', name: 'Sh2-101', type: 'HII', magnitude: null,
+        raDeg: 300.0, decDeg: 35.3, sizeMajArcmin: 20);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night,
+        catalog: [for (var i = 1; i <= 60; i++) ldn(i), galaxy, sh2],
+        limit: 30);
+    final ids = list.map((o) => o.id).toList();
+    expect(ids, contains('NGC7331'));
+    expect(ids, contains('Sh2-101'));
+    final ldnBest = list.firstWhere((o) => o.type == 'DrkN');
+    expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'NGC7331').score!));
+    expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'Sh2-101').score!));
+    // Still listed (advise, don't dictate), with the why spelled out.
+    expect(ldnBest.scoreReasons!.join(' '), contains('dark nebula'));
+  });
+
   test('curated imaging regions override catalog core-sizes and add fields', () {
     // OpenNGC undersells the famous complexes: NGC 6618 is a 12.6' "Checkmark"
     // core but the imaged Swan runs ~45'; NGC 6604 is a 9.6' OCl inside the
