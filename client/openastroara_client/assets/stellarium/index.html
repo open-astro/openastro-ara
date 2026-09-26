@@ -190,8 +190,9 @@
 </div>
 
 <!-- Catalogs (§36): highlight rings for a chosen catalog or object type, drawn over
-     the engine's native deep-sky layer. Rows come from the daemon's catalog list
-     (GET /api/v1/catalogs), objects brightest-first per its 500-row cap. -->
+     the engine's native deep-sky layer. Rows come from the client's own loopback
+     server (GET /aracat, answered from the bundled catalogs — no daemon, works
+     offline), objects brightest-first per the 500-row cap on /aracat/{id}. -->
 <div id="catalogs" class="ui">
   <div class="card-title">Catalogs<button class="close" id="cat-close" title="Hide">✕</button></div>
   <div id="cat-list"></div>
@@ -804,7 +805,7 @@ var CAT_COLORS = {
 };
 function catColor(id) { return CAT_COLORS[id] || '#81c784'; }
 
-var catInfos = null;      // [{id,name,group}] from /api/v1/catalogs, or null until fetched
+var catInfos = null;      // [{id,name,group}] from the loopback /aracat, or null until fetched
 var catInfosPending = false;
 var catOn = {};           // id -> bool (the persisted toggle state)
 // Ids whose boot-restore silently reverted (fetch failed/empty at launch).
