@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
@@ -5,7 +7,7 @@ import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show isDarkNow, tonightSkyUpNowProvider;
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show clockProvider, isDarkNow, skyClockProvider, tonightSkyUpNowProvider;
 import 'package:openastroara/util/tonight_sky_local.dart';
 
 void main() {
@@ -340,4 +342,40 @@ void main() {
     c.read(siteSettingsProvider.notifier).setLongitudeDeg(-106.0);
     expect(c.read(tonightSkyUpNowProvider), isTrue);
   });
+
+  test('Up now switches itself on when the clock crosses into dark, until pinned', () {
+    const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+    var now = DateTime.utc(2026, 9, 25, 21, 0); // 15:00 MDT, daylight
+    final ticks = StreamController<int>.broadcast();
+    addTearDown(ticks.close);
+    final c = ProviderContainer(overrides: [
+      clockProvider.overrideWithValue(() => now),
+      skyClockProvider.overrideWith((ref) => ticks.stream),
+      siteSettingsProvider.overrideWith(() => _SeededSite(belen)),
+    ]);
+    addTearDown(c.dispose);
+    final keep = c.listen(tonightSkyUpNowProvider, (_, _) {});
+    addTearDown(keep.close);
+    expect(c.read(tonightSkyUpNowProvider), isFalse);
+    // The evening passes; the next tick re-evaluates against the new clock.
+    now = DateTime.utc(2026, 9, 26, 4, 43); // 22:43 MDT
+    ticks.add(1);
+    return Future<void>.delayed(Duration.zero).then((_) {
+      expect(c.read(tonightSkyUpNowProvider), isTrue, reason: 'dark now');
+      // A tap pins it; later ticks leave it alone.
+      c.read(tonightSkyUpNowProvider.notifier).set(false);
+      now = DateTime.utc(2026, 9, 26, 5, 30);
+      ticks.add(2);
+      return Future<void>.delayed(Duration.zero);
+    }).then((_) {
+      expect(c.read(tonightSkyUpNowProvider), isFalse, reason: 'pinned');
+    });
+  });
+}
+
+class _SeededSite extends SiteSettingsNotifier {
+  _SeededSite(this._seed);
+  final SiteSettings _seed;
+  @override
+  SiteSettings build() => _seed;
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -134,8 +135,13 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
 
   @override
   bool build() {
+    // Re-evaluate on the site AND on the clock: a session opened at dusk
+    // must flip on once it is actually dark (review #1105 — the first build
+    // used to be the only one).
+    ref.watch(skyClockProvider);
+    final site = ref.watch(siteSettingsProvider);
     if (_pinned) return state;
-    return isDarkNow(ref.watch(siteSettingsProvider));
+    return isDarkNow(site, nowUtc: ref.read(clockProvider)());
   }
 
   void toggle() {
@@ -148,6 +154,15 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     state = on;
   }
 }
+
+/// The wall clock, as a provider so tests can pin it.
+final clockProvider = Provider<DateTime Function()>((_) => DateTime.now);
+
+/// A coarse tick (every 5 min) that dark-dependent state watches so it
+/// follows the night without anyone touching it. Tests override it with a
+/// stream they drive.
+final skyClockProvider = StreamProvider<int>(
+    (_) => Stream<int>.periodic(const Duration(minutes: 5), (i) => i));
 
 /// True when the sun is below −12° (nautical dark) at [site] right now; an
 /// unset site (0, 0) is never "dark" so the filter stays off there.
