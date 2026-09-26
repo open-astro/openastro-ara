@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
+import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../services/planetarium_overlay.dart';
@@ -17,9 +18,13 @@ import '../../services/stellarium_server.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/imaging_regions.dart';
+import '../../util/planetarium_seed.dart';
 import 'linux_planetarium_overlay.dart';
 import 'tonight_sky_panel.dart';
 
@@ -59,6 +64,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
   final _prefsService = PlanetariumPrefsService();
+  Future<List<Map<String, Object?>>> Function()? _listResolver;
+  Future<List<Map<String, Object?>>?> Function(String, int)? _objectsResolver;
   bool _unavailable = false;
 
   // Linux only: the loopback URL handed to the native GTK overlay
@@ -91,14 +98,34 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final server = await StellariumServer.start();
         if (!mounted) return;
         _server = server;
+        // Catalogs overlays are answered from the client's bundled set. Kept
+        // in fields so dispose() clears only OUR closures — a remount whose
+        // new initState runs before the old dispose must keep its resolvers.
+        _listResolver = () async => catalogOverlayInfos();
+        _objectsResolver = (id, limit) async {
+          final all = await ref.read(bundledCatalogProvider.future);
+          return catalogOverlayObjects(id, all, limit: limit);
+        };
+        StellariumServer.catalogListResolver = _listResolver;
+        StellariumServer.catalogObjectsResolver = _objectsResolver;
         // Handle events the page posts back (e.g. framing → add-to-sequence).
         _eventSub = server.events.listen(_onPageEvent);
         // The page self-initialises from these query params: the observer site, and
         // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
-        final site =
-            ref.read(siteLocationProvider).asData?.value ??
-            await ref.read(siteLocationProvider.future);
+        // The daemon's site when it answers; otherwise the client's own site
+        // settings (seeded from the cached profile offline). A transport
+        // failure here must not take the whole atlas down — the sky still
+        // draws, from the cached site.
+        SiteLocation? serverSite;
+        try {
+          serverSite = ref.read(siteLocationProvider).asData?.value ??
+              await ref.read(siteLocationProvider.future);
+        } catch (e) {
+          debugPrint('StellariumView: daemon site unavailable, using cached: $e');
+        }
         if (!mounted) return;
+        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
+        final optics = planetariumOpticsFor(ref.read(opticsSettingsProvider));
         final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
         final api = activeServer?.baseUrl ?? '';
@@ -114,6 +141,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                   'lon': (site?.longitudeDeg ?? 0).toString(),
                   'elev': (site?.elevationM ?? 0).toString(),
                   'api': api,
+                  // Offline framing: the page's optics fetch has no daemon to
+                  // ask, so the configured train rides in the URL too.
+                  if (optics != null) 'optics': jsonEncode(optics),
                   'prefs': jsonEncode(savedPrefs),
                   // Per-run secret the page must echo as X-Ara-Token on the
                   // loopback control channels (/araevent, /aracmd); see
@@ -197,6 +227,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   @override
   void dispose() {
     unawaited(_eventSub?.cancel());
+    // The /aracat resolvers capture this widget's ref; a later hit after
+    // dispose would throw into the server's catch (a 500). Clear them — but
+    // only if they are still ours (a replacement view may already have
+    // installed its own).
+    if (identical(StellariumServer.catalogListResolver, _listResolver)) {
+      StellariumServer.catalogListResolver = null;
+    }
+    if (identical(StellariumServer.catalogObjectsResolver, _objectsResolver)) {
+      StellariumServer.catalogObjectsResolver = null;
+    }
     _searchCtrl.dispose();
     // wva.WebViewController has no dispose() in the webview_flutter API; its
     // platform view is torn down with the widget.
@@ -299,8 +339,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations (and
     // OpenNGC common names) must resolve against the local mirror — a hit
     // centres by coordinates, the same channel as Tonight's Sky recentre.
-    final catalog = ref.read(dsoCatalogProvider).value;
-    final hit = catalog == null ? null : findCatalogObject(catalog, q);
+    // The curated imaging-regions layer rides on top (its names — "WR 134
+    // ring", "Thor's Helmet", "Crescent" — are what people type, and the
+    // standalone regions have no mirror row at all). Empty mirror → the
+    // regions alone still resolve.
+    // The FULL bundled set (no magnitude cull) — a 15th-magnitude WR star or
+    // a faint Arp galaxy is exactly what someone types into a search box.
+    final catalog = ref.read(bundledCatalogProvider).value ??
+        ref.read(dsoCatalogProvider).value ??
+        const <PlanningDso>[];
+    final hit = findCatalogObject(applyImagingRegions(catalog), q);
     if (hit != null) {
       _pushCmd({'type': 'goto', 'ra': hit.raDeg, 'dec': hit.decDeg});
       return;
@@ -379,6 +427,25 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // forwarded command for a fresh one. (updateShouldNotify ignores the null,
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
+    });
+
+    // Site / optics edits made in Options reach the page even with no daemon
+    // to poll (online, the page's own polling of the profile endpoints does
+    // the same job; the push is harmless there — same values).
+    ref.listen(siteSettingsProvider, (_, next) {
+      final site = planetariumSiteFor(null, next);
+      if (site == null) return;
+      _pushCmd({
+        'type': 'site',
+        'lat': site.latitudeDeg,
+        'lon': site.longitudeDeg,
+        'elev': site.elevationM,
+      });
+    });
+    ref.listen(opticsSettingsProvider, (_, next) {
+      final optics = planetariumOpticsFor(next);
+      if (optics == null) return;
+      _pushCmd({'type': 'optics', ...optics});
     });
 
     // Night mode for the sky map: a Flutter overlay can't paint over the native

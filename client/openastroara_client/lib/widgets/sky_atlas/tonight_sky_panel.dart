@@ -16,6 +16,7 @@ import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
+import 'target_preview.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
 /// active profile's site and optical train, by the server's transparent 0–100
@@ -81,6 +82,21 @@ TonightWindowState windowStateFor(TonightSkyObject o, DateTime nowUtc) {
   return TonightWindowState.open;
 }
 
+/// Local HH:MM of the earliest still-to-come window start, or null.
+String? _nextOpening(List<TonightSkyObject> all, DateTime nowUtc) {
+  DateTime? next;
+  for (final o in all) {
+    final s = o.windowStartUtc;
+    if (s != null && s.isAfter(nowUtc) && (next == null || s.isBefore(next))) {
+      next = s;
+    }
+  }
+  if (next == null) return null;
+  final t = next.toLocal();
+  return '${t.hour.toString().padLeft(2, '0')}:'
+      '${t.minute.toString().padLeft(2, '0')}';
+}
+
 class TonightSkyPanel extends ConsumerWidget {
   const TonightSkyPanel({super.key});
 
@@ -102,6 +118,7 @@ class TonightSkyPanel extends ConsumerWidget {
         .watch(savedServersProvider)
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     final theme = Theme.of(context);
+    final upNow = ref.watch(tonightSkyUpNowProvider);
     // Material (not a bare Container colour) so the rows' ink splashes have a
     // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
@@ -116,6 +133,24 @@ class TonightSkyPanel extends ConsumerWidget {
               child: Row(
                 children: [
                   Expanded(child: Text("Tonight's Sky", style: AraText.title)),
+                  // "Up now": hide the rows whose window hasn't opened yet
+                  // (they rise later tonight and are ranked on the whole
+                  // night, which read as "it's listing things below the
+                  // horizon" at 22:40 with the scope out).
+                  Tooltip(
+                    message: upNow
+                        ? 'Showing only targets whose dark window is open '
+                            'right now (on automatically after dark) — tap '
+                            'to see the whole night'
+                        : 'Show only targets you can point at right now',
+                    child: FilterChip(
+                      label: const Text('Up now'),
+                      selected: upNow,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) =>
+                          ref.read(tonightSkyUpNowProvider.notifier).toggle(),
+                    ),
+                  ),
                   IconButton(
                     tooltip: 'Refresh',
                     icon: const Icon(Icons.refresh, size: 18),
@@ -134,7 +169,24 @@ class TonightSkyPanel extends ConsumerWidget {
                   message: 'Could not load Tonight\'s Sky.',
                   onRetry: () => ref.invalidate(tonightSkyProvider),
                 ),
-                data: (objects) {
+                data: (all) {
+                  final nowUtc = DateTime.now().toUtc();
+                  final objects = upNow
+                      ? [
+                          for (final o in all)
+                            if (windowStateFor(o, nowUtc) ==
+                                TonightWindowState.open)
+                              o,
+                        ]
+                      : all;
+                  if (objects.isEmpty && all.isNotEmpty) {
+                    return _Message(
+                      message: 'Nothing on tonight\'s list is up right now — '
+                          'the next one opens at '
+                          '${_nextOpening(all, nowUtc) ?? 'a later hour'}. '
+                          'Turn off "Up now" to see the whole night.',
+                    );
+                  }
                   if (objects.isEmpty) {
                     // Distinguish "no server" (offline ranking found no usable
                     // cached site) from "connected, but nothing's up / no site
@@ -319,8 +371,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final hasReasons = reasons != null && reasons.isNotEmpty;
     // Watch (not read) so the autoDispose sequence API stays alive while the
     // panel is shown — a bare read would let it dispose (closing its Dio) before
-    // an in-flight create() resolves.
-    final canAdd = ref.watch(sequenceApiProvider) != null;
+    // an in-flight create() resolves. Offline the add is NOT gated: with no
+    // server createImagingRun saves a local draft that pushes on reconnect
+    // (§2 offline planning) — the button was dead at the dark site before.
+    final online = ref.watch(sequenceApiProvider) != null;
     // select() so a selection change rebuilds only the two rows whose
     // highlight actually flipped, not every visible row.
     final selected = ref.watch(
@@ -382,9 +436,16 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     ),
                   ),
                   const SizedBox(width: 6),
+                  // The altitude NOW; amber while the window hasn't opened
+                  // (too low / still rising) so a 90-score row that can't
+                  // be shot yet doesn't read as shootable.
                   Text(
                     '${_object.altitudeDeg.toStringAsFixed(0)}°',
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: windowState == TonightWindowState.upcoming
+                          ? AraColors.accentWarning
+                          : null,
+                    ),
                   ),
                 ],
               ),
@@ -429,16 +490,26 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                   if (_object.integrationHours > 0) ...[
                     const SizedBox(height: 2),
                     Text(
-                      windowState == TonightWindowState.open
-                          ? 'open now · '
-                                '${_object.integrationHours.toStringAsFixed(1)} h dark'
-                                '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}'
-                          : '${_object.integrationHours.toStringAsFixed(1)} h dark'
-                                '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
+                      switch (windowState) {
+                        TonightWindowState.open =>
+                          'open now · '
+                              '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                              '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
+                        // Say it plainly: not shootable YET, and when it will be.
+                        TonightWindowState.upcoming =>
+                          'rises into your window at '
+                              '${_hhmm(_object.windowStartUtc!)} · '
+                              '${_object.integrationHours.toStringAsFixed(1)} h dark',
+                        TonightWindowState.passed || TonightWindowState.none =>
+                          '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                              '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
+                      },
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: windowState == TonightWindowState.open
-                            ? AraColors.accentConnected
-                            : AraColors.textSecondary,
+                        color: switch (windowState) {
+                          TonightWindowState.open => AraColors.accentConnected,
+                          TonightWindowState.upcoming => AraColors.accentWarning,
+                          _ => AraColors.textSecondary,
+                        },
                       ),
                     ),
                   ],
@@ -489,9 +560,12 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                       : IconButton(
                           iconSize: 18,
                           visualDensity: VisualDensity.compact,
-                          tooltip: 'Add to a new sequence',
+                          tooltip: online
+                              ? 'Add to a new sequence'
+                              : 'Save as a draft run (no server — pushes '
+                                  'when you reconnect)',
                           icon: const Icon(Icons.playlist_add),
-                          onPressed: canAdd ? _addToSequence : null,
+                          onPressed: _addToSequence,
                         ),
                   IconButton(
                     iconSize: 18,
@@ -530,6 +604,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // What it looks like — fetched on expand only, so
+                            // the list itself never spends network on rows
+                            // nobody opened. Tap to enlarge.
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: TargetPreview(object: _object),
+                            ),
                             for (final r in reasons)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 2),

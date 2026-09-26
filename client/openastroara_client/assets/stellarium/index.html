@@ -190,8 +190,9 @@
 </div>
 
 <!-- Catalogs (§36): highlight rings for a chosen catalog or object type, drawn over
-     the engine's native deep-sky layer. Rows come from the daemon's catalog list
-     (GET /api/v1/catalogs), objects brightest-first per its 500-row cap. -->
+     the engine's native deep-sky layer. Rows come from the client's own loopback
+     server (GET /aracat, answered from the bundled catalogs — no daemon, works
+     offline), objects brightest-first per the 500-row cap on /aracat/{id}. -->
 <div id="catalogs" class="ui">
   <div class="card-title">Catalogs<button class="close" id="cat-close" title="Hide">✕</button></div>
   <div id="cat-list"></div>
@@ -804,7 +805,7 @@ var CAT_COLORS = {
 };
 function catColor(id) { return CAT_COLORS[id] || '#81c784'; }
 
-var catInfos = null;      // [{id,name,group}] from /api/v1/catalogs, or null until fetched
+var catInfos = null;      // [{id,name,group}] from the loopback /aracat, or null until fetched
 var catInfosPending = false;
 var catOn = {};           // id -> bool (the persisted toggle state)
 // Ids whose boot-restore silently reverted (fetch failed/empty at launch).
@@ -880,17 +881,11 @@ function catToggle(id, on, skipPost) {
   on = (on == null) ? !catOn[id] : !!on;
   catOn[id] = on;
   if (on && !catRowsCache[id] && !catPending[id]) {
-    if (!API) {
-      setCatMsg('Connect to a server to load catalogs.');
-      catOn[id] = false;
-      if (skipPost) catBootReverted[id] = true;
-      renderCatPanel();
-      return;
-    }
     catPending[id] = true;
-    fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=500')
-      // 404 = the OpenNGC source isn't installed; a 200 empty array is an
-      // installed catalog that genuinely matched nothing — different advice.
+    fetch('/aracat/' + encodeURIComponent(id) + '?limit=500', { headers: araHeaders() })
+      // 404 = the loopback resolver has no such catalog id (or the app's
+      // planetarium view is gone); a 200 empty array is a catalog that
+      // genuinely matched nothing — different advice.
       .then(function (r) {
         if (r.status === 404) return { missing: true };
         if (!r.ok) return null;
@@ -903,9 +898,9 @@ function catToggle(id, on, skipPost) {
         } else {
           catOn[id] = false;
           if (skipPost) catBootReverted[id] = true;
-          setCatMsg(!res ? 'Could not load the catalog — is the server reachable?'
-              : res.missing ? 'Install the OpenNGC deep-sky package under Data to highlight catalogs.'
-              : 'The installed data has no objects for this catalog.');
+          setCatMsg(!res ? 'Could not load the catalog from the app — try reopening Planning.'
+              : res.missing ? 'This catalog is not known to the app — try reopening Planning.'
+              : 'The bundled data has no objects for this catalog.');
         }
         updateCatGeo(id); renderCatPanel();
         if (!skipPost) postDisplayPrefs();   // persist only what actually stuck
@@ -970,9 +965,9 @@ function renderCatPanel() {
 
 function loadCatalogs() {
   if (catInfos || catInfosPending) return;
-  if (!API) { setCatMsg('Connect to a server to load catalogs.'); return; }
   catInfosPending = true;
-  fetch(API + '/api/v1/catalogs')
+  // Bundled in the client — served by the loopback server, works offline.
+  fetch('/aracat', { headers: araHeaders() })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (infos) {
       catInfosPending = false;
@@ -980,7 +975,7 @@ function loadCatalogs() {
         catInfos = infos;
         setCatMsg('Rings mark the brightest objects of each catalog (up to 500).');
       } else {
-        setCatMsg('Install the OpenNGC deep-sky package (Data button in the app) to highlight catalogs.');
+        setCatMsg('No catalogs came back from the app — try reopening Planning.');
       }
       renderCatPanel();
     })
@@ -1044,12 +1039,20 @@ function applyOptics(o) {
   return optics;
 }
 
+// Offline seed: the configured train rides in the URL (`optics`, the same wire
+// shape as the profile endpoint) so the framing box draws with no daemon.
+function urlOptics() {
+  try { var o = JSON.parse(qp('optics', 'null')); return o && typeof o === 'object' ? o : null; }
+  catch (e) { return null; }
+}
+var pushedOptics = null;   // a Flutter-pushed `optics` command outranks the URL seed
 function loadOptics() {
-  if (!API) return Promise.resolve(applyOptics(null));
+  var fallback = pushedOptics || urlOptics();
+  if (!API) return Promise.resolve(applyOptics(fallback));
   return fetch(API + '/api/v1/profile/optics')
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(applyOptics)
-    .catch(function () { return applyOptics(null); });
+    .then(function (o) { return applyOptics(o || fallback); })
+    .catch(function () { return applyOptics(fallback); });
 }
 
 // Remember the target to frame (J2000). Called on every search / selection so
@@ -1221,13 +1224,16 @@ function renderFramePanel() {
     msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
     msg.classList.add('warn');
   } else if (!API) {
-    msg.textContent = 'Connect to a server to create a Run from this frame.';
-    msg.classList.add('warn');
+    // No daemon: the app still takes the frame — it saves a local draft run
+    // that pushes to the server on reconnect (§2 offline planning).
+    msg.textContent = 'No server — “Create Run” saves a draft that pushes when you reconnect.';
+    msg.classList.remove('warn');
   } else {
     msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
-  document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
+  document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
+  document.getElementById('f-add').disabled = !(frameRaDeg != null && optics && optics.ok);
   setFrameCoordText();
 }
 
@@ -1341,11 +1347,11 @@ function addFrameToSequence() {
       panels: panels,
     }),
   }).then(function (r) {
-    btn.textContent = r.ok ? 'Created ✓' : "Couldn't create";
+    btn.textContent = r.ok ? (API ? 'Created ✓' : 'Draft saved ✓') : "Couldn't create";
   }).catch(function () {
     btn.textContent = "Couldn't create";
   }).then(function () {
-    setTimeout(function () { btn.textContent = 'Create Run'; renderFramePanel(); }, 1800);
+    setTimeout(function () { renderFramePanel(); }, 1800);
   });
 }
 
@@ -1412,12 +1418,44 @@ function pollCmd() {
       debugEvent({ cmd: c.type });
       if (c.type === 'search') doSearch(c.q || '');
       else if (c.type === 'zoom') zoomBy(c.factor);
+      // Observer site pushed from Flutter (offline edits in Options; the
+      // daemon poll in loadSite covers the online case).
+      else if (c.type === 'site' && isFinite(+c.lat) && isFinite(+c.lon)) {
+        var la = +c.lat, lo = +c.lon, el = +c.elev || 0;
+        if (!(la === LAT && lo === LON && el === ELEV)) {
+          LAT = la; LON = lo; ELEV = el;
+          stel.core.observer.latitude = LAT * D2R;
+          stel.core.observer.longitude = LON * D2R;
+          stel.core.observer.elevation = ELEV;
+          setObserverTime();
+          var sel0 = stel.core.selection; if (sel0) renderInfo(sel0);
+        }
+      }
+      else if (c.type === 'optics') { pushedOptics = c; applyOptics(c); }
       else if (c.type === 'goto' && c.ra != null) {
         stel.core.selection = 0;
         // A framing goto (Tonight's Sky row tap) opens the framing overlay so
         // the box lands ON the object (setFrameTarget inside pointRaDec
         // replaces the open-seed centre); a plain goto stays centre-only.
         if (c.frame) toggleFrame(true);
+        // `dss: true` (the session planner's "Show on the planetarium") turns
+        // the DSS2 photo layer on so the user sees the real field; the
+        // Display panel dot + stored prefs follow, same as a manual toggle.
+        if (c.dss && !dispState('dss')) { setLayer('dss', true); renderDisplayPanel(); postDisplayPrefs(); }
+        // `rot` (degrees) presets the framing dial — the session planner's
+        // per-slot rotation lands on the box so the user sees the layout
+        // they dialled, and Create Run here carries the same angle.
+        if (c.rot != null && isFinite(+c.rot)) {
+          frameRotDeg = ((Math.round(+c.rot) % 360) + 360) % 360;
+          renderFramePanel();
+        }
+        // A planned mosaic presets the grid the same way (cols/rows 1–8,
+        // overlap 0–50 — the Frame panel's own bounds).
+        if (c.cols != null && c.rows != null) {
+          frameCols = Math.max(1, Math.min(8, Math.round(+c.cols) || 1));
+          frameRows = Math.max(1, Math.min(8, Math.round(+c.rows) || 1));
+          if (c.overlap != null && isFinite(+c.overlap)) frameOverlap = Math.max(0, Math.min(50, Math.round(+c.overlap)));
+        }
         pointRaDec(c.ra, c.dec, c.name);
       }
     })
