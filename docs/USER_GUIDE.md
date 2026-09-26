@@ -71,7 +71,8 @@ installed). Search anything ("M 42", "NGC 7000", "Vega"), explore, and toggle di
   NGC, or IC object (or a type — galaxies, globular clusters, planetary nebulae, …), brightest
   500 first, sized by magnitude so the showpieces stand out. Toggle several at once; each catalog
   gets its own color, your picks persist across restarts, and the underlying deep-sky layer still
-  supplies names and tap-to-select. Needs the OpenNGC package from the sky-data manager.
+  supplies names and tap-to-select. The catalogs ship inside the app, so this works offline
+  and without a daemon.
 - **Framing** — the Frame overlay draws your camera's true field of view (from the profile optics)
   with rotation and a mosaic grid. What you frame here seeds the sequence target.
 - Moon/twilight context is annotated; your custom horizon (Settings → Safety → Site) shades the
