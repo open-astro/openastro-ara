@@ -790,9 +790,10 @@ function wireDisplay() {
 
 // ---- Catalogs overlay (§36) ----------------------------------------------
 // Highlight rings for a chosen catalog (Messier/Caldwell/NGC/IC) or object type,
-// drawn as stroke-only Polygon features per catalog on a dedicated layer
-// (the engine accepts Polygon only; fill-opacity 0 skips fill tessellation).
-// The engine's native dsos layer still supplies names/
+// drawn as ONE stroke-only MultiPolygon feature per catalog on a dedicated layer
+// (the mosaic's proven cheap path — per-feature work is what wedges the engine,
+// so 500 rings collapse into a single feature; fill-opacity 0 skips the fill
+// tessellation entirely). The engine's native dsos layer still supplies names/
 // selection underneath — these rings just say "this one is in your catalog".
 // Toggles persist through the same displayPref channel as the layer dots,
 // namespaced `cat:{id}` (the Flutter side stores the map as-is).
@@ -825,10 +826,9 @@ function catRingRadius(mag) {
   return Math.max(0.05, Math.min(0.3, 0.3 - 0.022 * mag));
 }
 
-// One Polygon feature per 12-gon ring, deprojected off each object's own tangent
-// plane (reuses the mosaic's gnomonic inverse so rings stay round at high
-// declination). The bundled engine's GeoJSON adapter accepts Polygon only;
-// MultiPolygon is rejected by stellarium-web-engine.js.
+// One MultiPolygon of 12-gon rings for every object in the catalog, deprojected
+// off each object's own tangent plane (reuses the mosaic's gnomonic inverse so
+// rings stay round at high declination).
 function catData(id) {
   var rows = catRowsCache[id] || [];
   var polys = [];
@@ -844,15 +844,13 @@ function catData(id) {
     }
     polys.push([ring]);
   }
-  return { type: 'FeatureCollection', features: polys.map(function (ring) {
-    return {
-      type: 'Feature', geometry: { type: 'Polygon', coordinates: ring },
-      properties: {
-        stroke: catColor(id), 'stroke-width': 1.3, 'stroke-opacity': 0.85,
-        fill: catColor(id), 'fill-opacity': 0,
-      },
-    };
-  }) };
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: polys },
+    properties: {
+      stroke: catColor(id), 'stroke-width': 1.3, 'stroke-opacity': 0.85,
+      fill: catColor(id), 'fill-opacity': 0,
+    },
+  }] };
 }
 
 function updateCatGeo(id) {
@@ -1158,18 +1156,20 @@ function mosaicData() {
       polys.push([ring]); // a polygon = [exterior ring]
     }
   }
-  // The bundled engine's GeoJSON adapter accepts Polygon only, so keep one
-  // feature per panel. `fill-opacity: 0` skips fill tessellation; frame rebuilds
-  // are debounced by followFrame, keeping pan input responsive.
-  return { type: 'FeatureCollection', features: polys.map(function (ring) {
-    return {
-      type: 'Feature', geometry: { type: 'Polygon', coordinates: ring },
-      properties: {
-        stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
-        fill: '#4fc3f7', 'fill-opacity': 0,
-      },
-    };
-  }) };
+  // ONE MultiPolygon feature for the WHOLE mosaic, not N separate features. The
+  // engine's per-feature work is what bogged down and eventually wedged large grids
+  // (dozens of tiles), even though building the data is free — so collapse every
+  // panel into a single feature the renderer treats as one object. `fill-opacity: 0`
+  // makes the renderer skip the fill pass entirely (geojson.c renders nothing when
+  // fill alpha is 0), so this is stroke-only outlines with no per-panel fill
+  // tessellation — the same clean look, a fraction of the cost.
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: polys },
+    properties: {
+      stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
+      fill: '#4fc3f7', 'fill-opacity': 0,
+    },
+  }] };
 }
 
 function updateFrame() {
@@ -1565,7 +1565,10 @@ StelWebEngine({
     // target). The loopback server proxies and caches these HiPS tiles under
     // /dss/, so tiles downloaded once while online remain usable on the SBC-only
     // hotspot. A cache miss off-net simply leaves the vector sky visible.
-    core.dss.addDataSource({ url: './dss/' });
+    // NB: no trailing slash — the engine joins `url + '/' + path` verbatim
+    // (hips.c get_url_for), so './dss/' would request '/dss//properties' and
+    // the server's path validator rejects the empty segment.
+    core.dss.addDataSource({ url: './dss' });
     s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
     s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 

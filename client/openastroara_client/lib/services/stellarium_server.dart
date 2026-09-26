@@ -41,6 +41,10 @@ class StellariumServer {
   /// loopback server instead of CDS directly, so tiles downloaded while online
   /// remain available when the computer later joins the SBC-only hotspot.
   final Directory _dssCacheDir;
+
+  /// Where DSS2 tiles are cached (exposed so a test can seed a hit).
+  @visibleForTesting
+  Directory get dssCacheDir => _dssCacheDir;
   final HttpClient _dssClient = HttpClient();
   final Map<String, Future<Uint8List?>> _dssFetches = {};
   DateTime? _dssRetryAfter;
@@ -50,6 +54,7 @@ class StellariumServer {
     'https://alasky.u-strasbg.fr/DSS/DSSColor/',
   );
   static const _maxDssResourceBytes = 64 * 1024 * 1024;
+  static final RegExp _dssSegment = RegExp(r'^[A-Za-z0-9._-]+$');
 
   static const String _tokenHeader = 'x-ara-token';
 
@@ -283,7 +288,15 @@ class StellariumServer {
       // requested path from the fixed CDS origin, then stores it for offline
       // use. No arbitrary proxying is allowed.
       if (path == '/dss' || path.startsWith(_dssPathPrefix)) {
-        await _serveDss(request, path == '/dss' ? _dssPathPrefix : path);
+        // Cache misses cost an upstream fetch and a disk write, so at least
+        // hold this to our own loopback Host like the control channels (a
+        // DNS-rebinding page must not be able to drive the cache).
+        if (!_isLoopbackHost(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
+        await _serveDss(request, path);
         return;
       }
       if (path == '/aracat' || path.startsWith('/aracat/')) {
@@ -375,16 +388,8 @@ class StellariumServer {
       await response.close();
       return;
     }
-    final relative = path.substring(_dssPathPrefix.length);
-    final parts = relative.split('/');
-    if (relative.isEmpty ||
-        parts.any(
-          (part) =>
-              part.isEmpty ||
-              part == '.' ||
-              part == '..' ||
-              !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(part),
-        )) {
+    final relative = _dssRelativePath(path);
+    if (relative == null) {
       response.statusCode = HttpStatus.forbidden;
       await response.close();
       return;
@@ -424,6 +429,25 @@ class StellariumServer {
     response.headers.set(HttpHeaders.contentLengthHeader, bytes.length);
     if (request.method == 'GET') response.add(bytes);
     await response.close();
+  }
+
+  /// Map a request path under `/dss/` onto the cache-relative tile path, or
+  /// null when it must be refused: anything outside the prefix, an empty or
+  /// dot segment (`/dss//properties`, `..`), or a character outside the HiPS
+  /// name alphabet. Only such a validated path ever reaches the disk or CDS.
+  @visibleForTesting
+  static String? dssRelativePath(String path) => _dssRelativePath(path);
+
+  static String? _dssRelativePath(String path) {
+    if (!path.startsWith(_dssPathPrefix)) return null;
+    final relative = path.substring(_dssPathPrefix.length);
+    if (relative.isEmpty) return null;
+    for (final part in relative.split('/')) {
+      if (part == '.' || part == '..' || !_dssSegment.hasMatch(part)) {
+        return null;
+      }
+    }
+    return relative;
   }
 
   Future<Uint8List?> _fetchDss(String relative, File file) async {
@@ -510,7 +534,8 @@ class StellariumServer {
   static ContentType contentTypeFor(String path) => _contentTypeFor(path);
 
   static ContentType _contentTypeFor(String path) {
-    if (path == '/dss/properties' || path.endsWith('/properties')) {
+    // A HiPS `properties` manifest has no extension.
+    if (path.endsWith('/properties')) {
       return ContentType('text', 'plain', charset: 'utf-8');
     }
     final dot = path.lastIndexOf('.');

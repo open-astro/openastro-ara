@@ -11,59 +11,33 @@ import 'package:openastroara/services/stellarium_server.dart';
 // which is the part with real branching.
 void main() {
   group('StellariumServer.contentTypeFor', () {
-    test(
-      'serves WASM with the correct type (needed for streaming instantiation)',
-      () {
-        expect(
-          StellariumServer.contentTypeFor('/stellarium-web-engine.wasm')
-              .toString(),
-          'application/wasm',
-        );
-      },
-    );
+    test('serves WASM with the correct type (needed for streaming instantiation)', () {
+      expect(StellariumServer.contentTypeFor('/stellarium-web-engine.wasm').toString(),
+          'application/wasm');
+    });
     test('serves the bridge page as HTML and the engine as JavaScript', () {
-      expect(
-        StellariumServer.contentTypeFor('/index.html').mimeType,
-        'text/html',
-      );
-      expect(
-        StellariumServer.contentTypeFor('/stellarium-web-engine.js').mimeType,
-        'text/javascript',
-      );
+      expect(StellariumServer.contentTypeFor('/index.html').mimeType, 'text/html');
+      expect(StellariumServer.contentTypeFor('/stellarium-web-engine.js').mimeType,
+          'text/javascript');
     });
     test('serves gzipped data as gzip (the engine inflates it itself)', () {
-      expect(
-        StellariumServer.contentTypeFor('/skydata/tle_satellite.jsonl.gz')
-            .mimeType,
-        'application/gzip',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/tle_satellite.jsonl.gz').mimeType,
+          'application/gzip');
     });
     test('serves .webp landscape/art tiles as image/webp', () {
-      expect(
-        StellariumServer.contentTypeFor(
-          '/skydata/landscapes/guereins/tile.webp',
-        ).mimeType,
-        'image/webp',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/landscapes/guereins/tile.webp').mimeType,
+          'image/webp');
     });
     test('serves DSS2 JPEG tiles as image/jpeg', () {
-      expect(
-        StellariumServer.contentTypeFor('/dss/Norder3/Dir0/Npix0.jpg').mimeType,
-        'image/jpeg',
-      );
+      expect(StellariumServer.contentTypeFor('/dss/Norder3/Dir0/Npix0.jpg').mimeType,
+          'image/jpeg');
     });
     test('serves the DSS2 properties manifest as text', () {
-      expect(
-        StellariumServer.contentTypeFor('/dss/properties').mimeType,
-        'text/plain',
-      );
+      expect(StellariumServer.contentTypeFor('/dss/properties').mimeType, 'text/plain');
     });
     test('unknown / binary sky-data blobs fall back to octet-stream', () {
-      expect(
-        StellariumServer.contentTypeFor('/skydata/dso/Norder0/Dir0/Npix0.eph')
-            .mimeType,
-        'application/octet-stream',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/dso/Norder0/Dir0/Npix0.eph').mimeType,
+          'application/octet-stream');
     });
   });
 
@@ -171,6 +145,92 @@ void main() {
       expect((await get('/aracat/nope')).status, HttpStatus.notFound);
       StellariumServer.catalogListResolver = null;
       expect((await get('/aracat')).status, HttpStatus.notFound);
+    });
+  });
+
+  group('StellariumServer.dssRelativePath', () {
+    test('accepts the HiPS manifest, Allsky and tile paths the engine requests', () {
+      expect(StellariumServer.dssRelativePath('/dss/properties'), 'properties');
+      expect(StellariumServer.dssRelativePath('/dss/Norder3/Allsky.jpg'),
+          'Norder3/Allsky.jpg');
+      expect(StellariumServer.dssRelativePath('/dss/Norder7/Dir10000/Npix12345.jpg'),
+          'Norder7/Dir10000/Npix12345.jpg');
+    });
+    test('refuses empty and dot segments and anything outside the prefix', () {
+      // The engine joins `url + "/" + path` verbatim, so a data-source URL
+      // with a trailing slash produced exactly this — and DSS never loaded.
+      expect(StellariumServer.dssRelativePath('/dss//properties'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/../index.html'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/Norder3/./Allsky.jpg'), isNull);
+      expect(StellariumServer.dssRelativePath('/dss/a%2f..%2fb'), isNull);
+      expect(StellariumServer.dssRelativePath('/skydata/stars'), isNull);
+    });
+  });
+
+  // Cache HITS and refused paths never leave the machine, so they too can be
+  // black-box tested over loopback. (A miss would fetch from CDS — not here.)
+  group('StellariumServer /dss', () {
+    late StellariumServer server;
+    setUpAll(() async {
+      server = await StellariumServer.start();
+    });
+    tearDownAll(() async => server.dispose());
+
+    Future<HttpClientResponse> send(String method, String path) async {
+      final client = HttpClient();
+      try {
+        final req = await client.openUrl(
+            method, Uri.parse('${server.baseUrl}$path'));
+        return await req.close();
+      } finally {
+        client.close(force: true);
+      }
+    }
+
+    test("refuses the double-slash path a trailing-slash data source produces",
+        () async {
+      expect((await send('GET', '/dss//properties')).statusCode,
+          HttpStatus.forbidden);
+      expect((await send('GET', '/dss/')).statusCode, HttpStatus.forbidden);
+      // (`..` is covered by the dssRelativePath unit test above — Dart's
+      // HttpClient normalises dot segments away before the request is sent.)
+    });
+
+    test('serves a cached tile from disk (GET body, HEAD length only)',
+        () async {
+      final tile = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix1.jpg');
+      await tile.parent.create(recursive: true);
+      await tile.writeAsBytes([0xFF, 0xD8, 0xFF, 0xD9]);
+      try {
+        final get = await send('GET', '/dss/Norder3/Dir0/Npix1.jpg');
+        expect(get.statusCode, HttpStatus.ok);
+        expect(get.headers.contentType?.mimeType, 'image/jpeg');
+        expect(await get.fold<List<int>>([], (a, b) => a..addAll(b)),
+            [0xFF, 0xD8, 0xFF, 0xD9]);
+        final head = await send('HEAD', '/dss/Norder3/Dir0/Npix1.jpg');
+        expect(head.statusCode, HttpStatus.ok);
+        expect(head.contentLength, 4);
+        expect(await head.fold<int>(0, (n, b) => n + b.length), 0);
+      } finally {
+        await tile.delete();
+      }
+    });
+
+    test('rejects methods other than GET/HEAD', () async {
+      expect((await send('POST', '/dss/properties')).statusCode,
+          HttpStatus.methodNotAllowed);
+    });
+  });
+
+  group('planetarium page DSS data source', () {
+    test('points at the loopback cache WITHOUT a trailing slash', () {
+      // hips.c get_url_for() emits `<url>/<path>`; './dss/' would request
+      // '/dss//properties', which dssRelativePath rightly refuses.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      expect(page, contains("core.dss.addDataSource({ url: './dss' })"));
+      expect(page, isNot(contains("url: './dss/'")));
     });
   });
 }
