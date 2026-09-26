@@ -190,13 +190,13 @@ namespace OpenAstroAra.Server.Services {
                 // .deb seed for offline-first installs. Type "WR*" — stars, so the planning
                 // ranker skips them; they exist to be searchable + to overlay (the ring nebulae
                 // around them are the imaging targets).
-                Description: "226 Galactic Wolf-Rayet stars (van der Hucht 2001) — search any WR number; the shells around them are the targets.",
+                Description: "717 Galactic Wolf-Rayet stars (Sheffield catalogue, Rosslowe & Crowther 2015) — search any WR number; the shells around them are the targets.",
                 Category: "catalog",
-                SizeBytes: 18158,
-                Version: "2001NewAR-45-135",
+                SizeBytes: 81807,
+                Version: "2015MNRAS-447-2322",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/a72784dab96371f25877c2dcd3ea6751e09e0bcc/wr.csv"),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/cc6373e4b284a35bcdbaf91877b13e37d6ad20c2/wr.csv"),
                 Recommended: false),
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
@@ -218,7 +218,7 @@ namespace OpenAstroAra.Server.Services {
                 ["vdb-reflection"] = "9b0024925ec9f5ef50e84a4efb6f7cf8535994aa0e2018b354ffce2f99b977f5",
                 ["abell-pn"] = "aea2591ad1e1f0245205fca946a363cef8820e05a6e5e422ce1e4ed16f26e200",
                 ["arp-peculiar"] = "afe3aed0bbcfc5bd807e88a4b1f4ae15a493d9170d1bdff8a528a7a80e04f853",
-                ["wr-stars"] = "9847929216b4ba7b87f89fdf3cef43d95b74ed4f1a8a20340a9315397bd4f838",
+                ["wr-stars"] = "afc8c3c9861feaea11614a8d51017a3f7d043eddd16c6fb384c7f77385f65965",
             };
 
         /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
