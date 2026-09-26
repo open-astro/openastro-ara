@@ -71,18 +71,19 @@ class OpenAstroAraApp extends ConsumerWidget {
         }
         return result;
       },
-      home: _withNightHotkey(ref, const _RootRouter()),
+      home: withNightHotkey(ref, const _RootRouter()),
     );
   }
 }
 
 /// Wraps the app root so Ctrl+N (Cmd+N on macOS) toggles night mode from
-/// anywhere. It WAS a bare `N` with a "skip while a text field has focus"
+/// anywhere. Public so `test/night_hotkey_test.dart` can drive it with key
+/// events. It WAS a bare `N` with a "skip while a text field has focus"
 /// guard — which didn't cover every place you can type (typing "ldn" into the
 /// planetarium search flipped the display mid-word). A modified chord can't
 /// collide with typing, so no guard is needed. The [Focus] gives the shortcut
 /// a target to receive keys.
-Widget _withNightHotkey(WidgetRef ref, Widget child) {
+Widget withNightHotkey(WidgetRef ref, Widget child) {
   void toggle() => ref.read(nightModeProvider.notifier).toggle();
   return CallbackShortcuts(
     bindings: <ShortcutActivator, VoidCallback>{
