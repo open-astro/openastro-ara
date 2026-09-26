@@ -68,9 +68,10 @@ class SequencerToolbar extends ConsumerWidget {
     final busy = ref.watch(sequenceCommandBusyProvider);
     // §2 offline drafts live client-side: they save locally with no daemon,
     // and never expose actions that send the draft's id to the daemon
-    // (run/pause/skip/abort/delete/export) even while connected — push the
-    // draft to the server first. Validate is the exception: it sends only the
-    // BODY (no id), so pre-push validation of a draft works while connected.
+    // (run/pause/skip/abort/export) even while connected — push the draft to
+    // the server first. Two exceptions: Validate sends only the BODY (no id),
+    // so pre-push validation works while connected; Delete removes the LOCAL
+    // draft (see _deleteDraft) and never talks to the daemon.
     final isDraft = isDraftSequenceId(selectedId);
     final hasSelection = connected && selectedId != null && !busy && !isDraft;
     // Save is enabled only when the open sequence has unsaved edits. A draft
