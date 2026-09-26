@@ -32,6 +32,22 @@ public static class SystemEndpoints {
     private static bool IsMagnitudelessImagingType(string type) =>
         type is "HII" or "EmN" or "RfN" or "DrkN" or "Neb" or "Cl+N" or "SNR" or "PN";
 
+    /// <summary>The /dso-catalog cull, as one testable rule: rows at or under <paramref name="maxMag"/>
+    /// pass; magnitude-less nebula types pass (they legitimately have no integrated magnitude);
+    /// Wolf-Rayet STARS (<c>WR*</c>) pass regardless of magnitude — mostly v 10–17, so the cull
+    /// would drop the lot, but the client's offline search resolves "WR 134" against this mirror
+    /// (717 rows; the client ranker skips star types). Magnitude-less rows of other types (stars,
+    /// stubs) are dropped.</summary>
+    internal static bool PassesDsoCatalogCull(DsoEntryDto d, double maxMag) {
+        if (d.Type == "WR*") {
+            return true;
+        }
+        if (d.Magnitude is { } mag) {
+            return mag <= maxMag;
+        }
+        return IsMagnitudelessImagingType(d.Type);
+    }
+
     private static IResult NotImplementedStub(string endpoint, string section) =>
         Results.Problem(
             type: "https://openastro.net/errors/not-implemented",
@@ -189,22 +205,11 @@ public static class SystemEndpoints {
                     var cap = maxMag ?? 12.0;
                     var list = new List<DsoEntryDto>();
                     foreach (var d in dsos) {
-                        if (d.Type == "WR*") {
-                            // Wolf-Rayet STARS: mostly v 10–17, so the mag-12 cull would drop
-                            // the lot — but the client's offline search resolves "WR 134"
-                            // against this mirror. 226 rows; the client ranker skips stars.
-                            list.Add(d);
-                        } else if (d.Magnitude is { } mag) {
-                            if (mag <= cap) {
-                                list.Add(d);
-                            }
-                        } else if (IsMagnitudelessImagingType(d.Type)) {
-                            // Nebulae (HII regions, dark/reflection nebulae, SNRs…) legitimately
-                            // have NO integrated magnitude — Sh2/LDN/Barnard rows would all be
-                            // culled by a magnitude bound they can never satisfy. Pass them
-                            // through; the client ranker scores them on size/surface brightness.
-                            // Magnitude-less rows of OTHER types (stars, duplicate stubs) stay
-                            // dropped, same as the original TonightSkyService cull.
+                        // See PassesDsoCatalogCull: mag ≤ cap, or a magnitude-less nebula type
+                        // (Sh2/LDN/Barnard rows have no integrated magnitude to satisfy a bound
+                        // with; the client ranker scores them on size/surface brightness), or a
+                        // Wolf-Rayet star (searchable offline; the ranker skips stars).
+                        if (PassesDsoCatalogCull(d, cap)) {
                             list.Add(d);
                         }
                     }

@@ -139,6 +139,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void GetObjects_wolf_rayet_lists_WR_rows_from_the_wr_stars_package() {
+            // The package's rows spell the name "WR NN" and the type "WR*" (sky-data wr.csv);
+            // both the overlay predicate and the cull bypass key on exactly that.
+            WriteCatalog("NGC0224;G;00:42:44.3;+41:16:09;3.44;4.36;031;;;C 076;;;;;Andromeda Galaxy\n");
+            Directory.CreateDirectory(Path.Combine(_root, "wr-stars"));
+            File.WriteAllText(Path.Combine(_root, "wr-stars", "catalog.csv"),
+                "Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;MajAx;MinAx;PosAng;SurfBr;Common names\n" +
+                "WR 134;WR*;20:10:14.19;+36:10:34.9;7.99;8.25;;;;HD 191765;;;;;Anon (Chu)\n" +
+                "WR 136;WR*;20:12:06.53;+38:21:17.7;7.44;7.65;;;;HD 192163;;;;;NGC 6888\n" +
+                "WR 3-1;WR*;01:40:32.96;+63:42:22.9;;16.04;;;;WR-C-01;;;;;\n");
+            var svc = new SkyCatalogService(_root);
+
+            var wr = svc.GetObjects("wolf-rayet", null, CancellationToken.None)!;
+            Assert.That(wr.Select(o => o.Name), Is.EqualTo(WrBrightestFirst),
+                "brightest first; the magnitude-less row sorts last");
+            Assert.That(svc.GetObjects("ngc", null, CancellationToken.None)!.Select(o => o.Name),
+                Has.No.Member("WR 134"), "WR rows never leak into the NGC set");
+            // And the planning entries carry the type the cull + the client ranker key on.
+            Assert.That(svc.GetAllDsos(CancellationToken.None)!.Where(d => d.Name.StartsWith("WR ", StringComparison.Ordinal))
+                .Select(d => d.Type).Distinct(), Is.EqualTo(WrTypeOnly));
+        }
+
+        private static readonly string[] WrBrightestFirst = { "WR 136", "WR 134", "WR 3-1" };
+        private static readonly string[] WrTypeOnly = { "WR*" };
+
+        [Test]
         public void GetAllDsos_drops_duplicate_and_nonexistent_stub_rows() {
             WriteMembershipFixture();
             var svc = new SkyCatalogService(_root);
