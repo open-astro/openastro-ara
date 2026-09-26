@@ -146,8 +146,9 @@ double? decToDeg(String raw) {
 
 /// The planning subset — the same cull the daemon's /dso-catalog applied:
 /// mag ≤ [maxMag], plus magnitude-less nebula types (which legitimately have
-/// no integrated magnitude), plus WR stars (searchable; the ranker skips
-/// them). Magnitude-less stars / stubs stay out.
+/// no integrated magnitude), plus WR stars (kept for the search; they score
+/// low in the ranker — no size, no surface brightness — and #1107 skips
+/// star types outright). Magnitude-less stars / stubs stay out.
 List<PlanningDso> planningCull(List<PlanningDso> all, {double maxMag = 12}) => [
       for (final d in all)
         if (d.type == 'WR*' ||

@@ -882,8 +882,9 @@ function catToggle(id, on, skipPost) {
   if (on && !catRowsCache[id] && !catPending[id]) {
     catPending[id] = true;
     fetch('/aracat/' + encodeURIComponent(id) + '?limit=500', { headers: araHeaders() })
-      // 404 = the OpenNGC source isn't installed; a 200 empty array is an
-      // installed catalog that genuinely matched nothing — different advice.
+      // 404 = the loopback resolver has no such catalog id (or the app's
+      // planetarium view is gone); a 200 empty array is a catalog that
+      // genuinely matched nothing — different advice.
       .then(function (r) {
         if (r.status === 404) return { missing: true };
         if (!r.ok) return null;
@@ -896,9 +897,9 @@ function catToggle(id, on, skipPost) {
         } else {
           catOn[id] = false;
           if (skipPost) catBootReverted[id] = true;
-          setCatMsg(!res ? 'Could not load the catalog — is the server reachable?'
-              : res.missing ? 'Install the OpenNGC deep-sky package under Data to highlight catalogs.'
-              : 'The installed data has no objects for this catalog.');
+          setCatMsg(!res ? 'Could not load the catalog from the app — try reopening Planning.'
+              : res.missing ? 'This catalog is not known to the app — try reopening Planning.'
+              : 'The bundled data has no objects for this catalog.');
         }
         updateCatGeo(id); renderCatPanel();
         if (!skipPost) postDisplayPrefs();   // persist only what actually stuck

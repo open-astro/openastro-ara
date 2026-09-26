@@ -64,6 +64,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
   final _prefsService = PlanetariumPrefsService();
+  Future<List<Map<String, Object?>>> Function()? _listResolver;
+  Future<List<Map<String, Object?>>?> Function(String, int)? _objectsResolver;
   bool _unavailable = false;
 
   // Linux only: the loopback URL handed to the native GTK overlay
@@ -96,13 +98,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final server = await StellariumServer.start();
         if (!mounted) return;
         _server = server;
-        // Catalogs overlays are answered from the client's bundled set.
-        StellariumServer.catalogListResolver =
-            () async => catalogOverlayInfos();
-        StellariumServer.catalogObjectsResolver = (id, limit) async {
+        // Catalogs overlays are answered from the client's bundled set. Kept
+        // in fields so dispose() clears only OUR closures — a remount whose
+        // new initState runs before the old dispose must keep its resolvers.
+        _listResolver = () async => catalogOverlayInfos();
+        _objectsResolver = (id, limit) async {
           final all = await ref.read(bundledCatalogProvider.future);
           return catalogOverlayObjects(id, all, limit: limit);
         };
+        StellariumServer.catalogListResolver = _listResolver;
+        StellariumServer.catalogObjectsResolver = _objectsResolver;
         // Handle events the page posts back (e.g. framing → add-to-sequence).
         _eventSub = server.events.listen(_onPageEvent);
         // The page self-initialises from these query params: the observer site, and
@@ -223,9 +228,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   void dispose() {
     unawaited(_eventSub?.cancel());
     // The /aracat resolvers capture this widget's ref; a later hit after
-    // dispose would throw into the server's catch (a 500). Clear them.
-    StellariumServer.catalogListResolver = null;
-    StellariumServer.catalogObjectsResolver = null;
+    // dispose would throw into the server's catch (a 500). Clear them — but
+    // only if they are still ours (a replacement view may already have
+    // installed its own).
+    if (identical(StellariumServer.catalogListResolver, _listResolver)) {
+      StellariumServer.catalogListResolver = null;
+    }
+    if (identical(StellariumServer.catalogObjectsResolver, _objectsResolver)) {
+      StellariumServer.catalogObjectsResolver = null;
+    }
     _searchCtrl.dispose();
     // wva.WebViewController has no dispose() in the webview_flutter API; its
     // platform view is torn down with the widget.

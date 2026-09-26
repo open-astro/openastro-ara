@@ -57,6 +57,10 @@ Credited here per their terms:
 - **Sharpless (Sh2), Lynds dark nebulae (LDN), Barnard dark objects, van den Bergh reflection nebulae (vdB), Abell planetary nebulae, Arp peculiar galaxies** — VizieR (CDS, Strasbourg Observatory, France) TSV exports of the published catalogues (Sharpless 1959 ApJS 4, 257; Lynds 1962 ApJS 7, 1; Barnard 1927 via Dobek 2011; van den Bergh 1966 AJ 71, 990; Acker et al. 1992 SECGPN; Arp 1966 ApJS 14, 1 / Webb 1996), normalised to the OpenNGC column layout in `open-astro/sky-data`. VizieR data may be reused with attribution to the original papers and to CDS ([licence](https://cds.unistra.fr/vizier-org/licences_vizier.html)). Bundled with the client and daemon packages.
 - **Galactic Wolf-Rayet Catalogue** ([P. Crowther, University of Sheffield](http://pacrowther.staff.shef.ac.uk/WRcat/); Rosslowe & Crowther 2015, MNRAS 447, 2322) — 717 Galactic WR stars, positions/photometry/spectral types as published on the catalogue site, normalised to the OpenNGC layout. Bundled with the client and a daemon package, credited to the catalogue and its per-row references.
 
+## Online imagery (not bundled)
+
+- **DSS2 colour sky survey via CDS hips2fits** (`alasky.u-strasbg.fr`, CDS Strasbourg Observatory; the Digitized Sky Survey is © AURA/STScI and the original observatories) — the target previews in Plan my night and Tonight's Sky are cutouts fetched on demand from this service and cached under app support; the planetarium's optional "DSS2 sky survey" layer streams the same survey as HiPS tiles. Nothing is redistributed; each request is for the target being planned. Credit: "Digitized Sky Survey (DSS2), STScI/AURA, via CDS hips2fits". (A setting to disable the fetch is tracked as a follow-up.)
+
 ## Bundled / vendored source
 
 Some third-party source is vendored directly into this repository (not consumed

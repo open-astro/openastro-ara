@@ -60,8 +60,13 @@ class TargetPreviewService {
     if (frame == null) return base;
     final diagDeg = math.sqrt(frame.$1 * frame.$1 + frame.$2 * frame.$2) / 60;
     final needed = diagDeg * 1.15 * aspect;
-    return math.max(base, needed).clamp(0.4, 12.0);
+    return ladder(math.max(base, needed).clamp(0.4, 12.0));
   }
+
+  /// Quantise a field to 0.25° steps (rounding up) so a mosaic stepper walk
+  /// doesn't mint a new cutout — a new cache file and a new resolved image
+  /// held for the session — for every fractional change (review #1105).
+  static double ladder(double deg) => (deg / 0.25).ceil() * 0.25;
 
   static Uri cutoutUri(
       {required double raDeg,

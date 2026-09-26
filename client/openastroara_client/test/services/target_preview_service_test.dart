@@ -52,7 +52,7 @@ void main() {
     // diagonal (review #1105: width-only sizing clipped a 135° frame).
     const frame = (187.0, 125.0);
     final field = TargetPreviewService.fieldDegFor(30, frame);
-    expect(field, closeTo(6.91, 0.02));
+    expect(field, 7.0, reason: '6.91 on the 0.25° ladder');
     expect(field / TargetPreviewService.aspect, greaterThanOrEqualTo(4.31),
         reason: 'the height holds the rotated frame');
     // A big object still wins when it is wider than the frame's need.
@@ -61,7 +61,11 @@ void main() {
     // the 8° object cap, inside the 12° frame cap — at 135° the frame's
     // vertical extent (5.38+3.60)·sin45° = 6.35° fits the 7.4° height.
     final wide = TargetPreviewService.fieldDegFor(30, (322.8, 216.0));
-    expect(wide, closeTo(11.9, 0.05));
+    expect(wide, 12.0, reason: '11.9 on the ladder, at the cap');
+    // The ladder collapses a mosaic stepper walk onto few cutouts.
+    expect(TargetPreviewService.ladder(6.91), 7.0);
+    expect(TargetPreviewService.ladder(7.0), 7.0);
+    expect(TargetPreviewService.ladder(1.26), 1.5);
     expect(wide / TargetPreviewService.aspect, greaterThan(6.35));
     // No frame = the object's own field.
     expect(TargetPreviewService.fieldDegFor(30, null), closeTo(1.25, 1e-9));
