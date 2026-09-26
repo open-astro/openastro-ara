@@ -1044,12 +1044,20 @@ function applyOptics(o) {
   return optics;
 }
 
+// Offline seed: the configured train rides in the URL (`optics`, the same wire
+// shape as the profile endpoint) so the framing box draws with no daemon.
+function urlOptics() {
+  try { var o = JSON.parse(qp('optics', 'null')); return o && typeof o === 'object' ? o : null; }
+  catch (e) { return null; }
+}
+var pushedOptics = null;   // a Flutter-pushed `optics` command outranks the URL seed
 function loadOptics() {
-  if (!API) return Promise.resolve(applyOptics(null));
+  var fallback = pushedOptics || urlOptics();
+  if (!API) return Promise.resolve(applyOptics(fallback));
   return fetch(API + '/api/v1/profile/optics')
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(applyOptics)
-    .catch(function () { return applyOptics(null); });
+    .then(function (o) { return applyOptics(o || fallback); })
+    .catch(function () { return applyOptics(fallback); });
 }
 
 // Remember the target to frame (J2000). Called on every search / selection so
@@ -1412,6 +1420,20 @@ function pollCmd() {
       debugEvent({ cmd: c.type });
       if (c.type === 'search') doSearch(c.q || '');
       else if (c.type === 'zoom') zoomBy(c.factor);
+      // Observer site pushed from Flutter (offline edits in Options; the
+      // daemon poll in loadSite covers the online case).
+      else if (c.type === 'site' && isFinite(+c.lat) && isFinite(+c.lon)) {
+        var la = +c.lat, lo = +c.lon, el = +c.elev || 0;
+        if (!(la === LAT && lo === LON && el === ELEV)) {
+          LAT = la; LON = lo; ELEV = el;
+          stel.core.observer.latitude = LAT * D2R;
+          stel.core.observer.longitude = LON * D2R;
+          stel.core.observer.elevation = ELEV;
+          setObserverTime();
+          var sel0 = stel.core.selection; if (sel0) renderInfo(sel0);
+        }
+      }
+      else if (c.type === 'optics') { pushedOptics = c; applyOptics(c); }
       else if (c.type === 'goto' && c.ra != null) {
         stel.core.selection = 0;
         // A framing goto (Tonight's Sky row tap) opens the framing overlay so
