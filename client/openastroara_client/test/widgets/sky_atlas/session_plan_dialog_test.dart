@@ -91,6 +91,43 @@ void main() {
     expect(find.byTooltip('Add to a run (3.0 h)'), findsOneWidget);
   });
 
+  testWidgets('Show sends rotation and grid even when untouched, so a previous slot cannot leak',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      targetPreviewProvider.overrideWith((ref, key) async => null),
+      opticsSettingsProvider.overrideWith(() => _FixedOptics()),
+      tonightSkyAtProvider
+          .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showDialog<void>(
+                  context: context, builder: (_) => const SessionPlanDialog()),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Plan it'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Show on the planetarium'));
+    await tester.tap(find.byTooltip('Show on the planetarium'));
+    await tester.pumpAndSettle();
+    final cmd = container.read(planetariumCommandProvider)!;
+    expect(cmd['rot'], 0.0);
+    expect(cmd['cols'], 1);
+    expect(cmd['rows'], 1);
+    expect(cmd['overlap'], 10);
+  });
+
   testWidgets('Show on atlas closes the dialog and the plan survives reopen',
       (tester) async {
     final container = ProviderContainer(overrides: [

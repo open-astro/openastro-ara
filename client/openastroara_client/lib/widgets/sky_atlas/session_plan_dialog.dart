@@ -140,13 +140,14 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       'dec': aim.decDeg,
       'name': o.name,
       'frame': true,
-      // The slot's dialled rotation + mosaic grid land on the framing box.
-      'rot': ?t.positionAngleDeg,
-      if (t.mosaic.isMosaic) ...{
-        'cols': t.mosaic.cols,
-        'rows': t.mosaic.rows,
-        'overlap': t.mosaic.overlapPct,
-      },
+      // The slot's rotation + grid land on the framing box — ALWAYS sent,
+      // 0° / 1×1 included: the page only ever assigns these, so a previous
+      // slot's 90° 2×2 would otherwise stay on the box for this one and
+      // Create Run there would build a 4-panel run (review #1105).
+      'rot': t.positionAngleDeg ?? 0,
+      'cols': t.mosaic.cols,
+      'rows': t.mosaic.rows,
+      'overlap': t.mosaic.overlapPct,
       // The point of "show" is to SEE it: switch the DSS2 photo layer on so
       // the framed field is the real sky, not a hint circle on a star map.
       'dss': true,
