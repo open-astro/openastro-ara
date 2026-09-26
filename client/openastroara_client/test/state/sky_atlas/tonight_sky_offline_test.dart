@@ -32,6 +32,12 @@ void main() {
           ))),
     ]);
     addTearDown(c.dispose);
+    // Hold the autoDispose ranker alive across its awaits (the planning
+    // catalog now loads the bundled CSVs first, which takes real time) —
+    // a bare read lets it dispose mid-build, exactly as the plan dialog
+    // learned. This is what the panel does by watching it.
+    final keep = c.listen(tonightSkyProvider, (_, _) {});
+    addTearDown(keep.close);
     final list = await c.read(tonightSkyProvider.future);
     expect(list, isNotEmpty);
     expect(list.first.score, isNotNull);
