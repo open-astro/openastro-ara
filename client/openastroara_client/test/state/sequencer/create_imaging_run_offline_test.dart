@@ -7,6 +7,7 @@ import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 
@@ -139,6 +140,31 @@ void main() {
     expect(after.length, greaterThan(before.length));
     expect('M 31'.allMatches(after).length,
         greaterThan('M 31'.allMatches(before).length));
+  });
+
+  testWidgets('offline append starts from the editor\'s UNSAVED working copy',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(container.dispose);
+    final first = await run(tester, api: null, container: container);
+    final draftId = first.result!.sequenceId;
+    // The Run tab opens the draft; the user edits it and does NOT save. The
+    // editor's working copy carries a marker the stored body doesn't.
+    final stored = drafts.store[draftId]!;
+    final edited = Map<String, dynamic>.from(stored.body)
+      ..['Name'] = 'EDITED-BUT-UNSAVED';
+    container.read(sequenceEditorProvider.notifier).load(
+        SequenceDetail(id: draftId, name: stored.name, body: edited));
+
+    final second = await run(tester, api: null, container: container);
+    expect(second.result!.appended, isTrue);
+    // The edit survived: the saved draft is the editor's copy + the target.
+    expect(drafts.store[draftId]!.body['Name'], 'EDITED-BUT-UNSAVED');
+    expect(container.read(sequenceEditorProvider)!.body['Name'],
+        'EDITED-BUT-UNSAVED');
   });
 
   testWidgets(

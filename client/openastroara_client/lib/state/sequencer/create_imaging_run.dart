@@ -74,8 +74,10 @@ void showImagingRunFeedback(
   } else if (result.draft) {
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Saved "$targetName" as an offline draft — push it to '
-            'the server from Load sequence once connected.'),
+        content: Text(result.appended
+            ? 'Added "$targetName" to the offline draft.'
+            : 'Saved "$targetName" as an offline draft — push it to '
+                'the server from Load sequence once connected.'),
       ),
     );
   } else {
@@ -151,8 +153,8 @@ Future<ImagingRunResult?> createImagingRun(
   // §2 offline planning — no server: build the same run body from whatever the
   // settings notifiers currently hold (no daemon to hydrate from) and save it
   // as a LOCAL draft; it pushes to the daemon from the Load dialog later.
-  // Append-to-open-draft is a tracked follow-up — offline, each target gets
-  // its own draft.
+  // With a draft already open the target is APPENDED to it (below), the same
+  // choreography as the connected append-to-open-sequence path.
   if (api == null) {
     final choice = await _choosePlan(
       ref,
@@ -600,28 +602,34 @@ Future<Map<String, dynamic>> _openSequenceBaseBody(
   return (await api.getSequenceDetail(id)).body;
 }
 
-/// After a persisted body mutation: re-sync the editor (not-dirty, at the
-/// saved body) when it holds this sequence so the Run tab shows the change
-/// without a re-select, and refresh the list (ModifiedUtc ordering changed).
 /// Graft [blocks] onto the local draft [id] (before its session-end steps)
 /// and save it; the open editor reloads so the new targets show at once.
-/// False when the draft no longer exists or its root can't take an append.
+/// Same base rule as [_openSequenceBaseBody]: when the editor holds this
+/// draft, the append starts from its WORKING copy so unsaved edits are
+/// persisted along with the new target, not clobbered by the stored body
+/// (which `load()` would then also wipe from undo). False when the draft no
+/// longer exists or its root can't take an append.
 Future<bool> _appendToDraft(
   ProviderContainer container,
   String id,
   List<Map<String, dynamic>> blocks,
 ) async {
-  final drafts = container.read(draftSequencesProvider).asData?.value ??
-      await container.read(draftSequencesProvider.future);
+  // Unambiguous null handling (the analyzer flagged the one-liner both ways):
+  // the loaded value when the notifier has settled, else await it.
+  final loaded = container.read(draftSequencesProvider).asData?.value;
+  final List<DraftSequence> drafts =
+      loaded ?? await container.read(draftSequencesProvider.future);
   DraftSequence? draft;
-  for (final d in drafts ?? const <DraftSequence>[]) {
+  for (final d in drafts) {
     if (d.id == id) {
       draft = d;
       break;
     }
   }
   if (draft == null) return false;
-  Map<String, dynamic> body = draft.body;
+  final editor = container.read(sequenceEditorProvider);
+  Map<String, dynamic> body =
+      (editor != null && editor.id == id) ? editor.body : draft.body;
   try {
     for (final b in blocks) {
       body = appendTargetToRunBody(body, b);
@@ -638,6 +646,9 @@ Future<bool> _appendToDraft(
   return true;
 }
 
+/// After a persisted body mutation: re-sync the editor (not-dirty, at the
+/// saved body) when it holds this sequence so the Run tab shows the change
+/// without a re-select, and refresh the list (ModifiedUtc ordering changed).
 void _syncAfterBodyChange(
   ProviderContainer container,
   String id,
