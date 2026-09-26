@@ -28,6 +28,7 @@ TonightSkyObject obj(
     );
 
 void main() {
+  _aimTests();
   _mosaicTests();
   _rotationTests();
   _swapTests();
@@ -207,6 +208,40 @@ void main() {
     );
     expect(plan.targets, isEmpty);
     expect(plan.notes, isNotEmpty);
+  });
+}
+
+void _aimTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  test('aiming offsets the slew centre on the tangent plane, clamped, recentrable', () {
+    final plan = planImagingSession(
+        ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
+        windowStartUtc: winStart,
+        windowEndUtc: winEnd);
+    final t0 = plan.targets.single;
+    expect(t0.isAimed, isFalse);
+    expect(t0.aim.raDeg, closeTo(t0.object.raDeg, 1e-9));
+    // 30' north: Dec +0.5°, RA unchanged (object at RA 0, Dec 0).
+    final north = setPlanAim(plan, 0, (0, 30)).targets.single;
+    expect(north.isAimed, isTrue);
+    expect(north.aim.decDeg, closeTo(0.5, 1e-3));
+    expect(north.aim.raDeg, closeTo(0.0, 1e-6));
+    // 60' east: RA +1°.
+    final east = setPlanAim(plan, 0, (60, 0)).targets.single;
+    expect(east.aim.raDeg, closeTo(1.0, 1e-3));
+    // Runaway drags clamp to ±240'.
+    expect(setPlanAim(plan, 0, (9999, -9999)).targets.single.aimOffsetArcmin,
+        (240.0, -240.0));
+    // Recentre.
+    expect(setPlanAim(setPlanAim(plan, 0, (60, 0)), 0, (0, 0)).targets.single.isAimed, isFalse);
+    expect(setPlanAim(plan, 7, (1, 1)), same(plan));
+    // Independent of rotation / mosaic edits.
+    final all = setPlanMosaic(setPlanRotation(setPlanAim(plan, 0, (10, 5)), 0, 45), 0,
+        (cols: 2, rows: 1, overlapPct: 10));
+    expect(all.targets.single.aimOffsetArcmin, (10.0, 5.0));
+    expect(all.targets.single.positionAngleDeg, 45);
+    expect(all.targets.single.mosaic.cols, 2);
   });
 }
 
