@@ -64,6 +64,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(drafts.deleted, [_id]);
+    expect(find.text('Deleted "M 31 night".'), findsOneWidget);
     expect(container.read(selectedSequenceIdProvider), isNull);
     expect(container.read(sequenceEditorProvider), isNull,
         reason: 'the Run tab must not keep editing a ghost');

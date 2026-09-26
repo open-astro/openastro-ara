@@ -167,6 +167,31 @@ void main() {
         'EDITED-BUT-UNSAVED');
   });
 
+  testWidgets('feedback copy: an appended draft says added, a new one says saved',
+      (tester) async {
+    late ScaffoldMessengerState messenger;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) {
+          messenger = ScaffoldMessenger.of(context);
+          return const SizedBox();
+        }),
+      ),
+    ));
+    showImagingRunFeedback(messenger,
+        targetName: 'M 42',
+        result: const ImagingRunResult('draft:x', appended: true, draft: true));
+    await tester.pump();
+    expect(find.text('Added "M 42" to the offline draft.'), findsOneWidget);
+    messenger.hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    showImagingRunFeedback(messenger,
+        targetName: 'M 31',
+        result: const ImagingRunResult('draft:y', appended: false, draft: true));
+    await tester.pump();
+    expect(find.textContaining('Saved "M 31" as an offline draft'), findsOneWidget);
+  });
+
   testWidgets(
       'unreachable daemon (DioException without response) degrades to a draft',
       (tester) async {

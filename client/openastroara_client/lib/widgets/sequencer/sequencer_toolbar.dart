@@ -692,6 +692,25 @@ Future<void> _deleteDraft(
   if (ref.read(sequenceCommandBusyProvider)) return;
   final messenger = ScaffoldMessenger.of(context);
   final display = (name == null || name.isEmpty) ? '(untitled draft)' : name;
+  // Hold the busy fence across the confirm too, like the shared _delete: a
+  // keyboard-driven command while the dialog sits open must not slip past
+  // (review #1106 note).
+  final container = ProviderScope.containerOf(context, listen: false);
+  final busy = container.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    await _deleteDraftConfirmed(context, container, messenger, id, display);
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+Future<void> _deleteDraftConfirmed(
+    BuildContext context,
+    ProviderContainer container,
+    ScaffoldMessengerState messenger,
+    String id,
+    String display) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -711,9 +730,6 @@ Future<void> _deleteDraft(
     ),
   );
   if (ok != true || !context.mounted) return;
-  final container = ProviderScope.containerOf(context, listen: false);
-  final busy = container.read(sequenceCommandBusyProvider.notifier);
-  busy.setBusy(true);
   try {
     await container.read(draftSequencesProvider.notifier).delete(id);
     if (container.read(selectedSequenceIdProvider) == id) {
@@ -722,14 +738,15 @@ Future<void> _deleteDraft(
     if (container.read(sequenceEditorProvider)?.id == id) {
       container.read(sequenceEditorProvider.notifier).clear();
     }
+    // Same confirmation the shared delete gives, so the draft doesn't just
+    // silently vanish from the Run tab.
+    messenger.showSnackBar(SnackBar(content: Text('Deleted "$display".')));
   } catch (e) {
     debugPrint('[sequencer] draft delete failed: $e');
     messenger.showSnackBar(const SnackBar(
       content: Text("Couldn't delete the draft."),
       backgroundColor: AraColors.accentError,
     ));
-  } finally {
-    busy.setBusy(false);
   }
 }
 
