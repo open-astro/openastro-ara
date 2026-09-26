@@ -127,12 +127,15 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   Emission rows (`HII`/`EmN`/`Neb`/`Cl+N`) with NEITHER magnitude nor surface brightness —
   whatever catalog they come from: all 314 Sharpless rows, and OpenNGC's magnitude-less
   nebulae / cluster+nebula stubs — take a photogenic tier: membership in the curated
-  imaging-regions layer (an `overrides` key or a standalone region) is tier 3, else
+  imaging-regions layer is tier 3 — an `overrides` key, a standalone region, or a Sharpless
+  id a curated region stands for (`imaging_regions.sharplessAnchors`) — else
   `imaging_regions.photogenicTier` (Sharpless ids): 3 ×1.0, 2 ×0.9, 1 ×0.7, unlisted ×0.5
-  ("not a known imaging field — often just a faint glow among stars"). Overrides keep the
-  catalog row's measured photometry (surface brightness, position angle) — only name, type
-  and imaging extent are replaced. Stopgap until sky-data carries the Sharpless brightness
-  class.
+  ("not a known imaging field — often just a faint glow among stars"). An anchored Sharpless
+  row is replaced by its region wherever the region is present (always for a standalone
+  region; for an NGC/IC override only when that catalog row is installed), so the same nebula
+  never lists twice. Overrides keep the catalog row's measured photometry (surface
+  brightness, position angle) — only name, type and imaging extent are replaced. Stopgap
+  until sky-data carries the Sharpless brightness class.
   Filter reality: an emission-line target with no narrowband glass (an EMPTY filter set —
   a bare OSC/DSLR — counts) is ×0.85, or ×0.75 under a Bortle ≥ 5 sky; narrowband in the
   set is ×1.05. Continuum targets are untouched.
@@ -141,10 +144,11 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   its rounded point contribution (e.g. `"fills the frame (+35)"`, `"5 h dark window (+21)"`)
   so the UI can explain *why 90 / why 40*.
 
-  **Framing thresholds** — object major-axis ÷ the FOV's smaller dimension: `< 0.10` →
-  `TooSmall` (a ~10′ galaxy in a ~3° field at 448 mm), `0.10–0.80` → `Good`, `> 0.80` →
-  `TooBig` (Orion's ~85′ in a ~27′ field at 3000 mm; the 0.80 cap leaves an edge margin).
-  No recorded size → `Unknown`.
+  **Framing thresholds** — object major-axis ÷ the FOV's smaller dimension (§36.8 framing
+  review, 2026-07-17): `< 0.15` → `TooSmall` (a ~10′ galaxy in a ~3° field at 448 mm),
+  `0.15–0.40` → `GoodFit` (a clear target that would still like a longer focal length),
+  `0.40–0.80` → `Good` ("fills the frame"), `> 0.80` → `TooBig` (Orion's ~85′ in a ~27′
+  field at 3000 mm; the 0.80 cap leaves an edge margin). No recorded size → `Unknown`.
 
   **`RemainingHours`** — dark time still ahead of the query instant in the object's window
   tonight: `max(0, windowEnd − max(atUtc, windowStart))`. A past window → 0; a not-yet-
