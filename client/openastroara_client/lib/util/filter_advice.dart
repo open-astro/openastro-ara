@@ -15,7 +15,10 @@ import 'optimal_sub.dart';
 /// from it; Mixed can be either; Unknown gets NO advice — never guess.
 enum EmissionClass { unknown, emissionLine, continuum, mixed }
 
-const int _brightSkyBortle = 5;
+/// Bortle class at which a sky counts as bright for emission targets — the
+/// filter ADVICE and the ranker's no-narrowband score factor share it so the
+/// two can't drift apart (review #1104).
+const int brightSkyBortle = 5;
 const int _veryBrightSkyBortle = 6;
 
 /// Emission character from the catalog type — OpenNGC codes (HII/EmN/PN/SNR/
@@ -78,7 +81,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
       }
       return (
         TonightFilterAdvice.broadband,
-        bortleClass >= _brightSkyBortle
+        bortleClass >= brightSkyBortle
             ? 'Emission-line target with broadband-only filters under a '
                 'Bortle $bortleClass sky — expect many hours of integration; '
                 'a dual-band filter would cut this dramatically.'
@@ -99,7 +102,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
       return (TonightFilterAdvice.broadband, '$reason.');
 
     case EmissionClass.mixed:
-      if (bortleClass >= _brightSkyBortle && monoNb.isNotEmpty) {
+      if (bortleClass >= brightSkyBortle && monoNb.isNotEmpty) {
         return (
           TonightFilterAdvice.narrowband,
           'Mixed emission/continuum target under a Bortle $bortleClass sky — '
@@ -107,7 +110,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
               'emission structure.'
         );
       }
-      if (bortleClass >= _brightSkyBortle && duo.isNotEmpty) {
+      if (bortleClass >= brightSkyBortle && duo.isNotEmpty) {
         return (
           TonightFilterAdvice.duoband,
           'Mixed emission/continuum target under a Bortle $bortleClass sky — '
