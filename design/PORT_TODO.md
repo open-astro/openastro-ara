@@ -1669,6 +1669,22 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   draft; the connected path's append-to-open-sequence choreography
   (`create_imaging_run.dart`) doesn't yet apply to a selected draft. Fold the target-block
   append into the draft body when a draft is open.
+- **Tonight's Sky photogenic tier: seed the table from the NGC/IC side too (#1104 review).**
+  `photogenicTierOf` knows Sh2 ids, the `overrides` keys and the standalone regions; any
+  other `HII`/`EmN`/`Neb`/`Cl+N` row with neither magnitude nor surface brightness (an
+  OpenNGC nebula the CSV carries no photometry for, e.g. a bare NGC 2237 / IC 5070 / IC 1318
+  row) renders as "not a known imaging field". Extend the table with NGC/IC ids, or pull the
+  Sharpless brightness class into sky-data and retire the table.
+- **Tonight's Sky: NGC/IC twins of tier-3 Sharpless rows still list twice (#1104 review).**
+  `sharplessAnchors` covers the curated regions; Sh2-117 ≡ NGC 7000 / IC 5070, Sh2-296 ≡
+  IC 2177, Sh2-229 ≡ IC 405, Sh2-236 ≡ IC 410, Sh2-252 ≡ NGC 2174, Sh2-162 ≡ NGC 7635,
+  Sh2-185 ≡ IC 63 have no override and list beside their Sharpless row. Extend the anchors
+  (an NGC/IC id → Sh2 id table that doesn't need an override) or make the dedupe positional.
+- **Tonight's Sky: magnitude-less `RfN`/`SNR`/`PN` rows still score neutral (#1104 review).**
+  The vdB and Abell packages carry rows with neither magnitude nor surface brightness; they
+  take the 0.5 neutral on both the SB and magnitude terms, the same hole the LDN and
+  Sharpless fixes closed, at ~150-row scale. Fold them into the photogenic tier or give them
+  a type floor.
 - **Local profile drafts + sync (§2 "drafts local, sync to Pi").** The §37 wizard still
   requires a live daemon to save (`wizard_save.dart` posts every section). Full offline
   profile authoring means persisting the wizard draft locally and replaying the section

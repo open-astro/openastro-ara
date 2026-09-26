@@ -348,6 +348,20 @@ void main() {
     final ldnBest = list.firstWhere((o) => o.type == 'DrkN');
     expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'NGC7331').score!));
     expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'Sh2-119').score!));
+    // "Never flood" = never crowd a real target out: with 400 dark nebulae
+    // in a 30-slot list, both real targets are still listed and every dark
+    // nebula that made the list sits below them. (A share-of-list assertion
+    // is meaningless on a two-target synthetic catalog — the remaining
+    // slots have nothing else to hold.)
+    final flood = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night,
+        catalog: [for (var i = 1; i <= 400; i++) ldn(i), galaxy, sh2],
+        limit: 30);
+    final ids400 = flood.map((o) => o.id).toList();
+    expect(ids400, containsAll(['NGC7331', 'Sh2-119']));
+    final firstDark = flood.indexWhere((o) => o.type == 'DrkN');
+    expect(firstDark, greaterThan(ids400.indexOf('NGC7331')));
+    expect(firstDark, greaterThan(ids400.indexOf('Sh2-119')));
     // Still listed (advise, don't dictate), with the why spelled out — BOTH
     // halves of the rule: the ×0.6 factor and the SB floor (review #1104:
     // deleting the floor left every assertion green).

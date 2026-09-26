@@ -132,8 +132,8 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   `imaging_regions.photogenicTier` (Sharpless ids): 3 ×1.0, 2 ×0.9, 1 ×0.7, unlisted ×0.5
   ("not a known imaging field — often just a faint glow among stars"). An anchored Sharpless
   row is replaced by its region wherever the region is present (always for a standalone
-  region; for an NGC/IC override only when that catalog row is installed), so the same nebula
-  never lists twice. Overrides keep the catalog row's measured photometry (surface
+  region; for an NGC/IC override only when that catalog row is installed), so an anchored
+  Sharpless row never lists beside its region. Overrides keep the catalog row's measured photometry (surface
   brightness, position angle) — only name, type and imaging extent are replaced. Stopgap
   until sky-data carries the Sharpless brightness class.
   Filter reality: an emission-line target with no narrowband glass (an EMPTY filter set —
