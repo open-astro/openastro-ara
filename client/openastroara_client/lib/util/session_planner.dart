@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../services/tonight_sky_api.dart';
+import 'mosaic_geometry.dart';
 
 /// §36.8 "What-if run" — the session planner behind the Tonight's Sky panel.
 ///
@@ -34,6 +35,10 @@ class SessionPlanTarget {
   /// framing dial.
   final double? positionAngleDeg;
 
+  /// Mosaic grid for this slot (1×1 = a single frame). The slot's hours are
+  /// shared across the panels — see [subsPerPanel].
+  final MosaicGrid mosaic;
+
   const SessionPlanTarget({
     required this.object,
     required this.startUtc,
@@ -42,17 +47,36 @@ class SessionPlanTarget {
     this.subSeconds,
     this.subCount,
     this.positionAngleDeg,
+    this.mosaic = singleFrame,
   });
 
-  SessionPlanTarget withRotation(double? deg) => SessionPlanTarget(
+  /// Subs each panel gets when the slot is split evenly across the grid,
+  /// charging one more per-target setup for every extra panel. Null when
+  /// there is no sub figure; 0 when the slot can't feed the grid.
+  int? subsPerPanel(SessionOverheads overheads) {
+    final subS = subSeconds;
+    if (subS == null || subS <= 0) return null;
+    if (!mosaic.isMosaic) return subCount;
+    return overheads.subsIn(hours / mosaic.panelCount, subS);
+  }
+
+  SessionPlanTarget _copy({double? positionAngleDeg, bool clearRotation = false,
+          MosaicGrid? mosaic}) =>
+      SessionPlanTarget(
         object: object,
         startUtc: startUtc,
         endUtc: endUtc,
         hours: hours,
         subSeconds: subSeconds,
         subCount: subCount,
-        positionAngleDeg: deg,
+        positionAngleDeg:
+            clearRotation ? null : (positionAngleDeg ?? this.positionAngleDeg),
+        mosaic: mosaic ?? this.mosaic,
       );
+
+  SessionPlanTarget withRotation(double? deg) =>
+      _copy(positionAngleDeg: deg, clearRotation: deg == null);
+  SessionPlanTarget withMosaic(MosaicGrid g) => _copy(mosaic: g);
 }
 
 /// Real-night overheads charged against each slice so the sub counts describe
@@ -362,6 +386,20 @@ SessionPlan setPlanRotation(SessionPlan plan, int index, double? deg) {
   if (index < 0 || index >= plan.targets.length) return plan;
   final norm = deg == null ? null : ((deg.round() % 360) + 360) % 360.0;
   final targets = [...plan.targets]..[index] = plan.targets[index].withRotation(norm);
+  return SessionPlan(
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
+}
+
+/// Set the mosaic grid on [plan]'s slice [index] (cols/rows clamped 1–8,
+/// overlap 0–50, the framing overlay's bounds).
+SessionPlan setPlanMosaic(SessionPlan plan, int index, MosaicGrid g) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final norm = (
+    cols: g.cols.clamp(1, 8),
+    rows: g.rows.clamp(1, 8),
+    overlapPct: g.overlapPct.clamp(0, 50),
+  );
+  final targets = [...plan.targets]..[index] = plan.targets[index].withMosaic(norm);
   return SessionPlan(
       targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
 }
