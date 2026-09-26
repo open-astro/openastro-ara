@@ -10,6 +10,7 @@ import '../../state/sky_atlas/session_plan_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/mosaic_geometry.dart';
 import '../../util/session_planner.dart';
 import '../../util/tonight_sky_local.dart' show opticsFovArcmin;
 import 'target_preview.dart';
@@ -138,8 +139,13 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       'dec': o.decDeg,
       'name': o.name,
       'frame': true,
-      // The slot's dialled rotation lands on the framing box.
+      // The slot's dialled rotation + mosaic grid land on the framing box.
       'rot': ?t.positionAngleDeg,
+      if (t.mosaic.isMosaic) ...{
+        'cols': t.mosaic.cols,
+        'rows': t.mosaic.rows,
+        'overlap': t.mosaic.overlapPct,
+      },
       // The point of "show" is to SEE it: switch the DSS2 photo layer on so
       // the framed field is the real sky, not a hint circle on a star map.
       'dss': true,
@@ -153,6 +159,19 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   Future<bool> _addOne(SessionPlanTarget t, ScaffoldMessengerState messenger,
       {bool quiet = false}) async {
     final o = t.object;
+    // A mosaic becomes one target block per panel, on the same grid the
+    // preview drew (mosaic_geometry ports the overlay's math). Each panel
+    // gets its share of the slot so the run finishes inside it.
+    final fov = opticsFovArcmin(ref.read(opticsSettingsProvider));
+    final panels = t.mosaic.isMosaic && fov != null
+        ? mosaicPanelCentres(
+            raDeg: o.raDeg,
+            decDeg: o.decDeg,
+            fovArcmin: fov,
+            g: t.mosaic,
+            rotationDeg: t.positionAngleDeg ?? 0,
+          )
+        : const <({double raDeg, double decDeg})>[];
     ImagingRunResult? result;
     try {
       result = await createImagingRun(
@@ -160,13 +179,20 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
         raDeg: o.raDeg,
         decDeg: o.decDeg,
         targetName: o.name,
-        remainingDarkHours: t.hours,
+        remainingDarkHours:
+            panels.isEmpty ? t.hours : t.hours / panels.length,
+        mosaicPanels: panels,
         // Same rule as the framing overlay: a dialled angle upgrades the
         // slew to Center and Rotate; not set (or an untouched 0) stays a
         // plain slew so the run never demands a plate solver by accident.
-        positionAngleDeg: (t.positionAngleDeg ?? 0) != 0
-            ? t.positionAngleDeg
-            : null,
+        // (A mosaic always carries the angle, 0° included — its panels only
+        // tile when each slew is plate-solved to the drawn grid; the run
+        // builder applies that rule when panels are present.)
+        positionAngleDeg: panels.isNotEmpty
+            ? (t.positionAngleDeg ?? 0)
+            : (t.positionAngleDeg ?? 0) != 0
+                ? t.positionAngleDeg
+                : null,
         jumpToRun: false,
       );
     } catch (e, st) {
@@ -318,6 +344,10 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                           onRotate: (deg) => ref
                               .read(sessionPlanProvider.notifier)
                               .setRotation(i, deg),
+                          overheads: s.overheads,
+                          onMosaic: (g) => ref
+                              .read(sessionPlanProvider.notifier)
+                              .setMosaic(i, g),
                           onSwap: (o) => ref
                               .read(sessionPlanProvider.notifier)
                               .swap(i, o),
@@ -375,6 +405,8 @@ class _PlanTargetCard extends StatelessWidget {
   final bool busy;
   final (double, double)? frameFovArcmin;
   final ValueChanged<double?> onRotate;
+  final SessionOverheads overheads;
+  final ValueChanged<MosaicGrid> onMosaic;
   final ValueChanged<TonightSkyObject> onSwap;
   final VoidCallback onShow;
   final VoidCallback onAdd;
@@ -385,6 +417,8 @@ class _PlanTargetCard extends StatelessWidget {
     required this.busy,
     required this.frameFovArcmin,
     required this.onRotate,
+    required this.overheads,
+    required this.onMosaic,
     required this.onSwap,
     required this.onShow,
     required this.onAdd,
@@ -394,15 +428,22 @@ class _PlanTargetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final o = target.object;
-    final subs = target.subCount != null && target.subSeconds != null
-        ? '≈ ${target.subCount} subs × ${target.subSeconds!.round()} s'
+    final m = target.mosaic;
+    final perPanel = target.subsPerPanel(overheads);
+    final subs = perPanel != null && target.subSeconds != null
+        ? m.isMosaic
+            ? '≈ $perPanel subs × ${target.subSeconds!.round()} s per panel '
+                '(${m.panelCount} panels)'
+            : '≈ $perPanel subs × ${target.subSeconds!.round()} s'
         : null;
     // SHO planning helper: with a narrowband recommendation, the slice is
     // typically split across the three lines.
     final sho = o.filterAdvice == TonightFilterAdvice.narrowband &&
-            target.subCount != null
-        ? ' (SHO ≈ ${(target.subCount! / 3).floor()} each)'
+            perPanel != null
+        ? ' (SHO ≈ ${(perPanel / 3).floor()} each)'
         : '';
+    final suggested =
+        frameFovArcmin == null ? null : suggestMosaic(o.sizeMajArcmin, frameFovArcmin!);
     return Card(
       color: AraColors.bgPanelAlt,
       margin: const EdgeInsets.only(bottom: 8),
@@ -419,6 +460,7 @@ class _PlanTargetCard extends StatelessWidget {
                 object: o,
                 frameFovArcmin: frameFovArcmin,
                 rotationDeg: target.positionAngleDeg ?? 0,
+                mosaic: m,
               ),
             ),
             const SizedBox(height: 8),
@@ -489,6 +531,73 @@ class _PlanTargetCard extends StatelessWidget {
                   ),
                 ],
               ),
+            // Mosaic grid for this slot: columns × rows with overlap, the
+            // same bounds as the planetarium's Frame panel. "Suggest" picks
+            // the smallest grid that covers an object that overflows one
+            // frame; the preview redraws the grid and the field widens to
+            // hold it.
+            if (frameFovArcmin != null)
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 4,
+                runSpacing: 2,
+                children: [
+                  Tooltip(
+                    message: 'Mosaic grid for this target',
+                    child: Icon(Icons.grid_on,
+                        size: 16,
+                        color: m.isMosaic
+                            ? theme.colorScheme.primary
+                            : AraColors.textSecondary),
+                  ),
+                  const SizedBox(width: 6),
+                  _Stepper(
+                    label: 'cols',
+                    value: m.cols,
+                    min: 1,
+                    max: 8,
+                    enabled: !busy,
+                    onChanged: (v) => onMosaic((cols: v, rows: m.rows, overlapPct: m.overlapPct)),
+                  ),
+                  const SizedBox(width: 6),
+                  _Stepper(
+                    label: 'rows',
+                    value: m.rows,
+                    min: 1,
+                    max: 8,
+                    enabled: !busy,
+                    onChanged: (v) => onMosaic((cols: m.cols, rows: v, overlapPct: m.overlapPct)),
+                  ),
+                  if (m.isMosaic) ...[
+                    const SizedBox(width: 6),
+                    _Stepper(
+                      label: 'overlap %',
+                      value: m.overlapPct,
+                      min: 0,
+                      max: 50,
+                      step: 5,
+                      enabled: !busy,
+                      onChanged: (v) => onMosaic((cols: m.cols, rows: m.rows, overlapPct: v)),
+                    ),
+                  ],
+                  if (suggested != null && suggested != m)
+                    TextButton(
+                      style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact),
+                      onPressed: busy ? null : () => onMosaic(suggested),
+                      child: Text(
+                          'Suggest ${suggested.cols}×${suggested.rows}'),
+                    )
+                  else if (m.isMosaic)
+                    TextButton(
+                      style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: AraColors.textSecondary),
+                      onPressed: busy ? null : () => onMosaic(singleFrame),
+                      child: const Text('Single frame'),
+                    ),
+                ],
+              ),
             const SizedBox(height: 2),
             Row(
               children: [
@@ -550,6 +659,60 @@ class _PlanTargetCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A compact − value + stepper for the mosaic controls.
+class _Stepper extends StatelessWidget {
+  final String label;
+  final int value;
+  final int min;
+  final int max;
+  final int step;
+  final bool enabled;
+  final ValueChanged<int> onChanged;
+  const _Stepper({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    this.step = 1,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary)),
+        IconButton(
+          iconSize: 14,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 26, height: 26),
+          tooltip: 'Fewer $label',
+          icon: const Icon(Icons.remove),
+          onPressed: enabled && value - step >= min
+              ? () => onChanged(value - step)
+              : null,
+        ),
+        Text('$value', style: theme.textTheme.bodySmall),
+        IconButton(
+          iconSize: 14,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 26, height: 26),
+          tooltip: 'More $label',
+          icon: const Icon(Icons.add),
+          onPressed: enabled && value + step <= max
+              ? () => onChanged(value + step)
+              : null,
+        ),
+      ],
     );
   }
 }

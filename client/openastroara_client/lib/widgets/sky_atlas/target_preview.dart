@@ -8,6 +8,7 @@ import '../../services/target_preview_service.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/target_preview_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/mosaic_geometry.dart';
 
 /// A landscape DSS2 cutout of [object] — what it actually looks like —
 /// filling whatever width it is given (sensor-ish 1.6:1 aspect), with the
@@ -24,15 +25,24 @@ class TargetPreview extends ConsumerWidget {
   /// alone.
   final (double, double)? frameFovArcmin;
   final double rotationDeg;
+
+  /// Mosaic grid to draw instead of a single frame (1×1 = one frame).
+  final MosaicGrid mosaic;
   const TargetPreview({
     super.key,
     required this.object,
     this.frameFovArcmin,
     this.rotationDeg = 0,
+    this.mosaic = singleFrame,
   });
 
+  /// The footprint the field must hold: the whole grid, not one panel.
+  (double, double)? get _footprintArcmin => frameFovArcmin == null
+      ? null
+      : mosaicExtentArcmin(frameFovArcmin!, mosaic);
+
   double get _fieldDeg =>
-      TargetPreviewService.fieldDegFor(object.sizeMajArcmin, frameFovArcmin);
+      TargetPreviewService.fieldDegFor(object.sizeMajArcmin, _footprintArcmin);
 
   TargetPreviewKey get _key => (
         id: object.id,
@@ -88,6 +98,7 @@ class TargetPreview extends ConsumerWidget {
                           fovArcmin: frameFovArcmin!,
                           fieldDeg: fieldDeg,
                           rotationDeg: rotationDeg,
+                          mosaic: mosaic,
                         ),
                       ),
                     ),
@@ -142,6 +153,7 @@ class TargetPreview extends ConsumerWidget {
                                 fovArcmin: frameFovArcmin!,
                                 fieldDeg: fieldDeg,
                                 rotationDeg: rotationDeg,
+                                mosaic: mosaic,
                               ),
                             ),
                           ),
@@ -155,7 +167,8 @@ class TargetPreview extends ConsumerWidget {
               Text(
                 '${fieldDeg.toStringAsFixed(1)}° across · DSS2 colour survey '
                 '(CDS hips2fits)'
-                '${frameFovArcmin != null ? ' · frame at ${rotationDeg.round()}°' : ''}',
+                '${frameFovArcmin != null ? ' · frame at ${rotationDeg.round()}°' : ''}'
+                '${mosaic.isMosaic ? ' · ${mosaic.cols}×${mosaic.rows} mosaic' : ''}',
                 style: Theme.of(ctx)
                     .textTheme
                     .bodySmall
@@ -190,10 +203,12 @@ class _FramePainter extends CustomPainter {
   final (double, double) fovArcmin;
   final double fieldDeg;
   final double rotationDeg;
+  final MosaicGrid mosaic;
   const _FramePainter({
     required this.fovArcmin,
     required this.fieldDeg,
     required this.rotationDeg,
+    this.mosaic = singleFrame,
   });
 
   @override
@@ -203,39 +218,49 @@ class _FramePainter extends CustomPainter {
     final w = fovArcmin.$1 / 60 * pxPerDeg;
     final h = fovArcmin.$2 / 60 * pxPerDeg;
     final c = size.center(Offset.zero);
+    // Panel centres in the unrotated grid (pixels); the canvas rotation
+    // below turns the whole grid, matching the overlay's tangent-plane math.
+    final panels = mosaicPanelOffsetsArcmin(fovArcmin, mosaic)
+        .map((o) => Offset(o.$1 / 60 * pxPerDeg, o.$2 / 60 * pxPerDeg))
+        .toList();
     canvas.save();
     canvas.translate(c.dx, c.dy);
     canvas.rotate(rotationDeg * math.pi / 180);
-    final rect = Rect.fromCenter(center: Offset.zero, width: w, height: h);
-    // Dim everything outside the frame so the layout reads at a glance.
-    canvas.drawPath(
-      Path()
-        ..fillType = PathFillType.evenOdd
-        ..addRect(Rect.fromCenter(
-            center: Offset.zero,
-            width: size.longestSide * 4,
-            height: size.longestSide * 4))
-        ..addRect(rect),
-      Paint()..color = Colors.black.withValues(alpha: 0.45),
-    );
+    final union = Path();
+    for (final p in panels) {
+      union.addRect(Rect.fromCenter(center: p, width: w, height: h));
+    }
+    // Dim everything outside the covered sky so the layout reads at a glance:
+    // paint the dim into a layer, then CLEAR the panels' union out of it —
+    // overlapping panels stay fully clear (an even-odd path would re-dim
+    // the overlap bands).
+    final everything = Rect.fromCenter(
+        center: Offset.zero,
+        width: size.longestSide * 4,
+        height: size.longestSide * 4);
+    canvas.saveLayer(everything, Paint());
     canvas.drawRect(
-      rect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = Colors.black.withValues(alpha: 0.6),
-    );
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = AraColors.accentInfo,
-    );
-    // A tick on the frame's top edge so "which way is up" survives rotation.
+        everything, Paint()..color = Colors.black.withValues(alpha: 0.45));
+    canvas.drawPath(union, Paint()..blendMode = BlendMode.clear);
+    canvas.restore();
+    final shadow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = Colors.black.withValues(alpha: 0.6);
+    final edge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = AraColors.accentInfo;
+    for (final p in panels) {
+      final rect = Rect.fromCenter(center: p, width: w, height: h);
+      canvas.drawRect(rect, shadow);
+      canvas.drawRect(rect, edge);
+    }
+    // A tick on the grid's top edge so "which way is up" survives rotation.
+    final top = panels.map((p) => p.dy).reduce(math.min) - h / 2;
     canvas.drawLine(
-      Offset(0, -h / 2),
-      Offset(0, -h / 2 - 8),
+      Offset(0, top),
+      Offset(0, top - 8),
       Paint()
         ..strokeWidth = 2
         ..color = AraColors.accentInfo,
@@ -247,5 +272,6 @@ class _FramePainter extends CustomPainter {
   bool shouldRepaint(_FramePainter old) =>
       old.fovArcmin != fovArcmin ||
       old.fieldDeg != fieldDeg ||
-      old.rotationDeg != rotationDeg;
+      old.rotationDeg != rotationDeg ||
+      old.mosaic != mosaic;
 }

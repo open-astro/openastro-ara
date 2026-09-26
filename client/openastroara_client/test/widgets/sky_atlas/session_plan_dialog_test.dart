@@ -128,6 +128,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('135°'), findsOneWidget);
 
+    // Make it a 2×1 mosaic with the steppers; the subs line goes per-panel.
+    await tester.ensureVisible(find.byTooltip('More cols'));
+    await tester.tap(find.byTooltip('More cols'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('per panel (2 panels)'), findsOneWidget);
+    expect(find.text('Single frame'), findsOneWidget);
+
     await tester.ensureVisible(find.byTooltip('Show on the planetarium'));
     await tester.tap(find.byTooltip('Show on the planetarium'));
     await tester.pumpAndSettle();
@@ -138,6 +145,9 @@ void main() {
     expect(cmd?['name'], 'Test Nebula');
     expect(cmd?['dss'], true, reason: 'show = see the real field');
     expect(cmd?['rot'], 135.0, reason: 'the dialled rotation presets the box');
+    expect(cmd?['cols'], 2, reason: 'the planned grid presets the Frame panel');
+    expect(cmd?['rows'], 1);
+    expect(cmd?['overlap'], 10);
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
@@ -145,6 +155,7 @@ void main() {
         reason: 'the plan is kept across close/reopen');
     expect(find.text('Plan it again'), findsOneWidget);
     expect(find.text('135°'), findsOneWidget, reason: 'rotation kept too');
+    expect(find.textContaining('(2 panels)'), findsOneWidget, reason: 'grid kept too');
   });
 }
 

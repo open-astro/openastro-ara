@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/util/mosaic_geometry.dart';
 import 'package:openastroara/util/session_planner.dart';
 
 TonightSkyObject obj(
@@ -27,6 +28,7 @@ TonightSkyObject obj(
     );
 
 void main() {
+  _mosaicTests();
   _rotationTests();
   _swapTests();
 
@@ -205,6 +207,39 @@ void main() {
     );
     expect(plan.targets, isEmpty);
     expect(plan.notes, isNotEmpty);
+  });
+}
+
+void _mosaicTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  test('a slot mosaic is clamped, splits subs per panel, and survives rotation', () {
+    final plan = planImagingSession(
+        ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
+        windowStartUtc: winStart,
+        windowEndUtc: winEnd);
+    const overheads = SessionOverheads();
+    final single = plan.targets.single;
+    expect(single.mosaic, singleFrame);
+    expect(single.subsPerPanel(overheads), single.subCount);
+
+    final grid = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10));
+    final t = grid.targets.single;
+    expect(t.mosaic.panelCount, 4);
+    // 3 h / 4 panels = 0.75 h each, each charged its own setup + AF: fewer
+    // than a quarter of the single-frame count.
+    final per = t.subsPerPanel(overheads)!;
+    expect(per, lessThan(single.subCount! ~/ 4));
+    expect(per, greaterThan(0));
+    expect(t.hours, single.hours, reason: 'the slot itself is unchanged');
+
+    expect(setPlanMosaic(plan, 0, (cols: 0, rows: 99, overlapPct: 80)).targets.single.mosaic,
+        (cols: 1, rows: 8, overlapPct: 50));
+    expect(setPlanMosaic(plan, 4, singleFrame), same(plan));
+    // Rotation and mosaic are independent edits.
+    final both = setPlanRotation(grid, 0, 30);
+    expect(both.targets.single.mosaic.panelCount, 4);
+    expect(both.targets.single.positionAngleDeg, 30);
   });
 }
 

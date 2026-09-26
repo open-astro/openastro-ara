@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../util/mosaic_geometry.dart';
 import '../../util/session_planner.dart';
 
 /// The "Plan my night" dialog's working state, kept OUTSIDE the dialog so a
@@ -67,6 +68,13 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
     final plan = state.plan;
     if (plan == null) return;
     state = state.copyWith(plan: setPlanRotation(plan, index, deg));
+  }
+
+  /// Set the mosaic grid on slice [index].
+  void setMosaic(int index, MosaicGrid g) {
+    final plan = state.plan;
+    if (plan == null) return;
+    state = state.copyWith(plan: setPlanMosaic(plan, index, g));
   }
 
   /// Put [replacement] into slice [index] (see [swapPlanTarget]).

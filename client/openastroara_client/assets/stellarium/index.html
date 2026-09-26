@@ -1429,6 +1429,13 @@ function pollCmd() {
           frameRotDeg = ((Math.round(+c.rot) % 360) + 360) % 360;
           renderFramePanel();
         }
+        // A planned mosaic presets the grid the same way (cols/rows 1–8,
+        // overlap 0–50 — the Frame panel's own bounds).
+        if (c.cols != null && c.rows != null) {
+          frameCols = Math.max(1, Math.min(8, Math.round(+c.cols) || 1));
+          frameRows = Math.max(1, Math.min(8, Math.round(+c.rows) || 1));
+          if (c.overlap != null && isFinite(+c.overlap)) frameOverlap = Math.max(0, Math.min(50, Math.round(+c.overlap)));
+        }
         pointRaDec(c.ra, c.dec, c.name);
       }
     })
