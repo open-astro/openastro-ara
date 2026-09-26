@@ -140,7 +140,8 @@ class TonightSkyPanel extends ConsumerWidget {
                   Tooltip(
                     message: upNow
                         ? 'Showing only targets whose dark window is open '
-                            'right now — tap to see the whole night'
+                            'right now (on automatically after dark) — tap '
+                            'to see the whole night'
                         : 'Show only targets you can point at right now',
                     child: FilterChip(
                       label: const Text('Up now'),

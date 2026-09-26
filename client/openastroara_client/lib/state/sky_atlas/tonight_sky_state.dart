@@ -123,15 +123,42 @@ final selectedTonightObjectProvider =
     );
 
 /// Tonight's Sky "Up now" filter: when on, the panel lists only objects
-/// whose dark window is open at this moment. Off by default — the list is
-/// TONIGHT's sky by design (a plan made in the afternoon needs the targets
-/// that rise later), but at 22:40 with the scope out a user reasonably wants
-/// what they can point at right now. Session-scoped.
+/// whose dark window is open at this moment. The list is TONIGHT's sky by
+/// design (a plan made in the afternoon needs the targets that rise later),
+/// but at 22:40 with the scope out a user wants what they can point at right
+/// now — so until the user touches the chip it follows the sky: ON once the
+/// sun is below the nautical-dark line at the site, OFF in daylight/dusk.
+/// A tap pins the choice for the session.
 class TonightSkyUpNowNotifier extends Notifier<bool> {
+  bool _pinned = false;
+
   @override
-  bool build() => false;
-  void toggle() => state = !state;
-  void set(bool on) => state = on;
+  bool build() {
+    if (_pinned) return state;
+    return isDarkNow(ref.watch(siteSettingsProvider));
+  }
+
+  void toggle() {
+    _pinned = true;
+    state = !state;
+  }
+
+  void set(bool on) {
+    _pinned = true;
+    state = on;
+  }
+}
+
+/// True when the sun is below −12° (nautical dark) at [site] right now; an
+/// unset site (0, 0) is never "dark" so the filter stays off there.
+bool isDarkNow(SiteSettings site, {DateTime? nowUtc}) {
+  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return false;
+  final sun = sunMoonAltitudeDeg(
+    (nowUtc ?? DateTime.now()).toUtc(),
+    site.latitudeDeg,
+    site.longitudeDeg,
+  ).sunAltDeg;
+  return sun < -12;
 }
 
 final tonightSkyUpNowProvider =
