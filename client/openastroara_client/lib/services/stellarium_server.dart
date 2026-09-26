@@ -48,12 +48,30 @@ class StellariumServer {
   final HttpClient _dssClient = HttpClient();
   final Map<String, Future<Uint8List?>> _dssFetches = {};
   DateTime? _dssRetryAfter;
+  DateTime? _dssLastFailure;
+  DateTime? _dssLastSuccess;
+
+  /// True once an upstream fetch has failed more recently than one succeeded:
+  /// the page's Frame panel asks `/dss/status` so it can say why the photo
+  /// backdrop is blank at a dark site even when the manifest is cached.
+  bool get _dssOffline =>
+      _dssLastFailure != null &&
+      (_dssLastSuccess == null || _dssLastFailure!.isAfter(_dssLastSuccess!));
 
   static const _dssPathPrefix = '/dss/';
-  static final Uri _dssOrigin = Uri.parse(
-    'https://alasky.u-strasbg.fr/DSS/DSSColor/',
-  );
-  static const _maxDssResourceBytes = 64 * 1024 * 1024;
+  /// Upstream HiPS root (trailing slash: tile paths resolve beneath it).
+  /// Static + overridable so a test can point the cache at a local stub.
+  @visibleForTesting
+  static Uri dssOrigin = Uri.parse('https://alasky.u-strasbg.fr/DSS/DSSColor/');
+
+  /// Per-resource size cap (a HiPS tile is ~10-60 KiB; Allsky under 2 MiB).
+  @visibleForTesting
+  static int maxDssResourceBytes = 64 * 1024 * 1024;
+
+  /// Deadline for the whole upstream body once headers are in: a stalled TCP
+  /// body (captive-portal hotspot) must not pin the page's fetch, the
+  /// coalescing map entry and the socket until the OS gives up.
+  static const _dssBodyTimeout = Duration(seconds: 30);
   static final RegExp _dssSegment = RegExp(r'^[A-Za-z0-9._-]+$');
 
   static const String _tokenHeader = 'x-ara-token';
@@ -146,11 +164,10 @@ class StellariumServer {
       return dir;
     } catch (_) {
       // Keep the planetarium usable in a test/headless host where the path
-      // provider plugin is unavailable. This fallback is still per-user temp
-      // storage and never touches the SBC.
-      final dir = Directory('${Directory.systemTemp.path}/openastroara-dss2');
-      await dir.create(recursive: true);
-      return dir;
+      // provider plugin is unavailable. A fresh private (mkdtemp, 0700) dir per
+      // run — never a fixed shared path another user could pre-create or
+      // symlink on a multi-user host. Nothing here touches the SBC.
+      return Directory.systemTemp.createTemp('openastroara-dss2-');
     }
   }
 
@@ -388,6 +405,18 @@ class StellariumServer {
       await response.close();
       return;
     }
+    // Page → "is the photo backdrop expected to be blank?" (see [_dssOffline]).
+    if (path == '${_dssPathPrefix}status') {
+      response.headers.contentType =
+          ContentType('application', 'json', charset: 'utf-8');
+      response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+      response.write(jsonEncode({
+        'offline': _dssOffline,
+        'cached': await File('${_dssCacheDir.path}/properties').exists(),
+      }));
+      await response.close();
+      return;
+    }
     final relative = _dssRelativePath(path);
     if (relative == null) {
       response.statusCode = HttpStatus.forbidden;
@@ -451,38 +480,60 @@ class StellariumServer {
   }
 
   Future<Uint8List?> _fetchDss(String relative, File file) async {
-    final uri = _dssOrigin.resolve(relative);
+    final uri = dssOrigin.resolve(relative);
+    HttpClientRequest? req;
+    final Uint8List bytes;
     try {
-      final req = await _dssClient
-          .getUrl(uri)
-          .timeout(const Duration(seconds: 5));
+      req = await _dssClient.getUrl(uri).timeout(const Duration(seconds: 5));
       req.headers.set(HttpHeaders.userAgentHeader, 'OpenAstroAra DSS cache');
       final upstream = await req.close().timeout(const Duration(seconds: 10));
       if (upstream.statusCode != HttpStatus.ok) {
+        // A 404 is the survey's own answer (a tile outside its coverage), not
+        // a connectivity failure — no backoff, and it counts as "online".
         await upstream.drain<void>();
+        _dssLastSuccess = DateTime.now();
         return null;
       }
-      final builder = BytesBuilder(copy: false);
-      await for (final chunk in upstream) {
-        if (builder.length + chunk.length > _maxDssResourceBytes) return null;
-        builder.add(chunk);
-      }
-      final bytes = builder.takeBytes();
+      final body = await _readCapped(upstream).timeout(_dssBodyTimeout);
+      _dssLastSuccess = DateTime.now();
+      if (body == null) return null; // over the cap: refuse, don't persist
+      bytes = body;
+    } on Object catch (e) {
+      // Joining the SBC hotspot removes the Internet route. Avoid making every
+      // visible tile wait through another socket timeout while offline; cached
+      // tiles still serve immediately during the backoff window.
+      _dssLastFailure = DateTime.now();
+      _dssRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+      // A timed-out request/response must not linger on the socket.
+      try {
+        req?.abort();
+      } catch (_) {/* already finished */}
+      debugPrint('StellariumServer: DSS fetch failed for $relative: $e');
+      return null;
+    }
+    // Persist separately: the bytes arrived fine, so a disk problem (full,
+    // read-only) must not arm the "offline" backoff — serve them and move on.
+    try {
       await file.parent.create(recursive: true);
       final part = File(
         '${file.path}.part-${DateTime.now().microsecondsSinceEpoch}',
       );
       await part.writeAsBytes(bytes, flush: true);
       await part.rename(file.path);
-      return bytes;
-    } on Object catch (e) {
-      // Joining the SBC hotspot removes the Internet route. Avoid making every
-      // visible tile wait through another socket timeout while offline; cached
-      // tiles still serve immediately during the backoff window.
-      _dssRetryAfter = DateTime.now().add(const Duration(seconds: 30));
-      debugPrint('StellariumServer: DSS fetch failed for $relative: $e');
-      return null;
+    } catch (e) {
+      debugPrint('StellariumServer: DSS cache write failed for $relative: $e');
     }
+    return bytes;
+  }
+
+  /// Read the whole upstream body, or null once it exceeds [maxDssResourceBytes].
+  static Future<Uint8List?> _readCapped(HttpClientResponse upstream) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in upstream) {
+      if (builder.length + chunk.length > maxDssResourceBytes) return null;
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
   }
 
   /// Parse a single `bytes=start-end` Range header into inclusive byte offsets,
