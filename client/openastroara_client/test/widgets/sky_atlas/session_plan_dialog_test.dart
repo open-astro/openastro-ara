@@ -7,6 +7,7 @@ import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
+import 'package:openastroara/widgets/sky_atlas/target_preview.dart';
 
 TonightSkyObject _allNight(String id, String name, double score) =>
     TonightSkyObject(
@@ -128,6 +129,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('135°'), findsOneWidget);
 
+    // Drag the preview: the frame moves off the catalogue centre. Screen-down
+    // is south, so dragging DOWN aims south (−north), and the goto follows.
+    await tester.ensureVisible(find.byType(TargetPreview));
+    await tester.drag(find.byType(TargetPreview), const Offset(0, 40));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Aimed'), findsOneWidget);
+    expect(find.textContaining('′ S'), findsOneWidget);
+    expect(find.text('Recentre'), findsOneWidget);
+
     // Make it a 2×1 mosaic with the steppers; the subs line goes per-panel.
     await tester.ensureVisible(find.byTooltip('More cols'));
     await tester.tap(find.byTooltip('More cols'));
@@ -143,6 +153,8 @@ void main() {
     expect(cmd?['type'], 'goto');
     expect(cmd?['frame'], true);
     expect(cmd?['name'], 'Test Nebula');
+    expect(cmd?['ra'], closeTo(0.0, 1e-6), reason: 'a pure N/S drag keeps RA');
+    expect(cmd?['dec'], lessThan(-0.01), reason: 'aimed south of the object');
     expect(cmd?['dss'], true, reason: 'show = see the real field');
     expect(cmd?['rot'], 135.0, reason: 'the dialled rotation presets the box');
     expect(cmd?['cols'], 2, reason: 'the planned grid presets the Frame panel');

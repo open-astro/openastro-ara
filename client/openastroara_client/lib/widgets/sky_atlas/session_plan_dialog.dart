@@ -132,11 +132,12 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   /// — the plan lives in the provider and is still there on reopen.
   void _showOnAtlas(SessionPlanTarget t) {
     final o = t.object;
+    final aim = t.aim; // the object, or where the user dragged the frame
     ref.read(selectedTonightObjectProvider.notifier).select(o.id);
     ref.read(planetariumCommandProvider.notifier).send({
       'type': 'goto',
-      'ra': o.raDeg,
-      'dec': o.decDeg,
+      'ra': aim.raDeg,
+      'dec': aim.decDeg,
       'name': o.name,
       'frame': true,
       // The slot's dialled rotation + mosaic grid land on the framing box.
@@ -163,10 +164,11 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // preview drew (mosaic_geometry ports the overlay's math). Each panel
     // gets its share of the slot so the run finishes inside it.
     final fov = opticsFovArcmin(ref.read(opticsSettingsProvider));
+    final aim = t.aim;
     final panels = t.mosaic.isMosaic && fov != null
         ? mosaicPanelCentres(
-            raDeg: o.raDeg,
-            decDeg: o.decDeg,
+            raDeg: aim.raDeg,
+            decDeg: aim.decDeg,
             fovArcmin: fov,
             g: t.mosaic,
             rotationDeg: t.positionAngleDeg ?? 0,
@@ -176,8 +178,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     try {
       result = await createImagingRun(
         ref,
-        raDeg: o.raDeg,
-        decDeg: o.decDeg,
+        raDeg: aim.raDeg,
+        decDeg: aim.decDeg,
         targetName: o.name,
         remainingDarkHours:
             panels.isEmpty ? t.hours : t.hours / panels.length,
@@ -348,6 +350,9 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                           onMosaic: (g) => ref
                               .read(sessionPlanProvider.notifier)
                               .setMosaic(i, g),
+                          onAim: (off) => ref
+                              .read(sessionPlanProvider.notifier)
+                              .setAim(i, off),
                           onSwap: (o) => ref
                               .read(sessionPlanProvider.notifier)
                               .swap(i, o),
@@ -407,6 +412,7 @@ class _PlanTargetCard extends StatelessWidget {
   final ValueChanged<double?> onRotate;
   final SessionOverheads overheads;
   final ValueChanged<MosaicGrid> onMosaic;
+  final ValueChanged<(double, double)> onAim;
   final ValueChanged<TonightSkyObject> onSwap;
   final VoidCallback onShow;
   final VoidCallback onAdd;
@@ -419,6 +425,7 @@ class _PlanTargetCard extends StatelessWidget {
     required this.onRotate,
     required this.overheads,
     required this.onMosaic,
+    required this.onAim,
     required this.onSwap,
     required this.onShow,
     required this.onAdd,
@@ -461,6 +468,8 @@ class _PlanTargetCard extends StatelessWidget {
                 frameFovArcmin: frameFovArcmin,
                 rotationDeg: target.positionAngleDeg ?? 0,
                 mosaic: m,
+                aimOffsetArcmin: target.aimOffsetArcmin,
+                onAim: onAim,
               ),
             ),
             const SizedBox(height: 8),
@@ -477,6 +486,26 @@ class _PlanTargetCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text('$subs$sho', style: theme.textTheme.bodySmall),
             ],
+            if (target.isAimed)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Aimed ${_fmtOffset(target.aimOffsetArcmin)} from the '
+                      'catalogue centre',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.primary),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: AraColors.textSecondary),
+                    onPressed: busy ? null : () => onAim((0.0, 0.0)),
+                    child: const Text('Recentre'),
+                  ),
+                ],
+              ),
             // Camera rotation for this slot — the box on the preview turns
             // with it so the layout is judged on the real field. Only drawn
             // when the optical train is configured enough to know the FOV.
@@ -715,4 +744,16 @@ class _Stepper extends StatelessWidget {
       ],
     );
   }
+}
+
+/// "12′ N · 30′ W" — the aim offset in the words an imager uses.
+String _fmtOffset((double, double) off) {
+  final parts = <String>[];
+  if (off.$2.abs() >= 0.5) {
+    parts.add('${off.$2.abs().round()}′ ${off.$2 > 0 ? 'N' : 'S'}');
+  }
+  if (off.$1.abs() >= 0.5) {
+    parts.add('${off.$1.abs().round()}′ ${off.$1 > 0 ? 'E' : 'W'}');
+  }
+  return parts.isEmpty ? 'under 1′' : parts.join(' · ');
 }

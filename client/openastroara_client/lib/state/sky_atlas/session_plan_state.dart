@@ -70,6 +70,14 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
     state = state.copyWith(plan: setPlanRotation(plan, index, deg));
   }
 
+  /// Aim slice [index] at an offset from the catalogue centre (arcmin,
+  /// +east/+north); (0, 0) recentres.
+  void setAim(int index, (double, double) offsetArcmin) {
+    final plan = state.plan;
+    if (plan == null) return;
+    state = state.copyWith(plan: setPlanAim(plan, index, offsetArcmin));
+  }
+
   /// Set the mosaic grid on slice [index].
   void setMosaic(int index, MosaicGrid g) {
     final plan = state.plan;

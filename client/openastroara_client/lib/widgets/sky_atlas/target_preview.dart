@@ -28,12 +28,20 @@ class TargetPreview extends ConsumerWidget {
 
   /// Mosaic grid to draw instead of a single frame (1×1 = one frame).
   final MosaicGrid mosaic;
+
+  /// Where the frame is aimed: tangent-plane offset from the object in
+  /// arcmin (+east, +north). Drag the preview to change it via [onAim];
+  /// without [onAim] the frame stays on the object.
+  final (double, double) aimOffsetArcmin;
+  final ValueChanged<(double, double)>? onAim;
   const TargetPreview({
     super.key,
     required this.object,
     this.frameFovArcmin,
     this.rotationDeg = 0,
     this.mosaic = singleFrame,
+    this.aimOffsetArcmin = (0.0, 0.0),
+    this.onAim,
   });
 
   /// The footprint the field must hold: the whole grid, not one panel.
@@ -75,13 +83,35 @@ class TargetPreview extends ConsumerWidget {
             ),
     );
     final bytes = preview.hasValue ? preview.value : null;
+    final canAim = onAim != null && frameFovArcmin != null;
     return Semantics(
       label: label,
       button: bytes != null,
+      hint: canAim ? 'Drag to aim the frame' : null,
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: bytes != null ? () => _enlarge(context, bytes) : null,
-        child: ClipRRect(
+        child: LayoutBuilder(builder: (context, constraints) {
+          final pxPerArcmin = constraints.maxWidth / (fieldDeg * 60);
+          // Dragging moves the FRAME across the fixed field: screen right is
+          // west (east-left survey), screen down is south, so both axes
+          // invert into the +east/+north tangent-plane offset. Axis-specific
+          // recognisers (not a pan): inside the dialog's scroll view a pan
+          // loses the arena to the scroll and the card just scrolls.
+          return GestureDetector(
+            onVerticalDragUpdate: canAim
+                ? (d) => onAim!((
+                      aimOffsetArcmin.$1,
+                      aimOffsetArcmin.$2 - d.delta.dy / pxPerArcmin,
+                    ))
+                : null,
+            onHorizontalDragUpdate: canAim
+                ? (d) => onAim!((
+                      aimOffsetArcmin.$1 - d.delta.dx / pxPerArcmin,
+                      aimOffsetArcmin.$2,
+                    ))
+                : null,
+            child: ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: AspectRatio(
             aspectRatio: TargetPreviewService.aspect,
@@ -99,6 +129,7 @@ class TargetPreview extends ConsumerWidget {
                           fieldDeg: fieldDeg,
                           rotationDeg: rotationDeg,
                           mosaic: mosaic,
+                          aimOffsetArcmin: aimOffsetArcmin,
                         ),
                       ),
                     ),
@@ -106,7 +137,8 @@ class TargetPreview extends ConsumerWidget {
                     left: 6,
                     bottom: 4,
                     child: Text(
-                      '${fieldDeg.toStringAsFixed(1)}° across · DSS2',
+                      '${fieldDeg.toStringAsFixed(1)}° across · DSS2'
+                      '${canAim ? ' · drag to aim' : ''}',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: Colors.white70,
                             shadows: const [
@@ -120,6 +152,8 @@ class TargetPreview extends ConsumerWidget {
             ),
           ),
         ),
+          );
+        }),
       ),
     );
   }
@@ -154,6 +188,7 @@ class TargetPreview extends ConsumerWidget {
                                 fieldDeg: fieldDeg,
                                 rotationDeg: rotationDeg,
                                 mosaic: mosaic,
+                                aimOffsetArcmin: aimOffsetArcmin,
                               ),
                             ),
                           ),
@@ -204,11 +239,13 @@ class _FramePainter extends CustomPainter {
   final double fieldDeg;
   final double rotationDeg;
   final MosaicGrid mosaic;
+  final (double, double) aimOffsetArcmin;
   const _FramePainter({
     required this.fovArcmin,
     required this.fieldDeg,
     required this.rotationDeg,
     this.mosaic = singleFrame,
+    this.aimOffsetArcmin = (0.0, 0.0),
   });
 
   @override
@@ -217,7 +254,22 @@ class _FramePainter extends CustomPainter {
     final pxPerDeg = size.width / fieldDeg;
     final w = fovArcmin.$1 / 60 * pxPerDeg;
     final h = fovArcmin.$2 / 60 * pxPerDeg;
-    final c = size.center(Offset.zero);
+    // The frame's centre: the object (field centre) shifted by the aim —
+    // +east is screen-left, +north is screen-up on the survey cutout.
+    final c = size.center(Offset(
+      -aimOffsetArcmin.$1 / 60 * pxPerDeg,
+      -aimOffsetArcmin.$2 / 60 * pxPerDeg,
+    ));
+    // A small cross on the catalogue centre so an aimed frame shows what it
+    // moved away from.
+    if (aimOffsetArcmin.$1 != 0 || aimOffsetArcmin.$2 != 0) {
+      final o = size.center(Offset.zero);
+      final cross = Paint()
+        ..strokeWidth = 1.2
+        ..color = Colors.white.withValues(alpha: 0.7);
+      canvas.drawLine(o.translate(-6, 0), o.translate(6, 0), cross);
+      canvas.drawLine(o.translate(0, -6), o.translate(0, 6), cross);
+    }
     // Panel centres in the unrotated grid (pixels); the canvas rotation
     // below turns the whole grid, matching the overlay's tangent-plane math.
     final panels = mosaicPanelOffsetsArcmin(fovArcmin, mosaic)
@@ -273,5 +325,6 @@ class _FramePainter extends CustomPainter {
       old.fovArcmin != fovArcmin ||
       old.fieldDeg != fieldDeg ||
       old.rotationDeg != rotationDeg ||
-      old.mosaic != mosaic;
+      old.mosaic != mosaic ||
+      old.aimOffsetArcmin != aimOffsetArcmin;
 }

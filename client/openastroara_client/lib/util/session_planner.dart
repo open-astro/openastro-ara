@@ -39,6 +39,12 @@ class SessionPlanTarget {
   /// shared across the panels — see [subsPerPanel].
   final MosaicGrid mosaic;
 
+  /// Where the frame (or grid) is aimed, as a tangent-plane offset from the
+  /// catalogue centre in arcmin: +east, +north (the gnomonic ξ/η the
+  /// overlay uses). (0, 0) = dead on the object. Dragging the preview sets
+  /// it so the user can put the object low or high in the frame.
+  final (double, double) aimOffsetArcmin;
+
   const SessionPlanTarget({
     required this.object,
     required this.startUtc,
@@ -48,7 +54,18 @@ class SessionPlanTarget {
     this.subCount,
     this.positionAngleDeg,
     this.mosaic = singleFrame,
+    this.aimOffsetArcmin = (0.0, 0.0),
   });
+
+  bool get isAimed => aimOffsetArcmin.$1 != 0 || aimOffsetArcmin.$2 != 0;
+
+  /// The J2000 centre the run should slew to: the object plus the offset.
+  ({double raDeg, double decDeg}) get aim => tanToRaDec(
+        aimOffsetArcmin.$1 / 60,
+        aimOffsetArcmin.$2 / 60,
+        object.raDeg,
+        object.decDeg,
+      );
 
   /// Subs each panel gets when the slot is split evenly across the grid,
   /// charging one more per-target setup for every extra panel. Null when
@@ -61,7 +78,7 @@ class SessionPlanTarget {
   }
 
   SessionPlanTarget _copy({double? positionAngleDeg, bool clearRotation = false,
-          MosaicGrid? mosaic}) =>
+          MosaicGrid? mosaic, (double, double)? aimOffsetArcmin}) =>
       SessionPlanTarget(
         object: object,
         startUtc: startUtc,
@@ -72,11 +89,14 @@ class SessionPlanTarget {
         positionAngleDeg:
             clearRotation ? null : (positionAngleDeg ?? this.positionAngleDeg),
         mosaic: mosaic ?? this.mosaic,
+        aimOffsetArcmin: aimOffsetArcmin ?? this.aimOffsetArcmin,
       );
 
   SessionPlanTarget withRotation(double? deg) =>
       _copy(positionAngleDeg: deg, clearRotation: deg == null);
   SessionPlanTarget withMosaic(MosaicGrid g) => _copy(mosaic: g);
+  SessionPlanTarget withAim((double, double) offsetArcmin) =>
+      _copy(aimOffsetArcmin: offsetArcmin);
 }
 
 /// Real-night overheads charged against each slice so the sub counts describe
@@ -400,6 +420,21 @@ SessionPlan setPlanMosaic(SessionPlan plan, int index, MosaicGrid g) {
     overlapPct: g.overlapPct.clamp(0, 50),
   );
   final targets = [...plan.targets]..[index] = plan.targets[index].withMosaic(norm);
+  return SessionPlan(
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
+}
+
+/// Aim [plan]'s slice [index] at a tangent-plane offset (arcmin, +east/+north)
+/// from the catalogue centre; (0, 0) recentres on the object. Clamped to
+/// ±[maxArcmin] per axis so a runaway drag can't aim at another field.
+SessionPlan setPlanAim(SessionPlan plan, int index, (double, double) offsetArcmin,
+    {double maxArcmin = 240}) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final clamped = (
+    offsetArcmin.$1.clamp(-maxArcmin, maxArcmin).toDouble(),
+    offsetArcmin.$2.clamp(-maxArcmin, maxArcmin).toDouble(),
+  );
+  final targets = [...plan.targets]..[index] = plan.targets[index].withAim(clamped);
   return SessionPlan(
       targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
 }
