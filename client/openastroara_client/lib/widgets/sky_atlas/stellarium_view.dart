@@ -17,9 +17,12 @@ import '../../services/stellarium_server.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/planetarium_seed.dart';
 import 'linux_planetarium_overlay.dart';
 import 'tonight_sky_panel.dart';
 
@@ -95,10 +98,20 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         _eventSub = server.events.listen(_onPageEvent);
         // The page self-initialises from these query params: the observer site, and
         // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
-        final site =
-            ref.read(siteLocationProvider).asData?.value ??
-            await ref.read(siteLocationProvider.future);
+        // The daemon's site when it answers; otherwise the client's own site
+        // settings (seeded from the cached profile offline). A transport
+        // failure here must not take the whole atlas down — the sky still
+        // draws, from the cached site.
+        SiteLocation? serverSite;
+        try {
+          serverSite = ref.read(siteLocationProvider).asData?.value ??
+              await ref.read(siteLocationProvider.future);
+        } catch (e) {
+          debugPrint('StellariumView: daemon site unavailable, using cached: $e');
+        }
         if (!mounted) return;
+        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
+        final optics = planetariumOpticsFor(ref.read(opticsSettingsProvider));
         final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
         final api = activeServer?.baseUrl ?? '';
@@ -114,6 +127,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                   'lon': (site?.longitudeDeg ?? 0).toString(),
                   'elev': (site?.elevationM ?? 0).toString(),
                   'api': api,
+                  // Offline framing: the page's optics fetch has no daemon to
+                  // ask, so the configured train rides in the URL too.
+                  if (optics != null) 'optics': jsonEncode(optics),
                   'prefs': jsonEncode(savedPrefs),
                   // Per-run secret the page must echo as X-Ara-Token on the
                   // loopback control channels (/araevent, /aracmd); see
@@ -379,6 +395,25 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // forwarded command for a fresh one. (updateShouldNotify ignores the null,
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
+    });
+
+    // Site / optics edits made in Options reach the page even with no daemon
+    // to poll (online, the page's own polling of the profile endpoints does
+    // the same job; the push is harmless there — same values).
+    ref.listen(siteSettingsProvider, (_, next) {
+      final site = planetariumSiteFor(null, next);
+      if (site == null) return;
+      _pushCmd({
+        'type': 'site',
+        'lat': site.latitudeDeg,
+        'lon': site.longitudeDeg,
+        'elev': site.elevationM,
+      });
+    });
+    ref.listen(opticsSettingsProvider, (_, next) {
+      final optics = planetariumOpticsFor(next);
+      if (optics == null) return;
+      _pushCmd({'type': 'optics', ...optics});
     });
 
     // Night mode for the sky map: a Flutter overlay can't paint over the native
