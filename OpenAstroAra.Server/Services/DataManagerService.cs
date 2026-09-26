@@ -192,11 +192,11 @@ namespace OpenAstroAra.Server.Services {
                 // around them are the imaging targets).
                 Description: "717 Galactic Wolf-Rayet stars (Sheffield catalogue, Rosslowe & Crowther 2015) — search any WR number; the shells around them are the targets.",
                 Category: "catalog",
-                SizeBytes: 81828,
+                SizeBytes: 81786,
                 Version: "2015MNRAS-447-2322",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/9d7283557efb663b326785386baf3fdb97ce4dfc/wr.csv"),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/05404ebdfc2041f3d8066bfdd171cca9caf8e8b4/wr.csv"),
                 Recommended: false),
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
@@ -218,7 +218,7 @@ namespace OpenAstroAra.Server.Services {
                 ["vdb-reflection"] = "9b0024925ec9f5ef50e84a4efb6f7cf8535994aa0e2018b354ffce2f99b977f5",
                 ["abell-pn"] = "aea2591ad1e1f0245205fca946a363cef8820e05a6e5e422ce1e4ed16f26e200",
                 ["arp-peculiar"] = "afe3aed0bbcfc5bd807e88a4b1f4ae15a493d9170d1bdff8a528a7a80e04f853",
-                ["wr-stars"] = "b4de2109889943d4d04f306914db2eff30577312e8a2a5c25807817ee417df06",
+                ["wr-stars"] = "cf6d56f0055d2ac5e336322f26ef3f261bf7dd18c375a5a263c87e3f4fca9caa",
             };
 
         /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
