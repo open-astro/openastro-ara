@@ -220,6 +220,15 @@ void main() {
         reason: 'a galaxy with real photometry beats an unknown Sharpless field');
     expect(list.firstWhere((o) => o.id == 'Sh2-110').scoreReasons!.join(' '),
         contains('not a known imaging field'));
+    // A photometry-less cluster+nebula stub (IC 1310) is the same story.
+    const stub = PlanningDso(
+        id: 'IC1310', name: 'IC1310', type: 'Cl+N', magnitude: null,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60);
+    final withStub = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, filterSet: nb,
+        catalog: const [stub, galaxy], limit: 50);
+    expect(withStub.firstWhere((o) => o.id == 'IC1310').score!,
+        lessThan(withStub.firstWhere((o) => o.id == 'NGC7331').score!));
   });
 
   test('a bare OSC (empty filter set) is scored as broadband, harder under bright skies', () {

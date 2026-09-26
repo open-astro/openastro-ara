@@ -461,7 +461,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
         'dark nebula — a silhouette target that needs a dark sky and long '
         'broadband integration (−40%)',
       );
-    } else if ((o.type == 'HII' || o.type == 'EmN' || o.type == 'Neb') &&
+    } else if ((o.type == 'HII' ||
+            o.type == 'EmN' ||
+            o.type == 'Neb' ||
+            o.type == 'Cl+N') &&
         o.magnitude == null &&
         o.surfaceBrightness == null) {
       // The Sharpless package (314 rows) carries no photometry at all, so a
