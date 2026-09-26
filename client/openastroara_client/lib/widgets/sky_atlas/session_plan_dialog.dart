@@ -210,6 +210,20 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     return true;
   }
 
+  /// The per-card add. Same busy latch as [_addAll]: a create awaits the
+  /// plan chooser and the daemon (or disk), so a double-tap on the button
+  /// would otherwise start two runs for one target.
+  Future<void> _addSingle(SessionPlanTarget t) async {
+    if (_adding) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _adding = true);
+    try {
+      await _addOne(t, messenger);
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
   Future<void> _addAll(SessionPlan plan) async {
     if (_adding) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -358,8 +372,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                               .read(sessionPlanProvider.notifier)
                               .swap(i, o),
                           onShow: () => _showOnAtlas(plan.targets[i]),
-                          onAdd: () => _addOne(
-                              plan.targets[i], ScaffoldMessenger.of(context)),
+                          onAdd: () => _addSingle(plan.targets[i]),
                         ),
                       if (plan.notes.isNotEmpty)
                         Padding(

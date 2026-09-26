@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/draft_sequence.dart';
+import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
@@ -206,6 +212,65 @@ void main() {
     expect(find.text('135°'), findsOneWidget, reason: 'rotation kept too');
     expect(find.textContaining('(2 panels)'), findsOneWidget, reason: 'grid kept too');
   });
+
+  testWidgets('A double-tap on a card\'s add button creates one run, not two',
+      (tester) async {
+    // No daemon → createImagingRun takes the offline-draft path, whose only
+    // side effect is one draft save per run. The store's save hangs until
+    // released, so the first add is still in flight when the second tap
+    // lands — exactly the double-tap the guard has to absorb.
+    final drafts = _HangingDraftService();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+        tonightSkyAtProvider
+            .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
+        sequenceApiProvider.overrideWith((ref) => null),
+        draftSequenceServiceProvider.overrideWithValue(drafts),
+      ],
+      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+    ));
+    await tester.tap(find.text('Plan it'));
+    await tester.pumpAndSettle();
+
+    final add = find.byTooltip('Add to a run (3.0 h)');
+    await tester.ensureVisible(add);
+    await tester.tap(add);
+    await tester.pump();
+    expect(drafts.saves, 1, reason: 'the first tap starts a run');
+    await tester.tap(add, warnIfMissed: false);
+    await tester.pump();
+    expect(drafts.saves, 1,
+        reason: 'a second tap while the first add is in flight must be a no-op');
+
+    drafts.release();
+    await tester.pumpAndSettle();
+  });
+}
+
+/// In-memory draft store whose save() blocks until [release] — lets a test
+/// hold an add "in flight" and count how many runs got created meanwhile.
+class _HangingDraftService extends DraftSequenceService {
+  final _gate = Completer<void>();
+  int saves = 0;
+  int _n = 0;
+
+  void release() => _gate.complete();
+
+  @override
+  String newId() => '${draftIdPrefix}hang-${_n++}';
+
+  @override
+  Future<List<DraftSequence>> loadAll() async => const [];
+
+  @override
+  Future<void> save(DraftSequence draft) {
+    saves++;
+    return _gate.future;
+  }
+
+  @override
+  Future<void> delete(String id) async {}
 }
 
 class _FixedOptics extends OpticsSettingsNotifier {

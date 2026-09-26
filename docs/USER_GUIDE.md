@@ -29,8 +29,9 @@ safety policies, storage, and optional sky-data downloads. Notes:
 
 - **Skip is always available** — anything skipped shows as "Default" in Settings and can be set later.
 - The **sky-data screen pre-checks the recommended catalogs** (star catalog + deep-sky objects);
-  they download in the background after you finish and power the planetarium, search, and
-  Tonight's Sky.
+  they download in the background after you finish and are what the rig server plate-solves and
+  plans with. The planetarium, search, and Tonight's Sky run off catalogs bundled in the app, so
+  they work before that download finishes and offline.
 - The wizard writes a **profile**; you can create more later (Settings → Profile) and export/import
   them. Exported profiles are stripped of paths, secrets, and location — the recipient re-runs the
   wizard sections that need local values.
