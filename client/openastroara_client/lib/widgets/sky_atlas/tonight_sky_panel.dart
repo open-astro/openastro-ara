@@ -16,6 +16,7 @@ import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
+import 'target_preview.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
 /// active profile's site and optical train, by the server's transparent 0–100
@@ -530,6 +531,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // What it looks like — fetched on expand only, so
+                            // the list itself never spends network on rows
+                            // nobody opened. Tap to enlarge.
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: TargetPreview(object: _object, size: 96),
+                            ),
                             for (final r in reasons)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 2),

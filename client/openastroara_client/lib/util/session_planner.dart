@@ -283,3 +283,57 @@ SessionPlan planImagingSession({
     notes: notes,
   );
 }
+/// Alternatives the user could swap into [slice]: every ranked object that is
+/// shootable for at least [minHours] of the slice's interval and isn't already
+/// in [plan]. Ranked order is preserved (best first).
+List<TonightSkyObject> swapCandidates({
+  required List<TonightSkyObject> ranked,
+  required SessionPlan plan,
+  required SessionPlanTarget slice,
+  double minHours = _minSliceHours,
+}) {
+  final used = {for (final t in plan.targets) t.object.id};
+  return [
+    for (final o in ranked)
+      if (!used.contains(o.id))
+        if (_usable(o, slice.startUtc, slice.endUtc) case final (
+              DateTime,
+              DateTime
+            ) u)
+          if (_hoursBetween(u.$1, u.$2) >= minHours) o,
+  ];
+}
+
+/// Replace the object in [plan]'s slice at [index] with [replacement],
+/// keeping the slice's clock times where the replacement is shootable and
+/// clamping to its dark window where it isn't (with a note saying so). Sub
+/// counts are recomputed for the new object's optimal sub. Returns [plan]
+/// unchanged when the replacement can't be shot inside the slice at all.
+SessionPlan swapPlanTarget(
+  SessionPlan plan,
+  int index,
+  TonightSkyObject replacement, {
+  SessionOverheads overheads = const SessionOverheads(),
+}) {
+  if (index < 0 || index >= plan.targets.length) return plan;
+  final old = plan.targets[index];
+  final usable = _usable(replacement, old.startUtc, old.endUtc);
+  if (usable == null) return plan;
+  final fresh = _slice(replacement, usable.$1, usable.$2, overheads);
+  final notes = [
+    for (final n in plan.notes)
+      if (!n.startsWith('${old.object.name}: ')) n,
+  ];
+  if (fresh.hours < old.hours - 1 / 60) {
+    notes.add(
+      '${replacement.name}: only up for '
+      '${fresh.hours.toStringAsFixed(1)} h of that slot — trimmed to its dark window.',
+    );
+  }
+  final targets = [...plan.targets]..[index] = fresh;
+  return SessionPlan(
+    targets: targets,
+    plannedHours: targets.fold(0.0, (sum, t) => sum + t.hours),
+    notes: notes,
+  );
+}

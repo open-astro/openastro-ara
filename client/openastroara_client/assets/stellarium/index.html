@@ -1418,6 +1418,10 @@ function pollCmd() {
         // the box lands ON the object (setFrameTarget inside pointRaDec
         // replaces the open-seed centre); a plain goto stays centre-only.
         if (c.frame) toggleFrame(true);
+        // `dss: true` (the session planner's "Show on the planetarium") turns
+        // the DSS2 photo layer on so the user sees the real field; the
+        // Display panel dot + stored prefs follow, same as a manual toggle.
+        if (c.dss && !dispState('dss')) { setLayer('dss', true); renderDisplayPanel(); postDisplayPrefs(); }
         pointRaDec(c.ra, c.dec, c.name);
       }
     })

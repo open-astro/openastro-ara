@@ -9,6 +9,7 @@ import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
@@ -153,6 +154,8 @@ Widget _host(_RecordingClient client,
       overrides: [
         tonightSkyProvider.overrideWith((ref) async => objects ?? [_m31]),
         sequenceApiProvider.overrideWith((ref) => client),
+        // No network in widget tests: the Why? preview renders its placeholder.
+        targetPreviewProvider.overrideWith((ref, key) async => null),
       ],
       child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
     );
