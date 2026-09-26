@@ -195,6 +195,74 @@ void main() {
     expect(scoreOf('G', broadOnly), scoreOf('G', nb));
   });
 
+  test('photometry-less emission rows: curated fields keep their score, the rest drop', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const nb = FilterSetSettings(filters: [
+      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+    ]);
+    PlanningDso sh2(String id) => PlanningDso(
+        id: id, name: id, type: 'HII', magnitude: null,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60);
+    const galaxy = PlanningDso(
+        id: 'NGC7331', name: 'NGC7331', type: 'G', magnitude: 9.5,
+        raDeg: 339.267, decDeg: 34.416,
+        sizeMajArcmin: 10.5, sizeMinArcmin: 3.7, surfaceBrightness: 22.5);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, filterSet: nb,
+        catalog: [sh2('Sh2-110'), sh2('Sh2-105'), sh2('Sh2-126'), galaxy],
+        limit: 50);
+    double score(String id) => list.firstWhere((o) => o.id == id).score!;
+    // Same geometry, same (absent) photometry: the Crescent is a showpiece,
+    // Sh2-126 a faint specialist field, Sh2-110 an unknown that's mostly stars.
+    expect(score('Sh2-105'), greaterThan(score('Sh2-126')));
+    expect(score('Sh2-126'), greaterThan(score('Sh2-110')));
+    expect(score('Sh2-110'), lessThan(score('NGC7331')),
+        reason: 'a galaxy with real photometry beats an unknown Sharpless field');
+    expect(list.firstWhere((o) => o.id == 'Sh2-110').scoreReasons!.join(' '),
+        contains('not a known imaging field'));
+  });
+
+  test('a bare OSC (empty filter set) is scored as broadband, harder under bright skies', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const hii = PlanningDso(
+        id: 'X', name: 'X', type: 'HII', magnitude: 5.0,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60, sizeMinArcmin: 60);
+    const galaxy = PlanningDso(
+        id: 'G', name: 'G', type: 'G', magnitude: 5.0,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60, sizeMinArcmin: 60);
+    const nb = FilterSetSettings(filters: [
+      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+    ]);
+    double scoreOf(String id, FilterSetSettings fs, {int bortle = 4}) =>
+        computeTonightSkyLocal(
+                site: site.copyWith(bortleClass: bortle),
+                optics: optics,
+                atUtc: night,
+                filterSet: fs,
+                catalog: const [hii, galaxy])
+            .firstWhere((o) => o.id == id)
+            .score!;
+    const osc = FilterSetSettings(filters: []);
+    // Before: an empty set skipped the factor entirely — same as having Hα.
+    expect(scoreOf('X', osc), lessThan(scoreOf('X', nb)));
+    // Bortle 6 with no narrowband is penalised more than Bortle 3.
+    expect(scoreOf('X', osc, bortle: 6), lessThan(scoreOf('X', osc, bortle: 3)));
+    // Continuum targets are untouched by any of it.
+    expect(scoreOf('G', osc), scoreOf('G', nb));
+  });
+
+  test('a standalone curated region replaces the raw Sharpless row', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const raw = PlanningDso(
+        id: 'Sh2-101', name: 'Sh2-101', type: 'HII', magnitude: null,
+        raDeg: 300.0, decDeg: 35.3, sizeMajArcmin: 20);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: const [raw]);
+    expect(list.where((o) => o.id == 'Sh2-101'), isEmpty,
+        reason: 'REGION-SH2-101 (Tulip) stands in for it');
+    expect(list.where((o) => o.id == 'REGION-SH2-101'), hasLength(1));
+  });
+
   test('dark nebulae rank below real photometry, never flood the list', () {
     // The LDN/Barnard packages carry ONLY a major axis: no magnitude, no
     // surface brightness. Scored neutral on both they hit a flat 90 whenever
@@ -212,18 +280,18 @@ void main() {
         sizeMajArcmin: 10.5, sizeMinArcmin: 3.7, surfaceBrightness: 22.5);
     // An emission region from Sharpless: also magnitude-less, size only.
     const sh2 = PlanningDso(
-        id: 'Sh2-101', name: 'Sh2-101', type: 'HII', magnitude: null,
-        raDeg: 300.0, decDeg: 35.3, sizeMajArcmin: 20);
+        id: 'Sh2-119', name: 'Sh2-119', type: 'HII', magnitude: null,
+        raDeg: 319.6, decDeg: 43.9, sizeMajArcmin: 160);
     final list = computeTonightSkyLocal(
         site: site, optics: optics, atUtc: night,
         catalog: [for (var i = 1; i <= 60; i++) ldn(i), galaxy, sh2],
         limit: 30);
     final ids = list.map((o) => o.id).toList();
     expect(ids, contains('NGC7331'));
-    expect(ids, contains('Sh2-101'));
+    expect(ids, contains('Sh2-119'));
     final ldnBest = list.firstWhere((o) => o.type == 'DrkN');
     expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'NGC7331').score!));
-    expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'Sh2-101').score!));
+    expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'Sh2-119').score!));
     // Still listed (advise, don't dictate), with the why spelled out.
     expect(ldnBest.scoreReasons!.join(' '), contains('dark nebula'));
   });
