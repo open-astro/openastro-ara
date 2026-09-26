@@ -69,9 +69,10 @@ const Map<String, ImagingRegion> overrides = {
 /// ranker discounts it hard: most Sharpless entries are HII regions that
 /// image as a star field with a faint glow — not what a wide-field rig is
 /// for. This is a stopgap until sky-data carries the Sharpless brightness
-/// class; keep the ids in catalog spelling. Fields that have a standalone
-/// region (Tulip, Lion, Cave …) are not listed: the raw row is replaced by
-/// the region before scoring and the region is tier 3 by membership.
+/// class; keep the ids in catalog spelling. Sharpless ids a curated region
+/// stands for ([sharplessAnchors]: Tulip, Crescent, Heart, Spaghetti …) are
+/// not listed here — they are tier 3 by membership, and their raw row is
+/// replaced by the region wherever the region is present.
 const Map<String, int> photogenicTier = {
   // Scorpius / Sagittarius / Serpens.
   'Sh2-8': 3, // Cat's Paw (NGC 6334)
@@ -87,7 +88,6 @@ const Map<String, int> photogenicTier = {
   'Sh2-88': 2,
   'Sh2-91': 1, // Cygnus SNR filament — faint
   'Sh2-104': 2,
-  'Sh2-105': 3, // Crescent (NGC 6888)
   'Sh2-106': 2,
   'Sh2-108': 3, // Sadr / Butterfly (IC 1318)
   'Sh2-112': 2,
@@ -97,35 +97,25 @@ const Map<String, int> photogenicTier = {
   'Sh2-124': 2,
   'Sh2-126': 1, // Lacerta — huge, faint
   // Cepheus / Cassiopeia.
-  'Sh2-131': 3, // IC 1396
   'Sh2-140': 2,
-  'Sh2-142': 3, // Wizard (NGC 7380)
   'Sh2-162': 3, // Bubble (NGC 7635)
   'Sh2-170': 2, // Little Rosette
-  'Sh2-171': 3, // NGC 7822
   'Sh2-173': 2, // Phantom
   'Sh2-185': 3, // Ghost of Cassiopeia (IC 59/63)
   'Sh2-188': 1, // Dolphin — faint
-  'Sh2-190': 3, // Heart (IC 1805)
-  'Sh2-199': 3, // Soul (IC 1848)
   // Perseus / Auriga / Taurus.
   'Sh2-216': 1, // giant faint PN
-  'Sh2-220': 3, // California (NGC 1499)
   'Sh2-224': 1, // faint SNR
   'Sh2-229': 3, // Flaming Star (IC 405)
   'Sh2-236': 3, // Tadpoles (IC 410)
-  'Sh2-240': 3, // Spaghetti (Simeis 147)
   // Gemini / Orion / Monoceros.
-  'Sh2-248': 3, // Jellyfish (IC 443)
   'Sh2-252': 3, // Monkey Head (NGC 2174)
   'Sh2-261': 2, // Lower's
   'Sh2-264': 3, // Lambda Orionis ring
   'Sh2-273': 3, // Cone / Fox Fur (NGC 2264)
-  'Sh2-275': 3, // Rosette
   'Sh2-276': 3, // Barnard's Loop
   'Sh2-277': 3, // Flame / Horsehead field
   'Sh2-279': 3, // Running Man
-  'Sh2-281': 3, // Orion Nebula (M42)
   'Sh2-284': 2,
   'Sh2-292': 3, // Seagull head
   'Sh2-296': 3, // Seagull (IC 2177)
@@ -136,21 +126,49 @@ const Map<String, int> photogenicTier = {
 
 /// The tier a photometry-less row earns, or null when it isn't a known
 /// imaging field. Membership in the curated layer itself — an [overrides]
-/// key or a standalone region — IS the showpiece tier: that table exists to
+/// key, a standalone region, or a Sharpless id a curated region stands for
+/// ([sharplessAnchors]) — IS the showpiece tier: that table exists to
 /// promote exactly those fields (review #1104: a magnitude-less OpenNGC
 /// override like NGC 7822 fell to the unknown-field discount).
 int? photogenicTierOf(String id) {
-  if (overrides.containsKey(id) || _standaloneIds.contains(id)) return 3;
+  if (overrides.containsKey(id) ||
+      _standaloneIds.contains(id) ||
+      _anchoredSharpless.contains(id)) {
+    return 3;
+  }
   return photogenicTier[id];
 }
 
 final Set<String> _standaloneIds = {for (final r in standaloneRegions) r.id};
+final Set<String> _anchoredSharpless = sharplessAnchors.values.toSet();
 
-/// The raw catalog row a standalone region replaces (REGION-SH2-101 ↔
-/// Sh2-101), so the Sharpless package's own row doesn't list twice.
-String? _anchorOf(String regionId) => regionId.startsWith('REGION-SH2-')
-    ? 'Sh2-${regionId.substring('REGION-SH2-'.length)}'
-    : null;
+/// Curated region id → the Sharpless row that is the SAME nebula, so the
+/// Sharpless package's own row doesn't list beside the region (the Tulip as
+/// "Tulip Nebula" and again as "Sh2-101"; the Crescent as NGC 6888 and as
+/// Sh2-105). A standalone region always stands in; an NGC/IC-keyed override
+/// only when its catalog row is actually present — otherwise the Sharpless
+/// row is the only listing and stays. Review #1104 (both rounds).
+const Map<String, String> sharplessAnchors = {
+  // Standalone regions.
+  'REGION-SH2-101': 'Sh2-101',
+  'REGION-SH2-129': 'Sh2-129',
+  'REGION-SH2-132': 'Sh2-132',
+  'REGION-SH2-155': 'Sh2-155',
+  'REGION-SH2-157': 'Sh2-157',
+  'REGION-SH2-308': 'Sh2-308',
+  'REGION-SIMEIS-147': 'Sh2-240',
+  // NGC/IC-keyed overrides.
+  'NGC6888': 'Sh2-105',
+  'IC1396': 'Sh2-131',
+  'NGC7380': 'Sh2-142',
+  'NGC7822': 'Sh2-171',
+  'IC1805': 'Sh2-190',
+  'IC1848': 'Sh2-199',
+  'NGC1499': 'Sh2-220',
+  'IC443': 'Sh2-248',
+  'NGC2244': 'Sh2-275',
+  'NGC1976': 'Sh2-281',
+};
 
 /// Region-scale fields with no single catalog anchor. Ids are stable and
 /// namespaced so they can never collide with an OpenNGC name.
@@ -255,8 +273,10 @@ final List<PlanningDso> standaloneRegions = [
 /// and append the standalone regions. Pure + cheap — runs inside the ranking
 /// isolate on every recompute.
 List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
+  final present = {for (final o in catalog) o.id};
   final covered = {
-    for (final r in standaloneRegions) ?_anchorOf(r.id),
+    for (final e in sharplessAnchors.entries)
+      if (_standaloneIds.contains(e.key) || present.contains(e.key)) e.value,
   };
   final merged = [
     for (final o in catalog)
