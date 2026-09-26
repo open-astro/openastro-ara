@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/util/mosaic_geometry.dart';
 import 'package:openastroara/util/session_planner.dart';
 
 TonightSkyObject obj(
@@ -27,6 +28,11 @@ TonightSkyObject obj(
     );
 
 void main() {
+  _aimTests();
+  _mosaicTests();
+  _rotationTests();
+  _swapTests();
+
   final winStart = DateTime.utc(2026, 7, 18, 4); // 22:00 MDT
   final winEnd = DateTime.utc(2026, 7, 18, 7); // 01:00 MDT
 
@@ -202,5 +208,144 @@ void main() {
     );
     expect(plan.targets, isEmpty);
     expect(plan.notes, isNotEmpty);
+  });
+}
+
+void _aimTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  test('aiming offsets the slew centre on the tangent plane, clamped, recentrable', () {
+    final plan = planImagingSession(
+        ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
+        windowStartUtc: winStart,
+        windowEndUtc: winEnd);
+    final t0 = plan.targets.single;
+    expect(t0.isAimed, isFalse);
+    expect(t0.aim.raDeg, closeTo(t0.object.raDeg, 1e-9));
+    // 30' north: Dec +0.5°, RA unchanged (object at RA 0, Dec 0).
+    final north = setPlanAim(plan, 0, (0, 30)).targets.single;
+    expect(north.isAimed, isTrue);
+    expect(north.aim.decDeg, closeTo(0.5, 1e-3));
+    expect(north.aim.raDeg, closeTo(0.0, 1e-6));
+    // 60' east: RA +1°.
+    final east = setPlanAim(plan, 0, (60, 0)).targets.single;
+    expect(east.aim.raDeg, closeTo(1.0, 1e-3));
+    // Runaway drags clamp to ±240'.
+    expect(setPlanAim(plan, 0, (9999, -9999)).targets.single.aimOffsetArcmin,
+        (240.0, -240.0));
+    // Recentre.
+    expect(setPlanAim(setPlanAim(plan, 0, (60, 0)), 0, (0, 0)).targets.single.isAimed, isFalse);
+    expect(setPlanAim(plan, 7, (1, 1)), same(plan));
+    // Independent of rotation / mosaic edits.
+    final all = setPlanMosaic(setPlanRotation(setPlanAim(plan, 0, (10, 5)), 0, 45), 0,
+        (cols: 2, rows: 1, overlapPct: 10));
+    expect(all.targets.single.aimOffsetArcmin, (10.0, 5.0));
+    expect(all.targets.single.positionAngleDeg, 45);
+    expect(all.targets.single.mosaic.cols, 2);
+  });
+}
+
+void _mosaicTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  test('a slot mosaic is clamped, splits subs per panel, and survives rotation', () {
+    final plan = planImagingSession(
+        ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
+        windowStartUtc: winStart,
+        windowEndUtc: winEnd);
+    const overheads = SessionOverheads();
+    final single = plan.targets.single;
+    expect(single.mosaic, singleFrame);
+    expect(single.subsPerPanel(overheads), single.subCount);
+
+    final grid = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10));
+    final t = grid.targets.single;
+    expect(t.mosaic.panelCount, 4);
+    // 3 h / 4 panels = 0.75 h each, each charged its own setup + AF: fewer
+    // than a quarter of the single-frame count.
+    final per = t.subsPerPanel(overheads)!;
+    expect(per, lessThan(single.subCount! ~/ 4));
+    expect(per, greaterThan(0));
+    expect(t.hours, single.hours, reason: 'the slot itself is unchanged');
+
+    expect(setPlanMosaic(plan, 0, (cols: 0, rows: 99, overlapPct: 80)).targets.single.mosaic,
+        (cols: 1, rows: 8, overlapPct: 50));
+    expect(setPlanMosaic(plan, 4, singleFrame), same(plan));
+    // Rotation and mosaic are independent edits.
+    final both = setPlanRotation(grid, 0, 30);
+    expect(both.targets.single.mosaic.panelCount, 4);
+    expect(both.targets.single.positionAngleDeg, 30);
+  });
+}
+
+void _rotationTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  test('a slot rotation is normalised, kept through the plan, and clearable', () {
+    final plan = planImagingSession(
+        ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
+        windowStartUtc: winStart,
+        windowEndUtc: winEnd);
+    expect(plan.targets.single.positionAngleDeg, isNull);
+    final turned = setPlanRotation(plan, 0, 372);
+    expect(turned.targets.single.positionAngleDeg, 12);
+    expect(setPlanRotation(plan, 0, -15).targets.single.positionAngleDeg, 345);
+    expect(turned.targets.single.subCount, plan.targets.single.subCount);
+    expect(turned.plannedHours, plan.plannedHours);
+    expect(setPlanRotation(turned, 0, null).targets.single.positionAngleDeg, isNull);
+    expect(setPlanRotation(plan, 3, 90), same(plan));
+    // A swap starts the new object fresh — its rotation is not inherited.
+    final swapped = swapPlanTarget(turned, 0, obj('B', winStart: winStart, winEnd: winEnd));
+    expect(swapped.targets.single.positionAngleDeg, isNull);
+  });
+}
+
+void _swapTests() {
+  final winStart = DateTime.utc(2026, 7, 18, 4);
+  final winEnd = DateTime.utc(2026, 7, 18, 7);
+  final allNight = (DateTime.utc(2026, 7, 18, 3), DateTime.utc(2026, 7, 18, 9));
+  final ranked = [
+    obj('A', winStart: allNight.$1, winEnd: allNight.$2, hoursFree: 70),
+    obj('B', winStart: allNight.$1, winEnd: allNight.$2, hoursFree: 60),
+    // C sets at 05:30 UTC — only 1.5 h of the 3 h window.
+    obj('C',
+        winStart: allNight.$1,
+        winEnd: DateTime.utc(2026, 7, 18, 5, 30),
+        hoursFree: 50),
+    // D rises after the window closes.
+    obj('D',
+        winStart: DateTime.utc(2026, 7, 18, 8),
+        winEnd: allNight.$2,
+        hoursFree: 90),
+  ];
+
+  test('swap candidates exclude planned objects and unshootable ones', () {
+    final plan = planImagingSession(
+        ranked: ranked, windowStartUtc: winStart, windowEndUtc: winEnd);
+    expect(plan.targets.single.object.id, 'A');
+    final alts = swapCandidates(
+        ranked: ranked, plan: plan, slice: plan.targets.single);
+    expect(alts.map((o) => o.id), ['B', 'C']);
+  });
+
+  test('swapping keeps the slot, recomputes subs, and clamps to the dark window', () {
+    final plan = planImagingSession(
+        ranked: ranked, windowStartUtc: winStart, windowEndUtc: winEnd);
+    final toB = swapPlanTarget(plan, 0, ranked[1]);
+    expect(toB.targets.single.object.id, 'B');
+    expect(toB.targets.single.startUtc, winStart);
+    expect(toB.targets.single.endUtc, winEnd);
+    expect(toB.targets.single.subCount, plan.targets.single.subCount);
+    expect(toB.notes, isEmpty);
+
+    final toC = swapPlanTarget(plan, 0, ranked[2]);
+    expect(toC.targets.single.object.id, 'C');
+    expect(toC.targets.single.hours, closeTo(1.5, 0.01));
+    expect(toC.plannedHours, closeTo(1.5, 0.01));
+    expect(toC.notes.single, contains('trimmed'));
+
+    // D never overlaps the slot — the plan is returned untouched.
+    expect(swapPlanTarget(plan, 0, ranked[3]), same(plan));
+    expect(swapPlanTarget(plan, 5, ranked[1]), same(plan));
   });
 }

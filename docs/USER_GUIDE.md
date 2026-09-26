@@ -29,8 +29,9 @@ safety policies, storage, and optional sky-data downloads. Notes:
 
 - **Skip is always available** — anything skipped shows as "Default" in Settings and can be set later.
 - The **sky-data screen pre-checks the recommended catalogs** (star catalog + deep-sky objects);
-  they download in the background after you finish and power the planetarium, search, and
-  Tonight's Sky.
+  they download in the background after you finish and are what the rig server plate-solves and
+  plans with. The planetarium, search, and Tonight's Sky run off catalogs bundled in the app, so
+  they work before that download finishes and offline.
 - The wizard writes a **profile**; you can create more later (Settings → Profile) and export/import
   them. Exported profiles are stripped of paths, secrets, and location — the recipient re-runs the
   wizard sections that need local values.
@@ -71,7 +72,8 @@ installed). Search anything ("M 42", "NGC 7000", "Vega"), explore, and toggle di
   NGC, or IC object (or a type — galaxies, globular clusters, planetary nebulae, …), brightest
   500 first, sized by magnitude so the showpieces stand out. Toggle several at once; each catalog
   gets its own color, your picks persist across restarts, and the underlying deep-sky layer still
-  supplies names and tap-to-select. Needs the OpenNGC package from the sky-data manager.
+  supplies names and tap-to-select. The catalogs ship inside the app, so this works offline
+  and without a daemon.
 - **Framing** — the Frame overlay draws your camera's true field of view (from the profile optics)
   with rotation and a mosaic grid. What you frame here seeds the sequence target.
 - Moon/twilight context is annotated; your custom horizon (Settings → Safety → Site) shades the
