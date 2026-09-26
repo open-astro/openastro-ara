@@ -22,6 +22,7 @@ import '../../state/settings/site_settings_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/imaging_regions.dart';
 import '../../util/planetarium_seed.dart';
 import 'linux_planetarium_overlay.dart';
 import 'tonight_sky_panel.dart';
@@ -315,8 +316,12 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations (and
     // OpenNGC common names) must resolve against the local mirror — a hit
     // centres by coordinates, the same channel as Tonight's Sky recentre.
-    final catalog = ref.read(dsoCatalogProvider).value;
-    final hit = catalog == null ? null : findCatalogObject(catalog, q);
+    // The curated imaging-regions layer rides on top (its names — "WR 134
+    // ring", "Thor's Helmet", "Crescent" — are what people type, and the
+    // standalone regions have no mirror row at all). Empty mirror → the
+    // regions alone still resolve.
+    final catalog = ref.read(dsoCatalogProvider).value ?? const <PlanningDso>[];
+    final hit = findCatalogObject(applyImagingRegions(catalog), q);
     if (hit != null) {
       _pushCmd({'type': 'goto', 'ra': hit.raDeg, 'dec': hit.decDeg});
       return;

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/util/imaging_regions.dart';
 
 PlanningDso _dso(String id, {String? common}) => PlanningDso(
       id: id,
@@ -34,5 +35,24 @@ void main() {
   test('no match returns null so the Stellarium fallback fires', () {
     expect(findCatalogObject(catalog, 'jupiter'), isNull);
     expect(findCatalogObject(catalog, ''), isNull);
+  });
+
+  test('curated imaging-region names resolve on top of the mirror', () {
+    // The planetarium search runs over applyImagingRegions(mirror): the WR
+    // shells / famous complexes have imaging names (and some have no mirror
+    // row at all), so "WR 134" or "thor" must hit even with an empty mirror.
+    final layered = applyImagingRegions(const []);
+    expect(findCatalogObject(layered, 'WR 134')!.id, 'REGION-WR134');
+    expect(findCatalogObject(layered, 'wr134')!.id, 'REGION-WR134');
+    expect(findCatalogObject(layered, 'dolphin')!.id, 'REGION-SH2-308');
+    expect(findCatalogObject(layered, 'tulip')!.id, 'REGION-SH2-101');
+    // An override renames a mirror row: the imaging name resolves to it.
+    const crescent = PlanningDso(
+        id: 'NGC6888', name: 'NGC6888', type: 'EmN', magnitude: 7.4,
+        raDeg: 303.05, decDeg: 38.35, sizeMajArcmin: 18);
+    final withRow = applyImagingRegions(const [crescent]);
+    expect(findCatalogObject(withRow, 'crescent')!.id, 'NGC6888');
+    expect(findCatalogObject(withRow, "thor's helmet"), isNull,
+        reason: 'no NGC 2359 row in this mirror — nothing to rename');
   });
 }
