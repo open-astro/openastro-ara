@@ -46,13 +46,23 @@ void main() {
     expect(TargetPreviewService.fovDegFor(600), 8.0); // Sh2 field: cap
   });
 
-  test('the field grows to hold the camera frame at any rotation', () {
-    // RedCat 51 + IMX571: ~187' × 125' — diagonal 3.75°, so a 2° object
-    // field would clip the frame; the field opens to fit it (+15%).
+  test('the field grows to hold the camera frame at any rotation — in the short axis', () {
+    // A 187' × 125' frame: diagonal 3.75°, +15% = 4.32°. The tile is 1.6:1,
+    // so the WIDTH must be 4.32° × 1.6 = 6.91° for the height to hold the
+    // diagonal (review #1105: width-only sizing clipped a 135° frame).
     const frame = (187.0, 125.0);
-    expect(TargetPreviewService.fieldDegFor(30, frame), closeTo(4.32, 0.02));
-    // A big object still wins when it is wider than the frame.
+    final field = TargetPreviewService.fieldDegFor(30, frame);
+    expect(field, closeTo(6.91, 0.02));
+    expect(field / TargetPreviewService.aspect, greaterThanOrEqualTo(4.31),
+        reason: 'the height holds the rotated frame');
+    // A big object still wins when it is wider than the frame's need.
     expect(TargetPreviewService.fieldDegFor(180, frame), closeTo(7.5, 0.01));
+    // The dialog test's rig (250 mm, IMX571: 322.8' × 216') needs 11.9°: past
+    // the 8° object cap, inside the 12° frame cap — at 135° the frame's
+    // vertical extent (5.38+3.60)·sin45° = 6.35° fits the 7.4° height.
+    final wide = TargetPreviewService.fieldDegFor(30, (322.8, 216.0));
+    expect(wide, closeTo(11.9, 0.05));
+    expect(wide / TargetPreviewService.aspect, greaterThan(6.35));
     // No frame = the object's own field.
     expect(TargetPreviewService.fieldDegFor(30, null), closeTo(1.25, 1e-9));
   });

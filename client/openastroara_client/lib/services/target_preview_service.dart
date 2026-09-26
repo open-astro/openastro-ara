@@ -49,13 +49,18 @@ class TargetPreviewService {
   }
 
   /// The field to fetch when a camera frame of [frameFovArcmin] (w, h) is
-  /// drawn over it: wide enough that the frame fits at ANY rotation (its
-  /// diagonal plus margin), never narrower than the object's own field.
+  /// drawn over it: the frame's diagonal (plus a 15% margin) must fit the
+  /// tile's SHORT side — the height, which is width ÷ [aspect] — so the box
+  /// stays whole at any rotation (review #1105: sizing the width alone
+  /// clipped a 135° frame top and bottom). Never narrower than the object's
+  /// own field; a wide-field train may push past the 8° object cap, up to
+  /// 12° (hips2fits mosaics the survey tiles, so the cutout stays real).
   static double fieldDegFor(double? sizeMajArcmin, (double, double)? frame) {
     final base = fovDegFor(sizeMajArcmin);
     if (frame == null) return base;
     final diagDeg = math.sqrt(frame.$1 * frame.$1 + frame.$2 * frame.$2) / 60;
-    return math.max(base, diagDeg * 1.15).clamp(0.4, 8.0);
+    final needed = diagDeg * 1.15 * aspect;
+    return math.max(base, needed).clamp(0.4, 12.0);
   }
 
   static Uri cutoutUri(

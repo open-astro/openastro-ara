@@ -232,8 +232,9 @@ class _NoPreview extends StatelessWidget {
 }
 
 /// The camera frame as a rotated rectangle over a cutout [fieldDeg] degrees
-/// across. Scale is honest: the field is sized so the frame fits at any
-/// rotation, but a train wider than the 8° cap simply runs off the tile.
+/// across. Scale is honest: the field is sized so the frame's diagonal fits
+/// the tile's short side (any rotation stays whole), but a train wider than
+/// the 12° cap simply runs off the tile.
 class _FramePainter extends CustomPainter {
   final (double, double) fovArcmin;
   final double fieldDeg;
