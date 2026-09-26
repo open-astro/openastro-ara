@@ -259,7 +259,7 @@ openastro-ara/                              (repo root, default branch: master)
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
 7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred — see design/ROADMAP.md** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
-9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of PRs (each phase, plus sub-PRs within Phase 0.5 and Phase 12) cut from `master` and merged **directly back to `master`** — no integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the feature branch, open the PR, run the review poll-and-fix loop (see COMMIT-PR-RULES.md), then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; review quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean), deleting the branch on merge. After merge, pull the updated `master` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
+9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of PRs (each phase, plus sub-PRs within Phase 0.5 and Phase 12) cut from `master` and merged **directly back to `master`** — no integration branch. At the end of each phase or sub-phase, after the §15 gate is green: update `design/PORT_PROGRESS.md`, push the feature branch, open the PR, run the review poll-and-fix loop (see COMMIT-PR-RULES.md), and then, **immediately before the merge**, tag the PR's head with the tag-and-push sequence in §22.1 step 4 (the PR's head OID from `gh pr view --json headRefOid`, never `origin/<branch>` and never an unqualified `git tag`), which ends with the `git push origin <tag>` — the tag goes on last because §19.1 requires it on "the work being merged", and any review round that produces a fix commit moves that head (§22.1 step 4 already said "before merging the last PR of the phase"). A tagged PR merges with `--merge`, never `--squash`, or the squash rewrites the head and strands the tag. Then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; review quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean), deleting the branch on merge. After merge, pull the updated `master` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
 10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
 
 ---
@@ -326,7 +326,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Concern | Value |
 |---|---|
 | Language | Dart |
-| Framework | Flutter stable, **pinned to 3.27.x** (latest stable at port time, 2026-05-23). Pin enforced via `client/openastroara_client/.flutter-version` + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.X mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
+| Framework | Flutter stable, **pinned via `client/openastroara_client/.flutter-version`** (3.27.x at port time, 2026-05-23; bumped weekly by `check-flutter.yml`, so the number is not restated here). Pin enforced by that file + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.1 (`.github/workflows/check-flutter.yml`) mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
 | Target platforms | macOS, iOS, Android, Windows, Linux desktop |
 | HTTP client | `dio` (supports interceptors and progress callbacks for image downloads) |
 | WebSocket | `web_socket_channel` |
@@ -359,7 +359,9 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 Phase 0.5 — Fork hygiene + project demolition
             §4, §17, §18 (decisions) — rename, license headers, delete WPF/plugins/vendor SDKs/WiX/WebView2/MGEN/COM
             **Split into 16 sub-PRs (0.5a–0.5p) per `design/COMMIT-PR-RULES.md`** — DELETE before RENAME pattern, each sub-PR
-            stays under CodeRabbit's 200-file free-tier limit. See COMMIT-PR-RULES.md for the full mapping. Order:
+            keeps each review tractable. (The original ≤200-file target was CodeRabbit's free-tier cap;
+            that reviewer is gone and COMMIT-PR-RULES.md relaxed the size rule on 2026-06-09 — bundle
+            related work when it reads as one logical change.) See COMMIT-PR-RULES.md for the full mapping. Order:
             0.5a (delete WPF UI) → 0.5b (delete MGEN/nikoncswrapper/WiX/Plugin) → 0.5c (delete vendor SDKs, may sub-split) →
             0.5d (delete ASCOM COM) → 0.5e (delete WebView2 refs) → 0.5f (strip Stefan branding + license headers) →
             0.5g–0.5n (project renames: Core → Astrometry → Profile → Image → Equipment → Sequencer → PlateSolving → Test) →
@@ -996,20 +998,21 @@ Commit: `port(server): smoke test on linux-arm64`.
 
 ### 12.1 Scaffold
 
-Flutter SDK pin: **3.27.1** (or latest 3.27.x at port time) per §2.2. Pinned via:
+Flutter SDK pin: **whatever `client/openastroara_client/.flutter-version` says** — that file is the single source of truth, and `check-flutter.yml` bumps it weekly, so this section deliberately does not restate the number. (3.27.1 at port time, 3.44.0, then 3.47.5 — see #997.) Pinned via:
 
-1. `client/openastroara_client/.flutter-version` — single line `3.27.1`. Consumed by `subosito/flutter-action@v2` in CI + by FVM (Flutter Version Manager) for local dev.
-2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=3.27.0 <3.28.0'` (allows patch updates within minor; major/minor bumps need explicit PR).
+1. `client/openastroara_client/.flutter-version` — a single bare version. Read by CI, which passes it to `subosito/flutter-action` (`.github/workflows/ci.yml`). This file is the single source of truth. (FVM is *not* wired up — local dev installs the pinned version directly; see `docs/RUNNING.md`.)
+2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=X.Y.0 <X.(Y+1).0'` matching that pin (allows patch updates within the minor; major/minor bumps need an explicit PR) and `environment.sdk`, the Dart constraint shipping with that release.
 
 ```bash
 mkdir client
 cd client
 flutter create --org org.openastro --project-name openastroara \
     --platforms macos,windows,linux openastroara_client
-# Note: iOS + Android platforms NOT added in the initial release per §18.G mobile-deferred (ROADMAP);
-# Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
+# iOS + Android were added later (#1063) with `flutter create --platforms=ios,android .`;
+# §18.G mobile-deferred still holds for DISTRIBUTION (store signing, CI build legs), not for
+# building and side-loading the platform folders that are now checked in.
 cd openastroara_client
-echo "3.27.1" > .flutter-version
+echo "X.Y.Z" > .flutter-version    # the pinned stable; see §12.1
 flutter pub add dio web_socket_channel multicast_dns riverpod flutter_riverpod \
     flutter_secure_storage file_picker
 flutter pub add --dev openapi_generator build_runner
@@ -1017,13 +1020,17 @@ flutter pub add --dev openapi_generator build_runner
 
 Configure `openapi_generator` to read `../../OpenAstroAra.Server/openapi.yaml`, generate Dart client into `lib/api/generated/`. Run via `dart run build_runner build`.
 
-**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns:
+**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns. Implemented per #997; the version logic lives in `scripts/check-flutter-release.py` (`--check` / `--apply`) so it is testable outside Actions:
 
-- Weekly cron Mondays 08:00 UTC alongside other version checks
-- Queries Flutter SDK release feed for latest stable in `3.x` series
-- If newer 3.x stable than pinned, opens PR bumping `.flutter-version` + `pubspec.yaml` constraint + runs widget + integration tests + posts regression report
-- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes
+- Weekly cron Mondays 08:00 UTC alongside other version checks, plus `workflow_dispatch`
+- Queries the Flutter stable release feed for the current stable release
+- If newer than the pin **in the same major series**, applies the bump, runs `flutter pub get` + `analyze` + `test` against the new SDK, regenerates the third-party notices, and opens a PR labelled `dependencies`
+- Verification runs *before* the PR opens, so a release that breaks the client fails the scheduled run rather than landing as a green-looking PR
+- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes; the workflow reports one and stops
+- Skips if a PR for that version is already open (safe to re-run)
 - User reviews + merges if green
+
+**Caveat:** a PR opened with `GITHUB_TOKEN` does not trigger `pull_request` CI (GitHub's recursion guard). The in-workflow verification above is the gate. Setting a `FLUTTER_BUMP_TOKEN` repo secret to a PAT makes the full matrix run automatically; otherwise close/reopen the PR once.
 
 ### 12.2 First-run flow
 
@@ -1217,7 +1224,8 @@ ReadWritePaths=/var/run/openastroara
 ReadWritePaths=/etc/openastroara
 
 # Network restrictions
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK: .NET lists interfaces over netlink (getifaddrs); Alpaca discovery needs it (#1096)
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 # Capability restrictions (CAP_SYS_TIME for §31 time sync; nothing else)
 CapabilityBoundingSet=CAP_SYS_TIME
@@ -1277,19 +1285,25 @@ In `client/openastroara_client/`:
 
 ### 14.3 CI matrix (`.github/workflows/ci.yml`)
 
-| Job | Runner | Steps |
-|---|---|---|
-| server-build | `ubuntu-latest` | `dotnet build`, `dotnet test` (unit + integration), publish `linux-arm64` + `linux-x64` |
-| server-e2e | `ubuntu-latest` | Docker-based E2E smoke against a Linux ARM64 image (qemu) — runs on phase boundaries only |
-| client-macos | `macos-latest` | `flutter build macos --release`, `flutter build ios --no-codesign` |
-| client-windows | `windows-latest` | `flutter build windows --release` |
-| client-linux | `ubuntu-latest` | `flutter build linux --release`, `flutter build apk --release` |
-| client-test | `ubuntu-latest` | `flutter test`, `flutter test integration_test/`, `flutter analyze` |
-| settings-registry | `ubuntu-latest` | `node scripts/check-settings-registry.mjs --pr-diff` — fails PR if new settings lack registry entries |
+As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the live workflow, not the original plan). Job ids are `ci.yml`'s; the **Context** column is the literal check name the `master protection` ruleset matches (COMMIT-PR-RULES.md item 2). Path gating comes from the `changes` job (#1020/#1021): `docs_only` skips every build/test job; the finer `dotnet` / `client` outputs skip only jobs that are **not** required contexts. Five jobs (`alpaca-sim-smoke`, `alpaca-sim-integration`, `analyzer-gate`, `server-build`, `registry-gate` — not `client-test`, which needs only `changes`) also carry `needs.sanity.result == 'success'`, so a failed `Sanity (design docs)` skips them too — when attributing a skip under §19.1, check `sanity` first, then the `changes` outputs.
 
-On tag `v0.0.1-ara.*`, also a `release` job uploading artifacts to a GitHub Release.
+| Job id | Context | Runner | Steps | Gated by |
+|---|---|---|---|---|
+| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; Python tooling tests (`scripts/tests/`) | never skipped |
+| `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything, and both steps are `continue-on-error` so a checkout flake or a wedged clone leaves the job green with an annotation; only the outer 5-minute job timeout can still report failure — #1024; job-level `continue-on-error` was measured on #1043 to still publish a red check) | never skipped |
+| `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
+| `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |
+| `analyzer-gate` | `Analyzer gate (full solution, warnings = errors)` | `ubuntu-latest` | `dotnet build OpenAstroAra.sln -c Release` with warnings as errors; astrometry natives; `dotnet test` (non-Integration) | `docs_only`, `dotnet` |
+| `server-build` | `Server (build + cross-publish + Docker)` ✅ required | `ubuntu-latest` | third-party licenses freshness gate; build Server + Fits; test Fits + Stretch; runtime smoke (`/healthz`); `dotnet publish linux-arm64`; QEMU arm64 Docker image + health probe; build + upload the arm64 `.deb` | `docs_only` only |
+| `registry-gate` | `Settings + Help registry gate` ✅ required | `ubuntu-latest` | `node scripts/check-settings-registry.mjs`; `node scripts/check-help-registry.mjs` | `docs_only` only |
+| `client-test` | `Client (analyze + test) — <os>` ✅ required ×3 | `ubuntu-latest`, `macos-latest`, `windows-latest` (os matrix) | `flutter pub get`, `flutter analyze`, `flutter test` | `docs_only` at **step** level — the job always expands so its three required contexts report (#1025) |
+| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client` |
+| `unicode` | `Unicode scan` | `ubuntu-latest` | Trojan-Source / invisible-Unicode scan | never skipped |
+| `zizmor` | `zizmor (workflow audit)` | `ubuntu-latest` | static audit of `.github/workflows/` | never skipped |
 
-Commit: `port(ci): GitHub Actions for server + Flutter client + registry gate`.
+Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
+
+The matrix reached this shape progressively through the `prep-ci` placeholder (§19.1's pre-Phase-14 exception) rather than in one `port(ci)` commit.
 
 ### 14.4 Pre-PR gate (`scripts/pre-pr-check.sh`)
 
@@ -1421,7 +1435,7 @@ The script `scripts/bump-alpaca-simulators.sh`:
 3. Runs the §14.1 server integration tests against the new simulators
 4. Generates a regression report (which existing test names pass/fail; new event shapes detected)
 5. Opens a PR with body: "Bump Alpaca simulators v0.4.0 → vX.Y.Z. Regression test results: N passed, N failed. Upstream changelog: <link>"
-6. PR follows the standard CodeRabbit poll-and-fix loop (COMMIT-PR-RULES.md); AI merges per the §19.1 merge-gate if green
+6. PR follows the standard review poll-and-fix loop (COMMIT-PR-RULES.md); AI merges per the §19.1 merge-gate if green
 
 If the upstream API has breaking changes, the PR's failing tests document exactly what changed — informs whether ARA needs adaptation code or whether the change is benign.
 
@@ -1446,7 +1460,7 @@ If the upstream API has breaking changes, the PR's failing tests document exactl
 - §14.3 — CI matrix downloads the pinned version at job start
 - §14.4 — pre-PR gate auto-downloads if missing
 - §14.5 — parent section (this is a subsection)
-- COMMIT-PR-RULES.md — bump PRs follow the standard CodeRabbit poll-and-fix loop
+- COMMIT-PR-RULES.md — bump PRs follow the standard review poll-and-fix loop
 
 ### 14.6 Manual UI verification + screenshots
 
@@ -1620,8 +1634,8 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 | Project namespace prefix | `OpenAstroAra.*` |
 | Server executable | `OpenAstroAra.Server` |
 | Client app name | `OpenAstro Ara` |
-| iOS/macOS bundle ID | `org.openastro.ara` |
-| Android app ID | `org.openastro.ara` |
+| iOS/macOS bundle ID | `org.openastro.openastroara` (`macos/Runner/Configs/AppInfo.xcconfig`, `ios/Runner.xcodeproj`) |
+| Android app ID | `org.openastro.openastroara` (`android/app/build.gradle.kts` `applicationId` + `namespace`) |
 | GitHub repo (monorepo) | `github.com/open-astro/openastro-ara` |
 | Server log path | Linux: `/var/log/openastroara/`; macOS dev: `~/Library/Logs/OpenAstroAra/`; Windows dev: `%LOCALAPPDATA%\OpenAstroAra\Logs\` |
 | Server config path | `/etc/openastroara/` (Linux); equivalents on dev OSes |
@@ -1734,7 +1748,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 18.I — Plate solving
 - **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
-  - Linux: `which astap` → `/usr/bin/astap` or `/opt/astap/astap`
+  - Linux: `/usr/bin/astap_cli` — Debian's `astap-cli` package, a `.deb` Depends since #1094 (the GUI package's `/usr/bin/astap` also works if installed)
   - macOS: `/Applications/ASTAP.app/Contents/MacOS/astap`
   - Windows: `%PROGRAMFILES%\astap\astap.exe`
 - **Star databases — FOV-aware, multi-database.** The solver engine is the same across the whole field-of-view span (wide nebula → tiny galaxy); what actually determines whether a frame solves is the **star-database depth matched to the rig's pixel scale / FOV**. ASTAP ships several swappable Gaia-based databases, and the config must support **more than one installed at once** rather than a single fixed path:
@@ -1742,7 +1756,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **General all-purpose** (typical FOVs) → `V50` / `D50` — covers the bulk of sessions.
   - **Narrow field / tiny galaxies** (long focal length, small FOV, few bright stars in frame) → dense deep database (e.g. `H17` / `H18`) — enough faint Gaia stars to get a match where shallow catalogs fail.
   - **Selection:** the server picks the appropriate installed database from the active rig's computed FOV / pixel scale (focal length + sensor + binning) and passes it to ASTAP per-solve via the `-d <database_dir>` argument. If only one database is installed, it is used for all solves with a warning logged when the FOV falls outside its useful range. Exact database names/magnitude limits track astap.nl and may evolve — config stores paths, not hard-coded catalog identifiers.
-  - **Code gap (Phase 8):** the inherited NINA `ASTAPSolver.GetArguments` (`OpenAstroAra.PlateSolving/Solvers/ASTAPSolver.cs`) passes **no** `-d` argument today — it relies on whatever default database is configured inside ASTAP's own ini. FOV-aware selection requires adding a `-d <database_dir>` arg and threading a database path through `PlateSolveParameter`. This is net-new ARA code, not a straight port.
+  - **Status (2026-09-22, #1094):** `ASTAPSolver` now passes `-d <database_dir>` from the profile's plate-solve index path (`ASTAPDatabaseLocation`, bridged from `PlateSolveSettingsDto.IndexDownloadPath`, default `/var/lib/astap`); a configured directory that is missing or empty logs one warning per daemon run and falls back to ASTAP's own lookup. Still open: FOV-aware selection among several installed databases (`-D <abbrev>` is not passed) and the server-side download flow below — DEPLOY.md documents a manual one-time D80 download until then.
 - **Where ASTAP + databases live: on the Pi (server side), not the client.** The solver runs on the Pi, so its binary and star databases are a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36 Aladin HiPS surveys / DE440, which download to the client). Consequences:
   - **Downloads execute server-side.** The wizard (running in WILMA) does not fetch databases to the client and copy them over — it calls a **server endpoint** that downloads the selected database(s) from astap.nl directly onto the Pi's USB storage, where ASTAP reads them. Client only triggers and shows progress (mirrors the §36.2 background-download UX, but the bytes land on the Pi).
   - **"Browse" = the Pi's filesystem.** Any path picker for binary/database location browses the **server's** filesystem via the server API, not WILMA's local disk.
@@ -1762,25 +1776,26 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 19.1 Git safety
 
-- **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
+- **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`), `rules-*` for rules/playbook upkeep branches (the namespace §22.2 has always listed as driver-created), and `chore/<short-name>` for maintenance work that is not a port phase (skill and doc upkeep, CI cleanups). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
 - **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
-  - All required CI checks are `pass` (no `pending`, no `failure`)
-  - **CodeRabbit has actually reviewed the PR** — a real walkthrough or "no actionable comments" summary in the comment thread, not a "Review skipped" / "Review limit reached" / rate-limit message. A "pass" status check from CodeRabbit alongside a rate-limit comment **does not satisfy** this gate (CodeRabbit reports pass on the check even when the underlying review was throttled). The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
-  - All actionable CodeRabbit findings have been addressed via additional commits on the same sub-branch (per the CodeRabbit poll-and-fix loop in COMMIT-PR-RULES.md); disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
+  - All required CI checks are `pass` — or `skipping` **because CI's documented path gate skipped them** (`.github/workflows/ci.yml`'s `changes` job, #1020: a docs-only PR skips six jobs — six check contexts, of which two are required: `server-build` and `registry-gate`. The other four — both Alpaca jobs, `analyzer-gate`, and `client-build`, which appears once under its literal uninterpolated name `Client (native build) — ${{ matrix.target }}` because a matrix skipped at job level never expands — are not required contexts but will also read `skipping`. The three required `client-test` legs are gated at step level and report `pass`, not `skipping`, because a matrix job skipped at job level never expands and its required contexts are never reported at all — see #1025). No `pending`, no `failure`. A `skipping` that is *not* attributable to that gate — a job skipped because one of its `needs:` failed, or by an `if:` the merging agent cannot account for — is **ambiguous, not clearance**: post `Held for human review` and stop. The distinction matters because GitHub counts a skipped required context as satisfied, so "skipped" alone cannot be trusted to mean "did not need to run"; the reason has to be checked. (Amended 2026-09-19 in PR #1021, which introduced the path gate, at the user's direction after the AI flagged that editing this gate autonomously was not its call.) **Second amendment, 2026-09-19, again at the user's direction** ("I want to make sure we are thinking thoughtful with CI so we are not running things when we do not need to"): the `changes` job now also emits `dotnet` and `client`, so the four NON-REQUIRED contexts above — both Alpaca jobs, `analyzer-gate`, and `client-build` — can read `skipping` on a PR that is **not** docs-only. A client-only PR skips the three `dotnet` jobs; a PR touching neither the .NET graph nor `client/` skips all four. That is attributable and therefore clearance. The two REQUIRED contexts (`server-build`, `registry-gate`) and the three step-gated `client-test` legs are deliberately left on `docs_only` alone, because a skipped required context is counted by GitHub as satisfied and a classifier bug there would merge a broken PR with nothing red. Classification is `scripts/classify-changed-paths.py`, unit-tested in `scripts/tests/` (which the Sanity job runs), including a differential against the shell it replaced; read that script to attribute a skip, and treat a skip it does not explain as ambiguous.
+  - **The reviewer has actually reviewed the current head** — a `claude[bot]` comment (or `github-actions[bot]` on the fork path) whose `updated_at` is at or after the last push, carrying a sign-off marker (`Approved` / `Issues found`). A green `review` status check **does not satisfy** this gate on its own: that check only asserts a comment was posted, never that it was clean, and a comment older than the last push is the previous round's verdict on code that has since changed. The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
+  - All **Defects** in that review have been addressed via additional commits on the same sub-branch (per the review poll-and-fix loop in COMMIT-PR-RULES.md). **Notes never block a merge.** Disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
   - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
   - At a phase boundary: verify the expected `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tag has been pushed for the work being merged
 
-  **Rate-limit handling:** if CodeRabbit returns rate-limit / no-credits / "Review limit reached", AI does NOT merge. AI posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>` and either (a) waits for the auto-refill window then retriggers via `@coderabbitai review`, or (b) waits for user direction (e.g., billing fix). No "strict-letter" merge-on-skip — that defeats the checks-and-balances purpose of the gate.
+  **No review, no merge.** `.github/workflows/claude-review.yml` runs automatically on `opened` and `synchronize`, so pushing a fix is what re-reviews a PR — AI never @-mentions or hand-retriggers a reviewer, and there is no self-review fallback (`/review` does not satisfy this gate). If no review has appeared the run is still in flight, and AI waits. Two cases can never produce one: a PR that edits `claude-review.yml` (the action refuses to run when the workflow differs from the default branch, and the assert step exempts it — `claude-review.yml:218-228`) and a fork PR without the `safe-to-review` label. Both are `Held for human review @<user> — <reason>`, never a merge on green CI alone. No "strict-letter" merge-on-skip — that defeats the checks-and-balances purpose of the gate.
 
-  Merge method: **squash** for prep + multi-commit PRs that should land as one logical change on `master`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch`** so the merged feature branch is removed from origin immediately. Pull `master` and continue.
+  Merge method: **squash** for prep + multi-commit PRs that should land as one logical change on `master`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history — **except that a PR carrying a phase or sub-phase tag always merges with `--merge`**, whatever its commit history looks like, because a squash rewrites the head the tag points at and strands the tag off `master` (§0 rule 9, §22.1 step 5). **Always use `--delete-branch` on a same-repo head** so the merged feature branch is removed from origin immediately; **omit it on a fork head** (`gh pr view <PR> --json isCrossRepository --jq .isCrossRepository` is `true`) — the branch belongs to the contributor and is never deleted from here (#1031; §22.2, `/pr-checker` Step 4 and the driver's §3b carry the same rule). Pull `master` and continue.
 
   If any of the gate conditions are ambiguous or the AI is uncertain whether to merge, it posts "Held for human review @<user> — <reason>" instead of merging. The user can override either way.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
 - No `--no-verify` on commits.
 - No `git reset --hard` without first creating `backup-<timestamp>` tag.
 - No deleting branches, remotes, or stashes on the remote.
+- **Local refs (#1028):** a *local* branch may be deleted with `git branch -D <name>` only when its head is **exactly** the `headRefOid` of a PR already merged under that name (`gh pr list --head <name> --base master --state merged --limit 100 --json headRefOid` — `--base master` because the claim is about `master`, `--limit 100` because a long-lived placeholder name outgrows the default 30) — i.e. the ref is the squash-merged leftover `--delete-branch` could not reach, and every byte on it is in `master` by content. A ref carrying anything beyond that head stays a Held, and so does any name (local ref reusable, retirable or absent) whose `origin/<name>` still exists at a commit `master` does not contain (`git ls-remote --heads origin refs/heads/<name>` non-empty and not an ancestor of `origin/master` — the full ref name so a `someone/<name>` ref cannot match: an aborted PR or a hand merge without `--delete-branch`), because the eventual push would be rejected non-fast-forward and the driver may not clear the remote ref (#1047, #1057). Local only, never `push --delete`; `-D` is needed because after a squash `-d` cannot see the merge. The port-driver skill §5 step 2 is the only `-D` caller (`/pr-checker`'s end-of-run `git branch -d` is the ordinary already-merged delete, which `-d` itself refuses otherwise).
 - No history rewriting (`filter-branch`, `filter-repo`, interactive rebase).
-- Tags: `phase-N-complete` (or `phase-N-<letter>-complete` for sub-PRs) at boundaries, `backup-<timestamp>` before destructive ops. Push via `git push --tags`.
+- Tags: `phase-N-complete` (or `phase-N-<letter>-complete` for sub-PRs) at boundaries, `backup-<timestamp>` before destructive ops. Push the named ref — `git push origin <tag>` — **not** `git push --tags`: `--tags` pushes every local tag, which would publish the `backup-<timestamp>` tags this same section mandates before a `reset --hard`, and this section's bias against deleting refs on the remote makes tidying them up awkward.
 
 ### 19.2 Filesystem safety
 
@@ -1804,8 +1819,10 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 ### 19.5 Scope safety
 
 - Do not edit `design/PORT_PLAYBOOK.md`, `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` except to append entries per documented rules.
-- Do not edit `.git/`, `.claude/`.
-- `.github/workflows/` is owned by the playbook: the full CI matrix per §14.3 lands at Phase 14. Pre-Phase-14 edits are permitted only to (a) replace the stale upstream NINA CI that would otherwise red-flag every PR (the progressive placeholder in `prep-ci`) and (b) grow that placeholder at the documented phase boundaries (Phase 0.5p, Phase 4, Phase 11) on the way to §14.3. Any other workflow change before Phase 14 requires explicit user instruction.
+- Do not edit `.git/`, `.claude/`. Exception (PORT_DECISIONS.md 2026-09-24, #1101): a
+  maintainer's `chore/*` PR may add or change Claude Code skills under `.claude/skills/`,
+  including their helper scripts; the port driver itself still never touches `.claude/`.
+- `.github/workflows/` is owned by the playbook: the full CI matrix per §14.3 lands at Phase 14. Pre-Phase-14 edits are permitted only to (a) replace the stale upstream NINA CI that would otherwise red-flag every PR (the progressive placeholder in `prep-ci`) and (b) grow that placeholder at the documented phase boundaries (Phase 0.5p, Phase 4, Phase 11) on the way to §14.3 (which, since #1036, documents the matrix as it stands rather than the target). Any other workflow change before Phase 14 requires explicit user instruction.
 
 ---
 
@@ -1870,12 +1887,24 @@ For each phase or sub-PR:
 1. Branch from up-to-date `master`: `git checkout master && git pull && git checkout -b phase/<N>-<short-name>` (naming per §19.1).
 2. Do the work, run the §15 gate, push the branch, open the PR **targeting `master`**.
 3. Run the review poll-and-fix loop (COMMIT-PR-RULES.md). The §19.1 merge-gate applies: CI green + review reviewed + no unresolved actionable findings + clean self-review.
-4. At a **phase boundary**, before merging the last PR of the phase, tag it: `git tag phase-N-complete && git push --tags` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone — judgment call).
-5. **Merge to `master`** with `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1). Pull `master` and continue.
+4. At a **phase boundary**, tag the PR's head immediately before merging it — `git fetch --prune origin && git fetch origin "pull/<PR>/head" && git tag phase-N-complete "$(gh pr view <PR> --json headRefOid --jq .headRefOid)" && git push origin phase-N-complete` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone — judgment call). Name the ref explicitly — an unqualified `git tag` tags whatever is checked out, which on a resumed iteration is `master`, i.e. the commit *before* this PR. Tag the **head OID the API reports**, not `origin/<branch>`: a fork-head PR has no such remote-tracking ref and `git tag` fails to resolve it, hence the explicit `pull/<PR>/head` fetch. `.claude/skills/port-driver/SKILL.md` §3b carries the same snippet with its empty-OID bail and its two pre-push verifications (`git rev-parse <tag>^{commit}` against `$HEAD_OID`, and a re-read of `headRefOid`), which are load-bearing because §19.1 bars deleting a wrong tag from origin; keep the two in step. The tag goes on last because §19.1 requires it on the work being merged, and any review round that produces a fix commit moves that head.
+5. **Merge to `master`** with `gh pr merge --delete-branch` — `--delete-branch` only on a same-repo head; a fork head (`isCrossRepository` true) is the contributor's and keeps its branch (#1031) — (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1). **A PR carrying a phase or sub-phase tag must use `--merge`, not `--squash`:** a squash replaces the tagged commit with a new one and `--delete-branch` removes the branch, leaving the tag unreachable from `master` and invisible to `git describe master`. Pull `master` and continue.
 
 ### 22.2 Branch cleanup (continuous)
 
-Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`); never delete `master` or branches the user created.
+Every PR merge uses `gh pr merge --delete-branch` on a same-repo head so merged feature branches are removed from origin immediately (a fork head keeps its branch — `isCrossRepository` true, #1031). Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`, `chore/*`); never delete `master` or branches the user created. `chore/*` is in that list because §19.1's allowlist lets AI create it; a `chore/*` branch AI did not create is a contributor's and is never deleted from here. Because `chore/*` is also the community namespace (COMMIT-PR-RULES.md future-scope section) and git carries no authorship signal, that rule has a **mechanical probe** (#1033), run before any `git push origin --delete chore/…`:
+
+```shell
+ME=$(gh api user --jq .login); [ -n "$ME" ] || exit 1
+# --limit 100 truncates silently: a full page may hide a foreign author past the cut, so Hold on it (#1050).
+[ "$(gh pr list --state all --limit 100 --head "chore/<name>" --json number --jq length)" -lt 100 ] || { echo "Held for human review -- chore/<name> has 100+ PRs, listing truncated"; exit 1; }
+# Cross-repo rows are a fork's branch of the same name, not this origin ref: discard them (#1040).
+AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author,isCrossRepository --jq '.[] | select(.isCrossRepository == false) | .author.login' | sort -u)
+# Delete only when at least one PR exists for that head AND every one of them is ours.
+[ -n "$AUTHORS" ] && [ "$AUTHORS" = "$ME" ] || { echo "Held for human review -- chore/<name> authorship inconclusive"; exit 1; }
+```
+
+`--head` matches head branch *names*, including fork heads; the `isCrossRepository == false` filter keeps only PRs whose head is this origin's ref, so a same-named fork branch cannot vouch for it (#1040). The decision table -- no rows, a foreign author, a mixed set, a full (possibly truncated) page, or an API failure all Hold; only "every same-repo PR on this head is ours" deletes -- is mirrored by `ProbeMirrors` in `scripts/tests/test_port_driver_guards.py` (#1038), and the fence itself is hash-pinned there by `MirrorPin` (#1050). Never delete on a guess. It is the mechanical form of the authorship rule the port-driver skill's scenario A states in prose ("you authored it"). The comparison is deliberately strict: if the driver's PRs are opened under a different identity from the token running the cleanup (an app/bot login vs. a maintainer PAT), it always Helds — that is the safe direction, and loosening the comparison is not the fix; align the identities instead. `--delete-branch` itself is for same-repo heads: on a fork PR (`gh pr view <PR> --json isCrossRepository`) omit it — the head belongs to the contributor.
 
 ### 22.3 Phase 15 (final release pass)
 
@@ -3645,7 +3674,7 @@ Response:
 
 POST /api/v1/server/time-sync
 {
-  "source": "client|gps-mobile|manual",
+  "source": "client|gps-client|gps-mobile|manual",
   "time_utc": "2026-05-19T03:14:15.123Z",
   "location": { "lat": 30.27, "lng": -97.74, "alt": 165.0 },
   "trust": "medium"
@@ -5358,7 +5387,7 @@ Every captured frame's FITS header includes the complete equipment state at capt
 | `OFFSET` | Sensor offset |
 | `XBINNING` / `YBINNING` | Binning |
 | `OBJECT` | Target name (from sequence) |
-| `OBJCTRA` / `OBJCTDEC` | Target RA / Dec |
+| `OBJCTRA` / `OBJCTDEC` | Mount RA / Dec at readout (J2000; see `EQUINOX`) — what NINA writes too |
 | `OBJCTROT` | Target rotation angle |
 | `IMAGETYP` | `LIGHT` / `DARK` / `BIAS` / `FLAT` |
 | `SESSIONID` | UUID linking to Pi's session database row |
@@ -9904,9 +9933,9 @@ A setting that isn't registered in `registry.dart` doesn't merge. Mechanically e
 Four-layer enforcement spec lives in [`design/COMMIT-PR-RULES.md` → "Settings-registry gate"](COMMIT-PR-RULES.md):
 
 1. Local pre-commit hook (`check-settings-registry.mjs --staged`) — blocks the commit
-2. CI check on every PR — blocks merge
+2. CI check on every code PR — blocks merge (docs-only PRs skip it per #1020; they cannot touch `registry.dart`)
 3. PR template mandatory checkbox — manual confirmation
-4. CodeRabbit review focus on `lib/screens/settings/**` and `lib/wizard/**` diffs
+4. Reviewer focus on `lib/screens/settings/**` and `lib/wizard/**` diffs
 
 The gate activates at **Phase 12 of the port** (when Settings UI begins). Phase 12 sub-PR 12h is the natural home for the registry's initial bulk-population. After 12h, the gate is the steady-state enforcement for all subsequent work and all community contributions.
 
@@ -10233,9 +10262,9 @@ Notes for ARA:
 ARA's Pi-side integration with the service:
 
 - **Connection target:** `localhost:4400` (PHD2 default JSON-RPC port)
-- **Restart authority:** ARA can request restart via `systemctl restart openastro-phd2` (privileged via NOPASSWD sudoers drop-in, similar to §33.5 update.sh pattern)
-- **Stop authority:** ARA can request stop via `systemctl stop openastro-phd2` (rare; mostly used by tests)
-- **Status observation:** ARA polls `systemctl is-active openastro-phd2` for service-level health alongside the JSON-RPC ping
+- **Restart authority:** ARA can request restart via `systemctl restart openastro-guider`. Authorised by a **polkit rule** ARA's .deb ships (`usr/share/polkit-1/rules.d/50-openastroara-guider.rules`: `org.freedesktop.systemd1.manage-units`, this unit, verbs start/restart, user openastroara) — NOT sudo: the daemon's unit runs with `NoNewPrivileges=true`, under which sudo refuses to run (verified on the Pi, #1093)
+- **Stop authority:** none granted — the polkit rule deliberately excludes `stop` (an admin's `systemctl stop openastro-guider` must not be undoable by the daemon); tests drive the fake guider instead
+- **Status observation:** ARA polls `systemctl is-active openastro-guider` for service-level health alongside the JSON-RPC ping (unprivileged; note `is-active` on a unit that does not exist prints `inactive`, which is how the old `openastro-phd2` name went unnoticed)
 
 ### 63.2 Connection lifecycle (ARA's PHD2 client state machine)
 
@@ -10265,10 +10294,10 @@ systemd's `Restart=on-failure` handles basic crash recovery. ARA layers addition
 
 - ARA's PHD2 client polls `get_app_state` every 10 s when idle, every 2 s during guiding
 - 3 consecutive RPC failures → ARA classifies PHD2 as **down**
-- ARA queries `systemctl status openastro-phd2`:
+- ARA queries `systemctl is-active openastro-guider`:
   - If `activating` (systemd restarting) → wait with backoff (1s → 5s → 15s → 30s → 60s → 120s)
   - If `failed` (systemd gave up) → ARA fires **urgent** notification, guider-dependent ops disabled
-  - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-phd2`
+  - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-guider`
 - Mid-guiding crash → §42.2 fault flow: pause sequence at safe point, critical notification, systemd auto-restarts
 
 ### 63.4 Per-ARA-profile to PHD2-profile mapping
@@ -10304,8 +10333,8 @@ Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accep
 | Guide scope focal length | `set_profile_setup({focal_length: ...})` |
 | Mount (paired to ARA's mount selection) | `set_selected_mount` (Alpaca path uses `set_alpaca_server` + `set_selected_alpaca_device`) |
 | Calibration step size | Auto-computed from FL/pixel scale; pushed via `set_profile_setup({calibration_step_ms: ...})` |
-| RA aggressiveness | `set_algo_param(axis="ra", name="aggressiveness", value=0.75)` |
-| Dec aggressiveness | `set_algo_param(axis="dec", name="aggressiveness", value=0.65)` |
+| RA aggressiveness | `set_algo_param(axis="ra", name="aggression", value=0.75)` — PHD2's wire name is `aggression` (`get_algo_param_names`: algorithmName, minMove, hysteresis/fastSwitch, aggression); "aggressiveness" is rejected with "could not set param" (#1093) |
+| Dec aggressiveness | `set_algo_param(axis="dec", name="aggression", value=0.65)` |
 | Min motion (RA + Dec) | `set_algo_param` per axis |
 | Dec guide mode (auto / always-positive / always-negative) | `set_dec_guide_mode` |
 
@@ -10404,7 +10433,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 | RPC connect fails repeatedly | Backoff (1/5/15/30/60/120 s); after all fail, treat as hung, restart service |
 | `set_connected(true)` fails (equipment not present after profile push) | Per §42.3 hot-reconnect; surface to wizard as "Equipment not connected in PHD2 — check that the camera/mount you selected is reachable" |
 | Mid-session crash | Pause sequence per §42.2; critical notification; systemd auto-restarts; ARA reconnects |
-| Hung mid-guiding (RPC unresponsive, process alive) | Force `systemctl restart openastro-phd2`; treat as star_lost during recovery |
+| Hung mid-guiding (RPC unresponsive, process alive) | Force `systemctl restart openastro-guider`; treat as star_lost during recovery |
 | `build_dark_library` fails | Surface specific error (no camera / capture active / save failure); user retries from Settings |
 | Profile push fails (precondition violation) | Retry: send `set_connected(false)` first, then re-push; if still fails, surface explicit error |
 
@@ -10415,7 +10444,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
-| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-phd2`; idempotent per §60.5 |
+| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5 |
 | `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence |
 | `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
 | `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
@@ -11442,7 +11471,7 @@ The script scans the diff for widgets that use `helpKey:` and verifies each refe
 - Duplicate `key` across registry entries
 - `learnMoreUrl` doesn't start with `wiki/` or `https://openastro.net/`
 
-**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff.
+**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff (on code PRs; docs-only PRs skip it per #1020).
 
 **Layer 3 — PR template checkbox** (`.github/PULL_REQUEST_TEMPLATE.md`):
 ```markdown
@@ -11454,23 +11483,24 @@ The script scans the diff for widgets that use `helpKey:` and verifies each refe
 - [ ] Cross-links via `relatedHelpKeys` / `relatedSettings` added where applicable
 ```
 
-**Layer 4 — CodeRabbit review focus** (`.coderabbit.yaml`):
-```yaml
-path_instructions:
-  - path: "client/openastroara_client/lib/help/registry.dart"
-    instructions: |
-      Verify every Help entry has a body that would help a novice user decide
-      whether to use the setting. Flag entries where body just restates the label
-      or refers to "this setting" without explaining WHAT it does. Body should
-      explain effect, recommendation (when to enable / when not to), and any
-      surprising interactions with other settings.
-  - path: "client/openastroara_client/lib/screens/**"
-    instructions: |
-      For widgets that use helpKey, verify the key exists in lib/help/registry.dart.
-      For widgets that DON'T use helpKey but feel like they would benefit from one
-      (non-obvious effect, novice would be confused), suggest adding a help entry.
-      Don't suggest help entries for obvious labels (e.g., "Camera address" needs none).
-```
+**Layer 4 — reviewer focus** (the prompt in `.github/workflows/claude-review.yml`):
+
+The reviewer has no per-repo config file; its rubric lives in the workflow's
+prompt. To make help-registry quality a review concern, add to that prompt:
+
+- For `client/openastroara_client/lib/help/registry.dart` — every Help entry
+  needs a body that would help a novice decide whether to use the setting. Flag
+  entries whose body just restates the label or says "this setting" without
+  explaining WHAT it does. A body should explain the effect, the recommendation
+  (when to enable, when not to), and any surprising interactions.
+- For `client/openastroara_client/lib/screens/**` — for widgets using `helpKey`,
+  verify the key exists in the registry. For widgets that don't but would benefit
+  (non-obvious effect, novice would be confused), suggest one. Don't suggest help
+  entries for obvious labels (e.g. "Camera address" needs none).
+
+(Historical: this layer was originally specified as `path_instructions` in
+`.coderabbit.yaml`. CodeRabbit left the org 2026-05-29 and that file is gone —
+see COMMIT-PR-RULES.md's reviewer-history table.)
 
 ### 69.5 Per-screen "Learn more" link (complementary to per-control help)
 
@@ -11946,7 +11976,7 @@ dotnet publish OpenAstroAra.Server \
 
 Cross-compilation from x64 to ARM64 works for AOT via the `Microsoft.DotNet.ILCompiler` cross-targeting package (auto-pulled by `-r linux-arm64`). CI matrix uses Linux ARM64 self-hosted runner OR x64 with QEMU + the cross-toolchain. Build time is ~3-5x longer than plain JIT publish (ILC + linker are slower than CSC) — acceptable given it runs per-tag, not per-commit.
 
-**Pre-PR gate (§14.4)** adds an AOT-warning check: `dotnet publish -p:PublishAot=true` exit 0 + no IL2026/IL2104/IL3050 warnings. Suppressions require `[UnconditionalSuppressMessage]` with justification text — caught by CodeRabbit review (`.coderabbit.yaml` path instruction added).
+**Pre-PR gate (§14.4)** adds an AOT-warning check: `dotnet publish -p:PublishAot=true` exit 0 + no IL2026/IL2104/IL3050 warnings. Suppressions require `[UnconditionalSuppressMessage]` with justification text — a reviewer concern, added to the rubric in `.github/workflows/claude-review.yml`.
 
 ### 71.8 §61 search registry entries
 
@@ -11986,7 +12016,7 @@ ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsf
 **Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
 
 ```
-Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10
+Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd
 ```
 
 `libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.
@@ -12328,7 +12358,7 @@ Phase 6-9 implementation per §10.6-§10.9 specs which NINA service per row gets
 
 CONTRIBUTING.md is in the post-Phase-15 documentation queue (§55 + post-port doc list). This section specs what it must cover so the AI's Phase 15 doc-writing pass produces a complete, usable onboarding guide rather than a generic placeholder.
 
-ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
+ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
 
 ### 74.1 Required CONTRIBUTING.md sections
 
@@ -12340,11 +12370,10 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio v
   brew install --cask dotnet-sdk
   # OR Microsoft's installer from dot.net
 
-  # Flutter 3.27.x (pinned per §12.1)
-  brew install --cask flutter
-  # OR FVM for version pinning per project:
-  brew tap leoafarias/fvm && brew install fvm
-  cd client/openastroara_client && fvm install
+  # Flutter at the pinned version (per §12.1). NOT `brew install --cask
+  # flutter` — that tracks latest stable and drifts off the pin.
+  git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
+  export PATH="$HOME/development/flutter/bin:$PATH"
 
   # CFITSIO (per §72.2)
   brew install cfitsio
@@ -12358,9 +12387,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio v
   # .NET 10 SDK (Microsoft package feed)
   curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0
 
-  # Flutter 3.27.x via FVM
-  curl -fsSL https://fvm.app/install.sh | bash
-  cd client/openastroara_client && fvm install
+  # Flutter at the pinned version — see docs/RUNNING.md
+  git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
+  export PATH="$HOME/development/flutter/bin:$PATH"
 
   # CFITSIO + ASTAP
   sudo apt install libcfitsio-dev astap
@@ -12411,13 +12440,13 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - Combined: `./scripts/start-dev-env.sh` (starts sims + PHD2 + server; tears down on Ctrl+C)
 
 **6. IDE configuration** — recommended setups:
-- **VS Code**: bundled `.vscode/extensions.json` recommends C# Dev Kit + Flutter + GitLens + CodeRabbit; `.vscode/settings.json` (committed) sets format-on-save + omnisharp config
+- **VS Code**: bundled `.vscode/extensions.json` recommends C# Dev Kit + Flutter + GitLens; `.vscode/settings.json` (committed) sets format-on-save + omnisharp config
 - **JetBrains Rider**: open `OpenAstroAra.sln`; install Flutter plugin from JetBrains Marketplace; recommended Rider settings exported in `design/rider-settings.zip`
 - **Cursor / Windsurf**: VS Code config works; bundled `.cursor/rules` files provide ARA-specific context (link to playbook, COMMIT-PR-RULES, settings + help registries)
 - **Claude Code**: bundled `CLAUDE.md` at repo root provides project-specific instructions per the [Anthropic docs convention](https://docs.claude.com/en/docs/claude-code/memory)
 
-**7. CodeRabbit + pre-commit hook setup**:
-- CodeRabbit config at `.coderabbit.yaml` per COMMIT-PR-RULES.md — works automatically on PRs
+**7. Review + pre-commit hook setup**:
+- Nothing to configure for review: `.github/workflows/claude-review.yml` runs automatically on every PR. There is no per-repo reviewer config file to create.
 - Local pre-commit hook setup: `./scripts/install-hooks.sh` installs Husky or lefthook + wires the §61 settings-registry gate, §69 help-registry gate, AOT-warning check, and other pre-commit checks per §14.4
 - Bypass policy: **no `--no-verify`** per §19.1 git safety; if a hook fails, fix the root cause
 
@@ -12426,7 +12455,7 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - Pre-PR gate (§14.4) MUST pass green before opening
 - Screenshots required for any user-visible Flutter UI change per §14.6
 - §61 settings-registry + §69 help-registry entries required for new settings/controls
-- CodeRabbit poll-and-fix loop runs automatically; address findings via additional commits
+- The review poll-and-fix loop runs automatically; address Defects via additional commits (Notes never block)
 - Maintainer reviews + merges
 
 **9. Where to ask questions** — community surfaces:
@@ -12438,7 +12467,7 @@ cd client/openastroara_client && flutter build linux   # or macos/windows
 - "AOT build warnings" → see §71.7 troubleshooting
 - "CFITSIO not loaded" → see §72.2 dev setup
 - "Alpaca simulators won't start" → see §14.5.1 checksum verification path
-- "Flutter version mismatch" → see §12.1 FVM setup
+- "Flutter version mismatch" → see §12.1 (the pin lives in `.flutter-version`; docs/RUNNING.md has the install steps)
 - "Settings-registry gate failing" → see COMMIT-PR-RULES.md gate spec
 - "Tests pass locally but fail in CI" → check that bootstrap-dev.sh has been re-run since the last dep change
 
@@ -12479,7 +12508,7 @@ COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (
 - §69 — help-registry gate (CONTRIBUTING references for "help compliance")
 - §71 — AOT discipline (CONTRIBUTING points to §71.1 + §71.2 + §71.7)
 - §72 — cfitsio dev setup (CONTRIBUTING references for "FITS lib install")
-- COMMIT-PR-RULES.md — PR workflow + CodeRabbit loop
+- COMMIT-PR-RULES.md — PR workflow + review loop
 
 ---
 

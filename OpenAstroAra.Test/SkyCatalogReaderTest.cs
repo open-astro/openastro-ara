@@ -65,6 +65,23 @@ namespace OpenAstroAra.Test {
                 Is.Empty, "limit 0 returns nothing, not one (the cap is checked before adding)");
         }
 
+        private static readonly string[] WrNamesByIdThenCommon = { "WR 21", "Anon (Marston)" };
+
+        [Test]
+        public void OpenNgc_layout_wr_rows_with_two_spectral_types_name_by_id_not_identifier() {
+            // Verbatim from the pinned sky-data wr.csv: the Hubble cell joins alternate
+            // classifications with ", ". The first build used ";" (the field separator), so
+            // /data-manager/wr-stars/catalog named WR 21 "HD 90657" (review #1107).
+            const string csv =
+                "Name;Type;RA;Dec;Const;MajAx;MinAx;PosAng;B-Mag;V-Mag;J-Mag;H-Mag;K-Mag;SurfBr;Hubble;Pax;Pm-RA;Pm-Dec;RadVel;Redshift;Cstar U-Mag;Cstar B-Mag;Cstar V-Mag;M;NGC;IC;Cstar Names;Identifiers;Common names\n" +
+                "WR 21;WR*;10:26:31.40;-58:38:26.1;;;;;10.16;9.71;8.41;8.22;8.03;;WN5o+O4-6, WN5o+O7V;;;;;;;;;;;;;HD 90657,DR3 5255569549619300096;\n" +
+                "WR 30;WR*;10:51:05.99;-62:17:01.6;;;;;;11.73;10.05;9.76;9.21;;WC6+O6-8, WC6+O7.5;;;;;;;;;;;;;HD 94305,DR3 5241922754918453760,TYC 8961 618 1;Anon (Marston)\n";
+            var rows = SkyCatalogReader.Read("wr-stars", S(csv), maxMag: null, limit: null, CancellationToken.None);
+
+            Assert.That(rows.Select(r => r.Name), Is.EqualTo(WrNamesByIdThenCommon));
+            Assert.That(rows[0].Magnitude, Is.EqualTo(9.71).Within(1e-6));
+        }
+
         [Test]
         public void Hyg_skips_out_of_range_ra_or_dec() {
             var csv = "id,proper,ra,dec,mag\n" +

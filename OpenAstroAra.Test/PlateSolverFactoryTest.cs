@@ -32,17 +32,35 @@ namespace OpenAstroAra.Test {
     public class PlateSolverFactoryTest {
 
         // Concrete (internal) solver class names asserted below — pinned here so a rename is a single-point
-        // update. GetType().Name is used because the classes aren't visible to this assembly.
+        // update. GetType().Name predates InternalsVisibleTo (#1094) and is kept: the factory contract is
+        // "which backend", not a type reference.
         private const string AstapSolver = "ASTAPSolver";
         private const string LocalSolver = "LocalPlateSolver";
 
-        private static IPlateSolveSettings Settings(BlindSolver blind = BlindSolver.ASTAP, PlateSolver primary = PlateSolver.ASTAP) {
+        private static IPlateSolveSettings Settings(BlindSolver blind = BlindSolver.ASTAP, PlateSolver primary = PlateSolver.ASTAP, string? database = null) {
             var s = new Mock<IPlateSolveSettings>();
             s.SetupGet(x => x.BlindSolverType).Returns(blind);
             s.SetupGet(x => x.PlateSolverType).Returns(primary);
             s.SetupGet(x => x.ASTAPLocation).Returns("astap_cli");
+            s.SetupGet(x => x.ASTAPDatabaseLocation).Returns(database ?? string.Empty);
             s.SetupGet(x => x.CygwinLocation).Returns(string.Empty);
             return s.Object;
+        }
+
+        [Test]
+        public void ASTAP_solver_from_the_factory_carries_the_database_directory() {
+            // The one link that carries -d into production: both ASTAP arms of the factory switch.
+            var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ara-astap-" + System.Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, "d80_0101.1476"), new byte[] { 1 });
+            try {
+                var primary = (OpenAstroAra.PlateSolving.Solvers.ASTAPSolver)PlateSolverFactory.GetPlateSolver(Settings(database: dir));
+                var substituted = (OpenAstroAra.PlateSolving.Solvers.ASTAPSolver)PlateSolverFactory.GetBlindSolver(Settings(blind: BlindSolver.AstrometryNet, database: dir));
+                Assert.That(primary.EffectiveDatabaseLocation, Is.EqualTo(dir));
+                Assert.That(substituted.EffectiveDatabaseLocation, Is.EqualTo(dir));
+            } finally {
+                System.IO.Directory.Delete(dir, recursive: true);
+            }
         }
 
         [Test]

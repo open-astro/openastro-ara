@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data' show BytesBuilder;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -20,6 +21,15 @@ import '../models/server.dart';
 ///    multicast — yet scan-like probe traffic shouldn't hit every network
 ///    the laptop joins (hotel Wi-Fi) when mDNS is answering fine (review r2).
 ///
+/// A sweep, once justified, is shared: the connect screen restarts discovery
+/// every ~4 s, and a full /24 on a quiet Wi-Fi outlives that tick, so a new
+/// pass JOINS the sweep in flight (or replays one that finished within
+/// [sweepReplayWindow]) instead of cancelling it. Joining never spawns a
+/// sweep: a fresh one still needs the current pass's own mDNS to come up
+/// empty, and an mDNS answer drops the joined strand, so a healthy network
+/// sees no further probe traffic. [resetSweepCache] (the ⟳ Rescan) forgets
+/// the shared run so a daemon that went away is re-probed, not replayed.
+///
 /// Both paths yield numeric-IP hostnames, so the saved server never carries
 /// a `.local` name that only resolves while multicast is healthy.
 class ServerDiscoveryService {
@@ -30,17 +40,41 @@ class ServerDiscoveryService {
   /// sweep fallback starts alongside it.
   static const Duration mdnsGracePeriod = Duration(milliseconds: 2500);
 
+  /// A-record collection per rig: close after this long with no new record
+  /// (the same tolerance for the first record as the old `.first.timeout`),
+  /// and never run longer than [_aRecordDeadline] in total.
+  static const Duration _aRecordIdleWindow = Duration(milliseconds: 800);
+  static const Duration _aRecordDeadline = Duration(milliseconds: 1500);
+
   /// Test seams: the real strategies are network-bound, so tests inject
   /// deterministic streams here. Production callers use the default ctor.
-  ServerDiscoveryService({this.mdnsSource, this.sweepSource});
+  ServerDiscoveryService({
+    this.mdnsSource,
+    this.sweepSource,
+    this.sweepAbandonGrace = const Duration(seconds: 2),
+  });
 
   final Stream<AraServer> Function()? mdnsSource;
   final Stream<AraServer> Function()? sweepSource;
 
-  /// Run a single discovery pass. mDNS starts immediately; the sweep joins
-  /// only if mDNS stays empty (grace timer) or finishes empty. Results
-  /// dedupe by endpoint; the stream closes when every started strategy is
-  /// done.
+  /// How long a sweep keeps probing after its last listener goes away. The
+  /// connect screen restarts discovery every ~4 s, and the restart detaches
+  /// the old pass a moment before the new one attaches; that hop must not
+  /// read as "the user left the screen", which is what really stops a sweep.
+  final Duration sweepAbandonGrace;
+
+  /// A sweep that finished this recently still counts for a new pass: its
+  /// hits are replayed instead of waiting for a fresh sweep to rediscover
+  /// them, and the new pass joins the sweep path at once rather than sitting
+  /// out [mdnsGracePeriod] first.
+  static const Duration sweepReplayWindow = Duration(seconds: 15);
+
+  /// Run a single discovery pass. mDNS starts immediately. A sweep that is
+  /// current (in flight, or finished within [sweepReplayWindow]) is joined at
+  /// once for its hits; a NEW sweep is spawned only if this pass's mDNS stays
+  /// empty (grace timer) or finishes empty, and an mDNS answer drops the
+  /// sweep strands. Results dedupe by endpoint; the stream closes when every
+  /// started strategy is done.
   Stream<AraServer> discover() {
     final controller = StreamController<AraServer>();
     final seen = <String>{};
@@ -50,6 +84,7 @@ class ServerDiscoveryService {
     var cancelled = false;
     StreamSubscription<AraServer>? mdnsSub;
     StreamSubscription<AraServer>? sweepSub;
+    StreamSubscription<AraServer>? joinSub;
     Timer? grace;
 
     void done() {
@@ -67,17 +102,47 @@ class ServerDiscoveryService {
 
     void maybeStartSweep() {
       if (sweepStarted || cancelled || controller.isClosed) return;
+      // A pass already joined to a sweep still IN FLIGHT has nothing to gain
+      // from a second attach to the same run: the join strand carries its
+      // hits. A join that only replayed a finished run must not block the
+      // fresh sweep this pass is entitled to.
+      if (joinSub != null && !(_sweepRun?.finished ?? true)) return;
       sweepStarted = true;
       pending++;
-      sweepSub = (sweepSource != null
-              ? sweepSource!()
-              : _sweepDiscover(isCancelled: () => cancelled))
-          .listen(emit, onError: (Object _) {}, onDone: done);
+      // Clear the handle when the strand finishes on its own: a later
+      // dropSweepStrands() must not count a finished strand as pending
+      // again, or the pass closes before the mDNS record is emitted.
+      sweepSub = _sharedSweep().listen(
+        emit,
+        onError: (Object _) {},
+        onDone: () {
+          sweepSub = null;
+          done();
+        },
+      );
+    }
+
+    // mDNS answered: the sweep path is not needed on this network. Drop the
+    // joined/spawned strands (their pending slots go with them) so a healthy
+    // network never sees probe traffic chained from an earlier empty pass.
+    void dropSweepStrands() {
+      grace?.cancel();
+      for (final sub in [joinSub, sweepSub]) {
+        if (sub != null) {
+          unawaited(sub.cancel());
+          done();
+        }
+      }
+      joinSub = null;
+      sweepSub = null;
     }
 
     mdnsSub = (mdnsSource ?? _mdnsDiscover)().listen(
       (s) {
-        sawMdnsResult = true;
+        if (!sawMdnsResult) {
+          sawMdnsResult = true;
+          dropSweepStrands();
+        }
         emit(s);
       },
       onError: (Object _) {},
@@ -88,6 +153,21 @@ class ServerDiscoveryService {
         done();
       },
     );
+    if (_sweepIsCurrent) {
+      // A sweep is running or just finished: an earlier pass proved mDNS
+      // empty, so take its hits now — waiting out the grace period again is
+      // how the previous pass missed its own results. This only attaches or
+      // replays; spawning a fresh sweep stays gated on THIS pass's mDNS.
+      pending++;
+      joinSub = _joinSweep().listen(
+        emit,
+        onError: (Object _) {},
+        onDone: () {
+          joinSub = null;
+          done();
+        },
+      );
+    }
     grace = Timer(mdnsGracePeriod, () {
       if (!sawMdnsResult) maybeStartSweep();
     });
@@ -101,6 +181,7 @@ class ServerDiscoveryService {
       cancelled = true;
       grace?.cancel();
       unawaited(mdnsSub?.cancel());
+      unawaited(joinSub?.cancel());
       unawaited(sweepSub?.cancel());
     };
     return controller.stream;
@@ -110,42 +191,78 @@ class ServerDiscoveryService {
     final mdns = MDnsClient();
     try {
       await mdns.start();
+      // One interface enumeration per pass, not one per rig resolved.
+      final local = await _localIPv4Addresses();
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
-          ResourceRecordQuery.serverPointer(serviceType))) {
+        ResourceRecordQuery.serverPointer(serviceType),
+      )) {
         await for (final SrvResourceRecord srv
             in mdns.lookup<SrvResourceRecord>(
-                ResourceRecordQuery.service(ptr.domainName))) {
+              ResourceRecordQuery.service(ptr.domainName),
+            )) {
           // Resolve the SRV target to its numeric IPv4 while the multicast
           // channel is provably working (we just heard the record). Saving
           // the .local hostname instead locks the saved server to mDNS
           // resolution forever — on a flaky-multicast network the daemon
           // then reads as "down" even though it answers by IP.
-          final String host;
+          //
+          // The daemon advertises EVERY address it holds, and an SBC running
+          // its own hotspot has two (eth0 on the house LAN + ap0 on the
+          // hotspot). Taking the first A record to arrive picked whichever
+          // the Pi listed first — the unreachable hotspot address when the
+          // laptop is on the LAN. Collect the whole answer set and prefer the
+          // address that shares a /24 with a local interface.
+          final candidates = <String>[];
           try {
-            final a = await mdns
+            // The lookup stream only closes on the library's own long
+            // timeout; an idle window gathers the burst of A records that
+            // answer one query without wedging later PTR/SRV records (r1:
+            // without a timeout this nested await wedged EVERY later record
+            // and kept the stream from closing). The idle window is a floor
+            // on every resolution and rigs resolve serially, so an overall
+            // cap keeps several rigs inside [mdnsGracePeriod].
+            final sub = mdns
                 .lookup<IPAddressResourceRecord>(
-                    ResourceRecordQuery.addressIPv4(srv.target))
-                .first
-                .timeout(const Duration(milliseconds: 800));
-            host = a.address.address;
-            // Broad on purpose: `.first` throws StateError (an Error, not
-            // Exception) on an empty stream, and a dropped A-record reply is
-            // the exact flaky-multicast mode this file survives — without
-            // the timeout this nested await wedged EVERY later PTR/SRV
-            // record and kept the merged stream from ever closing (r1).
+                  ResourceRecordQuery.addressIPv4(srv.target),
+                )
+                .map((a) => a.address.address)
+                .timeout(
+                  _aRecordIdleWindow,
+                  onTimeout: (sink) => sink.close(),
+                )
+                .listen(candidates.add);
+            // A cancellable Timer, not Future.delayed: a deadline that
+            // outlives the subscription would leave a timer pending on
+            // every resolution (and trip FakeAsync once this path is
+            // under test).
+            final deadline = Completer<void>();
+            final timer = Timer(_aRecordDeadline, deadline.complete);
+            try {
+              await Future.any<void>([sub.asFuture<void>(), deadline.future]);
+            } finally {
+              timer.cancel();
+              await sub.cancel();
+            }
+            // Broad on purpose: a dropped A-record reply is the exact
+            // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
           } catch (_) {
+            continue;
+          }
+          if (candidates.isEmpty) {
             // Unresolved: do NOT emit the .local name — a saved entry keyed
             // on it reintroduces the outage this PR fixes, and it would
             // duplicate the sweep's IP entry for the same daemon (r2). The
             // sweep surfaces this host by IP instead.
             continue;
           }
-          yield AraServer(
-            hostname: host,
-            port: srv.port,
-            mdnsName: ptr.domainName,
-          );
+          for (final host in preferLocalSubnet(candidates, local)) {
+            yield AraServer(
+              hostname: host,
+              port: srv.port,
+              mdnsName: ptr.domainName,
+            );
+          }
         }
       }
       // Deliberately broad: raw-socket mDNS fails in environment-specific
@@ -159,6 +276,138 @@ class ServerDiscoveryService {
     }
   }
 
+  /// The sweep in flight or most recently finished, if any. The connect
+  /// screen invalidates its discovery provider every ~4 s; a full /24 sweep
+  /// on a quiet Wi-Fi (silent hosts ride the connect timeout, ~1 s per batch
+  /// of 64) plus the mDNS grace period takes longer than that, so cancelling
+  /// the sweep on every tick meant the last batches — and any daemon living
+  /// there — were NEVER probed on a platform where mDNS stays empty
+  /// (Android: the raw-socket browse fails outright). Instead, a new pass
+  /// attaches to the running sweep (or replays one that just finished) and
+  /// the sweep only stops once nobody has listened for [sweepAbandonGrace].
+  SweepRun? _sweepRun;
+
+  /// Forget the shared sweep: an in-flight run is discarded and a finished
+  /// one is no longer replayed, so the next pass probes the subnet afresh.
+  /// The connect screen's ⟳ Rescan calls this — a daemon that was stopped or
+  /// moved must vanish from the list, not reappear from the cache.
+  void resetSweepCache() {
+    _sweepRun?.discard();
+    _sweepRun = null;
+  }
+
+  /// Hits of the current sweep without spawning one: the finished run's list
+  /// (then done), or the live run's replay + tail.
+  Stream<AraServer> _joinSweep() async* {
+    final run = _sweepRun;
+    if (run == null || !_sweepIsCurrent) return;
+    if (run.finished) {
+      // Snapshot: a ⟳ Rescan landing mid-replay clears run.found.
+      yield* Stream.fromIterable(List.of(run.found));
+    } else {
+      yield* run.attach();
+    }
+  }
+
+  bool get _sweepIsCurrent {
+    final run = _sweepRun;
+    if (run == null) return false;
+    final at = run.finishedAt;
+    return at == null || DateTime.now().difference(at) <= sweepReplayWindow;
+  }
+
+  Stream<AraServer> _sharedSweep() async* {
+    // Decide and publish the run BEFORE the first yield: an async* body
+    // suspends at yield*, and two live passes reading a just-finished run
+    // across that suspension would each spawn a fresh sweep, the first
+    // becoming an orphan that keeps probing.
+    final prev = _sweepRun;
+    final SweepRun run;
+    var replay = const <AraServer>[];
+    if (prev != null && !prev.finished) {
+      run = prev;
+    } else {
+      if (prev != null && _sweepIsCurrent) replay = List.of(prev.found);
+      final fresh = SweepRun(sweepAbandonGrace);
+      _sweepRun = run = fresh;
+      fresh.drive(
+        sweepSource != null
+            ? sweepSource!()
+            : _sweepDiscover(isCancelled: () => fresh.abandoned),
+      );
+    }
+    yield* Stream.fromIterable(replay);
+    yield* run.attach();
+  }
+
+  /// Keep the addresses one daemon advertised that a local interface can reach.
+  ///
+  /// Dart exposes no netmask, so "same subnet" means the same /24 as a local
+  /// interface — the assumption the sweep already makes. When one or more
+  /// candidates match, only those are returned (the rest are that rig's
+  /// other networks and would show as dead rows). When none match — a /16
+  /// LAN, a routed segment — every candidate is returned in the order
+  /// received so the user can still pick.
+  @visibleForTesting
+  static List<String> preferLocalSubnet(
+    List<String> candidates,
+    Iterable<String> localAddresses,
+  ) {
+    final localBases = {
+      for (final a in localAddresses) _slash24(a),
+    }..remove(null);
+    final onSubnet = [
+      for (final c in candidates)
+        if (localBases.contains(_slash24(c))) c,
+    ];
+    return onSubnet.isNotEmpty ? onSubnet : List.of(candidates);
+  }
+
+  static String? _slash24(String address) {
+    final parts = address.split('.');
+    return parts.length == 4 ? parts.sublist(0, 3).join('.') : null;
+  }
+
+  /// Physical LANs only (review r3): a VPN/tunnel interface's subnet is not
+  /// one a rig on the desk is reachable through, and sweeping it fires ~254
+  /// unsolicited probes into a corporate network — exactly the kind of
+  /// traffic that trips internal scanning alerts. Name prefixes cover the
+  /// common tunnel drivers across macOS/Linux/Windows.
+  static const List<String> _tunnelPrefixes = [
+    'utun',
+    'tun',
+    'tap',
+    'ppp',
+    'wg',
+    'zt',
+    'ipsec',
+    'gpd',
+  ];
+
+  static bool _isTunnel(NetworkInterface i) {
+    final name = i.name.toLowerCase();
+    return _tunnelPrefixes.any(name.startsWith);
+  }
+
+  /// IPv4 addresses of the local non-tunnel interfaces; empty when the
+  /// enumeration is unavailable (sandbox?).
+  static Future<List<String>> _localIPv4Addresses() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      return [
+        for (final i in interfaces)
+          if (!_isTunnel(i))
+            for (final a in i.addresses) a.address,
+      ];
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Probe every host of every local /24 for an Ara daemon on [defaultPort],
   /// in bounded batches. Worst case (silent-drop hosts) a batch rides its
   /// slowest probe's timeouts, so the sweep can take several seconds on
@@ -169,7 +418,9 @@ class ServerDiscoveryService {
     final List<NetworkInterface> interfaces;
     try {
       interfaces = await NetworkInterface.list(
-          type: InternetAddressType.IPv4, includeLoopback: false);
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       return; // no interface enumeration (sandbox?) — mDNS path remains
@@ -177,13 +428,7 @@ class ServerDiscoveryService {
     final bases = <String>{};
     final own = <String>{};
     for (final i in interfaces) {
-      // Physical LANs only (review r3): sweeping a VPN/tunnel interface fires
-      // ~254 unsolicited probes into a corporate network — exactly the kind
-      // of traffic that trips internal scanning alerts. Name prefixes cover
-      // the common tunnel drivers across macOS/Linux/Windows.
-      final name = i.name.toLowerCase();
-      const tunnelPrefixes = ['utun', 'tun', 'tap', 'ppp', 'wg', 'zt', 'ipsec', 'gpd'];
-      if (tunnelPrefixes.any(name.startsWith)) continue;
+      if (_isTunnel(i)) continue;
       for (final a in i.addresses) {
         final parts = a.address.split('.');
         if (parts.length == 4) {
@@ -230,21 +475,21 @@ class ServerDiscoveryService {
       final req = await client
           .getUrl(Uri.parse('http://$host:$defaultPort/api/v1/server/info'))
           .timeout(const Duration(milliseconds: 900));
-      final res =
-          await req.close().timeout(const Duration(milliseconds: 1200));
+      final res = await req.close().timeout(const Duration(milliseconds: 1200));
       if (res.statusCode != 200) return null;
       // Byte-capped read (review r3): probes hit arbitrary subnet hosts, and
       // a device that trickles a large body just under the time cap would
       // hold its slot ~3 s. /server/info is a few hundred bytes; anything
       // past 8 KiB is not an Ara daemon.
       const maxBodyBytes = 8192;
-      final bytes = await res.fold<BytesBuilder>(BytesBuilder(copy: false),
-          (b, chunk) {
-        if (b.length + chunk.length > maxBodyBytes) {
-          throw const FormatException('body too large for /server/info');
-        }
-        return b..add(chunk);
-      }).timeout(const Duration(milliseconds: 1200));
+      final bytes = await res
+          .fold<BytesBuilder>(BytesBuilder(copy: false), (b, chunk) {
+            if (b.length + chunk.length > maxBodyBytes) {
+              throw const FormatException('body too large for /server/info');
+            }
+            return b..add(chunk);
+          })
+          .timeout(const Duration(milliseconds: 1200));
       final json = jsonDecode(utf8.decode(bytes.takeBytes()));
       if (json is! Map<String, dynamic> || json['server_uuid'] is! String) {
         return null;
@@ -259,5 +504,93 @@ class ServerDiscoveryService {
     } catch (_) {
       return null; // not an Ara daemon (or unreachable) — skip silently
     }
+  }
+}
+
+/// One subnet sweep shared by every discovery pass that starts while it is
+/// running. Late attachers get the hits found so far, then live ones.
+///
+/// Public only so its timer bookkeeping can be tested directly; production
+/// code reaches it through [ServerDiscoveryService] alone.
+@visibleForTesting
+class SweepRun {
+  SweepRun(this.abandonGrace);
+
+  final Duration abandonGrace;
+  final found = <AraServer>[];
+  final _live = StreamController<AraServer>.broadcast();
+  StreamSubscription<AraServer>? _drive;
+  Timer? _abandonTimer;
+  var _listeners = 0;
+  bool abandoned = false;
+  DateTime? finishedAt;
+
+  bool get finished => finishedAt != null;
+
+  void drive(Stream<AraServer> source) {
+    _drive = source.listen(
+      (s) {
+        found.add(s);
+        _live.add(s);
+      },
+      onError: (Object _) {},
+      onDone: _finish,
+    );
+    // Armed from the start, not only on the first detach: a pass cancelled
+    // between spawning the run and attaching to it would otherwise leave a
+    // sweep probing the whole /24 with nobody listening and no timer to
+    // stop it. The first attach cancels this; each detach re-arms it.
+    _abandonTimer = Timer(abandonGrace, _abandon);
+  }
+
+  void _finish() {
+    if (finished) return;
+    finishedAt = DateTime.now();
+    _abandonTimer?.cancel();
+    unawaited(_live.close());
+  }
+
+  void _abandon() {
+    if (finished || _listeners > 0) return;
+    abandoned = true;
+    unawaited(_drive?.cancel());
+    _finish();
+  }
+
+  /// Stop probing and close every attached listener now; the run is no
+  /// longer the service's current sweep, so nothing replays it.
+  void discard() {
+    abandoned = true;
+    unawaited(_drive?.cancel());
+    found.clear();
+    _finish();
+  }
+
+  Stream<AraServer> attach() {
+    late StreamController<AraServer> out;
+    StreamSubscription<AraServer>? sub;
+    out = StreamController<AraServer>(
+      onListen: () {
+        _listeners++;
+        _abandonTimer?.cancel();
+        List.of(found).forEach(out.add);
+        if (finished) {
+          unawaited(out.close());
+          return;
+        }
+        sub = _live.stream.listen(
+          out.add,
+          onDone: () => unawaited(out.close()),
+        );
+      },
+      onCancel: () {
+        _listeners--;
+        if (_listeners == 0 && !finished) {
+          _abandonTimer = Timer(abandonGrace, _abandon);
+        }
+        return sub?.cancel();
+      },
+    );
+    return out.stream;
   }
 }

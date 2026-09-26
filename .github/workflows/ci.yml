@@ -28,8 +28,10 @@ name: CI
 #
 #   Phase 14 (full CI matrix per §14.3)
 #     → 14c [LANDED]: client-test extended to {linux, macos, windows} matrix.
-#     → 14d [LANDED]: server-e2e — actually `docker run` the arm64 image
-#       via qemu, probe /healthz + /api/v1/server/info from the host.
+#     → 14d [LANDED]: arm64 end-to-end inside `server-build` (no separate
+#       job): `docker run` the published image via qemu and probe /healthz
+#       + /api/v1/server/info from the host — the "Set up QEMU" … "Run arm64
+#       container + health probe" steps. Playbook §14.3 describes it the same way (#1037).
 #     → [LANDED]: client-build — native desktop compile gate
 #       (`flutter build {macos,linux,windows} --release`), closing the
 #       analyze-only gap that let a non-linking macOS client merge (#599).
@@ -74,11 +76,138 @@ jobs:
             echo "ok: $f ($(wc -l < "$f") lines)"
           done
 
+      # Unit tests for the repo's Python tooling. Cheap and network-free, so
+      # they ride along in the sanity job rather than earning their own.
+      # Currently: scripts/check-flutter-release.py, which drives the weekly
+      # Flutter bump PR (playbook §12.1) unattended — the pubspec-rewriting
+      # logic wants a guard that fails when it regresses; and
+      # scripts/tests/test_port_driver_guards.py, which pins the port-driver
+      # skill's git-state guards against throwaway repositories (they decide
+      # whether a branch carries live work or an already-merged leftover, and
+      # every prose-only revision of them so far has been wrong).
+      - name: Python tooling tests
+        run: python3 -m unittest discover -s scripts/tests -v
+
       # NOTE: We intentionally don't yaml-lint workflow files here.
       # GitHub Actions' own parser is the ultimate validator — a malformed
       # workflow won't run at all. A lint step is duplicate work.
       # When `actionlint` style checks are wanted (e.g., shellcheck inside
       # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
+
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5  # gates six jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
+    # A red `Changed paths` is never useful (#1024): every consumer below
+    # already fails safe on an empty output (`!= 'false'`, `!= 'true'`), so a
+    # checkout flake or a wedged fetch — neither of which the script's ERR
+    # trap can cover — must run the full matrix quietly, not hand the
+    # autonomous driver a `fail` to churn on. That is done with STEP-level
+    # `continue-on-error` on both steps below, deliberately not job-level:
+    # measured on probe PR #1043, a job-level `continue-on-error` keeps the
+    # workflow run green but still publishes this job's check run as
+    # `failure` (`gh pr checks` -> fail), whereas a step-level one publishes
+    # the job as `success` with the step's failure kept as an annotation.
+    # The job-level timeout above stays as the outer bound; the checkout
+    # step carries its own shorter timeout so a wedged fetch is a continued
+    # step, not a failed job.
+    # Classifies the PR so the expensive jobs below can skip work that cannot
+    # possibly be affected by it. See #1020.
+    #
+    # This is deliberately a job-level gate and NOT a workflow-level `paths:`
+    # filter. A workflow filtered out by `paths:` never creates its checks at
+    # all, so every required context in the `master protection` ruleset
+    # ("Sanity (design docs)", "Server (build + cross-publish + Docker)",
+    # "Settings + Help registry gate", the three "Client (analyze + test)"
+    # legs) would sit in "Expected — Waiting for status to be reported"
+    # forever and the PR could never merge. A job skipped by `if:` reports a
+    # `skipped` conclusion, which GitHub counts as satisfying a required check.
+    # That holds for NON-MATRIX jobs only. A matrix job skipped at job level
+    # never expands, so its per-leg contexts are never reported at all — which
+    # is why `client-test` is gated at step level instead (#1025).
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      # Finer-grained than docs_only, and consumed ONLY by jobs that are not
+      # required contexts (analyzer-gate, the two Alpaca jobs, client-build).
+      # A skipped required context is reported to GitHub as satisfied, so a
+      # classifier bug there would merge a broken PR with nothing red; these
+      # buckets are deliberately kept away from that blast radius.
+      dotnet: ${{ steps.classify.outputs.dotnet }}
+      client: ${{ steps.classify.outputs.client }}
+    steps:
+      - name: Checkout (no LFS, full history for the merge-base diff)
+        # Only a pull_request needs the diff at all; every other event short
+        # -circuits to docs_only=false below, so skip the clone entirely.
+        if: github.event_name == 'pull_request'
+        continue-on-error: true  # a flaked or timed-out clone leaves no repo; the classify step's ERR trap then emits docs_only=false (#1024)
+        timeout-minutes: 4  # under the job's 5, so a wedged fetch fails THIS step (continued) rather than the job
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          lfs: false
+          fetch-depth: 0  # merge-base against the PR's base needs real history
+          filter: blob:none  # history without blobs; checkout still materialises HEAD, which is all the classifier script needs
+          persist-credentials: false
+
+      - name: Classify changed paths
+        id: classify
+        timeout-minutes: 2  # a merge-base + diff + one Python call, with headroom; under the job's 5 so a hang is a continued step, not a failed job (#1044)
+        continue-on-error: true  # belt and braces with the ERR trap: an exit the trap misses leaves empty outputs, which every consumer treats as "run everything" (#1024)
+        env:
+          # Via env, not ${{ }} interpolation into the script body — zizmor
+          # template-injection policy.
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+
+          # Any unexpected failure below classifies as code and runs everything,
+          # rather than leaving a red `Changed paths` that blocks the PR anyway.
+          # The `if:` guards already fail safe on an empty output; this makes the
+          # job itself match that intent instead of going red.
+          trap 'echo "classifier failed -> running everything"; echo "docs_only=false" >> "$GITHUB_OUTPUT"; exit 0' ERR
+          set -e
+
+          # Fail safe: anything that is not a PR (push to master,
+          # workflow_dispatch) runs the full matrix.
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "not a pull_request event -> running everything"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          # --no-renames: rename detection needs blob contents (defeating
+          # `filter: blob:none` with a lazy promisor fetch) and reports only a
+          # rename's destination — so a code file moved into design/ would look
+          # docs-only while its deletion went unbuilt.
+          # -c core.quotePath=false: with the default, a non-ASCII path is
+          # emitted as "design/\303\251.md" (quoted, octal-escaped), and the
+          # leading quote misses every prefix rule in the classifier, so the
+          # PR pays for a full matrix it did not need. Paths with control
+          # characters are still quoted and still fall through — the safe
+          # direction (#1024).
+          files="$(git -c core.quotePath=false diff --no-renames --name-only "$base" "$HEAD_SHA")"
+
+          echo "Changed files:"
+          echo "$files" | sed 's/^/  /'
+
+          # An empty diff is unexpected; treat it as code and run everything.
+          if [ -z "$files" ]; then
+            echo "empty diff -> running everything"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Classification lives in scripts/classify-changed-paths.py, not in
+          # this block. It decides which jobs a PR may skip, an allowlist with
+          # a dozen carve-outs (the SIMULATORS_VERSION.md fixture, the client
+          # lockfile feeding the licence gate, ci.yml forcing the full
+          # matrix), and inline shell in a workflow is the one place in this
+          # repo nothing can unit-test. scripts/tests/ runs in the Sanity job.
+          classification="$(printf '%s\n' "$files" | python3 scripts/classify-changed-paths.py)"
+          echo "$classification"
+          echo "$classification" >> "$GITHUB_OUTPUT"
 
   # §14e — Alpaca simulator harness smoke test. Downloads the pinned ASCOM OmniSim
   # release (SHA-256 verified, not committed), runs it headless on the runner, and
@@ -88,7 +217,11 @@ jobs:
   alpaca-sim-smoke:
     name: Alpaca simulator harness (smoke)
     runs-on: ubuntu-latest
-    needs: sanity  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    needs: [sanity, changes]  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
+    # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
+    # need failed; the explicit sanity check keeps the original gating.
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
     timeout-minutes: 10  # backstop if a runner/OmniSim hang outlives the ~270s poll window
     permissions:
       contents: read  # only needs to check out + download a public release artifact
@@ -172,7 +305,11 @@ jobs:
   alpaca-sim-integration:
     name: Alpaca discovery integration test
     runs-on: ubuntu-latest
-    needs: sanity  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    needs: [sanity, changes]  # don't burn a runner + sim download if design-doc/workflow sanity already failed
+    # Fail SAFE, not open: if `changes` errors, docs_only is empty, which is
+    # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
+    # need failed; the explicit sanity check keeps the original gating.
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
     timeout-minutes: 15
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
@@ -245,7 +382,8 @@ jobs:
   analyzer-gate:
     name: Analyzer gate (full solution, warnings = errors)
     runs-on: ubuntu-latest
-    needs: sanity
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -312,7 +450,8 @@ jobs:
   server-build:
     name: Server (build + cross-publish + Docker)
     runs-on: ubuntu-latest
-    needs: sanity
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -535,27 +674,45 @@ jobs:
           set -e
           file ./publish/arm64/OpenAstroAra.Server | tee /dev/stderr | grep -q 'aarch64'
 
+      # §14e — the SOFA/NOVAS31 astrometry natives ship WITH the daemon. The test job builds
+      # them for the host to exercise the real transforms; this builds them for the Pi (arm64
+      # cross-compiler on the x64 runner) and stages them next to the published binary, so the
+      # Docker image and the .deb both carry them. Without them the slew epoch transform only
+      # degrades, but altitude/sun/moon conditions, the flip projection and polar-align solving
+      # fault on first use. Program.cs logs their presence at boot; build-deb.sh refuses a
+      # publish dir that lacks them.
+      - name: Build astrometry natives (SOFA + NOVAS31) for linux-arm64
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
+          for lib in libsofa.so libnovas31.so; do
+            file "./publish/arm64/$lib" | tee /dev/stderr | grep -q 'ARM aarch64'
+          done
+
       # Build the arm64 Docker image via buildx. Buildx + qemu lets the
       # x64 runner cross-build arm64 images without a real Pi.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8  # v3 pinned per zizmor immutable-ref policy
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v3 pinned per zizmor immutable-ref policy
         with:
           platforms: arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v3 pinned per zizmor immutable-ref policy
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v3 pinned per zizmor immutable-ref policy
 
       - name: Build Docker image (arm64)
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v6 pinned per zizmor immutable-ref policy
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v6 pinned per zizmor immutable-ref policy
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/arm64
           push: false
           tags: openastroara-server:arm64
-          load: true  # Phase 14d: load into the local daemon so the e2e step can `docker run`.
+          load: true  # Phase 14d: load into the local daemon so the end-to-end step can `docker run`.
 
-      # Phase 14d server-e2e: actually run the arm64 image via qemu and probe
+      # Phase 14d arm64 end-to-end (steps of this job, not a separate one):
+      # actually run the arm64 image via qemu and probe
       # /healthz to prove the published artifact + Dockerfile produce a
       # working container. The x64 GitHub runner emulates arm64 instructions
       # — slow (~2× wall clock vs. native) but representative.
@@ -596,7 +753,19 @@ jobs:
           curl -fsS http://localhost:5555/api/v1/server/info \
             | tee /dev/stderr \
             | grep -q '"server_uuid":"'
-          echo "✓ server-e2e clean"
+          # §14e — the boot probe is the real arm64 LOAD gate for the cross-built astrometry
+          # natives: `file` above proved the architecture, this proves dlopen succeeds on the
+          # target runtime/glibc. The daemon logs one of two fixed lines at startup.
+          # Capture first, then grep: under pipefail, `docker logs | grep -q` could turn a passing
+          # probe into exit 141 if the log ever outgrew the pipe buffer (grep exits on first match).
+          E2E_LOG="$(docker logs oara-e2e 2>&1 || true)"
+          if ! grep -qm1 'Astrometry natives loaded (SOFA + NOVAS31)' <<<"$E2E_LOG"; then
+            echo "✗ astrometry natives did not load in the arm64 container:"
+            grep -i 'astrometry natives' <<<"$E2E_LOG" || true
+            exit 1
+          fi
+          echo "✓ astrometry natives loaded in the arm64 container"
+          echo "✓ arm64 end-to-end clean"
 
       - name: Tear down container
         if: always()
@@ -651,7 +820,8 @@ jobs:
     # the port, per the activation table in COMMIT-PR-RULES.md.
     name: Settings + Help registry gate
     runs-on: ubuntu-latest
-    needs: sanity
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
@@ -667,6 +837,29 @@ jobs:
 
   client-test:
     name: Client (analyze + test) — ${{ matrix.os }}
+    needs: changes
+    # `!cancelled()` and nothing else, deliberately — see #1025.
+    # The three legs of this matrix are REQUIRED contexts. A matrix job skipped
+    # at job level never expands, so GitHub publishes ONE check named
+    # "Client (analyze + test) — ${{ matrix.os }}" (literally, unexpanded) and
+    # the three required contexts are never reported at all. The PR then sits
+    # on "Expected — Waiting for status to be reported" forever — the exact
+    # deadlock the `changes` job comment says job-level `if:` avoids. That is
+    # true for non-matrix jobs; it is false for matrix jobs.
+    # So this job always runs and its STEPS are guarded instead: the matrix
+    # expands, all three contexts report `success`, and a docs-only PR pays
+    # only three runner spin-ups.
+    # The guard must NOT be omitted entirely. With no `if:` the implicit
+    # condition is success() over `needs: changes`, so a failed `changes`
+    # would skip this job at job level and reproduce the deadlock. Since
+    # #1024 `changes` cannot fail short of its outer 5-minute job timeout
+    # (its steps are `continue-on-error`), so the
+    # implicit condition would in practice hold too -- but that is a property
+    # of another job's steps, and an edit there must not be able to silently
+    # re-open this deadlock. The explicit `!cancelled()` states the intent
+    # where it is enforced. (A cancelled run skips this job under either
+    # form; that is fine, a cancelled run reports nothing anyway.)
+    if: ${{ !cancelled() }}
     # §14.3 cross-platform client-test matrix. Linux is the canonical
     # development target; macOS + Windows verify Dart code stays
     # portable since the WILMA client ships to all three platforms.
@@ -688,13 +881,39 @@ jobs:
         # parameter expansion exactly like Linux/macOS.
         shell: bash
     steps:
+      # Always runs: with the work gated at step level, a misclassified
+      # docs-only PR would otherwise show three green required contexts and no
+      # trace of why. This puts the classifier's answer in the job summary.
+      - name: Record path-gate decision
+        run: |
+          # `unset`, not `<unset>`: the summary is rendered as markdown, so an
+          # angle-bracketed word is parsed as an HTML tag and disappears from
+          # exactly the case a reader most needs to see.
+          echo "docs_only=${DOCS_ONLY:-unset} (work steps run only when not 'true')" >> "$GITHUB_STEP_SUMMARY"
+          # ::notice:: surfaces in the checks UI; the summary alone is only
+          # visible by opening the run, which `gh pr checks` never shows. Fire
+          # it only when the work did NOT run: on an ordinary code PR the three
+          # legs would otherwise each post an annotation saying nothing. The two
+          # cases worth an annotation are a docs-only classification (three green
+          # contexts with no analyze/test behind them) and a missing output (the
+          # `changes` job failed, and the fail-open path ran the work anyway).
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "::notice title=Path gate::docs_only=true -- work steps skipped, contexts reported green by design"
+          elif [ -z "$DOCS_ONLY" ]; then
+            echo "::notice title=Path gate::docs_only=unset -- the changes job did not report; running the full work (fail-open)"
+          fi
+        env:
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+
       - name: Checkout (no LFS)
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor + CodeRabbit security policy
         with:
           lfs: false
           persist-credentials: false
 
       - name: Read pinned Flutter version
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         id: flutter-version
         run: |
           set -euo pipefail
@@ -706,6 +925,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Flutter
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.x pinned per zizmor immutable-ref policy
         with:
           flutter-version: ${{ steps.flutter-version.outputs.version }}
@@ -713,19 +933,29 @@ jobs:
           cache: true
 
       - name: pub get
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
         run: flutter pub get
 
       - name: flutter analyze
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
         run: flutter analyze
 
       - name: flutter test
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
         run: flutter test
 
   client-build:
+    # Matrix + job-level gate. Safe ONLY because these are not required
+    # contexts: skipped at job level the matrix never expands, so this reports
+    # one check under the literal name below rather than three per-target ones.
+    # If it is ever added to the ruleset's required checks, it reproduces the
+    # #1025 deadlock verbatim — gate it at step level like client-test instead.
     name: Client (native build) — ${{ matrix.target }}
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
     # Native desktop compile gate. `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO

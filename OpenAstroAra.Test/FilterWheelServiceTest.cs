@@ -30,6 +30,29 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class FilterWheelServiceTest {
 
+        // #1066 — the first-connect home to the default slot is daemon policy (moved from the
+        // Flutter client). These pin the pure helpers: ClaimFirstConnectHome (used by
+        // ConnectInBackground) and NeedsHomeToDefaultSlot (used by RefreshCacheOnce).
+        [Test]
+        public void First_connect_home_only_moves_a_wheel_parked_off_the_default_slot() {
+            Assert.That(FilterWheelService.NeedsHomeToDefaultSlot(FilterWheelService.DefaultSlot), Is.False);
+            Assert.That(FilterWheelService.NeedsHomeToDefaultSlot(3), Is.True);
+        }
+
+        [Test]
+        public void An_in_flight_home_is_only_wanted_while_no_change_or_reconnect_bumped_the_generation() {
+            Assert.That(FilterWheelService.HomeStillWanted(dispatched: 3, current: 3), Is.True);
+            Assert.That(FilterWheelService.HomeStillWanted(dispatched: 3, current: 4), Is.False, "a change/disconnect/newer connect retires it");
+        }
+
+        [Test]
+        public void First_connect_home_is_claimed_once_per_device_per_session() {
+            using var svc = new FilterWheelService();
+            Assert.That(svc.ClaimFirstConnectHome("fw-a"), Is.True, "first connect homes");
+            Assert.That(svc.ClaimFirstConnectHome("fw-a"), Is.False, "a reconnect never re-homes");
+            Assert.That(svc.ClaimFirstConnectHome("fw-b"), Is.True, "a different wheel gets its own first connect");
+        }
+
         [Test]
         public async Task GetAsync_is_null_before_any_device_is_selected() {
             using var svc = new FilterWheelService();

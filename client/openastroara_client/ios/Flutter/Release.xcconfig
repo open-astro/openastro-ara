@@ -1,0 +1,3 @@
+#include "Generated.xcconfig"
+// Per-developer signing (DEVELOPMENT_TEAM=...) lives in Local.xcconfig, git-ignored.
+#include? "Local.xcconfig"

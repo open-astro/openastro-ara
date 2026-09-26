@@ -47,7 +47,7 @@ namespace OpenAstroAra.Server.Services;
 /// switch as its "primary" — see <c>SwitchService.Mediator.cs</c>. Per-device sequencer targeting is a
 /// follow-up.
 /// </summary>
-public sealed partial class SwitchService : ISwitchService, IDisposable {
+public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IDisposable {
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
@@ -113,12 +113,14 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     }
 
     public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null) {
+            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null,
+            Func<ICameraService?>? cameraProbe = null) {
         _logger = logger ?? NullLogger<SwitchService>.Instance;
         _events = events;
         _faults = faults;
         _profileStore = profileStore;
         _ws = ws;
+        _cameraProbe = cameraProbe;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -238,16 +240,169 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         return Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
     }
 
+    // #1065 — lazily resolved (Func<>) to break the CameraService ↔ SwitchService construction
+    // cycle: the camera syncs the fan through this service, this service asks the camera whether
+    // it is cooling before it lets the fan stop.
+    private readonly Func<ICameraService?>? _cameraProbe;
+
     public async Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
         ArgumentNullException.ThrowIfNull(request);
-        // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
-        // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
-        // -32768). Checked before the connection lookup so the range contract holds regardless of state.
+        // ASCOM addresses ports by a short id; validate before anything else so an out-of-range
+        // PortId is the documented 400 regardless of connection or interlock state.
+        ThrowIfPortIdOutOfRange(request);
+        // §25.5.6 / #1065 fan-off interlock, daemon-side: a write that would stop the cooling fan
+        // is refused (→ 409) unless the camera's cooler is KNOWN to be off. Decided from the cached
+        // port snapshot (name + min) of a CONNECTED switch; the connection refusal itself stays with
+        // the write path.
+        var refusal = await FanOffRefusalForAsync(deviceId, request, ct).ConfigureAwait(false);
+        if (refusal is not null) {
+            throw new InvalidOperationException(refusal);
+        }
+        await SetValueCoreAsync(deviceId, request, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The interlock decision for one write: null when it is not a fan-off (or the port is
+    /// not the cooling fan), else the refusal reason. Fails CLOSED: no camera probe wired, or a
+    /// probe that throws, both read as "unknown" and refuse.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Interlock probe boundary: a failing camera status read must refuse the fan-off (fail closed), never surface as a 500 from a switch write. CA1031's log-and-recover boundary applies.")]
+    private async Task<string?> FanOffRefusalForAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        SwitchDto? device;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            device = _connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null;
+        }
+        // Not connected (unknown id, Error, Disconnected): the write path's own "not connected"
+        // refusal applies — the user must be told the switch is down, not to check the camera.
+        if (device is null || device.State != EquipmentConnectionState.Connected) {
+            return null;
+        }
+        if (!CoolingFanInterlock.IsPlausibleFanOff(device, request)) {
+            return null;
+        }
+        // Either the identified Fan port is being driven to its floor, or the connected Thermal
+        // Switch's port snapshot is still unread and the write is to 0 or below. Both ask the camera.
+        return CoolingFanInterlock.FanOffRefusal(await ProbeCoolerStateAsync(ct).ConfigureAwait(false));
+    }
+
+    /// <summary>The camera's cooler state for the interlock (#1076): null = unknown (no probe wired,
+    /// the probe threw, camera in Error, or an unreadable CoolerOn this pass) — fail closed. No DTO
+    /// (no camera device ever configured) reads as off, like a Disconnected camera.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Interlock probe boundary: a failing camera status read must read as unknown (fail closed), never surface as a 500 from a switch write. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool?> ProbeCoolerStateAsync(CancellationToken ct) {
+        try {
+            var camera = _cameraProbe?.Invoke();
+            if (camera is null) {
+                return null;
+            }
+            return CoolingFanInterlock.CoolerStateFor(await camera.GetAsync(ct).ConfigureAwait(false));
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw; // a genuine caller cancel (the sequencer's) propagates; it is not an unknown state
+        } catch (Exception ex) {
+            LogFanInterlockProbeFailed(_logger, ex);
+            return null;
+        }
+    }
+
+    /// <summary>#1076 — the sequencer's SetSwitchValue goes through the same fan-off interlock as the
+    /// REST write; the refusal (null = allowed) is the instruction's failure reason.</summary>
+    internal Task<string?> FanOffRefusalForSequencerAsync(string deviceId, short portId, double value, CancellationToken ct) =>
+        FanOffRefusalForAsync(deviceId, new SwitchValueRequestDto(portId, value), ct);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Cooling-fan interlock: camera cooler state could not be read; refusing the fan-off (fail closed).")]
+    private static partial void LogFanInterlockProbeFailed(ILogger logger, Exception ex);
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Catch-up fan sync boundary: a failing camera probe or fan write on a late-connecting switch must be a logged fault, never fault the connect task. CA1031's log-and-recover boundary applies.")]
+    private async Task SyncFanToCoolingCameraAsync(string deviceId) {
+        try {
+            // The connect's own RefreshCacheOnce is a CAS'd no-op while a timer pass or another
+            // switch's connect is already refreshing (review of #1084), so the port snapshot may
+            // still be empty here and the fan port unidentifiable. Wait for the first ports read
+            // (the next 2 s tick at the latest) rather than deciding on an empty snapshot and
+            // never coming back — this is a one-shot task.
+            var connected = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
+            if (connected is null || !CoolingFanInterlock.IsThermalSwitchDevice(connected)) {
+                return; // not the fan switch (most rigs) — decided on the name, before any wait
+            }
+            var device = await WaitForPortsAsync(deviceId, PortsWaitBudget).ConfigureAwait(false);
+            if (device is null || CoolingFanInterlock.FindThermalSwitchFanPort([device]) is null) {
+                return; // no Fan port, or the ports never read
+            }
+            if (await ProbeCoolerStateAsync(CancellationToken.None).ConfigureAwait(false) != true) {
+                return; // the camera is not (known to be) cooling — nothing to catch up
+            }
+            var sync = CoolingFanInterlock.FanSyncRequest([device], cooling: true);
+            if (sync is null) {
+                return;
+            }
+            await SetValueCoreAsync(sync.Value.DeviceId, sync.Value.Request, CancellationToken.None).ConfigureAwait(false);
+            LogFanCaughtUp(_logger, deviceId);
+        } catch (Exception ex) when (ex is ObjectDisposedException or OperationCanceledException) {
+            // A daemon shutdown racing the catch-up is not a fan fault (review of #1084).
+        } catch (Exception ex) {
+            LogFanCatchUpFailed(_logger, ex, deviceId);
+            _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, deviceId, null, EquipmentFaultKind.OpError,
+                $"the camera is cooling, but the cooling fan on the newly connected switch could not be started ({ex.GetType().Name}) — check the fan",
+                DateTimeOffset.UtcNow));
+        }
+    }
+
+    /// <summary>How long the late-connect catch-up waits for the switch's first ports read: well
+    /// past one refresh interval, so a CAS-skipped seed refresh is covered by the next tick.</summary>
+    private static readonly TimeSpan PortsWaitBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>The switch's DTO once its ports have been read (cache polling only, no device I/O
+    /// of our own); null if it is gone, disposed, or the ports never land within the budget.</summary>
+    private async Task<SwitchDto?> WaitForPortsAsync(string deviceId, TimeSpan budget) {
+        var deadline = DateTimeOffset.UtcNow + budget;
+        while (true) {
+            var device = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
+            if (device is null || device.State != EquipmentConnectionState.Connected) {
+                return null;
+            }
+            if (device.Ports.Count > 0) {
+                return device;
+            }
+            if (DateTimeOffset.UtcNow >= deadline) {
+                return null;
+            }
+            await Task.Delay(200).ConfigureAwait(false);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Cooling fan on switch '{Device}' started to match the camera that was already cooling (#1076).")]
+    private static partial void LogFanCaughtUp(ILogger logger, string device);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Cooling fan catch-up on switch '{Device}' failed.")]
+    private static partial void LogFanCatchUpFailed(ILogger logger, Exception ex, string device);
+
+    /// <summary>The camera's post-cooler fan sync (<see cref="ICoolingFanActuator"/>): the plain
+    /// write, no fan-off interlock — the cooler-off that motivates it has just been committed.</summary>
+    public Task SetFanValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        ArgumentNullException.ThrowIfNull(request);
+        return SetValueCoreAsync(deviceId, request, ct);
+    }
+
+    // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
+    // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
+    // -32768). Called before the connection lookup AND before the interlock so the range contract
+    // holds regardless of state.
+    private static void ThrowIfPortIdOutOfRange(SwitchValueRequestDto request) {
         if (request.PortId is < 0 or > short.MaxValue) {
             throw new ArgumentOutOfRangeException(nameof(request), request.PortId,
                 "PortId is out of range for an ASCOM Switch (0..32767).");
         }
+    }
+
+    private async Task SetValueCoreAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ThrowIfPortIdOutOfRange(request);
         AlpacaSwitch? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -498,6 +653,10 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             }
             if (stillConnected) {
                 LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+                // #1076 — a Thermal Switch that connects AFTER the cooler was turned on: the fan
+                // sync only fires on a cooler write, so catch up here from the camera's current
+                // state (best-effort; a failure is a logged fault like any fan-sync failure).
+                _ = Task.Run(() => SyncFanToCoolingCameraAsync(conn.Key), CancellationToken.None);
             }
         } catch (Exception ex) {
             if (!adopted) {

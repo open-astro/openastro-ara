@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
 import '../saved_server_state.dart';
 
@@ -39,10 +40,24 @@ class DsoCatalogSyncNotifier extends Notifier<int> {
 final dsoCatalogSyncProvider =
     NotifierProvider<DsoCatalogSyncNotifier, int>(DsoCatalogSyncNotifier.new);
 
-/// The locally-mirrored planning catalog (openngc-dso culled to mag ≤ 12), or
-/// empty when this machine never connected to a daemon with it installed —
-/// the ranker then falls back to the starter list.
+/// Every bundled catalog row (~16k: OpenNGC, Sharpless, LDN, Barnard, vdB,
+/// Abell, Arp, WR), parsed once per session. The search and the Catalogs
+/// overlays read this — the full set, no magnitude cull, no server needed.
+final bundledCatalogProvider =
+    FutureProvider<List<PlanningDso>>((ref) => loadBundledCatalogs());
+
+/// The planning catalog Tonight's Sky ranks: the bundled set culled the way
+/// the daemon's /dso-catalog was (mag ≤ 12 + magnitude-less nebulae), plus
+/// any mirrored daemon row the bundle doesn't know (a package installed
+/// server-side that hasn't shipped in the client yet).
 final dsoCatalogProvider = FutureProvider<List<PlanningDso>>((ref) async {
   ref.watch(dsoCatalogSyncProvider); // re-read after a refresh lands
-  return ref.watch(dsoCatalogServiceProvider).loadCached();
+  final bundled = planningCull(await ref.watch(bundledCatalogProvider.future));
+  final ids = {for (final d in bundled) d.id};
+  final mirror = await ref.watch(dsoCatalogServiceProvider).loadCached();
+  return [
+    ...bundled,
+    for (final d in mirror)
+      if (!ids.contains(d.id)) d,
+  ];
 });

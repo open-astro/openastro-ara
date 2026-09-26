@@ -19,13 +19,27 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/opena
   | sudo tee /etc/apt/sources.list.d/openastro.list
 sudo apt update
 
-# 2. Install (apt resolves libcfitsio10 transitively)
+# 2. Install (apt resolves libcfitsio10 and astap-cli transitively)
 sudo apt install openastroara-server
 
-# 3. The systemd unit auto-starts on first install
+# 3. Star database for the plate solver (one-time, ~1.7 GB). ASTAP's D80 covers the
+#    usual range of fields (roughly 0.25° to 30°); very wide fields want W08/G05 and
+#    very narrow ones H17/H18 (playbook §18.I). The package creates /var/lib/astap
+#    owned by the service user; the daemon passes it to astap_cli with -d
+#    (Options → Plate solving → index path).
+#    D80 is published only as a Debian package (its payload is the d80_*.1476 files);
+#    extract it into the daemon's directory rather than installing it, so the files
+#    land where the profile's index path points.
+#    Not via /tmp: on Raspberry Pi OS it is a ~2 GB tmpfs and this package is 1.2 GB.
+curl -L -o ~/d80.deb https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.deb/download
+dpkg-deb --fsys-tarfile ~/d80.deb \
+  | sudo tar -x -C /var/lib/astap --strip-components=3 --wildcards './opt/astap/d80_*'
+sudo chown -R openastroara:openastroara /var/lib/astap && rm ~/d80.deb
+
+# 4. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
 
-# 4. Verify the daemon is responding
+# 5. Verify the daemon is responding
 curl http://$(hostname -s).local:5555/healthz   # expect "ok"
 ```
 
@@ -45,7 +59,8 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 
 | Path | Purpose | Owner |
 |---|---|---|
-| `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary | `openastroara:openastroara` |
+| `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `libsofa.so` / `libnovas31.so` astrometry natives | `openastroara:openastroara` |
+| `/var/lib/astap/` | ASTAP star database (you download it, step 3 above; the solver binary itself is the `astap-cli` package) | `openastroara:openastroara` |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |
@@ -53,6 +68,12 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | `/etc/systemd/system/openastroara-server.service` | systemd unit | root |
 
 The daemon runs as the dedicated `openastroara` system user; it never runs as root.
+
+The first lines of the log say `Astrometry natives loaded (SOFA + NOVAS31)`. A
+`Astrometry natives incomplete` warning there means the package is broken (or a manual
+install skipped `scripts/build-astrometry-natives.sh`): slews still work, but altitude,
+sun and moon conditions, the meridian-flip projection and polar-align solving fail until
+the two `.so` files are next to the binary.
 
 ---
 
@@ -164,6 +185,11 @@ sudo apt install libcfitsio10
 
 # 3. Copy your linux-arm64 publish output into /opt/openastroara/
 # (built via `dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -p:PublishAot=false -o ./publish/arm64`)
+# The SOFA/NOVAS31 astrometry natives are NOT produced by `dotnet publish`; build them into the
+# same directory first (on the Pi itself: `sudo apt install build-essential`; cross-compiling
+# from x86-64: `sudo apt install gcc-aarch64-linux-gnu` and prefix with `CC=aarch64-linux-gnu-gcc`).
+scripts/build-astrometry-natives.sh ./publish/arm64
+ls publish/arm64/libsofa.so publish/arm64/libnovas31.so   # both must exist
 sudo cp -r publish/arm64/* /opt/openastroara/
 sudo chown -R openastroara:openastroara /opt/openastroara
 

@@ -185,7 +185,7 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   early-exit (`LogService.TailAsync`, byte-level carry across chunk boundaries, UTF-8-safe);
   §54 daemon-log + bug-report downloads now stream to a user-picked path via `dio.download`
   (destination-first flow: `pickStreamSavePath` directory picker + collision-safe name —
-  file_picker v12's `saveFile` requires the bytes up front, so path-only selection uses
+  file_picker's `saveFile` (v12 and v13 alike) requires the bytes up front, so path-only selection uses
   `getDirectoryPath`). A line index + continuation token stays deferred until the §54 panel
   live-streams or paginates.
 - **Merged Planning-tab prose reconciliation** — the §36/§25.5 merged-tab plan (decided
@@ -325,9 +325,10 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   field test remains hardware-gated. Waterfall UI steps 4+5 SHIPPED: Settings → Safety → Site
   grows a Time sync section (sync state/trust/offset/position/USB-GPS-detected, Retry +
   push-device-time actions, plug-a-GPS guidance while unsynced) and the manual-entry modal
-  (UTC + optional lat/lng/alt → low-trust `manual` push). Remaining: step 3 mobile GPS — needs
-  the `geolocator` dependency decision (new pub dep + license-gate pin + mobile platform
-  permissions; CI builds desktop targets only, so this is a user call).
+  (UTC + optional lat/lng/alt → low-trust `manual` push). Step 3 mobile GPS: the `geolocator`
+  dependency is in, and the Android + iOS platform folders with their location permissions
+  landed in #1063 (verified on a Pixel Tablet and an iPad Air). Remaining: CI still builds
+  desktop targets only, so an Android/iOS build leg is tracked in PORT_TODO.md.
 - **§57** Stop Mount — verification (2026-07-11) found the panic-stop PRIMITIVE existed
   (`POST /api/v1/telescope/abort` → `AbortSlew()`) but the §57 contract around it was never
   built. Server slice SHIPPED: `telescope.slew_started`/`slew_complete` now actually publish

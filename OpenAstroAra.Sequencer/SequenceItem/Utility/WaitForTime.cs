@@ -194,15 +194,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var now = DateTime.Now;
             var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
 
-            RolloverTime = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
+            // #1080 — an estimate is read from the run-state / WS publish / checkpoint paths as well
+            // as by the engine, so it must not write the live tree: the provider's rollover is used
+            // locally here; UpdateTime() is where RolloverTime (an observable property) is assigned.
+            var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
             var timeOnlyNow = TimeOnly.FromDateTime(now);
             var timeOnlyThen = TimeOnly.FromDateTime(then);
 
-            if (timeOnlyNow < RolloverTime && timeOnlyThen >= RolloverTime) {
+            if (timeOnlyNow < rollover && timeOnlyThen >= rollover) {
                 then = then.AddDays(-1);
             }
 
-            if (timeOnlyNow >= RolloverTime && timeOnlyThen < RolloverTime) {
+            if (timeOnlyNow >= rollover && timeOnlyThen < rollover) {
                 then = then.AddDays(1);
             }
 

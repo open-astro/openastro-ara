@@ -30,6 +30,12 @@ SOURCE_TREE="$SCRIPT_DIR/debian"
 # Validate inputs.
 [ -d "$PUBLISH_DIR" ] || { echo "error: publish dir not found: $PUBLISH_DIR" >&2; exit 1; }
 [ -x "$PUBLISH_DIR/OpenAstroAra.Server" ] || { echo "error: OpenAstroAra.Server ELF not found in $PUBLISH_DIR" >&2; exit 1; }
+# §14e — the astrometry natives must ride along (scripts/build-astrometry-natives.sh into the
+# publish dir, cross-compiled for arm64). A .deb without them boots but faults on the first
+# altitude condition / polar-align solve; refuse to package one.
+for lib in libsofa.so libnovas31.so; do
+  [ -f "$PUBLISH_DIR/$lib" ] || { echo "error: $lib not found in $PUBLISH_DIR — run 'CC=aarch64-linux-gnu-gcc scripts/build-astrometry-natives.sh $PUBLISH_DIR' first" >&2; exit 1; }
+done
 [ -d "$SOURCE_TREE/DEBIAN" ] || { echo "error: $SOURCE_TREE/DEBIAN missing — corrupted checkout?" >&2; exit 1; }
 
 mkdir -p "$OUTPUT_DIR"
@@ -130,6 +136,13 @@ if command -v systemd-analyze > /dev/null; then
     systemd-analyze verify "$STAGE/etc/systemd/system/openastroara-server.service" \
         2>&1 | grep -v 'systemd does not run with system instance' || true
 fi
+
+# §13 — the unit must keep AF_NETLINK: .NET's interface enumeration (which Alpaca
+# discovery does before every broadcast) opens a netlink socket, and losing it
+# silently breaks equipment auto-detect on every packaged install (#1096).
+# systemd-analyze verify passes either way, so assert it explicitly.
+grep -Eq '^RestrictAddressFamilies=.*\bAF_NETLINK\b' "$STAGE/etc/systemd/system/openastroara-server.service" \
+  || { echo "error: openastroara-server.service must list AF_NETLINK in RestrictAddressFamilies" >&2; exit 1; }
 
 # Build the .deb. dpkg-deb requires GNU tar in PATH; both Debian + Ubuntu
 # CI runners satisfy this out of the box.

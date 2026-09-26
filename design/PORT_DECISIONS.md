@@ -100,7 +100,8 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - Deleted `phase-12h2-equipment-connect` (superseded by Phase 12h.6L / PR #140) and `phase-12h3-search` (was PR #107, closed-unmerged; the feature shipped via PRs #65 + #113–#123). Both confirmed already-on-`master` or abandoned before deletion.
 
 ### Review tooling note
-- CodeRabbit is being replaced (the new review solution is in progress). Status options on the project board and the rewritten workflow docs are kept **review-tool-agnostic** (generic "In review" / "review poll-and-fix loop") so they don't bake in a specific bot. `.coderabbit.yaml` still contains a stale `port/ara` base-branch entry — left untouched pending the review-tooling decision, since the file is slated for replacement.
+- CodeRabbit was replaced. Status options on the project board and the rewritten workflow docs are kept **review-tool-agnostic** (generic "In review" / "review poll-and-fix loop") so they don't bake in a specific bot.
+- **Settled 2026-05-29:** CodeRabbit was removed from the org and `.coderabbit.yaml` deleted; the reviewer now runs from `.github/workflows/claude-review.yml` and has no per-repo config file. See COMMIT-PR-RULES.md's reviewer-history table for the full sequence of reviewers tried.
 
 ### §36 Sky Atlas embed — `webview_cef` (Chromium/CEF) for the cross-desktop Aladin Lite WebView
 - **Decision:** the §36 Sky Atlas embeds Aladin Lite via the **`webview_cef`** package — a Chromium Embedded Framework browser rendered to a Flutter texture — so the atlas composites **in-tab** on macOS, Windows, and Linux through one code path. Chosen by the user 2026-06-14 after the cross-desktop webview options were surfaced (per the standing v0.1.0 goal: "surface the cross-desktop webview decision before the client embed").
@@ -143,6 +144,7 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **Spike (works "a world better"):** added a build-time A/B — `--dart-define=WEBVIEW_ALL=true` renders the planetarium via **`webview_all`** (→ WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux), embedded as a **platform view** instead of CEF's texture. Default builds stay on CEF (`kUseWebViewAll` in `stellarium_view.dart`). The swap is low-risk here because the page is self-driven and **all Flutter↔page comms go over the loopback asset server** (`/aracmd` poll + `/araevent` post), not a webview JS bridge — so any webview that loads a URL works.
 - **Why `webview_all`:** the only candidate that natively covers all three desktop OSes *and* embeds in-tree. `flutter_inappwebview` (very mature) was rejected for **no Linux**; `atomic_webview` for opening a **separate window**. Trade-offs of the native-platform-view approach: Flutter widgets can't reliably float *over* it (our planetarium UI is all in-page HTML, so fine), and platform views have clipping/transform quirks.
 - **Direction:** lean toward retiring `webview_cef` and going **native-engine-per-platform** via `webview_all`. Gated on a Linux WebKitGTK WebGL2 spike (very likely fine on x86-64 desktop Mesa). See PORT_TODO. (Note: the bundled `webview_all` macOS path delegates to `webview_flutter_wkwebview`; keep the controller minimal — `WebViewController()..loadRequest(url)` — some WKWebView-macOS setters are unimplemented and abort init.)
+- **Follow-up (2026-09-22, #1097):** "minimal" now means *one* required setter. The Android WebView ships with JavaScript **off** (WKWebView/WebView2 default it on), so `setJavaScriptMode(unrestricted)` must be called before the load or the page never runs its engine script. It is individually try/caught so a platform that lacks it logs and continues; debug builds add `setOnConsoleMessage`, equally guarded. `loadRequest` stays fire-and-forget after the controller is published.
 
 ### Linux client target — x86-64 desktop only, Ubuntu 24.04 LTS baseline (user, 2026-06-27)
 - **Decision:** the Flutter client is "just a client" (daemon + guider run elsewhere) and targets **x86-64 desktop Linux only — NO Raspberry Pi / ARM.** Build/test baseline **Ubuntu 24.04 LTS** (raised from 22.04; v0.1.0 has no install base). A binary built on 24.04 requires **glibc ≥ 2.39**, so it runs on 24.04+, **Fedora 40–44**, Debian 13, and derivatives — all of which ship **webkit2gtk-4.1** (the `webview_all` Linux requirement) + modern Mesa/GTK (better WebGL2). One glibc-2.39 build covers Fedora too (glibc is backward-compatible); separate artifacts only if native `.deb`/`.rpm` packaging is wanted.
@@ -297,3 +299,19 @@ standard Alpaca bridge that outside contributors can reason about. ARA-side nati
 via the §77.2 disconnected-window). AlpacaBridge PR #168 (the C++ engine built to the first
 draft) was closed unmerged and is the reference implementation for the C# port. Section
 rewritten in place: playbook §77.
+
+## 2026-09-20 — `.claude/` stays in CI's inert (docs-only) bucket
+
+**Decision:** `.claude/` remains in `scripts/classify-changed-paths.py`'s `INERT_DIRS`, so a PR touching only the port-driver skill or `/pr-checker` merges with the build/test contexts skipped (#1024 item 4).
+
+**Reason:** the files there are the merge gate's rulebook, which made the inherited classification worth a conscious look. But no CI job has ever read them; `claude-review.yml` runs on every PR regardless of paths; and §19.1's protection for a rulebook change is the `claude[bot]` review body, which the path gate does not touch. Running the .NET and Flutter matrix on a SKILL.md edit would exercise nothing the edit can affect. The tree's prose-only status is now enforced by a Sanity-job test rather than assumed, so a future non-prose file under `.claude/` (a hook script, say) fails the build until it is classified deliberately.
+
+**Encoded in:** `scripts/classify-changed-paths.py` (`INERT_DIRS` comment), `scripts/tests/test_classify_changed_paths.py` (`InertTreesTest`), `.github/workflows/codeql.yml` (`paths-ignore`).
+
+## 2026-09-24 — `.claude/skills/` may hold helper scripts; the inert-tree guard is scoped, not dropped
+
+**Decision:** `scripts/tests/test_classify_changed_paths.py`'s `InertTreesTest` gains a per-prefix allowance so `.sh`, `.swift`, `.expect` and `.json` files may live under `.claude/skills/` (#1101). `.claude/` stays in `INERT_DIRS`; `.claude/commands/` and the rest of the tree stay prose-only; an allowance key may narrow an inert dir to one subtree but never name a tree outside them.
+
+**Reason:** the `ara-pr-investigation` and `ara-sbc-vm` skills drive real tools (PR facts, window capture, a QEMU VM) and need scripts a maintainer runs by hand on their machine. The 2026-09-20 basis for `.claude/` being inert — no CI job reads anything under it — holds for those scripts exactly as it does for the SKILL.md beside them, so they cannot be build inputs. The prose-only wording of the 2026-09-20 entry is superseded for that one subtree; the enforcement it describes is unchanged.
+
+**Encoded in:** `scripts/tests/test_classify_changed_paths.py` (`EXTRA_BY_PREFIX`, `test_every_extra_by_prefix_key_is_an_inert_dir`, `test_the_per_prefix_allowance_does_not_leak`).

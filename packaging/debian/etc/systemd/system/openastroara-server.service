@@ -41,7 +41,13 @@ ReadWritePaths=/var/run/openastroara
 ReadWritePaths=/etc/openastroara
 
 # Network restrictions
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK: .NET enumerates network interfaces over a netlink socket on Linux
+# (NetworkInterface.GetAllNetworkInterfaces → getifaddrs), which the Alpaca UDP
+# discovery library calls before every broadcast. Without it every
+# GET /api/v1/equipment/discover/{type} failed with "Address family not supported
+# by protocol" (errno 97) and the wizard's AlpacaBridge auto-detect never worked
+# on a packaged install (found live on a Pi, #1096).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 # Capability restrictions (CAP_SYS_TIME for §31 time sync; nothing else)
 CapabilityBoundingSet=CAP_SYS_TIME

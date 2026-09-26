@@ -18,6 +18,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
+using OpenAstroAra.TestHarness.Polling;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -215,6 +216,18 @@ namespace OpenAstroAra.Test {
             proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
             await WaitForStateAsync(svc, EquipmentConnectionState.Error, TimeSpan.FromSeconds(25));
 
+            // The state is observable before the fault lands: TripConnectionLost
+            // sets Error under _gate and publishes after releasing it, deliberately
+            // (publishing under the gate would re-enter subscribers while held).
+            // So poll for the fault rather than reading the list once — asserting
+            // straight after the state change is a race the runner loses under load.
+            await WaitForFaultCountAsync(faults, 1, TimeSpan.FromSeconds(10));
+
+            // Then let a couple of §42.3 refresh ticks pass: "exactly one per
+            // episode" is a claim about later ticks NOT re-firing, so it only
+            // means something once some have gone by.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "exactly one fault per episode — no re-fire on later ticks");
                 Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.Disconnected));
@@ -226,17 +239,100 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static async Task WaitForStateAsync(FocuserService svc, EquipmentConnectionState want, TimeSpan timeout) {
-            var deadline = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < deadline) {
-                var dto = await svc.GetAsync(CancellationToken.None);
-                if (dto?.State == want) {
-                    return;
-                }
-                await Task.Delay(200);
+        [Test]
+        [Category("bench")] // §42.2 virtual-observatory bench — loopback-only, runs in the default job too
+        public async Task Each_disconnect_episode_publishes_exactly_one_fault() {
+            // The sibling test asserts "one fault per episode" over a single
+            // episode, where a second fault is unreachable by construction:
+            // RefreshCacheOnce returns early once _state != Connected, and
+            // TripConnectionLost re-checks Connected under the gate. So that
+            // assertion is a regression guard, not a test of the property.
+            //
+            // This drives two real episodes — drop, recover, drop again — which
+            // is the only way the per-episode claim can be observed at all.
+            //
+            // It does NOT cover the ReferenceEquals(_client, probed) identity
+            // check in TripConnectionLost: RefreshCacheOnce is single-flight and
+            // the trip happens inside the tick holding that flag, so by the time
+            // this test observes Error and reconnects, no episode-1 probe can
+            // still be in flight. Dropping that clause leaves this test green.
+            await using var stub = StubDevice.Start();
+            await using var proxy = AlpacaFaultProxy.Start(stub.BaseUri);
+            var (hub, wsEvents) = Hub();
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+
+            using var svc = new FocuserService(faults: hub);
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "focuser-under-test", Name: "Bench Focuser", Type: DeviceType.Focuser,
+                HostName: proxy.BaseUri.Host, IpAddress: proxy.BaseUri.Host, IpPort: proxy.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+
+            // --- Episode 1 -----------------------------------------------------
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForStateAsync(svc, EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15));
+
+            proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
+            await WaitForStateAsync(svc, EquipmentConnectionState.Error, TimeSpan.FromSeconds(25));
+            await WaitForFaultCountAsync(faults, 1, TimeSpan.FromSeconds(10));
+
+            // --- Recovery ------------------------------------------------------
+            // Heal the device and reconnect: the fresh session must come up
+            // Connected without publishing a fault of its own.
+            proxy.ClearFaults();
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForStateAsync(svc, EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15));
+
+            // Hold through several §42.3 refresh ticks while healthy: a spurious
+            // trip on the reconnected session would show up here as a second
+            // fault against a device that is fine.
+            await Task.Delay(TimeSpan.FromSeconds(6));
+            lock (faults) {
+                Assert.That(faults, Has.Count.EqualTo(1),
+                    "reconnecting must not publish a fault");
             }
-            var last = await svc.GetAsync(CancellationToken.None);
-            Assert.Fail($"focuser never reached {want} within {timeout.TotalSeconds:0}s (last state: {last?.State.ToString() ?? "null"})");
+
+            // --- Episode 2 -----------------------------------------------------
+            proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
+            await WaitForStateAsync(svc, EquipmentConnectionState.Error, TimeSpan.FromSeconds(25));
+            await WaitForFaultCountAsync(faults, 2, TimeSpan.FromSeconds(10));
+
+            // Let later ticks run: still exactly one fault for this episode.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
+            lock (faults) {
+                Assert.That(faults, Has.Count.EqualTo(2), "one fault per episode, two episodes");
+                Assert.That(faults.TrueForAll(f => f.Kind == EquipmentFaultKind.Disconnected));
+                Assert.That(faults.TrueForAll(f => f.DeviceType == DeviceType.Focuser));
+                Assert.That(faults.TrueForAll(f => f.DeviceName == "Bench Focuser"));
+            }
+            lock (wsEvents) {
+                Assert.That(wsEvents.FindAll(e => e.Type == WsEventCatalog.EquipmentFault), Has.Count.EqualTo(2));
+            }
+        }
+
+        private static Task WaitForFaultCountAsync(List<EquipmentFaultEvent> faults, int want, TimeSpan timeout) =>
+            Poll.UntilAsync(
+                () => { lock (faults) { return faults.Count >= want; } },
+                timeout,
+                $"{want} equipment fault(s) to be published after the device reached Error");
+
+        private static async Task WaitForStateAsync(FocuserService svc, EquipmentConnectionState want, TimeSpan timeout) {
+            // Poll's description is built up front, so the observed state is
+            // appended on the way out instead: on a timeout, "reach Connected
+            // (last state: Error)" is diagnosable where "reach Connected" is not.
+            EquipmentConnectionState? last = null;
+            try {
+                await Poll.UntilAsync(
+                    async () => {
+                        last = (await svc.GetAsync(CancellationToken.None))?.State;
+                        return last == want;
+                    },
+                    timeout,
+                    $"the focuser to reach {want}");
+            } catch (TimeoutException ex) {
+                throw new TimeoutException($"{ex.Message} (last state: {last?.ToString() ?? "<none>"})", ex);
+            }
         }
     }
 }

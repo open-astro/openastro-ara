@@ -54,6 +54,7 @@ namespace OpenAstroAra.Server;
 // LowerCaseNamingPolicy which produces the §60.6 shape AOT-safely.
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(AlpacaDeviceNamesResponseDto))]
 [JsonSerializable(typeof(ApiSurfaceVersionDto))]
 [JsonSerializable(typeof(ApiVersionsDto))]
 [JsonSerializable(typeof(AutoFlatsDecisionRequestDto))]
@@ -177,6 +178,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<PlanningFilterDto>))]
 [JsonSerializable(typeof(FilterSetDto))]
 [JsonSerializable(typeof(FilterWheelLabelsDto))]
+[JsonSerializable(typeof(FilterWheelPolicyDto))]
 [JsonSerializable(typeof(FilterKind))]
 // NEXTGEN §1 Tonight's Sky filter advice.
 [JsonSerializable(typeof(Phd2SettingsDto))]

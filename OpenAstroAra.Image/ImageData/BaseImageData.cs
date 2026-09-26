@@ -510,7 +510,7 @@ namespace OpenAstroAra.Image.ImageData {
             XISF img = new XISF(header);
 
             if (Data.FlatArrayInt != null) {
-                img.AddAttachedImageInt(Data.FlatArrayInt, fileSaveInfo);
+                img.AddAttachedImageInt(Data.FlatArrayInt, Properties.BitDepth, fileSaveInfo);
             } else {
                 img.AddAttachedImage(Data.FlatArray, fileSaveInfo);
             }

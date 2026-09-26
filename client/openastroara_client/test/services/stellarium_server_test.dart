@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/stellarium_server.dart';
 
@@ -88,6 +91,86 @@ void main() {
     test('returns null for a non-bytes or malformed header', () {
       expect(StellariumServer.parseRange('items=0-1', 100), isNull);
       expect(StellariumServer.parseRange(null, 100), isNull);
+    });
+  });
+
+  // The /aracat routes never touch rootBundle (they answer from the two
+  // static resolvers), so unlike the asset path they CAN be black-box tested
+  // through a real loopback GET. Plain test() on purpose: the widget-test
+  // binding swaps HttpClient for a mock that 400s everything.
+  group('StellariumServer /aracat', () {
+    late StellariumServer server;
+    setUpAll(() async {
+      server = await StellariumServer.start();
+    });
+    tearDownAll(() async {
+      StellariumServer.catalogListResolver = null;
+      StellariumServer.catalogObjectsResolver = null;
+      await server.dispose();
+    });
+    setUp(() {
+      StellariumServer.catalogListResolver = () async => [
+            {'id': 'messier', 'count': 110},
+          ];
+      StellariumServer.catalogObjectsResolver = (id, limit) async => [
+            {'id': id, 'limit': limit},
+          ];
+    });
+
+    Future<({int status, String? type, String body})> get(String path,
+        {bool withToken = true}) async {
+      final client = HttpClient();
+      try {
+        final req = await client.getUrl(Uri.parse('${server.baseUrl}$path'));
+        if (withToken) req.headers.set('x-ara-token', server.token);
+        final res = await req.close();
+        return (
+          status: res.statusCode,
+          type: res.headers.contentType?.mimeType,
+          body: await utf8.decodeStream(res),
+        );
+      } finally {
+        client.close(force: true);
+      }
+    }
+
+    test('refuses a request without the per-run token', () async {
+      expect((await get('/aracat', withToken: false)).status,
+          HttpStatus.forbidden);
+      expect((await get('/aracat/messier', withToken: false)).status,
+          HttpStatus.forbidden);
+    });
+
+    test('lists the catalogs as JSON from the list resolver', () async {
+      final r = await get('/aracat');
+      expect(r.status, HttpStatus.ok);
+      expect(r.type, 'application/json');
+      expect(jsonDecode(r.body), [
+        {'id': 'messier', 'count': 110},
+      ]);
+    });
+
+    test('decodes the catalog id and parses ?limit=, defaulting to 500',
+        () async {
+      expect(jsonDecode((await get('/aracat/wr-stars?limit=25')).body), [
+        {'id': 'wr-stars', 'limit': 25},
+      ]);
+      expect(jsonDecode((await get('/aracat/sh2')).body), [
+        {'id': 'sh2', 'limit': 500},
+      ]);
+      expect(jsonDecode((await get('/aracat/sh2?limit=lots')).body), [
+        {'id': 'sh2', 'limit': 500},
+      ]);
+      expect(jsonDecode((await get('/aracat/Sharpless%202')).body), [
+        {'id': 'Sharpless 2', 'limit': 500},
+      ]);
+    });
+
+    test('404s an unknown catalog and an unwired resolver', () async {
+      StellariumServer.catalogObjectsResolver = (id, limit) async => null;
+      expect((await get('/aracat/nope')).status, HttpStatus.notFound);
+      StellariumServer.catalogListResolver = null;
+      expect((await get('/aracat')).status, HttpStatus.notFound);
     });
   });
 }

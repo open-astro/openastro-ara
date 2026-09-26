@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show Factory, kDebugMode;
+import 'package:flutter/gestures.dart'
+    show EagerGestureRecognizer, OneSequenceGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
+import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../services/planetarium_overlay.dart';
@@ -14,15 +18,20 @@ import '../../services/stellarium_server.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/imaging_regions.dart';
+import '../../util/planetarium_seed.dart';
 import 'linux_planetarium_overlay.dart';
 import 'tonight_sky_panel.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
 /// `assets/stellarium/LICENSE-AGPL-3.0.txt`), rendered in the platform's **native
-/// webview**. macOS/iOS (WKWebView) and Windows (WebView2) embed via `webview_all`.
+/// webview**. macOS/iOS (WKWebView), Android (WebView) and Windows (WebView2)
+/// embed via `webview_all`.
 /// Linux uses a **native GTK overlay** instead (`LinuxPlanetariumOverlay` +
 /// `linux/runner/planetarium_overlay.cc`): a real `WebKitWebView` composited over
 /// `FlView`, because `webview_all`'s texture-based platform view blanks the whole
@@ -55,6 +64,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
   final _prefsService = PlanetariumPrefsService();
+  Future<List<Map<String, Object?>>> Function()? _listResolver;
+  Future<List<Map<String, Object?>>?> Function(String, int)? _objectsResolver;
   bool _unavailable = false;
 
   // Linux only: the loopback URL handed to the native GTK overlay
@@ -87,14 +98,34 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final server = await StellariumServer.start();
         if (!mounted) return;
         _server = server;
+        // Catalogs overlays are answered from the client's bundled set. Kept
+        // in fields so dispose() clears only OUR closures — a remount whose
+        // new initState runs before the old dispose must keep its resolvers.
+        _listResolver = () async => catalogOverlayInfos();
+        _objectsResolver = (id, limit) async {
+          final all = await ref.read(bundledCatalogProvider.future);
+          return catalogOverlayObjects(id, all, limit: limit);
+        };
+        StellariumServer.catalogListResolver = _listResolver;
+        StellariumServer.catalogObjectsResolver = _objectsResolver;
         // Handle events the page posts back (e.g. framing → add-to-sequence).
         _eventSub = server.events.listen(_onPageEvent);
         // The page self-initialises from these query params: the observer site, and
         // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
-        final site =
-            ref.read(siteLocationProvider).asData?.value ??
-            await ref.read(siteLocationProvider.future);
+        // The daemon's site when it answers; otherwise the client's own site
+        // settings (seeded from the cached profile offline). A transport
+        // failure here must not take the whole atlas down — the sky still
+        // draws, from the cached site.
+        SiteLocation? serverSite;
+        try {
+          serverSite = ref.read(siteLocationProvider).asData?.value ??
+              await ref.read(siteLocationProvider.future);
+        } catch (e) {
+          debugPrint('StellariumView: daemon site unavailable, using cached: $e');
+        }
         if (!mounted) return;
+        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
+        final optics = planetariumOpticsFor(ref.read(opticsSettingsProvider));
         final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
         final api = activeServer?.baseUrl ?? '';
@@ -110,11 +141,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                   'lon': (site?.longitudeDeg ?? 0).toString(),
                   'elev': (site?.elevationM ?? 0).toString(),
                   'api': api,
+                  // Offline framing: the page's optics fetch has no daemon to
+                  // ask, so the configured train rides in the URL too.
+                  if (optics != null) 'optics': jsonEncode(optics),
                   'prefs': jsonEncode(savedPrefs),
                   // Per-run secret the page must echo as X-Ara-Token on the
                   // loopback control channels (/araevent, /aracmd); see
                   // StellariumServer._isAuthorized.
                   'token': server.token,
+                  // Debug builds only: the page posts renderer telemetry back
+                  // (FOV, canvas, errors) which _onPageEvent prints.
+                  if (kDebugMode) 'debug': '1',
                 }.entries
                 .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
                 .join('&');
@@ -145,11 +182,33 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 
       try {
         // Keep this minimal: webview_all notes some setters are unimplemented on
-        // certain platforms, and calling one would abort the whole init. JS is on
-        // by default in the native webviews; we only strictly need to load the URL.
-        final controller = wva.WebViewController()..loadRequest(Uri.parse(url));
+        // certain platforms, and calling one would abort the whole init. The one
+        // setter we DO need is JavaScript: WKWebView (macOS/iOS) and WebView2
+        // (Windows) enable it by default, but the Android WebView ships with it
+        // OFF — the page then renders its static "Loading planetarium…" status
+        // and the engine script never runs (Android tablet, 2026-09-22). Set it
+        // explicitly before the load, and never let it abort the init.
+        final controller = wva.WebViewController();
+        try {
+          await controller.setJavaScriptMode(wva.JavaScriptMode.unrestricted);
+        } on Object catch (e) {
+          debugPrint('StellariumView: setJavaScriptMode unsupported here: $e');
+        }
         if (!mounted) return;
+        if (kDebugMode) {
+          // Page console → logcat/stdout in debug builds only (diagnosing the
+          // renderer on a device with no devtools access).
+          try {
+            await controller.setOnConsoleMessage(
+              (m) => debugPrint('StellariumView console: ${m.message}'),
+            );
+          } on Object catch (_) {}
+        }
+        // Publish the controller BEFORE the load, fire-and-forget as it always
+        // was: on a platform whose loadRequest only completes once the platform
+        // view exists, awaiting it here would be a permanent loading screen.
         setState(() => _controller = controller);
+        unawaited(controller.loadRequest(Uri.parse(url)));
         // Apply any already-active night mode once the Stellarium page is up.
         _applyNightOnWeb(switch (ref.read(nightModeProvider)) {
           AsyncData(:final value) => value,
@@ -168,6 +227,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   @override
   void dispose() {
     unawaited(_eventSub?.cancel());
+    // The /aracat resolvers capture this widget's ref; a later hit after
+    // dispose would throw into the server's catch (a 500). Clear them — but
+    // only if they are still ours (a replacement view may already have
+    // installed its own).
+    if (identical(StellariumServer.catalogListResolver, _listResolver)) {
+      StellariumServer.catalogListResolver = null;
+    }
+    if (identical(StellariumServer.catalogObjectsResolver, _objectsResolver)) {
+      StellariumServer.catalogObjectsResolver = null;
+    }
     _searchCtrl.dispose();
     // wva.WebViewController has no dispose() in the webview_flutter API; its
     // platform view is torn down with the widget.
@@ -182,6 +251,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   Future<void> _onPageEvent(Map<String, Object?> event) async {
     // The page posts its Display-panel toggle state here on every change; persist it
     // so it's restored (via the load URL) next launch.
+    if (event['type'] == 'debug') {
+      if (kDebugMode) debugPrint('StellariumView debug: $event');
+      return;
+    }
     if (event['type'] == 'displayPref') {
       final layers = event['layers'];
       if (layers is Map) {
@@ -266,8 +339,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations (and
     // OpenNGC common names) must resolve against the local mirror — a hit
     // centres by coordinates, the same channel as Tonight's Sky recentre.
-    final catalog = ref.read(dsoCatalogProvider).value;
-    final hit = catalog == null ? null : findCatalogObject(catalog, q);
+    // The curated imaging-regions layer rides on top (its names — "WR 134
+    // ring", "Thor's Helmet", "Crescent" — are what people type, and the
+    // standalone regions have no mirror row at all). Empty mirror → the
+    // regions alone still resolve.
+    // The FULL bundled set (no magnitude cull) — a 15th-magnitude WR star or
+    // a faint Arp galaxy is exactly what someone types into a search box.
+    final catalog = ref.read(bundledCatalogProvider).value ??
+        ref.read(dsoCatalogProvider).value ??
+        const <PlanningDso>[];
+    final hit = findCatalogObject(applyImagingRegions(catalog), q);
     if (hit != null) {
       _pushCmd({'type': 'goto', 'ra': hit.raDeg, 'dec': hit.decDeg});
       return;
@@ -348,6 +429,25 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       ref.read(planetariumCommandProvider.notifier).clear();
     });
 
+    // Site / optics edits made in Options reach the page even with no daemon
+    // to poll (online, the page's own polling of the profile endpoints does
+    // the same job; the push is harmless there — same values).
+    ref.listen(siteSettingsProvider, (_, next) {
+      final site = planetariumSiteFor(null, next);
+      if (site == null) return;
+      _pushCmd({
+        'type': 'site',
+        'lat': site.latitudeDeg,
+        'lon': site.longitudeDeg,
+        'elev': site.elevationM,
+      });
+    });
+    ref.listen(opticsSettingsProvider, (_, next) {
+      final optics = planetariumOpticsFor(next);
+      if (optics == null) return;
+      _pushCmd({'type': 'optics', ...optics});
+    });
+
     // Night mode for the sky map: a Flutter overlay can't paint over the native
     // WebView, so drive a red tint directly inside the Stellarium page instead.
     ref.listen(nightModeProvider, (_, next) {
@@ -363,7 +463,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final planetarium = Expanded(
       child: linuxUrl != null
           ? LinuxPlanetariumOverlay(url: linuxUrl)
-          : wva.WebViewWidget(controller: c!),
+          : wva.WebViewWidget(
+              controller: c!,
+              // Claim every gesture inside the sky rect. With the default empty
+              // set the platform view only receives touches no Flutter
+              // recognizer wanted, and on a tablet that made the two-finger
+              // pinch unreliable (Android, 2026-09-22). Desktop mouse/trackpad
+              // input is unaffected.
+              gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{
+                Factory<OneSequenceGestureRecognizer>(
+                  EagerGestureRecognizer.new,
+                ),
+              },
+            ),
     );
 
     return ColoredBox(
@@ -377,6 +489,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             onSubmit: _submitSearch,
             onTonight: _toggleTonight,
             tonightOpen: tonightOpen,
+            // Touch platforms get on-screen zoom: no wheel/trackpad there, and
+            // an overshot pinch otherwise strands the view at the widest FOV.
+            onZoom: (Platform.isAndroid || Platform.isIOS)
+                ? (factor) => _pushCmd({'type': 'zoom', 'factor': factor})
+                : null,
           ),
           // Side-by-side: the planetarium keeps its Expanded (so its bounds
           // shrink and the native overlay recomputes) and the panel docks at a
@@ -410,12 +527,15 @@ class _SearchBar extends StatelessWidget {
   final VoidCallback onTonight;
   // Highlights the toggle while the docked panel is open.
   final bool tonightOpen;
+  // Present only on touch platforms: factor < 1 zooms in, > 1 out, 0 resets.
+  final void Function(double factor)? onZoom;
 
   const _SearchBar({
     required this.controller,
     required this.onSubmit,
     required this.onTonight,
     required this.tonightOpen,
+    this.onZoom,
   });
 
   @override
@@ -462,6 +582,24 @@ class _SearchBar extends StatelessWidget {
               ),
             ),
           ),
+          if (onZoom case final zoom?) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'Zoom in',
+              icon: const Icon(Icons.zoom_in, size: 20),
+              onPressed: () => zoom(0.6),
+            ),
+            IconButton(
+              tooltip: 'Zoom out',
+              icon: const Icon(Icons.zoom_out, size: 20),
+              onPressed: () => zoom(1 / 0.6),
+            ),
+            IconButton(
+              tooltip: 'Reset view',
+              icon: const Icon(Icons.center_focus_weak, size: 20),
+              onPressed: () => zoom(0),
+            ),
+          ],
           const SizedBox(width: 8),
           // A filled (vs outlined) button when the panel is open, so the toggle
           // reads its own state at a glance.
@@ -515,9 +653,8 @@ class _Unavailable extends StatelessWidget {
               'The embedded planetarium renderer could not start on this host. '
               'Reopen the app; if it persists, check that a system WebView is available.',
               textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
           ),
         ],

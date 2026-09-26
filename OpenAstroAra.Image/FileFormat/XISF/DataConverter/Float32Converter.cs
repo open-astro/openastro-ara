@@ -12,15 +12,36 @@
 
 #endregion "copyright"
 
+using System;
+
+using System.Buffers.Binary;
+
 namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
 
+    /// <summary>
+    /// XISF Float32 samples are nominally in [0, 1] (the <c>bounds</c> attribute may say otherwise;
+    /// the caller applies it). Out-of-range values are clamped and NaN reads as 0, so a stray
+    /// sample cannot wrap into garbage.
+    /// </summary>
     internal sealed class Float32Converter : IDataConverter {
+        private readonly double _low;
+        private readonly double _range;
 
-        public unsafe ushort[] Convert(byte[] rawData) {
+        /// <param name="boundsLow">The `bounds` attribute's lower value (spec default 0).</param>
+        /// <param name="boundsHigh">Its upper value (spec default 1); must exceed boundsLow.</param>
+        public Float32Converter(double boundsLow = 0d, double boundsHigh = 1d) {
+            if (!(boundsHigh > boundsLow)) { throw new ArgumentOutOfRangeException(nameof(boundsHigh)); }
+            _low = boundsLow;
+            _range = boundsHigh - boundsLow;
+        }
+
+        public ushort[] Convert(byte[] rawData) {
+            ArgumentNullException.ThrowIfNull(rawData);
             ushort[] data = new ushort[rawData.Length / 4];
+            var span = rawData.AsSpan();
             for (var i = 0; i < data.Length; i++) {
-                var integer = ((rawData[(i * 4) + 3] << 24) | (rawData[(i * 4) + 2] << 16) | (rawData[(i * 4) + 1] << 8) | (rawData[i * 4]));
-                data[i] = (ushort)((*(float*)&integer) * ushort.MaxValue); ;
+                float v = BinaryPrimitives.ReadSingleLittleEndian(span.Slice(i * 4, 4));
+                data[i] = FloatSample.ToUInt16((v - _low) / _range);
             }
             return data;
         }

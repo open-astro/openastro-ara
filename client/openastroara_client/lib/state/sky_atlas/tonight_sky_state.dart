@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,8 +78,9 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
   final optics = ref.watch(opticsSettingsProvider);
   final filterSet = ref.watch(filterSetProvider);
   final electronics = ref.watch(cameraElectronicsProvider);
-  // The mirrored openngc-dso catalog when this machine has one; the
-  // ranker falls back to the 20-object starter list otherwise.
+  // The bundled planning catalog (culled, plus any mirrored daemon rows the
+  // bundle lacks) — never empty, so the ranker's starter-list fallback is
+  // only reached by callers that pass no catalog at all.
   final catalog = await ref.watch(dsoCatalogProvider.future);
   // Plain records so the isolate payload stays model-free.
   final horizonPoints = ref
@@ -121,3 +123,59 @@ final selectedTonightObjectProvider =
     NotifierProvider.autoDispose<SelectedTonightObjectNotifier, String?>(
       SelectedTonightObjectNotifier.new,
     );
+
+/// Tonight's Sky "Up now" filter: when on, the panel lists only objects
+/// whose dark window is open at this moment. The list is TONIGHT's sky by
+/// design (a plan made in the afternoon needs the targets that rise later),
+/// but at 22:40 with the scope out a user wants what they can point at right
+/// now — so until the user touches the chip it follows the sky: ON once the
+/// sun is below the nautical-dark line at the site, OFF in daylight/dusk.
+/// A tap pins the choice for the session.
+class TonightSkyUpNowNotifier extends Notifier<bool> {
+  bool _pinned = false;
+
+  @override
+  bool build() {
+    // Re-evaluate on the site AND on the clock: a session opened at dusk
+    // must flip on once it is actually dark (review #1105 — the first build
+    // used to be the only one).
+    ref.watch(skyClockProvider);
+    final site = ref.watch(siteSettingsProvider);
+    if (_pinned) return state;
+    return isDarkNow(site, nowUtc: ref.read(clockProvider)());
+  }
+
+  void toggle() {
+    _pinned = true;
+    state = !state;
+  }
+
+  void set(bool on) {
+    _pinned = true;
+    state = on;
+  }
+}
+
+/// The wall clock, as a provider so tests can pin it.
+final clockProvider = Provider<DateTime Function()>((_) => DateTime.now);
+
+/// A coarse tick (every 5 min) that dark-dependent state watches so it
+/// follows the night without anyone touching it. Tests override it with a
+/// stream they drive.
+final skyClockProvider = StreamProvider<int>(
+    (_) => Stream<int>.periodic(const Duration(minutes: 5), (i) => i));
+
+/// True when the sun is below −12° (nautical dark) at [site] right now; an
+/// unset site (0, 0) is never "dark" so the filter stays off there.
+bool isDarkNow(SiteSettings site, {DateTime? nowUtc}) {
+  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return false;
+  final sun = sunMoonAltitudeDeg(
+    (nowUtc ?? DateTime.now()).toUtc(),
+    site.latitudeDeg,
+    site.longitudeDeg,
+  ).sunAltDeg;
+  return sun < -12;
+}
+
+final tonightSkyUpNowProvider =
+    NotifierProvider<TonightSkyUpNowNotifier, bool>(TonightSkyUpNowNotifier.new);

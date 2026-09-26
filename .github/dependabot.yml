@@ -44,7 +44,12 @@ updates:
       - dependency-name: SharpGIS.NmeaParser
         update-types: ["version-update:semver-major"]
 
-  # Flutter / Dart client.
+  # Flutter / Dart client packages.
+  #
+  # NOTE: this covers pub *packages* only. Dependabot has no Flutter-SDK
+  # ecosystem, so the SDK pin itself (client/openastroara_client/.flutter-version
+  # + pubspec.yaml's environment block) is watched by
+  # .github/workflows/check-flutter.yml instead — see playbook §12.1.
   - package-ecosystem: pub
     directory: /client/openastroara_client
     schedule:

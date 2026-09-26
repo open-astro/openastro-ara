@@ -98,8 +98,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         EquipmentEventPublisher? events = null,
         ImageHistoryService? imageHistory = null,
         IEquipmentFaultSink? faults = null,
-        IObservingConditionsService? weather = null) {
+        IObservingConditionsService? weather = null,
+        Func<ICoolingFanActuator?>? fan = null,
+        Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? legacyProfile = null,
+        Func<ITelescopeMediator?>? telescope = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
+        _fan = fan;
+        _legacyProfile = legacyProfile;
+        _telescope = telescope;
         _events = events;
         _faults = faults;
         _frames = frames;
@@ -113,11 +119,77 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     private readonly ImageHistoryService? _imageHistory;
 
+    // §25.5.6 / #1065 — the cooling fan follows the cooler. Lazily resolved (Func<>) to break the
+    // CameraService ↔ SwitchService construction cycle. Null = no switch service wired (tests).
+    private readonly Func<ICoolingFanActuator?>? _fan;
+
     // §29.2 header enrichment — the sky the frame was taken under (SQM,
     // ambient). Optional: no weather station, no headers, no complaints.
     private readonly IObservingConditionsService? _weather;
 
     private readonly IFocuserMediator? _focuser;
+    // §28 — the Equipment-layer profile the plate-solve capture's wrapped IImageData carries for
+    // render paths the solve loop never takes (RenderImage/Stretch); SaveToDisk does not read it,
+    // so it is optional. Func<>: it is registered after this service.
+    private readonly Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? _legacyProfile;
+    // §29.2 pointing — where the mount says it was looking when the frame was taken, for the
+    // OBJCTRA/OBJCTDEC/RA/DEC cards. Func<>: the telescope mediator is registered after this
+    // service in Program.cs.
+    private readonly Func<ITelescopeMediator?>? _telescope;
+
+    /// <summary>A frame's pointing as written to its header, with the epoch the numbers are in:
+    /// J2000 when the transform succeeded, else the mount's native epoch (see
+    /// <see cref="PointingFrom"/>). Carrying the epoch (not a bool) lets EQUINOX name the right
+    /// one for a B1950/J2050 mount instead of lumping it with "JNOW; transform unavailable".</summary>
+    internal readonly record struct FramePointing(double RaHours, double DecDegrees, OpenAstroAra.Astrometry.Epoch Epoch) {
+        public bool IsJ2000 => Epoch == OpenAstroAra.Astrometry.Epoch.J2000;
+    }
+
+    /// <summary>
+    /// The mount's reported position, in J2000 when the SOFA transform is available. A missing
+    /// native library degrades to the mount's own epoch (tens of arcminutes of precession drift
+    /// today — still a perfectly good solve hint), never to "no pointing". Null when there is no
+    /// connected mount or it hasn't reported a position yet.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort header metadata: a native-load failure in the epoch transform must degrade to the untransformed position, never fail the frame. Log-and-recover boundary.")]
+    internal static FramePointing? PointingFrom(OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo? info) {
+        if (info is not { Connected: true } || info.Coordinates is null) {
+            return null;
+        }
+        var coords = info.Coordinates;
+        if (coords.Epoch == OpenAstroAra.Astrometry.Epoch.J2000) {
+            return new FramePointing(coords.RA, coords.Dec, coords.Epoch);
+        }
+        // Coordinates.Transform only knows the JNOW→J2000 math: a B1950/J2050 SOURCE would be run
+        // through it silently and land ~1° off while claiming J2000. Same clamp as MapSlewEpoch —
+        // record such a (vanishingly rare) mount's position in its own epoch, flagged as such.
+        if (coords.Epoch != OpenAstroAra.Astrometry.Epoch.JNOW) {
+            return new FramePointing(coords.RA, coords.Dec, coords.Epoch);
+        }
+        try {
+            var j2000 = coords.Transform(OpenAstroAra.Astrometry.Epoch.J2000);
+            return new FramePointing(j2000.RA, j2000.Dec, OpenAstroAra.Astrometry.Epoch.J2000);
+        } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
+                or BadImageFormatException or TypeInitializationException) {
+            return new FramePointing(coords.RA, coords.Dec, coords.Epoch);
+        }
+    }
+
+    // Snapshotted right after pixel readout, like the focuser position. It is the §32.4 cache
+    // (refreshed every ~2 s), not a live read: while tracking the RA/Dec is constant, so the card
+    // is the frame's pointing to well within a pixel; with tracking off or a slew started right
+    // at readout it can be up to one refresh stale — fine for a solve hint.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recording pointing is best-effort metadata; a mediator/transport fault must not fail a capture whose image is already downloaded. Log-and-recover boundary.")]
+    private FramePointing? ReadPointing() {
+        try {
+            return PointingFrom(_telescope?.Invoke()?.GetInfo());
+        } catch (Exception ex) {
+            LogPointingSnapshotFailed(ex);
+            return null;
+        }
+    }
 
     // Snapshotted just after pixel readout (the focuser is stationary during an
     // exposure, so post-readout == shutter-open for this metadata). A focuser
@@ -294,6 +366,29 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         if (gateError is not null) {
             throw new InvalidOperationException(gateError);
         }
+        // #1076 — fan FIRST when enabling: the hazardous window is "TEC on, fan off", so the fan
+        // is started before the cooler write, and a rig whose fan cannot be started refuses to
+        // START cooling (409, nothing committed). Only a genuine off→on transition refuses: with
+        // the cooler already on (a set-point change, and above all the §58 unattended warm ramp,
+        // which calls this once a minute with enabled=true on its way to its final cooler-off)
+        // a failed fan write is a fault + log, never a throw — the ramp must always reach that
+        // final cooler-off (review of #1070/#1084), and refusing would leave the TEC where it is.
+        // Disabling keeps the old order: cooler off, then fan off.
+        if (enabled) {
+            bool alreadyCooling;
+            lock (_gate) {
+                // Only a cooler KNOWN to be on skips the refusal. Unknown (the CoolerOn read
+                // threw this pass) refuses like off — the hazard this guards is "TEC on, fan
+                // off", so it fails closed (review of #1084). The §58 ramp survives that:
+                // WarmCoolerAsync catches a failing ramp step and still issues its final
+                // cooler-off (pinned by A_failing_ramp_step_still_ends_with_the_cooler_off).
+                alreadyCooling = _state == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
+            }
+            var fanFailure = await SyncCoolingFanAsync(cooling: true).ConfigureAwait(false);
+            if (fanFailure is not null && !alreadyCooling) {
+                throw new InvalidOperationException(fanFailure);
+            }
+        }
         // §42.2 — a commanded cooler change starts a fresh drift baseline BEFORE the write is
         // dispatched (a new set-point legitimately starts far from the sensor; the old episode
         // and accumulation must not carry into it).
@@ -315,7 +410,67 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 $"the camera rejected the cooler write ({ex.GetType().Name}) — it may not support cooling", ex);
         }
         RefreshCacheOnce();
+        // §25.5.6 / #1065 — on DISABLE the fan is stopped AFTER the cooler write is committed and
+        // reflected. Every cooler path (REST, the §58 unattended warm ramp, other clients) gets it.
+        // A fan-off failure never fails the cooler call: the cooler DID change, and a caller such
+        // as the warm ramp must go on to its final cooler-off (review of #1070). It is published
+        // as an OpError equipment fault (→ notification center) and logged instead. (On ENABLE the
+        // fan was started before the cooler write above, #1076.)
+        // CancellationToken.None inside the sync, not ct (review of #1070): a client timeout during
+        // the blocking cooler write must not skip the fan write. Same reasoning as AbortExposureAsync.
+        if (!enabled) {
+            _ = await SyncCoolingFanAsync(cooling: false).ConfigureAwait(false);
+        }
     }
+
+    /// <summary>Sync the Thermal-Switch fan to the cooler direction. Returns null on success (or when
+    /// the rig has no fan port), else the user-facing failure sentence — the caller decides whether
+    /// that fails the call (cooler-ON: yes, nothing committed yet) or is only a fault (cooler-OFF).
+    /// A failed write is always published as an OpError equipment fault and logged.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fan-sync boundary: a switch-list read or fan write failure must never surface as a 500 — it is published as an equipment fault and logged, and the caller maps the returned sentence. CA1031's log-and-recover boundary applies.")]
+    private async Task<string?> SyncCoolingFanAsync(bool cooling) {
+        (string DeviceId, SwitchValueRequestDto Request)? sync;
+        ICoolingFanActuator? actuator;
+        try {
+            // Resolution sits inside the guard too: a throwing DI seam must not fail the cooler
+            // call any more than a failing switch read may.
+            actuator = _fan?.Invoke();
+            if (actuator is null) {
+                return null;
+            }
+            sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(CancellationToken.None).ConfigureAwait(false), cooling);
+        } catch (Exception ex) {
+            // Whether a fan-capable switch even exists is unknown here — most rigs have none, and
+            // the switch list is a separate subsystem. A list-read failure is a no-op, not an alarm
+            // on every cooler toggle; a real fan WRITE failure below is still surfaced.
+            LogFanListReadFailed(_logger, ex);
+            return null;
+        }
+        if (sync is null) {
+            return null;
+        }
+        try {
+            await actuator.SetFanValueAsync(sync.Value.DeviceId, sync.Value.Request, CancellationToken.None).ConfigureAwait(false);
+            return null;
+        } catch (Exception ex) {
+            LogFanSyncFailed(_logger, ex, cooling);
+            var sentence = cooling
+                ? $"the cooling fan could not be started ({ex.GetType().Name}) — check the fan"
+                : $"the cooler is off, but the cooling fan could not be stopped ({ex.GetType().Name}) — check the fan";
+            _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, sync.Value.DeviceId, null,
+                EquipmentFaultKind.OpError, sentence, DateTimeOffset.UtcNow));
+            return sentence;
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug,
+        Message = "Cooling-fan sync skipped: switch list unreadable.")]
+    private static partial void LogFanListReadFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "Cooling-fan sync failed after cooler change (cooling={Cooling}).")]
+    private static partial void LogFanSyncFailed(ILogger logger, Exception ex, bool cooling);
 
     /// <summary>
     /// §25.5.5 cooler capability gate: returns the human-readable refusal reason
@@ -554,13 +709,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
+        var pointing = ReadPointing();
         double? sensorTemp = null, tempSetPoint = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
-            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions);
+            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
+            pointing: pointing);
         var writeMs = storeTiming.ElapsedMilliseconds;
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
@@ -867,7 +1024,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
@@ -909,7 +1066,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
-        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt);
+        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt, pointing);
         fits.Complete(); // §28.7 atomic finish
         return path;
     }
@@ -941,7 +1098,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// (CCD-TEMP/SET-TEMP). Everything is best-effort: a header that's
     /// sometimes absent beats a capture that can fail on a flaky read, so
     /// each source is guarded and zero/unset profile values are skipped.
-    /// RA/DEC need the mount and land with the pointing follow-up.
+    /// Where the mount was pointed (OBJCTRA/OBJCTDEC/RA/DEC/EQUINOX) is written
+    /// by <see cref="WritePointingHeaders"/> whenever a mount is connected.
     /// </summary>
     /// <summary>All-on when the profile can't be read — a rich header is the
     /// safe default for everything except a capture failure.</summary>
@@ -958,7 +1116,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt) {
+    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -969,6 +1127,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
                 fits.SetHeader("OBJECT", targetName!, "target name");
+            }
+            // Where the mount was pointed: the solve hint (§18.I reads OBJCTRA/OBJCTDEC back), the
+            // stacker's target grouping, and the only record of pointing on a manually framed
+            // light. Always written when a mount is connected — pointing says nothing about where
+            // the observer lives, unlike the Site group.
+            if (pointing is FramePointing pt) {
+                WritePointingHeaders(fits, pt, capturedAt);
             }
             if (_device?.Name is string cam && cam.Length > 0) {
                 fits.SetHeader("INSTRUME", cam, "camera");
@@ -1071,6 +1236,31 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             LogHeaderEnrichmentFailed(ex);
         }
     }
+
+    /// <summary>
+    /// OBJCTRA/OBJCTDEC in NINA's sexagesimal FITS form ("HH MM SS" / "+DD MM SS"), RA/DEC in
+    /// decimal degrees, and EQUINOX. J2000 is the normal case; otherwise the cards carry the
+    /// mount's own epoch and EQUINOX names it (the capture's Julian year for JNOW, 1950.0 / 2050.0
+    /// for a B1950 / J2050 mount) rather than claiming 2000.0 for a position that isn't.
+    /// </summary>
+    internal static void WritePointingHeaders(FitsImage fits, FramePointing pt, DateTimeOffset capturedAt) {
+        var raDeg = OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(pt.RaHours);
+        fits.SetHeader("OBJCTRA", OpenAstroAra.Astrometry.AstroUtil.HoursToFitsHMS(pt.RaHours), "RA of mount pointing (H M S)");
+        fits.SetHeader("OBJCTDEC", OpenAstroAra.Astrometry.AstroUtil.DegreesToFitsDMS(pt.DecDegrees), "Dec of mount pointing (D M S)");
+        fits.SetHeader("RA", Math.Round(raDeg, 6), "RA of mount pointing deg");
+        fits.SetHeader("DEC", Math.Round(pt.DecDegrees, 6), "Dec of mount pointing deg");
+        var (equinox, note) = pt.Epoch switch {
+            OpenAstroAra.Astrometry.Epoch.J2000 => (2000.0, "J2000"),
+            OpenAstroAra.Astrometry.Epoch.B1950 => (1950.0, "mount epoch (B1950)"),
+            OpenAstroAra.Astrometry.Epoch.J2050 => (2050.0, "mount epoch (J2050)"),
+            _ => (Math.Round(JulianYear(capturedAt), 2), "mount epoch (JNOW; transform unavailable)"),
+        };
+        fits.SetHeader("EQUINOX", equinox, note);
+    }
+
+    // Julian epoch year: J2000.0 is JD 2451545.0 and a Julian year is 365.25 days.
+    internal static double JulianYear(DateTimeOffset at) =>
+        2000.0 + (at.UtcDateTime - new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc)).TotalDays / 365.25;
 
     /// <summary>
     /// SUNALT / MOONALT / MOONILL / MOONPHSE at the moment of capture, from
@@ -1523,7 +1713,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         double? temp;
         try { temp = c.CCDTemperature; } catch (Exception) { temp = null; }
         bool coolerOn;
-        try { coolerOn = c.CoolerOn; } catch (Exception) { coolerOn = false; }
+        var coolerStateKnown = true;
+        try { coolerOn = c.CoolerOn; } catch (Exception) { coolerOn = false; coolerStateKnown = false; }
         double? coolerPower;
         try { coolerPower = coolerOn ? c.CoolerPower : null; } catch (Exception) { coolerPower = null; }
         double? progress;
@@ -1541,7 +1732,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             }
         } catch (Exception) { }
         return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress,
-            CoolerSetpointC: setpoint, ReadoutMode: readoutMode);
+            CoolerSetpointC: setpoint, ReadoutMode: readoutMode, CoolerStateKnown: coolerStateKnown);
     }
 
     // Extracted (internal) for direct unit testing.
@@ -1888,6 +2079,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
     private partial void LogFocuserSnapshotFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Mount pointing snapshot failed; recording the frame without RA/Dec")]
+    private partial void LogPointingSnapshotFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Camera connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);

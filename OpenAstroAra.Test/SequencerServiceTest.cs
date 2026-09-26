@@ -107,6 +107,74 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Run_state_and_progress_frames_carry_the_sequencers_estimated_seconds() {
+            // #1068 — the wiring, not the estimator: the DTO and the WS payloads must actually
+            // carry the numbers (delete the EstimatedSeconds() calls and this fails).
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "note" }); // no own estimate -> nominal 15 s
+                c.Items.Add(new WaitForTimeSpan { Time = 0 });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state, Is.Not.Null);
+            Assert.That(state!.EstimatedTotalSeconds, Is.Not.Null.And.GreaterThan(0), "the DTO carries the sequencer's total");
+            Assert.That(state.EstimatedRemainingSeconds, Is.EqualTo(0), "a completed run has nothing left");
+            var frames = ws.Records.Where(e => e.Type == "sequence.progress" || e.Type == "sequence.complete").ToList();
+            Assert.That(frames, Is.Not.Empty);
+            Assert.That(frames.All(e => e.Payload.TryGetProperty("estimated_total_seconds", out _)
+                                        && e.Payload.TryGetProperty("estimated_remaining_seconds", out _)),
+                Is.True, "every run-lifecycle frame carries both estimate fields");
+            Assert.That(frames.Last().Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.EqualTo(0));
+            // The worker's finally releases the tree (SetRoot(null)) after the terminal state is
+            // observable; the retained estimate must survive that. Give the finally time to run.
+            await Task.Delay(500);
+            var later = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(later!.EstimatedTotalSeconds, Is.EqualTo(state.EstimatedTotalSeconds),
+                "the final estimate is retained after the run tree is released");
+        }
+
+        [Test]
+        public async Task The_estimate_cache_is_refreshed_by_leaf_status_changes_not_only_by_its_ttl() {
+            // #1080 — with the TTL pushed out to an hour, the tree-version bump in UpdateProgress
+            // is the only thing that can refresh the cached pair: the progress frames must still
+            // count down as leaves finish (dropping the bump makes every frame report the initial
+            // remaining figure), and the terminal frame must reach 0 through the State setter's bump.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                // Four 0.5 s waits: CoreUtil.Wait reports every 100 ms, so even a loaded runner
+                // whose CoalescingAsyncPublisher collapses most reports still publishes at least
+                // one frame after the first leaf finishes.
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+                c.Items.Add(new WaitForTimeSpan { Time = 0.5 });
+            }), ws: ws);
+            svc.EstimateCacheTtlMsForTests = 3_600_000;
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state, Is.Not.Null);
+
+            var progress = ws.Records
+                .Where(e => e.Type == "sequence.progress")
+                .Select(e => e.Payload.GetProperty("estimated_remaining_seconds").GetDouble())
+                .ToList();
+            Assert.That(progress, Is.Not.Empty);
+            Assert.That(progress, Is.Ordered.Descending, "a cached estimate never goes back up");
+            // The terminal frame is refreshed by the State setter's bump regardless, so the mid-run
+            // countdown is asserted on the progress frames alone: without the UpdateProgress bump
+            // every one of them reports the initial 2 s.
+            Assert.That(progress.Distinct().Count(), Is.GreaterThanOrEqualTo(2), "progress frames counted down as leaves finished, not served from the cache for the whole TTL");
+            var complete = ws.Records.Single(e => e.Type == "sequence.complete");
+            Assert.That(complete.Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.EqualTo(0), "the terminal frame walks fresh");
+        }
+
+        [Test]
         public async Task A_failed_instruction_emits_one_instruction_failed_event_before_the_terminal() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();
@@ -128,6 +196,10 @@ namespace OpenAstroAra.Test {
             var failed = records.Where(e => e.Type == "sequence.instruction_failed").ToList();
             Assert.That(failed, Has.Count.EqualTo(1), "exactly one event per failed leaf, no duplicates from tick + final scans");
             Assert.That(failed[0].Payload.GetProperty("failed_instruction_index").GetInt32(), Is.EqualTo(1));
+            // #1068 — the failure frame carries the estimate fields too (delete them in
+            // EmitInstructionFailedAsync and this fails).
+            Assert.That(failed[0].Payload.TryGetProperty("estimated_total_seconds", out _), Is.True);
+            Assert.That(failed[0].Payload.TryGetProperty("estimated_remaining_seconds", out _), Is.True);
             // The headless factory maps the unregistered ExternalScript to UnknownSequenceItem,
             // whose Name is the original serialized type token — a realistic FAILED leaf (an
             // imported sequence carrying an instruction this daemon doesn't know).

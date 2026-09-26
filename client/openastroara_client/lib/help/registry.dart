@@ -388,6 +388,37 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['safety.policies.weather_triggers'],
     keywords: ['dew', 'dew point', 'fog', 'delta', 'condensation'],
   ),
+  'timesync.client_gps.enabled': Help(
+    key: 'timesync.client_gps.enabled',
+    title: 'GPS on this computer',
+    body:
+        'Plug a cheap USB GPS dongle into the computer running this app instead '
+        'of into the Pi, and the app reads the satellite fix and sends the '
+        'receiver\'s exact UTC time plus your latitude, longitude and elevation '
+        'to the rig. It counts as a high-trust time sync (the same as a dongle on '
+        'the Pi) and fills the site coordinates that polar alignment and '
+        'plate solving need. The app keeps re-reading while it is open: every '
+        'couple of minutes until the first fix has been sent, then about hourly. '
+        'You are next to the mount during setup and polar alignment, so the '
+        'fix is the rig\'s position for every purpose that matters. Desktop '
+        'only; phones and tablets use their built-in GPS through Fill from GPS.',
+    relatedSettings: ['timesync.client_gps.enabled', 'timesync.client_gps.port'],
+    keywords: ['gps', 'dongle', 'time sync', 'site'],
+  ),
+  'timesync.client_gps.port': Help(
+    key: 'timesync.client_gps.port',
+    title: 'GPS serial port',
+    body:
+        'Which serial port the dongle is on. Most dongles show up as '
+        '/dev/cu.usbserial-… or /dev/cu.usbmodem… on a Mac, COM3 (or similar) on '
+        'Windows and /dev/ttyUSB0 or /dev/ttyACM0 on Linux; the list puts those '
+        'first. The dongle speaks NMEA at 9600 baud, which is what nearly every '
+        'receiver ships with. "No fix yet" with the port right just means the '
+        'receiver has not found enough satellites — give it a clear view of the '
+        'sky; a cold receiver can take a few minutes.',
+    relatedSettings: ['timesync.client_gps.port', 'timesync.client_gps.enabled'],
+    keywords: ['gps', 'serial', 'port', 'nmea'],
+  ),
   'safety.policies.auto_resume': Help(
     key: 'safety.policies.auto_resume',
     title: 'Auto-resume',
@@ -934,7 +965,7 @@ const Map<String, Help> helpRegistry = {
         '* Camera — USB link power-up only\n'
         '* Mount — sidereal tracking comes on\n'
         '* Focuser, rotator — position read on connect, no movement\n'
-        '* Filter wheel — most drivers reposition to last-known slot on connect (driver-dependent). If it matters which filter is in beam at startup, leave this off and connect manually.\n'
+        '* Filter wheel — the first time the wheel connects after Ara starts up on the rig (auto or manual) Ara itself parks it on slot 0, conventionally L, unless a filter change is requested first or "Park on slot 0 on first connect" is off; a later reconnect leaves the wheel where it is. Drivers may also reposition on connect (driver-dependent).\n'
         '* Flat panel (CoverCalibrator) — does not change cover position\n'
         '* Safety monitor — recommended on for unattended observatories\n\n'
         '*Manual-connect by default* (driver may actuate hardware on connect):\n'
@@ -942,6 +973,16 @@ const Map<String, Help> helpRegistry = {
         '* Dome — some drivers move shutter or rotate to home on connect\n'
         '* Weather station — keeps the polling loop quiet until you opt in\n\n'
         'Override per device based on your hardware\'s behaviour.',
+  ),
+
+  // #1075 — the first-connect home as a profile policy.
+  'eq.filterwheel.home_on_first_connect': Help(
+    key: 'eq.filterwheel.home_on_first_connect',
+    title: 'Park on slot 0 on first connect',
+    body:
+        'The first time your filter wheel connects after Ara starts up on the rig — whether it auto-connected on boot or you connected it by hand — Ara parks it on slot 0 (its first position, conventionally your luminance filter) so a session always starts from a known filter.\n\n'
+        'It happens once per rig start: a reconnect after a link blip leaves the wheel where it is, and a filter change you or a sequence request first always wins.\n\n'
+        'Turn this off if you want the wheel left exactly where the driver reports it, for example a mono rig that lives on Hα. Turning it back on takes effect the next time Ara starts on the rig: a wheel that already connected this session is not parked by the change.',
   ),
 
   'eq.switch.readings': Help(
@@ -1992,8 +2033,8 @@ const Map<String, Help> helpRegistry = {
         'resets that. Deep red light is the one colour your night vision barely responds to, '
         'so a red display lets you drive the rig between subs without starting the clock over.\n\n'
         '**Toggling it:** this switch, the moon button beside the equipment chips in the top '
-        'bar, or the **N** key from anywhere in the app (except while you\'re typing in a '
-        'field). The choice is remembered for next launch.\n\n'
+        'bar, or **Ctrl+N** (**⌘N** on a Mac) from anywhere in the app. The choice is '
+        'remembered for next launch.\n\n'
         'The sky map is a native browser view that Ara can\'t paint over, so it gets a matching '
         'red tint applied inside the map itself.\n\n'
         'For the deepest red, also turn your monitor\'s brightness right down — a dim red screen '

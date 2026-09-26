@@ -453,7 +453,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     /// off (or no readable temperature) skips the ramp entirely.
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown.")]
+        Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown, and a ramp step that throws (interlock refusal, driver rejection) is logged and cuts the ramp short so the final cooler-off still runs.")]
     private async Task<bool> WarmCoolerAsync(System.Text.StringBuilder summary, CancellationToken abandon) {
         if (_camera is null) return true;
         var dto = await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false);
@@ -481,9 +481,20 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         var stepSleep = TimeSpan.FromMinutes(1.0 / WarmTimeScale);
         var setpoint = startTemp;
         var started = DateTimeOffset.UtcNow;
+        var stepFailed = false;
         while (setpoint < WarmTargetC && DateTimeOffset.UtcNow - started < WarmHardCap) {
             setpoint = Math.Min(WarmTargetC, setpoint + stepC);
-            await _camera.SetCoolerAsync(true, setpoint, CancellationToken.None).ConfigureAwait(false);
+            try {
+                await _camera.SetCoolerAsync(true, setpoint, CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                // A ramp step that the camera service refuses (the #1076 fan interlock: fan
+                // write failed with the cooler state unreadable) or that the driver rejects must
+                // never skip the final cooler-off below — that is the step that matters
+                // overnight. Log it, stop stepping, and fall through to the cut-off.
+                LogRampStepFailed(setpoint, ex);
+                stepFailed = true;
+                break;
+            }
             if (setpoint >= WarmTargetC) break;
             try {
                 await Task.Delay(stepSleep, abandon).ConfigureAwait(false);
@@ -501,11 +512,16 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         // the cooler off short of the target — the abrupt-ish cutoff the ramp
         // exists to soften — and the morning summary must not read like a
         // completed warm-up (the sensor may still have been cold at power cut).
-        summary.Append(setpoint >= WarmTargetC
-            ? $"Cooler warmed from {startTemp:F0}°C and switched off. "
-            : $"Cooler warm-up HIT THE {WarmHardCap.TotalMinutes:F0}-minute cap at {setpoint:F0}°C set-point (target {WarmTargetC:F0}°C) — switched off early. ");
+        summary.Append(stepFailed
+            ? $"Cooler warm-up step to {setpoint:F0}°C FAILED — cooler switched off early. "
+            : setpoint >= WarmTargetC
+                ? $"Cooler warmed from {startTemp:F0}°C and switched off. "
+                : $"Cooler warm-up HIT THE {WarmHardCap.TotalMinutes:F0}-minute cap at {setpoint:F0}°C set-point (target {WarmTargetC:F0}°C) — switched off early. ");
         return true;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "UNATTENDED_SHUTDOWN cooler warm-up step to {Setpoint}°C failed; cutting the cooler off early")]
+    private partial void LogRampStepFailed(double setpoint, Exception ex);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown.")]

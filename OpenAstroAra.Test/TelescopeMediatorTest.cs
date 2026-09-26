@@ -194,8 +194,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void TransformBestEffort_degrades_to_untransformed_target_when_natives_missing() {
-            // The SOFA/NOVAS natives are not packaged for this platform yet (PORT_TODO §14e), so a
-            // cross-epoch transform must fall back to the original coordinates, never throw.
+            // A dev box without the SOFA/NOVAS natives staged (scripts/build-astrometry-natives.sh)
+            // must see a cross-epoch transform fall back to the original coordinates, never throw.
             using var svc = new TelescopeService();
             var j2000 = SampleTarget();
             Coordinates? result = null;

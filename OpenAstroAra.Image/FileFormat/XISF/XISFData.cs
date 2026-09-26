@@ -95,7 +95,37 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
         }
 
-        public XISFData(int[] data, FileSaveInfo fileSaveInfo) : this(Array.ConvertAll(data, item => (uint)item), fileSaveInfo) {
+        /// <summary>
+        /// Integer ADU samples from a <paramref name="bitDepth"/>-bit camera, scaled onto the spec's
+        /// UInt32 range [0, 2^32-1] so a spec-correct reader (ours included) maps them back to the
+        /// same ADU. Writing raw ADU into a UInt32 block, as this used to, read back as ~0.
+        /// </summary>
+        public XISFData(int[] data, int bitDepth, FileSaveInfo fileSaveInfo) : this(ScaleToUInt32(data, bitDepth), fileSaveInfo) {
+        }
+
+        private static uint[] ScaleToUInt32(int[] data, int bitDepth) {
+            // The reported bit depth is the scale, full stop. It must be frame-independent: a
+            // light and its matching dark from one camera have to encode the same ADU the same
+            // way or calibration subtracts the wrong level, so no content-driven widening. An
+            // ADU above the reported depth (a driver under-reporting BitDepth) is clipped, and
+            // the clip is logged with a count so it cannot pass silently -- the fix for that
+            // case is the driver's report, not this scale.
+            int effectiveDepth = Math.Clamp(bitDepth, 1, 32);
+            if (effectiveDepth != bitDepth) {
+                Logger.Warning($"XISF: reported bit depth {bitDepth} is outside 1..32; scaling as {effectiveDepth}-bit data");
+            }
+            double max = Math.Pow(2, effectiveDepth) - 1;
+            var scaled = new uint[data.Length];
+            int clipped = 0;
+            for (int i = 0; i < data.Length; i++) {
+                double v = data[i];
+                if (v > max) { v = max; clipped++; } else if (v < 0) { v = 0; }
+                scaled[i] = (uint)Math.Round(v / max * uint.MaxValue);
+            }
+            if (clipped > 0) {
+                Logger.Warning($"XISF: {clipped} sample(s) exceed the reported {bitDepth}-bit depth and were clipped; the camera driver is under-reporting its bit depth");
+            }
+            return scaled;
         }
 
         public XISFData(uint[] data, FileSaveInfo fileSaveInfo) {
@@ -173,6 +203,18 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     }
 
                     outArray = ZlibStream.CompressBuffer(byteArray);
+                } else if (CompressionType == XISFCompressionType.ZSTD) {
+                    if (ByteShuffling) {
+                        CompressionName = "zstd+sh";
+                        byteArray = Shuffle(byteArray, ShuffleItemSize);
+                    } else {
+                        CompressionName = "zstd";
+                    }
+
+                    // Level 3 is zstd's default and what PixInsight ships; the spec fixes only the
+                    // frame format, so any level reads back the same.
+                    using var compressor = new ZstdSharp.Compressor(3);
+                    outArray = compressor.Wrap(byteArray).ToArray();
                 } else {
                     outArray = new byte[byteArray.Length];
                     Array.Copy(byteArray, outArray, outArray.Length);
@@ -189,6 +231,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     outArray = byteArray;
                 }
                 CompressionType = XISFCompressionType.NONE;
+                CompressionName = null;
 
                 Logger.Debug("XISF output array is larger after compression. Image will be prepared uncompressed instead.");
             }
@@ -219,14 +262,29 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         ChecksumName = "sha-512";
                         break;
 
+                    // SHA-3 is not available on every platform .NET runs on (macOS lacks it).
+                    // A save must not fail over a checksum choice: fall back to SHA-256, which
+                    // the spec also allows, and say so once in the log.
                     case XISFChecksumType.Sha3256:
-                        Checksum = GetStringFromHash(SHA3_256.HashData(outArray));
-                        ChecksumName = "sha3-256";
+                        if (SHA3_256.IsSupported) {
+                            Checksum = GetStringFromHash(SHA3_256.HashData(outArray));
+                            ChecksumName = "sha3-256";
+                        } else {
+                            Logger.Warning("XISF: SHA3-256 is not supported on this platform; writing a SHA-256 checksum instead");
+                            Checksum = GetStringFromHash(SHA256.HashData(outArray));
+                            ChecksumName = "sha-256";
+                        }
                         break;
 
                     case XISFChecksumType.Sha3512:
-                        Checksum = GetStringFromHash(SHA3_512.HashData(outArray));
-                        ChecksumName = "sha3-512";
+                        if (SHA3_512.IsSupported) {
+                            Checksum = GetStringFromHash(SHA3_512.HashData(outArray));
+                            ChecksumName = "sha3-512";
+                        } else {
+                            Logger.Warning("XISF: SHA3-512 is not supported on this platform; writing a SHA-512 checksum instead");
+                            Checksum = GetStringFromHash(SHA512.HashData(outArray));
+                            ChecksumName = "sha-512";
+                        }
                         break;
 
                     case XISFChecksumType.NONE:

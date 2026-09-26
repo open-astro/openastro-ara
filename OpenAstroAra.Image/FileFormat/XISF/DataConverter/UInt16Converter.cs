@@ -14,16 +14,25 @@
 
 using System;
 
+using System.Buffers.Binary;
+using System.IO;
+
 namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
 
     internal sealed class UInt16Converter : IDataConverter {
 
         public ushort[] Convert(byte[] rawData) {
-            if (rawData.Length % sizeof(ushort) != 0) {
-                throw new System.IO.InvalidDataException($"XISF: UInt16 sample buffer length {rawData.Length} is not a multiple of {sizeof(ushort)}");
+            ArgumentNullException.ThrowIfNull(rawData);
+            if (rawData.Length % 2 != 0) {
+                throw new InvalidDataException($"XISF: UInt16 block of {rawData.Length} bytes is not a whole number of samples");
             }
-            ushort[] data = new ushort[rawData.Length / sizeof(ushort)];
-            Buffer.BlockCopy(rawData, 0, data, 0, rawData.Length);
+            // Explicitly little-endian, like the other converters: the spec fixes the byte order,
+            // and a BlockCopy would silently read host order on a big-endian machine.
+            ushort[] data = new ushort[rawData.Length / 2];
+            var span = rawData.AsSpan();
+            for (var i = 0; i < data.Length; i++) {
+                data[i] = BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(i * 2, 2));
+            }
             return data;
         }
     }

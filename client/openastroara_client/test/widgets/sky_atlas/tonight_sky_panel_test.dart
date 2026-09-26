@@ -8,11 +8,15 @@ import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/models/sequence/draft_sequence.dart';
+import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
+import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
-import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/widgets/sky_atlas/planning_visuals.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
@@ -153,11 +157,15 @@ Widget _host(_RecordingClient client,
       overrides: [
         tonightSkyProvider.overrideWith((ref) async => objects ?? [_m31]),
         sequenceApiProvider.overrideWith((ref) => client),
+        // No network in widget tests: the Why? preview renders its placeholder.
+        targetPreviewProvider.overrideWith((ref, key) async => null),
       ],
       child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
     );
 
 void main() {
+  _offlineAddTests();
+  _upNowTests();
   testWidgets('the add action creates a full imaging run named after the object',
       (tester) async {
     final client = _RecordingClient();
@@ -633,4 +641,125 @@ void main() {
           reason: '"$name" row must not carry the hero accent border');
     }
   });
+}
+
+
+/// A target ranked for later tonight: its window opens 40 min from now.
+TonightSkyObject _risingLater() => TonightSkyObject(
+      id: 'LATER',
+      name: 'Later Nebula',
+      type: 'HII',
+      magnitude: 7,
+      raDeg: 0,
+      decDeg: 0,
+      altitudeDeg: 12,
+      maxAltitudeDeg: 70,
+      windowStartUtc: DateTime.now().toUtc().add(const Duration(minutes: 40)),
+      windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 5)),
+      integrationHours: 4.3,
+      remainingHours: 4.3,
+      framing: TonightFraming.good,
+      score: 90,
+    );
+
+/// A target whose window is open right now.
+TonightSkyObject _upNow() => TonightSkyObject(
+      id: 'NOW',
+      name: 'Now Nebula',
+      type: 'HII',
+      magnitude: 7,
+      raDeg: 0,
+      decDeg: 0,
+      altitudeDeg: 60,
+      maxAltitudeDeg: 70,
+      windowStartUtc: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
+      windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 4)),
+      integrationHours: 5,
+      remainingHours: 4,
+      framing: TonightFraming.good,
+      score: 85,
+    );
+
+void _upNowTests() {
+  testWidgets('a row that rises later says so, and "Up now" hides it',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient(),
+        objects: [_risingLater(), _upNow()]));
+    await tester.pump();
+    // Whole night by default: both listed, the later one honest about it.
+    expect(find.text('Later Nebula'), findsOneWidget);
+    expect(find.textContaining('rises into your window at'), findsOneWidget);
+    expect(find.textContaining('open now'), findsOneWidget);
+
+    await tester.tap(find.text('Up now'));
+    await tester.pumpAndSettle();
+    expect(find.text('Later Nebula'), findsNothing);
+    expect(find.text('Now Nebula'), findsOneWidget);
+
+    await tester.tap(find.text('Up now'));
+    await tester.pumpAndSettle();
+    expect(find.text('Later Nebula'), findsOneWidget);
+  });
+
+  testWidgets('"Up now" with nothing open explains when the next one opens',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [_risingLater()]),
+      sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+      targetPreviewProvider.overrideWith((ref, key) async => null),
+    ]);
+    addTearDown(container.dispose);
+    container.read(tonightSkyUpNowProvider.notifier).set(true);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+    ));
+    await tester.pump();
+    expect(find.textContaining('Nothing on tonight\'s list is up right now'),
+        findsOneWidget);
+    expect(find.textContaining('the next one opens at'), findsOneWidget);
+  });
+}
+
+
+void _offlineAddTests() {
+  testWidgets('with no server the row add is live and saves a local draft',
+      (tester) async {
+    final drafts = _MemDrafts();
+    final container = ProviderContainer(overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      sequenceApiProvider.overrideWith((ref) => null),
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      targetPreviewProvider.overrideWith((ref, key) async => null),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+    ));
+    await tester.pump();
+    final add = find.byTooltip(
+        'Save as a draft run (no server — pushes when you reconnect)');
+    expect(add, findsOneWidget);
+    expect(tester.widget<IconButton>(find.ancestor(
+            of: add, matching: find.byType(IconButton))).onPressed,
+        isNotNull, reason: 'offline add must not be disabled');
+    await tester.tap(add);
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(drafts.store, hasLength(1));
+    expect(drafts.store.values.single.name, 'Andromeda Galaxy');
+  });
+}
+
+/// In-memory draft store, so the offline add can be observed without disk.
+class _MemDrafts extends DraftSequenceService {
+  final store = <String, DraftSequence>{};
+  @override
+  Future<List<DraftSequence>> loadAll() async => store.values.toList();
+  @override
+  Future<void> save(DraftSequence draft) async => store[draft.id] = draft;
+  @override
+  Future<void> delete(String id) async => store.remove(id);
 }

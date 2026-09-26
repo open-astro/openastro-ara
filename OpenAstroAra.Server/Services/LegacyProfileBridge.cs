@@ -54,6 +54,12 @@ public static class LegacyProfileBridge {
         if (!string.IsNullOrWhiteSpace(ps.PathOrEndpoint)) {
             s.ASTAPLocation = ps.PathOrEndpoint;
         }
+        // The star database directory the .deb documents (/var/lib/astap by default) — ASTAPSolver
+        // passes it as -d; before this the solver relied on ASTAP's own lookup, which finds nothing
+        // on a packaged Pi (#1094).
+        if (!string.IsNullOrWhiteSpace(ps.IndexDownloadPath)) {
+            s.ASTAPDatabaseLocation = ps.IndexDownloadPath;
+        }
         // "astap" is the only engine the port ships; anything unknown keeps the legacy value
         // rather than silently switching solver families.
         if (string.Equals(ps.Engine, "astap", System.StringComparison.OrdinalIgnoreCase)) {

@@ -1,10 +1,10 @@
 # OpenAstro Ara — Port TODO log
 
-Append-only list of every `TODO(port)` and `PORT_BLOCKED` left in the codebase during the port, grouped by phase. Also tracks out-of-scope CodeRabbit suggestions deferred for follow-up.
+Append-only list of every `TODO(port)` and `PORT_BLOCKED` left in the codebase during the port, grouped by phase. Also tracks out-of-scope review suggestions deferred for follow-up.
 
 Per PORT_PLAYBOOK.md §0 rule 4 (`Cite when stuck`): when you cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it here, and move on. Sweep in Phase 15.
 
-Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope suggestions": when CR suggests a broader refactor or future feature, log it here with the PR reference and reply "Acknowledged — tracked in design/PORT_TODO.md for follow-up".
+Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md's review rule "out-of-scope suggestions": when a review suggests a broader refactor or future feature, log it here with the PR reference and reply "Acknowledged — tracked in design/PORT_TODO.md for follow-up".
 
 **File layout (since 2026-07-07):** open and mixed sections first; sections that are entirely
 closed live under **"✅ Done / obsolete — archived entries"** at the bottom. When a section up
@@ -13,6 +13,79 @@ historical record as well as the queue). See `design/README.md` for how this fil
 the other design docs.
 
 ---
+
+## §14e astrometry natives — follow-ups (2026-09-22, from the #1092 review)
+
+- **No Docker-side equivalent of the `build-deb.sh` natives guard.** A local `docker build .` from a publish dir that skipped `scripts/build-astrometry-natives.sh` silently produces a broken image; CI catches it via the arm64 e2e boot-log grep, a local build does not. A `RUN test -f libsofa.so -a -f libnovas31.so` in the Dockerfile (needs a non-chiseled build stage, since the chiseled runtime-deps image has no shell) or a pre-build check script would close it.
+- **PORT_PLAYBOOK §11 (line ~989, "Copy `publish/arm64/` to `/opt/openastroara/`")** has the same natives gap as the DEPLOY.md recipe #1092 fixed, but §11 is the historical Phase-10 plan and already diverged (still shows the `aspnet:10.0-bookworm-slim` base and an x64 publish). Reconcile or mark it superseded by DEPLOY.md when next touched.
+- **glibc floor of the cross-built natives.** `libsofa.so`/`libnovas31.so` are built on `ubuntu-latest` (noble, glibc 2.39) while `packaging/debian/DEBIAN/control.template` carries an unversioned `Depends: libc6`. Debian 13 Trixie (2.41, the DEPLOY.md target) is fine; on a bookworm-based Pi OS the `.deb` installs and then `dlopen` fails on a `GLIBC_2.3x` symbol, and the boot probe reports the file as MISSING although it is on disk. If pre-Trixie is meant to be supported: build in a bookworm container (or with `-D_FORTIFY_SOURCE=0` + an older sysroot) and/or version the `libc6` dependency.
+## §29.2 pointing headers — follow-ups (2026-09-22, from the #1091 review)
+
+- **`AstroUtil.HoursToHMS` can emit `24 00 00`.** An RA within ~0.5 s of 24h rounds its seconds up into the hour field, which `SqliteFrameRepository.ParseTargetCoordinates` then rejects (≥360°) and which is a non-standard card for external tools. Pre-existing formatter behaviour, now reachable from the capture path's `OBJCTRA` card. Wrap at 24h in the formatter (and add the boundary case to `AstroUtilTest`).
+- **`TelescopeService.MapEpoch` treats `EquatorialCoordinateType.Other` as JNOW — and `Other` is also the "not read yet" sentinel** set in `ConnectInBackground`. A capture (or slew) in the window before the first successful equatorial-system read runs an already-J2000 position through the JNOW→J2000 transform: the frame gets `EQUINOX 2000.0` on numbers ~0.36° off, and a slew target is pre-precessed the wrong way. Pre-existing mapping shared with the slew path; #1091 only made it observable in headers. Distinguish "unknown" from "Other" (skip the transform and flag the pointing until the type is read).
+## §28 plate-solve capture — follow-ups (2026-09-22, from the #1090 review)
+
+- **No unit seam for `CameraService._capabilities`.** The new solve-path guards (binning and exposure vs the camera's caps in `CaptureAndPrepareImage`) mirror the autofocus probe's but have no test: caps are only settable via a real Alpaca connect. A small internal `WithCapabilitiesForTest(...)` (or a caps-source `Func<>`) would let both guard sets be unit-tested; the AF probe's guards are in the same boat.
+
+## §18.I star database provisioning — follow-ups (2026-09-22, found live on the Pi)
+
+- **The star database is still a manual download** (DEPLOY.md step 3, ~1.7 GB D80). The playbook §36/§18 plan (PORT_PLAYBOOK ~line 5034) is server-side downloads through the Data Manager with FOV-aware selection (`W08`/`V50`/`H17`/`H18`) and a "Solve a test image" button; none of that exists. Until it does, a fresh install that skips step 3 fails every solve with ASTAP exit 32 — the settings panel should at least show "database: N files found in <path>" from `ASTAPSolver.EffectiveDatabaseLocation`.
+- **Existing installs are not migrated to `astap_cli`.** A `profile.json` written before #1094 keeps `path_or_endpoint: /usr/bin/astap`; only the defaults moved. Add a one-time normalizer migration (`/usr/bin/astap` absent + `/usr/bin/astap_cli` present → rewrite) or a boot warning when the configured solver binary is missing.
+- **`-D <abbreviation>` is not passed**, so with more than one database in the directory ASTAP picks on its own. Fine while DEPLOY.md installs one (D80); revisit with the FOV-aware selection above.
+## sudo helpers vs NoNewPrivileges — the storage and update flows cannot escalate on the Pi (2026-09-22, found live)
+
+`openastroara-server.service` sets `NoNewPrivileges=true` (§13/§67 hardening). Under that flag every setuid binary refuses to run — `sudo` prints "The \"no new privileges\" flag is set, which prevents sudo from running as root" and exits 1 (verified with `systemd-run -p NoNewPrivileges=true -p User=openastroara sudo -n …` on the Pi). So the two `sudoers.d/openastroara` rules are dead from inside the daemon: `StorageDeviceService` (`sudo -n configure-storage.sh --format/--check/--eject`, §29) and the §33 `update.sh` push both fail with exit 1 in production even though they work when run by hand. #1093 kept guider unit control off sudo (polkit over D-Bus instead). Options for the two root scripts: (a) a root-owned `openastroara-helper.service` + `.path`/socket the daemon triggers (no privilege escalation in the daemon at all — preferred); (b) `pkexec` with a polkit rule (pkexec is setuid too, so no); (c) drop `NoNewPrivileges` and keep sudo (weakens §67). Re-test the §29 format/check/eject and the §33 update flow on the Pi after whichever lands; the CHANGELOG's "verified end-to-end on hardware" for exFAT predates this unit hardening or was run outside the unit.
+
+## §31 client-side GPS dongle — follow-ups (2026-09-22, from the #1095 review)
+
+- **Playbook §31.1 waterfall narrative** (~line 3625) still lists only Pi-dongle / phone / manual steps; #1095 added "USB dongle on the client computer" (wire source `gps-client`, high trust) between the Pi dongle and the device-location fallback. Extend the design narrative to match the code.
+- **Mobile time push.** Phones use their built-in GPS for *location* via geolocator, but no GPS time is pushed (geolocator exposes no receiver clock). If a phone ever needs to set the rig's clock, `gps-mobile` (medium) with the phone's NTP clock is the honest option.
+
+## §63 guider mediator — follow-ups (2026-09-22, from the #1089 review)
+
+- **No DI-composition test guards the mediator aliases.** `BuildServiceProvider` appears nowhere in `OpenAstroAra.Test/` and `Program.Main` has no test seam, so nothing fails when `IGuiderMediator` (or any of the eight sibling `IXxxMediator` aliases) silently reverts to a headless stub — which is exactly how #1089's gap survived since #346. Wanted: a container smoke test that resolves every mediator interface and asserts it is the live `XxxService` singleton. Needs a small harness that builds the Program.cs service graph without `app.Run()`.
+- **`GuiderService.GetInfo()` under-reports `CanClearCalibration`** (`GuiderService.Mediator.cs`): left false while `PHD2Guider.CanClearCalibration` is true. Reachable now that the mediator is live — `StartGuiding.Validate()` with `ForceCalibration` adds a bogus "cannot clear calibration" issue (non-blocking today; the daemon never calls `Validate()`). Report the real capability.
+- **Mediator `Connect()`/`Disconnect()` stay inert.** A PHD2 socket drop mid-sequence with the process alive cannot be reconnected through the mediator: `Connect()` returns false at once and `ReconnectTrigger` throws `SequenceEntityFailedException`. §63.3 `GuiderRecoveryCoordinator` covers the process-crash case only. Either route mediator `Connect()` through the REST connect path or make `ReconnectTrigger` call the recovery coordinator.
+
+## Android + iOS platforms — follow-ups (2026-09-20, from the #1063 review)
+
+- CI compiles no Android or iOS Runner: `.github/workflows/ci.yml`'s `client-build` job
+  (display name `Client (native build) — <target>`) has a macos/linux/windows matrix only, so AGP / Gradle / Xcode-project drift in the new
+  `client/openastroara_client/android/` and `ios/` folders lands silently until someone builds
+  by hand. Add an `android` leg (`flutter build apk --release`, needs the Android SDK +
+  cmdline-tools on the runner) and an iOS leg (`flutter build ios --release --no-codesign` on
+  macOS). Out of scope for the platform-add PR.
+- `AndroidManifest.xml` sets `android:usesCleartextTraffic="true"` globally so the daemon's
+  plain-HTTP API works; a `network_security_config` with `cleartextTrafficPermitted` scoped to
+  RFC1918 ranges would be tighter. Hardening, not a break.
+- Nothing verifies the checked-in launcher icons against `client/openastroara_client/icon_sources/`:
+  editing a source without re-running `dart run flutter_launcher_icons` leaves the shipped
+  Android/iOS/macOS/Windows icons silently stale. A CI step that regenerates and runs
+  `git diff --exit-code` on the icon outputs would pin it.
+- iOS 14+ gates the subnet sweep behind the Local Network permission prompt. The plist keys
+  are in place, but on *Don't Allow* `NetworkInterface.list()` still succeeds while every probe
+  fails, so the connect screen reads "no rigs found" with no hint that a permission is the
+  cause. A per-platform hint on the empty state (like the mobile-aware GPS copy) would close it.
+- iOS pod setup is not pinned like macOS's: `ios/Podfile` + `Podfile.lock` are not committed and
+  `ios/Flutter/{Debug,Release}.xcconfig` lack the `Pods-Runner.<mode>.xcconfig` include that
+  `macos/Flutter/Flutter-*.xcconfig` carries. `flutter` regenerates both on every iOS build, so
+  nothing breaks, but the tree dirties and plugin pod versions float. Commit the generated
+  Podfile + lock once the iOS toolchain settles.
+- Android mDNS never answers: `multicast_dns` opens its socket with `reusePort`, which Dart
+  rejects on Android (`socket_linux.cc: reusePort not supported`), and logs it on every
+  discovery tick. Discovery there is carried entirely by the subnet sweep, which adds a few
+  seconds; a working Android browse (or muting the log) is its own change.
+
+## file_picker 13 bump — follow-ups (2026-09-20, from the #1019 review)
+
+- `runProfileImportFlow` (`client/openastroara_client/lib/widgets/profile/profile_import_flow.dart`)
+  calls the static `FilePicker.pickFile` with no injectable seam, so none of its branches
+  (cancel, too-large, null path, read failure, and the new null-length abort that
+  `PlatformFile.length()` returning `Future<int?>` introduced) has a test. The repo's
+  pattern is a `@visibleForTesting` function var (cf. `frameExportSaver` in
+  `bulk_action_bar.dart`); extracting the size gate behind one would make the whole flow
+  testable. Out of scope for a Dependabot bump.
+
 
 ## §42.2 fault-matrix enforcement audit (2026-07-10) — the remaining rows, precisely
 
@@ -312,7 +385,12 @@ Still open before the `v0.0.1-ara.1` tag is a real release:
 
 - **DONE (verified 2026-07-02) — `webview_all` is the shipping renderer and `webview_cef` is fully retired.** Completed by the #611 native-webview pivot, which went further than this entry's plan: WKWebView (macOS/iOS) + WebView2 (Windows) via `webview_all`, a native WebKitGTK overlay on Linux (the platform-view GL conflict made the in-tree webview unusable there), the `packages/webview_cef` submodule removed, and the CEF download/helper machinery deleted. All three desktops verified on-device; the `client-build` CI job compiles the native runners. Original entry: The CEF OSR path freezes on macOS (lock-up on Frame in dense fields, idle freeze); the `--dart-define=WEBVIEW_ALL=true` spike (native platform view) is solid. Plan: (a) confirm the idle + Frame stress on WKWebView; (b) **Linux WebKitGTK WebGL2 spike** on Ubuntu 24.04 (the one gating unknown — needs a `linux/runner/my_application.cc` GtkOverlay edit per `webview_all`); (c) flip the default + remove the flag; (d) drop `webview_cef` + the CEF download/helper machinery. See PORT_DECISIONS 2026-06-27. (`flutter_inappwebview` rejected — no Linux; `atomic_webview` — separate window.)
 - **Deep offline star catalogue (mag ~12–14) to replace the reverted online Gaia.** Online Gaia DR2 tiles destabilised CEF OSR and were reverted; the bundled catalogue stops at mag 7. Bundle deeper Norder tiles (offline, no tile churn) sized to taste once the webview pivot settles — WKWebView/WebView2 also handle deeper WebGL2 better than CEF OSR did. (`skydata/stars/properties` is the cap; `display_limit_mag` is the runtime knob.)
-- ✅ **§36 Catalogs-overlay client slice — DONE (2026-07-08).** The planetarium page gained a Catalogs
+- ✅ **§36 Catalogs-overlay client slice — DONE (2026-07-08).** *Superseded 2026-09-26 (#1105): the
+  drawer no longer talks to the daemon. The catalogs are bundled in the client, the page fetches
+  `/aracat` and `/aracat/{id}?limit=500` from the client's own loopback server, and
+  `StellariumView` answers from the bundled set — no server, no network, no revert-on-missing-package.
+  The wire shapes are the daemon's, so the page code below the fetch is unchanged. The rest of this
+  entry is kept as written for history.* The planetarium page gained a Catalogs
   drawer (beside Display): rows from `GET /api/v1/catalogs` grouped Catalogs/Types, each toggle fetches
   `GET /api/v1/catalogs/{id}?limit=500` (brightest-first) and draws ONE stroke-only MultiPolygon of
   magnitude-scaled 12-gon rings per catalog (the mosaic's proven single-feature path; per-catalog colors)
@@ -367,7 +445,7 @@ The §38 execution engine (`SequencerService`, #319) now **runs** sequences for 
 - **DONE (2026-07-02) — `frames_*` → `instructions_*` renamed while the wire had no external consumers.** The decision the entry asked for, executed inside the breaking-change window: `SequenceRunStateDto.InstructionsCompleted/InstructionsTotal`, WS payload keys `instructions_completed`/`instructions_total`, openapi schema, the startup-notification wording ("was at instruction X/Y"), and the WILMA parse/UI — all in one PR, both sides shipped together (pre-release, WILMA is the only consumer). A true exposure counter can arrive later as a separate `frames_*` pair without a second rename (recorded in the openapi ordering note). Upgrade edge: a §28 checkpoint written by a pre-rename daemon that crashes across the upgrade reads its counters as 0 (missing keys) — transient, self-corrects on the next run.
 - **§28 checkpoint writes are synchronous per progress tick (from the #667 review).** `WriteCheckpointIfOwner` does `File.WriteAllText` + `File.Move` on every progress tick, on the Progress<T> callback thread. Deliberately untouched by the #667 back-pressure work (checkpointing has its own durability semantics — every tick's checkpoint matters for §28.2 crash recovery in a way WS snapshots don't), but now that ticks arrive at camera-capture rates the per-tick fsync-ish cost is worth measuring on the Pi; if it shows up, debounce the WRITE (keep the newest state) rather than reusing the publish pump — a checkpoint must never be older than the last emitted terminal event. (low)
 - **DONE (2026-07-02) — progress-emit back-pressure.** The condition this entry waited on ("when the capture path lands") arrived with the §14e capture PRs, so the guard shipped: `CoalescingAsyncPublisher`, a single-flight trailing-coalesce pump — at most one `sequence.progress` publish in flight, a tick burst collapses into one trailing publish carrying the freshest run state (read at publish time), the first poke publishes immediately (no debounce latency at low rates), a throwing delegate can't kill the pump, and lifecycle events stay unthrottled. Poke-never-lost proven under an 8-thread hammer test; burst-coalescing and single-flight proven with gated fakes.
-- **⚠️ Globalization-invariant gotcha (reference).** The AOT server container runs in **globalization-invariant mode** (no ICU). `new CultureInfo("xx")` for any *named* culture throws `CultureNotFoundException` there. Fixed in `OpenAstroAra.Profile/ApplicationSettings.cs` via a `SafeCulture(name)` helper (named culture when ICU is present, invariant fallback otherwise) — this was crashing `new Profile()` and thus the whole sequencer-factory construction in the e2e container (caught by the §38 execution-engine PR #319's `IHostedService` eager construction). **Any future inherited NINA code that constructs a named culture must use the same fallback pattern**, or it will crash the daemon. The server-e2e CI job exercises invariant mode, so such regressions fail CI.
+- **⚠️ Globalization-invariant gotcha (reference).** The AOT server container runs in **globalization-invariant mode** (no ICU). `new CultureInfo("xx")` for any *named* culture throws `CultureNotFoundException` there. Fixed in `OpenAstroAra.Profile/ApplicationSettings.cs` via a `SafeCulture(name)` helper (named culture when ICU is present, invariant fallback otherwise) — this was crashing `new Profile()` and thus the whole sequencer-factory construction in the e2e container (caught by the §38 execution-engine PR #319's `IHostedService` eager construction). **Any future inherited NINA code that constructs a named culture must use the same fallback pattern**, or it will crash the daemon. The `server-build` job's arm64 end-to-end step ("Run arm64 container + health probe", `ci.yml`) exercises invariant mode, so such regressions fail CI.
 - ✅ **Precise `frames_completed` + `current_instruction_index`** — **resolved in #320.** The worker flattens the deserialized tree to its leaf instructions and counts terminal-status (`FINISHED`/`FAILED`/`SKIPPED`) leaves for `frames_completed` + the first `RUNNING` leaf for `current_instruction_index`, on each `IProgress` tick + a final settle. `frames_total` = leaf count. Exact for linear sequences; looped containers reflect the current iteration (ties into the `frames_total`-vs-instruction-count API item above).
 - ✅ **Profile source-of-truth (§14e PR20)** — `StoreBackedProfileService` replaces the `HeadlessProfileService` stub at the DI registration point: one live `Profile` hydrates from `IProfileStore` (profile.json) at startup and on every settings PUT (new `IProfileStore.Changed` event), via the unit-tested `ProfileStoreMapper` (site→astrometry, PHD2→guider, autofocus→focuser, storage→image-file incl. FileType, plate-solve numerics incl. arcsec→arcmin threshold, safety-policy meridian fields). Sections with no NINA-profile counterpart stay store-only (documented per mapping). Multi-profile management remains inert (ARA is single-profile today per §37).
 - **CLOSED (verified 2026-07-02) — camera capture-block surface.** Half the entry went stale: `IsFreeToCapture` is real now (reads `_captureInFlight`, the same gate Live View and manual captures contend on). `RegisterCaptureBlock`/`ReleaseCaptureBlock` remain no-ops deliberately: repo-wide grep finds ZERO callers (they are inherited NINA-mediator surface whose consumers — WPF dockables — did not port), so there is no lifecycle to be consistent WITH. Re-open only if a ported instruction starts registering capture blocks; the no-ops would then need real block semantics tied to `_captureInFlight`.
@@ -386,7 +464,7 @@ The §38 execution engine (`SequencerService`, #319) now **runs** sequences for 
   - ✅ **Focuser mediator unification (§14e PR14)** — `FocuserService` now also serves `IFocuserMediator` (`FocuserService.Mediator.cs`; one singleton backs both, replacing `HeadlessFocuserMediator`). `GetInfo()` serves the §32.4 cache (never throws post-Dispose); `MoveFocuser`/`MoveFocuserRelative`/`MoveFocuserByTemperatureRelative` drive the live device with a bounded settle-wait and return the final position, so `MoveFocuserAbsolute`/`Relative`/`ByTemperature` execute against real hardware. `ToggleTempComp` writes through. First control-device mediator unification (SafetyMonitor #324 was read-only).
   - ✅ **Rotator mediator unification (§14e PR15)** — `RotatorService` now also serves `IRotatorMediator` (`RotatorService.Mediator.cs`, replacing `HeadlessRotatorMediator`), reusing the hardened focuser move path: `GetInfo()` from the §32.4 cache (never throws post-Dispose); `Move`/`MoveMechanical`/`MoveRelative` drive the live device (sky vs mechanical) with a cancellation+wall-clock-bounded blocking move + settle-wait + direct angle read-back; `Sync` writes through; `GetTarget*Position` normalize to `[0,360)`. `MoveRotatorMechanical` executes against real hardware.
   - ✅ **Dome mediator unification (§14e PR16)** — `DomeService` now also serves `IDomeMediator` (`DomeService.Mediator.cs`, replacing `HeadlessDomeMediator`). Added a read-once caps cache + raw ASCOM shutter capture so `GetInfo()` reports `CanFindHome`/`CanSetAzimuth`/… + the NINA `ShutterState`. `OpenShutter`/`CloseShutter`/`Park`/`FindHome`/`SlewToAzimuth` drive the live device and block on a bounded wait for their terminal condition (returns `true` only when reached). Dome-following (`EnableFollowing`/`SyncToScopeCoordinates`/`IsFollowingScope`) stays stubbed — the `IDomeFollower` subsystem (§38k-21) is separate. `OpenDomeShutter`/`CloseDomeShutter`/`ParkDome`/`FindHomeDome`/`SlewDomeAzimuth` execute against real hardware.
-  - **Guider follow-ups (§63, from the guider-a #345 self-review):** (1) ✅ **RMS** — *done in guider-a*: `GuiderService` accumulates raw RA/Dec errors from the `GuideEvent` stream into a bounded 200-step window and `GetAsync` reports `RmsTotal/Ra/Dec` (root-mean-square, pixels). ✅ *arcsec refinement done (2026-07-05)*: `GuiderStateDto` gained additive `RmsTotalArcsec/RmsRaArcsec/RmsDecArcsec` (pixel RMS × the guider's reported `PixelScale`; null until PHD2 reports a positive scale — never a fake 0″). (2) **Terminal-status surface for guide ops**: `StartGuiding`/`StopGuiding`/`Dither` are fire-and-forget `Task.Run` returning 202, so a `Dither` rejected because the guider isn't yet GUIDING (returns false, no exception) is indistinguishable from success to a polling client — the proper fix is a §60.9 WS event (`guider.dither.{complete,rejected}` etc.) once the WS guider channel lands, not a synchronous result. (3) **Arg-passing via shared profile**: `ConnectAsync`/`DitherAsync` write Host/Port/DitherPixels onto the singleton `ActiveProfile.GuiderSettings` that `PHD2Guider` reads asynchronously — racy under *concurrent* guider requests, but mitigated by §27 single-client today; a cleaner design passes these as method args when the guider mediator unification (guider-c) reworks the surface. (4) **`IGuiderMediator` unification** (guider-c) replacing `HeadlessGuiderMediator` so the sequencer's StartGuiding/StopGuiding/Dither drive the live guider.
+  - **Guider follow-ups (§63, from the guider-a #345 self-review):** (1) ✅ **RMS** — *done in guider-a*: `GuiderService` accumulates raw RA/Dec errors from the `GuideEvent` stream into a bounded 200-step window and `GetAsync` reports `RmsTotal/Ra/Dec` (root-mean-square, pixels). ✅ *arcsec refinement done (2026-07-05)*: `GuiderStateDto` gained additive `RmsTotalArcsec/RmsRaArcsec/RmsDecArcsec` (pixel RMS × the guider's reported `PixelScale`; null until PHD2 reports a positive scale — never a fake 0″). (2) **Terminal-status surface for guide ops**: `StartGuiding`/`StopGuiding`/`Dither` are fire-and-forget `Task.Run` returning 202, so a `Dither` rejected because the guider isn't yet GUIDING (returns false, no exception) is indistinguishable from success to a polling client — the proper fix is a §60.9 WS event (`guider.dither.{complete,rejected}` etc.) once the WS guider channel lands, not a synchronous result. (3) **Arg-passing via shared profile**: `ConnectAsync`/`DitherAsync` write Host/Port/DitherPixels onto the singleton `ActiveProfile.GuiderSettings` that `PHD2Guider` reads asynchronously — racy under *concurrent* guider requests, but mitigated by §27 single-client today; a cleaner design passes these as method args when the guider mediator unification (guider-c) reworks the surface. (4) ✅ **`IGuiderMediator` unification** (guider-c) — the mediator partial landed earlier, but Program.cs kept the stub registered until #1089 (2026-09-22); the sequencer's StartGuiding/StopGuiding/Dither now drive the live guider.
   - **Multi-instance equipment (`/equipment/{type}/{n}`) — Switch is the pilot.** ✅ **PR1 (server) done:** `SwitchService` went single-instance → keyed-by-`AlpacaDeviceNumber` so multiple Switch devices connect at once (`GET /switch` list + `/switch/{n}` get/disconnect/value; `SwitchDto.alpaca_device_number`; mediator targets the lowest-numbered "primary"; cross-host number collision replaces + logs). ✅ **PR2a (client data layer) done** (#557): `SwitchDevice`/`SwitchPort` models, `SwitchApi`, `switchListProvider`, `EquipmentDeviceType.switchDevice`, `DiscoveredDevice.toConnectRequestJson`. ✅ **PR2b (client UI) done:** `equipment_switch_panel.dart` (Settings → Equipment → Switch) — list of connected switches + per-port controls (boolean toggle / value slider / read-only) + Disconnect + an "Add switch" button (chooser `onPick` connects an additional device). **Deferred from PR2b:** the **wizard discovery Switch slot** stays disabled — the wizard models one device id per type (`switchDeviceId`), which doesn't fit multiple switches; multi-switch is managed in the Settings panel instead (wiring the wizard for a switch *list* is a separate follow-up if wanted). ✅ **PR3 (sequencer) done (2026-07-05):** `SetSwitchValue` gained a `[JsonProperty] AlpacaDeviceNumber` (default `-1` = primary — the value every pre-PR3/NINA sequence deserializes to, so no migration needed) routed through the new ARA-owned `ISwitchDeviceTargeting` capability interface (NOT added to the NINA-inherited `ISwitchMediator` — that file is ISO-8859-1 and the inherited surface stays untouched; the instruction type-checks and falls back to the single-target path). `SwitchService` implements it (`TargetConnectionLocked`: `-1` → lowest-numbered primary; `>= 0` → exact connected match only — a named-but-absent device degrades to the logged no-op, never a fallback to a DIFFERENT hub); Validate reads the SAME device Execute writes. Client: `SetSwitchValue` catalogued (new Switch palette category; device / writable-port / value fields). Dead `PlaceholderSwitchService` removed. **(Later)** multi-switch remember+auto-connect (`EquipmentSelectionStore` is one-device-per-type — multi-per-type for Switch + an `EquipmentAutoConnectService` Switch case); generalize `{n}` multi-instance to the other device types per §10.6 as real multi-device rigs need them; equipment `switch.*` WS events (no device emits equipment WS events yet — cross-cutting); a friendlier device/port PICKER in the sequence editor (live-queried names instead of raw numbers) once an editor-side equipment lookup exists.
   - **Remaining device services**: Camera/Guider/PolarAlign REST services are still `Placeholder*` (202-Accepted no-ops) — Camera gates on the image pipeline (§2105), Guider on PHD2 (§63), PolarAlign on camera+plate-solve orchestration. **Mediator follow-ups: complete.** Telescope (#337), Switch (#338) and FilterWheel (#339, with the device→profile filter import) landed; `IFlatDeviceMediator`/`IWeatherDataMediator` have **no consuming sequence instruction** in the port (the only `IFlatDeviceMediator` consumers are the Connect-capstone instructions, which call the inert `Connect()`/`Disconnect()` lifecycle members) so their headless stubs are the correct, final wiring until a flat-wizard/connect orchestration ships.
 
@@ -458,6 +536,7 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
   calls Debayer for OSC display (the data path exists as of #357; the display wiring is Live-View-gated).
 - Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,
   `BaseImageData.FromFile` (non-FITS/XISF), `ImageArrayExposureData.FromBitmapSource`.
+- **XISF 1.0 conformance, remaining after #996 PR 1 (2026-09-20).** PR 1 fixed the sample converters, made checksum failures fatal, read inline/embedded blocks per spec, fixed the attachment offset, and added `OpenAstroAra.Image.Tests`. `zstd` landed in #996 PR 3 (`ZstdSharp.Port`, licence file regenerated). Still open under #996: multi-channel `geometry` (today a clear error; needs a colour image model — `pixelStorage` and `colorSpace` are validated and `bounds` is honoured as of PR 2); writer emits `bounds`, RGB, and Float sample formats (`pixelStorage` is declared as of PR 4);  PixInsight-written fixtures (note `.xisf` is LFS-tracked and CI checks out with `lfs: false`, so gate on presence or store under a non-LFS name); `XISF:CreatorApplication` now says OpenAstro Ara (PR 4 changed `CoreUtil.Title`); the writer declares `pixelStorage` and `XISF:BlockAlignmentSize`. The UInt32 writer/reader asymmetry found in the #1048 review (raw ADU written into a [0, 2^32-1] block) was fixed in #996 PR 2: `XISFData(int[], bitDepth, …)` scales ADU by the camera bit depth onto the spec range, and `UInt32WriterRoundTripsAduExactlyThroughTheSpecScaling` pins it. PR 2 also reads `bounds`, validates `pixelStorage`/`colorSpace`, and rejects multi-channel files with a clear error until the image model can hold them.
 
 **§2105 in-memory render is otherwise COMPLETE (#354–#358)** — only libraw RAW decode + on-image star
 annotation remain, both Live-View-gated (ROADMAP part 5).
@@ -1369,7 +1448,7 @@ Deferred during the §38k-13…18 equipment-mediator stub layer (PR #315). Each 
 
 - ✅ **`Dither` + `SwitchFilter`** — **resolved in §38k-22 (#318)**: a `HeadlessProfileService` stub satisfies their `IProfileService` dependency for prototype construction; both registered.
 - ✅ **`SynchronizeDome`** — **resolved in §38k-21 (#317)**: added a `HeadlessDomeFollower` stub (the one non-mediator equipment dependency) and registered the instruction. `Enable`/`DisableDomeSynchronization` (dome + telescope only) landed earlier in §38k-18.
-- ✅ **Full `TakeExposure` capture path** — **resolved in §14e capture-path PRa+PRb (#343 + follow-up)**: real `CameraService` pipeline (expose → download → §72 FITS → §28 catalog) + re-ported `TakeExposure` executing through `IImagingMediator.CaptureImage` on the same pipeline. The #315 capture-block note is addressed: `IsFreeToCapture` truthfully reflects the shared in-flight capture gate (Register/Release stay inert — no headless consumer registers blocks). Still §2105-gated: the in-memory render path (`CaptureAndPrepareImage`/`PrepareImage`/live view, OpenCvSharp4 + libraw) — `TakeExposure` deliberately discards the returned `IExposureData`.
+- ✅ **Full `TakeExposure` capture path** — **resolved in §14e capture-path PRa+PRb (#343 + follow-up)**: real `CameraService` pipeline (expose → download → §72 FITS → §28 catalog) + re-ported `TakeExposure` executing through `IImagingMediator.CaptureImage` on the same pipeline. The #315 capture-block note is addressed: `IsFreeToCapture` truthfully reflects the shared in-flight capture gate (Register/Release stay inert — no headless consumer registers blocks). Still §2105-gated: the in-memory render members `PrepareImage`/live view (OpenCvSharp4 + libraw) — `TakeExposure` deliberately discards the returned `IExposureData`. `CaptureAndPrepareImage` is no longer gated: #1090 (2026-09-22) made it a real unpersisted capture, which is what finally makes the §28 centering entry above ("drives the real … live `CameraService` capture") true — before #1090 that seam threw NotSupported on the first exposure.
 - ✅ **Connect/Disconnect/SwitchProfile capstone** (`ConnectAllEquipment`, etc.) — **resolved in §38k-22 (#318)**: registered all five via the `HeadlessProfileService` stub; `DisconnectAllEquipment`/`DisconnectEquipment` flipped `internal`→`public` (CA1002 on their `Devices` property fixed to `IReadOnlyList<string>`).
 
 ## §26 / §2105 OpenCvSharp4 — version-pin BLOCKER (found 2026-06-10)
@@ -1591,10 +1670,30 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   with no daemon. Creating a run from Planning with no server saves a client-managed local
   draft (§28.9, app-support `sequence_drafts/`); drafts list in the Load dialog, open in
   the editor, save locally, and push to the daemon (create + delete local) once connected.
-- **Offline append-to-draft.** Offline, each "Add to Sequence" target creates its own
-  draft; the connected path's append-to-open-sequence choreography
-  (`create_imaging_run.dart`) doesn't yet apply to a selected draft. Fold the target-block
-  append into the draft body when a draft is open.
+- ✅ **Offline append-to-draft — DONE (2026-09-26, #1106).** With a draft selected, an
+  offline "Add to Sequence" grafts the target block(s) onto it (`_appendToDraft` in
+  `create_imaging_run.dart`, starting from the editor's working copy when it holds the
+  draft) instead of creating a second draft; the editor reloads in place.
+- **Load-dialog draft delete leaves the editor on a ghost.** `sequence_load_dialog.dart`'s
+  per-row draft delete doesn't clear the selection/editor the way the toolbar's Delete
+  (#1106) does, so `saveBody`'s resurrect-on-unknown-id brings the draft back on the next
+  Save. Extract one shared confirm-then-delete for both surfaces.
+- **Tonight's Sky photogenic tier: seed the table from the NGC/IC side too (#1104 review).**
+  `photogenicTierOf` knows Sh2 ids, the `overrides` keys and the standalone regions; any
+  other `HII`/`EmN`/`Neb`/`Cl+N` row with neither magnitude nor surface brightness (an
+  OpenNGC nebula the CSV carries no photometry for, e.g. a bare NGC 2237 / IC 5070 / IC 1318
+  row) renders as "not a known imaging field". Extend the table with NGC/IC ids, or pull the
+  Sharpless brightness class into sky-data and retire the table.
+- **Tonight's Sky: NGC/IC twins of tier-3 Sharpless rows still list twice (#1104 review).**
+  `sharplessAnchors` covers the curated regions; Sh2-117 ≡ NGC 7000 / IC 5070, Sh2-296 ≡
+  IC 2177, Sh2-229 ≡ IC 405, Sh2-236 ≡ IC 410, Sh2-252 ≡ NGC 2174, Sh2-162 ≡ NGC 7635,
+  Sh2-185 ≡ IC 63 have no override and list beside their Sharpless row. Extend the anchors
+  (an NGC/IC id → Sh2 id table that doesn't need an override) or make the dedupe positional.
+- **Tonight's Sky: magnitude-less `RfN`/`SNR`/`PN` rows still score neutral (#1104 review).**
+  The vdB and Abell packages carry rows with neither magnitude nor surface brightness; they
+  take the 0.5 neutral on both the SB and magnitude terms, the same hole the LDN and
+  Sharpless fixes closed, at ~150-row scale. Fold them into the photogenic tier or give them
+  a type floor.
 - **Local profile drafts + sync (§2 "drafts local, sync to Pi").** The §37 wizard still
   requires a live daemon to save (`wizard_save.dart` posts every section). Full offline
   profile authoring means persisting the wizard draft locally and replaying the section
@@ -1678,7 +1777,10 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
   (fetched the deleted /planning/tonight → 404) and only reachable via an aracmd the
   Dart side deliberately never sends (stellarium_view.dart:233) — the docked Flutter
   TonightSkyPanel is the feature.
-- **KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression)**:
+- **(Superseded 2026-09-26, #1105 — the client bundles every catalog with `messierNum`/
+  `caldwellNum` and answers the rings from its own loopback `/aracat`; the daemon endpoints
+  stay for the daemon's own consumers. Re-evaluate whether `/api/v1/catalogs` still has a
+  client caller.)** KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression):
   it is DATA hosting for the deliberate post-2026-06-26 catalog-rings feature (one
   MultiPolygon highlight layer over the engine's native dsos), and the rings need
   OpenNGC's Messier/Caldwell cross-reference columns that the client's dso-catalog
@@ -1721,3 +1823,164 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
 ## openapi.yaml refresh (2026-08-05, from the docs audit)
 
 `OpenAstroAra.Server/openapi.yaml` is frozen at an early generation (28 paths). Missing entirely: `/storage/*` (devices/configure/rescan/space), `/backup-stream/*`, `/frames/{id}/{preview,histogram,thumbnail,download}`, `/liveview*`, faults, guider, polar-align, profiles CRUD, time-sync, jobs. The reasoning log (`API_CONTRACT.md`) is current; the machine-readable spec is not. Options: hand-refresh in arcs, or generate from the minimal-API metadata (Swashbuckle/NSwag emit) and hand-annotate. Until done, `API_CONTRACT.md` + the endpoint source files are the contract of record.
+
+## port-driver loop mechanics (2026-09-19, from the #1003 review rounds)
+
+Two out-of-scope findings from #1003's review, both filed as issues rather than widened into that PR:
+
+- **#1028 — no lawful way to retire a stale local branch ref.** After a squash merge, `--delete-branch` drops the remote ref but the local one survives and §19.1 forbids `git branch -D`, so `origin/master..prep-ci` stays non-empty forever. §5 step 2's reuse guard then Helds — correctly, since building on it would stack new work on an already-merged diff — but §19.1/§19.5 plan to grow `prep-ci` at Phase 0.5p, 4 and 11, so in any clone that ran 0.5p, **Phase 4 stops the loop**. **Resolved 2026-09-20 (#1028 PR):** playbook §19.1 gained a "Local refs" carve-out — a *local* ref whose head is exactly the `headRefOid` of a PR merged under that name may be `branch -D`'d (never on the remote); §5 step 2 does that (RETIRE) and Helds on anything beyond that head. Pinned by `ReuseGuard::test_squash_merged_leftover_is_retired` and its stray-commit / no-PR / older-OID siblings. The mirror itself is now hash-pinned to the skill text (`MirrorPin`, #1030).
+- **#1029 — `/pr-checker` merges a phase-boundary PR without pushing the tag.** It now detects a tag and switches to `--merge`, but never pushes one, and #1003 moved tagging to immediately before the merge inside the driver's §3b. A boundary PR driven through `/pr-checker` merged untagged and silently skipped §19.1's phase-boundary gate item. **Resolved 2026-09-19 (#1036):** `/pr-checker` Step 4 now decides whether the PR closes a phase or sub-phase (PORT_PROGRESS.md + the sub-split tables), runs the driver's §3b tag block before merging when it does, and hard-stops when it cannot tell. **Refined (#1040):** the question is asked only for `phase/*` and `prep-*` heads (`prep-ci` grows at phase boundaries); `chore/*`, `rules-*` and contributor heads are never boundaries and skip it.
+
+Also noted, filed as #1034 after #1016 settled the allowlist and closed #1013 without folding it in: scenario A adopts any-author PRs on `prep-*`/`rules-*` but carves out `chore/*`, though all three are equally unreserved on origin. **Decided 2026-09-19 (#1034): the carve-out stays.** `prep-*`/`rules-*` are driver-only namespaces with no documented community use, so a PR on them is port work whoever pushed it; `chore/*` is also the community namespace (COMMIT-PR-RULES.md future-scope section), so adopting a `chore/*` PR the driver did not author would mean driving a contributor's PR without being asked. The deletion side got the matching authorship probe in §22.2 (#1033). Nothing left to do here unless `chore/*` stops being shared.
+
+## bench lane hygiene (2026-09-19, from the #1015 review notes)
+
+Two out-of-scope notes from #1015's approval, neither widened into that PR:
+
+- `bench/README.md:10` still says "The three hardware-free bench suites" and
+  lists only `AlpacaFaultProxyTest` / `FakeGuiderTest` /
+  `GuiderFakeIntegrationTest`. `EquipmentFaultDetectionTest` and
+  `StateChannelFaultWatchTest` tag `[Category("bench")]` per method and so also
+  run in the arm64 lane. Pre-existing; refresh the README when the lane is next
+  touched.
+- The fault-detection bench tests carry fixed `Task.Delay` holds (~11 s in
+  `Each_disconnect_episode_publishes_exactly_one_fault`, 5 s in its sibling) in
+  both the default unit job and the arm64 bench lane. A `Poll`-based "still N
+  after K ticks" shape with an early bail gets the same guarantee without the
+  floor; worth doing if lane wall-clock becomes a problem.
+
+## Flutter bump supersede (2026-09-19, from the #1017 review notes)
+
+Three out-of-scope items from #1017's review rounds, none widened into that PR:
+
+- `design/PORT_PLAYBOOK.md` §12.1 (lines 1024-1030) enumerates what
+  `check-flutter.yml` does and stops at "Skips if a PR for that version is
+  already open". Still accurate, but a run now also comments on and closes
+  every other open **non-fork** `ci/flutter-<version>` PR, deleting the branch
+  only when that PR still carries the workflow's own single commit — one that
+  has been pushed to is closed with its branch kept, and so is one whose commit
+  count cannot be read. One bullet keeps §12.1 the source of truth; fold it in
+  when §12.1 is next touched, and copy the conditions rather than the summary.
+- `scripts/tests/test_check_flutter_release.py`'s `SupersedeSelectorTest` cross-
+  checks the workflow's jq selectors against every engine on PATH, but
+  `ubuntu-latest` — where `.github/workflows/ci.yml` runs the suite — ships
+  oniguruma `jq` and not the `gojq` embedded in `gh --jq`. So CI only ever
+  exercises the engine production does *not* use. Installing `gojq` in the
+  sanity job makes the guard real; left out of #1017 because it edits ci.yml.
+- **Pre-existing:** the `existing` guard at `.github/workflows/check-flutter.yml:89`
+  runs `gh pr list --head "$BRANCH" --state open --json number` with no
+  `isCrossRepository` filter — the same gap #1017 closed on the two calls below
+  it. A fork PR whose head branch happened to be named `ci/flutter-<latest>`
+  would make the guard read "already proposed" and the whole run go quiet,
+  which is the #997 failure mode the watcher exists to prevent. One-line fix,
+  out of #1017's stated scope.
+
+## MoveAxis rate bands on the wire (2026-09-22, from the #1087 review notes)
+
+- **Product decision, out of #1087's scope:** `move_axis_rates_deg_per_sec` publishes the
+  endpoints of every band flattened (`EndpointsOf`), so the client cannot tell two discrete
+  rates `[(0.004,0.004),(2.0,2.0)]` from one band `(0.004, 2.0)` — #1087's "two rates are
+  one band" rule offers percentage presets on the former that the daemon snaps to a step
+  many times off the label, and drops the 0.004 chip. Likewise one endpoint cannot be told
+  apart as `(6.0, 6.0)` (discrete: every sub-25 % preset now 409s, including the pad's 10 %
+  default) versus `(0, 6.0)`. The fix is publishing bands, not endpoints (a wire change with
+  a client-side reader), and deciding whether a lone endpoint reads as `min == max`.
+- **Diagonal press with asymmetric per-axis bands** (primary `(0.001, 6)`, secondary
+  `(2.0, 6)`): a slow corner press moves one axis and 409s the other, so the mount tracks a
+  line rather than the diagonal. Release always sends 0 to both axes, so no stranding; the
+  toast fires. Newly reachable since #1087 (the slow leg used to be snapped up). Needs the
+  same bands-on-the-wire change so the picker can cap presets to the slower axis's floor.
+- `help/registry.dart` `eq.mount.manual_move` still says "Rates are in multiples of sidereal
+  speed: low rates (0.5–1×) for fine centering"; the picker shows percent-of-max deg/s chips
+  (and, since #1087, a "min ·" chip). Pre-existing copy drift; rewrite with the hardware-help
+  sync.
+- Default chip on a positive-floor single-rate mount (`(6.0, 6.0)` publishes `[6.0]`):
+  `_defaultRate` picks 10 % = 0.6 °/s, which the #1085 bound refuses, so the pad is
+  dead-by-default until a faster chip is tapped. Cheap client mitigation while bands-on-the-wire
+  is pending: default to the first chip >= max / 4.
+
+## Run ETA honest zeros (2026-09-22, from the #1088 review notes)
+
+- `RunEtaEstimator.HasOwnDurationModel` is a hand-maintained list (`TakeExposure`,
+  `WaitForTime`, `WaitForTimeSpan`). Other overriders of `GetEstimatedDuration()` fall into
+  two groups: `CoolCamera`, `WarmCamera`, `SkyFlats`, `FlatPanelFlats` and `Dither` never
+  return a non-positive value with a realistic profile (`CoolCamera` with `Duration = 0`
+  costs its 1 min floor, not the nominal), so adding them to the list would change nothing
+  today but would let a future zero silently drop a cool-to-setpoint to 0 s; `SetReadoutMode`
+  and `SetUSBLimit` truthfully return `TimeSpan.Zero` (instant operations) and ARE charged the
+  15 s nominal, which is the concrete honest-zero gap #1088 leaves. The right shape is a
+  nullable estimate on the interface (null = no model, zero = zero) rather than a wider list;
+  out of #1088's scope.
+- `run_eta.dart`'s `completed >= total` guard short-circuits before the daemon figure:
+  `instructions_total` is the leaf count, so at the end of every loop pass
+  `CountTerminalLeaves` transiently equals the total (before `ResetProgress`), and a frame or
+  `GET /state` in that window blanks "~X left" and shows the bar at 100 % although the daemon
+  has a remaining figure for the passes still to come. Pre-existing from #1068; since #1088 it
+  vetoes the figure the client now treats as authoritative. Fix: let a present daemon figure
+  win before the guard.
+- The ETA cache's version bump rides on `UpdateProgress` seeing a count/index change, so a
+  live-edit `move` (no count change) and any future in-place update op (exposure time on a
+  live run) can publish `sequence.run_items_changed` with a pair up to one TTL stale. Bump
+  `_treeVersion` explicitly from the live-edit path when an update op lands.
+- `RunEtaEstimator.Iterations()` multiplies a `ParallelContainer` by its `LoopCondition`, but
+  `ParallelStrategy.Execute` runs each child once and returns: it never loops. Pre-existing
+  (#1068), not reachable from a default sequence; the fix is to ignore loop conditions on a
+  parallel block (or, better, ask the strategy).
+- The run header now always shows the daemon figure, and `Remaining()` charges a RUNNING
+  `TakeExposure` its full exposure, so "~X left" freezes for a whole sub and drops in one step.
+  Follow-up: subtract the in-flight instruction's elapsed time (needs a start stamp per leaf).
+- `instructions_total` (the progress-bar denominator) still counts DISABLED leaves while
+  `estimated_total_seconds` excludes them; the two header numbers describe slightly different
+  plans. Pre-existing denominator, newly divergent after #1088.
+- `TimeCondition.CalculateRemainingTime()` (`OpenAstroAra.Sequencer/Conditions/TimeCondition.cs`)
+  still assigns the observable `RolloverTime` from a read path, the pattern #1088 removed from
+  `WaitForTime.GetEstimatedDuration()`. Unreachable from `RunEtaEstimator` today (only
+  `LoopCondition.Iterations` is read off conditions); fix before conditions join the walk.
+- `client/openastroara_client/tool/stellarium_bridge_test/test_bridge.js` still drives
+  `window.araStel` (`setLocation`/`zoomBy`/`panBy`), which `index.html` no longer defines, so
+  the only headless harness for the planetarium page fails at its readiness poll and can't
+  reach the loopback `zoom` command / FOV guard added in #1097. Not wired into CI, so nothing is
+  red; the JS half of that page has no reachable test surface until the harness is re-pointed
+  at the `/aracmd` channel. (Review note on #1097.)
+- Planetarium page: "Slew sent ✓" is shown on the daemon's 202 for
+  `/equipment/telescope/slew`, before the background op runs, so a mount command that then
+  fails (e.g. the bridge's latched "Mount communications compromised") still reads as sent.
+  Watch the operation or the telescope state after the 202. Pre-existing; found on #1097.
+- AlpacaBridge latches "Mount communications compromised" after three timeouts on the iOptron
+  Wi-Fi link and never recovers on its own; every client then fails until the telescope is
+  disconnected and reconnected through the daemon. The daemon could auto-reconnect when the
+  bridge reports the latched fault. Pre-existing; found on #1097 (2026-09-22 on the Pi rig).
+- `StellariumView` reads `Platform.isAndroid || Platform.isIOS` inline in `build()` and its
+  `_SearchBar` is private, so the touch-only zoom row (#1097) can't be pinned by a widget test;
+  route the gate through the existing `clientPlatform` seam (`lib/util/gps_site_fill.dart`) and
+  make the bar package-visible. Review note on #1097.
+
+- `packaging/debian/etc/systemd/system/openastroara-server.service` has
+  `ReadWritePaths=/media/openastroara` without a `-` prefix and nothing in the package creates
+  the path, so a fresh install crash-loops with `226/NAMESPACE` until DEPLOY.md's storage step
+  runs (found by the first `ara-sbc-vm` deploy, #1101). Either prefix it `-` or create the
+  directory in postinst/tmpfiles. Review note on #1101.
+- "No CI job reads anything under `.claude/`" is stated in `scripts/classify-changed-paths.py`
+  (`INERT_DIRS` comment), `scripts/tests/test_classify_changed_paths.py` (EXTRA_BY_PREFIX comment)
+  and the 2026-09-20 / 2026-09-24 PORT_DECISIONS entries, but
+  `scripts/tests/test_port_driver_guards.py` reads the port-driver SKILL.md and pr-checker.md
+  under the Sanity job. The conclusion holds (Sanity is not classifier-gated); reword all four as
+  "no classifier-gated job reads it". Review note on #1101.
+- `ServerDiscoveryService.preferLocalSubnet` filters rather than ranks: a local non-tunnel
+  interface that shares a /24 with the rig's *other* network (docker0/virbr0/bridge100/vmnet*
+  sit in 172.17–172.31, the same pool as a Pi hotspot) hides the reachable address entirely.
+  Rank on-subnet first and keep the rest after, and extend `_isTunnel` to bridge/VM interfaces.
+  Review note on #1103.
+- `_mdnsDiscover` builds `MDnsClient` inline, so the A-record collection path (collect the
+  burst, idle window + overall deadline) has no unit test; the `mdnsSource` seam bypasses the
+  whole method. A `@visibleForTesting` client factory would make it coverable. Review note on
+  #1103.
+- `SkyCatalogReader.ParseOpenNgc` names a row by its first common name, so
+  `/data-manager/wr-stars/catalog` returns 14 objects labelled "Anon (Marston)" (plus 5 "Anon IR
+  (Wachter)", 4 "Anon (Chu)") while `/catalogs/wolf-rayet` shows the WR id. Fall back to the
+  catalog id when a common name is not unique within the package. Review note on #1107.
+- The client culls bundled star rows out of the planning set (`planningCull` → `isStarType`),
+  which drops their ids, so all 717 WR rows come straight back from the daemon mirror, ride the
+  `Isolate.run` payload and are skipped again in `computeTonightSkyLocal`. Filter `isStarType` on
+  the mirror side of the merge in `dso_catalog_state.dart` so the star skip is one rule. Review
+  note on #1107.

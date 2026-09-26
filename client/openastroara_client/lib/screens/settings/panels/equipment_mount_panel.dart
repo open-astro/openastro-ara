@@ -383,8 +383,9 @@ class _ManualMovePad extends ConsumerStatefulWidget {
 
 class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   double? _rate;
-  // Slew-speed options: the mount's own rates when it reports several, else
-  // percentage presets of the max (1/5/10/25/50/100%). Never exceeds the max.
+  // Slew-speed options: the mount's own ladder when it reports three or more
+  // rates, else percentage presets of the max (1/5/10/25/50/100%) from the
+  // band's minimum up (#1085). Never exceeds the max.
   List<SlewRateOption> _rateOptions = const [];
 
   static const int _primary = 0; // RA / Azimuth (E/W)
@@ -465,8 +466,9 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   }
 
   // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
-  // the max for single-rate mounts, e.g. AM5N; the driver's own ladder for
-  // multi-rate mounts). The selected rate is what the direction pad sends at
+  // the max, from the band's minimum up, for a mount reporting one rate or one
+  // band; the driver's own ladder for three or more rates, #1085). The
+  // selected rate is what the direction pad sends at
   // press time; it defaults to the middle option, so a fresh connect never
   // lurches at full speed.
   Widget _speedPicker(List<SlewRateOption> options) {
@@ -561,15 +563,43 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   // A genuinely lost stop is covered by the deadman: the centre Stop / AbortSlew
   // halts all axes. (A server-side MoveAxis watchdog that auto-stops on a lost
   // heartbeat is a possible future hardening — tracked separately.)
+  //
+  // #1071 — a START the daemon refuses (409: not connected, or no usable rate for
+  // the axis yet — the first seconds after connect, or a mount whose AxisRates
+  // never answered; 400: an axis/rate it will not take) is shown once per press
+  // so the pad never looks silently dead. Stop legs (rate 0) stay silent: their
+  // backstop is Stop/AbortSlew, and a toast on every release would be noise.
   void _dispatchAxis(int axis, double rate) {
     try {
       ref
           .read(mountProvider.notifier)
           .moveAxis(axis: axis, rate: rate)
-          .catchError((_) => false);
+          .catchError((Object e) {
+        if (rate != 0 && mounted) _showNudgeRefusal(e);
+        return false;
+      });
     } catch (_) {
       // ref.read threw during teardown — nothing to do; Stop/AbortSlew is the backstop.
     }
+  }
+
+  // One toast per press: a diagonal press issues two starts (both axes) and
+  // a rapid repeat press re-issues one, each refused with the same sentence —
+  // an identical message while one is showing is dropped.
+  String? _shownRefusal;
+  void _showNudgeRefusal(Object e) {
+    final text = "Couldn't nudge the mount: ${describeEquipmentError(e)}";
+    if (_shownRefusal == text) return;
+    _shownRefusal = text;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(
+          content: Text(text),
+          backgroundColor: AraColors.accentError,
+        ))
+        .closed
+        .then((_) {
+      if (_shownRefusal == text) _shownRefusal = null;
+    });
   }
 }
 

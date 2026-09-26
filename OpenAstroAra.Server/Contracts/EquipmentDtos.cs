@@ -125,7 +125,11 @@ public sealed record CameraStateDto(
     double? CoolerSetpointC = null,
     // §25.5.5 — the CURRENT readout mode's display name (from the driver's ReadoutModes list);
     // null when the camera has no readout-mode support.
-    string? ReadoutMode = null);
+    string? ReadoutMode = null,
+    // #1076 — false when the CoolerOn property read threw this pass: CoolerOn then reads false by
+    // fallback, and the cooling-fan interlock must treat the state as UNKNOWN (refuse a fan-off),
+    // not as "off".
+    bool CoolerStateKnown = true);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
@@ -483,6 +487,12 @@ public sealed record GuiderEquipmentChoicesResponseDto(
 public sealed record GuiderCameraPixelSizeResponseDto(
     bool Connected,
     double? PixelSize);
+
+/// <summary>§63.20 / #1067 — real device names read off one Alpaca server's management API by the
+/// daemon, keyed <c>"&lt;devicetype&gt;/&lt;devicenumber&gt;"</c> (type lowercased, e.g. <c>"camera/1"</c>).
+/// Empty when the host could not be reached or answered nothing usable — a best-effort labelling
+/// assist, never an error status.</summary>
+public sealed record AlpacaDeviceNamesResponseDto(IReadOnlyDictionary<string, string> Names);
 
 /// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
 /// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for

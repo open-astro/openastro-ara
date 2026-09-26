@@ -430,6 +430,23 @@ public static class ProfileEndpoints {
             .WithName("PutFilterWheelLabels")
             .WithSummary("Replace the active profile's filter-wheel slot labels.");
 
+        // #1075 — filter-wheel policy: whether the daemon parks the wheel on slot 0 the first
+        // time it connects after the daemon starts (#1066). Whole-section PUT like the others.
+        profile.MapGet("/filter-wheel/policy", (IProfileStore store) =>
+                Results.Ok(store.GetFilterWheelPolicy()))
+            .Produces<FilterWheelPolicyDto>(StatusCodes.Status200OK)
+            .WithName("GetFilterWheelPolicy")
+            .WithSummary("Get the active profile's filter-wheel policy (home on first connect).");
+
+        profile.MapPut("/filter-wheel/policy", (FilterWheelPolicyDto body, IProfileStore store) => {
+            store.PutFilterWheelPolicy(body);
+            return Results.Ok(body);
+        })
+            .Accepts<FilterWheelPolicyDto>("application/json")
+            .Produces<FilterWheelPolicyDto>(StatusCodes.Status200OK)
+            .WithName("PutFilterWheelPolicy")
+            .WithSummary("Replace the active profile's filter-wheel policy.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)

@@ -28,7 +28,7 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
     return;
   }
 
-  // Pick metadata only (no withData) so we can size-check before reading the
+  // Pick metadata only (no file bytes) so we can size-check before reading the
   // file in — a profile share is a few KB of JSON, so anything large is a
   // mis-pick and we refuse rather than slurp it into memory. The picker itself
   // can throw (e.g. a macOS sandbox / denied-permission PlatformException), not
@@ -50,7 +50,17 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   if (picked == null) return; // user cancelled
   final file = picked;
   const maxShareBytes = 1024 * 1024; // 1 MB ceiling — shares are a few KB
-  if (await file.length() > maxShareBytes) {
+  // file_picker 13 returns null when the length could not be determined (a
+  // failed disk read), distinct from a genuinely empty file (0). Treat that as
+  // unreadable rather than as "small enough": the readAsBytes below would only
+  // fail the same way.
+  final length = await file.length();
+  if (length == null) {
+    messenger.showSnackBar(
+        const SnackBar(content: Text("Couldn't read the selected file.")));
+    return;
+  }
+  if (length > maxShareBytes) {
     messenger.showSnackBar(const SnackBar(
         content: Text("That file is too large to be a profile share."),
         backgroundColor: AraColors.accentError));
@@ -73,9 +83,9 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
         const SnackBar(content: Text("Couldn't read the selected file.")));
     return;
   }
-  // Re-check the actual byte length: file.size is metadata read before this
-  // gap (so it can be stale/0 on some backends, or the file could have grown).
-  // This bounds what we parse + upload regardless of what file.size reported.
+  // Re-check the actual byte length: file.length() was read before this gap
+  // (so it can be stale on some backends, or the file could have grown). This
+  // bounds what we parse + upload regardless of what file.length() reported.
   if (bytes.length > maxShareBytes) {
     messenger.showSnackBar(const SnackBar(
         content: Text("That file is too large to be a profile share."),

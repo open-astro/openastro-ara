@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenAstroAra.TestHarness.Polling;
 
 namespace OpenAstroAra.Test {
 
@@ -281,15 +282,15 @@ namespace OpenAstroAra.Test {
                 AlpacaDeviceNumber: 0, UseHttps: false);
             await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
-                TimeSpan.FromSeconds(15), "mount never connected");
+                TimeSpan.FromSeconds(15), "the mount to connect");
             // Let at least one refresh observe tracking=on so the watch arms.
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.Runtime.Tracking == true,
-                TimeSpan.FromSeconds(10), "tracking never observed on");
+                TimeSpan.FromSeconds(10), "tracking to be observed on");
 
             // The mount silently drops tracking — no daemon command.
             Volatile.Write(ref trackingValue, "false");
             await WaitForAsync(() => { lock (faults) { return Task.FromResult(faults.Count > 0); } },
-                TimeSpan.FromSeconds(20), "the tracking-lost fault never published");
+                TimeSpan.FromSeconds(20), "the tracking-lost fault to be published");
 
             // Several more ticks with tracking still off: the episode must not re-fire.
             await Task.Delay(TimeSpan.FromSeconds(5));
@@ -322,7 +323,7 @@ namespace OpenAstroAra.Test {
                 AlpacaDeviceNumber: 0, UseHttps: false);
             await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
-                TimeSpan.FromSeconds(15), "mount never connected");
+                TimeSpan.FromSeconds(15), "the mount to connect");
 
             var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
             Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
@@ -336,15 +337,9 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string failure) {
-            var deadline = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < deadline) {
-                if (await condition()) {
-                    return;
-                }
-                await Task.Delay(200);
-            }
-            Assert.Fail(failure);
-        }
+        // `description` completes "timed out after 10s waiting for …", so it
+        // names the condition being awaited, not the failure.
+        private static Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string description) =>
+            Poll.UntilAsync(condition, timeout, description);
     }
 }

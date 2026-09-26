@@ -434,8 +434,8 @@ void main() {
     expect(find.textContaining("Couldn't do that"), findsNothing);
   });
 
-  // §25.5.6 — the fan-off interlock must also cover this generic panel, not
-  // just the FanSwitchRow in Settings → Camera (both reach the same port).
+  // §25.5.6 / #1065 — the fan-off interlock lives in the daemon; this generic
+  // panel sends the write and shows the server's refusal verbatim.
   SwitchDevice thermalSwitch({double fanValue = 1.0}) => SwitchDevice(
     deviceId: 'sw-1',
     alpacaDeviceNumber: 1,
@@ -453,9 +453,8 @@ void main() {
     ],
   );
 
-  testWidgets('refuses a Thermal-Switch fan-off while the cooler is cooling', (
-    tester,
-  ) async {
+  testWidgets('a Thermal-Switch fan-off is sent while cooling — the daemon '
+      'owns the interlock (#1065)', (tester) async {
     final api = await _pump(tester, [
       thermalSwitch(),
     ], camera: _camera(coolerOn: true));
@@ -463,49 +462,36 @@ void main() {
       find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('damage the camera'), findsOneWidget);
-    expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
+    expect(api.calls, contains('setValue:sw-1:0=0.0'));
   });
 
-  testWidgets('allows a Thermal-Switch fan-off with no camera connected '
-      '(resolved-null status = no TEC this client started)', (tester) async {
-    final api = await _pump(tester, [thermalSwitch()]);
+  testWidgets("the daemon's fan-off refusal (409 detail) is shown verbatim", (
+    tester,
+  ) async {
+    final api = await _pump(
+      tester,
+      [thermalSwitch()],
+      camera: _camera(coolerOn: true),
+      setValueError: DioException(
+        requestOptions: RequestOptions(path: '/switch'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/switch'),
+          statusCode: 409,
+          data: const {
+            'detail': 'Turn the cooler off before stopping the fan — cooling '
+                'with the fan off can damage the camera.',
+          },
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
     await tester.tap(
       find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
     );
     await tester.pumpAndSettle();
+    expect(find.textContaining('damage the camera'), findsOneWidget);
     expect(api.calls, contains('setValue:sw-1:0=0.0'));
   });
-
-  testWidgets(
-    'refuses dragging a PWM Fan slider to its true off (min != 0) while '
-    'cooling — the interlock is range-aware, not a fixed 0.5 threshold',
-    (tester) async {
-      final pwmThermal = SwitchDevice(
-        deviceId: 'sw-1',
-        alpacaDeviceNumber: 1,
-        name: 'ToupTek Thermal Switch',
-        connectionState: SwitchConnectionState.connected,
-        ports: [
-          SwitchPort(
-            id: 0,
-            name: 'Fan',
-            value: 50,
-            min: 10,
-            max: 100,
-            canWrite: true,
-          ),
-        ],
-      );
-      final api = await _pump(tester, [
-        pwmThermal,
-      ], camera: _camera(coolerOn: true));
-      await tester.drag(find.byType(Slider), const Offset(-600, 0));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('damage the camera'), findsOneWidget);
-      expect(api.calls.where((c) => c.startsWith('setValue')), isEmpty);
-    },
-  );
 
   testWidgets('allows a Thermal-Switch fan-off once the cooler is off', (
     tester,

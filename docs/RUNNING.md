@@ -14,7 +14,7 @@ see [`DEPLOY.md`](DEPLOY.md) instead.
 | Tool | Version | Notes |
 |---|---|---|
 | .NET SDK | **10.0.100+** | Pinned in `global.json` (`rollForward: latestFeature`) |
-| Flutter | **3.44.x** (stable) | Pinned in `client/openastroara_client/.flutter-version`; the client's `pubspec.yaml` requires `>=3.44.0 <3.45.0` — a newer Flutter fails `flutter pub get` |
+| Flutter | **exactly the version in `client/openastroara_client/.flutter-version`** | That file is the source of truth and moves weekly (see "How the pin gets updated"); `pubspec.yaml` constrains to that minor, so a newer Flutter fails `flutter pub get` |
 | CFITSIO | any recent | Native library the daemon loads at runtime to write FITS files — per-OS install below |
 
 ### Installing Flutter at the exact pinned version
@@ -25,13 +25,16 @@ past the pin):
 
 ```bash
 # Linux / macOS
-git clone https://github.com/flutter/flutter.git -b 3.44.0 ~/development/flutter
+git clone https://github.com/flutter/flutter.git \
+  -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
 echo 'export PATH="$HOME/development/flutter/bin:$PATH"' >> ~/.bashrc   # or ~/.zshrc
 ```
 
 ```powershell
 # Windows — use a short path WITHOUT spaces (not under Program Files)
-git clone https://github.com/flutter/flutter.git -b 3.44.0 C:\development\flutter
+# Read the pinned version from client\openastroara_client\.flutter-version first
+$ver = (Get-Content client\openastroara_client\.flutter-version).Trim()
+git clone https://github.com/flutter/flutter.git -b $ver C:\development\flutter
 # Then add C:\development\flutter\bin to your user Path:
 # Start → "environment variables" → Environment Variables… → Path → Edit → New
 ```
@@ -39,8 +42,32 @@ git clone https://github.com/flutter/flutter.git -b 3.44.0 C:\development\flutte
 **Open a new terminal after editing PATH** — it only refreshes in new sessions
 (`flutter: command not found` almost always means PATH wasn't set or the terminal
 wasn't reopened). The first `flutter --version` downloads the bundled Dart SDK;
-give it a minute. It must report `Flutter 3.44.0 … channel stable`. Then run
+give it a minute. It must report the version in `.flutter-version`, on `channel stable`. Then run
 `flutter doctor` and fix anything red for your platform's desktop toolchain.
+
+### How the pin gets updated
+
+You don't have to watch the Flutter release feed.
+`.github/workflows/check-flutter.yml` runs weekly (Mondays 08:00 UTC) and opens
+a `dependencies`-labelled PR when stable moves within the same major series,
+bumping `.flutter-version` and the `pubspec.yaml` constraints together. It runs
+`flutter analyze` + `flutter test` against the new SDK *before* opening the PR,
+so a release that breaks the client shows up as a failed scheduled run rather
+than a green-looking PR.
+
+Major bumps (3.x → 4.x) are deliberately not automated — the workflow reports
+one and stops.
+
+To check by hand, or to see what a bump would change:
+
+```bash
+python3 scripts/check-flutter-release.py --check   # compare pin vs stable
+python3 scripts/check-flutter-release.py --apply   # rewrite both pin files
+```
+
+After `--apply`, re-run `flutter pub get` and
+`python3 scripts/generate-3rd-party-licenses.py` — the notices ship in the
+`.deb` and their freshness gate fails CI if a dependency moved.
 
 ---
 
@@ -94,6 +121,28 @@ The build doesn't need CFITSIO, but the capture path resolves it at runtime
   report how it goes.
 
 ---
+
+
+### Astrometry natives (SOFA + NOVAS31)
+
+The cross-epoch transforms, rise/set bodies and Julian-date helpers P/Invoke two
+C libraries built from the vendored sources. They are not checked in and not built
+by `dotnet build`. The daemon logs `Astrometry natives loaded` or an
+`Astrometry natives incomplete` warning in its first lines, and the test suite
+fails seven NOVAS/SOFA-dependent tests without them. Stage them once per output
+directory (a `dotnet clean` wipes them):
+
+```bash
+# daemon
+scripts/build-astrometry-natives.sh OpenAstroAra.Server/bin/Debug/net10.0/    # or bin/Release/…
+# tests
+scripts/build-astrometry-natives.sh OpenAstroAra.Test/bin/Release/net10.0/
+```
+
+Needs a C compiler (`cc`): Xcode command-line tools on macOS, `build-essential` on
+Debian/Ubuntu. CI builds them for the host on the test job and cross-compiles them
+for linux-arm64 into the publish directory, so the Docker image and the `.deb` ship
+them. Windows keeps the inherited `SOFAlib.dll` / `NOVAS31lib.dll` probing (untested).
 
 ## 2. Run the client
 
@@ -199,10 +248,9 @@ Manual entry: host `localhost`, port `5555`.
 
 ### Daemon on a different machine (e.g. daemon on a Mac, client on Linux/Windows)
 
-Both machines must be on the same LAN. Use **manual entry with the daemon machine's
-IP address** — prefer it over tapping a discovered row, because discovery connects
-by the daemon host's `.local` mDNS name, which Linux typically can't resolve without
-extra setup (`Temporary failure in name resolution`).
+Both machines must be on the same LAN. A discovered row already carries the daemon's
+numeric LAN IP (never its `.local` mDNS name), so tapping it is fine. If nothing is
+discovered, use **manual entry with the daemon machine's IP address**:
 
 1. Find the daemon machine's LAN IP (macOS: `ipconfig getifaddr en0`; Linux:
    `hostname -I`; Windows: `ipconfig`).
@@ -226,7 +274,7 @@ simulators — the same devices the integration tests use
 
 ## 4. Troubleshooting (client builds)
 
-- **`flutter pub get` fails with a version error** → wrong Flutter. It must be 3.44.x
+- **`flutter pub get` fails with a version error** → wrong Flutter. It must be 3.47.x
   (`flutter --version`); reinstall via the version-exact git clone above.
 - **`flutter: command not found` / `not recognized`** → Flutter's `bin` isn't on PATH,
   or the terminal wasn't reopened after editing PATH.

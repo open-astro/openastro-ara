@@ -89,6 +89,7 @@ public static class ProfileSnapshotNormalizer {
             CalibrationState = NormalizeCalibrationState(snap.CalibrationState),
             // §45.12 — a pre-§45 file back-fills to the all-defaults section.
             PolarAlign = (PolarAlignSettingsDto?)snap.PolarAlign ?? new PolarAlignSettingsDto(),
+            FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
         };
     }
 
@@ -134,7 +135,7 @@ public static class ProfileSnapshotNormalizer {
             AbortSequenceOnAfFailure: true, RestorePositionOnFailure: true,
             TelescopeType: "other"),
         PlateSolve: new(
-            Engine: "astap", PathOrEndpoint: "/usr/bin/astap",
+            Engine: "astap", PathOrEndpoint: "/usr/bin/astap_cli", // Debian's astap-cli package (a .deb Depends since #1094)
             IndexDownloadPath: "/var/lib/astap", SearchRadiusDeg: 30.0,
             DownsampleFactor: 2, TimeoutSeconds: 60, UseBlindFallback: true,
             CenterAfterSlew: true, SyncToCoordinates: true, MaxIterations: 5,

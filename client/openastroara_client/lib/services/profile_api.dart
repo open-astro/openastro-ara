@@ -11,6 +11,7 @@ import '../state/settings/custom_horizon_state.dart';
 import '../state/settings/camera_electronics_state.dart';
 import '../state/settings/diagnostics_mode_state.dart';
 import '../state/settings/equipment_connection_state.dart';
+import '../state/settings/filter_wheel_policy_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/filter_wheel_labels_state.dart';
 import '../state/settings/filter_set_state.dart';
@@ -466,6 +467,25 @@ class ProfileApi {
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
+  /// GET the active profile's filter-wheel policy (#1075): whether Ara parks
+  /// the wheel on slot 0 (L) the first time it connects after the daemon
+  /// starts.
+  Future<FilterWheelPolicy> getFilterWheelPolicy() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/filter-wheel/policy',
+    );
+    return FilterWheelPolicy.fromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's filter-wheel policy. Returns Ara's echo.
+  Future<FilterWheelPolicy> putFilterWheelPolicy(FilterWheelPolicy value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/filter-wheel/policy',
+      data: value.toJson(),
+    );
+    return FilterWheelPolicy.fromJson(res.data ?? const {});
+  }
+
   /// GET the active profile's equipment auto-connect bools.
   Future<EquipmentConnectionSettings> getEquipmentConnection() async {
     final res = await _dio.get<Map<String, dynamic>>(
@@ -809,7 +829,7 @@ class ProfileApi {
     Map<String, dynamic> j,
   ) => PlateSolveSettings(
     engine: _plateSolveEngineFromString(j['engine'] as String?),
-    pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap',
+    pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap_cli',
     indexDownloadPath:
         (j['index_download_path'] as String?) ?? '/var/lib/astap',
     searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,

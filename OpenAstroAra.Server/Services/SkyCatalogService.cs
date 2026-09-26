@@ -68,7 +68,7 @@ namespace OpenAstroAra.Server.Services {
         /// any (unlikely) primary-name collision by arriving first.</summary>
         internal static readonly string[] DsoPackages = {
             "openngc-dso", "sharpless-hii", "ldn-dark", "barnard-dark",
-            "vdb-reflection", "abell-pn", "arp-peculiar",
+            "vdb-reflection", "abell-pn", "arp-peculiar", "wr-stars",
         };
 
         private string DsoCsvPath => Path.Combine(_skyDataRoot, "openngc-dso", "catalog.csv");
@@ -116,6 +116,8 @@ namespace OpenAstroAra.Server.Services {
                 r => r.Name.StartsWith("Abell ", StringComparison.Ordinal)),
             new CatalogDef("arp", "Arp peculiar galaxies", "Catalogs",
                 r => r.Name.StartsWith("Arp ", StringComparison.Ordinal)),
+            new CatalogDef("wolf-rayet", "Wolf-Rayet stars (WR)", "Catalogs",
+                r => r.Name.StartsWith("WR ", StringComparison.Ordinal)),
             new CatalogDef("galaxies", "Galaxies", "Types",
                 r => r.Type is "G" or "GPair" or "GTrpl" or "GGroup"),
             new CatalogDef("open-clusters", "Open clusters", "Types", r => r.Type is "OCl"),

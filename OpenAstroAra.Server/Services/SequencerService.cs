@@ -557,7 +557,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// provably never disposed.
     /// </summary>
     private RunState? TryReserveRun(Guid id) {
-        var run = new RunState();
+        var run = new RunState { EstimateCacheTtlMs = EstimateCacheTtlMsForTests };
         var reserved = _runs.AddOrUpdate(id, run, (_, existing) => IsTerminal(existing.State) ? run : existing);
         if (ReferenceEquals(reserved, run)) {
             return run;
@@ -976,6 +976,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
             };
+            var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
+            payload["estimated_total_seconds"] = estimatedTotal;
+            payload["estimated_remaining_seconds"] = estimatedRemaining;
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {
@@ -999,6 +1002,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
             };
+            var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
+            payload["estimated_total_seconds"] = estimatedTotal;
+            payload["estimated_remaining_seconds"] = estimatedRemaining;
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(WsEventCatalog.SequenceInstructionFailed, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {
@@ -1020,6 +1026,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // bench can trip the watchdog in milliseconds without a fake clock.
     internal TimeSpan RuntimeCapPollInterval { get; set; } = TimeSpan.FromSeconds(60);
     internal TimeSpan? RuntimeCapOverrideForTests { get; set; }
+    // #1080 — the ETA cache's TTL, copied into each new RunState. A test sets it to an hour so
+    // the tree-version bump is the only thing that can refresh the estimate.
+    internal long EstimateCacheTtlMsForTests { get; set; } = 250;
 
     // §37.5 — stop a run that has exceeded the profile's max-sequence-runtime
     // cap. Reads the cap EVERY tick (a mid-run Settings change applies without a
@@ -1107,7 +1116,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         public SequenceRunState State {
             get => (SequenceRunState)Volatile.Read(ref _state);
-            set => Volatile.Write(ref _state, (int)value);
+            set {
+                Volatile.Write(ref _state, (int)value);
+                // #1080 — a lifecycle transition changes what is left; the frame that announces it
+                // must not carry a remaining figure cached from before it.
+                Interlocked.Increment(ref _treeVersion);
+            }
         }
 
         /// <summary>
@@ -1115,6 +1129,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// false when another writer got there first. Used by the pause paths so
         /// entering/leaving Paused can never clobber a concurrent Abort/Stop
         /// (whose unconditional write always wins over a failed CAS).
+        /// #1080 — deliberately does NOT bump <c>_treeVersion</c> (unlike the <see cref="State"/>
+        /// setter): pause/resume change nothing in the tree, and the ETA cache's TTL covers the
+        /// frame that announces them. Do not route this through the setter to "fix" that.
         /// </summary>
         public bool TryTransition(SequenceRunState from, SequenceRunState to) =>
             Interlocked.CompareExchange(ref _state, (int)to, (int)from) == (int)from;
@@ -1159,8 +1176,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public ISequenceRootContainer? Root { get { lock (_gate) { return _root; } } }
         public ISequenceContainer? BodyTop { get { lock (_gate) { return _bodyTop; } } }
         public void SetRoot(ISequenceRootContainer? root, ISequenceContainer? bodyTop = null) {
-            lock (_gate) { _root = root; _bodyTop = bodyTop ?? root; }
+            lock (_gate) {
+                if (root is null) {
+                    // #1068 — the tree is released at run end; keep its final estimate so a
+                    // terminal run state still reports the total (and remaining = what was left).
+                    _finalEstimate = EstimatedSecondsLocked(fresh: true);
+                }
+                _root = root;
+                _bodyTop = bodyTop ?? root;
+            }
         }
+
+        private (double? Total, double? Remaining) _finalEstimate;
 
         // §38.9 — serializes competing live-edit requests against each other,
         // ACROSS the persist await (review #871: an object lock can't span the
@@ -1210,8 +1237,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// <summary>Set the instruction total + completed count + current index as one consistent snapshot.</summary>
         public void UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
+                var clamped = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
+                if (total != InstructionCount || clamped != InstructionsCompleted || runningIndex != CurrentInstructionIndex) {
+                    // #1080 — a leaf changed status (not merely reported another tick): the cached
+                    // estimate is stale whatever its age.
+                    Interlocked.Increment(ref _treeVersion);
+                }
                 InstructionCount = total;
-                InstructionsCompleted = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
+                InstructionsCompleted = clamped;
                 CurrentInstructionIndex = runningIndex;
             }
         }
@@ -1249,8 +1282,50 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
         }
 
+        /// <summary>#1068 — the sequencer's estimated total / remaining seconds for this run, walked
+        /// off the live tree (null until it has loaded). Cheap: the tree is a few dozen nodes.</summary>
+        public (double? Total, double? Remaining) EstimatedSeconds() {
+            lock (_gate) {
+                return EstimatedSecondsLocked();
+            }
+        }
+
+        // #1080 — the two tree walks run on the per-report checkpoint path as well as every WS
+        // publish and GET /state. The pair is cached against a tree version (bumped when a leaf
+        // changes status or the run reaches a lifecycle state through the State setter; pause and
+        // resume go through TryTransition and rely on the TTL; never on a same-status progress
+        // tick) plus a short TTL for the time-based estimates (WaitForTime counts down between
+        // status changes).
+        // The final capture at tree release walks fresh (fresh: true) so a terminal state never
+        // reports a stale "remaining".
+        public long EstimateCacheTtlMs { get; init; } = 250;
+        private long _treeVersion;
+        private long _cachedEstimateVersion = -1;
+        private (double? Total, double? Remaining) _cachedEstimate;
+        // Monotonic (Environment.TickCount64), not wall clock: a backwards NTP step on an RTC-less
+        // Pi must not serve the cache past its TTL and freeze a WaitForTime countdown.
+        private long _cachedEstimateAtMs = long.MinValue / 2;
+
+        // Caller holds _gate.
+        private (double? Total, double? Remaining) EstimatedSecondsLocked(bool fresh = false) {
+            var top = (ISequenceItem?)_bodyTop ?? _root;
+            if (top is null) {
+                return _finalEstimate; // (null, null) before the tree loads; the last walk after it is released
+            }
+            var now = Environment.TickCount64;
+            var version = Interlocked.Read(ref _treeVersion);
+            if (!fresh && version == _cachedEstimateVersion && now - _cachedEstimateAtMs < EstimateCacheTtlMs) {
+                return _cachedEstimate;
+            }
+            _cachedEstimate = (RunEtaEstimator.EstimateTotalSeconds(top), RunEtaEstimator.EstimateRemainingSeconds(top));
+            _cachedEstimateAtMs = now;
+            _cachedEstimateVersion = version;
+            return _cachedEstimate;
+        }
+
         public SequenceRunStateDto ToDto(Guid sequenceId) {
             lock (_gate) {
+                var (total, remaining) = EstimatedSecondsLocked();
                 return new(
                     SequenceId: sequenceId,
                     RunId: RunId,
@@ -1261,7 +1336,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     CompletedUtc: CompletedUtc,
                     InstructionsCompleted: InstructionsCompleted,
                     InstructionsTotal: InstructionCount,
-                    CurrentInstructionDescription: CurrentInstructionDescription);
+                    CurrentInstructionDescription: CurrentInstructionDescription,
+                    EstimatedTotalSeconds: total,
+                    EstimatedRemainingSeconds: remaining);
             }
         }
     }

@@ -4,10 +4,10 @@ import 'package:file_picker/file_picker.dart';
 
 /// §54/§29.9 streaming downloads — pick a destination PATH before the bytes
 /// exist, so the download can stream to disk instead of being buffered whole
-/// in memory. file_picker v12's `saveFile` always takes the bytes and writes
-/// them itself, so the streaming flow asks for a directory instead and places
-/// [suggestedName] inside it, uniquified (`name (1).ext`, …) rather than
-/// silently overwriting. Returns null when the user cancels.
+/// in memory. file_picker's `saveFile` (v12 and v13 alike) always takes the
+/// bytes and writes them itself, so the streaming flow asks for a directory
+/// instead and places [suggestedName] inside it, uniquified (`name (1).ext`,
+/// …) rather than silently overwriting. Returns null when the user cancels.
 Future<String?> pickStreamSavePath(
   String dialogTitle,
   String suggestedName,

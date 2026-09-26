@@ -2,9 +2,15 @@
 # Per design/PORT_PLAYBOOK.md §11.2 + §13 deployment target.
 #
 # Build context expects ./publish/arm64/ to already contain the self-contained
-# .NET publish output. CI's `publish` step produces that via:
+# .NET publish output PLUS the SOFA/NOVAS31 astrometry natives (libsofa.so /
+# libnovas31.so, cross-built by scripts/build-astrometry-natives.sh — §14e). CI's
+# `publish` step produces that via:
 #   dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 \
 #     --self-contained -p:PublishAot=false -o ./publish/arm64
+#   CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
+# A local `docker build .` from a publish dir that skipped the natives produces an
+# image whose boot log warns "Astrometry natives incomplete" (CI's arm64 e2e step
+# fails on that line; a local build does not guard itself).
 #
 # Base: runtime-deps chiseled — because --self-contained bundles the
 # .NET + ASP.NET Core runtime DLLs into the publish output, so the base

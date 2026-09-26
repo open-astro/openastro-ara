@@ -75,8 +75,10 @@ For each catalog object, at the active site for tonight's dark window:
 - Sort by `Score` descending — the recommendation.
 - **Do not hard-filter on altitude or window length.** Anything with a non-empty
   window above the site horizon stays in the list; low/short ones fall to the bottom
-  *with their reason visible*. The only drops are "never up tonight" and (optionally) a
-  user-set magnitude floor.
+  *with their reason visible*. The only drops are "never up tonight", (optionally) a
+  user-set magnitude floor, and star rows (`WR*`, `*`, `**`): stars ride in the mirror so the
+  search can resolve them, but they are not imaging targets — the ring nebulae AROUND WR
+  stars are, as nebula rows / curated regions.
 - A bigger panel is fine (user: "It's ok if the screen is bigger"). Default surfaces a
   generous N; the rest are one scroll away, not gone.
 
@@ -113,20 +115,42 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   **Score weights (0–100, tunable — `TonightSkyService` constants):**
   | Component | Weight | Quality factor `q∈[0,1]` |
   |---|---|---|
-  | Framing fit | **35** | Good → 1.0; Unknown → 0.5 (neutral); off-band graded by how far out (`ratio/0.10` for too-small, `0.80/ratio` for too-big) with a floor of **0.15** so it's never zeroed |
+  | Framing fit | **35** | ratio = object major axis ÷ short FOV side. ≥ 0.40 "fills the frame" → 1.0; 0.15–0.40 "good fit" ramps 0.70 → 1.0; < 0.15 "small" → `0.70·ratio/0.15`; > 0.80 "overflows" → `0.80/ratio`; Unknown → 0.5 (neutral); floor **0.15** so it's never zeroed (§36.8 framing review, 2026-07-17) |
   | Integration hours | **25** | `min(hours / 6, 1)` — linear, saturates at 6 dark hours |
   | Peak altitude / airmass | **20** | `max(0, sin(peakAlt))` — `sin(alt) ≈ 1/airmass` (1 overhead, ~0.5 at 30°, 0 at horizon) |
   | Surface brightness vs Bortle | **12** | `clamp((skyMag − SB + 4) / 4, 0.15, 1)`; `skyMag ≈ 22 − (Bortle−1)·0.5` mag/arcsec². Faint-under-bright penalised, floored at 0.15, never zeroed |
   | Magnitude | **8** | `clamp((12 − mag) / 12, 0, 1)` — brighter a touch higher |
 
+  Missing surface brightness scores neutral (0.5) — except for `DrkN`, which takes the 0.15
+  floor: a dark nebula is by definition darker than the sky behind it. Post-sum photogenic-type
+  multipliers (advisory-sized, targets stay listed): `OCl` ×0.85, `GCl` ×0.95, `DrkN` ×0.6.
+  The DrkN factor exists because the LDN + Barnard packages (~2,100 rows) carry a size and
+  nothing else — scored neutral they hit a flat 90 and filled every slot of the list.
+  Emission rows (`HII`/`EmN`/`Neb`/`Cl+N`) with NEITHER magnitude nor surface brightness —
+  whatever catalog they come from: all 314 Sharpless rows, and OpenNGC's magnitude-less
+  nebulae / cluster+nebula stubs — take a photogenic tier: membership in the curated
+  imaging-regions layer is tier 3 — an `overrides` key, a standalone region, or a Sharpless
+  id a curated region stands for (`imaging_regions.sharplessAnchors`) — else
+  `imaging_regions.photogenicTier` (Sharpless ids): 3 ×1.0, 2 ×0.9, 1 ×0.7, unlisted ×0.5
+  ("not a known imaging field — often just a faint glow among stars"). An anchored Sharpless
+  row is replaced by its region wherever the region is present (always for a standalone
+  region; for an NGC/IC override only when that catalog row is installed), so an anchored
+  Sharpless row never lists beside its region. Overrides keep the catalog row's measured photometry (surface
+  brightness, position angle) — only name, type and imaging extent are replaced. Stopgap
+  until sky-data carries the Sharpless brightness class.
+  Filter reality: an emission-line target with no narrowband glass (an EMPTY filter set —
+  a bare OSC/DSLR — counts) is ×0.85, or ×0.75 under a Bortle ≥ 5 sky; narrowband in the
+  set is ×1.05. Continuum targets are untouched.
+
   Score = Σ(weight · q), clamped to [0,100]. Each component emits a short reason tag with
   its rounded point contribution (e.g. `"fills the frame (+35)"`, `"5 h dark window (+21)"`)
   so the UI can explain *why 90 / why 40*.
 
-  **Framing thresholds** — object major-axis ÷ the FOV's smaller dimension: `< 0.10` →
-  `TooSmall` (a ~10′ galaxy in a ~3° field at 448 mm), `0.10–0.80` → `Good`, `> 0.80` →
-  `TooBig` (Orion's ~85′ in a ~27′ field at 3000 mm; the 0.80 cap leaves an edge margin).
-  No recorded size → `Unknown`.
+  **Framing thresholds** — object major-axis ÷ the FOV's smaller dimension (§36.8 framing
+  review, 2026-07-17): `< 0.15` → `TooSmall` (a ~10′ galaxy in a ~3° field at 448 mm),
+  `0.15–0.40` → `GoodFit` (a clear target that would still like a longer focal length),
+  `0.40–0.80` → `Good` ("fills the frame"), `> 0.80` → `TooBig` (Orion's ~85′ in a ~27′
+  field at 3000 mm; the 0.80 cap leaves an edge margin). No recorded size → `Unknown`.
 
   **`RemainingHours`** — dark time still ahead of the query instant in the object's window
   tonight: `max(0, windowEnd − max(atUtc, windowStart))`. A past window → 0; a not-yet-

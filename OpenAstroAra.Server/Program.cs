@@ -255,8 +255,19 @@ public partial class Program {
         // backs BOTH the REST ISwitchService and the Sequencer's ISwitchMediator (§8.1), so the
         // SetSwitchValue instruction drives the live device (mediator wiring is below; this replaces
         // the HeadlessSwitchMediator stub).
-        builder.Services.AddSingleton<SwitchService>();
+        // #1065 — explicit factory: the fan-off interlock probes the camera's cooler state through
+        // a Func<> (breaks the CameraService ↔ SwitchService construction cycle), which constructor
+        // activation would not inject.
+        builder.Services.AddSingleton<SwitchService>(sp =>
+            new SwitchService(
+                sp.GetRequiredService<ILogger<SwitchService>>(),
+                sp.GetService<EquipmentEventPublisher>(),
+                sp.GetService<IEquipmentFaultSink>(),
+                sp.GetService<IProfileStore>(),
+                sp.GetService<IWsBroadcaster>(),
+                cameraProbe: () => sp.GetService<ICameraService>()));
         builder.Services.AddSingleton<ISwitchService>(sp => sp.GetRequiredService<SwitchService>());
+        builder.Services.AddSingleton<ICoolingFanActuator>(sp => sp.GetRequiredService<SwitchService>());
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4
         // cached). REST-only — no sequence instruction consumes the weather mediator's data, so
         // IWeatherDataMediator stays the headless stub.
@@ -273,7 +284,7 @@ public partial class Program {
         // §14e — seventh real device service: live flat device / CoverCalibrator (cover + light)
         // + apply. REST-only; the mediator unification is a follow-up.
         builder.Services.AddSingleton<IFlatDeviceService, FlatDeviceService>();
-        // §63.3 guider-d — crash detection + auto-restart of the sibling openastro-phd2 unit.
+        // §63.3 guider-d — crash detection + auto-restart of the sibling openastro-guider unit.
         builder.Services.AddSingleton<IGuiderProcessSupervisor, SystemctlGuiderProcessSupervisor>();
         builder.Services.AddSingleton<GuiderRecoveryCoordinator>();
         // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's
@@ -429,6 +440,9 @@ public partial class Program {
             // rather than silently following it. If redirects are ever needed, re-validate the Location scheme.
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
+        // §63.20 / #1067 — the wizard's Alpaca device-name lookup, proxied through the daemon.
+        builder.Services.AddSingleton<IAlpacaManagementClient>(sp =>
+            new AlpacaManagementClient(sp.GetService<ILogger<AlpacaManagementClient>>()));
         var skyDataRoot = System.IO.Path.Combine(profileDir, "sky-data");
         // §36-2 startup polish: reclaim any .staging-*/.backup-* scratch dirs orphaned by a download worker
         // hard-killed mid-extract (a daemon crash) — a graceful drain can't catch that case. Best-effort + synchronous
@@ -533,7 +547,16 @@ public partial class Program {
                 faults: sp.GetRequiredService<IEquipmentFaultSink>(),
                 // §29.2 — SQM/ambient into every frame's header when a
                 // weather source is connected.
-                weather: sp.GetService<IObservingConditionsService>()));
+                weather: sp.GetService<IObservingConditionsService>(),
+                // #1065 — the cooling fan follows the cooler (Func<>: construction-cycle breaker).
+                fan: () => sp.GetService<ICoolingFanActuator>(),
+                // §28 — the legacy profile the plate-solve capture's wrapped IImageData carries for
+                // render paths the solve loop never takes; optional (Func<>: registered later in
+                // this file).
+                legacyProfile: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                // §29.2 — the mount's RA/Dec at readout for the OBJCTRA/OBJCTDEC/RA/DEC cards
+                // (Func<>: the telescope mediator is registered later in this file).
+                telescope: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -762,8 +785,12 @@ public partial class Program {
         // SlewScopeToRaDec drive the live Alpaca mount.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(
             sp => sp.GetRequiredService<TelescopeService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
+        // §63 guider-c — the real GuiderService backs IGuiderMediator too (replaces
+        // HeadlessGuiderMediator), so StartGuiding / StopGuiding / Dither and the flip
+        // executor's guide pause/resume drive the live PHD2 link instead of no-op stubs
+        // that reported success while nothing guided.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(
+            sp => sp.GetRequiredService<GuiderService>());
         // §14e — the real FocuserService backs IFocuserMediator too (replaces HeadlessFocuserMediator),
         // so the MoveFocuser* sequence instructions drive the live Alpaca focuser.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(
@@ -1054,6 +1081,28 @@ public partial class Program {
         // the live store before any request is served.
         _ = app.Services.GetRequiredService<IProfileRepository>();
 
+        // §14e — say up front whether the SOFA/NOVAS31 astrometry natives are next to the binary.
+        // Without them the slew epoch transform degrades quietly, but altitude/sun/moon conditions,
+        // the meridian-flip projection and polar-align solving fault on first use. A package built
+        // without `scripts/build-astrometry-natives.sh` must be obvious in the first log lines.
+        // Windows keeps the inherited External/x64 DllLoader+SetDllDirectory path, which this probe
+        // does not mirror — a working Windows box would log a false "MISSING". Untested platform
+        // (RUNNING.md points at WSL2); say so instead of crying wolf.
+        if (OperatingSystem.IsWindows()) {
+            LogAstrometryNativesNotProbed(app.Logger);
+        } else {
+            var (sofaOk, novasOk) = OpenAstroAra.Astrometry.AstrometryNatives.Probe();
+            if (sofaOk && novasOk) {
+                LogAstrometryNativesPresent(app.Logger);
+            } else {
+                var (sofaName, novasName) = OpenAstroAra.Astrometry.AstrometryNatives.ExpectedFileNames;
+                LogAstrometryNativesMissing(app.Logger,
+                    sofaOk ? "present" : $"MISSING ({sofaName})",
+                    novasOk ? "present" : $"MISSING ({novasName})",
+                    AppContext.BaseDirectory);
+            }
+        }
+
         LogListening(app.Logger, port);
         try {
             app.Run();
@@ -1079,6 +1128,15 @@ public partial class Program {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "OpenAstroAra.Server listening on :{Port}")]
     private static partial void LogListening(ILogger logger, int port);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Astrometry natives loaded (SOFA + NOVAS31)")]
+    private static partial void LogAstrometryNativesPresent(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Astrometry natives not probed on Windows (inherited External/x64 SOFAlib.dll / NOVAS31lib.dll loader path; untested platform)")]
+    private static partial void LogAstrometryNativesNotProbed(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Astrometry natives incomplete: SOFA {Sofa}, NOVAS31 {Novas}. Expected next to the daemon in {BaseDir}; build them with scripts/build-astrometry-natives.sh. Cross-epoch slews fall back to untransformed coordinates; altitude/sun/moon conditions, the meridian-flip projection and polar-align solving will fail until they are installed.")]
+    private static partial void LogAstrometryNativesMissing(ILogger logger, string sofa, string novas, string baseDir);
 
     /// <summary>
     /// Resolve listen port. Order of precedence (per playbook §2.1):

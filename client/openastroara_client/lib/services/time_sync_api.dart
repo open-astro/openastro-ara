@@ -103,6 +103,16 @@ abstract interface class TimeSyncClient {
   /// source lands with the §31 mobile slice.
   Future<void> pushClientTime(DateTime utcNow);
 
+  /// §31.1 — relay a fix read from a USB GPS dongle on THIS computer as a
+  /// high-trust external GPS sync (`source: gps-client`). [timeUtc] is the
+  /// receiver's own UTC (from the RMC sentence), not this device's clock.
+  Future<TimeSyncPushResult> pushGpsFix({
+    required DateTime timeUtc,
+    double? lat,
+    double? lng,
+    double? alt,
+  });
+
   /// §31.1 step 5 — push a manually entered time (+ optional position) as a
   /// `manual` sync. The server clamps manual to low trust regardless of what
   /// is requested, so no trust field is sent. Location is all-or-nothing on
@@ -157,6 +167,27 @@ class TimeSyncApi implements TimeSyncClient {
         'trust': 'medium',
       },
     );
+  }
+
+  @override
+  Future<TimeSyncPushResult> pushGpsFix({
+    required DateTime timeUtc,
+    double? lat,
+    double? lng,
+    double? alt,
+  }) async {
+    final res = await _dio.post<dynamic>(
+      '/api/v1/server/time-sync',
+      data: <String, dynamic>{
+        'source': 'gps-client',
+        'time_utc': timeUtc.toUtc().toIso8601String(),
+        'trust': 'high',
+        if (lat != null && lng != null)
+          'location': <String, dynamic>{'lat': lat, 'lng': lng, 'alt': ?alt},
+      },
+    );
+    final data = res.data;
+    return TimeSyncPushResult.fromJson(data is Map<String, dynamic> ? data : const {});
   }
 
   @override

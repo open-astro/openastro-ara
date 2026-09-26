@@ -217,7 +217,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
     // Defaults match PlateSolveSettings() constructor.
     private PlateSolveSettingsDto _plateSolve = new(
         Engine: "astap",
-        PathOrEndpoint: "/usr/bin/astap",
+        PathOrEndpoint: "/usr/bin/astap_cli", // Debian's astap-cli package (a .deb Depends since #1094)
         IndexDownloadPath: "/var/lib/astap",
         SearchRadiusDeg: 30.0,
         DownsampleFactor: 2,
@@ -401,6 +401,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutFilterWheelLabels(FilterWheelLabelsDto value) {
         lock (_lock) { _filterWheelLabels = value; }
+        RaiseChanged();
+    }
+
+    // #1075 filter-wheel policy — home on first connect, on by default.
+    private FilterWheelPolicyDto _filterWheelPolicy = FilterWheelPolicyDto.Default;
+
+    public FilterWheelPolicyDto GetFilterWheelPolicy() {
+        lock (_lock) { return _filterWheelPolicy; }
+    }
+
+    public void PutFilterWheelPolicy(FilterWheelPolicyDto value) {
+        lock (_lock) { _filterWheelPolicy = value; }
         RaiseChanged();
     }
 
