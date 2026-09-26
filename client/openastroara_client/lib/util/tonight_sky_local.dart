@@ -302,6 +302,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final scored = <(double, TonightSkyObject)>[];
   final up = List<bool>.filled(sampleCount, false);
   for (final o in objects) {
+    // Stars (the Wolf-Rayet package, OpenNGC's '*'/'**' stubs) ride in the
+    // mirror so the search can resolve them, but they're not imaging
+    // targets — the ring nebulae AROUND WR stars are, and those are
+    // deep-sky rows / curated regions.
+    if (o.type == 'WR*' || o.type == '*' || o.type == '**') continue;
     // Pre-filter: never clears the horizon at upper culmination → never up.
     final peakAltDeg = _maxAltitudeDeg(o.decDeg, lat);
     if (peakAltDeg < horizon) continue;

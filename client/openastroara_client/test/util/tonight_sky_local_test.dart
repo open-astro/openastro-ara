@@ -313,4 +313,16 @@ void main() {
       expect(d[i].score, a[i].score);
     }
   });
+
+  test('stars in the mirror (WR package) are searchable, never ranked', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const wr = PlanningDso(
+        id: 'WR 134', name: 'WR 134', type: 'WR*', magnitude: 8.1,
+        raDeg: 302.28, decDeg: 36.18);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: const [wr], limit: 50);
+    expect(list.where((o) => o.id == 'WR 134'), isEmpty);
+    // …but the curated WR 134 ring (a nebula) still ranks.
+    expect(list.where((o) => o.id == 'REGION-WR134'), hasLength(1));
+  });
 }

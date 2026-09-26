@@ -189,7 +189,12 @@ public static class SystemEndpoints {
                     var cap = maxMag ?? 12.0;
                     var list = new List<DsoEntryDto>();
                     foreach (var d in dsos) {
-                        if (d.Magnitude is { } mag) {
+                        if (d.Type == "WR*") {
+                            // Wolf-Rayet STARS: mostly v 10–17, so the mag-12 cull would drop
+                            // the lot — but the client's offline search resolves "WR 134"
+                            // against this mirror. 226 rows; the client ranker skips stars.
+                            list.Add(d);
+                        } else if (d.Magnitude is { } mag) {
                             if (mag <= cap) {
                                 list.Add(d);
                             }
