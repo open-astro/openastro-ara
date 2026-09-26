@@ -61,13 +61,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete draft?'), findsOneWidget);
     await tester.tap(find.widgetWithText(TextButton, 'Delete').last);
-    await tester.pumpAndSettle();
+    // Pump frame by frame, not pumpAndSettle: settling can run the SnackBar's
+    // 4 s display timer out before the assertion looks (flaked in the full
+    // suite, passed alone).
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(drafts.deleted, [_id]);
-    expect(find.text('Deleted "M 31 night".'), findsOneWidget);
+    // The toolbar names a draft "<name> (offline draft)"; the SnackBar echoes it.
+    expect(find.text('Deleted "M 31 night (offline draft)".'), findsOneWidget);
     expect(container.read(selectedSequenceIdProvider), isNull);
     expect(container.read(sequenceEditorProvider), isNull,
         reason: 'the Run tab must not keep editing a ghost');
+    await tester.pumpAndSettle();
   });
 
   testWidgets('cancelling the confirm keeps the draft', (tester) async {
