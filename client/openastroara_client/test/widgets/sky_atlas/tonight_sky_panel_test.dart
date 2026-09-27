@@ -370,6 +370,28 @@ void main() {
     expect(container.read(selectedTonightObjectProvider), isNull);
   });
 
+  testWidgets('info action opens target details without changing atlas command',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(TonightSkyPanel)));
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pump();
+
+    expect(find.text('Andromeda Galaxy'), findsNWidgets(2));
+    expect(find.textContaining('Coordinates:'), findsOneWidget);
+    expect(find.text('Type: Galaxy'), findsOneWidget);
+    expect(find.text('Tonight score: 88'), findsOneWidget);
+    expect(find.text('• fills the frame (+35)'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    // The info button wins the gesture over the row's tap: no goto was sent
+    // and nothing was framed.
+    expect(container.read(planetariumCommandProvider), isNull);
+    expect(container.read(selectedTonightObjectProvider), isNull);
+  });
+
   testWidgets('a create failure surfaces an error SnackBar', (tester) async {
     final client = _RecordingClient()..throwOnCreate = true;
     await tester.pumpWidget(_host(client));

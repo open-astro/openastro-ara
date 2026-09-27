@@ -14,6 +14,7 @@ import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
+import '../../util/coord_format.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
 import 'target_preview.dart';
@@ -574,6 +575,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     icon: const Icon(Icons.my_location),
                     onPressed: _recentre,
                   ),
+                  IconButton(
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Show target details',
+                    icon: const Icon(Icons.info_outline),
+                    onPressed: () => _showDetails(context),
+                  ),
                   const Spacer(),
                   if (hasReasons)
                     TextButton(
@@ -720,6 +728,68 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     'dec': _object.decDeg,
     'name': _object.name,
   });
+
+  /// Show target metadata without leaving the planning list. Row taps keep
+  /// framing the atlas; this separate action makes target inspection reliable.
+  void _showDetails(BuildContext context) {
+    final o = _object;
+    final rows = <Widget>[
+      _detailLine('Type', _typeLabel(o.type)),
+      _detailLine(
+        'Coordinates',
+        '${formatRaHms(o.raDeg / 15)} · ${formatDecDms(o.decDeg)}',
+      ),
+      _detailLine(
+        'Altitude',
+        '${o.altitudeDeg.toStringAsFixed(0)}° now · '
+            '${o.maxAltitudeDeg.toStringAsFixed(0)}° max',
+      ),
+      if (o.magnitude case final magnitude?)
+        _detailLine('Magnitude', magnitude.toStringAsFixed(1)),
+      if (_timingLine(o) case final timing?) _detailLine('Tonight', timing),
+      if (o.framing != TonightFraming.unknown)
+        _detailLine('Framing', _framingLabel(o.framing) ?? 'Unknown'),
+      if (o.filterAdvice case final advice?)
+        _detailLine('Filter', advice.label),
+      if (o.score case final score?)
+        _detailLine('Tonight score', score.toStringAsFixed(0)),
+      if (o.surfaceBrightness case final sb?)
+        _detailLine('Surface brightness', sb.toStringAsFixed(1)),
+      if (o.sizeMajArcmin case final size?)
+        _detailLine('Size', '${size.toStringAsFixed(1)} arcmin'),
+    ];
+    if (o.scoreReasons case final reasons? when reasons.isNotEmpty) {
+      rows.add(const SizedBox(height: 8));
+      rows.add(
+        Text('Why this target', style: Theme.of(context).textTheme.titleSmall),
+      );
+      rows.addAll(reasons.map((reason) => Text('• $reason')));
+    }
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(o.name),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: rows,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _detailLine(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text('$label: $value'),
+      );
 
   /// Create a full imaging run for this object — cool/unpark/track/slew/
   /// autofocus + a Take-Exposure loop sized to tonight's remaining dark window
