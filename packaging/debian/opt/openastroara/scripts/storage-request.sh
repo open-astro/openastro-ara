@@ -63,7 +63,16 @@ WORK=$(mktemp -d /run/openastroara-storage.XXXXXX) || exit 9
 trap 'rm -rf "$WORK"' EXIT
 TMP="$WORK/result"
 rc=0
-out=$("$HELPER" "$@" 2>&1) || rc=$?
+# Same shape the daemon's direct-sudo path sees: stdout is the result, stderr
+# stands in only when stdout is blank. Merging the two would let a stray
+# stderr line from an inner tool land in front of the helper's "ERROR: <code>"
+# line and turn a typed failure into an opaque one. stderr still reaches the
+# journal (StandardError=journal on the unit).
+out=$("$HELPER" "$@" 2>"$WORK/stderr") || rc=$?
+if [ -s "$WORK/stderr" ]; then
+    cat "$WORK/stderr" >&2
+    [ -n "$out" ] || out=$(cat "$WORK/stderr")
+fi
 {
     printf '%s\n' "$rc"
     printf '%s\n' "$out"
