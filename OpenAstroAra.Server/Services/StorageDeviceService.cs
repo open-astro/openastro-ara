@@ -367,6 +367,11 @@ namespace OpenAstroAra.Server.Services {
                         string.IsNullOrWhiteSpace(output) ? "storage helper unit produced no result" : output);
                 }
                 return ParseHelperResult(await File.ReadAllTextAsync(resultPath, ct).ConfigureAwait(false));
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // An unwritable or unreadable exchange directory (root-owned after a
+                // hand-edited tmpfiles config, tmpfs full) is a helper failure like
+                // any other: typed result, not a 500 out of the request pipeline.
+                return (-1, $"storage request exchange failed: {ex.Message}");
             } finally {
                 TryDelete(requestPath);
                 TryDelete(resultPath);
@@ -408,11 +413,13 @@ namespace OpenAstroAra.Server.Services {
         internal static bool IsSingleLine(string? value) =>
             value is null || value.AsSpan().IndexOfAny('\n', '\r') < 0;
 
-        [System.Text.RegularExpressions.GeneratedRegex("^[0-9A-Fa-f-]{1,64}$")]
-        private static partial System.Text.RegularExpressions.Regex UuidShape();
+        // \z, not $: $ also matches before a single trailing newline, which
+        // would let "ABCD-1234\n" through and split it into two request lines.
+        [System.Text.RegularExpressions.GeneratedRegex(@"^[0-9A-Fa-f-]{1,64}\z")]
+        internal static partial System.Text.RegularExpressions.Regex UuidShape();
 
-        [System.Text.RegularExpressions.GeneratedRegex("^/dev/[A-Za-z0-9]{1,32}$")]
-        private static partial System.Text.RegularExpressions.Regex DevPathShape();
+        [System.Text.RegularExpressions.GeneratedRegex(@"^/dev/[A-Za-z0-9]{1,32}\z")]
+        internal static partial System.Text.RegularExpressions.Regex DevPathShape();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Probing external tools is best-effort: a missing/failing lsblk|findmnt|sudo must degrade to 'no devices' or a typed failure result, never crash the request. Log-and-recover boundary.")]

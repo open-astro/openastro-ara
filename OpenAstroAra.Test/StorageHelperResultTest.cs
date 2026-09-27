@@ -77,5 +77,22 @@ namespace OpenAstroAra.Test {
         public void ConfirmLabelMustBeOneRequestLine(string? label, bool accepted) {
             Assert.That(StorageDeviceService.IsSingleLine(label), Is.EqualTo(accepted));
         }
+
+        // The identifier travels as a request line too; $ would accept a single
+        // trailing newline and turn the UUID into two lines.
+        [TestCase("ABCD-1234", true)]
+        [TestCase("0123456789abcdef", true)]
+        [TestCase("ABCD-1234\n", false)]
+        [TestCase("ABCD-1234\r\n", false)]
+        [TestCase("ABCD-1234 ", false)]
+        public void UuidMustBeOneRequestLine(string uuid, bool accepted) {
+            Assert.That(StorageDeviceService.UuidShape().IsMatch(uuid), Is.EqualTo(accepted));
+        }
+
+        [TestCase("/dev/sda", true)]
+        [TestCase("/dev/sda\n", false)]
+        public void DevPathMustBeOneRequestLine(string path, bool accepted) {
+            Assert.That(StorageDeviceService.DevPathShape().IsMatch(path), Is.EqualTo(accepted));
+        }
     }
 }
