@@ -18,11 +18,15 @@ ExecStart=/opt/openastroara/scripts/storage-request.sh %i
 # a distro DefaultTimeoutStartSec= override would SIGKILL a format mid-flight
 # with no result file, so pin it explicitly.
 TimeoutStartSec=infinity
-# No mount-namespace hardening here (ProtectSystem/ProtectHome/PrivateTmp):
-# each of those gives the unit a private mount namespace, and a mount made
-# inside one never appears on the host — the whole point of this unit is to
-# mount the store where the daemon can see it. Network is never needed.
-PrivateNetwork=true
+# No mount-namespace hardening here, and nothing that implies one: not
+# ProtectSystem/ProtectHome/PrivateTmp, and not PrivateNetwork either, which
+# systemd.exec(5) documents as implying PrivateMounts= (it has to remount /sys
+# for the new network namespace). Any of those gives the unit a private mount
+# namespace: a mount made inside it never appears on the host, an unmount
+# inside it leaves the host mount in place, and a disk check would then fsck
+# a filesystem that is still mounted read-write on the host. The whole point
+# of this unit is to mount the store where the daemon can see it. Network is
+# never needed, but it cannot be dropped without also dropping the mounts.
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=openastroara-storage
