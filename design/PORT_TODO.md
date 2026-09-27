@@ -38,6 +38,8 @@ the other design docs.
 
 **Storage (§29) — fixed:** `StorageDeviceService` no longer calls sudo on a packaged install. It writes `/run/openastroara/storage/<id>.request` (one helper argument per line), runs `systemctl start openastroara-storage@<id>.service` (a root `Type=oneshot` template unit shipped by the .deb, authorised for the service user by `50-openastroara-storage.rules`), and reads back `<id>.result` (helper exit code + output) — the daemon holds no privilege at all. The sudo path survives only as the fallback for a dev rig with no packaged unit. Verified on the Pi from a `NoNewPrivileges=true` transient unit as `openastroara`.
 
+**Storage follow-up:** `RunHelperAsync` selects the unit path only while `/run/openastroara/storage` exists and otherwise falls back to the dead sudo call, so a missing exchange directory (edited tmpfiles config, `/run` cleared without a re-run) silently brings back the original NoNewPrivileges failure. `/var/run/openastroara` is in the daemon unit's `ReadWritePaths`, so `Directory.CreateDirectory(RequestDirectory)` (guarded, since a dev rig may not be able to create it) would make the packaged path self-healing. Review note on #1110.
+
 **Update push (§33) — still open:** `update.sh` still goes through the dead sudo rule. Reuse the same shape (a root template unit + polkit rule + request/result files) rather than any of: `pkexec` (setuid too, so no) or dropping `NoNewPrivileges` (weakens §67). Re-test the §33 push on the Pi once it lands.
 
 ## §31 client-side GPS dongle — follow-ups (2026-09-22, from the #1095 review)

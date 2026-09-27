@@ -4268,6 +4268,7 @@ sudo apt install openastroara-server
 - Drops `/usr/lib/tmpfiles.d/openastroara.conf` for `/var/run/openastroara/` (per §34.7 sequence lock)
 - Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
 - Installs `/opt/openastroara/scripts/configure-storage.sh` (mode 0750, owned by root:openastroara) — per §29.1.4
+- Installs the root-side half of the §29.1.4 storage flow (the daemon's unit sets `NoNewPrivileges=true`, under which sudo cannot run): the template unit `/etc/systemd/system/openastroara-storage@.service`, its entry point `/opt/openastroara/scripts/storage-request.sh` (rebuilds the helper's argv from `/run/openastroara/storage/<id>.request`, writes `<id>.result`), the polkit rule `/usr/share/polkit-1/rules.d/50-openastroara-storage.rules` that lets the service user start exactly that unit, and the `/var/run/openastroara/storage` tmpfiles entry
 - Installs `/opt/openastroara/scripts/set-usbfs-memory.sh` (mode 0750, owned by root:openastroara) — per §77.1
   capture tuning. Validates its single argument is an integer in [16, 1000], writes it to
   `/sys/module/usbcore/parameters/usbfs_memory_mb` (live), and persists it for boot via
@@ -4279,6 +4280,7 @@ sudo apt install openastroara-server
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/set-usbfs-memory.sh
   ```
+  None of these is reachable from the packaged daemon (NoNewPrivileges); the storage line is the dev-rig fallback only, and the others are tracked in PORT_TODO "sudo helpers vs NoNewPrivileges"
 - Creates data + log + config dirs at proper permissions
 - Installs `/etc/logrotate.d/openastroara` per §29.9
 - Enables + starts the service: `systemctl enable --now openastroara-server.service`

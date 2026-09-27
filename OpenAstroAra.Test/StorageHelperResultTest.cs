@@ -62,5 +62,20 @@ namespace OpenAstroAra.Test {
             Assert.That(code, Is.EqualTo(-1));
             Assert.That(output, Is.EqualTo(text));
         }
+
+        // The request file is one argument per line, so a confirm label with a
+        // line break would change the helper's argv shape; ConfigureAsync
+        // refuses it before anything is written.
+        [TestCase(null, true)]
+        [TestCase("", true)]
+        [TestCase("ARA-DISK", true)]
+        [TestCase("ARA DISK 2", true)]
+        [TestCase("ARA-DISK\n", false)]
+        [TestCase("ARA-DISK\r\n", false)]
+        [TestCase("ARA\nDISK", false)]
+        [TestCase("\n\n\n\n\n\n\n\n\n", false)]
+        public void ConfirmLabelMustBeOneRequestLine(string? label, bool accepted) {
+            Assert.That(StorageDeviceService.IsSingleLine(label), Is.EqualTo(accepted));
+        }
     }
 }

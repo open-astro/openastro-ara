@@ -218,6 +218,15 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "label_required",
                     "Reformatting requires the drive's current label as confirmation.", null);
             }
+            // The request file is newline-delimited (one helper argument per
+            // line), so a label carrying a line break would split into extra
+            // arguments: a trailing "\n" would pass the retype gate as the bare
+            // label, and a run of them trips the wrapper's argument cap into an
+            // opaque failure. Not reachable from the client's single-line field.
+            if (!IsSingleLine(expectedLabel)) {
+                return new StorageConfigureResult(false, "bad_label",
+                    "The confirmation label cannot contain line breaks.", null);
+            }
             // The identifier is a filesystem UUID (strictly hex-and-dashes)
             // or, for a brand-new blank disk that has no filesystem yet, a
             // /dev/ node path. Anything else never matches a device — reject
@@ -393,6 +402,11 @@ namespace OpenAstroAra.Server.Services {
             var (exitCode, output) = await RunAsync(file, args, ct).ConfigureAwait(false);
             return exitCode == 0 ? output : null;
         }
+
+        /// <summary>True when <paramref name="value"/> can travel as one line of
+        /// the request file (no CR or LF); null is the "no label" case.</summary>
+        internal static bool IsSingleLine(string? value) =>
+            value is null || value.AsSpan().IndexOfAny('\n', '\r') < 0;
 
         [System.Text.RegularExpressions.GeneratedRegex("^[0-9A-Fa-f-]{1,64}$")]
         private static partial System.Text.RegularExpressions.Regex UuidShape();

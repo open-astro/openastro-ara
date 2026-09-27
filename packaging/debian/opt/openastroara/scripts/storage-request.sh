@@ -8,9 +8,14 @@
 # The unit always exits 0 once a result has been written — the helper's own
 # exit code travels in the result file, so a refused format never leaves a
 # "failed" instance behind in systemd. The request directory is owned by the
-# daemon user and this runs as root, so every file it opens there is created
-# fresh (mktemp, O_EXCL) or checked to be a regular file first: a symlink
-# planted by the daemon user must never make root read or write elsewhere.
+# daemon user and this runs as root, so every file it writes there is created
+# fresh (mktemp, O_EXCL) and the request is checked to be a regular file
+# before it is read. That check is not atomic with the open: a symlink swapped
+# in between could at most make root read MAX_ARGS lines of some other file
+# into configure-storage.sh's argv, which the helper validates and never
+# echoes back — no wider than the argv the daemon user could already hand it
+# under the old sudoers rule. Nothing here writes through a daemon-supplied
+# path (the result is rename()d over it).
 set -u
 
 DIR=/run/openastroara/storage
