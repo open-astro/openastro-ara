@@ -36,8 +36,9 @@ namespace OpenAstroAra.Server.Services {
         Task<IReadOnlyList<StorageDeviceDto>> ListAsync(CancellationToken ct);
 
         /// <summary>Mount (and optionally reformat — exFAT by default, ext4 on
-        /// request) the device with this UUID at /media/openastroara via the
-        /// sudoers-scoped helper.</summary>
+        /// request) the device with this UUID at /media/openastroara through
+        /// the root-run <c>configure-storage.sh</c> helper: on a packaged install
+        /// via the <c>openastroara-storage@</c> unit, on a dev rig via sudo.</summary>
         Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, string? filesystem, CancellationToken ct);
 
         /// <summary>§29 user-triggered disk check: unmount → matching fsck
