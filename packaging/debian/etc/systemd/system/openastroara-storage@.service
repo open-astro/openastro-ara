@@ -1,0 +1,32 @@
+[Unit]
+Description=OpenAstro Ara storage helper (request %i)
+Documentation=https://github.com/open-astro/openastro-ara
+# Root-side half of the §29.1.4 storage flow. openastroara-server.service runs
+# with NoNewPrivileges=true, under which sudo (setuid) refuses to run, so the
+# daemon cannot escalate itself. Instead it writes one request file to
+# /run/openastroara/storage/<id>.request (one configure-storage.sh argument
+# per line) and asks systemd over D-Bus to start this instance; polkit
+# authorises exactly that (50-openastroara-storage.rules). The instance runs
+# the helper as root and leaves <id>.result for the daemon to read. The
+# daemon never holds any privilege of its own.
+
+[Service]
+Type=oneshot
+ExecStart=/opt/openastroara/scripts/storage-request.sh %i
+# mkfs.ext4 / e2fsck -f on a multi-TB drive can run for many minutes. oneshot
+# units default to no start timeout, but that default is load-bearing here and
+# a distro DefaultTimeoutStartSec= override would SIGKILL a format mid-flight
+# with no result file, so pin it explicitly.
+TimeoutStartSec=infinity
+# No mount-namespace hardening here, and nothing that implies one: not
+# ProtectSystem/ProtectHome/PrivateTmp, and not PrivateNetwork either, which
+# systemd.exec(5) documents as implying PrivateMounts= (it has to remount /sys
+# for the new network namespace). Any of those gives the unit a private mount
+# namespace: a mount made inside it never appears on the host, an unmount
+# inside it leaves the host mount in place, and a disk check would then fsck
+# a filesystem that is still mounted read-write on the host. The whole point
+# of this unit is to mount the store where the daemon can see it. Network is
+# never needed, but it cannot be dropped without also dropping the mounts.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openastroara-storage

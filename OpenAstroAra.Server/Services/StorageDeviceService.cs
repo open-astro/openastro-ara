@@ -36,8 +36,9 @@ namespace OpenAstroAra.Server.Services {
         Task<IReadOnlyList<StorageDeviceDto>> ListAsync(CancellationToken ct);
 
         /// <summary>Mount (and optionally reformat — exFAT by default, ext4 on
-        /// request) the device with this UUID at /media/openastroara via the
-        /// sudoers-scoped helper.</summary>
+        /// request) the device with this UUID at /media/openastroara through
+        /// the root-run <c>configure-storage.sh</c> helper: on a packaged install
+        /// via the <c>openastroara-storage@</c> unit, on a dev rig via sudo.</summary>
         Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, string? filesystem, CancellationToken ct);
 
         /// <summary>§29 user-triggered disk check: unmount → matching fsck
@@ -53,15 +54,26 @@ namespace OpenAstroAra.Server.Services {
 
     /// <summary>
     /// §29.1 storage configuration. Enumeration is a plain <c>lsblk -J</c> read
-    /// (no privilege); every mutating operation goes through
-    /// <c>/opt/openastroara/scripts/configure-storage.sh</c> under sudo — the
-    /// single narrow privilege the daemon holds for storage (§29.1.4/§34.3), so
-    /// the script's own validation (system-disk refusal, ext4 check, label
-    /// confirmation) can never be bypassed by the API.
+    /// (no privilege); every mutating operation runs
+    /// <c>/opt/openastroara/scripts/configure-storage.sh</c> as root, so the
+    /// script's own validation (system-disk refusal, filesystem check, label
+    /// confirmation) can never be bypassed by the API. On a packaged install the
+    /// daemon holds no privilege of its own: its unit runs with
+    /// <c>NoNewPrivileges=true</c>, under which sudo refuses to run, so it
+    /// writes a request file and asks systemd (over D-Bus, authorised by a
+    /// polkit rule) to start <c>openastroara-storage@&lt;id&gt;.service</c>,
+    /// which runs the helper and leaves a result file. A dev rig without the
+    /// packaged unit falls back to the sudoers-scoped direct invocation.
     /// </summary>
     public sealed partial class StorageDeviceService : IStorageDeviceService {
         internal const string HelperPath = "/opt/openastroara/scripts/configure-storage.sh";
         internal const string MountPoint = "/media/openastroara";
+        /// <summary>Template unit installed by the .deb; its presence selects the
+        /// request-file path over direct sudo.</summary>
+        internal const string HelperUnitTemplate = "/etc/systemd/system/openastroara-storage@.service";
+        /// <summary>Daemon-owned exchange directory (tmpfiles.d): <c>&lt;id&gt;.request</c>
+        /// in, <c>&lt;id&gt;.result</c> out.</summary>
+        internal const string RequestDirectory = "/run/openastroara/storage";
 
         private readonly ILogger logger;
 
@@ -206,6 +218,15 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "label_required",
                     "Reformatting requires the drive's current label as confirmation.", null);
             }
+            // The request file is newline-delimited (one helper argument per
+            // line), so a label carrying a line break would split into extra
+            // arguments: a trailing "\n" would pass the retype gate as the bare
+            // label, and a run of them trips the wrapper's argument cap into an
+            // opaque failure. Not reachable from the client's single-line field.
+            if (!IsSingleLine(expectedLabel)) {
+                return new StorageConfigureResult(false, "bad_label",
+                    "The confirmation label cannot contain line breaks.", null);
+            }
             // The identifier is a filesystem UUID (strictly hex-and-dashes)
             // or, for a brand-new blank disk that has no filesystem yet, a
             // /dev/ node path. Anything else never matches a device — reject
@@ -218,9 +239,9 @@ namespace OpenAstroAra.Server.Services {
             // re-splitting), and the helper re-validates everything it is
             // told — the API cannot talk it past its own checks.
             string[] args = format
-                ? ["-n", HelperPath, "--format", "--fs", fs, uuid, expectedLabel!]
-                : ["-n", HelperPath, uuid];
-            var (exitCode, output) = await RunAsync("sudo", args, ct).ConfigureAwait(false);
+                ? ["--format", "--fs", fs, uuid, expectedLabel!]
+                : [uuid];
+            var (exitCode, output) = await RunHelperAsync(args, ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
                 LogConfigured(logger, uuid, format);
@@ -250,7 +271,7 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "bad_uuid",
                     "That does not look like a filesystem UUID.", null);
             }
-            var (exitCode, output) = await RunAsync("sudo", ["-n", HelperPath, "--check", uuid], ct).ConfigureAwait(false);
+            var (exitCode, output) = await RunHelperAsync(["--check", uuid], ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
                 LogChecked(logger, uuid, text);
@@ -279,7 +300,7 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "bad_uuid",
                     "That does not look like a filesystem UUID.", null);
             }
-            var (exitCode, output) = await RunAsync("sudo", ["-n", HelperPath, "--eject", uuid], ct).ConfigureAwait(false);
+            var (exitCode, output) = await RunHelperAsync(["--eject", uuid], ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
                 LogEjected(logger, uuid);
@@ -319,16 +340,97 @@ namespace OpenAstroAra.Server.Services {
 
         private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 
+        /// <summary>
+        /// Runs <see cref="HelperPath"/> as root with <paramref name="helperArgs"/>
+        /// and returns the helper's exit code and output. Packaged install: request
+        /// file → <c>systemctl start openastroara-storage@&lt;id&gt;.service</c> →
+        /// result file (see <see cref="ParseHelperResult"/> for its shape). The
+        /// unit itself always exits 0 once it has written a result, so a missing
+        /// result means the request never ran (polkit refused, unit not loaded)
+        /// and systemctl's own stderr is the best diagnostic. Dev rig with no
+        /// packaged unit: <c>sudo -n</c> directly, as before.
+        /// </summary>
+        private static async Task<(int ExitCode, string Output)> RunHelperAsync(string[] helperArgs, CancellationToken ct) {
+            if (!File.Exists(HelperUnitTemplate)) {
+                return await RunAsync("sudo", ["-n", HelperPath, .. helperArgs], ct).ConfigureAwait(false);
+            }
+            // The packaged unit is present, so this IS a packaged install and sudo
+            // is dead under NoNewPrivileges: a missing exchange directory (cleared
+            // /run, edited tmpfiles config) is repaired here when possible and is
+            // otherwise a typed, diagnosable failure, never a silent sudo fallback.
+            if (!Directory.Exists(RequestDirectory)) {
+                try {
+                    Directory.CreateDirectory(RequestDirectory);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    return (-1, $"ERROR: exchange_missing {RequestDirectory} is missing and could not be created ({ex.Message}); run systemd-tmpfiles --create");
+                }
+            }
+            var id = Guid.NewGuid().ToString("N");
+            var requestPath = Path.Combine(RequestDirectory, id + ".request");
+            var resultPath = Path.Combine(RequestDirectory, id + ".result");
+            try {
+                // One argument per line; the wrapper rebuilds argv from it. An
+                // empty confirm label must survive as an empty line.
+                await File.WriteAllTextAsync(requestPath, string.Join('\n', helperArgs) + "\n", ct).ConfigureAwait(false);
+                var (exitCode, output) = await RunAsync("systemctl", ["start", $"openastroara-storage@{id}.service"], ct).ConfigureAwait(false);
+                if (!File.Exists(resultPath)) {
+                    return (exitCode == 0 ? -1 : exitCode,
+                        string.IsNullOrWhiteSpace(output) ? "storage helper unit produced no result" : output);
+                }
+                return ParseHelperResult(await File.ReadAllTextAsync(resultPath, ct).ConfigureAwait(false));
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // An unwritable or unreadable exchange directory (root-owned after a
+                // hand-edited tmpfiles config, tmpfs full) is a helper failure like
+                // any other: typed result, not a 500 out of the request pipeline.
+                return (-1, $"storage request exchange failed: {ex.Message}");
+            } finally {
+                TryDelete(requestPath);
+                TryDelete(resultPath);
+            }
+        }
+
+        /// <summary>
+        /// Result file shape written by storage-request.sh: first line is the
+        /// helper's exit code, the rest is its combined output. A malformed first
+        /// line is reported as exit -1 with the whole text as output rather than
+        /// being mistaken for success.
+        /// </summary>
+        internal static (int ExitCode, string Output) ParseHelperResult(string text) {
+            var newline = text.IndexOf('\n', StringComparison.Ordinal);
+            var first = (newline < 0 ? text : text[..newline]).Trim();
+            var rest = newline < 0 ? string.Empty : text[(newline + 1)..];
+            return int.TryParse(first, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
+                ? (code, rest)
+                : (-1, text);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort cleanup of the request/result exchange files; a leftover file is harmless (unique id per request) and must never mask the helper's real outcome.")]
+        private static void TryDelete(string path) {
+            try {
+                File.Delete(path);
+            } catch (Exception) {
+                // Intentionally swallowed — see justification.
+            }
+        }
+
         private static async Task<string?> RunCaptureAsync(string file, string[] args, CancellationToken ct) {
             var (exitCode, output) = await RunAsync(file, args, ct).ConfigureAwait(false);
             return exitCode == 0 ? output : null;
         }
 
-        [System.Text.RegularExpressions.GeneratedRegex("^[0-9A-Fa-f-]{1,64}$")]
-        private static partial System.Text.RegularExpressions.Regex UuidShape();
+        /// <summary>True when <paramref name="value"/> can travel as one line of
+        /// the request file (no CR or LF); null is the "no label" case.</summary>
+        internal static bool IsSingleLine(string? value) =>
+            value is null || value.AsSpan().IndexOfAny('\n', '\r') < 0;
 
-        [System.Text.RegularExpressions.GeneratedRegex("^/dev/[A-Za-z0-9]{1,32}$")]
-        private static partial System.Text.RegularExpressions.Regex DevPathShape();
+        // \z, not $: $ also matches before a single trailing newline, which
+        // would let "ABCD-1234\n" through and split it into two request lines.
+        [System.Text.RegularExpressions.GeneratedRegex(@"^[0-9A-Fa-f-]{1,64}\z")]
+        internal static partial System.Text.RegularExpressions.Regex UuidShape();
+
+        [System.Text.RegularExpressions.GeneratedRegex(@"^/dev/[A-Za-z0-9]{1,32}\z")]
+        internal static partial System.Text.RegularExpressions.Regex DevPathShape();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Probing external tools is best-effort: a missing/failing lsblk|findmnt|sudo must degrade to 'no devices' or a typed failure result, never crash the request. Log-and-recover boundary.")]
