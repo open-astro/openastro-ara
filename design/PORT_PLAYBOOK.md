@@ -12023,7 +12023,7 @@ Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd
 
 **Dev machines (Linux/macOS/Windows):**
 
-- **Linux dev:** `sudo apt install libcfitsio-dev` (Debian/Ubuntu) or distro equivalent. CFITSIO version 4.x+.
+- **Linux dev:** `sudo apt install libcfitsio10` (Debian/Ubuntu) or distro equivalent — the runtime package is enough since the resolver in §72.3 handles the versioned soname, and it keeps a dev box identical to the SBC. `libcfitsio-dev` also works. CFITSIO version 4.x+.
 - **macOS dev:** `brew install cfitsio` — installs to `/opt/homebrew/lib/libcfitsio.dylib` (Apple Silicon) or `/usr/local/lib/libcfitsio.dylib` (Intel).
 - **Windows dev:** vcpkg recommended (`vcpkg install cfitsio:x64-windows`) or pre-built binary from heasarc. Path goes in `OPENASTROARA_CFITSIO_PATH` env var.
 
@@ -12034,7 +12034,7 @@ DEPLOY.md adds a "Development setup" section listing platform-specific install c
 ```yaml
 - name: Install CFITSIO (Linux)
   if: runner.os == 'Linux'
-  run: sudo apt-get install -y libcfitsio-dev
+  run: sudo apt-get install -y libcfitsio10   # runtime package only, same as the .deb's Depends
 - name: Install CFITSIO (macOS)
   if: runner.os == 'macOS'
   run: brew install cfitsio
@@ -12079,10 +12079,20 @@ internal static partial class CFitsIO
 }
 ```
 
-Platform-specific name resolution (handled automatically by .NET):
-- Linux: `libcfitsio.so` → `libcfitsio.so.10`
-- macOS: `libcfitsio.dylib`
-- Windows: `cfitsio.dll`
+Platform-specific name resolution. The runtime probes only the **bare** name
+(`libcfitsio.so` / `libcfitsio.dylib` / `cfitsio.dll`); it never appends a
+version suffix. On Linux the bare `libcfitsio.so` symlink comes from
+`libcfitsio-dev`, which a production SBC never has: the runtime package
+`libcfitsio10` installs `libcfitsio.so.10` only, so a stock `.deb` install
+failed every capture with `DllNotFoundException` until 2026-09-27. `CFitsIO`
+therefore registers a `DllImportResolver` that runs the default probe first and
+then falls back to the versioned sonames the distro packages actually ship:
+- Linux: `libcfitsio.so`, then `libcfitsio.so.10` (CFITSIO 4.x), then `libcfitsio.so.9` (3.49)
+- macOS: `libcfitsio.dylib`, then `libcfitsio.10.dylib`, then `libcfitsio.9.dylib`
+- Windows: `cfitsio.dll` (no versioned fallback)
+
+The fallback is not redundant with the assembly-level `DefaultDllImportSearchPaths`
+attribute; removing it reintroduces the Pi capture failure.
 
 If the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message. Error references the §72.2 install docs.
 
