@@ -64,6 +64,11 @@ abstract interface class EquipmentDeviceClient<T> {
   /// Disconnect the device (idempotent). 202-Accepted.
   Future<void> disconnect();
 
+  /// Remove the retained (disconnected / errored) device and forget its
+  /// auto-connect entry — the card's Remove (`DELETE /api/v1/equipment/{path}`).
+  /// 204; the daemon refuses (409) while the device is connected.
+  Future<void> forget();
+
   /// POST a device-specific control command to `{base}/{subpath}` (e.g. a focuser
   /// `move`, a filter-wheel `position`, a flat-device `apply`). 202-Accepted +
   /// background — poll [getStatus] for the result. [body] is the JSON request, or
@@ -129,6 +134,11 @@ class EquipmentDeviceApi<T> implements EquipmentDeviceClient<T> {
   @override
   Future<void> disconnect() async {
     await _dio.post<void>('$_base/disconnect');
+  }
+
+  @override
+  Future<void> forget() async {
+    await _dio.delete<void>(_base);
   }
 
   @override

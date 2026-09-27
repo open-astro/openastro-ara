@@ -51,6 +51,10 @@ class _FakeAutofocusApi implements AutofocusApi {
 }
 
 class _FakeFocuserApi implements EquipmentDeviceClient<FocuserStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeFocuserApi(this.status);
   FocuserStatus? status;
   final List<String> calls = [];

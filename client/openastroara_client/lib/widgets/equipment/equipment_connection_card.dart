@@ -13,8 +13,9 @@ import 'equipment_state_chip.dart';
 /// Shared connection card for the single-instance equipment panels (everything on
 /// the generic [EquipmentDeviceNotifier] core — i.e. all but the multi-instance
 /// Switch). Renders the four async shapes of a device's live status and owns the
-/// connect (via the §52.2 chooser) / disconnect controls + their error SnackBars;
-/// each panel supplies only the device-specific live body via [connectedBody].
+/// connect (via the §52.2 chooser) / disconnect / reconnect / remove controls +
+/// their error SnackBars; each panel supplies only the device-specific live body
+/// via [connectedBody].
 class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     extends ConsumerWidget {
   final AsyncValue<T?> status;
@@ -32,8 +33,15 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
   final VoidCallback onRetry;
 
   /// Optional one-tap reconnect of the last-connected device (no re-discovery).
-  /// When supplied, a **Reconnect** button is shown while disconnected.
+  /// When supplied, a **Reconnect** button is shown while nothing is known, and
+  /// a **Connect** icon on a known device's card while it is not live.
   final Future<bool> Function()? onReconnect;
+
+  /// Optional removal of a known-but-not-connected device (the daemon drops it
+  /// and forgets its auto-connect entry — `DELETE /equipment/{type}`). When
+  /// supplied, a **Remove** icon is shown on the card while the device is not
+  /// live — the same escape hatch the multi-instance Switch card offers.
+  final Future<bool> Function()? onForget;
 
   /// The device-specific live content shown once connected (e.g. a Safe/Unsafe
   /// indicator, a weather sensor grid). The header (name + state chip + disconnect)
@@ -51,6 +59,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     required this.onRetry,
     required this.connectedBody,
     this.onReconnect,
+    this.onForget,
   });
 
   @override
@@ -66,13 +75,14 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         child: !ref.watch(serverLinkUpProvider)
             ? _serverOffline(context)
             : switch (status) {
-          // A device that's never been connected 404s (null); one disconnected
-          // after a session reports a non-null status with state == disconnected.
-          // Both mean "no live device" — show the disconnected card (Reconnect +
-          // Connect…), not the connected layout.
-          AsyncData(:final value) => value == null || value.isDisconnected
-              ? _disconnected(context)
-              : _connected(context, value),
+          // A device that's never been connected 404s (null) → the bare
+          // "nothing known" row (Reconnect + Connect…). One disconnected after a
+          // session reports a NON-null status with state == disconnected: the
+          // daemon still knows it, so it keeps its card — name, chip, Connect
+          // (that device, no chooser) and Remove — like a Switch card does.
+          AsyncData(:final value) => value == null
+              ? _noDevice(context)
+              : _device(context, value),
           AsyncError(:final error) => _MessageRow(
               icon: Icons.error_outline,
               color: AraColors.accentError,
@@ -108,7 +118,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     );
   }
 
-  Widget _disconnected(BuildContext context) {
+  Widget _noDevice(BuildContext context) {
     return Row(
       children: [
         const EquipmentStateChip(state: EquipmentConnectionState.disconnected),
@@ -151,8 +161,13 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     }
   }
 
-  Widget _connected(BuildContext context, T value) {
+  /// A device the daemon knows — connected, connecting, disconnected after a
+  /// session, or in error. The header action follows the state: Disconnect (or
+  /// Cancel) while live; Connect + Remove otherwise. A not-live card also keeps
+  /// the chooser ("Connect…") so a different device can be picked instead.
+  Widget _device(BuildContext context, T value) {
     final title = _titleFor(value);
+    final live = value.isConnected || value.isConnecting;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -162,19 +177,105 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
               child: Text(title, style: Theme.of(context).textTheme.titleMedium),
             ),
             EquipmentStateChip(state: value.connectionState),
-            IconButton(
-              // While connecting, the same action aborts the in-progress connect.
-              tooltip: value.isConnecting ? 'Cancel connecting' : 'Disconnect',
-              icon: Icon(value.isConnecting ? Icons.close : Icons.link_off,
-                  size: 18),
-              onPressed: () => _disconnect(context),
-            ),
+            if (live)
+              IconButton(
+                // While connecting, the same action aborts the in-progress connect.
+                tooltip: value.isConnecting ? 'Cancel connecting' : 'Disconnect',
+                icon: Icon(value.isConnecting ? Icons.close : Icons.link_off,
+                    size: 18),
+                onPressed: () => _disconnect(context),
+              )
+            else ...[
+              if (onReconnect != null)
+                IconButton(
+                  tooltip: 'Connect',
+                  icon: const Icon(Icons.link, size: 18),
+                  onPressed: () => _reconnect(context),
+                ),
+              if (onForget != null)
+                IconButton(
+                  tooltip: 'Remove this $deviceTypeLabel',
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () => _remove(context, value),
+                ),
+            ],
           ],
         ),
         const Divider(height: 20, color: AraColors.border),
-        connectedBody(context, value),
+        // Under the device's own name + Disconnected chip, the type-level
+        // emptyLabel ("No rotator connected.") would read as a contradiction.
+        if (value.isDisconnected)
+          Text(
+            'Not connected.',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
+          )
+        else
+          connectedBody(context, value),
+        if (!live)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _connect(context),
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text('Connect…'),
+            ),
+          ),
       ],
     );
+  }
+
+  /// Remove a known-but-not-connected device: the daemon drops it from the live
+  /// service and forgets its auto-connect entry. Confirmed first, like the
+  /// Switch card's Remove — it is the way out for dead or replaced hardware.
+  Future<void> _remove(BuildContext context, T value) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final name = value.name.isEmpty ? deviceTypeLabel : value.name;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove $name?'),
+        content: Text(
+          'The $deviceTypeLabel is dropped and will no longer auto-connect on '
+          'boot. Connect it again any time via Connect….',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AraColors.accentError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      final performed = await onForget!();
+      if (!performed) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Another connect/disconnect is still in progress.'),
+        ));
+      }
+    } catch (e) {
+      // 404 = a daemon older than this client (no DELETE /equipment/{type}
+      // route yet) — say so rather than showing a bare "not found".
+      final text = isNotFoundEquipmentError(e)
+          ? 'The server could not remove this $deviceTypeLabel — it may need '
+              'updating.'
+          : "Couldn't remove: ${describeEquipmentError(e)}";
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 
   // The device's own name, or the capitalized device-type label as a fallback.

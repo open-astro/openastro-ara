@@ -29,6 +29,14 @@ abstract interface class SwitchClient {
   /// throws a 404 when no switch has ever been connected.
   Future<void> reconnect();
 
+  /// Reconnect the KNOWN switch [deviceId] — the card's Connect after a
+  /// disconnect — from the discovery record the daemon still holds
+  /// (`POST /api/v1/equipment/switch/{id}/connect`); the `SwitchDevice` carries
+  /// no host/port, so the client can't rebuild a `/connect` body itself.
+  /// 202-Accepted; throws a 404 when the daemon no longer knows the id
+  /// (removed, or a daemon restart without auto-connect) — use Add switch.
+  Future<void> reconnectDevice(String deviceId);
+
   /// Write [value] to [portId] of the switch with [deviceId]. 202-Accepted.
   Future<void> setValue({
     required String deviceId,
@@ -94,6 +102,11 @@ class SwitchApi implements SwitchClient {
   @override
   Future<void> reconnect() async {
     await _dio.post<void>('$_base/reconnect');
+  }
+
+  @override
+  Future<void> reconnectDevice(String deviceId) async {
+    await _dio.post<void>('$_base/${Uri.encodeComponent(deviceId)}/connect');
   }
 
   @override

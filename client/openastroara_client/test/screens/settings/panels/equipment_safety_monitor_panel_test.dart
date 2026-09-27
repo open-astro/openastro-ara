@@ -24,6 +24,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeSafetyApi implements EquipmentDeviceClient<SafetyMonitorStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeSafetyApi(this.status);
   SafetyMonitorStatus? status;
   final List<String> calls = [];
@@ -115,14 +119,17 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
   });
 
-  testWidgets('a disconnected (non-null) monitor shows the empty state + Reconnect',
+  testWidgets('a disconnected (non-null) monitor keeps its card with Connect + Remove',
       (tester) async {
     // The daemon keeps the device after a disconnect and reports
-    // state=disconnected (non-null, not a 404). The shared card must render the
-    // disconnected layout (Reconnect + Connect…), not the connected one.
+    // state=disconnected (non-null, not a 404). The shared card keeps the device
+    // (name + Connect + Remove + the chooser), not the connected layout.
     await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
-    expect(find.text('No safety monitor connected.'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+    expect(find.text('CloudWatcher'), findsOneWidget);
+    expect(find.text('Not connected.'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    expect(find.byTooltip('Remove this safety monitor'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
     expect(find.byIcon(Icons.link_off), findsNothing);
   });
 

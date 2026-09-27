@@ -29,6 +29,8 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
+  @override
+  Future<void> forget() async {}
   final List<String> commands = [];
   bool failCommands = false;
   MountStatus? status;

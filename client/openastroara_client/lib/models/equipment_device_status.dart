@@ -34,9 +34,10 @@ abstract class EquipmentDeviceStatus {
   bool get isConnected => connectionState == EquipmentConnectionState.connected;
 
   /// The device service keeps the last device after a disconnect and reports it
-  /// with `state == disconnected` (a non-null status, NOT a 404), so callers must
-  /// treat this as "no live device" — the same as a null status — rather than a
-  /// connected one. See [EquipmentConnectionCard].
+  /// with `state == disconnected` (a non-null status, NOT a 404). Callers must
+  /// treat this as "no live device", never as a connected one; it is still a
+  /// KNOWN device though (name, Connect, Remove), unlike a null status, which
+  /// means nothing was ever selected. See [EquipmentConnectionCard].
   bool get isDisconnected =>
       connectionState == EquipmentConnectionState.disconnected;
 

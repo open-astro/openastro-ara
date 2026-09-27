@@ -194,6 +194,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ReconnectAsync_for_an_unknown_id_returns_null() {
+            using var svc = new SwitchService();
+            Assert.That(await svc.ReconnectAsync("never-seen", null, CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ReconnectAsync_after_a_disconnect_redispatches_the_known_device() {
+            using var svc = new SwitchService();
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid", 0)), null, CancellationToken.None);
+            await PollUntilNotConnectingAsync(svc, "uid");
+            await svc.DisconnectAsync("uid", null, CancellationToken.None);
+
+            var accepted = await svc.ReconnectAsync("uid", null, CancellationToken.None);
+
+            // The card's Connect re-dispatches the registry's own discovery record (no rediscovery,
+            // no host/port from the client): the entry leaves Disconnected — Connecting, then Error
+            // for this unreachable device — and stays a single known switch.
+            Assert.That(accepted, Is.Not.Null);
+            var dto = await PollUntilNotConnectingAsync(svc, "uid");
+            Assert.That(dto!.State, Is.EqualTo(EquipmentConnectionState.Error));
+            Assert.That(await svc.GetAllAsync(CancellationToken.None), Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public void SetValueAsync_for_an_unknown_device_number_throws_InvalidOperation() {
             using var svc = new SwitchService();
             Assert.ThrowsAsync<InvalidOperationException>(

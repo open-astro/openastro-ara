@@ -72,6 +72,9 @@ namespace OpenAstroAra.Test {
             public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
                 throw new NotSupportedException();
 
+            public Task<bool> ForgetAsync(CancellationToken ct) =>
+                throw new NotSupportedException();
+
             public Task<OperationAcceptedDto> ApplyFlatPanelAsync(FlatPanelRequestDto request, string? idempotencyKey, CancellationToken ct) {
                 if (ThrowOnApply) {
                     throw new InvalidOperationException("flat device is not connected");

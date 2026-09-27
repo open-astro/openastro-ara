@@ -26,6 +26,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeFwApi implements EquipmentDeviceClient<FilterWheelStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeFwApi(this.status);
   FilterWheelStatus? status;
   final List<String> calls = [];

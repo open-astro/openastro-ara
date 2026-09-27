@@ -24,6 +24,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeRotatorApi implements EquipmentDeviceClient<RotatorStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeRotatorApi(this.status);
   RotatorStatus? status;
   final List<String> calls = [];

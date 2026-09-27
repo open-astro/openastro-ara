@@ -24,6 +24,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeFlatApi implements EquipmentDeviceClient<FlatPanelStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeFlatApi(this.status);
   FlatPanelStatus? status;
   final List<String> calls = [];
@@ -119,16 +123,35 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
   });
 
-  testWidgets('a disconnected (non-null) status still offers Reconnect',
+  testWidgets('a disconnected (non-null) status keeps its card with Connect + Remove',
       (tester) async {
     // After a session disconnect the daemon keeps the device and reports
-    // state=disconnected (a non-null status, not a 404). The card must still show
-    // the disconnected layout with Reconnect — not treat the lingering device as
-    // connected (which would hide Reconnect behind a Disconnect button).
-    await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
-    expect(find.text('No flat panel connected.'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+    // state=disconnected (a non-null status, not a 404). The card keeps the
+    // device — name, Disconnected chip, a Connect icon (that device, no chooser)
+    // and Remove — never a Disconnect button, and the chooser stays reachable.
+    final api =
+        await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
+    expect(find.text('FlatMaster'), findsOneWidget);
+    expect(find.text('Not connected.'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    expect(find.byTooltip('Remove this flat panel'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
     expect(find.byIcon(Icons.link_off), findsNothing); // not the connected layout
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:reconnect'));
+  });
+
+  testWidgets('Remove on a disconnected panel confirms, then forgets it',
+      (tester) async {
+    final api =
+        await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
+    await tester.tap(find.byTooltip('Remove this flat panel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove FlatMaster?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('forget'));
   });
 
   testWidgets('a connected panel with the light on shows its readout, no Reconnect',

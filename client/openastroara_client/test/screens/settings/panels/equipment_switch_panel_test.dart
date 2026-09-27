@@ -11,9 +11,12 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/screens/settings/panels/equipment_switch_panel.dart';
 import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/services/switch_api.dart';
+import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/equipment_connection_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -24,6 +27,16 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
   Future<void> add(AraServer server) async {}
+}
+
+class _NoDiscovery implements EquipmentDiscoveryApi {
+  @override
+  Future<List<DiscoveredDevice>> discover(
+    EquipmentDeviceType type, {
+    bool forceRefresh = false,
+  }) async => const [];
+  @override
+  void close() {}
 }
 
 class _FakeSwitchApi implements SwitchClient {
@@ -52,6 +65,14 @@ class _FakeSwitchApi implements SwitchClient {
       calls.add('connect:${device.alpacaDeviceNumber}');
   @override
   Future<void> reconnect() async => calls.add("reconnect");
+  /// Thrown by [reconnectDevice] when set (the daemon-forgot-it 404 case).
+  Object? reconnectDeviceError;
+
+  @override
+  Future<void> reconnectDevice(String deviceId) async {
+    calls.add('reconnectDevice:$deviceId');
+    if (reconnectDeviceError != null) throw reconnectDeviceError!;
+  }
 
   @override
   Future<void> disconnect(String deviceId) async =>
@@ -120,6 +141,11 @@ Future<_FakeSwitchApi> _pump(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
         ),
         switchApiFactoryProvider.overrideWithValue((_) => api),
+        // The card's Connect falls back to discovery on a 404; nothing is
+        // discoverable here, so the 404 surfaces as the card's message.
+        equipmentDiscoveryApiFactoryProvider.overrideWithValue(
+          (_) => _NoDiscovery(),
+        ),
         cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
       ],
       child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
@@ -568,5 +594,68 @@ void main() {
       ),
     ]);
     expect(find.byTooltip('Remove this switch'), findsNothing);
+  });
+
+  testWidgets('a disconnected switch offers Connect, not Disconnect', (
+    tester,
+  ) async {
+    // The bug: a card offered only Disconnect whatever its state, so a switch
+    // the user disconnected had no way back on its own card.
+    final api = await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.disconnected),
+    ]);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    expect(find.byTooltip('Disconnect'), findsNothing);
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('reconnectDevice:sw-0'));
+  });
+
+  testWidgets('an errored switch offers Connect as well', (tester) async {
+    await _pump(tester, [_device(const [], state: SwitchConnectionState.error)]);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    expect(find.byTooltip('Disconnect'), findsNothing);
+  });
+
+  testWidgets('a connected switch offers Disconnect, not Connect', (
+    tester,
+  ) async {
+    await _pump(tester, [_device(const [])]);
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsNothing);
+  });
+
+  testWidgets('a connecting switch offers Disconnect (cancel), not Connect', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.connecting),
+    ]);
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsNothing);
+  });
+
+  testWidgets('Connect answered 404 (forgotten, or an older daemon) says so', (
+    tester,
+  ) async {
+    final api = await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.disconnected),
+    ]);
+    api.reconnectDeviceError = DioException(
+      requestOptions: RequestOptions(path: '/x'),
+      response: Response(
+        requestOptions: RequestOptions(path: '/x'),
+        statusCode: 404,
+      ),
+    );
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The server could not reconnect this switch — it may need updating; '
+        'otherwise use Add switch.',
+      ),
+      findsOneWidget,
+    );
   });
 }

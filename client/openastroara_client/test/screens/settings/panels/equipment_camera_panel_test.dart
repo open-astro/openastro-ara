@@ -25,6 +25,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeCameraApi(this.status);
   CameraStatus? status;
   final List<String> calls = [];

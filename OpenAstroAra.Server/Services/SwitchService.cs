@@ -240,6 +240,23 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         return Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
     }
 
+    public async Task<OperationAcceptedDto?> ReconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        DiscoveredDeviceDto device;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_connections.TryGetValue(deviceId, out var conn)) {
+                return null;
+            }
+            // The registry keeps a disconnected switch's discovery record (DisconnectAsync leaves
+            // the entry as Disconnected), so the reconnect is the ordinary connect of that record.
+            device = conn.Device;
+        }
+        // Outside the lock: ConnectAsync takes _gate itself and handles the already-live /
+        // known-but-down cases. A Remove racing in between simply re-adds the device — harmless.
+        return await ConnectAsync(new ConnectRequestDto(device), idempotencyKey, ct).ConfigureAwait(false);
+    }
+
     // #1065 — lazily resolved (Func<>) to break the CameraService ↔ SwitchService construction
     // cycle: the camera syncs the fan through this service, this service asks the camera whether
     // it is cooling before it lets the fan stop.

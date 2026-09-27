@@ -256,8 +256,8 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
   }
 }
 
-/// One connected (or known) switch device: header (name + state + disconnect)
-/// and its ports.
+/// One connected (or known) switch device: header (name + state +
+/// connect/disconnect) and its ports.
 class _SwitchCard extends ConsumerWidget {
   final SwitchDevice device;
   const _SwitchCard({required this.device});
@@ -267,6 +267,9 @@ class _SwitchCard extends ConsumerWidget {
     final title = device.name.isEmpty
         ? 'Switch ${device.alpacaDeviceNumber}'
         : device.name;
+    final live =
+        device.connectionState == SwitchConnectionState.connected ||
+        device.connectionState == SwitchConnectionState.connecting;
     return Card(
       color: AraColors.bgPanel,
       margin: const EdgeInsets.only(top: 12),
@@ -284,11 +287,23 @@ class _SwitchCard extends ConsumerWidget {
                   ),
                 ),
                 _StateChip(state: device.connectionState),
-                IconButton(
-                  tooltip: 'Disconnect',
-                  icon: const Icon(Icons.link_off, size: 18),
-                  onPressed: () => _disconnect(context, ref),
-                ),
+                // Disconnect while live (connected or mid-connect), Connect
+                // otherwise. A card used to offer only Disconnect whatever its
+                // state, so once a switch was disconnected the only ways back
+                // were the header Reconnect (shown only when EVERY switch is
+                // down) or re-picking the device via Add switch.
+                if (live)
+                  IconButton(
+                    tooltip: 'Disconnect',
+                    icon: const Icon(Icons.link_off, size: 18),
+                    onPressed: () => _disconnect(context, ref),
+                  )
+                else
+                  IconButton(
+                    tooltip: 'Connect',
+                    icon: const Icon(Icons.link, size: 18),
+                    onPressed: () => _connect(context, ref),
+                  ),
                 // The stuck-device escape hatch: a dead/duplicate switch stays
                 // listed until removed. Only while NOT connected (the server
                 // refuses removal of a live switch — disconnect first).
@@ -418,6 +433,35 @@ class _SwitchCard extends ConsumerWidget {
           content: Text("Couldn't remove: ${_msg(e)}"),
           backgroundColor: AraColors.accentError,
         ),
+      );
+    }
+  }
+
+  /// Reconnect this known switch from the daemon's own discovery record — no
+  /// rediscovery, no chooser. A 404 is EITHER the daemon no longer knowing the
+  /// id (removed, or restarted without auto-connect) OR a daemon older than
+  /// this client that lacks the route — an empty 404 either way, so the copy
+  /// covers both and points at Add switch.
+  Future<void> _connect(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final performed = await ref
+          .read(switchListProvider.notifier)
+          .reconnectDevice(device.deviceId);
+      if (!performed) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Another connect/disconnect is still in progress.'),
+          ),
+        );
+      }
+    } catch (e) {
+      final text = isNotFoundEquipmentError(e)
+          ? 'The server could not reconnect this switch — it may need updating; '
+              'otherwise use Add switch.'
+          : "Couldn't connect: ${_msg(e)}";
+      messenger.showSnackBar(
+        SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
       );
     }
   }

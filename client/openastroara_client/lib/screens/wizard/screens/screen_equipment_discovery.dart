@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/discovered_device.dart';
 import '../../../models/profile_draft.dart';
-import '../../../models/server.dart';
 import '../../../services/equipment_discovery_api.dart';
+import '../../../state/equipment/equipment_discovery_provider.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../util/friendly_error.dart';
@@ -15,11 +15,10 @@ import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
 
-/// Injectable factory for the daemon discovery API — tests swap a fake so the
-/// §68.2 Next-gate can be exercised without a live daemon.
-final equipmentDiscoveryApiFactoryProvider =
-    Provider<EquipmentDiscoveryApi Function(AraServer)>(
-        (_) => EquipmentDiscoveryApi.new);
+// The discovery factory moved to the state layer (the Switch card's fallback
+// needs it); re-exported so existing importers keep working.
+export '../../../state/equipment/equipment_discovery_provider.dart'
+    show equipmentDiscoveryApiFactoryProvider;
 
 /// §37.2 Screen 2 — Connect to AlpacaBridge.
 ///

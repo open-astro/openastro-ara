@@ -235,3 +235,33 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Services/CoolingFanInterlock.cs` (`CoolerStateFor`, `FanSyncRequest`), `Services/SwitchService.cs` (`ProbeCoolerStateAsync`, `SyncFanToCoolingCameraAsync`), `Services/SwitchService.Mediator.cs`, `Services/CameraService.cs` (`SetCoolerAsync`, `SyncCoolingFanAsync`), `OpenAstroAra.Test/CoolingFanInterlockBenchTest.cs`.
 
 **Related:** #1076 (from the #1070 reviews), CHANGELOG [Unreleased]
+
+---
+
+### 2026-09-26 — per-switch reconnect: `POST /api/v1/equipment/switch/{id}/connect`
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/switch/{id}/connect` (new); the Switches panel card.
+
+**Decision:** reconnect a KNOWN switch by its id from the discovery record the daemon already holds (`DisconnectAsync` keeps the entry as Disconnected). 202 + `OperationAccepted` when dispatched (idempotent when the switch is already Connecting/Connected, exactly like `/connect`); 404 when the id is unknown — removed via `DELETE /switch/{id}`, or never connected this daemon session — so the client falls back to Add switch. The card now shows Disconnect while the switch is connected or connecting and Connect otherwise (Disconnected / Error / unknown).
+
+**Reasoning:** a card offered only Disconnect whatever its state, so a switch the user disconnected could not be reconnected from its card: the header Reconnect (`/switch/reconnect`) is deliberately offered only when EVERY switch is down (re-dispatching a live switch under a changed remembered endpoint can tear it down), and the only other path was re-picking the device through the discovery chooser. `SwitchDto` carries no host/port/https, so the client cannot rebuild a `/connect` body itself; adding those fields to the DTO was the alternative, but the daemon is the owner of the discovery record and a by-id route keeps the wire shape unchanged for older clients. No re-remember on this route: the entry was remembered by its first `/connect` and only `DELETE` forgets it.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (switch group); `ISwitchService.ReconnectAsync`.
+
+**Related:** `/switch/reconnect` (§52.1 manual reconnect, all remembered switches); `DELETE /switch/{id}` (§45 stuck-device removal).
+
+---
+
+### 2026-09-26 — remove a single-instance device: `DELETE /api/v1/equipment/{type}`
+
+**Endpoint(s) or area:** `DELETE /api/v1/equipment/{camera|telescope|focuser|filterwheel|rotator|dome|observingconditions|safetymonitor|flatdevice}` (new); the shared `EquipmentConnectionCard` (every single-instance panel).
+
+**Decision:** drop the service's retained device (the one it keeps after a disconnect so the status GET reports `state: disconnected` instead of 404) AND forget its remembered auto-connect entry. 204 (idempotent — nothing retained is still a 204); 409 while the device is Connecting/Connected, so a removal on live hardware is an explicit disconnect-then-remove, exactly like `DELETE /switch/{id}`. An Error device is removed directly (its state is published as Disconnected first, then dropped). The existing `DELETE …/remembered` keeps its store-only, never-409 semantics — the wizard's "None" slot relies on it while a device may still be live.
+
+The card now keeps a known device's card while it is not live: name, state chip, a **Connect** icon (`POST …/reconnect`, no chooser) and a **Remove** icon (this route, confirmed first), with the chooser ("Connect…") still available to pick a different device. Disconnect (or Cancel while connecting) stays the only header action while live. The bare "nothing known" row (Reconnect + Connect…) is unchanged.
+
+**Reasoning:** the Switch card gained Connect/Remove on its card (entry above); the maintainer asked for the same on every other device. Before this a disconnected camera/mount/etc. showed the anonymous "No X connected." row with a Reconnect button — the device's name vanished and there was no way to drop dead or replaced hardware short of a daemon restart. Clearing the retained record needs the service (only it holds the record), hence a per-service `ForgetAsync` behind one route rather than widening `/remembered`.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (`RemoveDeviceAsync`); `I{Type}Service.ForgetAsync`.
+
+**Related:** `DELETE /switch/{id}` (§45); `DELETE …/remembered` (§52.1); the per-switch `POST /switch/{id}/connect` entry above.

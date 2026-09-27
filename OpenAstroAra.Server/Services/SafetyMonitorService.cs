@@ -168,6 +168,36 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     }
 
     // ct is unused by design (see ConnectAsync): the 202 contract makes teardown fire-and-forget.
+    public async Task<bool> ForgetAsync(CancellationToken ct) {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_device is null) {
+                return false;
+            }
+            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
+                throw new InvalidOperationException("the safety monitor is connected — disconnect it before removing it");
+            }
+        }
+        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
+        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
+        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
+        // throwing property read) still holds a live, adopted client, and the card offers no
+        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
+        await DisconnectAsync(null, ct).ConfigureAwait(false);
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_device is null) {
+                return false;
+            }
+            // A connect that raced in between the two locks is live again — refuse, don't drop.
+            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
+                throw new InvalidOperationException("the safety monitor is connected — disconnect it before removing it");
+            }
+            _device = null;
+            return true;
+        }
+    }
+
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
         AlpacaSafetyMonitor? client;
         lock (_gate) {

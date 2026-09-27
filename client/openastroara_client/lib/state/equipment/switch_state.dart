@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/discovered_device.dart';
@@ -5,6 +6,7 @@ import '../../models/server.dart';
 import '../../models/switch_device.dart';
 import '../../services/switch_api.dart';
 import '../saved_server_state.dart';
+import 'equipment_discovery_provider.dart';
 import '../settings/equipment_connection_state.dart';
 import '../ws/ws_providers.dart';
 
@@ -96,6 +98,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     _refreshing = false;
     _acting = false;
     _generation++;
+    // Discovery records are per server (a same-id switch on another server is
+    // the same physical device, but the map must not grow across servers for
+    // the app's lifetime) — the next Connect re-discovers once, then reuses.
+    _knownDevices.clear();
     // §60.9 push — the Switch list has NO poll fallback (pull-on-demand only),
     // so this is the only way a daemon-side switch transition (another client
     // connecting one, a slot replacement, a drop) reaches an open panel without
@@ -134,8 +140,18 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // of every other switch. The UI wraps each control to surface the error; the
   // list keeps showing the last-read devices. (List-READ failures still surface as
   // the provider's AsyncError, since a list we can't read can't be shown.)
-  Future<bool> connect(DiscoveredDevice device) =>
-      _act((api) => api.connect(device));
+  Future<bool> connect(DiscoveredDevice device) {
+    _knownDevices[device.uniqueId] = device;
+    return _act((api) => api.connect(device));
+  }
+
+  // Discovery records of the switches this client connected (Add switch) or
+  // found through the fallback below, by unique id. The daemon's discovery is
+  // an uncached ~2 s UDP broadcast, so on a daemon WITHOUT the per-switch route
+  // the card's Connect would otherwise pay that broadcast every time — the
+  // measured "camera reconnects instantly, the switch takes a second". In
+  // memory only: an app restart pays one broadcast per switch, then not again.
+  final Map<String, DiscoveredDevice> _knownDevices = {};
 
   Future<bool> disconnect(String deviceId) =>
       _act((api) => api.disconnect(deviceId));
@@ -147,6 +163,55 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   /// Reconnect every switch the daemon remembers (no re-discovery). Throws a 404
   /// when nothing has been connected yet. Returns whether the call was performed.
   Future<bool> reconnectAll() => _act((api) => api.reconnect());
+
+  /// Reconnect ONE known switch by id — the card's Connect. Tries the daemon's
+  /// per-switch route first; on a 404 (a daemon older than this client that
+  /// lacks the route, or one that no longer knows the id) it falls back to the
+  /// device's discovery record — the one kept from an earlier connect, else a
+  /// discovery broadcast — and connects it through the plain `/connect` every
+  /// daemon has. Rethrows the 404 only when the
+  /// device is not discoverable either (→ "use Add switch"). Returns whether
+  /// the call was performed.
+  Future<bool> reconnectDevice(String deviceId) => _act((api) async {
+    try {
+      await api.reconnectDevice(deviceId);
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) rethrow;
+      final device =
+          _knownDevices[deviceId] ?? await _discoverSwitch(deviceId);
+      if (device == null) rethrow;
+      _knownDevices[deviceId] = device;
+      await api.connect(device);
+    }
+  });
+
+  /// Find the switch with [deviceId] via the daemon's discovery endpoint —
+  /// the cached list, then one forced rescan ONLY when that list came back
+  /// empty (a populated list that lacks the id is an answer, and each scan is
+  /// a ~2 s broadcast spent inside the acting guard). Null when it isn't
+  /// there or discovery itself fails (the caller then surfaces its 404).
+  Future<DiscoveredDevice?> _discoverSwitch(String deviceId) async {
+    final server = ref.read(_activeSwitchServerProvider);
+    if (server == null) return null;
+    final discovery = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
+    try {
+      for (final force in const [false, true]) {
+        final found = await discovery.discover(
+          EquipmentDeviceType.switchDevice,
+          forceRefresh: force,
+        );
+        for (final d in found) {
+          if (d.uniqueId == deviceId) return d;
+        }
+        if (found.isNotEmpty) return null;
+      }
+      return null;
+    } on DioException {
+      return null;
+    } finally {
+      discovery.close();
+    }
+  }
 
   Future<bool> setValue({
     required String deviceId,

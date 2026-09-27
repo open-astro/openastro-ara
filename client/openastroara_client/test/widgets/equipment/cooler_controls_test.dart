@@ -44,6 +44,8 @@ class _FakeSwitchClient implements SwitchClient {
   @override
   Future<void> reconnect() async {}
   @override
+  Future<void> reconnectDevice(String deviceId) async {}
+  @override
   Future<void> setValue({
     required String deviceId,
     required int portId,
@@ -83,6 +85,10 @@ SwitchDevice _fanDevice({double value = 0.0}) => SwitchDevice(
     );
 
 class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeCameraApi(this.status);
   CameraStatus? status;
   final List<String> calls = [];
