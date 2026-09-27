@@ -97,7 +97,9 @@ curl http://localhost:5555/healthz   # → "ok"
 The build doesn't need CFITSIO, but the capture path resolves it at runtime
 (`DllNotFoundException: 'cfitsio'` means it's missing).
 
-- **Linux:** `sudo apt-get install libcfitsio-dev` (Debian/Ubuntu; pulls the runtime lib).
+- **Linux:** `sudo apt-get install libcfitsio10` (Debian/Ubuntu). The runtime package is
+  enough: the server resolves the versioned `libcfitsio.so.10` itself, so a dev box matches
+  the SBC. `libcfitsio-dev` also works.
 - **macOS (Apple Silicon):** `brew install cfitsio`. The `CopyLibCfitsioMacOS`
   post-build target in `OpenAstroAra.Server.csproj` copies the dylib into the app's
   native runtime dir on every macOS build — needed because the .NET loader doesn't
