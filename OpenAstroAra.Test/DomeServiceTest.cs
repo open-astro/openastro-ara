@@ -30,6 +30,39 @@ namespace OpenAstroAra.Test {
     public class DomeServiceTest {
 
         [Test]
+        public async Task ForgetAsync_with_no_device_retained_returns_false() {
+            using var svc = new DomeService();
+            Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.False);
+        }
+
+        [Test]
+        public async Task ForgetAsync_after_a_disconnect_drops_the_retained_device() {
+            using var svc = new DomeService();
+            var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Dome, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            // Disconnect supersedes the in-flight connect (generation bump), so no settle poll is needed.
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            var retained = await svc.GetAsync(CancellationToken.None);
+            Assert.That(retained, Is.Not.Null, "retained after disconnect");
+            Assert.That(retained!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+
+            Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.True);
+
+            // The card's Remove: the status GET reads 404 again, as before any device was selected.
+            Assert.That(await svc.GetAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ForgetAsync_while_connecting_throws_InvalidOperation() {
+            using var svc = new DomeService();
+            var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Dome, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).
+            Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
+            await svc.DisconnectAsync(null, CancellationToken.None); // supersede the dead connect before dispose
+        }
+
+        [Test]
         public async Task GetAsync_is_null_before_any_device_is_selected() {
             using var svc = new DomeService();
             Assert.That(await svc.GetAsync(CancellationToken.None), Is.Null);
