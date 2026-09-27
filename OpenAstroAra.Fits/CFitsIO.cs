@@ -50,6 +50,9 @@ internal static partial class CFitsIO {
     // to 4.0 (Debian 11, Ubuntu 22.04). Listed newest first so a host with both
     // picks the one the binding was written against.
     private static readonly string[] s_linuxSonames = ["libcfitsio.so.10", "libcfitsio.so.9"];
+    // On macOS a bare dlopen searches only the DYLD fallback paths, not
+    // /opt/homebrew/lib, so these mostly matter for a system-wide install; the
+    // Homebrew case is handled by the CopyLibCfitsioMacOS build target instead.
     private static readonly string[] s_macSonames = ["libcfitsio.10.dylib", "libcfitsio.9.dylib"];
 
     static CFitsIO() {

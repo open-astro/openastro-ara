@@ -12088,7 +12088,7 @@ failed every capture with `DllNotFoundException` until 2026-09-27. `CFitsIO`
 therefore registers a `DllImportResolver` that runs the default probe first and
 then falls back to the versioned sonames the distro packages actually ship:
 - Linux: `libcfitsio.so`, then `libcfitsio.so.10` (CFITSIO 4.1+), then `libcfitsio.so.9` (3.49 to 4.0)
-- macOS: `libcfitsio.dylib`, then `libcfitsio.10.dylib`, then `libcfitsio.9.dylib`
+- macOS: `libcfitsio.dylib`, then `libcfitsio.10.dylib`, then `libcfitsio.9.dylib` — in practice the versioned names rarely fire on Apple Silicon, because a bare `dlopen` searches only the DYLD fallback paths and not `/opt/homebrew/lib`; the working mac path is the `CopyLibCfitsioMacOS` build target that stages the dylib next to the binary (docs/RUNNING.md)
 - Windows: `cfitsio.dll` (no versioned fallback)
 
 The fallback is not redundant with the assembly-level `DefaultDllImportSearchPaths`
