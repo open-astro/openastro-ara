@@ -12,8 +12,11 @@
 # writing: the daemon user can unlink anything in its own directory and put a
 # symlink in its place, and a name that was safe when mktemp created it is not
 # safe seconds later. The result is therefore built in a private root-only
-# directory (mktemp -d, 0700) and only rename()d into place; rename replaces
-# whatever sits at the destination without following it. The request is
+# directory (mktemp -d, 0700) and only rename()d into place with `mv -T`;
+# rename replaces whatever sits at the destination without following it, and
+# -T keeps mv from treating a symlink-to-directory there as a target directory
+# (plain `mv` stat()s the destination, follows the link, and would drop a
+# root-owned file into whatever directory the link points at). The request is
 # checked to be a regular file before it is read; that check is not atomic
 # with the open, so a symlink swapped in between could at most make root read
 # MAX_ARGS lines of some other file into configure-storage.sh's argv, which
@@ -66,7 +69,9 @@ out=$("$HELPER" "$@" 2>&1) || rc=$?
     printf '%s\n' "$out"
 } > "$TMP"
 chmod 0644 "$TMP"
-# rename() replaces whatever sits at $RES (even a symlink) with our file and
-# never follows it; the daemon-writable directory is touched by nothing else.
-mv -f "$TMP" "$RES"
+# -T: never treat $RES as a directory, even when it is a symlink to one, so
+# this is always rename(2) onto the name, which replaces a planted symlink
+# instead of following it. The daemon-writable directory is touched by
+# nothing else.
+mv -fT "$TMP" "$RES"
 exit 0
