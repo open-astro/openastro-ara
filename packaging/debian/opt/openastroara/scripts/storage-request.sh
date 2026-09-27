@@ -7,15 +7,18 @@
 #                                             then the helper's output)
 # The unit always exits 0 once a result has been written — the helper's own
 # exit code travels in the result file, so a refused format never leaves a
-# "failed" instance behind in systemd. The request directory is owned by the
-# daemon user and this runs as root, so every file it writes there is created
-# fresh (mktemp, O_EXCL) and the request is checked to be a regular file
-# before it is read. That check is not atomic with the open: a symlink swapped
-# in between could at most make root read MAX_ARGS lines of some other file
-# into configure-storage.sh's argv, which the helper validates and never
-# echoes back — no wider than the argv the daemon user could already hand it
-# under the old sudoers rule. Nothing here writes through a daemon-supplied
-# path (the result is rename()d over it).
+# "failed" instance behind in systemd. The exchange directory is owned by the
+# daemon user and this runs as root, so root must never open a path there for
+# writing: the daemon user can unlink anything in its own directory and put a
+# symlink in its place, and a name that was safe when mktemp created it is not
+# safe seconds later. The result is therefore built in a private root-only
+# directory (mktemp -d, 0700) and only rename()d into place; rename replaces
+# whatever sits at the destination without following it. The request is
+# checked to be a regular file before it is read; that check is not atomic
+# with the open, so a symlink swapped in between could at most make root read
+# MAX_ARGS lines of some other file into configure-storage.sh's argv, which
+# the helper validates and never echoes back — no wider than the argv the
+# daemon user could already hand it under the old sudoers rule.
 set -u
 
 DIR=/run/openastroara/storage
@@ -50,7 +53,12 @@ done < "$REQ"
 shift   # drop the request id; the rest is the helper's argv
 rm -f "$REQ"
 
-TMP=$(mktemp "$DIR/.$ID.XXXXXX") || exit 9
+# Private root-only work directory on the same tmpfs as $DIR (so the final mv
+# is a rename, never a copy through the destination name). Nothing the daemon
+# user does can reach a path under it.
+WORK=$(mktemp -d /run/openastroara-storage.XXXXXX) || exit 9
+trap 'rm -rf "$WORK"' EXIT
+TMP="$WORK/result"
 rc=0
 out=$("$HELPER" "$@" 2>&1) || rc=$?
 {
@@ -58,6 +66,7 @@ out=$("$HELPER" "$@" 2>&1) || rc=$?
     printf '%s\n' "$out"
 } > "$TMP"
 chmod 0644 "$TMP"
-# rename() replaces whatever sits at $RES (even a symlink) with our file.
+# rename() replaces whatever sits at $RES (even a symlink) with our file and
+# never follows it; the daemon-writable directory is touched by nothing else.
 mv -f "$TMP" "$RES"
 exit 0
