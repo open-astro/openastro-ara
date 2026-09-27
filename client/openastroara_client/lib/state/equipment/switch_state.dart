@@ -98,6 +98,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     _refreshing = false;
     _acting = false;
     _generation++;
+    // Discovery records are per server (a same-id switch on another server is
+    // the same physical device, but the map must not grow across servers for
+    // the app's lifetime) — the next Connect re-discovers once, then reuses.
+    _knownDevices.clear();
     // §60.9 push — the Switch list has NO poll fallback (pull-on-demand only),
     // so this is the only way a daemon-side switch transition (another client
     // connecting one, a slot replacement, a drop) reaches an open panel without
