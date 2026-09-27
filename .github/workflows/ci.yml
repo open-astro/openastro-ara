@@ -335,10 +335,12 @@ jobs:
 
       # §14e capture path: CameraConnectIntegrationTest writes a real FITS file through
       # CFITSIO (P/Invoke), so the runtime lib must be present in this job too.
+      # Runtime package only (no -dev): that is what the .deb depends on, so this
+      # job proves the binding resolves the versioned soname the way an SBC does.
       - name: Install CFITSIO (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcfitsio-dev
+          sudo apt-get install -y libcfitsio10
 
       - name: dotnet restore (test project)
         run: dotnet restore OpenAstroAra.Test/OpenAstroAra.Test.csproj
@@ -397,11 +399,13 @@ jobs:
           dotnet-version: '10.0.x'
 
       # The Image/Fits tests resolve CFITSIO at runtime; the build itself does not
-      # need it, but the test step below does.
+      # need it, but the test step below does. Runtime package only (no -dev) so
+      # the tests exercise the same versioned-soname resolution as a stock SBC,
+      # where the .deb's libcfitsio10 dependency ships no unversioned symlink.
       - name: Install CFITSIO (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcfitsio-dev
+          sudo apt-get install -y libcfitsio10
 
       # Cache the global NuGet package folder so a clean runner doesn't re-download
       # every package each run. No packages.lock.json in this repo, so key on the
@@ -467,12 +471,12 @@ jobs:
 
       # §72.2 — install CFITSIO so OpenAstroAra.Fits can resolve the
       # native library at runtime (build doesn't need it, but a future
-      # FitsImageTests step will). Debian's libcfitsio10 (runtime) +
-      # libcfitsio-dev (headers, for ldconfig + symlinks) cover both.
+      # FitsImageTests step will). Runtime package only, matching the .deb's
+      # declared dependency; the binding resolves the versioned soname itself.
       - name: Install CFITSIO (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcfitsio-dev
+          sudo apt-get install -y libcfitsio10
 
       # Share the NuGet package cache with analyzer-gate (same key) so neither job
       # re-downloads every package on a clean runner.
