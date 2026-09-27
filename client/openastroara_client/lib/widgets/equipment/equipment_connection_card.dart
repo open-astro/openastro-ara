@@ -202,9 +202,11 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
           ],
         ),
         const Divider(height: 20, color: AraColors.border),
+        // Under the device's own name + Disconnected chip, the type-level
+        // emptyLabel ("No rotator connected.") would read as a contradiction.
         if (value.isDisconnected)
           Text(
-            emptyLabel,
+            'Not connected.',
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
@@ -263,8 +265,14 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         ));
       }
     } catch (e) {
+      // 404 = a daemon older than this client (no DELETE /equipment/{type}
+      // route yet) — say so rather than showing a bare "not found".
+      final text = isNotFoundEquipmentError(e)
+          ? 'The server could not remove this $deviceTypeLabel — it may need '
+              'updating.'
+          : "Couldn't remove: ${describeEquipmentError(e)}";
       messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't remove: ${describeEquipmentError(e)}"),
+        content: Text(text),
         backgroundColor: AraColors.accentError,
       ));
     }

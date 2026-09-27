@@ -126,7 +126,7 @@ void main() {
     // (name + Connect + Remove + the chooser), not the connected layout.
     await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
     expect(find.text('CloudWatcher'), findsOneWidget);
-    expect(find.text('No safety monitor connected.'), findsOneWidget);
+    expect(find.text('Not connected.'), findsOneWidget);
     expect(find.byTooltip('Connect'), findsOneWidget);
     expect(find.byTooltip('Remove this safety monitor'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);

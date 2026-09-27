@@ -132,7 +132,7 @@ void main() {
     final api =
         await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
     expect(find.text('FlatMaster'), findsOneWidget);
-    expect(find.text('No flat panel connected.'), findsOneWidget);
+    expect(find.text('Not connected.'), findsOneWidget);
     expect(find.byTooltip('Connect'), findsOneWidget);
     expect(find.byTooltip('Remove this flat panel'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);

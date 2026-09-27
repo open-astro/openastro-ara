@@ -267,8 +267,23 @@ void main() {
       c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
       throwsA(isA<DioException>()),
     );
-    expect(discovery.scans, 2, reason: 'cached list, then one forced rescan');
+    expect(discovery.scans, 1,
+        reason: 'a populated cached list without the id is the answer — no forced rescan');
     expect(api.calls, isNot(contains(startsWith('connect:'))));
+  });
+
+  test('an EMPTY cached discovery list earns one forced rescan', () async {
+    final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
+    final discovery = _FakeDiscoveryApi(const []);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    await expectLater(
+      c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
+      throwsA(isA<DioException>()),
+    );
+    expect(discovery.scans, 2, reason: 'cached (empty), then one forced rescan');
   });
 
   test('§25.3 switchActingProvider is true exactly while an action is in flight',

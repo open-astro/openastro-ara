@@ -2007,3 +2007,32 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   loopback-Host gate is its only guard and any local process can drive the cache (fill the disk).
   A per-run secret could go in the *path* instead: `core.dss.addDataSource({ url: './dss-' + TOKEN })`
   with the prefix checked server-side closes that gap without a header. Review note on #991.
+
+## Equipment card Connect/Remove follow-ups (2026-09-26, from the #1108 review notes)
+
+- Removing an already-disconnected single-instance device is silent on the wire: `ForgetAsync`
+  publishes through `DisconnectAsync`, whose `SetState(Disconnected)` is a no-op when the device
+  is already Disconnected, and `_device = null` publishes nothing. The acting client re-reads,
+  but a second open client keeps rendering the removed device's card until its next read (the
+  single-instance live poll only runs while connected). Publish a `state_changed` (or a
+  dedicated removed event) from `ForgetAsync` so §60.9 subscribers drop the card. Review note
+  on #1108.
+- `RemoveDeviceAsync` (409 mapping, 204 on nothing retained, best-effort store forget) and
+  `POST /switch/{id}/connect` (null → 404) are covered at service level only; there is no
+  HTTP-level test, matching `DELETE /switch/{id}`. Add endpoint tests for all three in one
+  sweep. Review note on #1108.
+- The Switch path is now the looser of the two: `_SwitchCard` gates Remove on
+  `!device.isConnected` (so it is offered mid-connect) and `SwitchService.RemoveAsync` refuses
+  only `Connected`, whereas the single-instance `ForgetAsync` refuses both `Connecting` and
+  `Connected`. Align the switch card gate on live (connected || connecting) and make
+  `RemoveAsync` refuse `Connecting` too. Pre-existing; review note on #1108.
+- The card's Connect calls `POST /equipment/{type}/reconnect`, which dispatches the REMEMBERED
+  entry, not the retained device the card names. They diverge after the wizard's store-only
+  `DELETE …/remembered` ("None" slot) while a device is still retained: the card shows the
+  device's name and Connect answers "No previous rotator to reconnect — use Connect… first".
+  Either have `/reconnect` fall back to the retained record, or add a by-id connect like the
+  switch's. Review note on #1108.
+- `RemoveDeviceAsync` and `DELETE /switch/{id}` both catch `InvalidOperationException`, which
+  is `ObjectDisposedException`'s base, so a request racing daemon shutdown gets a 409 "Cannot
+  access a disposed object" instead of a 5xx. Tighten both together if it ever matters. Review
+  note on #1108.

@@ -118,7 +118,8 @@ void main() {
     );
     expect(find.text('Nightcrawler'), findsOneWidget);
     expect(find.text('Disconnected'), findsOneWidget);
-    expect(find.text('No rotator connected.'), findsOneWidget);
+    expect(find.text('Not connected.'), findsOneWidget);
+    expect(find.text('No rotator connected.'), findsNothing);
     expect(find.text('BODY'), findsNothing);
     expect(find.byTooltip('Disconnect'), findsNothing);
     expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);

@@ -186,8 +186,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   });
 
   /// Find the switch with [deviceId] via the daemon's discovery endpoint —
-  /// cached list first, then one forced rescan. Null when it isn't there or
-  /// discovery itself fails (the caller then surfaces its original 404).
+  /// the cached list, then one forced rescan ONLY when that list came back
+  /// empty (a populated list that lacks the id is an answer, and each scan is
+  /// a ~2 s broadcast spent inside the acting guard). Null when it isn't
+  /// there or discovery itself fails (the caller then surfaces its 404).
   Future<DiscoveredDevice?> _discoverSwitch(String deviceId) async {
     final server = ref.read(_activeSwitchServerProvider);
     if (server == null) return null;
@@ -201,6 +203,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
         for (final d in found) {
           if (d.uniqueId == deviceId) return d;
         }
+        if (found.isNotEmpty) return null;
       }
       return null;
     } on DioException {
