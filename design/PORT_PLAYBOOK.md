@@ -12094,7 +12094,7 @@ then falls back to the versioned sonames the distro packages actually ship:
 The fallback is not redundant with the assembly-level `DefaultDllImportSearchPaths`
 attribute; removing it reintroduces the Pi capture failure.
 
-If the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message. Error references the §72.2 install docs.
+Intended: if the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message referencing the §72.2 install docs. **Not implemented as of 2026-09-27:** `FitsLibraryProbe.EnsureLoadable()` exists but is called only from tests, so a missing library surfaces at the first FITS write as `DllNotFoundException` (tracked in PORT_TODO "No startup probe for CFITSIO").
 
 ### 72.4 Managed wrapper layer
 
