@@ -59,7 +59,7 @@ Credited here per their terms:
 
 ## Online imagery (not bundled)
 
-- **DSS2 colour sky survey via CDS hips2fits** (`alasky.u-strasbg.fr`, CDS Strasbourg Observatory; the Digitized Sky Survey is © AURA/STScI and the original observatories) — the target previews in Plan my night and Tonight's Sky are cutouts fetched on demand from this service and cached under app support; the planetarium's optional "DSS2 sky survey" layer streams the same survey as HiPS tiles. Nothing is redistributed; each request is for the target being planned. Credit: "Digitized Sky Survey (DSS2), STScI/AURA, via CDS hips2fits". (A setting to disable the fetch is tracked as a follow-up.)
+- **DSS2 colour sky survey via CDS hips2fits** (`alasky.u-strasbg.fr`, CDS Strasbourg Observatory; the Digitized Sky Survey is © AURA/STScI and the original observatories) — the target previews in Plan my night and Tonight's Sky are cutouts fetched on demand from this service and cached under app support; the planetarium's optional "DSS2 sky survey" layer fetches the same survey as HiPS tiles through the client's loopback server, and those tiles are likewise cached under app support (`stellarium-dss2`) and kept until the folder is deleted. Nothing is redistributed; each request is for the target being planned. Credit: "Digitized Sky Survey (DSS2), STScI/AURA, via CDS hips2fits". (A setting to disable the fetch is tracked as a follow-up.)
 
 ## Bundled / vendored source
 

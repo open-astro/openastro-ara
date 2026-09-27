@@ -1984,3 +1984,26 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   `Isolate.run` payload and are skipped again in `computeTonightSkyLocal`. Filter `isStarType` on
   the mirror side of the merge in `dso_catalog_state.dart` so the star skip is one rule. Review
   note on #1107.
+
+## DSS2 tile cache housekeeping (2026-09-26, from the #991 review notes)
+
+- The client's `stellarium-dss2` cache is append-only: nothing evicts it and `docs/RUNNING.md`
+  does not say how to prune it. A night of zooming across the sky at Norder 7-8 is tens of MB;
+  months of it is GB, and the route is deliberately token-less (the WASM loader cannot set
+  `x-ara-token`), so any local process can grow it too. Add a size cap with LRU eviction (or at least a "Clean sky photo cache"
+  button next to the §65.4 preview-cache one in the Storage panel) and document the folder.
+  Two leftovers fold into the same sweep: an orphaned `.part-<micros>` file stays behind when the
+  rename fails (Windows, target exists) or the app is killed mid-write, and nothing sweeps them;
+  and the engine's `Allsky.jpg?v=<release_date>` cache-buster is dropped from the cache key, so a
+  survey re-release would keep serving the old allsky. Review notes on #991.
+- `/dss` tile fetches share the page's per-origin connection pool with the control channels
+  (`/aracmd` polled every ~350 ms, `/araevent`), and a miss can hold its request for up to
+  10 s (headers) + 30 s (body). On a slow-but-alive uplink the browser's ~6 sockets per host
+  can all be parked on pending tile misses, delaying Flutter -> page `goto`/search commands
+  by seconds; pre-#991 the tiles went to `alasky.u-strasbg.fr` on their own pool. Consider
+  `_dssClient.maxConnectionsPerHost` plus a shorter first-byte deadline, or answer a miss
+  with 404 immediately and fetch in the background. Review note on #991.
+- The `/dss` route is token-less because the engine's WASM loader cannot set `x-ara-token`, so the
+  loopback-Host gate is its only guard and any local process can drive the cache (fill the disk).
+  A per-run secret could go in the *path* instead: `core.dss.addDataSource({ url: './dss-' + TOKEN })`
+  with the prefix checked server-side closes that gap without a header. Review note on #991.
