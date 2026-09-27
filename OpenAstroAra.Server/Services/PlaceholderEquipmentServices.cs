@@ -45,6 +45,7 @@ static class PlaceholderEquipmentHelpers {
 }
 
 public sealed class PlaceholderCameraService : ICameraService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<CameraDto?> GetAsync(CancellationToken ct) => Task.FromResult<CameraDto?>(null);
     public bool IsFreeToCapture(object consumer) => true; // no camera, no exposure to protect
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
@@ -73,6 +74,7 @@ public sealed class PlaceholderCameraService : ICameraService {
 }
 
 public sealed class PlaceholderTelescopeService : ITelescopeService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<TelescopeDto?> GetAsync(CancellationToken ct) => Task.FromResult<TelescopeDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("telescope.connect", idempotencyKey));
@@ -92,6 +94,7 @@ public sealed class PlaceholderTelescopeService : ITelescopeService {
 }
 
 public sealed class PlaceholderFocuserService : IFocuserService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<FocuserDto?> GetAsync(CancellationToken ct) => Task.FromResult<FocuserDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("focuser.connect", idempotencyKey));
@@ -102,6 +105,7 @@ public sealed class PlaceholderFocuserService : IFocuserService {
 }
 
 public sealed class PlaceholderFilterWheelService : IFilterWheelService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<FilterWheelDto?> GetAsync(CancellationToken ct) => Task.FromResult<FilterWheelDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("filter-wheel.connect", idempotencyKey));
@@ -112,6 +116,7 @@ public sealed class PlaceholderFilterWheelService : IFilterWheelService {
 }
 
 public sealed class PlaceholderRotatorService : IRotatorService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<RotatorDto?> GetAsync(CancellationToken ct) => Task.FromResult<RotatorDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.connect", idempotencyKey));
@@ -126,6 +131,7 @@ public sealed class PlaceholderRotatorService : IRotatorService {
 }
 
 public sealed class PlaceholderDomeService : IDomeService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<DomeDto?> GetAsync(CancellationToken ct) => Task.FromResult<DomeDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.connect", idempotencyKey));
@@ -151,6 +157,7 @@ public sealed class PlaceholderDomeService : IDomeService {
 
 
 public sealed class PlaceholderObservingConditionsService : IObservingConditionsService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     // operation_type prefix matches the route segment ("observing-conditions.*")
     // for consistency with the rest of the 12-service block.
     public Task<ObservingConditionsDto?> GetAsync(CancellationToken ct) => Task.FromResult<ObservingConditionsDto?>(null);
@@ -161,6 +168,7 @@ public sealed class PlaceholderObservingConditionsService : IObservingConditions
 }
 
 public sealed class PlaceholderSafetyMonitorService : ISafetyMonitorService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<SafetyMonitorDto?> GetAsync(CancellationToken ct) => Task.FromResult<SafetyMonitorDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("safety-monitor.connect", idempotencyKey));
@@ -169,6 +177,7 @@ public sealed class PlaceholderSafetyMonitorService : ISafetyMonitorService {
 }
 
 public sealed class PlaceholderFlatDeviceService : IFlatDeviceService {
+    public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<FlatDeviceDto?> GetAsync(CancellationToken ct) => Task.FromResult<FlatDeviceDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("flat-device.connect", idempotencyKey));

@@ -168,6 +168,23 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     }
 
     // ct is unused by design (see ConnectAsync): the 202 contract makes teardown fire-and-forget.
+    public Task<bool> ForgetAsync(CancellationToken ct) {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_device is null) {
+                return Task.FromResult(false);
+            }
+            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
+                throw new InvalidOperationException("the safety monitor is connected — disconnect it before removing it");
+            }
+            // Error → Disconnected first (publishes the §60.9 transition while the device is still
+            // known to subscribers), then drop the retained record so GetAsync reads null (404).
+            SetState(EquipmentConnectionState.Disconnected);
+            _device = null;
+            return Task.FromResult(true);
+        }
+    }
+
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
         AlpacaSafetyMonitor? client;
         lock (_gate) {

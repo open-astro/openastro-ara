@@ -15,6 +15,8 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 /// type triggers an immediate provider refresh (push replaces waiting out the
 /// next poll tick); other types, alias events, and unknown tokens do not.
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
+  @override
+  Future<void> forget() async {}
   int statusReads = 0;
 
   /// When set, the FIRST read blocks on this — lets a test hold build()'s

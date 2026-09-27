@@ -24,6 +24,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeDomeApi implements EquipmentDeviceClient<DomeStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeDomeApi(this.status);
   DomeStatus? status;
   final List<String> calls = [];

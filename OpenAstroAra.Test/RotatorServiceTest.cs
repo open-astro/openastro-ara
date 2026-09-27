@@ -59,6 +59,49 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ForgetAsync_with_no_device_retained_returns_false() {
+            using var svc = new RotatorService();
+            Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.False);
+        }
+
+        [Test]
+        public async Task ForgetAsync_after_a_disconnect_drops_the_retained_device() {
+            using var svc = new RotatorService();
+            var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Rotator, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            await PollUntilNotConnectingAsync(svc);
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            Assert.That(await svc.GetAsync(CancellationToken.None), Is.Not.Null, "retained after disconnect");
+
+            Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.True);
+
+            // The card's Remove: the status GET reads 404 again, as before any device was selected.
+            Assert.That(await svc.GetAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ForgetAsync_from_Error_drops_the_device_without_a_disconnect() {
+            using var svc = new RotatorService();
+            var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Rotator, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            var dto = await PollUntilNotConnectingAsync(svc);
+            Assert.That(dto!.State, Is.EqualTo(EquipmentConnectionState.Error));
+
+            Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.True);
+            Assert.That(await svc.GetAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ForgetAsync_while_connecting_throws_InvalidOperation() {
+            using var svc = new RotatorService();
+            var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Rotator, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).
+            Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
+            await PollUntilNotConnectingAsync(svc);
+        }
+
+        [Test]
         public void MoveAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new RotatorService();
             Assert.Throws<InvalidOperationException>(

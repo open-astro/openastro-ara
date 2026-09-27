@@ -42,6 +42,10 @@ class _FakeProfileApi extends ProfileApi {
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
+  @override
+  Future<void> forget() async {
+    calls.add('forget');
+  }
   _FakeMountApi(this.status, {this.moveAxisError, this.moveAxisStopError});
   MountStatus? status;
   final List<String> calls = [];

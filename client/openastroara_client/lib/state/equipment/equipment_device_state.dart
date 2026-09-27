@@ -164,6 +164,12 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   Future<bool> reconnect() =>
       _act((api) => api.command('reconnect'), pollAfter: true);
 
+  /// Remove the retained (not-connected) device and its auto-connect entry —
+  /// the card's Remove. The follow-up read then 404s → `null` ("no device").
+  /// Throws a 409 while the device is connected. Returns whether the call was
+  /// performed (see [connect]).
+  Future<bool> forget() => _act((api) => api.forget());
+
   /// Run a device-specific control action (e.g. a focuser move, a filter change)
   /// through the same 202-accept + re-read + re-entrancy machinery as
   /// connect/disconnect. Subclasses expose typed wrappers over this. Returns

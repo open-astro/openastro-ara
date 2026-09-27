@@ -529,6 +529,21 @@ public static partial class EquipmentEndpoints {
         safety.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.SafetyMonitor, ct));
         flat.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.CoverCalibrator, ct));
 
+        // ─── Remove the device (the card's Remove; single-instance form of the §45 escape hatch) ───
+        // DELETE /equipment/{type}: drop the service's retained (disconnected / errored) device so the
+        // status GET reads 404 again, AND forget its remembered auto-connect entry. Unlike
+        // /remembered (store-only, used by the wizard's "None" slot), this refuses a live device with
+        // 409 — disconnect first. Idempotent otherwise (nothing retained is still a 204).
+        camera.MapDelete("", (ICameraService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.Camera, logger, ct));
+        telescope.MapDelete("", (ITelescopeService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.Telescope, logger, ct));
+        focuser.MapDelete("", (IFocuserService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.Focuser, logger, ct));
+        filterwheel.MapDelete("", (IFilterWheelService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.FilterWheel, logger, ct));
+        rotator.MapDelete("", (IRotatorService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.Rotator, logger, ct));
+        dome.MapDelete("", (IDomeService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.Dome, logger, ct));
+        oc.MapDelete("", (IObservingConditionsService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.ObservingConditions, logger, ct));
+        safety.MapDelete("", (ISafetyMonitorService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.SafetyMonitor, logger, ct));
+        flat.MapDelete("", (IFlatDeviceService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.CoverCalibrator, logger, ct));
+
         return app;
     }
 
@@ -543,6 +558,27 @@ public static partial class EquipmentEndpoints {
     internal static int ScaleAutofocusProgress(double progress, int maxProgress, int totalSteps) {
         var scaled = (int)System.Math.Round(progress / maxProgress * totalSteps);
         return System.Math.Clamp(scaled, 1, totalSteps);
+    }
+
+    // The card's Remove for a single-instance type: drop the service's retained device (409 while it
+    // is live), then forget the remembered auto-connect entry. The store forget is best-effort like
+    // the switch's — the device is already gone from the live service, so a profile-dir I/O failure
+    // must not turn the removal into a 500; log it so the operator expects one auto-connect ghost.
+    private static async Task<IResult> RemoveDeviceAsync(System.Func<Task<bool>> forget, IEquipmentSelectionStore store,
+            DeviceType type, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) {
+        try {
+            await forget();
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+        try {
+            await store.ForgetAsync(type, ct);
+        } catch (System.IO.IOException ex) {
+            LogRememberedForgetFailed(logger, ex, type);
+        } catch (System.UnauthorizedAccessException ex) {
+            LogRememberedForgetFailed(logger, ex, type);
+        }
+        return Results.NoContent();
     }
 
     private static async Task<IResult> ForgetRememberedAsync(IEquipmentSelectionStore store, DeviceType type, CancellationToken ct) {
@@ -742,4 +778,10 @@ public static partial class EquipmentEndpoints {
         Message = "Switch {DeviceId} was removed from the live registry, but forgetting its remembered auto-connect entry failed — it may reappear on the next boot; remove it again to retry the forget.")]
     private static partial void LogSwitchForgetFailed(
         global::Microsoft.Extensions.Logging.ILogger logger, global::System.Exception ex, string deviceId);
+
+    [global::Microsoft.Extensions.Logging.LoggerMessage(EventId = 3721,
+        Level = global::Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "The {DeviceType} was removed from the live service, but forgetting its remembered auto-connect entry failed — it may reconnect on the next boot; remove it again to retry the forget.")]
+    private static partial void LogRememberedForgetFailed(
+        global::Microsoft.Extensions.Logging.ILogger logger, global::System.Exception ex, DeviceType deviceType);
 }

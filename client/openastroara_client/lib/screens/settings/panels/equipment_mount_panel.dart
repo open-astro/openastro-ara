@@ -70,6 +70,7 @@ class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
           onReconnect: notifier.reconnect,
+          onForget: notifier.forget,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _MountBody(status: s),
         ),

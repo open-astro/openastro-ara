@@ -14,6 +14,8 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 /// A mount whose reads the test can fail on demand — the outage this watchdog
 /// exists for.
 class _FlakyMountApi implements EquipmentDeviceClient<MountStatus> {
+  @override
+  Future<void> forget() async {}
   bool failing = false;
   int statusReads = 0;
 

@@ -36,6 +36,13 @@ public interface ICameraService {
     bool IsFreeToCapture(object consumer);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task AbortExposureAsync(CancellationToken ct);
     Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
@@ -57,6 +64,13 @@ public interface ITelescopeService {
     Task<TelescopeDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct);
@@ -77,6 +91,13 @@ public interface IFocuserService {
     Task<FocuserDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> MoveAsync(FocuserMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
@@ -84,6 +105,13 @@ public interface IFilterWheelService {
     Task<FilterWheelDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ChangeFilterAsync(FilterChangeRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
@@ -91,6 +119,13 @@ public interface IRotatorService {
     Task<RotatorDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct);
@@ -100,6 +135,13 @@ public interface IDomeService {
     Task<DomeDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> SlewAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> ParkAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> OpenShutterAsync(string? idempotencyKey, CancellationToken ct);
@@ -141,18 +183,39 @@ public interface IObservingConditionsService {
     Task<ObservingConditionsDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
 }
 
 public interface ISafetyMonitorService {
     Task<SafetyMonitorDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
 }
 
 public interface IFlatDeviceService {
     Task<FlatDeviceDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
+    /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
+    /// hatch. True when a device was dropped, false when none was retained. Throws
+    /// InvalidOperationException (→ 409) while Connecting/Connected: disconnect first, so a removal
+    /// on live hardware is always an explicit two-step.</summary>
+    Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ApplyFlatPanelAsync(FlatPanelRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 

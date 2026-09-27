@@ -38,6 +38,7 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
           onReconnect: notifier.reconnect,
+          onForget: notifier.forget,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _SafetyBody(status: s),
         ),
