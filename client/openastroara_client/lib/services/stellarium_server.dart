@@ -48,8 +48,12 @@ class StellariumServer {
   // connectionTimeout, not `.getUrl().timeout()`: the latter abandons only the
   // wait, so a connect+TLS that finishes a moment later leaves an unclosed
   // HttpClientRequest in the client's active set for the app's life.
+  // followRedirects off: a captive portal answers every URL with a 302 to its
+  // login page, and a followed redirect would hand [_fetchDss] that page as
+  // a 200. The survey never redirects a tile, so a 3xx is never a tile.
   final HttpClient _dssClient = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 5);
+    ..connectionTimeout = const Duration(seconds: 5)
+    ..followRedirects = false;
   final Map<String, Future<Uint8List?>> _dssFetches = {};
   DateTime? _dssRetryAfter;
   DateTime? _dssLastFailure;
@@ -489,16 +493,37 @@ class StellariumServer {
       req = await _dssClient.getUrl(uri);
       req.headers.set(HttpHeaders.userAgentHeader, 'OpenAstroAra DSS cache');
       final upstream = await req.close().timeout(const Duration(seconds: 10));
-      if (upstream.statusCode != HttpStatus.ok) {
+      if (upstream.statusCode == HttpStatus.notFound) {
         // A 404 is the survey's own answer (a tile outside its coverage), not
         // a connectivity failure — no backoff, and it counts as "online".
         await upstream.drain<void>();
         _dssLastSuccess = DateTime.now();
         return null;
       }
+      // Only a 200 carrying the resource's own media type is a tile. A captive
+      // portal (hotel / campground Wi-Fi) answers with a 302 to its login page
+      // or a 200 of HTML; persisting either would serve HTML as image/jpeg,
+      // immutable, until the cache is deleted by hand. Refuse and treat it as
+      // offline, which for the user it is — the Frame hint then says so.
+      if (upstream.statusCode != HttpStatus.ok ||
+          !_isDssMediaType(relative, upstream.headers.contentType)) {
+        throw HttpException(
+          'upstream answered ${upstream.statusCode} '
+          '${upstream.headers.contentType?.mimeType ?? "(no content type)"} '
+          'for $relative',
+          uri: uri,
+        );
+      }
       final body = await _readCapped(upstream).timeout(_dssBodyTimeout);
+      if (body == null) {
+        // Over the cap: refuse, don't persist, and don't leave the rest of the
+        // body streaming into nowhere. Neither a success nor an outage.
+        try {
+          req.abort();
+        } catch (_) {/* already finished */}
+        return null;
+      }
       _dssLastSuccess = DateTime.now();
-      if (body == null) return null; // over the cap: refuse, don't persist
       bytes = body;
     } on Object catch (e) {
       // Joining the SBC hotspot removes the Internet route. Avoid making every
@@ -526,6 +551,22 @@ class StellariumServer {
       debugPrint('StellariumServer: DSS cache write failed for $relative: $e');
     }
     return bytes;
+  }
+
+  /// True when [type] is what the survey serves for this resource: the
+  /// `properties` manifest is text (`text/plain` at CDS), every other HiPS
+  /// resource is an image. Anything else — HTML, JSON, nothing — is not the
+  /// survey talking and must never be persisted as a tile.
+  @visibleForTesting
+  static bool isDssMediaType(String relative, ContentType? type) =>
+      _isDssMediaType(relative, type);
+
+  static bool _isDssMediaType(String relative, ContentType? type) {
+    if (type == null) return false;
+    if (relative == 'properties' || relative.endsWith('/properties')) {
+      return type.primaryType == 'text' && type.subType != 'html';
+    }
+    return type.primaryType == 'image';
   }
 
   /// Read the whole upstream body, or null once it exceeds [maxDssResourceBytes].

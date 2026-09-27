@@ -42,6 +42,20 @@ void main() {
     });
   });
 
+  group('StellariumServer.isDssMediaType', () {
+    test('tiles must be images, the manifest must be non-HTML text', () {
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', ContentType('image', 'jpeg')), isTrue);
+      expect(StellariumServer.isDssMediaType('Norder3/Allsky.jpg', ContentType('image', 'png')), isTrue);
+      expect(StellariumServer.isDssMediaType('properties', ContentType('text', 'plain', charset: 'utf-8')), isTrue);
+      // What a captive portal serves for either.
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', ContentType.html), isFalse);
+      expect(StellariumServer.isDssMediaType('properties', ContentType.html), isFalse);
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', ContentType.json), isFalse);
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', null), isFalse);
+      expect(StellariumServer.isDssMediaType('properties', ContentType('image', 'jpeg')), isFalse);
+    });
+  });
+
   group('StellariumServer.parseRange', () {
     test('parses a closed range', () {
       expect(StellariumServer.parseRange('bytes=10-20', 100), (10, 20));
@@ -331,6 +345,75 @@ void main() {
       } finally {
         StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
       }
+    });
+  });
+
+  // A captive portal (hotel / campground / airport Wi-Fi) answers every URL
+  // with its login page: a 302 to the portal, or a bare 200 of HTML. Neither
+  // is a tile; persisting one would serve HTML as image/jpeg, immutable, for
+  // ever (nothing evicts the cache). Own group: a portal arms the backoff.
+  group('StellariumServer /dss fetch (captive portal)', () {
+    late HttpServer origin;
+    late StellariumServer server;
+    final savedOrigin = StellariumServer.dssOrigin;
+    const portalHtml = '<html><body>Please log in</body></html>';
+
+    setUpAll(() async {
+      origin = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      origin.listen((req) async {
+        final path = req.uri.path;
+        if (path == '/portal') {
+          req.response.headers.contentType = ContentType.html;
+          req.response.write(portalHtml);
+        } else if (path == '/Norder3/Dir0/Npix20.jpg') {
+          // Portal that redirects.
+          req.response.statusCode = HttpStatus.found;
+          req.response.headers.set(HttpHeaders.locationHeader, '/portal');
+        } else if (path == '/Norder3/Dir0/Npix21.jpg' || path == '/properties') {
+          // Portal that rewrites the body in place (200 + HTML).
+          req.response.headers.contentType = ContentType.html;
+          req.response.write(portalHtml);
+        } else {
+          req.response.statusCode = HttpStatus.notFound;
+        }
+        await req.response.close();
+      });
+      StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
+      server = await StellariumServer.start();
+    });
+    tearDownAll(() async {
+      StellariumServer.dssOrigin = savedOrigin;
+      await server.dispose();
+      await origin.close(force: true);
+    });
+
+    Future<({int status, List<int> body})> get(String path) async {
+      final client = HttpClient();
+      try {
+        final res = await (await client.getUrl(Uri.parse('${server.baseUrl}$path'))).close();
+        return (status: res.statusCode, body: await res.fold<List<int>>([], (a, b) => a..addAll(b)));
+      } finally {
+        client.close(force: true);
+      }
+    }
+
+    Future<Map<String, Object?>> status() async =>
+        jsonDecode(utf8.decode((await get('/dss/status')).body)) as Map<String, Object?>;
+
+    test('a redirected tile is refused, not persisted, and reads as offline', () async {
+      expect((await get('/dss/Norder3/Dir0/Npix20.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix20.jpg').existsSync(), isFalse);
+      expect((await status())['offline'], true);
+    });
+
+    test('a 200 whose body is not an image is refused and not persisted', () async {
+      // The portal test above armed the backoff; this must not depend on it.
+      // Nothing was cached, so a hit is impossible either way — the assertion
+      // that matters is the file never appearing, whichever path answered.
+      expect((await get('/dss/Norder3/Dir0/Npix21.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix21.jpg').existsSync(), isFalse);
+      expect((await get('/dss/properties')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/properties').existsSync(), isFalse);
     });
   });
 
