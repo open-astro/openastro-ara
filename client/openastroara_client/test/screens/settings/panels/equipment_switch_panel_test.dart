@@ -11,9 +11,12 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/screens/settings/panels/equipment_switch_panel.dart';
 import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/services/switch_api.dart';
+import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/equipment_connection_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -24,6 +27,16 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
   Future<void> add(AraServer server) async {}
+}
+
+class _NoDiscovery implements EquipmentDiscoveryApi {
+  @override
+  Future<List<DiscoveredDevice>> discover(
+    EquipmentDeviceType type, {
+    bool forceRefresh = false,
+  }) async => const [];
+  @override
+  void close() {}
 }
 
 class _FakeSwitchApi implements SwitchClient {
@@ -128,6 +141,11 @@ Future<_FakeSwitchApi> _pump(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
         ),
         switchApiFactoryProvider.overrideWithValue((_) => api),
+        // The card's Connect falls back to discovery on a 404; nothing is
+        // discoverable here, so the 404 surfaces as the card's message.
+        equipmentDiscoveryApiFactoryProvider.overrideWithValue(
+          (_) => _NoDiscovery(),
+        ),
         cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
       ],
       child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),

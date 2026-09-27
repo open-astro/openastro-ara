@@ -1,12 +1,15 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
+import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/switch_api.dart';
+import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
@@ -59,9 +62,14 @@ class _FakeSwitchApi implements SwitchClient {
   @override
 
   Future<void> reconnect() async => calls.add("reconnect");
+  /// Thrown by [reconnectDevice] when set (an older daemon answers 404).
+  Object? reconnectDeviceError;
+
   @override
-  Future<void> reconnectDevice(String deviceId) async =>
-      calls.add('reconnectDevice:$deviceId');
+  Future<void> reconnectDevice(String deviceId) async {
+    calls.add('reconnectDevice:$deviceId');
+    if (reconnectDeviceError != null) throw reconnectDeviceError!;
+  }
 
 
   @override
@@ -90,6 +98,30 @@ class _FakeSwitchApi implements SwitchClient {
   void close() {}
 }
 
+class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
+  _FakeDiscoveryApi(this.devices);
+  final List<DiscoveredDevice> devices;
+  int scans = 0;
+  bool closed = false;
+
+  @override
+  Future<List<DiscoveredDevice>> discover(
+    EquipmentDeviceType type, {
+    bool forceRefresh = false,
+  }) async {
+    scans++;
+    return devices;
+  }
+
+  @override
+  void close() => closed = true;
+}
+
+DioException _notFound() => DioException(
+  requestOptions: RequestOptions(path: '/x'),
+  response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: 404),
+);
+
 DiscoveredDevice _discovered(int n) => DiscoveredDevice(
       uniqueId: 'sw-$n',
       name: 'Switch $n',
@@ -101,10 +133,16 @@ DiscoveredDevice _discovered(int n) => DiscoveredDevice(
       useHttps: false,
     );
 
-ProviderContainer _container(List<AraServer> servers, SwitchClient api) {
+ProviderContainer _container(
+  List<AraServer> servers,
+  SwitchClient api, {
+  EquipmentDiscoveryApi? discovery,
+}) {
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
     switchApiFactoryProvider.overrideWithValue((_) => api),
+    if (discovery != null)
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue((_) => discovery),
   ]);
   addTearDown(c.dispose);
   return c;
@@ -154,6 +192,50 @@ void main() {
     final list = c.read(switchListProvider).value!;
     expect(list.map((d) => d.alpacaDeviceNumber), [0, 1],
         reason: 'both switches present after connecting two');
+  });
+
+  test('reconnectDevice uses the per-switch route when the daemon has it', () async {
+    final api = _FakeSwitchApi();
+    final discovery = _FakeDiscoveryApi([_discovered(0)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    expect(await c.read(switchListProvider.notifier).reconnectDevice('sw-0'), isTrue);
+
+    expect(api.calls, ['reconnectDevice:sw-0']);
+    expect(discovery.scans, 0, reason: 'no discovery when the route exists');
+  });
+
+  test('reconnectDevice falls back to discovery + /connect on a 404 (older daemon)',
+      () async {
+    final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
+    final discovery = _FakeDiscoveryApi([_discovered(3), _discovered(0)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    expect(await c.read(switchListProvider.notifier).reconnectDevice('sw-0'), isTrue);
+
+    expect(api.calls, ['reconnectDevice:sw-0', 'connect:0'],
+        reason: 'the discovered device with the matching unique id is connected');
+    expect(discovery.scans, 1, reason: 'the cached list had it — no forced rescan');
+    expect(discovery.closed, isTrue, reason: 'one-shot discovery client is closed');
+  });
+
+  test('reconnectDevice rethrows the 404 when discovery has no such switch', () async {
+    final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
+    final discovery = _FakeDiscoveryApi([_discovered(3)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    await expectLater(
+      c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
+      throwsA(isA<DioException>()),
+    );
+    expect(discovery.scans, 2, reason: 'cached list, then one forced rescan');
+    expect(api.calls, isNot(contains(startsWith('connect:'))));
   });
 
   test('§25.3 switchActingProvider is true exactly while an action is in flight',

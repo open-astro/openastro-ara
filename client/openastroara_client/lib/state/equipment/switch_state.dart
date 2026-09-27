@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/discovered_device.dart';
@@ -5,6 +6,7 @@ import '../../models/server.dart';
 import '../../models/switch_device.dart';
 import '../../services/switch_api.dart';
 import '../saved_server_state.dart';
+import 'equipment_discovery_provider.dart';
 import '../settings/equipment_connection_state.dart';
 import '../ws/ws_providers.dart';
 
@@ -148,10 +150,48 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   /// when nothing has been connected yet. Returns whether the call was performed.
   Future<bool> reconnectAll() => _act((api) => api.reconnect());
 
-  /// Reconnect ONE known switch by id — the card's Connect. Throws a 404 when
-  /// the daemon no longer knows it. Returns whether the call was performed.
-  Future<bool> reconnectDevice(String deviceId) =>
-      _act((api) => api.reconnectDevice(deviceId));
+  /// Reconnect ONE known switch by id — the card's Connect. Tries the daemon's
+  /// per-switch route first; on a 404 (a daemon older than this client that
+  /// lacks the route, or one that no longer knows the id) it falls back to
+  /// discovery — find the device by its unique id, then connect it through
+  /// the plain `/connect` every daemon has. Rethrows the 404 only when the
+  /// device is not discoverable either (→ "use Add switch"). Returns whether
+  /// the call was performed.
+  Future<bool> reconnectDevice(String deviceId) => _act((api) async {
+    try {
+      await api.reconnectDevice(deviceId);
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) rethrow;
+      final device = await _discoverSwitch(deviceId);
+      if (device == null) rethrow;
+      await api.connect(device);
+    }
+  });
+
+  /// Find the switch with [deviceId] via the daemon's discovery endpoint —
+  /// cached list first, then one forced rescan. Null when it isn't there or
+  /// discovery itself fails (the caller then surfaces its original 404).
+  Future<DiscoveredDevice?> _discoverSwitch(String deviceId) async {
+    final server = ref.read(_activeSwitchServerProvider);
+    if (server == null) return null;
+    final discovery = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
+    try {
+      for (final force in const [false, true]) {
+        final found = await discovery.discover(
+          EquipmentDeviceType.switchDevice,
+          forceRefresh: force,
+        );
+        for (final d in found) {
+          if (d.uniqueId == deviceId) return d;
+        }
+      }
+      return null;
+    } on DioException {
+      return null;
+    } finally {
+      discovery.close();
+    }
+  }
 
   Future<bool> setValue({
     required String deviceId,
