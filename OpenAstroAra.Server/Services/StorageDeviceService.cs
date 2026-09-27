@@ -351,8 +351,19 @@ namespace OpenAstroAra.Server.Services {
         /// packaged unit: <c>sudo -n</c> directly, as before.
         /// </summary>
         private static async Task<(int ExitCode, string Output)> RunHelperAsync(string[] helperArgs, CancellationToken ct) {
-            if (!File.Exists(HelperUnitTemplate) || !Directory.Exists(RequestDirectory)) {
+            if (!File.Exists(HelperUnitTemplate)) {
                 return await RunAsync("sudo", ["-n", HelperPath, .. helperArgs], ct).ConfigureAwait(false);
+            }
+            // The packaged unit is present, so this IS a packaged install and sudo
+            // is dead under NoNewPrivileges: a missing exchange directory (cleared
+            // /run, edited tmpfiles config) is repaired here when possible and is
+            // otherwise a typed, diagnosable failure, never a silent sudo fallback.
+            if (!Directory.Exists(RequestDirectory)) {
+                try {
+                    Directory.CreateDirectory(RequestDirectory);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    return (-1, $"ERROR: exchange_missing {RequestDirectory} is missing and could not be created ({ex.Message}); run systemd-tmpfiles --create");
+                }
             }
             var id = Guid.NewGuid().ToString("N");
             var requestPath = Path.Combine(RequestDirectory, id + ".request");
