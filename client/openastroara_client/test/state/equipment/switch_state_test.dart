@@ -223,6 +223,39 @@ void main() {
     expect(discovery.closed, isTrue, reason: 'one-shot discovery client is closed');
   });
 
+  test('reconnectDevice on a 404 reuses the record from an earlier connect — no broadcast',
+      () async {
+    // Add switch handed the notifier the discovery record; a later Connect on
+    // an older daemon must not pay the ~2 s discovery broadcast again.
+    final api = _FakeSwitchApi();
+    final discovery = _FakeDiscoveryApi([_discovered(0)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+    await c.read(switchListProvider.notifier).connect(_discovered(0));
+    api.reconnectDeviceError = _notFound();
+
+    expect(await c.read(switchListProvider.notifier).reconnectDevice('sw-0'), isTrue);
+
+    expect(api.calls, ['connect:0', 'reconnectDevice:sw-0', 'connect:0']);
+    expect(discovery.scans, 0, reason: 'the record from Add switch is reused');
+  });
+
+  test('a discovery fallback keeps the record, so the next Connect skips the broadcast',
+      () async {
+    final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
+    final discovery = _FakeDiscoveryApi([_discovered(0)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    await c.read(switchListProvider.notifier).reconnectDevice('sw-0');
+    await c.read(switchListProvider.notifier).reconnectDevice('sw-0');
+
+    expect(discovery.scans, 1, reason: 'one broadcast, then the kept record');
+    expect(api.calls.where((c) => c == 'connect:0').length, 2);
+  });
+
   test('reconnectDevice rethrows the 404 when discovery has no such switch', () async {
     final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
     final discovery = _FakeDiscoveryApi([_discovered(3)]);
