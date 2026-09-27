@@ -16,7 +16,7 @@ the other design docs.
 
 ## §72 CFITSIO resolution — follow-ups (2026-09-27, from the #1109 review)
 
-- **`FitsImageTests` cannot detect a broken CFITSIO resolver in CI.** `OpenAstroAra.Fits.Tests/FitsImageTests.cs` early-returns (`if (!CfitsioAvailable) return;`) when the library fails to load, so the `analyzer-gate` job passes green with every FITS test silently no-op'd. Since #1109 that job installs only the runtime package (`libcfitsio10`), so a regression of the versioned-soname fallback is caught only by the non-required `alpaca-sim-integration` job (`CameraConnectIntegrationTest` asserts the frame file exists). Make the tests fail instead of skip when `CI` is set on Linux. Review note on #1109.
+- **`FitsImageTests` skips instead of failing when CFITSIO cannot load.** `OpenAstroAra.Fits.Tests/FitsImageTests.cs` early-returns (`if (!CfitsioAvailable) return;`) when the library fails to load, so the dedicated FITS round-trip and atomic-write tests silently no-op rather than fail. The resolver itself is still covered in CI: `analyzer-gate` (required, `dotnet test OpenAstroAra.sln --filter "TestCategory!=Integration"`) runs `CameraServicePointingHeaderTest` and `CaptureScanRecoverySessionTest`, which call `FitsImage.Create` with no guard and fail with `DllNotFoundException` if the versioned-soname fallback breaks on the runtime-only (`libcfitsio10`) install that job now uses; `alpaca-sim-integration` (`CameraConnectIntegrationTest`, asserts the frame file exists) covers the end-to-end capture path. Make `FitsImageTests` fail instead of skip when `CI` is set on Linux so the FITS-specific assertions carry their own weight. Review note on #1109.
 
 ## §14e astrometry natives — follow-ups (2026-09-22, from the #1092 review)
 
