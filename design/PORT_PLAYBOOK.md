@@ -12087,7 +12087,7 @@ version suffix. On Linux the bare `libcfitsio.so` symlink comes from
 failed every capture with `DllNotFoundException` until 2026-09-27. `CFitsIO`
 therefore registers a `DllImportResolver` that runs the default probe first and
 then falls back to the versioned sonames the distro packages actually ship:
-- Linux: `libcfitsio.so`, then `libcfitsio.so.10` (CFITSIO 4.x), then `libcfitsio.so.9` (3.49)
+- Linux: `libcfitsio.so`, then `libcfitsio.so.10` (CFITSIO 4.1+), then `libcfitsio.so.9` (3.49 to 4.0)
 - macOS: `libcfitsio.dylib`, then `libcfitsio.10.dylib`, then `libcfitsio.9.dylib`
 - Windows: `cfitsio.dll` (no versioned fallback)
 
@@ -12401,8 +12401,8 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
   git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
   export PATH="$HOME/development/flutter/bin:$PATH"
 
-  # CFITSIO + ASTAP
-  sudo apt install libcfitsio-dev astap
+  # CFITSIO + ASTAP (runtime package only, same as the .deb's Depends; see §72.2)
+  sudo apt install libcfitsio10 astap
   ```
 
 - **Windows** — secondary; works but less tested:

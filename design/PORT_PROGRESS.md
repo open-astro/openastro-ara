@@ -286,7 +286,7 @@ Future §65 sub-PRs:
 CFITSIO via P/Invoke per playbook §72.3, packaged into the new portable `OpenAstroAra.Fits` project (net10.0, AOT-compatible). Managed `FitsImage` wrapper with §28.7 atomic-write pipeline. **Closes the last 501 stub on the surface** — every endpoint now serves a real response.
 
 - ✅ **#197** — Scaffold: project + `[LibraryImport]` P/Invoke wrappers for CFITSIO.
-- ✅ **#198** — `FitsImage` managed wrapper + atomic-rename + parent-dir fsync; xUnit tests verify round-trip + atomic semantics + stale-temp purge against `libcfitsio-dev` installed on the Linux CI runner.
+- ✅ **#198** — `FitsImage` managed wrapper + atomic-rename + parent-dir fsync; xUnit tests verify round-trip + atomic semantics + stale-temp purge against `libcfitsio-dev` installed on the Linux CI runner (since #1109 CI installs the `libcfitsio10` runtime package only, and the resolver supplies the versioned soname).
 - ✅ **#199** — Wire `/api/v1/frames/{id}/download` to the catalog's `file_path` via `FileStream`; last 501 stub gone. `NotImplementedStub` helper deleted.
 - ✅ **#200** — Promotion to master.
 
