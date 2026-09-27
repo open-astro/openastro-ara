@@ -254,7 +254,7 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 
 ### 2026-09-26 — remove a single-instance device: `DELETE /api/v1/equipment/{type}`
 
-**Endpoint(s) or area:** `DELETE /api/v1/equipment/{camera|telescope|focuser|filterwheel|rotator|dome|observingconditions|safetymonitor|flat}` (new); the shared `EquipmentConnectionCard` (every single-instance panel).
+**Endpoint(s) or area:** `DELETE /api/v1/equipment/{camera|telescope|focuser|filterwheel|rotator|dome|observingconditions|safetymonitor|flatdevice}` (new); the shared `EquipmentConnectionCard` (every single-instance panel).
 
 **Decision:** drop the service's retained device (the one it keeps after a disconnect so the status GET reports `state: disconnected` instead of 404) AND forget its remembered auto-connect entry. 204 (idempotent — nothing retained is still a 204); 409 while the device is Connecting/Connected, so a removal on live hardware is an explicit disconnect-then-remove, exactly like `DELETE /switch/{id}`. An Error device is removed directly (its state is published as Disconnected first, then dropped). The existing `DELETE …/remembered` keeps its store-only, never-409 semantics — the wizard's "None" slot relies on it while a device may still be live.
 
