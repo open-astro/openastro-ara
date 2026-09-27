@@ -46,9 +46,9 @@ internal static partial class CFitsIO {
     private const string LibraryName = "cfitsio";
 
     // Versioned sonames to try after the runtime's own probing fails. ABI 10 is
-    // CFITSIO 4.x (Debian 12/13, Ubuntu 22.04+, Homebrew); 9 is CFITSIO 3.49
-    // (Debian 11). Listed newest first so a host with both picks the one the
-    // binding was written against.
+    // CFITSIO 4.1+ (Debian 12/13, Ubuntu 24.04+, Homebrew); 9 is CFITSIO 3.49
+    // to 4.0 (Debian 11, Ubuntu 22.04). Listed newest first so a host with both
+    // picks the one the binding was written against.
     private static readonly string[] s_linuxSonames = ["libcfitsio.so.10", "libcfitsio.so.9"];
     private static readonly string[] s_macSonames = ["libcfitsio.10.dylib", "libcfitsio.9.dylib"];
 

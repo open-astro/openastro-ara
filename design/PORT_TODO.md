@@ -14,6 +14,10 @@ the other design docs.
 
 ---
 
+## §72 CFITSIO resolution — follow-ups (2026-09-27, from the #1109 review)
+
+- **`FitsImageTests` cannot detect a broken CFITSIO resolver in CI.** `OpenAstroAra.Fits.Tests/FitsImageTests.cs` early-returns (`if (!CfitsioAvailable) return;`) when the library fails to load, so the `analyzer-gate` job passes green with every FITS test silently no-op'd. Since #1109 that job installs only the runtime package (`libcfitsio10`), so a regression of the versioned-soname fallback is caught only by the non-required `alpaca-sim-integration` job (`CameraConnectIntegrationTest` asserts the frame file exists). Make the tests fail instead of skip when `CI` is set on Linux. Review note on #1109.
+
 ## §14e astrometry natives — follow-ups (2026-09-22, from the #1092 review)
 
 - **No Docker-side equivalent of the `build-deb.sh` natives guard.** A local `docker build .` from a publish dir that skipped `scripts/build-astrometry-natives.sh` silently produces a broken image; CI catches it via the arm64 e2e boot-log grep, a local build does not. A `RUN test -f libsofa.so -a -f libnovas31.so` in the Dockerfile (needs a non-chiseled build stage, since the chiseled runtime-deps image has no shell) or a pre-build check script would close it.
