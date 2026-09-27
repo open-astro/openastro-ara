@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 // CA5392/CA5393: constrain native library resolution to the OS "safe"
@@ -27,12 +28,15 @@ namespace OpenAstroAra.Fits;
 /// §72.3 P/Invoke wrappers for CFITSIO. AOT-safe via
 /// <c>[LibraryImport]</c> source generators per playbook §71.
 ///
-/// Library name resolution is automatic per-platform:
-/// <list type="bullet">
-///   <item>Linux: <c>libcfitsio.so</c> → <c>libcfitsio.so.10</c></item>
-///   <item>macOS: <c>libcfitsio.dylib</c></item>
-///   <item>Windows: <c>cfitsio.dll</c></item>
-/// </list>
+/// Library name resolution is per-platform. The runtime probes the bare
+/// name first (<c>libcfitsio.so</c> / <c>libcfitsio.dylib</c> /
+/// <c>cfitsio.dll</c>); when that fails, <see cref="Resolve"/> falls back
+/// to the versioned soname the distro runtime package actually ships.
+/// Debian's <c>libcfitsio10</c> (the .deb's declared dependency) installs
+/// only <c>libcfitsio.so.10</c>; the unversioned <c>libcfitsio.so</c>
+/// symlink comes from <c>libcfitsio-dev</c>, which a production SBC never
+/// has. Without the fallback every capture failed at the FITS write with
+/// <c>DllNotFoundException</c> on a stock install (2026-09-27).
 ///
 /// Subset surface — only the entry points <c>FitsImage</c> actually
 /// uses. Adding new ones is fine; see the CFITSIO reference at
@@ -40,6 +44,45 @@ namespace OpenAstroAra.Fits;
 /// </summary>
 internal static partial class CFitsIO {
     private const string LibraryName = "cfitsio";
+
+    // Versioned sonames to try after the runtime's own probing fails. ABI 10 is
+    // CFITSIO 4.x (Debian 12/13, Ubuntu 22.04+, Homebrew); 9 is CFITSIO 3.49
+    // (Debian 11). Listed newest first so a host with both picks the one the
+    // binding was written against.
+    private static readonly string[] s_linuxSonames = ["libcfitsio.so.10", "libcfitsio.so.9"];
+    private static readonly string[] s_macSonames = ["libcfitsio.10.dylib", "libcfitsio.9.dylib"];
+
+    static CFitsIO() {
+        NativeLibrary.SetDllImportResolver(typeof(CFitsIO).Assembly, Resolve);
+    }
+
+    /// <summary>
+    /// Runs the runtime's default probing first (application directory per the
+    /// assembly-level <see cref="DllImportSearchPath.SafeDirectories"/>, then the
+    /// bare name through the system loader), and only then tries the versioned
+    /// sonames. Returning zero hands resolution back to the runtime, whose own
+    /// failure message lists every path it tried.
+    /// </summary>
+    private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {
+        if (libraryName != LibraryName) {
+            return IntPtr.Zero;
+        }
+        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var handle)) {
+            return handle;
+        }
+        string[] candidates = OperatingSystem.IsLinux() ? s_linuxSonames
+            : OperatingSystem.IsMacOS() ? s_macSonames
+            : [];
+        foreach (var candidate in candidates) {
+            // A bare soname goes straight to dlopen, which resolves it through the
+            // loader cache (ld.so.cache / DYLD fallback paths) — no directory of
+            // ours is involved, so DLL planting is not a concern here.
+            if (NativeLibrary.TryLoad(candidate, out handle)) {
+                return handle;
+            }
+        }
+        return IntPtr.Zero;
+    }
 
     // ── Status code → string. Used by FitsException for clear error messages. ─────
     [LibraryImport(LibraryName, EntryPoint = "ffgerr")]
