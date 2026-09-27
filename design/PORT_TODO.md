@@ -2025,7 +2025,11 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   `!device.isConnected` (so it is offered mid-connect) and `SwitchService.RemoveAsync` refuses
   only `Connected`, whereas the single-instance `ForgetAsync` refuses both `Connecting` and
   `Connected`. Align the switch card gate on live (connected || connecting) and make
-  `RemoveAsync` refuse `Connecting` too. Pre-existing; review note on #1108.
+  `RemoveAsync` refuse `Connecting` too. In the same change, make `RemoveAsync` dispose an
+  `Error`-state client before `_connections.Remove` (`DisposeClientLocked(conn)`): a §42.3-tripped
+  switch still holds a live `AlpacaSwitch`, so removing it today leaks the driver connection —
+  exactly what the single-instance `ForgetAsync` now avoids by disconnecting first.
+  Pre-existing; review notes on #1108.
 - The card's Connect calls `POST /equipment/{type}/reconnect`, which dispatches the REMEMBERED
   entry, not the retained device the card names. They diverge after the wizard's store-only
   `DELETE …/remembered` ("None" slot) while a device is still retained: the card shows the
