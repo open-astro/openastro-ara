@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenAstro Ara storage helper (request %i)
+Documentation=https://github.com/open-astro/openastro-ara
+# Root-side half of the §29.1.4 storage flow. openastroara-server.service runs
+# with NoNewPrivileges=true, under which sudo (setuid) refuses to run, so the
+# daemon cannot escalate itself. Instead it writes one request file to
+# /run/openastroara/storage/<id>.request (one configure-storage.sh argument
+# per line) and asks systemd over D-Bus to start this instance; polkit
+# authorises exactly that (50-openastroara-storage.rules). The instance runs
+# the helper as root and leaves <id>.result for the daemon to read. The
+# daemon never holds any privilege of its own.
+
+[Service]
+Type=oneshot
+ExecStart=/opt/openastroara/scripts/storage-request.sh %i
+# No mount-namespace hardening here (ProtectSystem/ProtectHome/PrivateTmp):
+# each of those gives the unit a private mount namespace, and a mount made
+# inside one never appears on the host — the whole point of this unit is to
+# mount the store where the daemon can see it. Network is never needed.
+PrivateNetwork=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openastroara-storage

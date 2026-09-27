@@ -2920,7 +2920,7 @@ After `sudo apt install openastroara-server` completes:
 2. `GET /api/v1/server/storage/candidates` enumerates connected USB block devices (via `lsblk -J --output NAME,UUID,SIZE,MOUNTPOINT,LABEL,FSTYPE`) excluding the OS root + boot partitions. Drives need not be mounted yet — the helper script handles mounting.
 3. WILMA prompts user: *"Select a USB drive for ARA data:"* with size + label + filesystem type + free space (if mounted) per option.
 4. User picks → WILMA calls `POST /api/v1/server/storage/configure { "uuid": "..." }`.
-5. Server invokes the **configure-storage helper** (§29.1.4) via sudo:
+5. Server invokes the **configure-storage helper** (§29.1.4) as root — on a packaged install through `openastroara-storage@.service` (request file + `systemctl start`, polkit-authorised; the daemon's unit has `NoNewPrivileges=true` so sudo cannot run inside it), on a dev rig via sudo:
    - Helper validates the UUID, validates ext4, creates `/media/openastroara`, appends fstab line (idempotent), mounts the drive, chowns to `openastroara:openastroara`
    - On `ERROR: not_ext4` → server responds 422 with `{ "code": "not_ext4", "fs": "exfat" }`; WILMA presents the reformat path (§29.1.3)
    - On `ERROR: uuid_not_found` → server responds 422 with `{ "code": "uuid_not_found" }`; WILMA asks user to re-plug and retry
@@ -2970,9 +2970,12 @@ If the label confirmation fails server-side OR helper-side: server returns 422 w
 
 **Why label-echo confirmation:** stronger than a [Yes I'm sure] checkbox. Forces the user to look at the drive (or `lsblk` output) and copy the label deliberately. Prevents the "I clicked the wrong drive in the picker" disaster.
 
-### 29.1.4 configure-storage.sh helper (sudoers-invoked)
+### 29.1.4 configure-storage.sh helper (root-run via a systemd template unit)
 
-Lives at `/opt/openastroara/scripts/configure-storage.sh`, installed by the .deb postinst (§34.3). Sudoers drop-in grants the `openastroara` user passwordless invocation.
+Lives at `/opt/openastroara/scripts/configure-storage.sh`, installed by the .deb (§34.3). It always runs as root; how the daemon gets it run depends on the install:
+
+- **Packaged install (the Pi):** `openastroara-server.service` has `NoNewPrivileges=true`, under which sudo/setuid refuses to run, so the daemon holds no privilege. `StorageDeviceService` writes `/run/openastroara/storage/<id>.request` (one helper argument per line, daemon-owned directory from tmpfiles.d), runs `systemctl start openastroara-storage@<id>.service` — a root `Type=oneshot` template unit whose `ExecStart` is `storage-request.sh <id>` — and reads `<id>.result` (line 1: helper exit code, then output). Polkit rule `50-openastroara-storage.rules` lets the service user start exactly that template (verb `start` only), the same shape as guider unit control (§63.3). The wrapper refuses non-regular request files and creates its result with `mktemp` so a symlink planted in the exchange directory can never make root read or write elsewhere; the unit exits 0 once a result is written so a refused operation leaves no failed instance behind.
+- **Dev rig (daemon run by hand, no packaged unit):** the sudoers drop-in below grants the daemon user passwordless invocation and the service calls `sudo -n` directly.
 
 **Interface:**
 
@@ -3011,7 +3014,7 @@ openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
 ```
 
-Scope is narrow: only these two scripts, only as root, only nopasswd. The `openastroara` user has no shell (system user per §34.3), isn't reachable interactively, and the scripts validate their own inputs. No direct `/usr/bin/mount` or `/sbin/mkfs.ext4` permissions are granted — all storage operations route through the helpers so their validation logic can't be bypassed.
+On a packaged install neither line is reachable (NoNewPrivileges, above); the storage line serves dev rigs and the update line is pending the same template-unit treatment (design/PORT_TODO.md). Scope is narrow: only these two scripts, only as root, only nopasswd. The `openastroara` user has no shell (system user per §34.3), isn't reachable interactively, and the scripts validate their own inputs. No direct `/usr/bin/mount` or `/sbin/mkfs.ext4` permissions are granted — all storage operations route through the helpers so their validation logic can't be bypassed.
 
 **Helper script exit codes:**
 

@@ -53,15 +53,26 @@ namespace OpenAstroAra.Server.Services {
 
     /// <summary>
     /// §29.1 storage configuration. Enumeration is a plain <c>lsblk -J</c> read
-    /// (no privilege); every mutating operation goes through
-    /// <c>/opt/openastroara/scripts/configure-storage.sh</c> under sudo — the
-    /// single narrow privilege the daemon holds for storage (§29.1.4/§34.3), so
-    /// the script's own validation (system-disk refusal, ext4 check, label
-    /// confirmation) can never be bypassed by the API.
+    /// (no privilege); every mutating operation runs
+    /// <c>/opt/openastroara/scripts/configure-storage.sh</c> as root, so the
+    /// script's own validation (system-disk refusal, filesystem check, label
+    /// confirmation) can never be bypassed by the API. On a packaged install the
+    /// daemon holds no privilege of its own: its unit runs with
+    /// <c>NoNewPrivileges=true</c>, under which sudo refuses to run, so it
+    /// writes a request file and asks systemd (over D-Bus, authorised by a
+    /// polkit rule) to start <c>openastroara-storage@&lt;id&gt;.service</c>,
+    /// which runs the helper and leaves a result file. A dev rig without the
+    /// packaged unit falls back to the sudoers-scoped direct invocation.
     /// </summary>
     public sealed partial class StorageDeviceService : IStorageDeviceService {
         internal const string HelperPath = "/opt/openastroara/scripts/configure-storage.sh";
         internal const string MountPoint = "/media/openastroara";
+        /// <summary>Template unit installed by the .deb; its presence selects the
+        /// request-file path over direct sudo.</summary>
+        internal const string HelperUnitTemplate = "/etc/systemd/system/openastroara-storage@.service";
+        /// <summary>Daemon-owned exchange directory (tmpfiles.d): <c>&lt;id&gt;.request</c>
+        /// in, <c>&lt;id&gt;.result</c> out.</summary>
+        internal const string RequestDirectory = "/run/openastroara/storage";
 
         private readonly ILogger logger;
 
@@ -218,9 +229,9 @@ namespace OpenAstroAra.Server.Services {
             // re-splitting), and the helper re-validates everything it is
             // told — the API cannot talk it past its own checks.
             string[] args = format
-                ? ["-n", HelperPath, "--format", "--fs", fs, uuid, expectedLabel!]
-                : ["-n", HelperPath, uuid];
-            var (exitCode, output) = await RunAsync("sudo", args, ct).ConfigureAwait(false);
+                ? ["--format", "--fs", fs, uuid, expectedLabel!]
+                : [uuid];
+            var (exitCode, output) = await RunHelperAsync(args, ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
                 LogConfigured(logger, uuid, format);
@@ -250,7 +261,7 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "bad_uuid",
                     "That does not look like a filesystem UUID.", null);
             }
-            var (exitCode, output) = await RunAsync("sudo", ["-n", HelperPath, "--check", uuid], ct).ConfigureAwait(false);
+            var (exitCode, output) = await RunHelperAsync(["--check", uuid], ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
                 LogChecked(logger, uuid, text);
@@ -279,7 +290,7 @@ namespace OpenAstroAra.Server.Services {
                 return new StorageConfigureResult(false, "bad_uuid",
                     "That does not look like a filesystem UUID.", null);
             }
-            var (exitCode, output) = await RunAsync("sudo", ["-n", HelperPath, "--eject", uuid], ct).ConfigureAwait(false);
+            var (exitCode, output) = await RunHelperAsync(["--eject", uuid], ct).ConfigureAwait(false);
             var text = output.Trim();
             if (exitCode == 0) {
                 LogEjected(logger, uuid);
@@ -318,6 +329,64 @@ namespace OpenAstroAra.Server.Services {
             node.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.True;
 
         private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+
+        /// <summary>
+        /// Runs <see cref="HelperPath"/> as root with <paramref name="helperArgs"/>
+        /// and returns the helper's exit code and output. Packaged install: request
+        /// file → <c>systemctl start openastroara-storage@&lt;id&gt;.service</c> →
+        /// result file (see <see cref="ParseHelperResult"/> for its shape). The
+        /// unit itself always exits 0 once it has written a result, so a missing
+        /// result means the request never ran (polkit refused, unit not loaded)
+        /// and systemctl's own stderr is the best diagnostic. Dev rig with no
+        /// packaged unit: <c>sudo -n</c> directly, as before.
+        /// </summary>
+        private static async Task<(int ExitCode, string Output)> RunHelperAsync(string[] helperArgs, CancellationToken ct) {
+            if (!File.Exists(HelperUnitTemplate) || !Directory.Exists(RequestDirectory)) {
+                return await RunAsync("sudo", ["-n", HelperPath, .. helperArgs], ct).ConfigureAwait(false);
+            }
+            var id = Guid.NewGuid().ToString("N");
+            var requestPath = Path.Combine(RequestDirectory, id + ".request");
+            var resultPath = Path.Combine(RequestDirectory, id + ".result");
+            try {
+                // One argument per line; the wrapper rebuilds argv from it. An
+                // empty confirm label must survive as an empty line.
+                await File.WriteAllTextAsync(requestPath, string.Join('\n', helperArgs) + "\n", ct).ConfigureAwait(false);
+                var (exitCode, output) = await RunAsync("systemctl", ["start", $"openastroara-storage@{id}.service"], ct).ConfigureAwait(false);
+                if (!File.Exists(resultPath)) {
+                    return (exitCode == 0 ? -1 : exitCode,
+                        string.IsNullOrWhiteSpace(output) ? "storage helper unit produced no result" : output);
+                }
+                return ParseHelperResult(await File.ReadAllTextAsync(resultPath, ct).ConfigureAwait(false));
+            } finally {
+                TryDelete(requestPath);
+                TryDelete(resultPath);
+            }
+        }
+
+        /// <summary>
+        /// Result file shape written by storage-request.sh: first line is the
+        /// helper's exit code, the rest is its combined output. A malformed first
+        /// line is reported as exit -1 with the whole text as output rather than
+        /// being mistaken for success.
+        /// </summary>
+        internal static (int ExitCode, string Output) ParseHelperResult(string text) {
+            var newline = text.IndexOf('\n', StringComparison.Ordinal);
+            var first = (newline < 0 ? text : text[..newline]).Trim();
+            var rest = newline < 0 ? string.Empty : text[(newline + 1)..];
+            return int.TryParse(first, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
+                ? (code, rest)
+                : (-1, text);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort cleanup of the request/result exchange files; a leftover file is harmless (unique id per request) and must never mask the helper's real outcome.")]
+        private static void TryDelete(string path) {
+            try {
+                File.Delete(path);
+            } catch (Exception) {
+                // Intentionally swallowed — see justification.
+            }
+        }
 
         private static async Task<string?> RunCaptureAsync(string file, string[] args, CancellationToken ct) {
             var (exitCode, output) = await RunAsync(file, args, ct).ConfigureAwait(false);

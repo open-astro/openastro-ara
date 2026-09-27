@@ -5,9 +5,13 @@
 # configure-storage.sh — invoked by the storage-config flow (§29.1.4)
 #
 # NOTE: the openastroara-server unit sets NoNewPrivileges=true, under which sudo
-# (setuid) refuses to run — see design/PORT_TODO.md "sudo helpers vs
-# NoNewPrivileges". Guider unit control deliberately does NOT go through sudo:
-# it is a polkit rule (usr/share/polkit-1/rules.d/50-openastroara-guider.rules).
+# (setuid) refuses to run, so NEITHER line below is reachable from the packaged
+# daemon. Storage goes through openastroara-storage@.service + a polkit rule
+# (usr/share/polkit-1/rules.d/50-openastroara-storage.rules); the daemon only
+# falls back to this sudo line on a dev rig that has no packaged unit. Guider
+# unit control is likewise a polkit rule (50-openastroara-guider.rules). The
+# update.sh line is still dead on a packaged install — see design/PORT_TODO.md
+# "sudo helpers vs NoNewPrivileges".
 #
 # Mode 0440, owned by root:root, as Debian sudoers requires.
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
