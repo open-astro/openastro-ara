@@ -235,3 +235,17 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `Services/CoolingFanInterlock.cs` (`CoolerStateFor`, `FanSyncRequest`), `Services/SwitchService.cs` (`ProbeCoolerStateAsync`, `SyncFanToCoolingCameraAsync`), `Services/SwitchService.Mediator.cs`, `Services/CameraService.cs` (`SetCoolerAsync`, `SyncCoolingFanAsync`), `OpenAstroAra.Test/CoolingFanInterlockBenchTest.cs`.
 
 **Related:** #1076 (from the #1070 reviews), CHANGELOG [Unreleased]
+
+---
+
+### 2026-09-26 — per-switch reconnect: `POST /api/v1/equipment/switch/{id}/connect`
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/switch/{id}/connect` (new); the Switches panel card.
+
+**Decision:** reconnect a KNOWN switch by its id from the discovery record the daemon already holds (`DisconnectAsync` keeps the entry as Disconnected). 202 + `OperationAccepted` when dispatched (idempotent when the switch is already Connecting/Connected, exactly like `/connect`); 404 when the id is unknown — removed via `DELETE /switch/{id}`, or never connected this daemon session — so the client falls back to Add switch. The card now shows Disconnect while the switch is connected or connecting and Connect otherwise (Disconnected / Error / unknown).
+
+**Reasoning:** a card offered only Disconnect whatever its state, so a switch the user disconnected could not be reconnected from its card: the header Reconnect (`/switch/reconnect`) is deliberately offered only when EVERY switch is down (re-dispatching a live switch under a changed remembered endpoint can tear it down), and the only other path was re-picking the device through the discovery chooser. `SwitchDto` carries no host/port/https, so the client cannot rebuild a `/connect` body itself; adding those fields to the DTO was the alternative, but the daemon is the owner of the discovery record and a by-id route keeps the wire shape unchanged for older clients. No re-remember on this route: the entry was remembered by its first `/connect` and only `DELETE` forgets it.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (switch group); `ISwitchService.ReconnectAsync`.
+
+**Related:** `/switch/reconnect` (§52.1 manual reconnect, all remembered switches); `DELETE /switch/{id}` (§45 stuck-device removal).

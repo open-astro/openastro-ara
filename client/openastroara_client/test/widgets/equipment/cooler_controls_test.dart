@@ -44,6 +44,8 @@ class _FakeSwitchClient implements SwitchClient {
   @override
   Future<void> reconnect() async {}
   @override
+  Future<void> reconnectDevice(String deviceId) async {}
+  @override
   Future<void> setValue({
     required String deviceId,
     required int portId,

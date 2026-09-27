@@ -128,6 +128,13 @@ public interface ISwitchService {
     /// false for an unknown id; throws InvalidOperationException (→ 409) for a Connected switch —
     /// disconnect it first so a removal is always an explicit two-step on live hardware.</summary>
     Task<bool> RemoveAsync(string deviceId, CancellationToken ct);
+
+    /// <summary>Reconnect a KNOWN switch by id — the per-card Connect after a Disconnect (or an
+    /// Error) — from the endpoint the registry already holds, so the client needs neither a
+    /// rediscovery nor the device's host/port (the <c>SwitchDto</c> carries neither). Null for an
+    /// unknown id (→ 404: removed, or never connected this daemon session — use <c>/connect</c>).
+    /// Idempotent for a switch that is already Connecting/Connected, like <see cref="ConnectAsync"/>.</summary>
+    Task<OperationAcceptedDto?> ReconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct);
 }
 
 public interface IObservingConditionsService {

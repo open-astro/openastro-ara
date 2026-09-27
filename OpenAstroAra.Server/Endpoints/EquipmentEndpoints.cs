@@ -317,6 +317,14 @@ public static partial class EquipmentEndpoints {
         // device id is a no-op 202, not a 404.
         sw.MapPost("/{id}/disconnect", async (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(id, key, ct)));
+        // Reconnect a KNOWN (disconnected / errored) switch by id — the card's Connect button. The
+        // SwitchDto carries no host/port, so the client can't rebuild a /connect body; the daemon
+        // still holds the discovery record. 404 when the id is unknown (removed, or never connected
+        // this session): the client then falls back to Add switch. Idempotent when already live.
+        sw.MapPost("/{id}/connect", async (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) => {
+            var accepted = await svc.ReconnectAsync(id, key, ct);
+            return accepted is null ? Results.NotFound() : Results.Accepted(value: accepted);
+        });
         // Remove a stuck/dead switch from the known list AND its remembered auto-connect entry —
         // the stuck-device escape hatch. A Connected switch is refused (409): disconnect first, so a
         // removal on live hardware is always an explicit two-step. Unknown id → 404 (idempotent

@@ -148,6 +148,11 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   /// when nothing has been connected yet. Returns whether the call was performed.
   Future<bool> reconnectAll() => _act((api) => api.reconnect());
 
+  /// Reconnect ONE known switch by id — the card's Connect. Throws a 404 when
+  /// the daemon no longer knows it. Returns whether the call was performed.
+  Future<bool> reconnectDevice(String deviceId) =>
+      _act((api) => api.reconnectDevice(deviceId));
+
   Future<bool> setValue({
     required String deviceId,
     required int portId,

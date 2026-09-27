@@ -52,6 +52,14 @@ class _FakeSwitchApi implements SwitchClient {
       calls.add('connect:${device.alpacaDeviceNumber}');
   @override
   Future<void> reconnect() async => calls.add("reconnect");
+  /// Thrown by [reconnectDevice] when set (the daemon-forgot-it 404 case).
+  Object? reconnectDeviceError;
+
+  @override
+  Future<void> reconnectDevice(String deviceId) async {
+    calls.add('reconnectDevice:$deviceId');
+    if (reconnectDeviceError != null) throw reconnectDeviceError!;
+  }
 
   @override
   Future<void> disconnect(String deviceId) async =>
@@ -568,5 +576,68 @@ void main() {
       ),
     ]);
     expect(find.byTooltip('Remove this switch'), findsNothing);
+  });
+
+  testWidgets('a disconnected switch offers Connect, not Disconnect', (
+    tester,
+  ) async {
+    // The bug: a card offered only Disconnect whatever its state, so a switch
+    // the user disconnected had no way back on its own card.
+    final api = await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.disconnected),
+    ]);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    expect(find.byTooltip('Disconnect'), findsNothing);
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('reconnectDevice:sw-0'));
+  });
+
+  testWidgets('an errored switch offers Connect as well', (tester) async {
+    await _pump(tester, [_device(const [], state: SwitchConnectionState.error)]);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    expect(find.byTooltip('Disconnect'), findsNothing);
+  });
+
+  testWidgets('a connected switch offers Disconnect, not Connect', (
+    tester,
+  ) async {
+    await _pump(tester, [_device(const [])]);
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsNothing);
+  });
+
+  testWidgets('a connecting switch offers Disconnect (cancel), not Connect', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.connecting),
+    ]);
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsNothing);
+  });
+
+  testWidgets('Connect answered 404 (forgotten, or an older daemon) says so', (
+    tester,
+  ) async {
+    final api = await _pump(tester, [
+      _device(const [], state: SwitchConnectionState.disconnected),
+    ]);
+    api.reconnectDeviceError = DioException(
+      requestOptions: RequestOptions(path: '/x'),
+      response: Response(
+        requestOptions: RequestOptions(path: '/x'),
+        statusCode: 404,
+      ),
+    );
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The server could not reconnect this switch — it may need updating; '
+        'otherwise use Add switch.',
+      ),
+      findsOneWidget,
+    );
   });
 }
