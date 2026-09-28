@@ -181,6 +181,44 @@ void main() {
           reason: 'a PTR answer proves the query went out');
     });
 
+    test('Linux EHOSTUNREACH (113) is a block too', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(errno: 113),
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
+
+    test('no IPv4 network at all is not called a block', () async {
+      // Wi-Fi off / cable out: the same errno means "no route", not
+      // "macOS refused"; the banner would be a wrong diagnosis.
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(),
+        localAddresses: () async => const [],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(lines.single, contains('[discovery] mDNS socket error'));
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('a later pass with no socket error clears the block', () async {
+      // Permission granted, user taps ⟳, no rig powered on: the banner
+      // must not stay up forever.
+      var pass = 0;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => ++pass == 1
+            ? _AsyncSendErrorMdns()
+            : _AddressLookupFailsMdns(), // sends fine, answers nothing usable
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
     test('an unrelated socket error is logged but not called a block',
         () async {
       final svc = ServerDiscoveryService(

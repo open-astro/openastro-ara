@@ -54,7 +54,13 @@ class ServerDiscoveryService {
     this.sweepSource,
     this.sweepAbandonGrace = const Duration(seconds: 2),
     MDnsClient Function()? mdnsClientFactory,
-  }) : _mdnsClientFactory = mdnsClientFactory ?? MDnsClient.new;
+    Future<List<String>> Function()? localAddresses,
+  }) : _mdnsClientFactory = mdnsClientFactory ?? MDnsClient.new,
+       _localAddresses = localAddresses ?? _localIPv4Addresses;
+
+  /// Test seam for the local IPv4 enumeration (production uses
+  /// `NetworkInterface.list`).
+  final Future<List<String>> Function() _localAddresses;
 
   final Stream<AraServer> Function()? mdnsSource;
   final Stream<AraServer> Function()? sweepSource;
@@ -75,17 +81,29 @@ class ServerDiscoveryService {
   final ValueNotifier<bool> _localNetworkBlocked = ValueNotifier(false);
 
   /// errno values a blocked multicast send comes back with: EHOSTUNREACH
-  /// (macOS Local Network denial), EPERM and EACCES (sandbox/firewall).
-  static const _blockedErrnos = {65, 1, 13};
+  /// (65 on macOS/BSD, 113 on Linux; macOS Local Network denial), EPERM (1)
+  /// and EACCES (13) for a sandbox or firewall, and their WinSock
+  /// counterparts WSAEACCES (10013) and WSAEHOSTUNREACH (10065).
+  static const _blockedErrnos = {65, 113, 1, 13, 10013, 10065};
+
+  // Per pass: whether the machine had any IPv4 address at all (no Wi-Fi,
+  // cable out: EHOSTUNREACH then means "no network", not "blocked"), and
+  // whether a socket error arrived, so a clean pass can clear the flag.
+  bool _passHasNetwork = false;
+  bool _passSawSocketError = false;
 
   /// Socket-level errors from the mDNS client. `dart:io` does NOT throw on
   /// a datagram send failure; it reports it asynchronously on the socket's
   /// event stream, which `multicast_dns` forwards only to the `onError`
   /// given to `start()`. Without this hook the failure was an unhandled
-  /// async error and the browse simply produced nothing.
+  /// async error and the browse simply produced nothing. The library
+  /// attaches the hook to its IPv4 socket, which is the only socket it
+  /// sends on for the default IPv4 mDNS address this service uses.
   void _onMdnsSocketError(Object error, StackTrace stack) {
     debugPrint('[discovery] mDNS socket error: $error');
-    if (error is SocketException &&
+    _passSawSocketError = true;
+    if (_passHasNetwork &&
+        error is SocketException &&
         _blockedErrnos.contains(error.osError?.errorCode)) {
       _localNetworkBlocked.value = true;
     }
@@ -223,10 +241,12 @@ class ServerDiscoveryService {
 
   Stream<AraServer> _mdnsDiscover() async* {
     final mdns = _mdnsClientFactory();
+    _passSawSocketError = false;
     try {
       await mdns.start(onError: _onMdnsSocketError);
       // One interface enumeration per pass, not one per rig resolved.
-      final local = await _localIPv4Addresses();
+      final local = await _localAddresses();
+      _passHasNetwork = local.isNotEmpty;
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
@@ -313,6 +333,12 @@ class ServerDiscoveryService {
       debugPrint('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
       mdns.stop();
+      // A pass that sent without a socket error means the block is gone
+      // (permission granted, then ⟳), even when no rig answered. Socket
+      // errors are reported a microtask after the send, so give them that
+      // turn before deciding.
+      await Future<void>.delayed(Duration.zero);
+      if (!_passSawSocketError) _localNetworkBlocked.value = false;
     }
   }
 
