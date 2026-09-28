@@ -301,6 +301,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         ? rotationDeg
         : null;
 
+    // The page event arrives on a stream that can outlive this State (the
+    // subscription is cancelled in dispose, but an event already in flight
+    // still lands); an inherited lookup on a defunct element throws into the
+    // stream as an uncaught async error (#1111).
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     ImagingRunResult? result;
     try {

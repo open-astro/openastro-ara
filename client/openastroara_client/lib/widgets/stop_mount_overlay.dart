@@ -134,13 +134,19 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
       }
     });
 
-    if (!_slewing) return widget.child;
+    // The SAME tree shape whether or not a slew is in progress (#1111): this
+    // used to return `widget.child` bare when idle and `CallbackShortcuts(
+    // Stack([child, banner]))` while slewing, so every slew start, stop,
+    // abort and link drop remounted the entire shell under it — toolbar,
+    // tab stack, every visited tab, the planetarium webview. Now only the
+    // banner and the Space binding come and go; the child stays at slot 0
+    // with the same parent and keeps its State.
     return CallbackShortcuts(
       // §57.3 — Space is the desktop panic key while (and only while) a slew
       // is in progress; a focused text field consumes Space first, which is
       // the right precedence.
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.space): _stopMount,
+      bindings: <ShortcutActivator, VoidCallback>{
+        if (_slewing) const SingleActivator(LogicalKeyboardKey.space): _stopMount,
       },
       child: Stack(
         // Fill the parent regardless of the child's own size, so the banner's
@@ -148,6 +154,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
         fit: StackFit.expand,
         children: [
           widget.child,
+          if (_slewing)
           Positioned(
             top: 0,
             left: 0,

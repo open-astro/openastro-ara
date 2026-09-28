@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
@@ -104,6 +105,25 @@ class _FakeSeqClient implements SequenceClient {
 WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
     WsEvent(type: type, ts: DateTime.utc(2026, 7, 11), seq: 1, payload: payload);
 
+/// #1111 — a child that reports how often it was (re)mounted.
+class _Probe extends StatefulWidget {
+  const _Probe();
+  static int initCount = 0;
+  @override
+  State<_Probe> createState() => _ProbeState();
+}
+
+class _ProbeState extends State<_Probe> {
+  @override
+  void initState() {
+    super.initState();
+    _Probe.initCount++;
+  }
+
+  @override
+  Widget build(BuildContext context) => const Text('probe');
+}
+
 class _LinkUpNotifier extends Notifier<bool> {
   @override
   bool build() => true;
@@ -118,7 +138,7 @@ void main() {
   late _FakeSeqClient seqApi;
   late ProviderContainer container;
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content')}) async {
     ws = StreamController<WsEvent>.broadcast();
     addTearDown(ws.close);
     mountApi = _FakeMountApi();
@@ -133,9 +153,9 @@ void main() {
           mountApiFactoryProvider.overrideWithValue((_) => mountApi),
           sequenceApiFactoryProvider.overrideWithValue((_) => seqApi),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
-            body: StopMountListener(child: Text('tab content')),
+            body: StopMountListener(child: child),
           ),
         ),
       ),
@@ -410,5 +430,84 @@ void main() {
     expect(seqApi.lifecycle, isEmpty,
         reason: 'acting on stale run-7 would resume the wrong run');
     expect(find.textContaining('No paused run to act on'), findsOneWidget);
+  });
+
+  group('#1111 the shell under the listener keeps its State', () {
+    testWidgets('across slew started, complete, aborted and a link drop',
+        (tester) async {
+      _Probe.initCount = 0;
+      await pump(tester, child: const _Probe());
+      expect(_Probe.initCount, 1);
+      final state = tester.state(find.byType(_Probe));
+
+      await fire(tester, _event(SlewWsEvents.started));
+      expect(find.byKey(const ValueKey('stop_mount_button')), findsOneWidget);
+      expect(tester.state(find.byType(_Probe)), same(state));
+
+      await fire(tester, _event(SlewWsEvents.complete));
+      expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
+      expect(tester.state(find.byType(_Probe)), same(state));
+
+      await fire(tester, _event(SlewWsEvents.started));
+      await fire(tester, _event(SlewWsEvents.aborted));
+      expect(tester.state(find.byType(_Probe)), same(state));
+      // Dismiss the post-stop modal.
+      await tester.tap(find.byKey(const ValueKey('stop_modal_close')));
+      await tester.pumpAndSettle();
+
+      await fire(tester, _event(SlewWsEvents.started));
+      container.read(_linkUp.notifier).set(false);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
+      expect(tester.state(find.byType(_Probe)), same(state));
+
+      expect(_Probe.initCount, 1, reason: 'the child must never be remounted');
+    });
+
+    testWidgets('Space aborts only while a slew is in progress', (tester) async {
+      await pump(tester);
+      // Give the shortcut scope focus, as the shell's autofocus would.
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            savedServerServiceProvider
+                .overrideWithValue(_FakeSavedServerService()),
+            wsEventsProvider.overrideWith((ref) => ws.stream),
+            serverLinkUpProvider.overrideWith((ref) => ref.watch(_linkUp)),
+            mountApiFactoryProvider.overrideWithValue((_) => mountApi),
+            sequenceApiFactoryProvider.overrideWithValue((_) => seqApi),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: StopMountListener(
+                child: Focus(
+                  focusNode: focus,
+                  autofocus: true,
+                  child: const Text('tab content'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      container = ProviderScope.containerOf(
+        tester.element(find.byType(StopMountListener)),
+      );
+      await container.read(savedServersProvider.future);
+      await tester.pumpAndSettle();
+      expect(focus.hasFocus, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(mountApi.commands, isNot(contains('abort')),
+          reason: 'idle: Space must not reach the mount');
+
+      await fire(tester, _event(SlewWsEvents.started));
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(mountApi.commands, contains('abort'));
+    });
   });
 }

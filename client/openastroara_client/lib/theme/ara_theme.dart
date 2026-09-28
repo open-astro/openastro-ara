@@ -60,3 +60,8 @@ ThemeData buildAraTheme() {
     ),
   );
 }
+
+/// The one [ThemeData] the app runs with. `MaterialApp.theme` compares by
+/// identity, so a fresh [buildAraTheme] per root build made every root
+/// rebuild re-theme the whole tree (#1111); build it once instead.
+final ThemeData araTheme = buildAraTheme();
