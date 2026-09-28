@@ -153,7 +153,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(log.exports, ['${dir.path}/openastroara-client.log']);
+    // uniquePathIn joins with the platform separator (backslash on Windows).
+    expect(log.exports, hasLength(1));
+    expect(File(log.exports.single).parent.path, dir.path);
+    expect(log.exports.single, endsWith('openastroara-client.log'));
     expect(
       find.text('Saved bugreport-x.zip and openastroara-client.log'),
       findsOneWidget,

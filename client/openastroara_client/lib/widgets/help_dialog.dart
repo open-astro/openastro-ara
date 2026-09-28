@@ -80,9 +80,14 @@ class _HelpDialog extends ConsumerWidget {
               label: 'Saved servers',
               value: '${servers.value?.length ?? 0}',
             ),
-            _DiagnosticRow(
-              label: 'Client log',
-              value: _clientLogLine(ref.watch(clientErrorLogProvider)),
+            // Listens to the log's status so an error recorded while the
+            // dialog is open shows up, matching the Support card.
+            ValueListenableBuilder<ClientErrorLogStatus>(
+              valueListenable: ref.watch(clientErrorLogProvider).status,
+              builder: (context, _, _) => _DiagnosticRow(
+                label: 'Client log',
+                value: _clientLogLine(ref.read(clientErrorLogProvider)),
+              ),
             ),
             const SizedBox(height: 16),
             const Text(

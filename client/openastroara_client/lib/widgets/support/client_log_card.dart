@@ -106,7 +106,8 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
     if (s.entries == 0) return 'No errors recorded. $tail';
     final noun = s.entries == 1 ? 'error' : 'errors';
     final session = s.sessionEntries > 0
-        ? ' (${s.sessionEntries} since launch)'
+        ? ' (${s.sessionEntries} since launch'
+            '${s.suppressedRepeats > 0 ? ', ${s.suppressedRepeats} repeats' : ''})'
         : '';
     return '${s.entries} $noun recorded$session. $tail';
   }

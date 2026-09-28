@@ -81,8 +81,8 @@ class ClientErrorHandlers {
         return priorPlatformOnError(error, stack);
       }
       // Returning true tells the engine the error is handled, which also
-      // suppresses its own print — so print it ourselves. In release that
-      // is a no-op; in debug the console still shows the failure.
+      // suppresses its own print — so print it ourselves (debugPrint still
+      // writes in release, so the console line exists in every mode).
       debugPrint('Uncaught error: $error\n$stack');
       return true;
     };

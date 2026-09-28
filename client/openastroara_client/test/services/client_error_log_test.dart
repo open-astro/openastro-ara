@@ -284,6 +284,8 @@ void main() {
     await l.record('flutter_error', 'boom');
     expect(l.summary(), startsWith('client log: 1 entry, last '));
     expect(l.summary(), endsWith(' flutter_error: boom'));
+    await l.record('flutter_error', 'boom');
+    expect(l.summary(), startsWith('client log: 1 entry (+1 repeats), last '));
   });
 
   test('an unwritable directory never throws and marks the log unavailable',

@@ -147,8 +147,9 @@ class ClientErrorLog {
   /// Live counters for UI; see [ClientErrorLogStatus].
   ValueListenable<ClientErrorLogStatus> get status => _status;
 
-  /// Completes when every queued write has finished. Tests await this; the
-  /// bug-report card awaits it before copying the file.
+  /// Completes when every queued write has finished. Tests await this;
+  /// [exportTo] queues itself behind the same chain, so callers copying the
+  /// file need not.
   Future<void> get idle => _chain;
 
   /// The `debugPrint` lines held for the next entry, oldest first.
@@ -294,6 +295,9 @@ class ClientErrorLog {
     if (s.entries == 0) return 'client log: no errors recorded';
     final noun = s.entries == 1 ? 'entry' : 'entries';
     final buf = StringBuffer('client log: ${s.entries} $noun');
+    if (s.suppressedRepeats > 0) {
+      buf.write(' (+${s.suppressedRepeats} repeats)');
+    }
     if (s.lastAt != null) {
       buf.write(', last ${_stamp(s.lastAt!)} ${s.lastKind ?? ''}'.trimRight());
       if (s.lastMessage != null && s.lastMessage!.isNotEmpty) {

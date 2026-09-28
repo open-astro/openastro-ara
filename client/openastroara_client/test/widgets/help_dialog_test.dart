@@ -85,9 +85,21 @@ void main() {
     );
   });
 
-  testWidgets('with nothing recorded the row says so', (tester) async {
-    await open(tester, _MemLog(const ClientErrorLogStatus()));
+  testWidgets('with nothing recorded the row says so, and it follows the log',
+      (tester) async {
+    final log = _MemLog(const ClientErrorLogStatus());
+    await open(tester, log);
     expect(find.text('no errors recorded'), findsOneWidget);
+    // An error recorded while the dialog is open shows up without reopening.
+    log.statusNotifier.value = ClientErrorLogStatus(
+      entries: 1,
+      lastKind: 'uncaught',
+      lastAt: DateTime(2026, 9, 27, 14, 12),
+      lastMessage: 'boom',
+    );
+    await tester.pump();
+    expect(find.text('1 entry, last 2026-09-27 14:12 uncaught: boom'),
+        findsOneWidget);
   });
 
   testWidgets('Copy diagnostics puts the client log summary in the payload',

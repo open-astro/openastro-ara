@@ -61,6 +61,14 @@ void main() {
     await tester.pump();
     expect(find.textContaining('3 errors recorded (1 since launch)'),
         findsOneWidget);
+    log.statusNotifier.value = const ClientErrorLogStatus(
+      entries: 1,
+      sessionEntries: 1,
+      suppressedRepeats: 40,
+    );
+    await tester.pump();
+    expect(find.textContaining('1 error recorded (1 since launch, 40 repeats)'),
+        findsOneWidget);
     log.statusNotifier.value = const ClientErrorLogStatus(available: false);
     await tester.pump();
     expect(find.textContaining('could not be written'), findsOneWidget);
