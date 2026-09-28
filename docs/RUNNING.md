@@ -217,9 +217,14 @@ flutter build macos --debug
 open build/macos/Build/Products/Debug/openastroara.app
 ```
 
-**macOS debug-build gotcha:** mDNS auto-discovery fails in debug builds (no multicast
-entitlement — `No route to host` on `0.0.0.0:5353`), so the discovered-servers list
-stays empty. Use the first-run screen's manual entry: host `localhost`, port `5555`.
+**macOS Local Network gotcha:** an app launched with `open` (or from Finder) is its
+own privacy principal, so macOS asks for **Local Network** access on its first mDNS
+query and refuses multicast (`No route to host` on `0.0.0.0:5353`) until you allow
+it — the discovered-servers list stays empty. An app launched from a terminal
+(`flutter run`, or the binary inside the `.app`) inherits the terminal's grant, which
+is why the same build behaves differently. The connect screen shows a banner when
+this is happening; allow the app in System Settings → Privacy & Security → Local
+Network and tap ⟳, or use manual entry: host `localhost`, port `5555`.
 
 ### Windows
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,6 +85,16 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
+            // #1111 — the OS refused our multicast queries, so discovery
+            // cannot work until the user allows it; say so instead of
+            // showing "looking for servers" forever.
+            ValueListenableBuilder<bool>(
+              valueListenable:
+                  ref.watch(discoveryServiceProvider).localNetworkBlocked,
+              builder: (context, blocked, _) => blocked
+                  ? const _LocalNetworkBlockedBanner()
+                  : const SizedBox.shrink(),
+            ),
             Expanded(
               child: _discovered.isEmpty
                   ? const Center(
@@ -262,3 +273,50 @@ class _HandshakePanel extends StatelessWidget {
     );
   }
 }
+
+/// Shown while [ServerDiscoveryService.localNetworkBlocked] is true.
+class _LocalNetworkBlockedBanner extends StatelessWidget {
+  const _LocalNetworkBlockedBanner();
+
+  static const macMessage =
+      'macOS is blocking local network access for OpenAstro Ara, so '
+      'auto-discovery cannot see your rig. Allow it in System Settings → '
+      'Privacy & Security → Local Network, then tap ⟳. Adding the rig '
+      'manually below works regardless.';
+  static const otherMessage =
+      'This device is blocking local network (multicast) access for '
+      'OpenAstro Ara, so auto-discovery cannot see your rig. Check its '
+      'network privacy settings, then tap ⟳. Adding the rig manually below '
+      'works regardless.';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.wifi_off,
+                  size: 20, color: theme.colorScheme.onErrorContainer),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  Platform.isMacOS ? macMessage : otherMessage,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onErrorContainer),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

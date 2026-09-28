@@ -61,8 +61,260 @@ class _AddressLookupFailsMdns extends MDnsClient {
   void stop() {}
 }
 
+/// Starts, then fails the very first query send the way macOS does when the
+/// app has no Local Network permission: a synchronous SocketException with
+/// errno 65 (EHOSTUNREACH) out of RawDatagramSocket.send inside lookup().
+class _SendFailsMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {}
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    throw const SocketException(
+      'Send failed',
+      osError: OSError('No route to host', 65),
+      address: null,
+      port: 5353,
+    );
+  }
+
+  @override
+  void stop() {}
+}
+
+/// The production failure shape (#1111): the send does not throw; dart:io
+/// reports it later on the socket stream, which multicast_dns hands to the
+/// onError given to start(). Optionally answers the PTR query afterwards.
+class _AsyncSendErrorMdns extends MDnsClient {
+  _AsyncSendErrorMdns({this.answerAfterError = false, this.errno = 65});
+  final bool answerAfterError;
+  final int errno;
+  Function? _onError;
+
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {
+    _onError = onError;
+  }
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    if (T == PtrResourceRecord) {
+      final err = SocketException(
+        'Send failed',
+        osError: OSError('No route to host', errno),
+        port: 5353,
+      );
+      // Reported on the socket stream, a microtask later, like dart:io.
+      scheduleMicrotask(() {
+        final cb = _onError;
+        if (cb == null) throw err; // what happened before the fix
+        (cb as void Function(Object, StackTrace))(err, StackTrace.current);
+      });
+      if (!answerAfterError) return const Stream.empty();
+      return Stream<T>.fromFuture(Future.delayed(
+        const Duration(milliseconds: 10),
+        () => const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'rig._openastroara._tcp.local') as T,
+      ));
+    }
+    return const Stream.empty();
+  }
+
+  @override
+  void stop() {}
+}
+
+/// Starts and sends fine but nothing answers: a healthy network with no
+/// rig powered on.
+class _SilentMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {}
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) => const Stream.empty();
+
+  @override
+  void stop() {}
+}
+
 void main() {
   _preferLocalSubnetTests();
+
+  group('mDNS socket errors reported after the send (#1111 release miss)', () {
+    late List<String> lines;
+    setUp(() {
+      lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+    });
+
+    test('EHOSTUNREACH is logged, flags a Local Network block, no leak',
+        () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      expect(svc.localNetworkBlocked.value, isFalse);
+      final found = await svc.discover().toList();
+      expect(found, isEmpty);
+      expect(
+        lines.where((l) => l.startsWith('[discovery] mDNS socket error')),
+        hasLength(1),
+      );
+      expect(lines.single, contains('No route to host'));
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
+
+    test('a later answered query clears the block', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(answerAfterError: true),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isFalse,
+          reason: 'a PTR answer proves the query went out');
+    });
+
+    test('Linux EHOSTUNREACH (113) is a block too', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(errno: 113),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
+
+    test('no IPv4 network at all is not called a block', () async {
+      // Wi-Fi off / cable out: the same errno means "no route", not
+      // "macOS refused"; the banner would be a wrong diagnosis.
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(),
+        localAddresses: () async => const [],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(lines.single, contains('[discovery] mDNS socket error'));
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('a later answerless pass with no socket error clears the block',
+        () async {
+      // Permission granted, user taps ⟳, no rig powered on: nothing answers
+      // the PTR query, so only the end-of-pass clear can take the banner
+      // down.
+      var pass = 0;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => ++pass == 1
+            ? _AsyncSendErrorMdns()
+            : _SilentMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('a pass that fails before sending leaves the flag alone', () async {
+      // start() throwing (port 5353 contention) never queried, so it can't
+      // vouch that the block is gone.
+      var pass = 0;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => ++pass == 1
+            ? _AsyncSendErrorMdns()
+            : _UnstartableMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
+
+    test('an unrelated socket error is logged but not called a block',
+        () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(errno: 49), // EADDRNOTAVAIL
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(lines.single, contains('[discovery] mDNS socket error'));
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+  });
+
+  group('mDNS send failure (#1111 release-build miss)', () {
+    test('a synchronous send failure is caught and logged, scan completes',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _SendFailsMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found, isEmpty);
+      expect(lines.where((l) => l.startsWith('[discovery]')), hasLength(1));
+      expect(lines.single, contains('No route to host'));
+    });
+
+    test('cancelling the scan while mDNS is starting never leaks an error',
+        () async {
+      // The connect screen restarts discovery within milliseconds of the
+      // first pass on a fresh launch; the first pass's send then fails
+      // after its subscription is already gone.
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _SendFailsMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final sub = svc.discover().listen((_) {});
+      // Cancel before the async* body reaches lookup() (start() and the
+      // interface enumeration are both awaited first).
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // An unhandled async error here fails the test via the zone.
+    });
+  });
 
   group('mDNS failures are logged, not swallowed (#1111)', () {
     test('a client that cannot start is reported and the scan still ends',

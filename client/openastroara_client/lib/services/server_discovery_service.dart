@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data' show BytesBuilder;
 
-import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, ValueNotifier, debugPrint, visibleForTesting;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -53,7 +54,13 @@ class ServerDiscoveryService {
     this.sweepSource,
     this.sweepAbandonGrace = const Duration(seconds: 2),
     MDnsClient Function()? mdnsClientFactory,
-  }) : _mdnsClientFactory = mdnsClientFactory ?? MDnsClient.new;
+    Future<List<String>> Function()? localAddresses,
+  }) : _mdnsClientFactory = mdnsClientFactory ?? MDnsClient.new,
+       _localAddresses = localAddresses ?? _localIPv4Addresses;
+
+  /// Test seam for the local IPv4 enumeration (production uses
+  /// `NetworkInterface.list`).
+  final Future<List<String>> Function() _localAddresses;
 
   final Stream<AraServer> Function()? mdnsSource;
   final Stream<AraServer> Function()? sweepSource;
@@ -62,6 +69,27 @@ class ServerDiscoveryService {
   /// stands in for the sandboxed-socket failure the log line below exists
   /// to make visible.
   final MDnsClient Function() _mdnsClientFactory;
+
+  /// True while the OS refuses this app's multicast queries (#1111). On
+  /// macOS that is the Local Network privacy setting: a denied or
+  /// unanswered prompt makes every mDNS send fail with EHOSTUNREACH, so the
+  /// rig never appears although `dns-sd -B` on the same machine sees it.
+  /// The connect screen shows the fix (System Settings → Privacy & Security
+  /// → Local Network) while this is true; cleared by the next answered
+  /// query.
+  ValueListenable<bool> get localNetworkBlocked => _localNetworkBlocked;
+  final ValueNotifier<bool> _localNetworkBlocked = ValueNotifier(false);
+
+  /// errno values a blocked multicast send comes back with: EHOSTUNREACH
+  /// (65 on macOS/BSD, 113 on Linux; macOS Local Network denial), EPERM (1)
+  /// and EACCES (13) for a sandbox or firewall, and their WinSock
+  /// counterparts WSAEACCES (10013) and WSAEHOSTUNREACH (10065).
+  static const _blockedErrnos = {65, 113, 1, 13, 10013, 10065};
+
+  /// Whether [error] is the OS refusing our multicast send.
+  static bool _isBlockedSend(Object error) =>
+      error is SocketException &&
+      _blockedErrnos.contains(error.osError?.errorCode);
 
   /// How long a sweep keeps probing after its last listener goes away. The
   /// connect screen restarts discovery every ~4 s, and the restart detaches
@@ -195,13 +223,41 @@ class ServerDiscoveryService {
 
   Stream<AraServer> _mdnsDiscover() async* {
     final mdns = _mdnsClientFactory();
+    // Pass-local, not fields: the connect screen restarts discovery every
+    // 4 s and passes overlap, so one pass's error must not be read as
+    // another's. `hasNetwork` decides whether EHOSTUNREACH means "blocked"
+    // or just "no Wi-Fi, cable out".
+    var sawSocketError = false;
+    var hasNetwork = false;
+    // Only a pass that actually queried can vouch that the block is gone;
+    // one that died in start() (port 5353 contention, say) says nothing.
+    var sent = false;
+    // Socket-level errors from the mDNS client. `dart:io` does NOT throw on
+    // a datagram send failure; it reports it asynchronously on the socket's
+    // event stream, which `multicast_dns` forwards only to the `onError`
+    // given to `start()`. Without this hook the failure was an unhandled
+    // async error and the browse simply produced nothing. The library
+    // attaches the hook to its IPv4 socket, the only socket it sends on for
+    // the default IPv4 mDNS address this service uses.
+    void onSocketError(Object error, StackTrace stack) {
+      debugPrint('[discovery] mDNS socket error: $error');
+      sawSocketError = true;
+      if (hasNetwork && _isBlockedSend(error)) {
+        _localNetworkBlocked.value = true;
+      }
+    }
+
     try {
-      await mdns.start();
+      await mdns.start(onError: onSocketError);
       // One interface enumeration per pass, not one per rig resolved.
-      final local = await _localIPv4Addresses();
+      final local = await _localAddresses();
+      hasNetwork = local.isNotEmpty;
+      sent = true; // the PTR query below is the first send
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
+        // An answer means the query went out and came back: not blocked.
+        _localNetworkBlocked.value = false;
         await for (final SrvResourceRecord srv
             in mdns.lookup<SrvResourceRecord>(
               ResourceRecordQuery.service(ptr.domainName),
@@ -283,6 +339,12 @@ class ServerDiscoveryService {
       debugPrint('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
       mdns.stop();
+      // A pass that sent without a socket error means the block is gone
+      // (permission granted, then ⟳), even when no rig answered. Socket
+      // errors are reported a microtask after the send, so give them that
+      // turn before deciding.
+      await Future<void>.delayed(Duration.zero);
+      if (sent && !sawSocketError) _localNetworkBlocked.value = false;
     }
   }
 

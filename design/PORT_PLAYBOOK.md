@@ -2014,9 +2014,12 @@ Port 5555 (override `OPENASTROARA_PORT`). No auth (§67 trusted-LAN). JSON is sn
 captures land in `/tmp/ara/frames/manual/`.
 
 **3. Launch the Flutter app — manual connect + detached.**
-mDNS auto-discovery **fails on macOS debug builds** (`No route to host` on multicast
-`0.0.0.0:5353` — no multicast entitlement), so the discovered-servers list stays empty;
-use the first-run screen's manual entry (host `localhost`, port `5555`). And launch the
+An app launched with `open` is its own macOS privacy principal, so mDNS auto-discovery
+is refused (`No route to host` on multicast `0.0.0.0:5353`) until you allow it under
+System Settings → Privacy & Security → **Local Network** (the connect screen shows a
+banner while this is the case; a terminal-launched app inherits the terminal's grant,
+which is why `flutter run` never hits it — #1111). Allow it and tap ⟳, or use the
+first-run screen's manual entry (host `localhost`, port `5555`). And launch the
 **built `.app` detached** rather than leaving `flutter run` in the background — a
 backgrounded `flutter run` exits ("Lost connection to device") and takes the app down:
 ```bash
