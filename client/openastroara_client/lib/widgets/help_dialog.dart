@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_version.dart';
+import '../services/client_error_log.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
 
@@ -50,9 +51,13 @@ class _HelpDialog extends ConsumerWidget {
 
     return AlertDialog(
       title: const Text('Help / Report a bug'),
+      // Scrollable so the rows can't overflow a short viewport (a phone in
+      // landscape, or a small window) — same shape as the bug-report
+      // disclosure.
       content: SizedBox(
         width: 480,
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -75,6 +80,15 @@ class _HelpDialog extends ConsumerWidget {
               label: 'Saved servers',
               value: '${servers.value?.length ?? 0}',
             ),
+            // Listens to the log's status so an error recorded while the
+            // dialog is open shows up, matching the Support card.
+            ValueListenableBuilder<ClientErrorLogStatus>(
+              valueListenable: ref.watch(clientErrorLogProvider).status,
+              builder: (context, _, _) => _DiagnosticRow(
+                label: 'Client log',
+                value: _clientLogLine(ref.read(clientErrorLogProvider)),
+              ),
+            ),
             const SizedBox(height: 16),
             const Text(
               'Useful links',
@@ -90,6 +104,7 @@ class _HelpDialog extends ConsumerWidget {
               label: '• $_kRepoUrl/wiki (docs + troubleshooting)',
             ),
           ],
+          ),
         ),
       ),
       actions: [
@@ -114,6 +129,11 @@ class _HelpDialog extends ConsumerWidget {
       data: (_) => ref.read(activeServerProvider)?.toString() ?? '(none)',
       orElse: () => '(unknown)',
     );
+    // #1111 — the client log summary rides along so a report says up front
+    // whether this app has recorded a failure of its own. Read BEFORE the
+    // await below, like every other ref.read here: the dialog can be
+    // dismissed while the package-info call is in flight.
+    final clientLog = ref.read(clientErrorLogProvider).summary();
     // Re-fetch package info inline so the diagnostics text always has the
     // freshest version even if the dialog opened before the async resolved.
     // PackageInfo.fromPlatform can throw on some platforms (e.g. missing
@@ -131,6 +151,7 @@ OpenAstroAra diagnostics:
   app version: $version
   active server: $activeServer
   saved servers: ${servers.value?.length ?? 0}
+  $clientLog
 
 Steps to reproduce:
   1.
@@ -160,6 +181,13 @@ Actual behavior:
       const SnackBar(content: Text('Diagnostics copied to clipboard.')),
     );
   }
+}
+
+/// The summary without its `client log: ` prefix — the row label carries it.
+String _clientLogLine(ClientErrorLog log) {
+  const prefix = 'client log: ';
+  final s = log.summary();
+  return s.startsWith(prefix) ? s.substring(prefix.length) : s;
 }
 
 class _LinkRow extends StatelessWidget {
