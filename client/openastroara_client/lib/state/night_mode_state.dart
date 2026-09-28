@@ -8,7 +8,8 @@ final nightModePrefsProvider = Provider<NightModePrefsService>(
 );
 
 /// Persisted "night mode" UI preference (off by default). Night mode renders
-/// as a red colour filter over the whole app (see `main.dart`), so toggling is
+/// as a red colour filter over the whole app (`NightFilter` in
+/// `lib/widgets/night_filter.dart`, installed by `main.dart`), so toggling is
 /// just this flag — nothing else in the UI needs to know about it.
 class NightModeController extends AsyncNotifier<bool> {
   /// A toggle that landed before the initial prefs read finished. Without it

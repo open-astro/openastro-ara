@@ -66,8 +66,10 @@ Future<void> _noteLaunch(ClientErrorLog log) async {
 class OpenAstroAraApp extends StatelessWidget {
   /// [home] replaces the launch router; tests use it to put a plain page under
   /// the real root (theme, night filter, hotkey) without the router's providers.
-  const OpenAstroAraApp({super.key, this.home});
+  const OpenAstroAraApp({super.key, @visibleForTesting this.home});
 
+  /// Test seam only; production always routes through `_RootRouter`.
+  @visibleForTesting
   final Widget? home;
 
   @override
