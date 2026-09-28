@@ -11,6 +11,8 @@ import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
 import 'widgets/plan_offline_button.dart';
+import 'services/client_error_handlers.dart';
+import 'services/client_error_log.dart';
 import 'services/window_mode.dart';
 import 'state/client_gps_state.dart';
 import 'state/backup/backup_stream_state.dart';
@@ -21,8 +23,34 @@ import 'state/night_mode_state.dart';
 import 'theme/ara_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
-void main() {
-  runApp(const ProviderScope(child: OpenAstroAraApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // #1111 — the client's own error log. Installed before runApp so the very
+  // first build failure is on record; a debug app launched via `open` has
+  // no stderr, and a release build would otherwise leave no trace at all.
+  final errorLog = ClientErrorLog();
+  ClientErrorHandlers.install(errorLog);
+  unawaited(_noteLaunch(errorLog));
+  runApp(
+    ProviderScope(
+      overrides: [clientErrorLogProvider.overrideWithValue(errorLog)],
+      child: const OpenAstroAraApp(),
+    ),
+  );
+}
+
+/// First entry of every run. The VM service URL is included when there is
+/// one (debug/profile) — with it, a `flutter attach` or DevTools can reach a
+/// debug app that was launched from Finder rather than a terminal.
+Future<void> _noteLaunch(ClientErrorLog log) async {
+  var vm = '';
+  try {
+    final info = await developer.Service.getInfo();
+    if (info.serverUri != null) vm = ' vm service: ${info.serverUri}';
+  } catch (_) {
+    // Not available on this platform/mode — the launch line still lands.
+  }
+  await log.note('launch$vm');
 }
 
 /// The planetarium renders in the platform's native webview (`webview_all`), which

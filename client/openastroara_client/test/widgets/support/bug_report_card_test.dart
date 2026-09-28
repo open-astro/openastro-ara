@@ -1,10 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
+
 import 'package:openastroara/models/bug_report_preparation.dart';
 import 'package:openastroara/services/bug_report_api.dart';
+import 'package:openastroara/services/client_error_log.dart';
 import 'package:openastroara/state/support/bug_report_state.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+
+/// In-memory client log: exportTo records the path instead of touching disk
+/// (real file IO never completes inside a widget test's fake-async zone).
+class _MemLog extends ClientErrorLog {
+  _MemLog()
+      : super(
+          supportDir: () async => throw const FileSystemException('no disk'),
+          appVersion: () async => 'v',
+        );
+  final exports = <String>[];
+  bool fail = false;
+
+  @override
+  Future<int> exportTo(String path) async {
+    if (fail) throw const FileSystemException('disk full');
+    exports.add(path);
+    return 1;
+  }
+}
 
 class _FakeBugReportClient implements BugReportClient {
   _FakeBugReportClient({this.throwOnPrepare = false});
@@ -39,12 +61,13 @@ class _FakeBugReportClient implements BugReportClient {
   void close() {}
 }
 
-Widget _host(_FakeBugReportClient api) => ProviderScope(
+Widget _host(_FakeBugReportClient api, {ClientErrorLog? log}) => ProviderScope(
       overrides: [
         bugReportApiProvider.overrideWith((ref) {
           ref.onDispose(api.close);
           return api;
         }),
+        clientErrorLogProvider.overrideWithValue(log ?? _MemLog()),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -103,6 +126,47 @@ void main() {
     expect(api.lastDownloadId, 'abc-123');
     expect(api.lastSavePath, '/tmp/openastroara-bug-report.zip',
         reason: 'the picked path is chosen BEFORE the download and streamed to');
+  });
+
+  testWidgets('the client log is saved beside the ZIP and named in the toast',
+      (tester) async {
+    // #1111 — the bundle is built on the daemon, which has never seen this
+    // app's own failures; the client log rides along as a sibling file.
+    final api = _FakeBugReportClient();
+    final log = _MemLog();
+    await tester.pumpWidget(_host(api, log: log));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.textContaining("this app's own error log"), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Download anyway'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(log.exports, ['/tmp/openastroara-client.log']);
+    expect(
+      find.text('Saved bugreport-x.zip and openastroara-client.log'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a client-log export failure does not fail the bug report',
+      (tester) async {
+    final api = _FakeBugReportClient();
+    final log = _MemLog()..fail = true;
+    await tester.pumpWidget(_host(api, log: log));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.widgetWithText(FilledButton, 'Download anyway'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(api.downloadCalls, 1);
+    expect(find.text('Saved bugreport-x.zip'), findsOneWidget);
+    expect(find.textContaining('failed'), findsNothing);
   });
 
   testWidgets('a prepare failure shows an error and never opens the dialog',

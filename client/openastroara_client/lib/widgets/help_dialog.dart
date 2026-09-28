@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_version.dart';
+import '../services/client_error_log.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
 
@@ -75,6 +76,10 @@ class _HelpDialog extends ConsumerWidget {
               label: 'Saved servers',
               value: '${servers.value?.length ?? 0}',
             ),
+            _DiagnosticRow(
+              label: 'Client log',
+              value: _clientLogLine(ref.watch(clientErrorLogProvider)),
+            ),
             const SizedBox(height: 16),
             const Text(
               'Useful links',
@@ -126,11 +131,15 @@ class _HelpDialog extends ConsumerWidget {
       developer.log('Failed to read PackageInfo',
           name: 'openastroara.help_dialog', error: e, stackTrace: st);
     }
+    // #1111 — the client log summary rides along so a report says up front
+    // whether this app has recorded a failure of its own.
+    final clientLog = ref.read(clientErrorLogProvider).summary();
     final payload = '''
 OpenAstroAra diagnostics:
   app version: $version
   active server: $activeServer
   saved servers: ${servers.value?.length ?? 0}
+  $clientLog
 
 Steps to reproduce:
   1.
@@ -160,6 +169,13 @@ Actual behavior:
       const SnackBar(content: Text('Diagnostics copied to clipboard.')),
     );
   }
+}
+
+/// The summary without its `client log: ` prefix — the row label carries it.
+String _clientLogLine(ClientErrorLog log) {
+  const prefix = 'client log: ';
+  final s = log.summary();
+  return s.startsWith(prefix) ? s.substring(prefix.length) : s;
 }
 
 class _LinkRow extends StatelessWidget {

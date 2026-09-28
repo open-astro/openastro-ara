@@ -9,10 +9,12 @@ import '../../state/support/logs_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/support/daemon_restart_card.dart';
 import '../../widgets/support/bug_report_card.dart';
+import '../../widgets/support/client_log_card.dart';
 
 /// §54 Support tab — a live tail of the daemon's §29.9 logs with a level +
-/// substring filter and a "Download daemon log" action. (The §54 bug-report
-/// bundle action lands in a following slice.)
+/// substring filter and a "Download daemon log" action, the §54 bug-report
+/// bundle, and (#1111) the client's own error log, which is reachable with
+/// no rig connected.
 class SupportTab extends ConsumerStatefulWidget {
   /// Test seam for the OS save-location dialog (no platform channel under
   /// widget tests). Returns the destination path, or null on cancel.
@@ -126,15 +128,27 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       }
     });
     final hasServer = ref.watch(logsApiProvider) != null;
+    // The client log lives on THIS machine, so it stays reachable offline —
+    // a client-side crash is exactly when there may be no rig to talk to.
+    final clientLog = ClientLogCard(savePathPicker: widget.savePathPicker);
     if (!hasServer) {
-      return const Center(
-        child: Text('Connect to your rig to see its logs.'),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          clientLog,
+          const Divider(height: 1),
+          const Expanded(
+            child: Center(child: Text('Connect to your rig to see its logs.')),
+          ),
+        ],
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const BugReportCard(),
+        BugReportCard(savePathPicker: widget.savePathPicker),
+        const Divider(height: 1),
+        clientLog,
         const Divider(height: 1),
         const DaemonRestartCard(),
         const Divider(height: 1),

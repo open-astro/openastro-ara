@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../util/stream_save_location.dart';
 
 import '../../models/bug_report_preparation.dart';
+import '../../services/client_error_log.dart';
 import '../../state/support/bug_report_state.dart';
+import 'client_log_card.dart';
 
 /// §54 "Send me a bug report" action — prepares a diagnostic bundle on the
 /// daemon, shows the user exactly what it contains (a PII disclosure, required
@@ -47,9 +51,18 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
           'Choose where to save the bug report', 'openastroara-bug-report.zip');
       if (!mounted || savePath == null) return;
       final name = await api.downloadTo(savePath, prep.preparationId);
+      // #1111 — the client's own error log goes beside the ZIP. The bundle
+      // is built on the daemon, which has never seen this app's failures.
+      final clientLogName = await _saveClientLogBeside(savePath);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved $name')),
+        SnackBar(
+          content: Text(
+            clientLogName == null
+                ? 'Saved $name'
+                : 'Saved $name and $clientLogName',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -58,6 +71,21 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       );
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Exports the client log next to the bundle at [zipPath]; returns the
+  /// file name written, or null when the export failed (the ZIP is the
+  /// deliverable — a client-log hiccup must not turn its success into an
+  /// error).
+  Future<String?> _saveClientLogBeside(String zipPath) async {
+    try {
+      final dir = File(zipPath).parent.path;
+      final path = uniquePathIn(dir, ClientLogCard.suggestedFileName);
+      await ref.read(clientErrorLogProvider).exportTo(path);
+      return path.substring(dir.length + 1);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -81,6 +109,9 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                 'API / notification tokens, precise observatory coordinates, and '
                 'network addresses'),
             const Text('• system info, including this device\'s filesystem path'),
+            const Text(
+                '• this app\'s own error log, saved as a separate file beside '
+                'the ZIP'),
             const SizedBox(height: 12),
             Text('Approximate size: ${_humanSize(prep.estimatedSizeBytes)}.'),
             const SizedBox(height: 8),

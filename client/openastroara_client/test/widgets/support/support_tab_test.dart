@@ -5,6 +5,8 @@ import 'package:openastroara/models/log_entry.dart';
 import 'package:openastroara/screens/tabs/support_tab.dart';
 import 'package:openastroara/services/logs_api.dart';
 import 'package:openastroara/state/support/logs_state.dart';
+import 'package:openastroara/widgets/support/bug_report_card.dart';
+import 'package:openastroara/widgets/support/client_log_card.dart';
 
 class _FakeLogsClient implements LogsClient {
   _FakeLogsClient({this.entries = const [], this.throwOnTail = false});
@@ -126,6 +128,29 @@ void main() {
 
     expect(find.text('kept line'), findsOneWidget);
     expect(find.textContaining("Couldn't load the logs"), findsOneWidget);
+  });
+
+  testWidgets('with no server the client log card is still offered',
+      (tester) async {
+    // #1111 — the client's own log is on this machine; a client-side crash
+    // is exactly when there may be no rig to connect to.
+    await tester.pumpWidget(ProviderScope(
+      overrides: [logsApiProvider.overrideWith((ref) => null)],
+      child: const MaterialApp(home: Scaffold(body: SupportTab())),
+    ));
+    await tester.pump();
+    expect(find.text('Connect to your rig to see its logs.'), findsOneWidget);
+    expect(find.byType(ClientLogCard), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Save client log'), findsOneWidget);
+  });
+
+  testWidgets('connected: the client log card sits below the bug report card',
+      (tester) async {
+    await tester.pumpWidget(_host(_FakeLogsClient(entries: const [])));
+    await tester.pumpAndSettle();
+    final bug = tester.getTopLeft(find.byType(BugReportCard));
+    final client = tester.getTopLeft(find.byType(ClientLogCard));
+    expect(client.dy, greaterThan(bug.dy));
   });
 
   testWidgets('download button is present', (tester) async {
