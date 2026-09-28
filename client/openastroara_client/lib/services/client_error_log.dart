@@ -22,6 +22,7 @@ class ClientErrorLogStatus {
     this.lastAt,
     this.lastMessage,
     this.available = true,
+    this.suppressedRepeats = 0,
   });
 
   /// Entries in the current log file, earlier runs included.
@@ -35,8 +36,14 @@ class ClientErrorLogStatus {
   /// First line of the most recent entry's error text.
   final String? lastMessage;
 
-  /// False once a write has failed — the log directory is unwritable, say.
+  /// False while the last write failed — the log directory is unwritable,
+  /// say. Cleared by the next write that succeeds.
   final bool available;
+
+  /// Entries this session that were identical to their predecessor and
+  /// arrived within [ClientErrorLog.repeatWindow], so were counted instead
+  /// of written.
+  final int suppressedRepeats;
 
   ClientErrorLogStatus copyWith({
     int? entries,
@@ -45,6 +52,7 @@ class ClientErrorLogStatus {
     DateTime? lastAt,
     String? lastMessage,
     bool? available,
+    int? suppressedRepeats,
   }) => ClientErrorLogStatus(
     entries: entries ?? this.entries,
     sessionEntries: sessionEntries ?? this.sessionEntries,
@@ -52,6 +60,7 @@ class ClientErrorLogStatus {
     lastAt: lastAt ?? this.lastAt,
     lastMessage: lastMessage ?? this.lastMessage,
     available: available ?? this.available,
+    suppressedRepeats: suppressedRepeats ?? this.suppressedRepeats,
   );
 }
 
@@ -91,6 +100,7 @@ class ClientErrorLog {
     this.maxBytes = 512 * 1024,
     this.ringCapacity = 200,
     this.maxEntryBytes = 64 * 1024,
+    this.repeatWindow = const Duration(seconds: 5),
   }) : _supportDir = supportDir ?? getApplicationSupportDirectory,
        _appVersion = appVersion ?? _packageVersion,
        _now = now ?? DateTime.now {
@@ -112,6 +122,19 @@ class ClientErrorLog {
   final int maxBytes;
   final int ringCapacity;
   final int maxEntryBytes;
+
+  /// An entry identical to the previous one (same kind, same first line)
+  /// arriving within this window is counted, not written. The failure this
+  /// log exists for — an assertion that re-fires on every rebuild of a
+  /// stream-driven widget — would otherwise queue a 64 KiB entry per frame
+  /// and rotate the file every few entries; Flutter's console dump throttles
+  /// repeats for the same reason. The count is written out when the streak
+  /// ends (a different entry, or an export).
+  final Duration repeatWindow;
+
+  String? _lastKey;
+  DateTime? _lastAt;
+  int _repeats = 0;
 
   final ListQueue<String> _ring = ListQueue<String>();
   Future<void> _chain = Future<void>.value();
@@ -155,6 +178,20 @@ class ClientErrorLog {
     String? library,
   }) {
     final at = _now();
+    final firstLine = _firstLine(_describe(error));
+    final key = '$kind\n$firstLine';
+    final last = _lastAt;
+    if (key == _lastKey && last != null && at.difference(last) < repeatWindow) {
+      _repeats++;
+      _lastAt = at;
+      _status.value = _status.value.copyWith(
+        suppressedRepeats: _status.value.suppressedRepeats + 1,
+      );
+      return _chain;
+    }
+    final repeatNote = _takeRepeatNote();
+    _lastKey = key;
+    _lastAt = at;
     // Snapshot the ring NOW, not when the write runs — later prints (the
     // framework's own dump of this very error, for one) belong to the next
     // entry, and the file should show what led up to this one.
@@ -168,9 +205,12 @@ class ClientErrorLog {
       library: library,
       prints: prints,
     );
-    final firstLine = _firstLine(_describe(error));
     return _enqueue(() async {
-      await _append(text);
+      await _append(repeatNote + text);
+      // A successful write clears an earlier failure: the disk came back.
+      if (!_status.value.available) {
+        _status.value = _status.value.copyWith(available: true);
+      }
       // Informational notes are in the file but are not "errors recorded".
       if (kind == noteKind) return;
       _status.value = _status.value.copyWith(
@@ -201,6 +241,12 @@ class ClientErrorLog {
     var written = 0;
     Object? failure;
     StackTrace? failureStack;
+    // A streak of suppressed repeats is written out first, so the export
+    // says how often the last error fired.
+    final repeatNote = _takeRepeatNote();
+    if (repeatNote.isNotEmpty) {
+      _enqueue(() => _append(repeatNote));
+    }
     // Queued behind pending writes so the copy sees whole entries.
     await _enqueue(() async {
       try {
@@ -237,7 +283,7 @@ class ClientErrorLog {
   /// One line for "Copy diagnostics" and the Support card, e.g.
   /// `client log: 3 errors, last 2026-09-27 14:11 flutter_error: …`.
   String summary() {
-    final s = _status.value;
+    final s = status.value;
     if (!s.available) return 'client log: unavailable (write failed)';
     if (s.entries == 0) return 'client log: no errors recorded';
     final noun = s.entries == 1 ? 'entry' : 'entries';
@@ -264,19 +310,33 @@ class ClientErrorLog {
     return next;
   }
 
+  /// The streak-end line for suppressed repeats, or '' when there were none.
+  String _takeRepeatNote() {
+    if (_repeats == 0) return '';
+    final n = _repeats;
+    _repeats = 0;
+    return '(previous entry repeated $n more '
+        '${n == 1 ? 'time' : 'times'} within ${repeatWindow.inSeconds}s '
+        'of each other)\n\n';
+  }
+
+  /// Counts the entries earlier runs left behind — the rotated file too,
+  /// since [exportTo] ships both and the card's count should match what a
+  /// bug report will contain.
   Future<void> _scanExisting() async {
     final dir = await _supportDir();
-    final f = File('${dir.path}/$fileName');
-    if (!await f.exists()) return;
     var count = 0;
     String? lastKind;
     DateTime? lastAt;
     String? lastMessage;
     var pendingMessage = false;
-    await for (final line in f
-        .openRead()
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())) {
+    for (final name in [rotatedFileName, fileName]) {
+      final f = File('${dir.path}/$name');
+      if (!await f.exists()) continue;
+      await for (final line in f
+          .openRead()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
       if (line.startsWith(entryMarker)) {
         count++;
         // "=== <iso> <kind> ==="
@@ -297,6 +357,7 @@ class ClientErrorLog {
       } else if (pendingMessage && line.startsWith('error: ')) {
         lastMessage = line.substring('error: '.length);
         pendingMessage = false;
+      }
       }
     }
     if (count == 0) return;

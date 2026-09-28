@@ -2060,3 +2060,13 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   is `ObjectDisposedException`'s base, so a request racing daemon shutdown gets a 409 "Cannot
   access a disposed object" instead of a 5xx. Tighten both together if it ever matters. Review
   note on #1108.
+
+## Client error log in the §54 bundle scan (2026-09-28, from the #1112 review notes)
+
+- "Send me a bug report" saves the client's `client-errors.log` *beside* the daemon's ZIP, so
+  the §54.4 sensitivity detection and §54.6 always-blacklisted stripping (PORT_PLAYBOOK) will
+  never see it once they land, and each entry carries the last 200 `debugPrint` lines verbatim.
+  Nothing in `lib/` prints a token today (checked in the #1112 review), so this is not a leak,
+  but the client log should ride through the same scan path as the daemon logs — either the
+  client uploads it into the preparation before download, or the client runs the same
+  blacklist locally before writing the sidecar. Review note on #1112.

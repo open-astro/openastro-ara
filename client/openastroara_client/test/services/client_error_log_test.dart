@@ -159,6 +159,80 @@ void main() {
     expect(l.status.value.entries, 0);
   });
 
+  test('identical errors inside the repeat window are counted, not written',
+      () async {
+    final l = log();
+    for (var i = 0; i < 4; i++) {
+      await l.record('flutter_error', 'same assertion\nframe $i');
+    }
+    var text = current().readAsStringSync();
+    expect(ClientErrorLog.entryMarker.allMatches(text).length, 1);
+    expect(l.status.value.entries, 1);
+    expect(l.status.value.suppressedRepeats, 3);
+
+    // A different error ends the streak and writes the count out first.
+    await l.record('flutter_error', 'other');
+    text = current().readAsStringSync();
+    final note = text.indexOf('(previous entry repeated 3 more times within 5s');
+    expect(note, greaterThan(0));
+    expect(note, lessThan(text.indexOf(' flutter_error ===', note)));
+    expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
+  });
+
+  test('a streak of repeats is flushed by an export', () async {
+    final l = log();
+    await l.record('a', 'x');
+    await l.record('a', 'x');
+    final out = '${dir.path}/export.log';
+    await l.exportTo(out);
+    expect(File(out).readAsStringSync(),
+        contains('(previous entry repeated 1 more time within 5s'));
+  });
+
+  test('the same error outside the window is written again', () async {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      repeatWindow: Duration.zero,
+    );
+    await l.record('a', 'x');
+    await l.record('a', 'x');
+    expect(ClientErrorLog.entryMarker.allMatches(current().readAsStringSync())
+        .length, 2);
+    expect(l.status.value.suppressedRepeats, 0);
+  });
+
+  test('a write failure is cleared by the next successful write', () async {
+    var fail = true;
+    final l = ClientErrorLog(
+      supportDir: () async {
+        if (fail) throw const FileSystemException('offline disk');
+        return dir;
+      },
+      appVersion: () async => 'v',
+    );
+    await l.record('a', 'x');
+    expect(l.status.value.available, isFalse);
+    fail = false;
+    await l.record('b', 'y');
+    expect(l.status.value.available, isTrue);
+    expect(l.status.value.entries, 1);
+  });
+
+  test('a new instance counts the rotated file too', () async {
+    final first = log(maxBytes: 600);
+    final big = 'x' * 300;
+    await first.record('a', big);
+    await first.record('b', big);
+    expect(rotated().existsSync(), isTrue);
+
+    final second = log(maxBytes: 600);
+    await second.idle;
+    expect(second.status.value.entries, 2);
+    expect(second.status.value.lastKind, 'b');
+  });
+
   test('summary reads well empty and with entries', () async {
     final l = log();
     await l.idle;
