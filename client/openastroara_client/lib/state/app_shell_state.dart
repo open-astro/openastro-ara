@@ -31,6 +31,10 @@ class SelectedTabIndexNotifier extends Notifier<int> {
 /// shell), so a remounted shell starts lazy again instead of eagerly
 /// inflating every tab a previous shell had opened.
 class VisitedTabsNotifier extends Notifier<Set<int>> {
+  // read, not watch: the seed is taken once. A watch (or any
+  // ref.invalidate/refresh of this provider) would collapse the set to the
+  // current tab and tear down every other tab's body — including the
+  // Planning webview whose persistence is the whole reason for keep-alive.
   @override
   Set<int> build() => {ref.read(selectedTabIndexProvider)};
 

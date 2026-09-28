@@ -47,7 +47,14 @@ void main() {
     await tester.pumpWidget(host(selected: 0, visited: {0}));
     expect(find.text('a'), findsOneWidget);
     expect(find.byType(_Probe, skipOffstage: false), findsOneWidget);
-    expect(find.byType(SizedBox, skipOffstage: false), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(IndexedStack),
+        matching: find.byType(SizedBox, skipOffstage: false),
+        skipOffstage: false,
+      ),
+      findsNWidgets(2),
+    );
     expect(_Probe.initCounts, {'a': 1});
   });
 
@@ -66,11 +73,18 @@ void main() {
         reason: 'initState exactly once per tab');
   });
 
-  testWidgets('the selected index is shown even if not yet in visited',
+  testWidgets('a selected index outside visited is a placeholder',
       (tester) async {
-    await tester.pumpWidget(host(selected: 1, visited: {0, 1}));
+    // buildTabStack is a pure function of its inputs: it does NOT add the
+    // selected index to visited. The caller (AppShell.build) unions them,
+    // so this pins where that invariant lives.
+    await tester.pumpWidget(host(selected: 1, visited: {0}));
     final stack = tester.widget<IndexedStack>(find.byType(IndexedStack));
     expect(stack.index, 1);
+    expect(find.text('b', skipOffstage: false), findsNothing);
+    expect(_Probe.initCounts, {'a': 1});
+
+    await tester.pumpWidget(host(selected: 1, visited: {0, 1}));
     expect(find.text('b'), findsOneWidget);
   });
 }

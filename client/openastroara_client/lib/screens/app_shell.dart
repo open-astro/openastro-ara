@@ -166,7 +166,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                               // instead of its real body, so we DON'T run every tab's
                               // initState at startup (no eager API/poll calls before the
                               // user even opens that tab). A tab builds the first time it's
-                              // selected (it's in _builtTabs) and stays alive thereafter —
+                              // selected (it's in visitedTabsProvider) and stays alive thereafter —
                               // so the atlas still persists across switches once opened.
                               Expanded(
                                 child: buildTabStack(
