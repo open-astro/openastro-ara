@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data' show BytesBuilder;
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -52,10 +52,16 @@ class ServerDiscoveryService {
     this.mdnsSource,
     this.sweepSource,
     this.sweepAbandonGrace = const Duration(seconds: 2),
-  });
+    MDnsClient Function()? mdnsClientFactory,
+  }) : _mdnsClientFactory = mdnsClientFactory ?? MDnsClient.new;
 
   final Stream<AraServer> Function()? mdnsSource;
   final Stream<AraServer> Function()? sweepSource;
+
+  /// Test seam for the real mDNS path: a client whose `start()` throws
+  /// stands in for the sandboxed-socket failure the log line below exists
+  /// to make visible.
+  final MDnsClient Function() _mdnsClientFactory;
 
   /// How long a sweep keeps probing after its last listener goes away. The
   /// connect screen restarts discovery every ~4 s, and the restart detaches
@@ -188,7 +194,7 @@ class ServerDiscoveryService {
   }
 
   Stream<AraServer> _mdnsDiscover() async* {
-    final mdns = MDnsClient();
+    final mdns = _mdnsClientFactory();
     try {
       await mdns.start();
       // One interface enumeration per pass, not one per rig resolved.
@@ -246,7 +252,9 @@ class ServerDiscoveryService {
             // Broad on purpose: a dropped A-record reply is the exact
             // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
-          } catch (_) {
+          } catch (e) {
+            debugPrint('[discovery] mDNS A-record lookup for ${srv.target} '
+                'failed: $e');
             continue;
           }
           if (candidates.isEmpty) {
@@ -267,10 +275,12 @@ class ServerDiscoveryService {
       }
       // Deliberately broad: raw-socket mDNS fails in environment-specific
       // ways (port 5353 contention, sandbox denials); the sweep path is the
-      // fallback, so a browse failure must stay silent, never crash the scan.
+      // fallback, so a browse failure must never crash the scan. It is no
+      // longer SILENT, though: a release build that never lists a rig that
+      // `dns-sd -B` sees on the same machine (#1111) left nothing to read.
       // ignore: avoid_catches_without_on_clauses
-    } catch (_) {
-      // Multicast unavailable — the subnet sweep carries discovery.
+    } catch (e) {
+      debugPrint('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
       mdns.stop();
     }

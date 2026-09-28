@@ -2070,3 +2070,12 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   but the client log should ride through the same scan path as the daemon logs — either the
   client uploads it into the preparation before download, or the client runs the same
   blacklist locally before writing the sidecar. Review note on #1112.
+
+## Discovery log throttling (2026-09-28, from the #1113 review notes)
+
+- The `[discovery] mDNS browse failed …` and `… A-record lookup … failed` lines are not
+  throttled, and the connect screen restarts discovery every ~4 s, so a permanently
+  multicast-hostile host prints ~15 identical browse lines a minute (plus one per rig per pass
+  for A-records). Once the client error log (#1112) captures `debugPrint`, that churns the ring
+  buffer the lines are meant to fill. Log once per `ServerDiscoveryService` instance (or once per
+  distinct message) and keep the signal. Review note on #1113.
