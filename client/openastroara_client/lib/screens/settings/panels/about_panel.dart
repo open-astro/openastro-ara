@@ -139,7 +139,7 @@ class AboutPanel extends ConsumerWidget {
 
 /// Settings → System → About — night mode toggle. Also togglable via the moon
 /// button in the top bar and the Ctrl+N / ⌘N hotkey from anywhere in the app
-/// (main.dart `withNightHotkey`); persisted across launches.
+/// (`NightHotkey` around the app root); persisted across launches.
 class _NightModeRow extends ConsumerWidget {
   const _NightModeRow();
 
