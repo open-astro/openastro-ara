@@ -302,7 +302,9 @@ void main() {
       burstLimit: 3,
       burstWindow: const Duration(seconds: 60),
     );
-    // Two widgets alternating defeat the consecutive-repeat check.
+    // Two widgets alternating defeat the consecutive-repeat check: A, B, A
+    // are written; B is dropped; A is a repeat of the last WRITTEN entry
+    // (the dropped B never became the streak owner); B is dropped again.
     for (var i = 0; i < 6; i++) {
       await l.record('flutter_error', i.isEven ? 'widget A' : 'widget B');
     }
@@ -311,14 +313,64 @@ void main() {
     expect(l.status.value.entries, 3);
     expect(l.status.value.suppressedRepeats, 3);
 
-    // Next window: the drop count is written before the new entry.
+    // Next window: the repeat and drop counts are written before the new
+    // entry.
     tick += 100;
     await l.record('flutter_error', 'later');
     text = current().readAsStringSync();
-    final note = text.indexOf('(3 entries dropped: more than 3 in 60s)');
-    expect(note, greaterThan(0));
-    expect(note, lessThan(text.indexOf(' flutter_error ===', note)));
+    final rep = text.indexOf('(previous entry repeated 1 more time');
+    final drop = text.indexOf('(2 entries dropped: more than 3 in 60s)');
+    expect(rep, greaterThan(0));
+    expect(drop, greaterThan(rep));
+    expect(drop, lessThan(text.indexOf(' flutter_error ===', drop)));
     expect(ClientErrorLog.entryMarker.allMatches(text).length, 4);
+  });
+
+  test('a dropped entry keeps the previous entry\'s repeat streak intact',
+      () async {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      burstLimit: 1,
+      burstWindow: const Duration(seconds: 60),
+    );
+    await l.record('e', 'A'); // written, budget now full
+    await l.record('e', 'A'); // repeat of A (repeats: 1)
+    await l.record('e', 'B'); // dropped — must not consume A's streak
+    await l.record('e', 'A'); // still a repeat of A (repeats: 2)
+    tick += 100;
+    await l.record('e', 'C'); // new window: both notes, then C
+    final text = current().readAsStringSync();
+    final rep = text.indexOf('(previous entry repeated 2 more times');
+    final drop = text.indexOf('(1 entry dropped: more than 1 in 60s)');
+    final c = text.indexOf(' e ===', text.indexOf(' e ===') + 1);
+    expect(rep, greaterThan(0));
+    expect(drop, greaterThan(rep));
+    expect(c, greaterThan(drop));
+    expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
+  });
+
+  test('a dropped entry that re-fires is counted as drops, not repeats',
+      () async {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      burstLimit: 1,
+      burstWindow: const Duration(seconds: 60),
+    );
+    await l.record('e', 'H'); // written
+    for (var i = 0; i < 5; i++) {
+      await l.record('e', 'I'); // all dropped
+    }
+    tick += 100;
+    await l.record('e', 'J');
+    final text = current().readAsStringSync();
+    expect(text, contains('(5 entries dropped: more than 1 in 60s)'));
+    expect(text, isNot(contains('repeated')),
+        reason: 'H fired once; I was never written, so nothing repeated');
+    expect(l.status.value.suppressedRepeats, 5);
   });
 
   test('notes are exempt from the burst budget', () async {
@@ -355,6 +407,10 @@ void main() {
     );
     l.notePrint('0123456789abcdef');
     expect(l.recentPrints.single, '0123456789 … (line truncated)');
+    // A cut that would land between the halves of a surrogate pair backs
+    // off one unit instead of leaving a lone high surrogate.
+    l.notePrint('012345678😀abcdef');
+    expect(l.recentPrints.last, '012345678 … (line truncated)');
     l.notePrint('short');
     expect(l.recentPrints.last, 'short');
   });

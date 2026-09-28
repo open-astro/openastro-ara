@@ -25,7 +25,8 @@ class ClientErrorLogStatus {
     this.suppressedRepeats = 0,
   });
 
-  /// Entries in the current log file, earlier runs included.
+  /// Entries on disk — the current file plus the rotated one, earlier runs
+  /// included — which is exactly what [ClientErrorLog.exportTo] ships.
   final int entries;
 
   /// Entries recorded since this process started.
@@ -188,11 +189,15 @@ class ClientErrorLog {
     while (_ring.length >= ringCapacity) {
       _ring.removeFirst();
     }
-    _ring.addLast(
-      line.length > maxPrintLineChars
-          ? '${line.substring(0, maxPrintLineChars)} … (line truncated)'
-          : line,
-    );
+    if (line.length <= maxPrintLineChars) {
+      _ring.addLast(line);
+      return;
+    }
+    var cut = maxPrintLineChars;
+    // Never end on a high surrogate.
+    final last = line.codeUnitAt(cut - 1);
+    if (last >= 0xD800 && last <= 0xDBFF) cut--;
+    _ring.addLast('${line.substring(0, cut)} … (line truncated)');
   }
 
   /// Appends one entry. [kind] is a short tag (`flutter_error`,
@@ -223,10 +228,14 @@ class ClientErrorLog {
         );
       });
     }
-    final repeatNote = _takeRepeatNote();
-    _lastKey = key;
-    _lastAt = at;
     // Burst budget (notes are exempt: they are rare and never re-fire).
+    // Decided BEFORE the repeat streak is consumed or the key advances: a
+    // dropped entry must neither discard the previous entry's repeat count
+    // nor become the owner of repeats that follow it (its own re-fires are
+    // fresh records against the still-previous key, so they are dropped and
+    // counted as drops, not written up as someone else's repeats).
+    // The window is fixed, not sliding: it bounds file churn under the 512
+    // KiB cap, it is not a rate limit.
     var droppedNote = '';
     if (kind != noteKind) {
       final start = _burstStart;
@@ -245,6 +254,9 @@ class ClientErrorLog {
       }
       _burstCount++;
     }
+    final repeatNote = _takeRepeatNote();
+    _lastKey = key;
+    _lastAt = at;
     // Snapshot the ring NOW, not when the write runs — later prints (the
     // framework's own dump of this very error, for one) belong to the next
     // entry, and the file should show what led up to this one. Only the
