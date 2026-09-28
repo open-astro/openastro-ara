@@ -1456,8 +1456,9 @@ function pollCmd() {
       debugEvent({ cmd: c.type });
       if (c.type === 'search') doSearch(c.q || '');
       else if (c.type === 'zoom') zoomBy(c.factor);
-      // Observer site pushed from Flutter (offline edits in Options; the
-      // daemon poll in loadSite covers the online case).
+      // Observer site pushed from Flutter: every edit made in this client's
+      // Options arrives here at once, online or offline. loadSite's slow poll
+      // only covers an edit made on another client.
       else if (c.type === 'site' && isFinite(+c.lat) && isFinite(+c.lon)) {
         var la = +c.lat, lo = +c.lon, el = +c.elev || 0;
         if (!(la === LAT && lo === LON && el === ELEV)) {

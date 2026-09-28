@@ -25,6 +25,42 @@ class _UnstartableMdns extends MDnsClient {
   void stop() {}
 }
 
+/// Starts, answers the PTR and SRV queries for one rig, and fails the A-record
+/// lookup — the address-resolution half of the log coverage.
+class _AddressLookupFailsMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {}
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    if (T == PtrResourceRecord) {
+      return Stream<T>.fromIterable([
+        const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'rig._openastroara._tcp.local') as T,
+      ]);
+    }
+    if (T == SrvResourceRecord) {
+      return Stream<T>.fromIterable([
+        const SrvResourceRecord('rig._openastroara._tcp.local', 0,
+            target: 'rig.local', port: 5555, priority: 0, weight: 0) as T,
+      ]);
+    }
+    return Stream<T>.error(const SocketException('no route to multicast'));
+  }
+
+  @override
+  void stop() {}
+}
+
 void main() {
   _preferLocalSubnetTests();
 
@@ -46,6 +82,26 @@ void main() {
         hasLength(1),
       );
       expect(lines.single, contains('Operation not permitted'));
+    });
+
+    test('a failed A-record lookup is reported and the rig is skipped',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _AddressLookupFailsMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found, isEmpty, reason: 'an unresolved .local name is never emitted');
+      expect(
+        lines.where((l) =>
+            l.startsWith('[discovery] mDNS A-record lookup for rig.local')),
+        hasLength(1),
+      );
+      expect(lines.single, contains('no route to multicast'));
     });
   });
   group('ServerDiscoveryService.discover', () {

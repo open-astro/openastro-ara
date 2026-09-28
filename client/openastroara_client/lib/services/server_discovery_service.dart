@@ -278,7 +278,6 @@ class ServerDiscoveryService {
       // fallback, so a browse failure must never crash the scan. It is no
       // longer SILENT, though: a release build that never lists a rig that
       // `dns-sd -B` sees on the same machine (#1111) left nothing to read.
-      // debugPrint lands in the client error log's ring buffer.
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       debugPrint('[discovery] mDNS browse failed, sweep carries discovery: $e');

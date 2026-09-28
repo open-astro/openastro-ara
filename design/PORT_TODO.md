@@ -2060,3 +2060,14 @@ Three out-of-scope items from #1017's review rounds, none widened into that PR:
   is `ObjectDisposedException`'s base, so a request racing daemon shutdown gets a 409 "Cannot
   access a disposed object" instead of a 5xx. Tighten both together if it ever matters. Review
   note on #1108.
+
+
+## Discovery log throttling (2026-09-28, from the #1113 review notes)
+
+- The `[discovery] mDNS browse failed …` and `… A-record lookup … failed` lines are not
+  throttled, and the connect screen restarts discovery every ~4 s, so a permanently
+  multicast-hostile host prints ~15 identical browse lines a minute (plus one per rig per pass
+  for A-records). Once the client error log (#1112) captures `debugPrint`, that churns the ring
+  buffer the lines are meant to fill. Log once per `ServerDiscoveryService` instance (or once per
+  distinct message) and keep the signal. Review note on #1113.
+\n
