@@ -62,31 +62,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
   ];
 
-  // Indices that have been visited at least once. A tab isn't built until first
-  // selected; once built it stays in this set so the IndexedStack keeps it alive
-  // (see the IndexedStack comment below). Monotonic — never removed.
-  final Set<int> _builtTabs = <int>{};
-  // Tabs with a post-frame "mark visited" callback already queued. Guards against
-  // a second build() in the same frame (e.g. two provider updates before the
-  // callback fires) queuing a duplicate callback — which would otherwise trigger
-  // a spurious extra rebuild on first open.
-  final Set<int> _pendingTabs = <int>{};
-
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
-    // Record the current tab as visited via a post-frame callback rather than
-    // mutating _builtTabs directly in build() (keeps build side-effect-free). The
-    // local `liveTabs` below already includes selectedTab, so the tab renders this
-    // frame without waiting for the callback — no first-open flash. `_pendingTabs`
-    // ensures only one callback is queued per unvisited tab.
-    if (!_builtTabs.contains(selectedTab) && _pendingTabs.add(selectedTab)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _pendingTabs.remove(selectedTab);
-        if (mounted) setState(() => _builtTabs.add(selectedTab));
-      });
-    }
-    final liveTabs = {..._builtTabs, selectedTab};
+    // Visited tabs are provider state marked from select() (#1111 PR C), so
+    // this build has no side effects and no post-frame setState. The union
+    // with selectedTab keeps the invariant even if the two providers ever
+    // publish out of step.
+    final visited = ref.watch(visitedTabsProvider);
+    final liveTabs = {...visited, selectedTab};
     // Ties kOptionsTabIndex (used by the equipment chips to route to a device's
     // settings panel) to the actual tab order — a reorder of _tabs that forgets
     // to update the constant trips this in debug instead of silently navigating
@@ -182,17 +166,13 @@ class _AppShellState extends ConsumerState<AppShell> {
                               // instead of its real body, so we DON'T run every tab's
                               // initState at startup (no eager API/poll calls before the
                               // user even opens that tab). A tab builds the first time it's
-                              // selected (it's in _builtTabs) and stays alive thereafter —
+                              // selected (it's in visitedTabsProvider) and stays alive thereafter —
                               // so the atlas still persists across switches once opened.
                               Expanded(
-                                child: IndexedStack(
-                                  index: selectedTab,
-                                  children: [
-                                    for (var i = 0; i < _tabs.length; i++)
-                                      liveTabs.contains(i)
-                                          ? _tabs[i].body
-                                          : const SizedBox.shrink(),
-                                  ],
+                                child: buildTabStack(
+                                  selected: selectedTab,
+                                  visited: liveTabs,
+                                  bodies: [for (final t in _tabs) t.body],
                                 ),
                               ),
                             ],
@@ -211,6 +191,25 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
     );
   }
+}
+
+/// The shell's tab stack: an [IndexedStack] showing [selected], with every
+/// tab in [visited] holding its real body and the rest a placeholder. Kept
+/// as a plain function of its inputs so `app_shell_tab_stack_test` can pin
+/// the keep-alive and lazy-build contract without the shell's providers.
+@visibleForTesting
+Widget buildTabStack({
+  required int selected,
+  required Set<int> visited,
+  required List<Widget> bodies,
+}) {
+  return IndexedStack(
+    index: selected,
+    children: [
+      for (var i = 0; i < bodies.length; i++)
+        visited.contains(i) ? bodies[i] : const SizedBox.shrink(),
+    ],
+  );
 }
 
 class _TabSpec {
