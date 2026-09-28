@@ -506,6 +506,22 @@ void main() {
     });
   });
 
+  group('planetarium page site poll', () {
+    test('polls the daemon site slowly; Dart pushes this client\'s edits', () {
+      // #1111 — the page hit GET /api/v1/profile/site every 2 s for as long
+      // as the Planning tab was open. Edits made here arrive as a 'site'
+      // command from Dart, so the poll only covers another client's edits.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      expect(page, contains('setInterval(loadSite, 30000)'));
+      expect(page, isNot(contains('setInterval(loadSite, 2000)')));
+      // The push path the comment relies on must still exist on both ends.
+      expect(page, contains("c.type === 'site'"));
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
+          .readAsStringSync();
+      expect(dart, contains("'type': 'site'"));
+    });
+  });
+
   group('planetarium page DSS data source', () {
     test('points at the loopback cache WITHOUT a trailing slash', () {
       // hips.c get_url_for() emits `<url>/<path>`; './dss/' would request

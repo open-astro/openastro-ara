@@ -1,14 +1,53 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:multicast_dns/multicast_dns.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
 
 AraServer _s(String host, {int port = 5555, String? name}) =>
     AraServer(hostname: host, port: port, mdnsName: name);
 
+/// Stands in for the sandboxed multicast bind that fails on some hosts.
+class _UnstartableMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async => throw const SocketException('Operation not permitted');
+
+  @override
+  void stop() {}
+}
+
 void main() {
   _preferLocalSubnetTests();
+
+  group('mDNS failures are logged, not swallowed (#1111)', () {
+    test('a client that cannot start is reported and the scan still ends',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _UnstartableMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found, isEmpty);
+      expect(
+        lines.where((l) => l.startsWith('[discovery] mDNS browse failed')),
+        hasLength(1),
+      );
+      expect(lines.single, contains('Operation not permitted'));
+    });
+  });
   group('ServerDiscoveryService.discover', () {
     test('sweep does NOT run when mDNS produced a result', () async {
       var sweepRan = false;

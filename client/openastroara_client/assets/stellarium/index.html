@@ -288,9 +288,13 @@ var stel = null;
 // Planning clock: null = live "now"; else a fixed unix-ms instant.
 var pinnedMs = null;
 
-// Re-read the observer site from the daemon profile so editing it in Options →
-// Safety → Site preferences moves the sky/Sun/visibility without reloading the
-// page (the URL lat/lon are only the initial seed). Polled every few seconds.
+// Re-read the observer site from the daemon profile so a site edit made on
+// ANOTHER client moves the sky/Sun/visibility without reloading the page (the
+// URL lat/lon are only the initial seed). This client's own Options edits do
+// not need the poll: Dart pushes them as a 'site' command the moment they
+// change. So the poll is a slow safety net (30 s), not the delivery path —
+// at 2 s it was 30 GETs a minute against the daemon for as long as the
+// Planning tab was open (#1111).
 function loadSite() {
   if (!API || !stel) return;
   fetch(API + '/api/v1/profile/site')
@@ -1674,7 +1678,7 @@ StelWebEngine({
     wireDisplay();
     wireCatalogs();
     loadSite();                              // pull the real site from the daemon
-    setInterval(loadSite, 2000);             // and keep it in sync with Options (near-instant)
+    setInterval(loadSite, 30000);            // slow net for edits made on another client
   }
 });
 </script>
