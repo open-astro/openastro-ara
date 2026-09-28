@@ -67,7 +67,7 @@ void main() {
       suppressedRepeats: 40,
     );
     await tester.pump();
-    expect(find.textContaining('1 error recorded (1 since launch, 40 repeats)'),
+    expect(find.textContaining('1 error recorded (1 since launch, 40 suppressed)'),
         findsOneWidget);
     log.statusNotifier.value = const ClientErrorLogStatus(available: false);
     await tester.pump();

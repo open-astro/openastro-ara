@@ -25,7 +25,9 @@ class ClientErrorLogStatus {
     this.suppressedRepeats = 0,
   });
 
-  /// Entries in the current log file, earlier runs included.
+  /// Error entries on disk — the current file plus the rotated one, earlier
+  /// runs included. [ClientErrorLog.exportTo] ships those same two files;
+  /// notes and headers are in them too but are not counted here.
   final int entries;
 
   /// Entries recorded since this process started.
@@ -40,9 +42,9 @@ class ClientErrorLogStatus {
   /// say. Cleared by the next write that succeeds.
   final bool available;
 
-  /// Entries this session that were identical to their predecessor and
-  /// arrived within [ClientErrorLog.repeatWindow], so were counted instead
-  /// of written.
+  /// Entries this session that were counted instead of written: identical
+  /// to their predecessor within [ClientErrorLog.repeatWindow], or over the
+  /// [ClientErrorLog.burstLimit] for the window.
   final int suppressedRepeats;
 
   ClientErrorLogStatus copyWith({
@@ -101,6 +103,9 @@ class ClientErrorLog {
     this.ringCapacity = 200,
     this.maxEntryBytes = 64 * 1024,
     this.repeatWindow = const Duration(seconds: 5),
+    this.burstLimit = 8,
+    this.burstWindow = const Duration(seconds: 10),
+    this.maxPrintLineChars = 4096,
   }) : _supportDir = supportDir ?? getApplicationSupportDirectory,
        _appVersion = appVersion ?? _packageVersion,
        _now = now ?? DateTime.now {
@@ -136,6 +141,26 @@ class ClientErrorLog {
   DateTime? _lastAt;
   int _repeats = 0;
 
+  /// At most [burstLimit] entries are written per [burstWindow]; the rest
+  /// are counted and reported as one line when the window ends. The
+  /// consecutive-repeat check above catches one widget failing every
+  /// frame; this catches two of them alternating, which defeats it.
+  final int burstLimit;
+  final Duration burstWindow;
+  DateTime? _burstStart;
+  int _burstCount = 0;
+  int _dropped = 0;
+
+  /// Longest `debugPrint` line kept in the ring. Flutter's console dump
+  /// hands one call a whole formatted error plus stack; 200 of those can be
+  /// megabytes resident, and the head is what matters.
+  final int maxPrintLineChars;
+
+  // Non-note entries per file, so [ClientErrorLogStatus.entries] tracks what
+  // exportTo ships even after the second rotation deletes the older file.
+  int _rotatedEntries = 0;
+  int _currentEntries = 0;
+
   final ListQueue<String> _ring = ListQueue<String>();
   Future<void> _chain = Future<void>.value();
   String? _headerCache;
@@ -165,7 +190,17 @@ class ClientErrorLog {
     while (_ring.length >= ringCapacity) {
       _ring.removeFirst();
     }
-    _ring.addLast(line);
+    if (line.length <= maxPrintLineChars) {
+      _ring.addLast(line);
+      return;
+    }
+    var cut = maxPrintLineChars.clamp(0, line.length);
+    // Never end on a high surrogate.
+    if (cut > 0) {
+      final last = line.codeUnitAt(cut - 1);
+      if (last >= 0xD800 && last <= 0xDBFF) cut--;
+    }
+    _ring.addLast('${line.substring(0, cut)} … (line truncated)');
   }
 
   /// Appends one entry. [kind] is a short tag (`flutter_error`,
@@ -196,24 +231,52 @@ class ClientErrorLog {
         );
       });
     }
+    // Burst budget (notes are exempt: they are rare and never re-fire).
+    // Decided BEFORE the repeat streak is consumed or the key advances: a
+    // dropped entry must neither discard the previous entry's repeat count
+    // nor become the owner of repeats that follow it (its own re-fires are
+    // fresh records against the still-previous key, so they are dropped and
+    // counted as drops, not written up as someone else's repeats).
+    // The window is fixed, not sliding: it bounds file churn under the 512
+    // KiB cap, it is not a rate limit.
+    var droppedNote = '';
+    if (kind != noteKind && burstLimit > 0) {
+      final start = _burstStart;
+      if (start == null || at.difference(start) >= burstWindow) {
+        droppedNote = _takeDroppedNote();
+        _burstStart = at;
+        _burstCount = 0;
+      }
+      if (_burstCount >= burstLimit) {
+        _dropped++;
+        return _enqueue(() async {
+          _status.value = _status.value.copyWith(
+            suppressedRepeats: _status.value.suppressedRepeats + 1,
+          );
+        });
+      }
+      _burstCount++;
+    }
     final repeatNote = _takeRepeatNote();
     _lastKey = key;
     _lastAt = at;
     // Snapshot the ring NOW, not when the write runs — later prints (the
     // framework's own dump of this very error, for one) belong to the next
-    // entry, and the file should show what led up to this one.
+    // entry, and the file should show what led up to this one. Only the
+    // snapshot is taken here: formatting a 64 KiB entry belongs on the
+    // chain, not inside FlutterError.onError mid-frame.
     final prints = List<String>.from(_ring);
-    final text = _formatEntry(
-      at: at,
-      kind: kind,
-      error: error,
-      stack: stack,
-      context: context,
-      library: library,
-      prints: prints,
-    );
     return _enqueue(() async {
-      await _append(repeatNote + text);
+      final text = _formatEntry(
+        at: at,
+        kind: kind,
+        error: error,
+        stack: stack,
+        context: context,
+        library: library,
+        prints: prints,
+      );
+      await _append(repeatNote + droppedNote + text, countsAsEntry: kind != noteKind);
       // A successful write clears an earlier failure: the disk came back.
       if (!_status.value.available) {
         _status.value = _status.value.copyWith(available: true);
@@ -221,13 +284,22 @@ class ClientErrorLog {
       // Informational notes are in the file but are not "errors recorded".
       if (kind == noteKind) return;
       _status.value = _status.value.copyWith(
-        entries: _status.value.entries + 1,
+        entries: _rotatedEntries + _currentEntries,
         sessionEntries: _status.value.sessionEntries + 1,
         lastKind: kind,
         lastAt: at,
         lastMessage: firstLine,
       );
     });
+  }
+
+  /// The window-end line for entries the burst budget dropped, or ''.
+  String _takeDroppedNote() {
+    if (_dropped == 0) return '';
+    final n = _dropped;
+    _dropped = 0;
+    return '($n ${n == 1 ? 'entry' : 'entries'} dropped: more than '
+        '$burstLimit in ${burstWindow.inSeconds}s)\n\n';
   }
 
   /// Kind tag for [note] entries; excluded from the [status] counters.
@@ -250,9 +322,9 @@ class ClientErrorLog {
     StackTrace? failureStack;
     // A streak of suppressed repeats is written out first, so the export
     // says how often the last error fired.
-    final repeatNote = _takeRepeatNote();
-    if (repeatNote.isNotEmpty) {
-      _enqueue(() => _append(repeatNote));
+    final pending = _takeRepeatNote() + _takeDroppedNote();
+    if (pending.isNotEmpty) {
+      _enqueue(() => _append(pending));
     }
     // Queued behind pending writes so the copy sees whole entries.
     await _enqueue(() async {
@@ -296,7 +368,7 @@ class ClientErrorLog {
     final noun = s.entries == 1 ? 'entry' : 'entries';
     final buf = StringBuffer('client log: ${s.entries} $noun');
     if (s.suppressedRepeats > 0) {
-      buf.write(' (+${s.suppressedRepeats} repeats)');
+      buf.write(' (+${s.suppressedRepeats} suppressed)');
     }
     if (s.lastAt != null) {
       buf.write(', last ${_stamp(s.lastAt!)} ${s.lastKind ?? ''}'.trimRight());
@@ -343,6 +415,7 @@ class ClientErrorLog {
     for (final name in [rotatedFileName, fileName]) {
       final f = File('${dir.path}/$name');
       if (!await f.exists()) continue;
+      final before = count;
       await for (final line in f
           .openRead()
           .transform(utf8.decoder)
@@ -369,6 +442,11 @@ class ClientErrorLog {
         pendingMessage = false;
       }
       }
+      if (name == rotatedFileName) {
+        _rotatedEntries = count - before;
+      } else {
+        _currentEntries = count - before;
+      }
     }
     if (count == 0) return;
     // The scan is the first task on the chain, so nothing from this session
@@ -381,7 +459,7 @@ class ClientErrorLog {
     );
   }
 
-  Future<void> _append(String text) async {
+  Future<void> _append(String text, {bool countsAsEntry = false}) async {
     final dir = await _supportDir();
     await dir.create(recursive: true);
     final current = File('${dir.path}/$fileName');
@@ -393,15 +471,24 @@ class ClientErrorLog {
       if (await rotated.exists()) await rotated.delete();
       await current.rename(rotated.path);
       startFresh = true;
+      _rotatedEntries = _currentEntries;
+      _currentEntries = 0;
+      // A note or an export flush can rotate too; keep the published count
+      // equal to what is on disk without waiting for the next entry.
+      if (!countsAsEntry && _status.value.entries != _rotatedEntries) {
+        _status.value = _status.value.copyWith(entries: _rotatedEntries);
+      }
     }
     final sink = current.openWrite(mode: FileMode.append);
     try {
       if (startFresh) sink.write(await _header());
       sink.write(text);
     } finally {
-      await sink.flush();
+      // close() flushes; a single await so a failed flush cannot leave the
+      // handle open.
       await sink.close();
     }
+    if (countsAsEntry) _currentEntries++;
   }
 
   Future<String> _header() async {
