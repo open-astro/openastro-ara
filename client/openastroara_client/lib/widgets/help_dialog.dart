@@ -51,9 +51,13 @@ class _HelpDialog extends ConsumerWidget {
 
     return AlertDialog(
       title: const Text('Help / Report a bug'),
+      // Scrollable so the rows can't overflow a short viewport (a phone in
+      // landscape, or a small window) — same shape as the bug-report
+      // disclosure.
       content: SizedBox(
         width: 480,
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -95,6 +99,7 @@ class _HelpDialog extends ConsumerWidget {
               label: '• $_kRepoUrl/wiki (docs + troubleshooting)',
             ),
           ],
+          ),
         ),
       ),
       actions: [
@@ -119,6 +124,11 @@ class _HelpDialog extends ConsumerWidget {
       data: (_) => ref.read(activeServerProvider)?.toString() ?? '(none)',
       orElse: () => '(unknown)',
     );
+    // #1111 — the client log summary rides along so a report says up front
+    // whether this app has recorded a failure of its own. Read BEFORE the
+    // await below, like every other ref.read here: the dialog can be
+    // dismissed while the package-info call is in flight.
+    final clientLog = ref.read(clientErrorLogProvider).summary();
     // Re-fetch package info inline so the diagnostics text always has the
     // freshest version even if the dialog opened before the async resolved.
     // PackageInfo.fromPlatform can throw on some platforms (e.g. missing
@@ -131,9 +141,6 @@ class _HelpDialog extends ConsumerWidget {
       developer.log('Failed to read PackageInfo',
           name: 'openastroara.help_dialog', error: e, stackTrace: st);
     }
-    // #1111 — the client log summary rides along so a report says up front
-    // whether this app has recorded a failure of its own.
-    final clientLog = ref.read(clientErrorLogProvider).summary();
     final payload = '''
 OpenAstroAra diagnostics:
   app version: $version
