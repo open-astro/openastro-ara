@@ -184,10 +184,16 @@ class ClientErrorLog {
     if (key == _lastKey && last != null && at.difference(last) < repeatWindow) {
       _repeats++;
       _lastAt = at;
-      _status.value = _status.value.copyWith(
-        suppressedRepeats: _status.value.suppressedRepeats + 1,
-      );
-      return _chain;
+      // Deferred like every other status write: record() runs synchronously
+      // inside FlutterError.onError, which a build-phase error reaches from
+      // inside the build itself, and a listener's setState there is
+      // "setState() called during build". Nothing in this method may touch
+      // the notifier before returning.
+      return _enqueue(() async {
+        _status.value = _status.value.copyWith(
+          suppressedRepeats: _status.value.suppressedRepeats + 1,
+        );
+      });
     }
     final repeatNote = _takeRepeatNote();
     _lastKey = key;
@@ -378,7 +384,7 @@ class ClientErrorLog {
     final exists = await current.exists();
     final size = exists ? await current.length() : 0;
     var startFresh = !exists;
-    if (exists && size + text.length > maxBytes) {
+    if (exists && size + utf8.encode(text).length > maxBytes) {
       final rotated = File('${dir.path}/$rotatedFileName');
       if (await rotated.exists()) await rotated.delete();
       await current.rename(rotated.path);
@@ -395,7 +401,13 @@ class ClientErrorLog {
   }
 
   Future<String> _header() async {
-    if (_headerCache != null) return _headerCache!;
+    // The static lines are built once; the started stamp is per file, so a
+    // post-rotation file says when IT began, not when the process did.
+    final static_ = _headerCache ??= await _staticHeader();
+    return '$static_# started: ${_now().toIso8601String()}\n\n';
+  }
+
+  Future<String> _staticHeader() async {
     String version;
     try {
       version = await _appVersion();
@@ -415,10 +427,8 @@ class ClientErrorLog {
         '# platform: ${Platform.operatingSystem} '
         '${Platform.operatingSystemVersion}',
       )
-      ..writeln('# mode: $mode')
-      ..writeln('# started: ${_now().toIso8601String()}')
-      ..writeln();
-    return _headerCache = buf.toString();
+      ..writeln('# mode: $mode');
+    return buf.toString();
   }
 
   String _formatEntry({
@@ -451,11 +461,30 @@ class ClientErrorLog {
       }
     }
     buf.writeln();
-    var text = buf.toString();
-    if (text.length > maxEntryBytes) {
-      text = '${text.substring(0, maxEntryBytes)}\n  … (entry truncated)\n\n';
+    return _truncateToBytes(buf.toString(), maxEntryBytes);
+  }
+
+  /// Caps [text] at [maxBytes] of UTF-8 (the budgets are byte budgets, and
+  /// `String.length` counts UTF-16 units) without splitting a surrogate
+  /// pair, then marks the cut.
+  @visibleForTesting
+  static String truncateToBytes(String text, int maxBytes) =>
+      _truncateToBytes(text, maxBytes);
+
+  static String _truncateToBytes(String text, int maxBytes) {
+    if (utf8.encode(text).length <= maxBytes) return text;
+    // UTF-8 never needs fewer bytes than UTF-16 units, so maxBytes units is
+    // an upper bound; shrink until the encoding fits.
+    var cut = maxBytes.clamp(0, text.length);
+    while (cut > 0 && utf8.encode(text.substring(0, cut)).length > maxBytes) {
+      cut = (cut * 9) ~/ 10;
     }
-    return text;
+    // Never end on a high surrogate.
+    if (cut > 0) {
+      final last = text.codeUnitAt(cut - 1);
+      if (last >= 0xD800 && last <= 0xDBFF) cut--;
+    }
+    return '${text.substring(0, cut)}\n  … (entry truncated)\n\n';
   }
 
   static String _describe(Object error) {
