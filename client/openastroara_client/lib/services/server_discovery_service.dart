@@ -229,6 +229,9 @@ class ServerDiscoveryService {
     // or just "no Wi-Fi, cable out".
     var sawSocketError = false;
     var hasNetwork = false;
+    // Only a pass that actually queried can vouch that the block is gone;
+    // one that died in start() (port 5353 contention, say) says nothing.
+    var sent = false;
     // Socket-level errors from the mDNS client. `dart:io` does NOT throw on
     // a datagram send failure; it reports it asynchronously on the socket's
     // event stream, which `multicast_dns` forwards only to the `onError`
@@ -249,6 +252,7 @@ class ServerDiscoveryService {
       // One interface enumeration per pass, not one per rig resolved.
       final local = await _localAddresses();
       hasNetwork = local.isNotEmpty;
+      sent = true; // the PTR query below is the first send
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
@@ -340,7 +344,7 @@ class ServerDiscoveryService {
       // errors are reported a microtask after the send, so give them that
       // turn before deciding.
       await Future<void>.delayed(Duration.zero);
-      if (!sawSocketError) _localNetworkBlocked.value = false;
+      if (sent && !sawSocketError) _localNetworkBlocked.value = false;
     }
   }
 

@@ -142,6 +142,28 @@ class _AsyncSendErrorMdns extends MDnsClient {
   void stop() {}
 }
 
+/// Starts and sends fine but nothing answers: a healthy network with no
+/// rig powered on.
+class _SilentMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {}
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) => const Stream.empty();
+
+  @override
+  void stop() {}
+}
+
 void main() {
   _preferLocalSubnetTests();
 
@@ -206,14 +228,16 @@ void main() {
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
-    test('a later pass with no socket error clears the block', () async {
-      // Permission granted, user taps ⟳, no rig powered on: the banner
-      // must not stay up forever.
+    test('a later answerless pass with no socket error clears the block',
+        () async {
+      // Permission granted, user taps ⟳, no rig powered on: nothing answers
+      // the PTR query, so only the end-of-pass clear can take the banner
+      // down.
       var pass = 0;
       final svc = ServerDiscoveryService(
         mdnsClientFactory: () => ++pass == 1
             ? _AsyncSendErrorMdns()
-            : _AddressLookupFailsMdns(), // sends fine, answers nothing usable
+            : _SilentMdns(),
         localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
@@ -221,6 +245,23 @@ void main() {
       expect(svc.localNetworkBlocked.value, isTrue);
       await svc.discover().toList();
       expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('a pass that fails before sending leaves the flag alone', () async {
+      // start() throwing (port 5353 contention) never queried, so it can't
+      // vouch that the block is gone.
+      var pass = 0;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => ++pass == 1
+            ? _AsyncSendErrorMdns()
+            : _UnstartableMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
     });
 
     test('an unrelated socket error is logged but not called a block',

@@ -67,7 +67,11 @@ flutter build macos --debug; echo "build exit $?"
 open build/macos/Build/Products/Debug/openastroara.app
 ```
 
-- Debug builds cannot mDNS-discover; if the first-run/connect screen appears,
+- An app launched with `open` needs macOS **Local Network** permission before
+  mDNS discovery works (the connect screen shows a banner while it is refused;
+  a terminal-launched app inherits the terminal's grant — #1111). If the
+  first-run/connect screen appears with no rig listed, either allow the app
+  under System Settings → Privacy & Security → Local Network and tap ⟳, or
   enter host `localhost` port `5555` by hand (or `openastro.lan`). The user's
   machine already has a saved server in `org.openastro.openastroara.plist`, so
   usually the app connects straight away — say which daemon it connected to.
