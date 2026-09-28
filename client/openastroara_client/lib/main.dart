@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_version.dart';
@@ -19,8 +18,9 @@ import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
-import 'state/night_mode_state.dart';
 import 'theme/ara_theme.dart';
+import 'widgets/night_filter.dart';
+import 'widgets/night_hotkey.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
 Future<void> main() async {
@@ -56,70 +56,40 @@ Future<void> _noteLaunch(ClientErrorLog log) async {
 /// The planetarium renders in the platform's native webview (`webview_all`), which
 /// the OS tears down with the process — so there's no CEF/Chromium subprocess tree
 /// to shut down on exit, and the app needs no exit-lifecycle hook.
-class OpenAstroAraApp extends ConsumerWidget {
-  const OpenAstroAraApp({super.key});
+///
+/// Deliberately a [StatelessWidget] with nothing to watch (#1111): a rebuild
+/// here rebuilds `MaterialApp` → `WidgetsApp` → Navigator with whatever theme
+/// object it is handed, so the root must not depend on anything that changes
+/// at runtime. Night mode is applied by [NightFilter] inside `builder`, the
+/// hotkey by [NightHotkey] around `home`, and the GPS loop is kept alive from
+/// `_RootRouter` with a listen, never a watch.
+class OpenAstroAraApp extends StatelessWidget {
+  /// [home] replaces the launch router; tests use it to put a plain page under
+  /// the real root (theme, night filter, hotkey) without the router's providers.
+  const OpenAstroAraApp({super.key, @visibleForTesting this.home});
+
+  /// Test seam only; production always routes through `_RootRouter`.
+  @visibleForTesting
+  final Widget? home;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // §31 — start the "GPS on this computer" loop with the app, not when the
-    // settings pane is first opened; it is a no-op while the pref is off.
-    ref.watch(clientGpsProvider);
-    final night = switch (ref.watch(nightModeProvider)) {
-      AsyncData(:final value) => value,
-      _ => false,
-    };
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'OpenAstro Ara',
-      theme: buildAraTheme(),
+      theme: araTheme,
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
       // The Linux planetarium overlay subscribes to this so the native GTK
       // webview hides when a route is pushed over the shell (no-op elsewhere).
       navigatorObservers: [planetariumRouteObserver],
-      builder: (context, child) {
-        Widget result = child ?? const SizedBox.shrink();
-        if (night) {
-          // Night observing filter: fold every pixel's luminance into the red
-          // channel and zero green and blue outright. Blue/green light is what
-          // actually resets scotopic dark adaptation, so leaking half of it
-          // through would defeat the point. Luminance weights keep the UI
-          // readable — a green "connected" chip stays brighter than a dim
-          // border, so the interface still reads by brightness once hue is
-          // gone.
-          result = ColorFiltered(
-            colorFilter: const ColorFilter.matrix(<double>[
-              0.30, 0.59, 0.11, 0.0, 0.0, // R ← luminance
-              0.00, 0.00, 0.00, 0.0, 0.0, // G
-              0.00, 0.00, 0.00, 0.0, 0.0, // B
-              0.00, 0.00, 0.00, 1.0, 0.0, // A
-            ]),
-            child: result,
-          );
-        }
-        return result;
-      },
-      home: withNightHotkey(ref, const _RootRouter()),
+      // Always the same widget type above the Navigator, on or off — see
+      // NightFilter for why the Navigator's parent must never change.
+      builder: (context, child) =>
+          NightFilter(child: child ?? const SizedBox.shrink()),
+      home: NightHotkey(child: home ?? const _RootRouter()),
     );
   }
-}
-
-/// Wraps the app root so Ctrl+N (Cmd+N on macOS) toggles night mode from
-/// anywhere. Public so `test/night_hotkey_test.dart` can drive it with key
-/// events. It WAS a bare `N` with a "skip while a text field has focus"
-/// guard — which didn't cover every place you can type (typing "ldn" into the
-/// planetarium search flipped the display mid-word). A modified chord can't
-/// collide with typing, so no guard is needed. The [Focus] gives the shortcut
-/// a target to receive keys.
-Widget withNightHotkey(WidgetRef ref, Widget child) {
-  void toggle() => ref.read(nightModeProvider.notifier).toggle();
-  return CallbackShortcuts(
-    bindings: <ShortcutActivator, VoidCallback>{
-      const SingleActivator(LogicalKeyboardKey.keyN, control: true): toggle,
-      const SingleActivator(LogicalKeyboardKey.keyN, meta: true): toggle,
-    },
-    child: Focus(autofocus: true, child: child),
-  );
 }
 
 /// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
@@ -148,6 +118,11 @@ class _RootRouter extends ConsumerWidget {
     // Materialize the DSO-catalog mirror sync (fetch-on-connect) at the root
     // so offline planning has the full catalog after any connected session.
     ref.listen(dsoCatalogSyncProvider, (previous, next) {});
+    // §31 — keep the "GPS on this computer" loop alive for the app's lifetime
+    // (a no-op while the pref is off). A LISTEN: it used to be a watch in the
+    // app root, and every sync (busy on, busy off) rebuilt MaterialApp and
+    // re-themed the whole tree (#1111).
+    ref.listen(clientGpsProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);

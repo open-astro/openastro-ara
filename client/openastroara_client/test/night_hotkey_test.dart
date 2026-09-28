@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/main.dart';
 import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/night_mode_state.dart';
+import 'package:openastroara/widgets/night_hotkey.dart';
 
 /// The night-mode hotkey is Ctrl+N / ⌘N — a bare N must type, not toggle
 /// (typing "ldn" into the sky search used to flip the display).
@@ -26,11 +26,8 @@ void main() {
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(
-        home: Consumer(
-          builder: (context, ref, _) =>
-              withNightHotkey(ref, const Scaffold(body: Text('root'))),
-        ),
+      child: const MaterialApp(
+        home: NightHotkey(child: Scaffold(body: Text('root'))),
       ),
     ));
     await container.read(nightModeProvider.future);
