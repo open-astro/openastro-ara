@@ -25,8 +25,9 @@ class ClientErrorLogStatus {
     this.suppressedRepeats = 0,
   });
 
-  /// Entries on disk — the current file plus the rotated one, earlier runs
-  /// included — which is exactly what [ClientErrorLog.exportTo] ships.
+  /// Error entries on disk — the current file plus the rotated one, earlier
+  /// runs included. [ClientErrorLog.exportTo] ships those same two files;
+  /// notes and headers are in them too but are not counted here.
   final int entries;
 
   /// Entries recorded since this process started.
