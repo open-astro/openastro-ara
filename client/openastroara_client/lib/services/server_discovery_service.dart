@@ -86,28 +86,10 @@ class ServerDiscoveryService {
   /// counterparts WSAEACCES (10013) and WSAEHOSTUNREACH (10065).
   static const _blockedErrnos = {65, 113, 1, 13, 10013, 10065};
 
-  // Per pass: whether the machine had any IPv4 address at all (no Wi-Fi,
-  // cable out: EHOSTUNREACH then means "no network", not "blocked"), and
-  // whether a socket error arrived, so a clean pass can clear the flag.
-  bool _passHasNetwork = false;
-  bool _passSawSocketError = false;
-
-  /// Socket-level errors from the mDNS client. `dart:io` does NOT throw on
-  /// a datagram send failure; it reports it asynchronously on the socket's
-  /// event stream, which `multicast_dns` forwards only to the `onError`
-  /// given to `start()`. Without this hook the failure was an unhandled
-  /// async error and the browse simply produced nothing. The library
-  /// attaches the hook to its IPv4 socket, which is the only socket it
-  /// sends on for the default IPv4 mDNS address this service uses.
-  void _onMdnsSocketError(Object error, StackTrace stack) {
-    debugPrint('[discovery] mDNS socket error: $error');
-    _passSawSocketError = true;
-    if (_passHasNetwork &&
-        error is SocketException &&
-        _blockedErrnos.contains(error.osError?.errorCode)) {
-      _localNetworkBlocked.value = true;
-    }
-  }
+  /// Whether [error] is the OS refusing our multicast send.
+  static bool _isBlockedSend(Object error) =>
+      error is SocketException &&
+      _blockedErrnos.contains(error.osError?.errorCode);
 
   /// How long a sweep keeps probing after its last listener goes away. The
   /// connect screen restarts discovery every ~4 s, and the restart detaches
@@ -241,12 +223,32 @@ class ServerDiscoveryService {
 
   Stream<AraServer> _mdnsDiscover() async* {
     final mdns = _mdnsClientFactory();
-    _passSawSocketError = false;
+    // Pass-local, not fields: the connect screen restarts discovery every
+    // 4 s and passes overlap, so one pass's error must not be read as
+    // another's. `hasNetwork` decides whether EHOSTUNREACH means "blocked"
+    // or just "no Wi-Fi, cable out".
+    var sawSocketError = false;
+    var hasNetwork = false;
+    // Socket-level errors from the mDNS client. `dart:io` does NOT throw on
+    // a datagram send failure; it reports it asynchronously on the socket's
+    // event stream, which `multicast_dns` forwards only to the `onError`
+    // given to `start()`. Without this hook the failure was an unhandled
+    // async error and the browse simply produced nothing. The library
+    // attaches the hook to its IPv4 socket, the only socket it sends on for
+    // the default IPv4 mDNS address this service uses.
+    void onSocketError(Object error, StackTrace stack) {
+      debugPrint('[discovery] mDNS socket error: $error');
+      sawSocketError = true;
+      if (hasNetwork && _isBlockedSend(error)) {
+        _localNetworkBlocked.value = true;
+      }
+    }
+
     try {
-      await mdns.start(onError: _onMdnsSocketError);
+      await mdns.start(onError: onSocketError);
       // One interface enumeration per pass, not one per rig resolved.
       final local = await _localAddresses();
-      _passHasNetwork = local.isNotEmpty;
+      hasNetwork = local.isNotEmpty;
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
@@ -338,7 +340,7 @@ class ServerDiscoveryService {
       // errors are reported a microtask after the send, so give them that
       // turn before deciding.
       await Future<void>.delayed(Duration.zero);
-      if (!_passSawSocketError) _localNetworkBlocked.value = false;
+      if (!sawSocketError) _localNetworkBlocked.value = false;
     }
   }
 

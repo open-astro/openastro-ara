@@ -279,15 +279,15 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
   const _LocalNetworkBlockedBanner();
 
   static const macMessage =
-      'macOS is blocking local network access for OpenAstro Ara, so rigs '
-      'cannot be discovered. Allow it in System Settings → Privacy & '
-      'Security → Local Network, then tap ⟳. Adding the rig manually below '
-      'works regardless.';
+      'macOS is blocking local network access for OpenAstro Ara, so '
+      'auto-discovery cannot see your rig. Allow it in System Settings → '
+      'Privacy & Security → Local Network, then tap ⟳. Adding the rig '
+      'manually below works regardless.';
   static const otherMessage =
       'This device is blocking local network (multicast) access for '
-      'OpenAstro Ara, so rigs cannot be discovered. Check its network '
-      'privacy settings, then tap ⟳. Adding the rig manually below works '
-      'regardless.';
+      'OpenAstro Ara, so auto-discovery cannot see your rig. Check its '
+      'network privacy settings, then tap ⟳. Adding the rig manually below '
+      'works regardless.';
 
   @override
   Widget build(BuildContext context) {

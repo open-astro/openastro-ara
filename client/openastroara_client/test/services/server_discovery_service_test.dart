@@ -158,6 +158,7 @@ void main() {
         () async {
       final svc = ServerDiscoveryService(
         mdnsClientFactory: () => _AsyncSendErrorMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       expect(svc.localNetworkBlocked.value, isFalse);
@@ -174,6 +175,7 @@ void main() {
     test('a later answered query clears the block', () async {
       final svc = ServerDiscoveryService(
         mdnsClientFactory: () => _AsyncSendErrorMdns(answerAfterError: true),
+        localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       await svc.discover().toList();
@@ -184,6 +186,7 @@ void main() {
     test('Linux EHOSTUNREACH (113) is a block too', () async {
       final svc = ServerDiscoveryService(
         mdnsClientFactory: () => _AsyncSendErrorMdns(errno: 113),
+        localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       await svc.discover().toList();
@@ -211,6 +214,7 @@ void main() {
         mdnsClientFactory: () => ++pass == 1
             ? _AsyncSendErrorMdns()
             : _AddressLookupFailsMdns(), // sends fine, answers nothing usable
+        localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       await svc.discover().toList();
@@ -223,6 +227,7 @@ void main() {
         () async {
       final svc = ServerDiscoveryService(
         mdnsClientFactory: () => _AsyncSendErrorMdns(errno: 49), // EADDRNOTAVAIL
+        localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       await svc.discover().toList();
