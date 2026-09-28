@@ -83,7 +83,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       final dir = File(zipPath).parent.path;
       final path = uniquePathIn(dir, ClientLogCard.suggestedFileName);
       await ref.read(clientErrorLogProvider).exportTo(path);
-      return path.substring(dir.length + 1);
+      return File(path).uri.pathSegments.last;
     } catch (_) {
       return null;
     }

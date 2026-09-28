@@ -61,7 +61,15 @@ class _FakeBugReportClient implements BugReportClient {
   void close() {}
 }
 
-Widget _host(_FakeBugReportClient api, {ClientErrorLog? log}) => ProviderScope(
+/// A fresh directory per host, so `uniquePathIn` (which checks the real
+/// filesystem) can't be steered by a leftover file in a shared temp dir.
+Directory _freshDir() {
+  final d = Directory.systemTemp.createTempSync('bug_report_card');
+  addTearDown(() => d.deleteSync(recursive: true));
+  return d;
+}
+
+Widget _host(_FakeBugReportClient api, {ClientErrorLog? log, Directory? dir}) => ProviderScope(
       overrides: [
         bugReportApiProvider.overrideWith((ref) {
           ref.onDispose(api.close);
@@ -74,7 +82,7 @@ Widget _host(_FakeBugReportClient api, {ClientErrorLog? log}) => ProviderScope(
           // A canned Save-As path stands in for the OS dialog (no platform
           // channel under widget tests); the streaming download receives it.
           body: BugReportCard(
-            savePathPicker: (_, name) async => '/tmp/$name',
+            savePathPicker: (_, name) async => '${(dir ?? _freshDir()).path}/$name',
           ),
         ),
       ),
@@ -124,7 +132,7 @@ void main() {
 
     expect(api.downloadCalls, 1);
     expect(api.lastDownloadId, 'abc-123');
-    expect(api.lastSavePath, '/tmp/openastroara-bug-report.zip',
+    expect(api.lastSavePath, endsWith('/openastroara-bug-report.zip'),
         reason: 'the picked path is chosen BEFORE the download and streamed to');
   });
 
@@ -134,7 +142,8 @@ void main() {
     // app's own failures; the client log rides along as a sibling file.
     final api = _FakeBugReportClient();
     final log = _MemLog();
-    await tester.pumpWidget(_host(api, log: log));
+    final dir = _freshDir();
+    await tester.pumpWidget(_host(api, log: log, dir: dir));
 
     await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
     await tester.pump();
@@ -144,7 +153,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(log.exports, ['/tmp/openastroara-client.log']);
+    expect(log.exports, ['${dir.path}/openastroara-client.log']);
     expect(
       find.text('Saved bugreport-x.zip and openastroara-client.log'),
       findsOneWidget,

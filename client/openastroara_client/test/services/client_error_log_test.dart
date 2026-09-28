@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -94,6 +95,35 @@ void main() {
     expect(current().readAsStringSync(), contains(' c ==='));
   });
 
+  test('a post-rotation file carries its own started stamp', () async {
+    final l = log(maxBytes: 600);
+    final big = 'x' * 300;
+    await l.record('a', big);
+    await l.record('b', big);
+    final oldStamp = RegExp(r'# started: (\S+)')
+        .firstMatch(rotated().readAsStringSync())!
+        .group(1);
+    final newStamp = RegExp(r'# started: (\S+)')
+        .firstMatch(current().readAsStringSync())!
+        .group(1);
+    expect(newStamp, isNot(oldStamp));
+    expect(current().readAsStringSync(), contains('# app: 0.0.1a+37 (test)'));
+  });
+
+  test('entry and file caps are byte budgets and never split a surrogate',
+      () {
+    // 'x' + emoji (2 UTF-16 units, 4 UTF-8 bytes each): a 4-byte budget fits
+    // only the 'x' — a code-unit cut at 4 would have kept 'x' plus one whole
+    // emoji (5 bytes), and a cut at 2 would have split the first pair.
+    const s = 'x😀😀😀';
+    final t = ClientErrorLog.truncateToBytes(s, 4);
+    expect(t, startsWith('x\n  … (entry truncated)'));
+    expect(ClientErrorLog.truncateToBytes(s, 5), startsWith('x😀\n'));
+    expect(utf8.encode(ClientErrorLog.truncateToBytes(s, 9).split('\n').first)
+        .length, lessThanOrEqualTo(9));
+    expect(ClientErrorLog.truncateToBytes('plain', 100), 'plain');
+  });
+
   test('exportTo concatenates the rotated file then the current one',
       () async {
     final l = log(maxBytes: 600);
@@ -177,6 +207,20 @@ void main() {
     expect(note, greaterThan(0));
     expect(note, lessThan(text.indexOf(' flutter_error ===', note)));
     expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
+  });
+
+  test('a suppressed repeat never touches status synchronously', () async {
+    // record() runs inside FlutterError.onError, possibly mid-build; a
+    // synchronous notifier write there is "setState() called during build"
+    // for any listening widget. Both paths must defer.
+    final l = log();
+    await l.record('a', 'x');
+    final before = l.status.value;
+    final pending = l.record('a', 'x');
+    expect(identical(l.status.value, before), isTrue,
+        reason: 'status changed before the call returned');
+    await pending;
+    expect(l.status.value.suppressedRepeats, 1);
   });
 
   test('a streak of repeats is flushed by an export', () async {
