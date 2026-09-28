@@ -14,8 +14,35 @@ class SelectedTabIndexNotifier extends Notifier<int> {
   void select(int index) {
     if (index < 0 || index >= _tabCount) return;
     state = index;
+    // Mark here, at the one place a tab can be chosen, rather than from the
+    // shell's build (#1111 PR C): the shell used to remember visits in its
+    // own State via a post-frame setState, which made every first visit a
+    // build with side effects plus an extra rebuild.
+    ref.read(visitedTabsProvider.notifier).mark(index);
   }
 }
+
+/// Tabs that have been shown at least once this shell lifetime. `AppShell`
+/// builds a tab's real body only once it is in this set (or is the current
+/// selection), and keeps it alive thereafter so the Planning webview and
+/// other tab state persist across switches.
+///
+/// autoDispose: the set lives exactly as long as something watches it (the
+/// shell), so a remounted shell starts lazy again instead of eagerly
+/// inflating every tab a previous shell had opened.
+class VisitedTabsNotifier extends Notifier<Set<int>> {
+  @override
+  Set<int> build() => {ref.read(selectedTabIndexProvider)};
+
+  void mark(int index) {
+    if (state.contains(index)) return;
+    state = {...state, index};
+  }
+}
+
+final visitedTabsProvider =
+    NotifierProvider.autoDispose<VisitedTabsNotifier, Set<int>>(
+        VisitedTabsNotifier.new);
 
 final selectedTabIndexProvider =
     NotifierProvider<SelectedTabIndexNotifier, int>(

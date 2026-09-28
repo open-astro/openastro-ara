@@ -36,4 +36,54 @@ void main() {
       expect(container.read(selectedTabIndexProvider), 2);
     });
   });
+
+  group('visitedTabsProvider (#1111 PR C)', () {
+    test('starts with the selected tab and grows with select()', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final sub = container.listen(visitedTabsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(container.read(visitedTabsProvider), {0});
+
+      container.read(selectedTabIndexProvider.notifier).select(3);
+      expect(container.read(visitedTabsProvider), {0, 3});
+      container.read(selectedTabIndexProvider.notifier).select(1);
+      expect(container.read(visitedTabsProvider), {0, 1, 3});
+    });
+
+    test('a repeat select is a no-op for the set (same instance)', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final sub = container.listen(visitedTabsProvider, (_, _) {});
+      addTearDown(sub.close);
+      container.read(selectedTabIndexProvider.notifier).select(2);
+      final before = container.read(visitedTabsProvider);
+      container.read(selectedTabIndexProvider.notifier).select(2);
+      expect(identical(container.read(visitedTabsProvider), before), isTrue);
+    });
+
+    test('an out-of-range select marks nothing', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final sub = container.listen(visitedTabsProvider, (_, _) {});
+      addTearDown(sub.close);
+      container.read(selectedTabIndexProvider.notifier).select(7);
+      expect(container.read(visitedTabsProvider), {0});
+    });
+
+    test('resets once nothing listens, seeded from the current tab', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      var sub = container.listen(visitedTabsProvider, (_, _) {});
+      container.read(selectedTabIndexProvider.notifier).select(4);
+      expect(container.read(visitedTabsProvider), {0, 4});
+      sub.close();
+      // autoDispose tears the set down on the next event-loop turn.
+      await Future<void>.delayed(Duration.zero);
+      sub = container.listen(visitedTabsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(container.read(visitedTabsProvider), {4},
+          reason: 'a fresh shell starts lazy, on whichever tab is current');
+    });
+  });
 }
