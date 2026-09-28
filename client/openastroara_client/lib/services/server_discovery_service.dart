@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data' show BytesBuilder;
 
-import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, ValueNotifier, debugPrint, visibleForTesting;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -62,6 +63,33 @@ class ServerDiscoveryService {
   /// stands in for the sandboxed-socket failure the log line below exists
   /// to make visible.
   final MDnsClient Function() _mdnsClientFactory;
+
+  /// True while the OS refuses this app's multicast queries (#1111). On
+  /// macOS that is the Local Network privacy setting: a denied or
+  /// unanswered prompt makes every mDNS send fail with EHOSTUNREACH, so the
+  /// rig never appears although `dns-sd -B` on the same machine sees it.
+  /// The connect screen shows the fix (System Settings → Privacy & Security
+  /// → Local Network) while this is true; cleared by the next answered
+  /// query.
+  ValueListenable<bool> get localNetworkBlocked => _localNetworkBlocked;
+  final ValueNotifier<bool> _localNetworkBlocked = ValueNotifier(false);
+
+  /// errno values a blocked multicast send comes back with: EHOSTUNREACH
+  /// (macOS Local Network denial), EPERM and EACCES (sandbox/firewall).
+  static const _blockedErrnos = {65, 1, 13};
+
+  /// Socket-level errors from the mDNS client. `dart:io` does NOT throw on
+  /// a datagram send failure; it reports it asynchronously on the socket's
+  /// event stream, which `multicast_dns` forwards only to the `onError`
+  /// given to `start()`. Without this hook the failure was an unhandled
+  /// async error and the browse simply produced nothing.
+  void _onMdnsSocketError(Object error, StackTrace stack) {
+    debugPrint('[discovery] mDNS socket error: $error');
+    if (error is SocketException &&
+        _blockedErrnos.contains(error.osError?.errorCode)) {
+      _localNetworkBlocked.value = true;
+    }
+  }
 
   /// How long a sweep keeps probing after its last listener goes away. The
   /// connect screen restarts discovery every ~4 s, and the restart detaches
@@ -196,12 +224,14 @@ class ServerDiscoveryService {
   Stream<AraServer> _mdnsDiscover() async* {
     final mdns = _mdnsClientFactory();
     try {
-      await mdns.start();
+      await mdns.start(onError: _onMdnsSocketError);
       // One interface enumeration per pass, not one per rig resolved.
       final local = await _localIPv4Addresses();
       await for (final PtrResourceRecord ptr in mdns.lookup<PtrResourceRecord>(
         ResourceRecordQuery.serverPointer(serviceType),
       )) {
+        // An answer means the query went out and came back: not blocked.
+        _localNetworkBlocked.value = false;
         await for (final SrvResourceRecord srv
             in mdns.lookup<SrvResourceRecord>(
               ResourceRecordQuery.service(ptr.domainName),
