@@ -193,10 +193,12 @@ class ClientErrorLog {
       _ring.addLast(line);
       return;
     }
-    var cut = maxPrintLineChars;
+    var cut = maxPrintLineChars.clamp(0, line.length);
     // Never end on a high surrogate.
-    final last = line.codeUnitAt(cut - 1);
-    if (last >= 0xD800 && last <= 0xDBFF) cut--;
+    if (cut > 0) {
+      final last = line.codeUnitAt(cut - 1);
+      if (last >= 0xD800 && last <= 0xDBFF) cut--;
+    }
     _ring.addLast('${line.substring(0, cut)} … (line truncated)');
   }
 
@@ -237,7 +239,7 @@ class ClientErrorLog {
     // The window is fixed, not sliding: it bounds file churn under the 512
     // KiB cap, it is not a rate limit.
     var droppedNote = '';
-    if (kind != noteKind) {
+    if (kind != noteKind && burstLimit > 0) {
       final start = _burstStart;
       if (start == null || at.difference(start) >= burstWindow) {
         droppedNote = _takeDroppedNote();
@@ -365,7 +367,7 @@ class ClientErrorLog {
     final noun = s.entries == 1 ? 'entry' : 'entries';
     final buf = StringBuffer('client log: ${s.entries} $noun');
     if (s.suppressedRepeats > 0) {
-      buf.write(' (+${s.suppressedRepeats} repeats)');
+      buf.write(' (+${s.suppressedRepeats} suppressed)');
     }
     if (s.lastAt != null) {
       buf.write(', last ${_stamp(s.lastAt!)} ${s.lastKind ?? ''}'.trimRight());
@@ -470,6 +472,11 @@ class ClientErrorLog {
       startFresh = true;
       _rotatedEntries = _currentEntries;
       _currentEntries = 0;
+      // A note or an export flush can rotate too; keep the published count
+      // equal to what is on disk without waiting for the next entry.
+      if (!countsAsEntry && _status.value.entries != _rotatedEntries) {
+        _status.value = _status.value.copyWith(entries: _rotatedEntries);
+      }
     }
     final sink = current.openWrite(mode: FileMode.append);
     try {

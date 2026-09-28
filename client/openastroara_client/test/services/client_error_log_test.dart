@@ -415,6 +415,36 @@ void main() {
     expect(l.recentPrints.last, 'short');
   });
 
+  test('zero-or-negative knobs are inert, never throwing', () async {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      maxPrintLineChars: 0,
+      burstLimit: 0,
+    );
+    l.notePrint('anything');
+    expect(l.recentPrints.single, ' … (line truncated)');
+    for (var i = 0; i < 20; i++) {
+      await l.record('e', 'distinct $i');
+    }
+    expect(l.status.value.entries, 20, reason: 'no budget means no drops');
+    expect(l.status.value.suppressedRepeats, 0);
+  });
+
+  test('a rotation caused by a note republishes the entry count', () async {
+    final l = log(maxBytes: 600);
+    final big = 'x' * 300;
+    await l.record('a', big);
+    await l.record('b', big); // rotation 1: a → .1
+    expect(l.status.value.entries, 2);
+    await l.note('n' * 300); // rotation 2 by a NOTE: a is deleted
+    expect(l.status.value.entries, 1, reason: 'only b is on disk now');
+    final second = log(maxBytes: 600);
+    await second.idle;
+    expect(second.status.value.entries, 1);
+  });
+
   test('entries tracks the two files even after a second rotation',
       () async {
     final l = log(maxBytes: 600);
@@ -437,7 +467,7 @@ void main() {
     expect(l.summary(), startsWith('client log: 1 entry, last '));
     expect(l.summary(), endsWith(' flutter_error: boom'));
     await l.record('flutter_error', 'boom');
-    expect(l.summary(), startsWith('client log: 1 entry (+1 repeats), last '));
+    expect(l.summary(), startsWith('client log: 1 entry (+1 suppressed), last '));
   });
 
   test('an unwritable directory never throws and marks the log unavailable',
