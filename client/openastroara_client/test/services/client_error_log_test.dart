@@ -4,6 +4,15 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/client_error_log.dart';
 
+class _CountingError {
+  int calls = 0;
+  @override
+  String toString() {
+    calls++;
+    return 'counting error';
+  }
+}
+
 void main() {
   late Directory dir;
   // Injected clock: one second per call. The header's "started" stamp takes
@@ -149,7 +158,14 @@ void main() {
   });
 
   test('concurrent records land whole and in order', () async {
-    final l = log();
+    // Distinct errors above the default burst budget: lift it, this test is
+    // about write ordering.
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      burstLimit: 100,
+    );
     await Future.wait([
       for (var i = 0; i < 20; i++) l.record('k$i', 'msg $i'),
     ]);
@@ -275,6 +291,86 @@ void main() {
     await second.idle;
     expect(second.status.value.entries, 2);
     expect(second.status.value.lastKind, 'b');
+  });
+
+  test('a burst of distinct errors is capped per window and reported',
+      () async {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      burstLimit: 3,
+      burstWindow: const Duration(seconds: 60),
+    );
+    // Two widgets alternating defeat the consecutive-repeat check.
+    for (var i = 0; i < 6; i++) {
+      await l.record('flutter_error', i.isEven ? 'widget A' : 'widget B');
+    }
+    var text = current().readAsStringSync();
+    expect(ClientErrorLog.entryMarker.allMatches(text).length, 3);
+    expect(l.status.value.entries, 3);
+    expect(l.status.value.suppressedRepeats, 3);
+
+    // Next window: the drop count is written before the new entry.
+    tick += 100;
+    await l.record('flutter_error', 'later');
+    text = current().readAsStringSync();
+    final note = text.indexOf('(3 entries dropped: more than 3 in 60s)');
+    expect(note, greaterThan(0));
+    expect(note, lessThan(text.indexOf(' flutter_error ===', note)));
+    expect(ClientErrorLog.entryMarker.allMatches(text).length, 4);
+  });
+
+  test('notes are exempt from the burst budget', () async {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+      burstLimit: 1,
+      burstWindow: const Duration(seconds: 60),
+    );
+    await l.record('a', 'x');
+    await l.note('launch');
+    await l.note('second');
+    expect(ClientErrorLog.entryMarker.allMatches(current().readAsStringSync())
+        .length, 3);
+  });
+
+  test('the entry is formatted on the chain, not inside record()', () async {
+    final l = log();
+    final probe = _CountingError();
+    final pending = l.record('a', probe);
+    // toString() ran once, for the repeat key; the full entry (a second
+    // toString) is built when the write runs.
+    expect(probe.calls, 1);
+    await pending;
+    expect(probe.calls, 2);
+  });
+
+  test('an oversized debugPrint line is kept truncated in the ring', () {
+    final l = ClientErrorLog(
+      supportDir: () async => dir,
+      appVersion: () async => 'v',
+      maxPrintLineChars: 10,
+    );
+    l.notePrint('0123456789abcdef');
+    expect(l.recentPrints.single, '0123456789 … (line truncated)');
+    l.notePrint('short');
+    expect(l.recentPrints.last, 'short');
+  });
+
+  test('entries tracks the two files even after a second rotation',
+      () async {
+    final l = log(maxBytes: 600);
+    final big = 'x' * 300;
+    await l.record('a', big);
+    await l.record('b', big);
+    await l.record('c', big); // deletes the file holding 'a'
+    expect(l.status.value.entries, 2, reason: 'a is gone from disk');
+    expect(l.status.value.sessionEntries, 3);
+    final second = log(maxBytes: 600);
+    await second.idle;
+    expect(second.status.value.entries, 2);
   });
 
   test('summary reads well empty and with entries', () async {
