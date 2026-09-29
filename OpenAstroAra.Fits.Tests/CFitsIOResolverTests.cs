@@ -123,7 +123,8 @@ public class CFitsIOResolverTests {
     public void Linux_runtime_package_soname_is_loadable() {
         // Pins the versioned-soname fallback to what libcfitsio10 (the .deb's Depends) installs,
         // independent of whether the runner also has the -dev package's unversioned symlink.
-        if (!OperatingSystem.IsLinux()) return;
+        // Same gate as FitsImageTests.MustLoadCfitsio: a Linux dev box without the package skips.
+        if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"))) return;
         Assert.True(NativeLibrary.TryLoad("libcfitsio.so.10", out var handle),
             "libcfitsio.so.10 did not load; install the runtime package: sudo apt-get install libcfitsio10");
         NativeLibrary.Free(handle);

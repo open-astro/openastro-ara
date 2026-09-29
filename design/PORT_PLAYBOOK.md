@@ -11968,7 +11968,7 @@ version suffix. On Linux the bare `libcfitsio.so` symlink comes from
 `libcfitsio10` installs `libcfitsio.so.10` only, so a stock `.deb` install
 failed every capture with `DllNotFoundException` until 2026-09-27. `CFitsIO`
 therefore registers a `DllImportResolver` (`CFitsIOResolver`) that tries, in order:
-1. `OPENASTROARA_CFITSIO_PATH`, when set: the full path to the library file (e.g. `C:\vcpkg\installed\x64-windows\bin\cfitsio.dll`). If it doesn't load, resolution carries on and the boot log warns.
+1. `OPENASTROARA_CFITSIO_PATH`, when set: the full path to the library file (e.g. `C:\vcpkg\installed\x64-windows\bin\cfitsio.dll`). If it doesn't load, resolution carries on: the boot log warns when a fallback loads instead, and when nothing loads the Error line lists the path under `Tried:`.
 2. The runtime's default probe of the bare name (`libcfitsio.so` / `libcfitsio.dylib` / `cfitsio.dll`).
 3. The ABI 10 versioned soname: `libcfitsio.so.10` on Linux, `libcfitsio.10.dylib` on macOS, none on Windows. ABI 9 (CFITSIO 3.49 to 4.0: Debian 11, Ubuntu 22.04) is not tried; those distros are not targets. On Apple Silicon the dylib name rarely fires, because a bare `dlopen` searches only the DYLD fallback paths and not `/opt/homebrew/lib`; the working mac path is the `CopyLibCfitsioMacOS` build target that stages the dylib next to the binary (docs/RUNNING.md).
 

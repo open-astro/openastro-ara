@@ -206,7 +206,7 @@ sudo systemctl enable --now openastroara-server
 The captures volume isn't ext4. See [Storage setup](#storage-setup-required).
 
 **journalctl shows "Cannot load libcfitsio" at boot, or captures fail with `DllNotFoundException: 'cfitsio'`**
-`sudo apt install libcfitsio10` — the .deb dependency should pull this in automatically, but if you're on a sparse distro you may need it explicitly. The daemon keeps running without it, but every capture fails at the FITS write. The boot line lists every candidate it tried; a library outside the loader path can be named with `OPENASTROARA_CFITSIO_PATH=/full/path/to/libcfitsio.so.10`.
+`sudo apt install libcfitsio10` — the .deb dependency should pull this in automatically, but if you're on a sparse distro you may need it explicitly. The daemon keeps running without it, but every capture fails at the FITS write. The boot line lists every candidate it tried; a library outside the loader path can be named with `OPENASTROARA_CFITSIO_PATH=/full/path/to/libcfitsio.so.10`. It loads a native library into the daemon, so set it only in the root-owned unit (`Environment=` in a `systemctl edit` drop-in), never in a shell profile.
 
 **Client can't discover the daemon**
 - mDNS announces require LAN multicast — verify the Pi's network supports it (most home networks do; some enterprise networks block multicast)

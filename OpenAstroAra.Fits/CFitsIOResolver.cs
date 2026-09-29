@@ -118,19 +118,19 @@ internal static class CFitsIOResolver {
         if (explicitPath is not null) {
             tried.Add(explicitPath);
             if (tryLoad(explicitPath, out handle)) {
-                return (handle, new CFitsIOResolution(explicitPath, tried, explicitPath));
+                return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), explicitPath));
             }
         }
         tried.Add(DefaultProbeLabel);
         if (tryDefault(LibraryName, out handle)) {
-            return (handle, new CFitsIOResolution(explicitPath, tried, DefaultProbeLabel));
+            return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), DefaultProbeLabel));
         }
         foreach (var soname in versionedSonames) {
             tried.Add(soname);
             if (tryLoad(soname, out handle)) {
-                return (handle, new CFitsIOResolution(explicitPath, tried, soname));
+                return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), soname));
             }
         }
-        return (IntPtr.Zero, new CFitsIOResolution(explicitPath, tried, null));
+        return (IntPtr.Zero, new CFitsIOResolution(explicitPath, tried.ToArray(), null));
     }
 }
