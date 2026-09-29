@@ -31,6 +31,8 @@ using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -79,6 +81,10 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 Temperature = connected ? runtime.CcdTemperature ?? double.NaN : double.NaN,
                 CoolerOn = connected && runtime.CoolerOn,
                 CoolerPower = connected ? runtime.CoolerPowerPct ?? double.NaN : double.NaN,
+                // #1187 — the CoolCamera/WarmCamera instructions' Validate() refuses a camera that
+                // reports no set-point regulation; left unset, every cooling step failed validation.
+                CanSetTemperature = connected && _capabilities?.CanSetTemperature == true,
+                TemperatureSetPoint = connected ? runtime.CoolerSetpointC ?? double.NaN : double.NaN,
             };
         }
     }
@@ -321,13 +327,291 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     public void SetUSBLimit(int usbLimit) { }
     void ICameraMediator.SetSubSambleRectangle(ObservableRectangle observableRectangle) { }
 
-    public bool AtTargetTemp => false;
-    public double TargetTemp => double.NaN;
+    // ── #1187 sequencer cooling (NINA CameraVM.CoolCamera/WarmCamera semantics) ──────────────────
+    // Every set-point and cooler write goes through SetCoolerAsync, so the §25.5.5 capability gate
+    // and the #1076 cooling-fan interlock (fan started before the first cooler-on, a fan that cannot
+    // start refuses the cool, fan stopped after the cooler-off) cover sequences exactly as they
+    // cover the REST cooler control.
 
-    public Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
-        Task.FromResult(false); // ramped cooling orchestration rides with the capture-path engine wiring
-    public Task<bool> WarmCamera(TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
-        Task.FromResult(false);
+    /// <summary>Ramp checkpoint spacing: the set-point moves along the start→target line every
+    /// 15 s (NINA), in whole degrees until the last checkpoint, which writes the exact target.</summary>
+    internal static readonly TimeSpan CoolingRampInterval = TimeSpan.FromSeconds(15);
+    /// <summary>Sensor poll spacing while waiting for the final set-point (NINA: 5 s).</summary>
+    internal static readonly TimeSpan CoolingPollInterval = TimeSpan.FromSeconds(5);
+    /// <summary>Give up after this long without the sensor closing on the target by
+    /// <see cref="CoolingProgressC"/> while the TEC is pinned (≥99 % or ≤1 %) or its power is
+    /// unreadable (NINA: 2 min at saturated power).</summary>
+    internal static readonly TimeSpan CoolingStallTimeout = TimeSpan.FromMinutes(2);
+    /// <summary>The same, while the TEC still reports headroom (1–99 %). NINA waited forever here;
+    /// a bound keeps a regulator that settles just outside tolerance from hanging the sequence.</summary>
+    internal static readonly TimeSpan CoolingRegulatingTimeout = TimeSpan.FromMinutes(10);
+    /// <summary>Pause at the warm target before the cooler-off (NINA: 20 s).</summary>
+    internal static readonly TimeSpan WarmCoolerOffSettle = TimeSpan.FromSeconds(20);
+    /// <summary>Cooling is done at target + 1 °C, warming at target − 1 °C (NINA).</summary>
+    internal const double CoolingReachedToleranceC = 1.0;
+    internal const double CoolingProgressC = 0.5;
+    /// <summary><see cref="AtTargetTemp"/> tolerance (NINA's CameraVM.AtTargetTemp: ±2 °C).</summary>
+    internal const double AtTargetToleranceC = 2.0;
+    /// <summary>WarmCamera's set-point target (NINA): a TEC cannot warm past ambient, so on a
+    /// colder night the warm stalls short of it and still switches the cooler off.</summary>
+    internal const double WarmCameraTargetC = 20.0;
+
+    /// <summary>Test seam for the cooling ramp's waits (ramps run minutes; tests run them instantly).</summary>
+    internal Func<TimeSpan, CancellationToken, Task> CoolingDelay { get; set; } = Task.Delay;
+
+    // The final target of an in-flight CoolCamera/WarmCamera (the device set-point read-back is only
+    // the current ramp step). NaN when no sequencer cooling is running. Guarded by _gate.
+    private double _coolingTargetC = double.NaN;
+
+    /// <summary>The in-flight sequencer cooling target, else the cooler's set-point read-back while
+    /// the cooler is on; NaN when disconnected or the cooler is off.</summary>
+    public double TargetTemp {
+        get {
+            lock (_gate) {
+                if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
+                    return double.NaN;
+                }
+                if (!double.IsNaN(_coolingTargetC)) {
+                    return _coolingTargetC;
+                }
+                return _runtime.CoolerOn ? _runtime.CoolerSetpointC ?? double.NaN : double.NaN;
+            }
+        }
+    }
+
+    public bool AtTargetTemp {
+        get {
+            double temperature;
+            lock (_gate) {
+                temperature = _state == EquipmentConnectionState.Connected ? _runtime.CcdTemperature ?? double.NaN : double.NaN;
+            }
+            var target = TargetTemp;
+            return !double.IsNaN(temperature) && !double.IsNaN(target) && Math.Abs(temperature - target) <= AtTargetToleranceC;
+        }
+    }
+
+    /// <summary>
+    /// #1187 — the sequencer's CoolCamera. <paramref name="duration"/> zero (or a start already
+    /// within 1 °C) writes the target at once; otherwise the set-point ramps linearly over it. Then
+    /// waits for the sensor to reach target + 1 °C. False (with the reason reported on
+    /// <paramref name="progress"/>) when the camera is disconnected, cannot take a set-point, the
+    /// fan interlock or driver refuses the write, or the sensor stalls short of the target.
+    /// Cancellation holds the set-point at the current sensor temperature and rethrows.
+    /// </summary>
+    public async Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        const string operation = "Cooling";
+        var refusal = CoolingRefusal(needsSetpoint: true);
+        if (refusal is not null) {
+            return CoolingFailed(operation, refusal, progress);
+        }
+        LogSequencerCoolStart(temperature, duration);
+        SetCoolingTarget(temperature);
+        try {
+            var shortfall = await RegulateTemperatureAsync(temperature, duration, cooling: true, progress, ct).ConfigureAwait(false);
+            if (shortfall is not null) {
+                return CoolingFailed(operation, shortfall, progress);
+            }
+            progress?.Report(new ApplicationStatus { Status = string.Empty });
+            return true;
+        } catch (InvalidOperationException ex) {
+            // SetCoolerAsync's refusals (fan interlock, capability gate, driver rejection) and a
+            // camera that disconnected mid-ramp.
+            return CoolingFailed(operation, ex.Message, progress);
+        } finally {
+            SetCoolingTarget(double.NaN);
+        }
+    }
+
+    /// <summary>
+    /// #1187 — the sequencer's WarmCamera: with the cooler on, ramp the set-point toward
+    /// <see cref="WarmCameraTargetC"/> over <paramref name="duration"/> (a stall short of it — a cold
+    /// night — is logged, not a failure), settle 20 s, then switch the cooler off. A cooler that is
+    /// off (or whose state cannot be read) is never switched on; it only gets the cooler-off.
+    /// </summary>
+    public async Task<bool> WarmCamera(TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        const string operation = "Warming";
+        var refusal = CoolingRefusal(needsSetpoint: false);
+        if (refusal is not null) {
+            return CoolingFailed(operation, refusal, progress);
+        }
+        LogSequencerWarmStart(duration);
+        try {
+            var telemetry = await ReadCoolingTelemetryAsync().ConfigureAwait(false)
+                ?? throw new InvalidOperationException("camera is not connected");
+            bool canSetTemperature;
+            lock (_gate) {
+                canSetTemperature = _capabilities?.CanSetTemperature != false;
+            }
+            if (telemetry.CoolerOn == true) {
+                if (canSetTemperature && !double.IsNaN(telemetry.Temperature)
+                        && telemetry.Temperature < WarmCameraTargetC - CoolingReachedToleranceC) {
+                    SetCoolingTarget(WarmCameraTargetC);
+                    var shortfall = await RegulateTemperatureAsync(WarmCameraTargetC, duration, cooling: false, progress, ct).ConfigureAwait(false);
+                    if (shortfall is not null) {
+                        LogSequencerWarmShort(shortfall);
+                    }
+                }
+                progress?.Report(new ApplicationStatus { Status = "Waiting to turn the cooler off" });
+                await CoolingDelay(WarmCoolerOffSettle, ct).ConfigureAwait(false);
+            }
+            await SetCoolerAsync(enabled: false, targetTemperatureC: null, ct).ConfigureAwait(false);
+            progress?.Report(new ApplicationStatus { Status = string.Empty });
+            return true;
+        } catch (InvalidOperationException ex) {
+            return CoolingFailed(operation, ex.Message, progress);
+        } finally {
+            SetCoolingTarget(double.NaN);
+        }
+    }
+
+    /// <summary>Ramp (or set) the set-point, then wait for the sensor. Null when the target was
+    /// reached, else why not. Throws <see cref="InvalidOperationException"/> on a refused write or
+    /// a lost camera, and rethrows cancellation after holding the set-point where the sensor is.</summary>
+    private async Task<string?> RegulateTemperatureAsync(double target, TimeSpan duration, bool cooling,
+            IProgress<ApplicationStatus>? progress, CancellationToken ct) {
+        var label = cooling ? "Cooling camera" : "Warming camera";
+        var start = (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN;
+        var wrote = false;
+        try {
+            double? last = null;
+            if (duration > TimeSpan.Zero && !double.IsNaN(start) && Math.Abs(start - target) > CoolingReachedToleranceC) {
+                var checkpoints = (int)(duration.Ticks / CoolingRampInterval.Ticks);
+                for (var i = 1; i <= checkpoints; i++) {
+                    var fraction = (double)(i * CoolingRampInterval.Ticks) / duration.Ticks;
+                    var step = fraction >= 1
+                        ? target
+                        : Math.Round(start + ((target - start) * fraction), MidpointRounding.AwayFromZero);
+                    if (step != last) {
+                        ct.ThrowIfCancellationRequested();
+                        await SetCoolerAsync(enabled: true, step, ct).ConfigureAwait(false);
+                        wrote = true;
+                        last = step;
+                    }
+                    ReportCooling(progress, label, target, fraction);
+                    await CoolingDelay(CoolingRampInterval, ct).ConfigureAwait(false);
+                }
+            }
+            if (last != target) {
+                ct.ThrowIfCancellationRequested();
+                await SetCoolerAsync(enabled: true, target, ct).ConfigureAwait(false);
+                wrote = true;
+            }
+
+            var telemetry = await ReadCoolingTelemetryAsync().ConfigureAwait(false)
+                ?? throw new InvalidOperationException("camera is not connected");
+            var best = Distance(telemetry.Temperature, target);
+            var idle = TimeSpan.Zero;
+            while (!Reached(telemetry.Temperature, target, cooling)) {
+                var span = Math.Abs(start - target);
+                ReportCooling(progress, label, target, double.IsNaN(span) || span == 0 ? 0 : 1 - (Distance(telemetry.Temperature, target) / span));
+                await CoolingDelay(CoolingPollInterval, ct).ConfigureAwait(false);
+                telemetry = await ReadCoolingTelemetryAsync().ConfigureAwait(false)
+                    ?? throw new InvalidOperationException("camera is not connected");
+                var distance = Distance(telemetry.Temperature, target);
+                if (best - distance >= CoolingProgressC) {
+                    best = distance;
+                    idle = TimeSpan.Zero;
+                    continue;
+                }
+                idle += CoolingPollInterval;
+                var regulating = telemetry.CoolerPowerPct is > 1 and < 99;
+                if (idle >= (regulating ? CoolingRegulatingTimeout : CoolingStallTimeout)) {
+                    var power = telemetry.CoolerPowerPct is double p ? p.ToString("0", CultureInfo.InvariantCulture) + " %" : "unknown";
+                    return string.Create(CultureInfo.InvariantCulture,
+                        $"could not reach {target:0.#} °C (sensor at {telemetry.Temperature:0.#} °C, cooler power {power}, no progress for {idle.TotalMinutes:0} min)");
+                }
+            }
+            return null;
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested && wrote) {
+            // NINA: a cancelled ramp leaves the TEC holding where the sensor is, not still driving
+            // toward a target nobody is waiting for.
+            await HoldSetpointAtSensorAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private static double Distance(double temperature, double target) =>
+        double.IsNaN(temperature) ? double.PositiveInfinity : Math.Abs(temperature - target);
+
+    private static bool Reached(double temperature, double target, bool cooling) =>
+        !double.IsNaN(temperature)
+        && (cooling ? temperature <= target + CoolingReachedToleranceC : temperature >= target - CoolingReachedToleranceC);
+
+    private async Task HoldSetpointAtSensorAsync() {
+        var temperature = (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN;
+        if (double.IsNaN(temperature)) {
+            return;
+        }
+        try {
+            await SetCoolerAsync(enabled: true, temperature, CancellationToken.None).ConfigureAwait(false);
+        } catch (InvalidOperationException ex) {
+            LogSequencerCoolingHoldFailed(ex);
+        }
+    }
+
+    /// <summary>Why a sequencer cooling call cannot start, or null. Reads the capabilities first if
+    /// the refresh has not yet; unknown capabilities let the write be attempted.</summary>
+    private string? CoolingRefusal(bool needsSetpoint) {
+        bool connected;
+        CameraCapabilitiesDto? caps;
+        lock (_gate) {
+            connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            caps = _capabilities;
+        }
+        if (!connected) {
+            return "camera is not connected";
+        }
+        if (caps is null) {
+            RefreshCacheOnce();
+            lock (_gate) {
+                caps = _capabilities;
+            }
+        }
+        return CoolerCapabilityError(caps?.CanSetTemperature, caps?.HasCooler, needsSetpoint ? 0.0 : null);
+    }
+
+    private bool CoolingFailed(string operation, string reason, IProgress<ApplicationStatus>? progress) {
+        LogSequencerCoolingFailed(operation, reason);
+        progress?.Report(new ApplicationStatus { Status = $"{operation} failed: {reason}" });
+        return false;
+    }
+
+    private static void ReportCooling(IProgress<ApplicationStatus>? progress, string label, double target, double fraction) =>
+        progress?.Report(new ApplicationStatus {
+            Status = string.Create(CultureInfo.InvariantCulture, $"{label} to {target:0.#} °C"),
+            Progress = Math.Clamp(fraction, 0, 1),
+        });
+
+    private void SetCoolingTarget(double target) {
+        lock (_gate) {
+            _coolingTargetC = target;
+        }
+    }
+
+    private readonly record struct CoolingTelemetry(double Temperature, double? CoolerPowerPct, bool? CoolerOn);
+
+    /// <summary>A direct (uncached) sensor read for the ramp's decisions — the §32.4 cache can be a
+    /// refresh pass behind. Null when the camera is not connected.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: an unsupported or failing temperature/power/cooler read (or a client disposed by a concurrent disconnect) degrades to unknown, which the stall timeout then bounds. Same pattern as ReadRuntime.")]
+    private async Task<CoolingTelemetry?> ReadCoolingTelemetryAsync() {
+        AlpacaCamera? client;
+        lock (_gate) {
+            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            return null;
+        }
+        return await Task.Run(() => {
+            double temperature;
+            try { temperature = client.CCDTemperature; } catch (Exception) { temperature = double.NaN; }
+            double? power;
+            try { power = client.CoolerPower; } catch (Exception) { power = null; }
+            bool? coolerOn;
+            try { coolerOn = client.CoolerOn; } catch (Exception) { coolerOn = null; }
+            return new CoolingTelemetry(temperature, power, coolerOn);
+        }, CancellationToken.None).ConfigureAwait(false);
+    }
 
     public void RegisterCaptureBlock(ICameraConsumer cameraConsumer) { }
     public void ReleaseCaptureBlock(ICameraConsumer cameraConsumer) { }
@@ -359,6 +643,21 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     public event Func<object, EventArgs, Task>? Connected;
     public event Func<object, EventArgs, Task>? Disconnected;
     public event Func<object, EventArgs, Task>? DownloadTimeout;
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer CoolCamera: target {TargetC} °C over {Duration}")]
+    private partial void LogSequencerCoolStart(double targetC, TimeSpan duration);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer WarmCamera over {Duration}")]
+    private partial void LogSequencerWarmStart(TimeSpan duration);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer WarmCamera stopped short of ambient ({Reason}); switching the cooler off anyway")]
+    private partial void LogSequencerWarmShort(string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sequencer {Operation} failed: {Reason}")]
+    private partial void LogSequencerCoolingFailed(string operation, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sequencer cooling cancelled; holding the set-point at the sensor temperature failed")]
+    private partial void LogSequencerCoolingHoldFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer capture {FrameId} complete ({ImageType}, target '{Target}')")]
     private partial void LogSequencerCaptureComplete(Guid frameId, string imageType, string target);
