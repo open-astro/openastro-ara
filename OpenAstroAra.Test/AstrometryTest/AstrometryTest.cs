@@ -13,6 +13,7 @@ using FluentAssertions;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Server.Services;
 using System;
 using System.Text.RegularExpressions;
 
@@ -766,6 +767,74 @@ namespace OpenAstroAra.Test.AstrometryTest {
             var pattern = AstroUtil.DMSPattern;
             var match = Regex.Match(sut, pattern);
             match.Success.Should().BeFalse();
+        }
+    }
+
+    // #1125: a value just below the leading field's wrap point used to round up to 24h / 360°
+    // ("24:00:00"), which the frame scanner rejects. Not [Platform("Win")] like AstrometryTests
+    // above: these are pure formatting checks and must run on the Linux CI leg.
+    [TestFixture]
+    public class AstroUtilSexagesimalCarryTests {
+
+        [TestCase(23.99999, "00:00:00")]        // 23:59:59.964: seconds carry into minutes into hours
+        [TestCase(23.9999999, "00:00:00")]
+        [TestCase(-23.99999, "00:00:00")]
+        [TestCase(23.9998, "23:59:59")]         // 23:59:59.28 rounds down, no carry
+        [TestCase(12.99999, "13:00:00")]        // ordinary carry, no wrap
+        [TestCase(0.99999, "01:00:00")]
+        [TestCase(1.0 / 60 - 1e-7, "00:01:00")] // seconds carry into minutes only
+        [TestCase(24.0, "24:00:00")]            // explicit out-of-range input is not normalised
+        public void HoursToHMS_carries_and_wraps_at_24h(double hours, string expected) {
+            Assert.That(AstroUtil.HoursToHMS(hours), Is.EqualTo(expected));
+        }
+
+        [TestCase(23.99999, "00 00 00")]
+        [TestCase(5.5, "05 30 00")]
+        public void HoursToFitsHMS_carries_and_wraps_at_24h(double hours, string expected) {
+            Assert.That(AstroUtil.HoursToFitsHMS(hours), Is.EqualTo(expected));
+        }
+
+        [TestCase(359.9999, "00:00:00")]        // 23:59:59.976
+        [TestCase(-359.9999, "00:00:00")]
+        [TestCase(359.99, "23:59:58")]
+        [TestCase(14.9999, "01:00:00")]
+        public void DegreesToHMS_carries_and_wraps_at_24h(double degrees, string expected) {
+            Assert.That(AstroUtil.DegreesToHMS(degrees), Is.EqualTo(expected));
+        }
+
+        [TestCase(359.99999, "00° 00' 00\"")]  // 359° 59' 59.964"
+        [TestCase(-359.99999, "00° 00' 00\"")]
+        [TestCase(359.9998, "359° 59' 59\"")]
+        [TestCase(89.99999, "90° 00' 00\"")]   // the pole is a legal declination: no wrap
+        [TestCase(-89.99999, "-90° 00' 00\"")]
+        [TestCase(10.0 + 59.0 / 60 + 59.9 / 3600, "11° 00' 00\"")]
+        [TestCase(360.0, "360° 00' 00\"")]     // explicit out-of-range input is not normalised
+        public void DegreesToDMS_carries_and_wraps_at_360(double degrees, string expected) {
+            Assert.That(AstroUtil.DegreesToDMS(degrees), Is.EqualTo(expected));
+        }
+
+        [TestCase(89.99999, "+90 00 00")]
+        [TestCase(-89.99999, "-90 00 00")]
+        public void DegreesToFitsDMS_carries_to_the_pole(double degrees, string expected) {
+            Assert.That(AstroUtil.DegreesToFitsDMS(degrees), Is.EqualTo(expected));
+        }
+
+        // The OBJCTRA/OBJCTDEC cards the capture path writes must survive the frame scanner.
+        [TestCase(23.99999, 89.99999)]
+        [TestCase(23.9999999, -89.99999)]
+        [TestCase(0.0, 0.0)]
+        [TestCase(12.5, -30.25)]
+        public void Written_cards_near_the_wrap_round_trip_through_the_frame_scanner(double raHours, double decDegrees) {
+            var ra = AstroUtil.HoursToFitsHMS(raHours);
+            var dec = AstroUtil.DegreesToFitsDMS(decDegrees);
+
+            var parsed = SqliteFrameRepository.ParseTargetCoordinates(ra, dec);
+
+            Assert.That(parsed, Is.Not.Null, $"OBJCTRA '{ra}' / OBJCTDEC '{dec}' rejected");
+            // RA is compared on the circle: 23h59m59.96s and 00h00m00s are 0.6 arcsec apart.
+            var raDelta = Math.Abs(parsed!.Value.RaDegrees - raHours * 15) % 360;
+            Assert.That(Math.Min(raDelta, 360 - raDelta), Is.LessThan(0.5 / 3600 * 15 + 1e-9));
+            Assert.That(parsed.Value.DecDegrees, Is.EqualTo(decDegrees).Within(0.5 / 3600 + 1e-9));
         }
     }
 }
