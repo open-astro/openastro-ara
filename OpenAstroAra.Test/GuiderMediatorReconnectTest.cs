@@ -198,5 +198,21 @@ namespace OpenAstroAra.Test {
             var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(dto?.State ?? EquipmentConnectionState.Disconnected, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
+
+        [Test]
+        public async Task GetInfo_reports_that_PHD2_can_clear_calibration_while_connected() {
+            await using var fake = StartFake();
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, UnsupervisedRecovery(new Mock<IGuiderProcessSupervisor>()), grace: TimeSpan.FromSeconds(20));
+            Assert.That(svc.GetInfo().CanClearCalibration, Is.False, "nothing connected, nothing to clear");
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
+            Assert.That(svc.GetInfo().CanClearCalibration, Is.True,
+                "StartGuiding(ForceCalibration) validation flags a bogus issue when this stays false");
+            var startGuiding = new OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding(svc) { ForceCalibration = true };
+            Assert.That(startGuiding.Validate(), Is.True);
+            Assert.That(startGuiding.Issues, Is.Empty);
+        }
     }
 }

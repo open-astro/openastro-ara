@@ -59,6 +59,8 @@ public sealed partial class GuiderService : IGuiderMediator {
                 Name = connected ? "PHD2" : string.Empty,
                 DeviceId = connected ? "PHD2_Single" : string.Empty,
                 PixelScale = connected ? _guider!.PixelScale : 0,
+                // #1123 — StartGuiding(ForceCalibration) validates against this; PHD2 can clear it.
+                CanClearCalibration = connected && _guider!.CanClearCalibration,
             };
         }
     }
