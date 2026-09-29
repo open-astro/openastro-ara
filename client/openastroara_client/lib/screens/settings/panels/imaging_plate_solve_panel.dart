@@ -274,7 +274,9 @@ class _StarDatabaseStatus extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Solver not found at ${s.solverPath}',
+                  s.solverPath.isEmpty
+                      ? 'No solver path set'
+                      : 'Solver not found at ${s.solverPath}',
                   style: errorStyle,
                 ),
               ),

@@ -81,6 +81,26 @@ void main() {
     expect(find.text('Solver not found at /usr/bin/astap_cli'), findsOneWidget);
   });
 
+  testWidgets('blank solver path: says none is set, not "not found at "', (
+    tester,
+  ) async {
+    // An imported profile has its solver path stripped to "" (ProfileShareService).
+    await _pump(
+      tester,
+      const PlateSolveDatabaseStatus(
+        configuredPath: '/var/lib/astap',
+        effectivePath: null,
+        fileCount: 0,
+        databases: [],
+        solverPath: '',
+        solverFound: false,
+      ),
+    );
+
+    expect(find.text('No solver path set'), findsOneWidget);
+    expect(find.textContaining('Solver not found at'), findsNothing);
+  });
+
   testWidgets('unknown: offline or an older daemon is not an error', (
     tester,
   ) async {
