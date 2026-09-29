@@ -208,6 +208,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_cool_that_stalls_while_the_cooler_has_headroom_waits_the_longer_timeout() {
+            // TEC at 50 %: still regulating, so the 10-minute bound applies, not the 2-minute one.
+            await using var cam = new SimCamera { FixedTemperature = 5, CoolerPower = 50 };
+            var (svc, delays) = await ConnectedAsync(cam);
+            using var _ = svc;
+
+            var ok = await svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            var waited = TimeSpan.FromTicks(delays.Sum(d => d.Ticks));
+            Assert.That(waited, Is.GreaterThanOrEqualTo(TimeSpan.FromMinutes(10)).And.LessThan(TimeSpan.FromMinutes(11)),
+                "gives up after 10 minutes without progress while the cooler has headroom");
+        }
+
+        [Test]
         public async Task A_cool_whose_sensor_never_moves_with_unknown_cooler_power_still_gives_up() {
             // No readable CoolerPower (unparseable) — must not hang waiting for a power reading.
             await using var cam = new SimCamera { FixedTemperature = 5, CoolerPowerUnreadable = true };
