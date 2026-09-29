@@ -68,6 +68,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // worst-case total before RunMountOpAsync returns is ~8min (~15min for a slew); cancellation (ct)
     // cuts it short.
     private static readonly TimeSpan MountOpHardTimeout = TimeSpan.FromMinutes(5);
+    // #1124 — bound on the on-demand EquatorialSystem read a slew/sync makes before the first
+    // refresh has landed it: one property GET, so a few seconds is generous; Sync takes no token.
+    private static readonly TimeSpan EquatorialSystemReadTimeout = TimeSpan.FromSeconds(10);
     // Sanity bound on the post-slew pointing, paired with the authoritative !Slewing signal. Generous
     // (5°, parity with the dome's azimuth window) on purpose: it only guards against a premature exit
     // where Slewing hasn't asserted yet and the mount is still at its old heading — a *completed*
@@ -104,7 +107,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 CanPark = connected && caps?.CanPark == true,
                 CanSetTrackingEnabled = connected && caps?.CanSetTracking == true,
             };
-            if (connected && runtime.RightAscensionHours is double ra && runtime.DeclinationDegrees is double dec) {
+            // #1124 — RA/Dec whose frame hasn't been read yet has no honest epoch label: leave the
+            // pointing unset (frames record no RA/DEC/EQUINOX, as before the first position read)
+            // rather than label it JNOW and have the capture path precess it into a wrong J2000.
+            if (connected && _equatorialSystemKnown
+                    && runtime.RightAscensionHours is double ra && runtime.DeclinationDegrees is double dec) {
                 info.Coordinates = new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), epoch);
             }
             if (connected && caps is not null) {
@@ -137,9 +144,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         _ => null,
     };
 
-    // ASCOM's mount-native coordinate system → NINA Epoch. Topocentric/Other (and the "not yet read"
-    // sentinel) map to JNOW: the mount wants current-epoch coordinates. Extracted (internal) for
-    // direct unit testing.
+    // ASCOM's mount-native coordinate system → NINA Epoch. Topocentric/Other map to JNOW: the mount
+    // wants current-epoch coordinates. Only meaningful for a system actually READ from the device:
+    // the "not yet read" sentinel (also Other) must never reach the slew/sync transform or the
+    // capture pointing, so those paths gate on _equatorialSystemKnown (#1124). Extracted (internal)
+    // for direct unit testing.
     internal static Epoch MapEpoch(EquatorialCoordinateType equatorialSystem) => equatorialSystem switch {
         EquatorialCoordinateType.J2000 => Epoch.J2000,
         EquatorialCoordinateType.J2050 => Epoch.J2050,
@@ -172,9 +181,45 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
     }
 
+    // #1124 — the mount's coordinate system for a slew/sync target. Known → the cached value.
+    // Not read yet (the connect's first refresh is still in flight, or every read so far failed) →
+    // one on-demand read, bounded by EquatorialSystemReadTimeout, committed to the cache on success
+    // so the refresh stops retrying. Null means still unknown: the caller refuses the op rather than
+    // guess JNOW (a J2000 target precessed into JNOW for a J2000 mount lands ~0.36° off). A read
+    // against a client that was superseded or disconnected meanwhile is not trusted.
+    private async Task<EquatorialCoordinateType?> ResolveEquatorialSystemAsync(AlpacaTelescope client, CancellationToken ct) {
+        lock (_gate) {
+            if (_equatorialSystemKnown && ReferenceEquals(_client, client)) {
+                return _equatorialSystemRaw;
+            }
+        }
+        // ReadEquatorialSystem never throws (a failed read is null), so the task abandoned on a
+        // timeout needs no observer.
+        var read = Task.Run(() => ReadEquatorialSystem(client), CancellationToken.None);
+        EquatorialCoordinateType? value;
+        try {
+            value = await read.WaitAsync(EquatorialSystemReadTimeout, ct).ConfigureAwait(false); // a sequencer cancel propagates
+        } catch (TimeoutException) {
+            value = null;
+        }
+        lock (_gate) {
+            if (_disposed || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client)) {
+                return null;
+            }
+            if (_equatorialSystemKnown) {
+                return _equatorialSystemRaw; // a refresh pass landed the read meanwhile
+            }
+            if (value is not null) {
+                _equatorialSystemRaw = value.Value;
+                _equatorialSystemKnown = true;
+            }
+            return value;
+        }
+    }
+
     public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(coords);
-        EquatorialCoordinateType equatorialSystem;
+        AlpacaTelescope client;
         bool parked;
         lock (_gate) {
             // Connected check BEFORE the transform: Transform P/Invokes NOVAS, which must not run
@@ -183,7 +228,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
                 return Task.FromResult(false);
             }
-            equatorialSystem = _equatorialSystemRaw;
+            client = _client;
             parked = _runtime.Parked;
         }
         if (parked) {
@@ -192,21 +237,29 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogMountOpRejectedParked("telescope.slew");
             return Task.FromResult(false);
         }
-        // Transform to the mount's native coordinate system (a J2000 sequence target sent raw to a
-        // JNOW mount would be off by the precession drift, ~arcminutes). Best-effort: the cross-epoch
-        // path P/Invokes SOFA/NOVAS (shipped with the Pi package since #1092, but absent on an
-        // unstaged dev box) — a missing native falls back to the untransformed target rather than
-        // failing the run (same-epoch transforms are pure managed).
-        var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem));
-        var targetRa = target.RA;
-        var targetDec = target.Dec;
-        lock (_gate) {
-            TargetLatch.NoteTargetCommand(); // §57.9 — a goto re-arms the target display
-            SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
-        }
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #1124 — a slew right after connect can beat the first refresh: read the system now
+            // rather than guess. Still unknown → fail the instruction without sending anything
+            // (SlewScopeToRaDec ignores a false return, so a refusal must throw to be seen).
+            var equatorialSystem = await ResolveEquatorialSystemAsync(client, token).ConfigureAwait(false);
+            if (equatorialSystem is null) {
+                LogMountOpRejectedUnknownSystem("telescope.slew");
+                throw new SequenceEntityFailedException(UnknownSystemMessage("telescope.slew"));
+            }
+            // Transform to the mount's native coordinate system (a J2000 sequence target sent raw to
+            // a JNOW mount would be off by the precession drift, ~arcminutes). Best-effort: the
+            // cross-epoch path P/Invokes SOFA/NOVAS (shipped with the Pi package since #1092, but
+            // absent on an unstaged dev box) — a missing native falls back to the untransformed
+            // target rather than failing the run (same-epoch transforms are pure managed).
+            var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem.Value));
+            var targetRa = target.RA;
+            var targetDec = target.Dec;
+            lock (_gate) {
+                TargetLatch.NoteTargetCommand(); // §57.9 — a goto re-arms the target display
+                SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
+            }
             try {
                 return await RunMountOpAsync("telescope.slew",
                     c => {
@@ -525,7 +578,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         Justification = "Mount sync boundary: the blocking ASCOM SyncToCoordinates/CanSync can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-call; every escape is logged and reported as a failed sync (false) so the centering loop falls back to offset compensation rather than faulting the run. CA1031's log-and-recover boundary applies.")]
     public async Task<bool> Sync(Coordinates coordinates) {
         ArgumentNullException.ThrowIfNull(coordinates);
-        EquatorialCoordinateType equatorialSystem;
         bool parked;
         lock (_gate) {
             // Connected check before the transform (which P/Invokes NOVAS): don't run native astrometry
@@ -533,7 +585,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
                 return false;
             }
-            equatorialSystem = _equatorialSystemRaw;
             parked = _runtime.Parked;
         }
         if (parked) {
@@ -545,7 +596,15 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
-        var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem));
+        // #1124 — as for the slew: read the system now if the first refresh hasn't. Still unknown →
+        // a clean "not synced" (the centering loop offset-compensates, and its re-slew is refused in
+        // turn) rather than recalibrate the pointing model in a guessed frame.
+        var equatorialSystem = await ResolveEquatorialSystemAsync(client, CancellationToken.None).ConfigureAwait(false);
+        if (equatorialSystem is null) {
+            LogMountOpRejectedUnknownSystem("telescope.sync");
+            return false;
+        }
+        var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem.Value));
         try {
             var opTask = Task.Run(() => {
                 if (!client.CanSync) {
@@ -636,6 +695,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Mount mediator op {Op} rejected: mount is parked")]
     private partial void LogMountOpRejectedParked(string op);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "Mount mediator op {Op} rejected: the mount's EquatorialSystem could not be read, so the target's epoch is unknown")]
+    private partial void LogMountOpRejectedUnknownSystem(string op);
+
+    private static string UnknownSystemMessage(string op) =>
+        $"{op} refused: the mount has not reported its coordinate system (EquatorialSystem), so the target cannot be put in its epoch without guessing. Check the mount connection and retry.";
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Mount sync skipped: the mount reports CanSync=false; the centering loop will offset-compensate instead")]
     private partial void LogSyncUnsupported();
