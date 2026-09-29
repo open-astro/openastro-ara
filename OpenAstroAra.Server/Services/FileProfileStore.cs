@@ -51,6 +51,7 @@ public sealed partial class FileProfileStore : IProfileStore {
     private readonly string _profilePath;
     private readonly string _tempPath;
     private readonly ILogger<FileProfileStore> _logger;
+    private readonly Func<string, bool> _fileExists;
     // Pretty-printed variant of the AOT-safe context for on-disk
     // readability. Reading uses the default (non-indented) instance.
     private static readonly AraJsonSerializerContext _indentedContext =
@@ -60,11 +61,15 @@ public sealed partial class FileProfileStore : IProfileStore {
 
     private ProfileSnapshotDto _snapshot;
 
-    public FileProfileStore(string profileDir, ILogger<FileProfileStore>? logger = null) {
+    /// <param name="fileExists">The file check the normalizer's solver-path migration uses
+    /// (#1121); defaults to <see cref="File.Exists(string)"/>, injected by tests.</param>
+    public FileProfileStore(string profileDir, ILogger<FileProfileStore>? logger = null,
+            Func<string, bool>? fileExists = null) {
         _profileDir = profileDir;
         _profilePath = Path.Combine(profileDir, "profile.json");
         _tempPath = _profilePath + ".tmp";
         _logger = logger ?? NullLogger<FileProfileStore>.Instance;
+        _fileExists = fileExists ?? File.Exists;
 
         _snapshot = LoadOrDefaults();
     }
@@ -206,7 +211,7 @@ public sealed partial class FileProfileStore : IProfileStore {
             // section, e.g. a null optics → Optics().ApertureMm NRE). Normalizing at
             // the one write choke-point keeps the invariant regardless of which Put
             // the null arrives through.
-            _snapshot = ProfileSnapshotNormalizer.Normalize(mutate(_snapshot));
+            _snapshot = ProfileSnapshotNormalizer.Normalize(mutate(_snapshot), _fileExists);
             Persist(_snapshot);
         }
         // Raised OUTSIDE _lock so a subscriber that reads back through the Get* methods can't
@@ -252,7 +257,16 @@ public sealed partial class FileProfileStore : IProfileStore {
             // parameter to null rather than throwing, which would surface as a null
             // GET body on upgrade — or an NRE in a consumer. One normalizer covers
             // every section (shared with the write path, see UpdateAndPersist).
-            return ProfileSnapshotNormalizer.Normalize(loaded);
+            var normalized = ProfileSnapshotNormalizer.Normalize(loaded, _fileExists);
+            // #1121 — the solver-path migration rewrote a pre-#1094 /usr/bin/astap: persist it
+            // now so the rewrite happens once, not on every boot.
+            var loadedSolverPath = ((PlateSolveSettingsDto?)loaded.PlateSolve)?.PathOrEndpoint;
+            if (loadedSolverPath is not null
+                    && !string.Equals(loadedSolverPath, normalized.PlateSolve.PathOrEndpoint, StringComparison.Ordinal)) {
+                LogSolverPathMigrated(loadedSolverPath, normalized.PlateSolve.PathOrEndpoint);
+                Persist(normalized);
+            }
+            return normalized;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             LogParseFailed(ex, _profilePath);
             return defaults;
@@ -260,6 +274,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     }
 
     #region LoggerMessage delegates (CA1848)
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Plate solver path migrated from {OldPath} to {NewPath} (the installed ASTAP binary)")]
+    private partial void LogSolverPathMigrated(string oldPath, string newPath);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to persist profile to {Path}")]
     private partial void LogPersistFailed(Exception ex, string path);

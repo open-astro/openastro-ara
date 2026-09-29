@@ -1081,6 +1081,14 @@ public partial class Program {
         // the live store before any request is served.
         _ = app.Services.GetRequiredService<IProfileRepository>();
 
+        // #1121 — say at boot when the configured plate-solver binary is missing (after the
+        // normalizer's /usr/bin/astap → /usr/bin/astap_cli migration had its chance): otherwise
+        // the first sign is a failed centering or polar alignment in the field.
+        if (SolverPathMigration.MissingSolverBinary(
+                app.Services.GetRequiredService<IProfileStore>().GetPlateSolveSettings(), File.Exists) is string missingSolver) {
+            LogPlateSolverMissing(app.Logger, missingSolver);
+        }
+
         // §14e — say up front whether the SOFA/NOVAS31 astrometry natives are next to the binary.
         // Without them the slew epoch transform degrades quietly, but altitude/sun/moon conditions,
         // the meridian-flip projection and polar-align solving fault on first use. A package built
@@ -1133,6 +1141,9 @@ public partial class Program {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "OpenAstroAra.Server listening on :{Port}")]
     private static partial void LogListening(ILogger logger, int port);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Plate solver binary not found at {Path}: every plate solve (centering, polar alignment) will fail. Install astap-cli (apt install astap-cli) or fix Options → Plate solving → solver path.")]
+    private static partial void LogPlateSolverMissing(ILogger logger, string path);
 
     /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
     internal static void LogCfitsioProbe(ILogger logger, OpenAstroAra.Fits.FitsLibraryProbeResult result, string installHint) {

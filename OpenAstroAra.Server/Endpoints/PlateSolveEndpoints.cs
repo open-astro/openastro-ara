@@ -53,7 +53,35 @@ public static class PlateSolveEndpoints {
             .WithName("CenterOnCoordinates")
             .WithSummary("Slew the mount to coordinates and center by iterative plate solves, as a background job.");
 
+        // #1121 — read-only: is there a star database where the solver will look? A fresh install
+        // that skipped the DEPLOY.md download fails every solve with ASTAP exit 32, and only the
+        // daemon log said why. Settings → Plate solving shows this.
+        solve.MapGet("/database", GetDatabaseStatus)
+            .Produces<PlateSolveDatabaseStatusDto>(StatusCodes.Status200OK)
+            .WithName("GetPlateSolveDatabaseStatus")
+            .WithSummary("Report the ASTAP star-database directory's contents and whether the solver binary exists.");
+
         return app;
+    }
+
+    // Extracted (not an inline lambda) so the wiring is unit-testable with a real store.
+    public static IResult GetDatabaseStatus(IProfileStore store) =>
+        Results.Ok(BuildDatabaseStatus(store.GetPlateSolveSettings(), System.IO.File.Exists));
+
+    /// <summary>The status for <paramref name="settings"/>, with the same "directory holds files"
+    /// rule the solver applies before passing <c>-d</c>
+    /// (<see cref="OpenAstroAra.PlateSolving.Solvers.AstapStarDatabase.EffectiveLocation"/>).</summary>
+    public static PlateSolveDatabaseStatusDto BuildDatabaseStatus(PlateSolveSettingsDto settings, Func<string, bool> fileExists) {
+        var configured = settings.IndexDownloadPath?.Trim() ?? string.Empty;
+        var solverPath = settings.PathOrEndpoint?.Trim() ?? string.Empty;
+        var effective = OpenAstroAra.PlateSolving.Solvers.AstapStarDatabase.EffectiveLocation(configured);
+        return new PlateSolveDatabaseStatusDto(
+            ConfiguredPath: configured,
+            EffectivePath: effective,
+            FileCount: effective is null ? 0 : OpenAstroAra.PlateSolving.Solvers.AstapStarDatabase.CountFiles(effective),
+            Databases: OpenAstroAra.PlateSolving.Solvers.AstapStarDatabase.Databases(effective),
+            SolverPath: solverPath,
+            SolverFound: SolverPathMigration.MissingSolverBinary(settings, fileExists) is null && solverPath.Length > 0);
     }
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.

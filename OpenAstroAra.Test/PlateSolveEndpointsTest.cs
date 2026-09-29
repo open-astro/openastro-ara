@@ -228,5 +228,70 @@ namespace OpenAstroAra.Test {
             Assert.That(seen!.RA, Is.EqualTo(6.0).Within(1e-6));
             Assert.That(seen.Dec, Is.EqualTo(30.0).Within(1e-6));
         }
+
+        // #1121 — GET /api/v1/platesolve/database: what Settings → Plate solving shows.
+
+        private static readonly string[] D80AndW08 = { "d80", "w08" };
+
+        private static PlateSolveSettingsDto Settings(string indexPath, string solverPath = "/usr/bin/astap_cli") =>
+            ProfileSnapshotNormalizer.Defaults.PlateSolve with { IndexDownloadPath = indexPath, PathOrEndpoint = solverPath };
+
+        [Test]
+        public void DatabaseStatus_counts_the_files_and_names_the_databases() {
+            var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            foreach (var name in new[] { "d80_0101.1476", "d80_0102.1476", "w08_0101.001" }) {
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, name), new byte[] { 1 });
+            }
+            try {
+                var dto = PlateSolveEndpoints.BuildDatabaseStatus(Settings(dir), _ => true);
+
+                Assert.Multiple(() => {
+                    Assert.That(dto.ConfiguredPath, Is.EqualTo(dir));
+                    Assert.That(dto.EffectivePath, Is.EqualTo(dir));
+                    Assert.That(dto.FileCount, Is.EqualTo(3));
+                    Assert.That(dto.Databases, Is.EqualTo(D80AndW08));
+                    Assert.That(dto.SolverPath, Is.EqualTo("/usr/bin/astap_cli"));
+                    Assert.That(dto.SolverFound, Is.True);
+                });
+            } finally {
+                System.IO.Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public void DatabaseStatus_reports_an_empty_directory_as_no_database() {
+            // The .deb's tmpfiles entry creates /var/lib/astap empty: the DEPLOY.md step-3 state.
+            var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            try {
+                var dto = PlateSolveEndpoints.BuildDatabaseStatus(Settings(dir), _ => false);
+
+                Assert.Multiple(() => {
+                    Assert.That(dto.ConfiguredPath, Is.EqualTo(dir));
+                    Assert.That(dto.EffectivePath, Is.Null);
+                    Assert.That(dto.FileCount, Is.Zero);
+                    Assert.That(dto.Databases, Is.Empty);
+                    Assert.That(dto.SolverFound, Is.False);
+                });
+            } finally {
+                System.IO.Directory.Delete(dir);
+            }
+        }
+
+        [Test]
+        public void DatabaseStatus_handler_reads_the_active_profile() {
+            var store = new InMemoryProfileStore();
+            var missing = "/nonexistent/ara-astap-" + Guid.NewGuid().ToString("N");
+            store.PutPlateSolveSettings(Settings(missing));
+
+            var result = PlateSolveEndpoints.GetDatabaseStatus(store);
+
+            Assert.That(result, Is.InstanceOf<Microsoft.AspNetCore.Http.HttpResults.Ok<PlateSolveDatabaseStatusDto>>());
+            var dto = ((Microsoft.AspNetCore.Http.HttpResults.Ok<PlateSolveDatabaseStatusDto>)result).Value!;
+            Assert.That(dto.ConfiguredPath, Is.EqualTo(missing));
+            Assert.That(dto.EffectivePath, Is.Null);
+            Assert.That(dto.FileCount, Is.Zero);
+        }
     }
 }

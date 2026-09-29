@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/plate_solve_database_api.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -64,6 +65,8 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
     try {
       await ref.read(plateSolveSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
+      // The index path or solver path may have changed: re-read the status.
+      ref.invalidate(plateSolveDatabaseStatusProvider);
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
@@ -123,6 +126,7 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
               ref.read(plateSolveSettingsProvider).indexDownloadPath,
           parse: n.setIndexDownloadPath,
         ),
+        const _StarDatabaseStatus(),
         const SettingsSectionHeader('Solving parameters'),
         EditableNumberRow(
           label: 'Search radius (°)',
@@ -210,6 +214,75 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
         // Save lives in the settings-shell header (PanelSaveRegistration) —
         // fixed chrome, always visible, no scrolling to find it.
       ],
+    );
+  }
+}
+
+/// #1121 — whether the daemon has an ASTAP star database where the solver will
+/// look. Without one every solve fails with ASTAP exit 32 and, before this, only
+/// the daemon log said why. Unknown (offline, or a daemon older than the
+/// status route) is a normal state here, never an error.
+class _StarDatabaseStatus extends ConsumerWidget {
+  const _StarDatabaseStatus();
+
+  static const _label = 'Star database';
+  static const _unknown =
+      "Unknown (not connected, or the rig's server is too old to report it)";
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(plateSolveDatabaseStatusProvider);
+    return status.when(
+      loading: () => const SettingsRow(label: _label, value: 'Checking...'),
+      // The provider maps every failure to null; this is belt and braces.
+      error: (_, _) => const SettingsRow(label: _label, value: _unknown),
+      data: (s) {
+        if (s == null) {
+          return const SettingsRow(label: _label, value: _unknown);
+        }
+        final errorStyle = Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: Theme.of(context).colorScheme.error);
+        final names = s.databases.map((d) => d.toUpperCase()).join(', ');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (s.hasDatabase)
+              SettingsRow(
+                label: _label,
+                value: '${s.fileCount} files found in ${s.effectivePath}'
+                    '${names.isEmpty ? '' : ' ($names)'}',
+              )
+            else ...[
+              SettingsRow(
+                label: _label,
+                value: 'No star database in ${s.configuredPath}',
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Every plate solve will fail until one is installed. '
+                  'Download the D80 database into this folder on the rig '
+                  '(DEPLOY.md step 3, about 1.7 GB), or point the index '
+                  'path at a folder that has one.',
+                  style: errorStyle,
+                ),
+              ),
+            ],
+            if (!s.solverFound)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  s.solverPath.isEmpty
+                      ? 'No solver path set'
+                      : 'Solver not found at ${s.solverPath}',
+                  style: errorStyle,
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

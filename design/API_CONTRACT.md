@@ -265,3 +265,17 @@ The card now keeps a known device's card while it is not live: name, state chip,
 **Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (`RemoveDeviceAsync`); `I{Type}Service.ForgetAsync`.
 
 **Related:** `DELETE /switch/{id}` (§45); `DELETE …/remembered` (§52.1); the per-switch `POST /switch/{id}/connect` entry above.
+
+---
+
+### 2026-09-29 — #1121 star-database status: `GET /api/v1/platesolve/database`
+
+**Endpoint(s) or area:** `GET /api/v1/platesolve/database` (new, read-only); Settings → Plate solving.
+
+**Decision:** report `{ configured_path, effective_path, file_count, databases, solver_path, solver_found }` for the active profile. `effective_path` is the index path when it holds files, else null: the same rule `ASTAPSolver` applies before passing `-d` (`AstapStarDatabase.EffectiveLocation`), so the panel says what a solve will actually use. `databases` lists the abbreviations read from ASTAP's file names (`d80_0101.1476` → `d80`). The client treats a 404 (a daemon older than this route), no connection or any other failure as "unknown", never as an error.
+
+**Reasoning:** a fresh install that skipped the DEPLOY.md star-database step fails every solve with ASTAP exit 32, and only the daemon log said why. Folding this into `GET /profile/plate-solve` was the alternative, but that route round-trips a settings DTO the client PUTs back; a computed, file-system-backed status does not belong in it.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/PlateSolveEndpoints.cs` (`GetDatabaseStatus`); `PlateSolveDatabaseStatusDto`.
+
+**Related:** §18.I of PORT_PLAYBOOK.md; #1094 (`-d` wiring); the `-D` selection in `AstapStarDatabase.Select`.
