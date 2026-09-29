@@ -12418,14 +12418,14 @@ GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.
 |---|---|---|---|---|
 | **macOS** (universal: arm64 + x86_64) | `OpenAstroAra-{version}-macos.dmg` | `macos-14` (arm64; lipo's the x86_64 binary in) | `flutter build macos --release` → `create-dmg` wrap | ~80 MB |
 | **Windows** (x64) | `OpenAstroAra-{version}-windows-x64.zip` | `windows-2022` | `flutter build windows --release` → 7-zip the `build\windows\runner\Release\` tree | ~60 MB |
-| **Linux** (x86_64, Wayland only) | format pending #1203 (the AppImage plan is superseded) | `ubuntu-24.04`, pinned (glibc ≤ 2.39) | `flutter build linux --release` | ~80 MB |
+| **Linux** (x86_64 AppImage) | `OpenAstroAra-{version}-linux-x86_64.AppImage` | `ubuntu-22.04` | `flutter build linux --release` → `appimagetool` wrap | ~80 MB |
 
 **Why these specific runner images:**
 - `macos-14` is Apple Silicon (M1) — native arm64 builds + can cross-compile x86_64 via Xcode toolchain
 - `windows-2022` has all the Visual Studio C++ runtime bits Flutter Windows builds need
-- `ubuntu-24.04` (pinned, never `ubuntu-latest`) keeps the glibc floor at 2.39, the lowest of the supported set (Ubuntu 24.04 LTS)
+- `ubuntu-22.04` for the AppImage gives broad glibc compatibility (matches FUSE 2 era; AppImages built on 24.04 break on 22.04 user machines)
 
-**Linux client target (decided 2026-09-29, supersedes the AppImage/22.04 plan below):** x86-64 only, **Wayland only** (no X11). Supported and tested on one distro per family: Ubuntu 24.04 LTS (GNOME) and Kubuntu 24.04 (Plasma), Fedora KDE (current release), and Arch (Plasma). Other distros may work but are not tested or supported. The server is unaffected (arm64 Debian `.deb`, §34). Tracking: #1204; the packaging format is decided in #1203.
+**No Linux .deb, no Flatpak, no Snap for the initial release.** AppImage covers Linux without distro fragmentation; native package formats are future if users ask.
 
 **No Apple Silicon-only or Intel-only macOS variants.** Universal binary keeps the download story one-link-per-OS.
 
@@ -12480,8 +12480,6 @@ Install pattern: user unzips anywhere (typically `C:\Program Files\OpenAstro Ara
 **SmartScreen warning is expected** — see §75.5.
 
 ### 75.4 Linux — AppImage via `appimagetool`
-
-> **Superseded 2026-09-29.** Kept for history; the Linux client is x86-64 + Wayland only and its format is being decided in #1203 (see §75.1).
 
 ```yaml
 - name: Build AppImage
