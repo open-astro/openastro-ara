@@ -12423,9 +12423,9 @@ GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.
 **Why these specific runner images:**
 - `macos-14` is Apple Silicon (M1) — native arm64 builds + can cross-compile x86_64 via Xcode toolchain
 - `windows-2022` has all the Visual Studio C++ runtime bits Flutter Windows builds need
-- `ubuntu-24.04` (pinned, never `ubuntu-latest`) keeps the glibc floor at 2.39, the lowest of the supported set (RHEL/Alma/Rocky 10)
+- `ubuntu-24.04` (pinned, never `ubuntu-latest`) keeps the glibc floor at 2.39, the lowest of the supported set (Ubuntu 24.04 LTS)
 
-**Linux client target (decided 2026-09-29, supersedes the AppImage/22.04 plan below):** x86-64 only, **Wayland only** (no X11), any 64-bit distro. Supported and tested: Debian 13, Ubuntu 24.04+, Fedora (current two), RHEL/Alma/Rocky 10 with EPEL, Arch, Manjaro/EndeavourOS, on GNOME and KDE Plasma. The server is unaffected (arm64 Debian `.deb`, §34). Tracking: #1204; the packaging format is decided in #1203.
+**Linux client target (decided 2026-09-29, supersedes the AppImage/22.04 plan below):** x86-64 only, **Wayland only** (no X11). Supported and tested on one distro per family: Ubuntu 24.04 LTS (GNOME) and Kubuntu 24.04 (Plasma), Fedora KDE (current release), and Arch (Plasma). Other distros may work but are not tested or supported. The server is unaffected (arm64 Debian `.deb`, §34). Tracking: #1204; the packaging format is decided in #1203.
 
 **No Apple Silicon-only or Intel-only macOS variants.** Universal binary keeps the download story one-link-per-OS.
 
