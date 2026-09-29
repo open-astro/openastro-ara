@@ -59,6 +59,11 @@ namespace OpenAstroAra.Test {
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
+            // OneTimeSetUp's Assert.Ignore (no OmniSim) fires before _profileDir is set, and
+            // Directory.Delete("") throws ArgumentException, which failed the run with every test green.
+            if (_profileDir.Length == 0) {
+                return;
+            }
             try { Directory.Delete(_profileDir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
 
