@@ -33,7 +33,7 @@ namespace OpenAstroAra.Server.Services;
 /// (never §58.12 user activity). One reaction per disconnect episode — the latch
 /// clears on the next successful connect. <c>GuiderRetryTimeoutSec</c> is
 /// deliberately not consumed here: a grace window only makes sense once the §63.3
-/// ARA-client auto-reconnect exists (tracked in PORT_TODO); today the client never
+/// ARA-client auto-reconnect exists (tracked in the P1–P5 issue backlog); today the client never
 /// reconnects on its own, so waiting would only mean more unguided frames.
 /// </summary>
 public sealed partial class GuiderService {
@@ -282,7 +282,7 @@ public sealed partial class GuiderService {
     // §42.5 — an observed reconnect resolves this guider's open disconnect rows (the same
     // semantics EquipmentEventPublisher gives Alpaca devices). The camera-drop row (link
     // still up) also closes here — its true recovery signal needs the guider#57 structured
-    // reconnect events (tracked, ROADMAP part 4), and closing on the next guider connect is
+    // reconnect events (#1191), and closing on the next guider connect is
     // the conservative approximation until then.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort fault-log resolve on a fire-and-forget task; any store fault is logged. Log-and-recover boundary.")]

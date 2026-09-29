@@ -747,7 +747,7 @@ Package:        SQLitePCLRaw.lib.e_sqlite3 3.53.3
 Authors:        Eric Sink
 Copyright:      Copyright 2014-2026 SourceGear, LLC
 License:        Apache-2.0
-License source: https://github.com/ericsink/SQLitePCL.raw (SQLitePCLRaw is Apache-2.0; the bundled SQLite engine is public domain). This version is pinned over the bundle's transitive pick for CVE-2025-6965 — see design/PORT_TODO.md.
+License source: https://github.com/ericsink/SQLitePCL.raw (SQLitePCLRaw is Apache-2.0; the bundled SQLite engine is public domain). This version is pinned over the bundle's transitive pick for CVE-2025-6965 — see PORT_TODO.
 Project:        https://sqlite.org/
 
 ------------------------------------------------------------------------

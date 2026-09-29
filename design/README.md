@@ -1,46 +1,50 @@
-# design/ — the port's working docs
+# design/ — the spec and the process rules
 
-This directory is the OpenAstro Ara project's internal design record: the product spec, the
-process rules, the live work queue, and the append-only logs that explain *why* things are the
-way they are. Nothing in here ships to users (user-facing docs live in [`../docs/`](../docs/)).
+Three living documents remain here. Nothing in this directory ships to users (user-facing docs live
+in [`../docs/`](../docs/)).
 
-## The documents
-
-| Doc | What it is | How it's maintained |
-|---|---|---|
-| [`PORT_PLAYBOOK.md`](PORT_PLAYBOOK.md) | **The product spec.** ~12,800 lines, addressed by `§` numbers cited throughout the code, PRs, and every other doc. Has its own Table of Contents and the **"Port completion status — section checklist"** (✅/🟡/⬜/🚫 per §section) near the top. | User-authoritative. Feature PRs flip their §checklist marker; substance changes are the maintainer's call. |
-| [`ROADMAP.md`](ROADMAP.md) | **The design path.** The single consolidated list of everything remaining — in-flight epic, release gates, dependency-ordered workstreams, the themed feature backlog, verify passes, user-parked decisions, and a complete small-follow-ups appendix. Replaced the version-bucketed roadmap (playbook §55) on 2026-07-09. | Feature PRs strike/update their items; the appendix indexes `PORT_TODO.md` rather than duplicating it. |
-| [`PORT_TODO.md`](PORT_TODO.md) | **The work queue.** Every deferred item, review follow-up, parked blocker, and `TODO(port)` marker. Split in two: **open + mixed sections on top**, a "✅ Done / obsolete — archived entries" half below. | Every PR that defers something logs it here; fully-closed sections move (verbatim) below the archive line. |
-| [`PORT_PROGRESS.md`](PORT_PROGRESS.md) | **The per-PR narrative.** A short accurate "Current" block (phase / last merged / in progress / next) on top of the full phase-by-phase history. | The port-driver skill updates "Current" + appends a Completed entry on every PR. |
-| [`PORT_DECISIONS.md`](PORT_DECISIONS.md) | **Append-only decision log** — every non-obvious call, with date, reason, and a file/line pointer to where it's encoded. | Append only. Never edit prior entries. |
-| [`API_CONTRACT.md`](API_CONTRACT.md) | **Append-only API reasoning log** for the REST/WS surface. The contract itself is `OpenAstroAra.Server/openapi.yaml`; this file records *why* wire shapes look the way they do. | Append only. One entry per endpoint/wire-shape decision. |
-| [`COMMIT-PR-RULES.md`](COMMIT-PR-RULES.md) | **The process rules**: branch naming, PR rhythm, the §19.1 merge-gate (all checks green + review *body* clean), review-loop discipline. Referenced by CI, the PR template, and the registry-gate scripts. | Updated when the maintainer changes process; dated workflow notes at the top. |
-| [`PHD2-GAP.md`](PHD2-GAP.md) | **External-integration tracker** for the `openastro-guider` daemon: the gap analysis that produced upstream PR open-astro/openastro-guider#57, and the ARA-side adoption work owed once it merges. | Status header updated as the upstream PR progresses. |
-| [`TONIGHT_SKY.md`](TONIGHT_SKY.md) | **Feature spec (shipped)** — the §36.8 equipment-aware Tonight's Sky planner. Documents the live scoring weights/thresholds (`TonightSkyService` points here as rationale); deferred tails noted inline. | Reference; touch only when the scoring model changes. |
-| [`NEXTGEN_PLANNING.md`](NEXTGEN_PLANNING.md) | **Feature spec (shipped, slices 1–4)** — the Glover Optimal-Sub exposure intelligence. Still-deferred forks recorded in its status header (§6 native sequence model, adaptive/runtime Glover, §3 star-detectability bounds). | Reference; status header tracks slices. |
-| [`archive/`](archive/) | **Closed-out docs**, kept verbatim for the historical record: [`GAPS-ARA.md`](archive/GAPS-ARA.md) (the May-2026 design-phase gap tracker — fully resolved into the playbook) and [`HANDOFF.md`](archive/HANDOFF.md) (a June-2026 agent-handoff snapshot, long superseded). | Frozen. Don't add new content; each carries an ARCHIVED banner saying where its living concerns went. |
+| Doc | What it is |
+|---|---|
+| [`PORT_PLAYBOOK.md`](PORT_PLAYBOOK.md) | **The product spec.** Addressed by `§` numbers cited throughout the code, the PR reviews and the process rules. Never renumber. |
+| [`API_CONTRACT.md`](API_CONTRACT.md) | **The wire-shape reasoning log** (append-only). `OpenAstroAra.Server/openapi.yaml` is incomplete (#1131), so this log plus the endpoint sources are the contract; append an entry in the PR that adds or changes a wire shape. |
+| [`COMMIT-PR-RULES.md`](COMMIT-PR-RULES.md) | **The process rules**: branch naming, PR rhythm, the §19.1 merge gate (all checks green + review body clean), review-loop discipline. Referenced by CI, the PR template and the registry-gate scripts. |
 
 ## Where "what's left" lives
 
-There is deliberately **no duplicated status rollup here** — these four sources are authoritative,
-each at a different altitude:
+**GitHub issues, labelled `P1`–`P5`** (`P1` = blocks the first release or breaks a real install;
+`P5` = parked on a maintainer decision or speculative). Filter:
+`gh issue list --label P1` … `--label P5`.
 
-1. **Right now / next PR** → [`PORT_PROGRESS.md`](PORT_PROGRESS.md) → the "Current" block.
-2. **The open work queue** (deferred items, follow-ups, parked blockers) → [`PORT_TODO.md`](PORT_TODO.md), everything **above** its "Done / obsolete" archive line.
-3. **Section-level completion** across all 77 spec sections → `PORT_PLAYBOOK.md` → **"Port completion status — section checklist"** (near the top).
-4. **Everything remaining, as a design path** (workstreams, feature backlog, rationale) → [`ROADMAP.md`](ROADMAP.md).
+## Retired on 2026-09-28
 
-Externally-gated threads: the first public release tag (`v0.0.1-ara.1`) + RPi smoke test are **user/hardware-gated**
-(see PORT_PROGRESS "Current"); guider-daemon event adoption is gated on upstream
-open-astro/openastro-guider#57 (see [`PHD2-GAP.md`](PHD2-GAP.md)).
+The port is feature-complete. The status rollups and logs that tracked it were retired the day the
+open work moved to issues #1118–#1185, because they had drifted from the code and were misleading.
+They are in git history before that date: `ROADMAP.md`, `PORT_TODO.md`, `PORT_PROGRESS.md`,
+`PORT_DECISIONS.md` (append-only decision log), `PHD2-GAP.md`, `TONIGHT_SKY.md`,
+`NEXTGEN_PLANNING.md`, `INTEGRATION_BUDGET.md`, `PLANNING_REDESIGN.md`, `RUN_REDESIGN.md`,
+`AUDIT.MD` and `archive/` (`GAPS-ARA.md`, `HANDOFF.md`). New decisions are recorded in the PR that
+makes them.
 
-## Conventions
+**Citation keys.** Code comments and the playbook still cite these files by name — `PORT_TODO`,
+`PORT_DECISIONS 2026-07-15`, `NEXTGEN §3.1`, `ROADMAP part 4` / `ROADMAP §8`, `PHD2-GAP gap 3`,
+`AUDIT #H3`, `TONIGHT_SKY`, `INTEGRATION_BUDGET`, `GAPS-ARA`. Each resolves at the last commit
+that had them, `51cba5c40`:
+`https://github.com/open-astro/openastro-ara/blob/51cba5c40/design/<FILE>.md` (`archive/` for
+`GAPS-ARA` / `HANDOFF`, `AUDIT.MD` upper-case). A citation is a pointer to the reasoning, not a live
+task; open work is only what the `P1`–`P5` issues say.
 
-- **§ numbers** always refer to `PORT_PLAYBOOK.md` sections — the coordinate system for the whole
-  project. Never renumber.
-- The two **append-only logs** (`PORT_DECISIONS.md`, `API_CONTRACT.md`) grow at the bottom; prior
-  entries are never edited, even when later superseded (supersede with a new entry).
-- CI's `sanity` job verifies `PORT_PLAYBOOK.md`, `COMMIT-PR-RULES.md`, and this `README.md` exist
-  and are non-empty.
-- When a doc's job is finished, it moves to `archive/` with a dated banner — it is not deleted
-  (these files are cited by PR discussions, commit messages, and each other).
+## Standing decisions
+
+Carried over from the retired `PORT_DECISIONS.md` because they still govern new work:
+
+- **Use each vendored engine's native capabilities first; fill only the gap** (2026-06-26). For
+  Stellarium Web, the guider, ASTAP and the NINA-derived code, map and use what the engine already
+  does before writing custom code, and keep the custom part minimal.
+- **Planning compute belongs in the client; the Pi keeps execution** (2026-07-15). Target ranking,
+  optimal-sub math, FOV/framing and filter advice live in the client, which must work with no Pi
+  (§2). A new server-side planning endpoint needs a stated justification, such as feeding the
+  execution engine directly.
+- **Permanent non-goals** are listed in `PORT_PLAYBOOK.md` §55.
+
+CI's `sanity` job verifies `PORT_PLAYBOOK.md`, `COMMIT-PR-RULES.md` and this `README.md` exist and
+are non-empty.

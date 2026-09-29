@@ -3,7 +3,7 @@
 # HYG snapshot (hygdata_v40.csv.gz, sha256 8e3ff9e67445e558a759b117910850cff1b1d4d4
 # 92f45f715c2ee2db3d869bac — the same digest DataManagerService pins for hyg-stars).
 #
-# Method (design/NEXTGEN_PLANNING.md §3.1, grid + trigger pinned in #663):
+# Method (NEXTGEN_PLANNING §3.1, grid + trigger pinned in #663):
 #   * Pool star counts over ALL galactic longitudes in a ±5° |b| band around each of
 #     the 7 fixed latitudes {0,10,20,30,50,70,90}° (pooling averages out spiral-arm /
 #     cluster clumping a smooth model shouldn't capture).

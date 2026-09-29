@@ -8,7 +8,7 @@ ensures alignment with the design docs under `design/` and avoids duplicate work
 
 ## Ways to contribute
 
-- Fixing bugs and implementing features (see `design/PORT_TODO.md` for the tracked queue)
+- Fixing bugs and implementing features (the tracked queue is the GitHub issues labelled `P1`–`P5`)
 - Improving documentation (`docs/USER_GUIDE.md`, `docs/RUNNING.md`, `docs/DEPLOY.md`)
 - Reporting bugs — ideally with the in-app bundle (see below)
 - Reporting device quirks (the `driver-quirk-report` issue template)
@@ -31,7 +31,7 @@ OpenAstroAra.{Fits,Stretch}/   ← Ara-original imaging libraries (FITS IO, disp
 OpenAstroAra.Test/             ← NUnit server tests
 OpenAstroAra.TestHarness/      ← §42.2 virtual-observatory bench (fault-injection fakes)
 client/openastroara_client/    ← the Flutter client (AGPL-3.0)
-design/                        ← the port playbook + append-only decision/TODO logs
+design/                        ← the product spec (playbook), API contract log, PR rules
 ```
 
 Read `design/PORT_PLAYBOOK.md` (the product spec, addressed by § numbers you'll see all over the

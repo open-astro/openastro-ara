@@ -1,4 +1,4 @@
-/// §Integration Budget (design/INTEGRATION_BUDGET.md) — "how many hours does
+/// §Integration Budget (INTEGRATION_BUDGET) — "how many hours does
 /// this target need from MY sky?", the last objective link in the planning
 /// chain. Pure math; every constant carries its provenance grade:
 ///

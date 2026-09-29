@@ -54,8 +54,10 @@ NONE: frozenset = frozenset()
 # moment one is not prose or an image (#1024). Add the extension there, with
 # a reason, before adding a new kind of file here.
 #
-# `.claude/` is here on purpose (#1024 item 4, PORT_DECISIONS.md 2026-09-20):
-# it holds the merge gate's own rulebook, but no CI job has ever read it,
+# `.claude/` is here on purpose (#1024 item 4, PORT_DECISIONS 2026-09-20):
+# it holds the merge gate's own rulebook, and the only CI that reads it is
+# the Sanity job's script tests (test_port_driver_guards.py and this file's
+# tests pin the recipes), which run on every PR regardless of this list;
 # `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
 # change is the review, not the build matrix. Skipping the two job-gated
 # required contexts (server-build, registry-gate) and the three client-test

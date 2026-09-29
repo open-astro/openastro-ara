@@ -5,6 +5,17 @@ import 'package:flutter/material.dart';
 /// Material's default dark theme is too light/colorful for an observatory
 /// app used in the dark — these tokens give us the muted dark surface +
 /// saturated status accents that match NINA's information-dense layout.
+///
+/// Consistency ground rules (from the retired RUN_REDESIGN design doc; they
+/// apply app-wide, not just to the Run tab):
+/// * One spacing scale — 8 / 12 / 16 / 24 — and the Options-shell type ramp.
+/// * Accents only through semantic roles (state chips, category hues,
+///   destructive actions), never as decoration.
+/// * Copy in product voice: verbs, sentence case, no NINA or daemon enum
+///   names leaking into the UI.
+/// * Every state (idle / offline / draft / running / paused / attention /
+///   failed / done) has a designed look; nothing falls back to grey text.
+/// * Warnings pair icon + colour + text, never colour alone.
 class AraColors {
   // Backgrounds
   static const bgPrimary = Color(0xFF1A1A1A);

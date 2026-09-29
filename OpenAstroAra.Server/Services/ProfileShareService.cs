@@ -233,7 +233,7 @@ public sealed class ProfileShareService : IProfileShareService {
     /// The categories the export strips (§70.1) — surfaced to the importer so they
     /// know what they must supply themselves after importing the template. This is a
     /// hand-maintained mirror of what ExportAsync actually strips; keep the two in
-    /// step if the strip set changes (drift risk tracked in design/PORT_TODO.md).
+    /// step if the strip set changes (drift risk tracked in the P1–P5 issue backlog).
     private static readonly IReadOnlyList<string> DroppedFields = new[] {
         "Equipment (camera / mount / focuser / …) — re-select in the wizard",
         "Save directory + filename template",

@@ -38,7 +38,7 @@ namespace OpenAstroAra.Server.Services {
     /// manifests, and <see cref="ResolveSnapshotFilePathAsync"/> serves a snapshot for download. The destructive
     /// half — <see cref="RestoreZipAsync"/> (overwrites live config) and the <see cref="GetCloneStatusAsync"/>
     /// restore-progress state machine — is deferred to §43-2 and still returns the safe placeholder behaviour
-    /// (accept + report idle), documented on each method and tracked in <c>design/PORT_TODO.md</c>.
+    /// (accept + report idle), documented on each method and tracked in the P1–P5 issue backlog.
     ///
     /// <para>Scope choice (§43-1): a backup covers the two small config areas only — frame-metadata and log areas
     /// from the §43 selector set arrive with the restore work in §43-2. <see cref="CreateZipAsync"/> completes the

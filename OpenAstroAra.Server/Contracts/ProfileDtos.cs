@@ -429,9 +429,8 @@ public sealed record PolarAlignSettingsDto(
 /// <c>ReducerFactor</c> is 1.0 for none, 0.8 for a 0.8× reducer, 2.0 for a
 /// 2× barlow. Sensor dimensions are cached here on first camera connect
 /// (PORT_DECISIONS §36/§25.5) so framing works with the camera
-/// disconnected/offline; the user can override in Settings. NOTE: the
-/// on-first-connect auto-population is a FUTURE slice — this section is the
-/// storage + API foundation only.
+/// disconnected/offline; the user can override in Settings. The
+/// on-first-connect auto-population is <c>CameraService.MaybeAutoPopulateOptics</c>.
 /// <para>NEXTGEN §4 — <c>ApertureMm</c> (objective diameter) feeds the Optimal-Sub
 /// sky-flux term (aperture area); it is telescope-owned like focal length, so camera
 /// auto-population never touches it. 0 = unset (optional ctor default keeps a

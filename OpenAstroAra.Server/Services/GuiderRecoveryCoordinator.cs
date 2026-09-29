@@ -43,7 +43,7 @@ public enum GuiderRecoveryOutcome {
 ///   <item><c>unknown</c> → not a systemd host; leave the client's Error state and stop.</item>
 /// </list>
 /// On exhaustion it raises a §42.2 Critical notification + §51 Red diagnostic. Resuming guiding /
-/// reconnecting ARA's client + the mid-sequence fault flow are deferred follow-ups (PORT_TODO).
+/// reconnecting ARA's client + the mid-sequence fault flow are deferred follow-ups (the P1–P5 issue backlog).
 ///
 /// All I/O is behind <see cref="IGuiderProcessSupervisor"/>; the backoff delay is injected, so the
 /// whole tree is unit-testable with a fake supervisor and a no-op delay.

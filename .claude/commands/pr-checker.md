@@ -225,7 +225,7 @@ defer a Defect to a follow-up issue and do not decline one as low priority unles
 Handle the **Notes** by the classification rules in the `✅ Approved` section below: a mechanical
 note goes into the same round's push, a judgment note or one the bot marks "out of scope, open an
 issue" goes to the wrap-up and is never pushed (out-of-scope items get an entry in
-`design/PORT_TODO.md` per COMMIT-PR-RULES.md, which is a wrap-up line, not a second push). A note
+a GitHub issue per COMMIT-PR-RULES.md — `design/PORT_TODO.md` was retired 2026-09-28 — which is a wrap-up line, not a second push). A note
 is never a reason for a second push. Each push restarts a full fresh review.
 
 **Before writing a line**, fetch the head branch: contributors watch the same bot and often push
@@ -260,7 +260,7 @@ The bot is the second pair of eyes, not the test suite. For **every** Defect, in
      plus `dotnet build OpenAstroAra.<TouchedProject>/OpenAstroAra.<TouchedProject>.csproj -c Release`
      for each touched domain project (Core / Astrometry / Equipment / Image / Profile /
      PlateSolving / Test). Not the whole solution: `OpenAstroAra.Sequencer` is still blocked on
-     `NINA.WPF.Base` (tracked in `design/PORT_TODO.md`).
+     `NINA.WPF.Base` (tracked as a GitHub issue; `design/PORT_TODO.md` was retired 2026-09-28).
    - **Tests**: `dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj` when C# under test changed;
      the `Analyzer gate (full solution, warnings = errors)` job is the CI counterpart, so a new
      warning is a failure, not a nit.
@@ -319,7 +319,7 @@ a user-visible change, add the `CHANGELOG.md` `[Unreleased]` bullet in the same 
 pushing, go back to Step 1 and Step 2.
 
 **Never post PR comments replying to the bot** on an ordinary finding. A finding is either a change
-to the code, skill or docs (push it), an out-of-scope item tracked in `design/PORT_TODO.md`, or, if
+to the code, skill or docs (push it), an out-of-scope item filed as a GitHub issue (with a `P1`–`P5` label; `design/PORT_TODO.md` was retired 2026-09-28), or, if
 it is clearly wrong and nothing can be changed to satisfy it, a hard stop for the user to rule on.
 Explanations belong in the commit message, not in the PR thread. If the same issue ping-pongs more
 than twice on one thread, post `Deferring this to human review — see comments above` and stop
@@ -432,8 +432,9 @@ Then:
   rule exists for. A `chore/*`, `rules-*`, contributor or Dependabot PR is never a phase
   boundary, so for those skip this paragraph rather than stopping on a question that has no
   answer. For a `phase/*` or `prep-*` head, decide whether this PR closes a phase or
-  sub-phase: read `design/PORT_PROGRESS.md` and the COMMIT-PR-RULES.md sub-split tables, exactly
-  as §3b does. If it does and the probe found no
+  sub-phase: the port is complete and `design/PORT_PROGRESS.md` was retired 2026-09-28, so the
+  answer is "no" unless the PR itself says it closes a phase (check the COMMIT-PR-RULES.md
+  sub-split tables and the PR body), exactly as §3b does. If it does and the probe found no
   `phase-*` tag, run the §3b tag block from `.claude/skills/port-driver/SKILL.md` verbatim —
   `git fetch origin pull/<N>/head`, tag the `headRefOid`, both pre-push verifications, then
   `git push origin <tag>` (the named ref, never `--tags`) — and only then merge with `--merge`.
@@ -543,8 +544,8 @@ anything unmerged, which is the point). Confirm `git branch -r` shows no merged 
 behind on origin.
 
 One table: PR, title, rounds, final verdict, merge SHA (or "left open: reason"). Under it: any
-judgment notes left unpushed, any notes from the post-cleanup approval, any `design/PORT_TODO.md`
-entries added, and any contributor commits that landed mid-run, one line each.
+judgment notes left unpushed, any notes from the post-cleanup approval, any GitHub issues
+opened for out-of-scope findings, and any contributor commits that landed mid-run, one line each.
 
 **Retrospective, one line per PR:** which bot findings were about code pushed earlier in the same
 loop (a fix that introduced the next finding), and what probe would have caught each before the

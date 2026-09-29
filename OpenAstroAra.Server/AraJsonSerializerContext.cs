@@ -23,8 +23,9 @@ namespace OpenAstroAra.Server;
 
 /// <summary>
 /// Phase 14a — System.Text.Json source-generated serializer context.
-/// Closes the long-running AOT-readiness gap tracked in PORT_TODO.md:
-/// <c>OpenAstroAra.Server.csproj</c> has <c>&lt;PublishAot&gt;true&lt;/PublishAot&gt;</c>
+/// Closes the long-running AOT-readiness gap tracked in PORT_TODO:
+/// <c>OpenAstroAra.Server.csproj</c> had <c>&lt;PublishAot&gt;true&lt;/PublishAot&gt;</c> at the time (AOT
+/// publishing is paused since the §38 orchestrator wiring — see the csproj comment)
 /// but until this PR there was no <see cref="JsonSerializerContext"/>,
 /// so <c>dotnet run</c> in Development mode would throw
 /// <c>System.NotSupportedException: JsonTypeInfo metadata for type

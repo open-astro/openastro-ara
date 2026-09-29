@@ -1,17 +1,24 @@
 ---
 name: port-driver
-description: Drive the openastro-ara port end-to-end — pick up the next sub-PR per design/COMMIT-PR-RULES.md, build, open the PR, poll the claude[bot] review, merge under the §19.1 gate, advance PORT_PROGRESS.md, repeat. Designed to be invoked under `/loop /port-driver` (autonomous, self-paced) so it survives disconnects.
+description: RETIRED 2026-09-28 — the port is complete; invoking it stops immediately. Open work is GitHub issues labelled P1–P5; drive PRs with /pr-checker. The body is kept because /pr-checker borrows its §3b tag block and scripts/tests/test_port_driver_guards.py pins its guards.
 ---
 
 # port-driver
+
+> **RETIRED 2026-09-28 — do not run the loop.** The port is feature-complete and the tracking
+> files this skill read (`PORT_PROGRESS.md`, `PORT_TODO.md`, `PORT_DECISIONS.md`) were retired to
+> git history. If invoked: post one line saying the port is done, point at
+> `gh issue list --label P1` … `--label P5` for open work and `/pr-checker` for driving PRs, and
+> **stop without calling `ScheduleWakeup`**. The procedure below is kept for reference only:
+> `/pr-checker` reuses the §3b tag block and `scripts/tests/test_port_driver_guards.py` pins the
+> §2/§5 git-state guards against this text.
 
 **You are driving the openastro-ara port autonomously.** The user is offline / may disconnect. Your job is to make forward progress every iteration without losing state. The canonical references are:
 
 - `design/PORT_PLAYBOOK.md` (~12k lines — read sections on demand, do not load whole)
 - `design/COMMIT-PR-RULES.md` (the rhythm + review loop + §19.1 merge-gate)
-- `design/PORT_PROGRESS.md` (current phase + last merged sub-PR — **always re-read on each loop iteration**, it's the source of truth)
-- `design/PORT_TODO.md` (out-of-scope review findings deferred)
-- `design/PORT_DECISIONS.md` (locked-in decisions)
+- GitHub issues labelled `P1`–`P5` (open work and deferred out-of-scope review findings; replaced `PORT_PROGRESS.md` / `PORT_TODO.md`)
+- `design/README.md` "Standing decisions" (the decisions still in force from the retired `PORT_DECISIONS.md`)
 
 Plus the user's auto-memory under `~/.claude/projects/-Users-joey-Documents-GitHub-openastro-ara/memory/` — if a `MEMORY.md` index exists there, re-check it each iteration and read any entry relevant to the merge gate. Treat the directory as possibly empty; it is an index, not a dependency.
 
@@ -21,7 +28,7 @@ Stop the loop (omit `ScheduleWakeup`) when any of these are true. Post a final s
 
 1. The user has explicitly paused work (a comment on an open PR saying "pause", "stop", "hold", or similar — check the most recent PR comments by `@joeytroy`).
 2. You hit a `Held for human review @joeytroy — <reason>` situation in two consecutive iterations on the same PR with no intervening successful work (the counter resets the moment any iteration produces a fix push, a CI pass, a reply to a review finding, or any other non-Held outcome).
-3. PORT_PROGRESS.md shows the port is complete (Phase 15 merged and `v0.0.1-ara.1` tagged).
+3. The port is complete — **true since 2026-09-28**, so this condition always fires (see the banner above).
 4. A `dotnet build` or pre-PR gate fails twice in a row on the same fix attempt (don't ping-pong).
 5. Git state is unexpectedly dirty or on an unknown branch (investigate, don't auto-recover).
 
@@ -39,7 +46,7 @@ Run in parallel:
 - `git status --short && git branch --show-current`
 - `git log -1 --oneline`
 - `gh pr list --state open --json number,title,headRefName,baseRefName,author,updatedAt`
-- Read `design/PORT_PROGRESS.md` (whole file — it's ≤200 lines)
+- `gh issue list --state open --label P1` (the retired `PORT_PROGRESS.md` used to be read here)
 
 If a `MEMORY.md` index is loaded, read any entry it lists that bears on merge authority or the review gate.
 
@@ -69,8 +76,8 @@ from origin has the matching authorship probe in §22.2 (#1033): run it, and a
 no-PR or foreign-author result is a Held, not a delete. Recognising a branch,
 adopting someone's PR on it, deleting it, and creating one are four different
 permissions. §5 still only ever *creates*
-`phase/…` — the phase naming is what `PORT_PROGRESS.md` and the
-`COMMIT-PR-RULES.md` sub-split tables are keyed on.
+`phase/…` — the phase naming is what the
+`COMMIT-PR-RULES.md` sub-split tables are keyed on (and the retired `PORT_PROGRESS.md` was).
 
 There is no promotion scenario: under the master-only model (playbook §22.0) the merge to `master` **is** the integration. A phase boundary is a tag, handled inside §3b at merge time, not a separate iteration.
 
@@ -223,7 +230,7 @@ gh pr list --head "$(git branch --show-current)" --state merged \
    the side.
 
 **(C) No PR in flight and there is work to start or continue** — either on `master` after a merge advanced the phase, or on an allowlisted branch that carries no unmerged work yet (the zero-commits-ahead case B hands over).
-→ Pick the next sub-PR per the COMMIT-PR-RULES.md table + PORT_PROGRESS.md, create the branch if you are not already on it, do the work (§5).
+→ Pick the next `P1`–`P5` issue, create the branch if you are not already on it, do the work (§5).
 
 **(D) Anything ambiguous (unknown branch, conflicting state, broken working tree).**
 → Stop. Post a status note to the user. Do not schedule another wake-up.
@@ -287,8 +294,8 @@ these. Waiting on a review that can never arrive would spin forever — see step
 
    A review with an empty Defects section is a pass — merge on it. Do not treat
    Notes as blocking, and do not fix them in the same PR when doing so would
-   widen it beyond its description; open an issue or append to
-   `design/PORT_TODO.md` instead.
+   widen it beyond its description; open a GitHub issue with a
+   `P1`–`P5` label instead.
 
 4. **For each unaddressed Defect:**
 
@@ -297,7 +304,7 @@ these. Waiting on a review that can never arrive would spin forever — see step
    | Trivial / nit / formatting | Fix, commit, push, reply `Fixed in <sha>` |
    | Real bug / correctness | Fix, commit, push, reply `Addressed in <sha>` |
    | Disagreement / contradicts playbook | Reply with reasoning + playbook §ref, no code change |
-   | Out-of-scope | Append entry to `design/PORT_TODO.md`, reply `Acknowledged — tracked in design/PORT_TODO.md` |
+   | Out-of-scope | Open a GitHub issue with a `P1`–`P5` label, reply `Acknowledged — tracked in #<issue>` |
 
    If the same issue ping-pongs >2× on the same thread, post `Deferring this to human review — see comments above` and stop touching that thread.
 
@@ -444,8 +451,7 @@ boundary, where the tag decides it**:
   ```
 
 **Phase boundary — tag first, then merge with `--merge`.** If this is the last
-PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables and
-PORT_PROGRESS.md), push the tag *before* merging, per playbook §22.1 step 4:
+PR of a phase (consult the COMMIT-PR-RULES.md sub-split tables), push the tag *before* merging, per playbook §22.1 step 4:
 
 ```shell
 # Name the ref. Do NOT assume what is checked out: §5 step 2 leaves the driver
@@ -540,7 +546,7 @@ already picks merge-commit "where per-commit granularity matters", and §22.3
 prescribes merge-commit for the phase-15 release PR for the same reason.
 (Checked on the repo: `allow_merge_commit: true`, and `master`'s protection
 allows merge commits. Note the control is a repository **ruleset** — see
-`design/PORT_DECISIONS.md` "master protection" — so re-verify there rather than
+`gh api repos/{owner}/{repo}/rulesets` — so re-verify there rather than
 in the classic branch-protection object.)
 
 Tagging before the merge also satisfies the §19.1 gate condition the driver is
@@ -558,14 +564,10 @@ git checkout master && git pull --ff-only
 
 Then go to scenario C next iteration.
 
-Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use.
-
-**Always fold it into a PR.** There is no direct-commit path for the driver —
+(The phase-progress file this step used to update was retired on 2026-09-28; there is no
+tracking-file edit any more. There is still no direct-commit path for the driver —
 not because the server would refuse it (it would not; see the safety net on
-admin bypass) but because it would bypass the §19.1 gate. Include the
-PORT_PROGRESS.md edit in the next sub-PR's commits so it reviews alongside the
-code work. If the tracking update is the only thing outstanding, it rides along
-with the next sub-PR rather than getting a PR of its own.
+admin bypass) but because it would bypass the §19.1 gate.)
 
 ### Step 4 — Open the PR (scenario B)
 
@@ -578,7 +580,7 @@ with the next sub-PR rather than getting a PR of its own.
    dotnet build OpenAstroAra.<TouchedProject>/OpenAstroAra.<TouchedProject>.csproj -c Release
    ```
 
-   **Why Server, not the whole solution:** per `OpenAstroAra.Server.csproj` comments, Server is the cross-platform daemon artifact (`net10.0`, AOT-published in Release) and is the only project CI grows into gating (Phase 4 expansion in `.github/workflows/ci.yml`). Inherited domain projects stay `net10.0-windows` with WPF until each is made cross-platform-clean per §26 / Phase 4+. The whole-solution build is currently blocked on `OpenAstroAra.Sequencer` (96 errors from `NINA.WPF.Base` references, tracked in `design/PORT_TODO.md` as a separate `phase-0.5p-followup-sequencer` pass). Once that lands, this minimum gate can widen back to `dotnet build OpenAstroAra.sln -c Release`.
+   **Why Server, not the whole solution:** per `OpenAstroAra.Server.csproj` comments, Server is the cross-platform daemon artifact (`net10.0`, AOT-published in Release) and is the only project CI grows into gating (Phase 4 expansion in `.github/workflows/ci.yml`). Inherited domain projects stay `net10.0-windows` with WPF until each is made cross-platform-clean per §26 / Phase 4+. The whole-solution build is currently blocked on `OpenAstroAra.Sequencer` (96 errors from `NINA.WPF.Base` references, tracked in PORT_TODO as a separate `phase-0.5p-followup-sequencer` pass). Once that lands, this minimum gate can widen back to `dotnet build OpenAstroAra.sln -c Release`.
 
    Non-zero exit = fix + retry once. Twice failing in a row = stop and notify user.
 
@@ -608,7 +610,7 @@ with the next sub-PR rather than getting a PR of its own.
 
 ### Step 5 — Start the next sub-PR (scenario C)
 
-1. Re-read PORT_PROGRESS.md "Next" section + the COMMIT-PR-RULES.md table to identify which sub-PR comes next.
+1. Pick the next issue from `gh issue list --label P1` (then P2 …); the retired `PORT_PROGRESS.md` "Next" section used to decide this.
 
 2. Get onto the branch (playbook §22.1 step 1). The branch may already exist —
    the zero-commits-ahead hand-off from scenario B leaves you standing on it,
@@ -714,7 +716,7 @@ with the next sub-PR rather than getting a PR of its own.
 - Never skip hooks (`--no-verify` is forbidden by §19.1).
 - Never amend a pushed commit (create new commits; the reviewer sees each push).
 - Never force-push to a sub-branch with an open PR unless rebasing on updated `master` and announcing it in a PR comment.
-- Don't refactor adjacent code outside the sub-PR's scope (track in `design/PORT_TODO.md` instead).
+- Don't refactor adjacent code outside the sub-PR's scope (open a `P1`–`P5` GitHub issue instead).
 - Don't add comments that just describe what the code does (per CLAUDE.md guidance).
 
 ### Step 6 — Phase boundary (reference only)
@@ -726,9 +728,8 @@ boundary involves, all of which happens inside §3b:
   integration.
 - The `phase-<N>-complete` tag is pushed onto the PR's head **before** the
   merge, and that PR merges with `--merge` so the tagged commit stays reachable.
-- `design/PORT_PROGRESS.md` moves the phase "In flight" → "Completed" and the
-  "Currently working on" / "Next" pointers are reset, folded into the next
-  sub-PR's commits.
+- (Historical: the retired `PORT_PROGRESS.md` moved the phase "In flight" → "Completed"; there is
+  no tracking-file edit any more.)
 
 ## Pacing (ScheduleWakeup)
 
@@ -764,7 +765,7 @@ That single line is enough — don't write multi-paragraph summaries each iterat
 
 - Do NOT run destructive git ops (`reset --hard`, `branch -D`, `clean -f`, force-push to `master`) without an explicit user instruction. One standing exception, from §19.1 "Local refs" (#1028): §5 step 2 may `branch -D` a *local* ref whose head is exactly the `headRefOid` of a PR merged under that name. Nothing else, and never on the remote.
 - Do NOT merge a PR whose CI is failing, whose findings are unresolved, or for which no `claude[bot]` review comment has been posted.
-- Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** `master` is governed by a repository **ruleset** (`PORT_DECISIONS.md` "master protection") that requires a PR for everyone *except* its bypass actors — repository admins, retained for hotfixes — and the driver runs under the maintainer's admin credentials. (Don't go looking for `enforce_admins`: that is classic branch protection, which this repo does not use.) A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
+- Do NOT touch `master` directly — only via merged PRs. **Do not rely on the server to stop you:** `master` is governed by a repository **ruleset** (check `gh api repos/{owner}/{repo}/rulesets`) that requires a PR for everyone *except* its bypass actors — repository admins, retained for hotfixes — and the driver runs under the maintainer's admin credentials. (Don't go looking for `enforce_admins`: that is classic branch protection, which this repo does not use.) A direct push would succeed and land an unreviewed commit outside the §19.1 gate. The driver must never use that bypass.
 - Do NOT modify `.husky/` or `.github/workflows/` as part of a feature sub-PR. Those go in their own infra sub-PRs.
 - Do NOT update `design/PORT_PLAYBOOK.md` rules autonomously — that's user-authoritative.
 - Do NOT spawn cloud agents (no `/ultrareview`, no `/schedule`) from within the loop — they cost extra and the user runs them manually.

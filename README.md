@@ -8,7 +8,7 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 
 ## Status
 
-**Pre-release** — **v0.0.1 is feature-complete and pending its first tagged release (`v0.0.1-ara.1`)**; v0.1.0 feature work is already underway. Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the full port plan and `design/PORT_PROGRESS.md` for current status.
+**Pre-release** — **v0.0.1 is feature-complete and pending its first tagged release (`v0.0.1-ara.1`)**; v0.1.0 feature work is already underway. Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the product spec; open work is tracked as GitHub issues labelled `P1`–`P5`.
 
 ## Lineage
 
@@ -36,7 +36,7 @@ openastro-ara/                       (this repo)
 
 ## License
 
-Split by directory (see `NOTICE.md` and `design/PORT_DECISIONS.md` 2026-07-01):
+Split by directory (see `NOTICE.md`; the 2026-07-01 decision is `PORT_DECISIONS 2026-07-01`, resolved via `design/README.md`):
 
 - **Server/daemon and everything else:** [Mozilla Public License 2.0](LICENSE.txt) — same as upstream NINA, whose derived files keep their MPL lineage.
 - **Client (`client/openastroara_client/`):** [GNU AGPL v3 or later](client/openastroara_client/LICENSE) — the client is wholly original work; AGPL keeps derived clients open even when served from a device rather than shipped.

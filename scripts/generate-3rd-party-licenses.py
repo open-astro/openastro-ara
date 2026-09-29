@@ -32,7 +32,7 @@ Requirements: the Server project must be restored (the command reads the
 restore assets and nuspecs come from the populated NuGet cache), and the
 client's pubspec.lock must be checked in (it is).
 
-Provenance for the audit itself: design/PORT_TODO.md "§15 / §17.2
+Provenance for the audit itself: PORT_TODO "§15 / §17.2
 dependency-license audit (2026-06-10)".
 """
 
@@ -58,7 +58,7 @@ OUTPUT = REPO_ROOT / "3rd-party-licenses.txt"
 # nothing). Each entry is pinned to the version it was verified against
 # (upstream project checked 2026-07-01; `source` records where) — a version
 # bump of a curated package fails the run until a human re-verifies the
-# license and updates the pin. The repo-wide audit (design/PORT_TODO.md
+# license and updates the pin. The repo-wide audit (PORT_TODO
 # §15/§17.2, 2026-06-10) found the same set: everything permissive except
 # Accord.NET (LGPL-2.1, dynamically linked).
 _ACCORD = {
@@ -113,7 +113,7 @@ NUGET_OVERRIDES: dict[str, dict[str, str]] = {
         "license": "Apache-2.0",
         "source": "https://github.com/ericsink/SQLitePCL.raw (SQLitePCLRaw is Apache-2.0; "
         "the bundled SQLite engine is public domain). This version is pinned over the "
-        "bundle's transitive pick for CVE-2025-6965 — see design/PORT_TODO.md.",
+        "bundle's transitive pick for CVE-2025-6965 — see PORT_TODO.",
         "version": "3.53.3",
     },
     "SimpleBase": {

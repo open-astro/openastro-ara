@@ -24,7 +24,7 @@ response open long enough for the client to observe it before the reset — beha
 that is kernel- and runtime-sensitive. The macOS host can't catch a Linux-only
 regression in that path, and GitHub's hosted runners are x64. This lane keeps a
 standing `linux/arm64` check so a future kernel/runtime change that breaks the Drop
-mechanic (see `design/PORT_TODO.md`, the bench-5 Drop-fault note) is caught here.
+mechanic (see the bench-5 Drop-fault note in the retired `PORT_TODO.md`, citation key in `design/README.md`) is caught here.
 
 The image is **copy-in, not bind-mount**: the host builds for `osx-arm64` and this
 lane for `linux-arm64`, and sharing the source tree's `obj/`/`bin/` across the two

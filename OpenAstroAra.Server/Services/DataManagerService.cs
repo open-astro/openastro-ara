@@ -57,7 +57,7 @@ namespace OpenAstroAra.Server.Services {
         /// The curated set of installable §36 packages. Sizes/URLs are the catalog's advertised values;
         /// the installed size is measured from disk. Catalog star/DSO sources are commit-pinned upstream
         /// (HYG, OpenNGC) — immutable while the repo exists; a self-hosted snapshot is the eventual robust home
-        /// (tracked in PORT_TODO).
+        /// (tracked in the P1–P5 issue backlog).
         /// </summary>
         internal static readonly IReadOnlyList<DataPackageDto> Catalog = new[] {
             new DataPackageDto(
@@ -201,7 +201,7 @@ namespace OpenAstroAra.Server.Services {
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
             // the §36 Tonight's-Sky overlay, not fetched via the Data Manager; the real horizon feature re-adds it
-            // there. Tracked in PORT_TODO.
+            // there. Tracked in the P1–P5 issue backlog.
         };
 
         // Expected SHA-256 (hex) of each package's downloaded artifact (the raw bytes at SourceUrl — the .csv.gz for

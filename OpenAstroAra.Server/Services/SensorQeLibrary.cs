@@ -18,7 +18,7 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// NEXTGEN §5 <b>Tier 1</b> — the small sensor→peak-QE library
-/// (design/NEXTGEN_PLANNING.md "Data strategy"): QE is a property of the
+/// (NEXTGEN_PLANNING "Data strategy"): QE is a property of the
 /// <i>sensor</i> (shared and stable across every camera built on it), is never
 /// exposed over ASCOM, and is the one exposure-planning input a fresh profile
 /// can get for free — the connect-time electronics auto-capture fills it from

@@ -35,8 +35,33 @@ import 'star_model.dart' as stars;
 /// eastern horizon FINDS more objects and a tall western treeline correctly
 /// drops them. Flat default-horizon altitude gates when no polygon is given.
 
-// ── Score weights / thresholds (mirror TonightSkyService.cs; see
-//    design/TONIGHT_SKY.md for the rationale) ────────────────────────────────
+// ── Design rationale (condensed from the retired TONIGHT_SKY design doc) ──
+// * Advise, don't dictate. Nothing with a dark window tonight is hidden: low,
+//   short targets sort to the bottom WITH their reason tags. The only drops
+//   are "never up tonight" and star rows (they ride in the mirror for search).
+// * Inclusion gate: listed iff the object has a non-empty dark window in the
+//   ±12 h span — not "above the horizon right now" — so not-yet-risen targets
+//   show. MaxAltitudeDeg < horizon is a cheap pre-filter before the scan.
+// * Score = Σ weight·q clamped to 0–100, each component emitting a
+//   "(+N)" reason so the UI can explain why 90 vs why 40. Framing fit
+//   dominates: it is the equipment-aware part (a galaxy at 448 mm is small,
+//   Orion at 3000 mm overflows).
+// * Missing surface brightness scores neutral, except DrkN (floor — darker
+//   than the sky by definition). Photogenic multipliers OCl ×0.85, GCl ×0.95,
+//   DrkN ×0.6 keep ~2,100 size-only LDN/Barnard rows from flooding the list.
+// * Magnitude-less emission rows take a photogenic tier from the curated
+//   imaging regions (3 ×1.0, 2 ×0.9, 1 ×0.7, unlisted ×0.5); an anchored
+//   Sharpless row is replaced by its region, never listed beside it.
+// * Filter reality: emission target with no narrowband glass ×0.85 (×0.75
+//   under Bortle ≥ 5); narrowband in the set ×1.05; continuum untouched.
+// * RemainingHours = max(0, windowEnd − max(now, windowStart)), always
+//   ≤ IntegrationHours.
+// * Enums go on the wire all-lowercase (§60.6: toosmall/good/toobig).
+// * Moon is display-only (separation/illumination chip, +0 tag); making it a
+//   score input needs the maintainer's call on weights.
+
+// ── Score weights / thresholds (ported from the removed daemon
+//    TonightSkyService) ─────────────────────────────────────────────
 const double _framingWeight = 35.0;
 const double _hoursWeight = 25.0;
 const double _altitudeWeight = 20.0;
@@ -530,7 +555,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final finalScore = adjusted.clamp(0.0, 100.0);
 
     // §Integration Budget P3 - the tiered "how many hours from YOUR sky"
-    // line for the advised approach (design/INTEGRATION_BUDGET.md; validated
+    // line for the advised approach (INTEGRATION_BUDGET; validated
     // against the Texas NGC 6188 campaign). Needs the advised approach's
     // flux input AND a catalog surface brightness; degrades to null.
     String? integrationBudgetLine;

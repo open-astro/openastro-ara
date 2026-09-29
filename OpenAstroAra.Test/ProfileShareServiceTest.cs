@@ -393,7 +393,7 @@ public class ProfileShareServiceTest {
         // "you must re-enter this" must correspond to a field the export really emptied.
         // If the export ever stops stripping one of these, this fails rather than
         // silently showing the recipient a misleading list. (The reverse direction —
-        // a newly-stripped field nobody added to the advisory — is tracked in PORT_TODO.)
+        // a newly-stripped field nobody added to the advisory — is tracked in the P1–P5 issue backlog.)
         using var repo = new FakeRepo(DonorSnapshot());
         var svc = new ProfileShareService(repo);
         var share = await svc.ExportAsync(ProfileId, CancellationToken.None);

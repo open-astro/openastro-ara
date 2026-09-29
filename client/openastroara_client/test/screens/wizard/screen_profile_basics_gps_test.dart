@@ -67,7 +67,7 @@ void main() {
     expect(draft.altitudeMeters, 240.0);
     // GPS carries no timezone — it's derived worldwide from the coordinates
     // (30.5, -97.75 is central Texas). If DST legislation ever redraws zone
-    // BOUNDARIES, the mapping package needs a bump (PORT_TODO).
+    // BOUNDARIES, the mapping package needs a bump (the P1–P5 issue backlog).
     expect(draft.timezone, 'America/Chicago');
     expect(find.text('America/Chicago'), findsOneWidget);
     // The remounted fields show the fix (a fill the user can't see is a bug).

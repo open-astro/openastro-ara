@@ -58,7 +58,7 @@ namespace OpenAstroAra.Server.Services;
 /// Mount-gated to live-validate (it slews/flips the mount); the orchestration is unit-testable with mocked
 /// mediators + a mocked centering service. §58.9's four-layer unattended-safety pipeline (pre-flight flight
 /// check, in-slew watchdog, park-on-failure safe-rest state, looping alarm) is a separate follow-up tracked
-/// in PORT_TODO — this is the core §58.4 recovery sequence.
+/// in the P1–P5 issue backlog — this is the core §58.4 recovery sequence.
 /// </summary>
 public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     private readonly IProfileService profileService;

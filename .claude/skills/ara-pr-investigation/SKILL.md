@@ -68,7 +68,8 @@ Project rules that turn into findings when violated:
 - A new user-facing setting needs a `settings/registry.dart` entry (§61.4); a
   new ⓘ icon needs a `help/registry.dart` entry (§69.4). CI's registry gate
   catches the mechanical part; you check that the text is accurate.
-- `design/API_CONTRACT.md` lists the client/daemon contract; a server change to
+- `OpenAstroAra.Server/openapi.yaml` and the endpoint sources are the client/daemon contract
+  (`design/API_CONTRACT.md` is the reasoning log, and `openapi.yaml` is incomplete, #1131); a server change to
   a listed endpoint without a doc change is a defect.
 - New or changed logic ships with tests (§14.7). Note tests that only assert
   the happy path the body already claims.

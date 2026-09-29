@@ -100,7 +100,7 @@ class LibraryFrameDetail {
   final int? offset;
   // Nullable-ready: the wire is NOT NULL today (an uncooled camera records the
   // 0.0 sentinel — the same anti-pattern §28 removed for gain; the server-side
-  // widening pass is tracked in PORT_TODO). When it lands, null renders as
+  // widening pass is tracked in the P1–P5 issue backlog). When it lands, null renders as
   // unknown here with no client change.
   final double? temperatureC;
   final int? focuserPosition;

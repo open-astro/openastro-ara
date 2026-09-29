@@ -17,6 +17,6 @@ How you imagine it working. Screenshots/sketches welcome.
 Workarounds you're using today, other tools' approaches, etc.
 
 **Notes for triage**
-Feature work is tracked against the design docs (`design/PORT_PLAYBOOK.md` § numbers and
-`design/PORT_TODO.md`); accepted requests get mapped to a section + release there. If your
-request matches an existing §, mention it.
+Feature work is tracked as GitHub issues labelled `P1`–`P5` against the spec's § numbers
+(`design/PORT_PLAYBOOK.md`); an accepted request gets a priority label and a section. If your
+request matches an existing § or an open issue, mention it.

@@ -36,7 +36,7 @@ abstract interface class DataManagerClient {
   /// Currently unconsumed by design, NOT dead code: its Aladin-era consumer
   /// was pruned with AladinView, and this method + [CatalogObject] are the
   /// retained wire contract for the §36 Catalogs-overlay panel against the
-  /// Stellarium planetarium (see design/PORT_TODO.md "OBSOLETE ... do NOT
+  /// Stellarium planetarium (see PORT_TODO "OBSOLETE ... do NOT
   /// remove SkyCatalogService" entry before sweeping it).
   Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit});
 
