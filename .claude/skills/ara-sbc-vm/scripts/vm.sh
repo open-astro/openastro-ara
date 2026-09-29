@@ -210,10 +210,11 @@ cmd_deploy() {
     vscp "$deb" astro@localhost:/tmp/ara.deb
     # Same steps as docs/DEPLOY.md. The .deb's postinst creates the service
     # user, sets caps, and starts the unit; libcfitsio + astap come from apt.
-    # DEPLOY.md's "storage setup" mounts a drive at /media/openastroara; the
-    # unit's ReadWritePaths= hard-requires the path to exist (no "-" prefix),
-    # so without it the service fails with 226/NAMESPACE. The VM has no drive:
-    # a plain directory stands in for the mount (found 2026-09-24).
+    # DEPLOY.md's "storage setup" mounts a drive at /media/openastroara. The VM
+    # has no drive, so a plain daemon-owned directory stands in for the mount
+    # and captures have somewhere to land. Packages before #1186 also needed it
+    # to start at all (ReadWritePaths= without "-" → 226/NAMESPACE); to test a
+    # true fresh install, apt-get install the .deb by hand instead.
     # pipefail on the remote side: without it `apt-get | tail` reports tail's
     # status and a failed install would fall through to the restart.
     vssh 'set -o pipefail; sudo mkdir -p /media/openastroara && sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/ara.deb 2>&1 | tail -3 && sudo chown openastroara:openastroara /media/openastroara && sudo systemctl restart openastroara-server' \
@@ -237,7 +238,8 @@ cmd_build_pr() {
     (cd "$src" && dotnet publish OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release -r linux-arm64 --self-contained -p:PublishAot=false -p:TreatWarningsAsErrors=false -o "$out/publish" > "$out/publish.log" 2>&1) || { tail -20 "$out/publish.log"; fail "publish failed"; }
     log "shipping publish dir + vendored C sources + packaging to the VM"
     vssh "rm -rf ~/build && mkdir -p ~/build"
-    (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh SOFA NOVAS31 packaging) | vssh "tar -xf - -C ~/build"
+    # build-deb.sh copies the licence docs from the repo root into the package.
+    (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh scripts/generate-3rd-party-licenses.py SOFA NOVAS31 packaging LICENSE.txt NOTICE.md 3rd-party-licenses.txt) | vssh "tar -xf - -C ~/build"
     (cd "$out" && tar -cf - publish) | vssh "tar -xf - -C ~/build"
     log "building natives + .deb inside the VM"
     vssh "set -eo pipefail; cd ~/build; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential dpkg-dev curl >/dev/null; \
