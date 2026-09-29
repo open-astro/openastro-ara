@@ -11907,7 +11907,7 @@ Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd
 
 - **Linux dev:** `sudo apt install libcfitsio10` (Debian/Ubuntu) or distro equivalent — the runtime package is enough since the resolver in §72.3 handles the versioned soname, and it keeps a dev box identical to the SBC. `libcfitsio-dev` also works. CFITSIO version 4.x+.
 - **macOS dev:** `brew install cfitsio` — installs to `/opt/homebrew/lib/libcfitsio.dylib` (Apple Silicon) or `/usr/local/lib/libcfitsio.dylib` (Intel).
-- **Windows dev:** vcpkg recommended (`vcpkg install cfitsio:x64-windows`) or pre-built binary from heasarc. Path goes in `OPENASTROARA_CFITSIO_PATH` env var.
+- **Windows dev:** vcpkg recommended (`vcpkg install cfitsio:x64-windows`) or pre-built binary from heasarc. Set `OPENASTROARA_CFITSIO_PATH` to the full path of `cfitsio.dll`; the resolver tries it before the default search (§72.3). It works the same on Linux/macOS for a library outside the loader path.
 
 DEPLOY.md adds a "Development setup" section listing platform-specific install commands. README's developer-onboarding section links to it.
 
@@ -11967,16 +11967,15 @@ version suffix. On Linux the bare `libcfitsio.so` symlink comes from
 `libcfitsio-dev`, which a production SBC never has: the runtime package
 `libcfitsio10` installs `libcfitsio.so.10` only, so a stock `.deb` install
 failed every capture with `DllNotFoundException` until 2026-09-27. `CFitsIO`
-therefore registers a `DllImportResolver` that runs the default probe first and
-then falls back to the versioned sonames the distro packages actually ship:
-- Linux: `libcfitsio.so`, then `libcfitsio.so.10` (CFITSIO 4.1+), then `libcfitsio.so.9` (3.49 to 4.0)
-- macOS: `libcfitsio.dylib`, then `libcfitsio.10.dylib`, then `libcfitsio.9.dylib` — in practice the versioned names rarely fire on Apple Silicon, because a bare `dlopen` searches only the DYLD fallback paths and not `/opt/homebrew/lib`; the working mac path is the `CopyLibCfitsioMacOS` build target that stages the dylib next to the binary (docs/RUNNING.md)
-- Windows: `cfitsio.dll` (no versioned fallback)
+therefore registers a `DllImportResolver` (`CFitsIOResolver`) that tries, in order:
+1. `OPENASTROARA_CFITSIO_PATH`, when set: the full path to the library file (e.g. `C:\vcpkg\installed\x64-windows\bin\cfitsio.dll`). If it doesn't load, resolution carries on and the boot log warns.
+2. The runtime's default probe of the bare name (`libcfitsio.so` / `libcfitsio.dylib` / `cfitsio.dll`).
+3. The ABI 10 versioned soname: `libcfitsio.so.10` on Linux, `libcfitsio.10.dylib` on macOS, none on Windows. ABI 9 (CFITSIO 3.49 to 4.0: Debian 11, Ubuntu 22.04) is not tried; those distros are not targets. On Apple Silicon the dylib name rarely fires, because a bare `dlopen` searches only the DYLD fallback paths and not `/opt/homebrew/lib`; the working mac path is the `CopyLibCfitsioMacOS` build target that stages the dylib next to the binary (docs/RUNNING.md).
 
 The fallback is not redundant with the assembly-level `DefaultDllImportSearchPaths`
 attribute; removing it reintroduces the Pi capture failure.
 
-Intended: if the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message referencing the §72.2 install docs. **Not implemented as of 2026-09-27:** `FitsLibraryProbe.EnsureLoadable()` exists but is called only from tests, so a missing library surfaces at the first FITS write as `DllNotFoundException` (tracked in the `P1`–`P5` issue backlog "No startup probe for CFITSIO").
+Boot probe (#1120): the daemon calls `FitsLibraryProbe.Probe()` at startup, before it accepts requests, and logs the outcome. Success is an Information line naming the candidate that loaded (`CFITSIO loaded from libcfitsio.so.10`). A set `OPENASTROARA_CFITSIO_PATH` that did not load is a Warning even when a fallback did. When nothing loads it logs an Error, `Cannot load libcfitsio. Install via: sudo apt install libcfitsio10. Tried: <every candidate>. … Loader: <runtime message>` (platform-equivalent hint on macOS/Windows), and keeps running: equipment, planning and the client still work, and captures fail at the FITS write until the library is installed.
 
 ### 72.4 Managed wrapper layer
 
@@ -12298,7 +12297,7 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
   # CFITSIO
   vcpkg install cfitsio:x64-windows
-  # set OPENASTROARA_CFITSIO_PATH env var
+  # set OPENASTROARA_CFITSIO_PATH to the full path of cfitsio.dll (§72.3)
 
   # ASTAP
   # Download installer from astap.nl

@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 // CA5392/CA5393: constrain native library resolution to the OS "safe"
@@ -28,63 +27,25 @@ namespace OpenAstroAra.Fits;
 /// §72.3 P/Invoke wrappers for CFITSIO. AOT-safe via
 /// <c>[LibraryImport]</c> source generators per playbook §71.
 ///
-/// Library name resolution is per-platform. The runtime probes the bare
-/// name first (<c>libcfitsio.so</c> / <c>libcfitsio.dylib</c> /
-/// <c>cfitsio.dll</c>); when that fails, <see cref="Resolve"/> falls back
-/// to the versioned soname the distro runtime package actually ships.
-/// Debian's <c>libcfitsio10</c> (the .deb's declared dependency) installs
-/// only <c>libcfitsio.so.10</c>; the unversioned <c>libcfitsio.so</c>
-/// symlink comes from <c>libcfitsio-dev</c>, which a production SBC never
-/// has. Without the fallback every capture failed at the FITS write with
-/// <c>DllNotFoundException</c> on a stock install (2026-09-27).
+/// Library name resolution goes through <see cref="CFitsIOResolver"/>:
+/// <c>OPENASTROARA_CFITSIO_PATH</c> first, then the runtime's default probing
+/// of the bare name (<c>libcfitsio.so</c> / <c>libcfitsio.dylib</c> /
+/// <c>cfitsio.dll</c>), then the versioned soname the distro runtime package
+/// actually ships. Debian's <c>libcfitsio10</c> (the .deb's declared
+/// dependency) installs only <c>libcfitsio.so.10</c>; the unversioned
+/// <c>libcfitsio.so</c> symlink comes from <c>libcfitsio-dev</c>, which a
+/// production SBC never has. Without the fallback every capture failed at the
+/// FITS write with <c>DllNotFoundException</c> on a stock install (2026-09-27).
 ///
 /// Subset surface — only the entry points <c>FitsImage</c> actually
 /// uses. Adding new ones is fine; see the CFITSIO reference at
 /// <see href="https://heasarc.gsfc.nasa.gov/fitsio/c/c_user/cfitsio.html"/>.
 /// </summary>
 internal static partial class CFitsIO {
-    private const string LibraryName = "cfitsio";
-
-    // Versioned sonames to try after the runtime's own probing fails. ABI 10 is
-    // CFITSIO 4.1+ (Debian 12/13, Ubuntu 24.04+, Homebrew); 9 is CFITSIO 3.49
-    // to 4.0 (Debian 11, Ubuntu 22.04). Listed newest first so a host with both
-    // picks the one the binding was written against.
-    private static readonly string[] s_linuxSonames = ["libcfitsio.so.10", "libcfitsio.so.9"];
-    // On macOS a bare dlopen searches only the DYLD fallback paths, not
-    // /opt/homebrew/lib, so these mostly matter for a system-wide install; the
-    // Homebrew case is handled by the CopyLibCfitsioMacOS build target instead.
-    private static readonly string[] s_macSonames = ["libcfitsio.10.dylib", "libcfitsio.9.dylib"];
+    private const string LibraryName = CFitsIOResolver.LibraryName;
 
     static CFitsIO() {
-        NativeLibrary.SetDllImportResolver(typeof(CFitsIO).Assembly, Resolve);
-    }
-
-    /// <summary>
-    /// Runs the runtime's default probing first (application directory per the
-    /// assembly-level <see cref="DllImportSearchPath.SafeDirectories"/>, then the
-    /// bare name through the system loader), and only then tries the versioned
-    /// sonames. Returning zero hands resolution back to the runtime, whose own
-    /// failure message lists every path it tried.
-    /// </summary>
-    private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {
-        if (libraryName != LibraryName) {
-            return IntPtr.Zero;
-        }
-        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var handle)) {
-            return handle;
-        }
-        string[] candidates = OperatingSystem.IsLinux() ? s_linuxSonames
-            : OperatingSystem.IsMacOS() ? s_macSonames
-            : [];
-        foreach (var candidate in candidates) {
-            // A bare soname goes straight to dlopen, which resolves it through the
-            // loader cache (ld.so.cache / DYLD fallback paths) — no directory of
-            // ours is involved, so DLL planting is not a concern here.
-            if (NativeLibrary.TryLoad(candidate, out handle)) {
-                return handle;
-            }
-        }
-        return IntPtr.Zero;
+        NativeLibrary.SetDllImportResolver(typeof(CFitsIO).Assembly, CFitsIOResolver.ResolveForRuntime);
     }
 
     // ── Status code → string. Used by FitsException for clear error messages. ─────
@@ -209,15 +170,41 @@ public sealed class FitsException : Exception {
 }
 
 /// <summary>
-/// Confirms the CFITSIO library is loadable at startup. Calls a
-/// no-op entry point (<c>ffgerr</c> on status 0); if the library
-/// can't be found, .NET raises <see cref="DllNotFoundException"/>
-/// which the caller surfaces as a clear "install libcfitsio"
-/// message per §72.3.
+/// Confirms the CFITSIO library is loadable. Calls a no-op entry point
+/// (<c>ffgerr</c> on status 0), which makes the runtime resolve the library
+/// through <see cref="CFitsIOResolver"/>. The daemon calls <see cref="Probe"/>
+/// at boot so a broken install shows in the first log lines with an install
+/// hint (§72.3) instead of at the first exposure.
 /// </summary>
 public static class FitsLibraryProbe {
+    /// <summary>Throws <see cref="DllNotFoundException"/> (or another load failure) when CFITSIO can't be used.</summary>
     public static void EnsureLoadable() {
         var buffer = new byte[81];
         CFitsIO.GetErrorStatus(0, buffer);
     }
+
+    /// <summary>
+    /// Non-throwing <see cref="EnsureLoadable"/>: reports whether CFITSIO works, which candidate
+    /// the resolver loaded, and every candidate it tried.
+    /// </summary>
+    public static FitsLibraryProbeResult Probe() {
+        string? error = null;
+        try {
+            EnsureLoadable();
+        } catch (DllNotFoundException ex) {
+            error = ex.Message;          // nothing loadable
+        } catch (BadImageFormatException ex) {
+            error = ex.Message;          // present but wrong architecture
+        } catch (EntryPointNotFoundException ex) {
+            error = ex.Message;          // loaded but missing the probed symbol
+        }
+        var resolution = CFitsIOResolver.LastResolution ?? new CFitsIOResolution(null, [], null);
+        return new FitsLibraryProbeResult(error is null, resolution, error);
+    }
 }
+
+/// <summary>Outcome of <see cref="FitsLibraryProbe.Probe"/>.</summary>
+/// <param name="Loaded">True when a CFITSIO call succeeded.</param>
+/// <param name="Resolution">What the resolver tried and which candidate it loaded.</param>
+/// <param name="Error">The load failure's message when <paramref name="Loaded"/> is false.</param>
+public sealed record FitsLibraryProbeResult(bool Loaded, CFitsIOResolution Resolution, string? Error);

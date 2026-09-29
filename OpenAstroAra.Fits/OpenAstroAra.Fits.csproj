@@ -10,4 +10,9 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- #1120: the resolver's candidate order is tested through fake loaders. -->
+    <InternalsVisibleTo Include="OpenAstroAra.Fits.Tests" />
+  </ItemGroup>
+
 </Project>
