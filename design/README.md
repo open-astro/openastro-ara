@@ -44,6 +44,9 @@ Carried over from the retired `PORT_DECISIONS.md` because they still govern new 
   optimal-sub math, FOV/framing and filter advice live in the client, which must work with no Pi
   (§2). A new server-side planning endpoint needs a stated justification, such as feeding the
   execution engine directly.
+- **Linux desktop client: x86-64 only, Wayland only, any distro** (2026-09-29, supersedes
+  2026-06-27). Tested on the Debian, Red Hat and Arch families on GNOME and KDE; X11 is not
+  supported. The server's platform (arm64 Debian `.deb`) is unchanged. Tracking: #1204.
 - **Permanent non-goals** are listed in `PORT_PLAYBOOK.md` §55.
 
 CI's `sanity` job verifies `PORT_PLAYBOOK.md`, `COMMIT-PR-RULES.md` and this `README.md` exist and
