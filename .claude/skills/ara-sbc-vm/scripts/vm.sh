@@ -239,7 +239,7 @@ cmd_build_pr() {
     log "shipping publish dir + vendored C sources + packaging to the VM"
     vssh "rm -rf ~/build && mkdir -p ~/build"
     # build-deb.sh copies the licence docs from the repo root into the package.
-    (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh SOFA NOVAS31 packaging LICENSE.txt NOTICE.md 3rd-party-licenses.txt) | vssh "tar -xf - -C ~/build"
+    (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh scripts/generate-3rd-party-licenses.py SOFA NOVAS31 packaging LICENSE.txt NOTICE.md 3rd-party-licenses.txt) | vssh "tar -xf - -C ~/build"
     (cd "$out" && tar -cf - publish) | vssh "tar -xf - -C ~/build"
     log "building natives + .deb inside the VM"
     vssh "set -eo pipefail; cd ~/build; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential dpkg-dev curl >/dev/null; \
