@@ -157,25 +157,36 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal;
             startInfo.FileName = executableLocation;
             startInfo.UseShellExecute = false;
+            // #1188 — both streams are redirected and read asynchronously. Before, stdout was
+            // redirected but never read (no BeginOutputReadLine), so the handlers below never fired
+            // and a solver writing more than the pipe buffer (64 KB) blocked on write until the solve
+            // timeout killed it.
             startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
             startInfo.CreateNoWindow = true;
             startInfo.Arguments = GetArguments(imageFilePath, outputFilePath, parameter, imageProperties);
             process.StartInfo = startInfo;
             process.EnableRaisingEvents = true;
 
-            process.OutputDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) => {
-                progress?.Report(new ApplicationStatus() { Status = e.Data ?? string.Empty });
-                Logger.Debug(e.Data ?? string.Empty);
-            };
+            // A null line is end-of-stream; the solve result is only read once both have closed.
+            var stdoutClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stderrClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tail = new Queue<string>();
 
-            process.ErrorDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) => {
-                progress?.Report(new ApplicationStatus() { Status = e.Data ?? string.Empty });
-                Logger.Error(e.Data ?? string.Empty);
-            };
+            process.OutputDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) =>
+                ReceiveOutputLine(e.Data, false, stdoutClosed, tail, progress);
+            process.ErrorDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) =>
+                ReceiveOutputLine(e.Data, true, stderrClosed, tail, progress);
             Logger.Debug($"Starting process '{executableLocation}' with args '{startInfo.Arguments}'");
             process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
             try {
                 await process.WaitForExitAsync(ct);
+                // WaitForExitAsync already waits for the async readers to hit end-of-stream; waiting
+                // on our own markers as well keeps "every line was handled before the result is read"
+                // explicit rather than an implementation detail of Process.
+                await Task.WhenAll(stdoutClosed.Task, stderrClosed.Task).WaitAsync(ct);
             } catch (OperationCanceledException) {
                 // Timeout or caller cancellation: kill the solver (and its children) before propagating.
                 try {
@@ -191,14 +202,55 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             // (success was inferred solely from the sidecar file). Surface the exit code so the
             // generic solve-retry loop's failures are diagnosable; solver subclasses map their
             // documented codes (ASTAP: 1 = clean no-solution, 32/33 = missing star database, ...).
+            // The last lines the solver printed go with it, since per-line output is Debug only.
             var exitCode = process.ExitCode;
             if (exitCode != 0) {
-                Logger.Warning($"Plate solver '{Path.GetFileName(executableLocation)}' exited with code {exitCode}{DescribeExitCode(exitCode)}");
+                string lastOutput;
+                lock (tail) {
+                    lastOutput = tail.Count == 0 ? string.Empty : $"; last output:{Environment.NewLine}{string.Join(Environment.NewLine, tail)}";
+                }
+                Logger.Warning($"Plate solver '{Path.GetFileName(executableLocation)}' exited with code {exitCode}{DescribeExitCode(exitCode)}{lastOutput}");
+            }
+        }
+
+        /// <summary>How many of the solver's last output lines the non-zero-exit warning carries.</summary>
+        private const int OutputTailLines = 20;
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Process output callback on a thread-pool reader thread: an exception escaping it (a failing progress sink) is unhandled and process-fatal, so it is logged and the solve carries on.")]
+        private void ReceiveOutputLine(string? line, bool stdErr, TaskCompletionSource closed, Queue<string> tail, IProgress<ApplicationStatus>? progress) {
+            if (line == null) {
+                closed.TrySetResult();
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(line)) {
+                return;
+            }
+            lock (tail) {
+                tail.Enqueue(stdErr ? $"[stderr] {line}" : line);
+                while (tail.Count > OutputTailLines) {
+                    tail.Dequeue();
+                }
+            }
+            try {
+                OnSolverOutput(line, stdErr, progress);
+            } catch (Exception ex) {
+                Logger.Error(ex);
             }
         }
 
         /// <summary>Solver-specific meaning of a non-zero exit code, appended to the exit-code
         /// warning (e.g. ASTAP's documented codes). Empty when the code isn't recognized.</summary>
         protected virtual string DescribeExitCode(int exitCode) => string.Empty;
+
+        /// <summary>One non-blank line of solver output, stdout or stderr, called on a reader thread
+        /// (the two streams can call concurrently). The line becomes the solve's progress status and
+        /// is logged at Debug. stderr used to be logged at Error, but CLI solvers print routine
+        /// progress and diagnostics there, so a successful solve would have filled the log with
+        /// errors; a failing solve surfaces the last lines at Warning with its exit code instead.</summary>
+        protected virtual void OnSolverOutput(string line, bool stdErr, IProgress<ApplicationStatus>? progress) {
+            progress?.Report(new ApplicationStatus() { Status = line });
+            Logger.Debug(stdErr ? $"[stderr] {line}" : line);
+        }
     }
 }
