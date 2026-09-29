@@ -30,7 +30,7 @@ makes them.
 `AUDIT #H3`, `TONIGHT_SKY`, `INTEGRATION_BUDGET`, `RUN_REDESIGN`, `PLANNING_REDESIGN`, `GAPS-ARA`. Each resolves at the last commit
 that had them, `51cba5c40`:
 `https://github.com/open-astro/openastro-ara/blob/51cba5c40/design/<FILE>.md` (`archive/` for
-`GAPS-ARA` / `HANDOFF`, `AUDIT.MD` upper-case). A citation is a pointer to the reasoning, not a live
+`GAPS-ARA` / `HANDOFF`, `AUDIT.MD` upper-case, and `NEXTGEN` is short for `NEXTGEN_PLANNING.md`). A citation is a pointer to the reasoning, not a live
 task; open work is only what the `P1`–`P5` issues say.
 
 ## Standing decisions
