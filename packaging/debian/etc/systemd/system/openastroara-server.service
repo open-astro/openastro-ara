@@ -34,9 +34,20 @@ PrivateTmp=true
 # in systemd .service syntax — systemd-analyze warns "Failed to parse
 # boolean value" on them — so move the rationale to a dedicated line.)
 PrivateDevices=false
+# Every entry without a "-" prefix must exist before the unit starts, or systemd
+# cannot build the mount namespace and the start fails with 226/NAMESPACE. postinst
+# and tmpfiles.d create the other four (scripts/tests/test_unit_rw_paths.py checks).
+# /media/openastroara is the §29 store mount point and only exists once the storage
+# step (configure-storage.sh) has run, so it is optional: on a fresh install it is
+# skipped, and a store mounted there later reaches this namespace by mount
+# propagation as a new rw mount (ProtectSystem= only re-marks mounts present at
+# start). Deliberately not created at install: the bind of an empty directory
+# shows up in the daemon's /proc/self/mounts as if a store were mounted, which is
+# how the daemon tells an ejected drive, and a tmpfiles `d` line that set the
+# owner would try to chown an exFAT store's root at every boot.
 ReadWritePaths=/var/log/openastroara
 ReadWritePaths=/var/lib/openastroara
-ReadWritePaths=/media/openastroara
+ReadWritePaths=-/media/openastroara
 ReadWritePaths=/var/run/openastroara
 ReadWritePaths=/etc/openastroara
 

@@ -64,7 +64,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |
-| `/media/openastroara/` | Captures save path (mount your USB SSD here — see below) | `openastroara:openastroara` |
+| `/media/openastroara/` | Captures save path (mount your USB SSD here — see below). Not created by the package: the storage step makes it, and the daemon starts fine without it | `openastroara:openastroara` |
 | `/etc/systemd/system/openastroara-server.service` | systemd unit | root |
 
 The daemon runs as the dedicated `openastroara` system user; it never runs as root.
