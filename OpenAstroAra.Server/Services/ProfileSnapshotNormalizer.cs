@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
+using System;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -48,7 +49,11 @@ public static class ProfileSnapshotNormalizer {
     /// <see cref="Defaults"/>. The nullable casts sidestep the "left operand is
     /// never null" NRT warnings — the runtime values genuinely can be null here
     /// (Json.NET-style holes in older files).</summary>
-    public static ProfileSnapshotDto Normalize(ProfileSnapshotDto snap) {
+    public static ProfileSnapshotDto Normalize(ProfileSnapshotDto snap) => Normalize(snap, System.IO.File.Exists);
+
+    /// <param name="fileExists">The file check <see cref="SolverPathMigration"/> uses (#1121);
+    /// injected so tests never depend on what this machine has in /usr/bin.</param>
+    public static ProfileSnapshotDto Normalize(ProfileSnapshotDto snap, Func<string, bool> fileExists) {
         var defaults = Defaults;
         var filterSet = (FilterSetDto?)snap.FilterSet ?? defaults.FilterSet;
         if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
@@ -74,7 +79,9 @@ public static class ProfileSnapshotNormalizer {
             Filenames = (FilenamesSettingsDto?)snap.Filenames ?? defaults.Filenames,
             SafetyPolicies = (SafetyPoliciesDto?)snap.SafetyPolicies ?? defaults.SafetyPolicies,
             Autofocus = (AutofocusSettingsDto?)snap.Autofocus ?? defaults.Autofocus,
-            PlateSolve = (PlateSolveSettingsDto?)snap.PlateSolve ?? defaults.PlateSolve,
+            // #1121 — a pre-#1094 profile's /usr/bin/astap becomes /usr/bin/astap_cli when that is
+            // the binary actually installed.
+            PlateSolve = SolverPathMigration.Migrate((PlateSolveSettingsDto?)snap.PlateSolve ?? defaults.PlateSolve, fileExists),
             DiagnosticsMode = (DiagnosticsModeDto?)snap.DiagnosticsMode ?? defaults.DiagnosticsMode,
             Phd2 = (Phd2SettingsDto?)snap.Phd2 ?? defaults.Phd2,
             EquipmentConnection = (EquipmentConnectionDto?)snap.EquipmentConnection ?? defaults.EquipmentConnection,

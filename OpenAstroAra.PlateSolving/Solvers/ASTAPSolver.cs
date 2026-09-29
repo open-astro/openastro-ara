@@ -61,16 +61,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         /// or empty (the .deb's tmpfiles entry creates the directory before any database is downloaded
         /// into it, so "exists" alone would hand ASTAP an empty dir and exit 32). Touches the file
         /// system on every read — fine per solve; a polled UI check should cache it.</summary>
-        public string? EffectiveDatabaseLocation =>
-            databaseLocation is not null && DirectoryHasFiles(databaseLocation) ? databaseLocation : null;
-
-        private static bool DirectoryHasFiles(string dir) {
-            try {
-                return Directory.Exists(dir) && Directory.EnumerateFiles(dir).Any();
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                return false;
-            }
-        }
+        public string? EffectiveDatabaseLocation => AstapStarDatabase.EffectiveLocation(databaseLocation);
 
         /// <summary>Test seam: the exact argument string a solve would run with (the class is sealed,
         /// so the protected builder cannot be reached by subclassing from the test project).</summary>
@@ -191,6 +182,13 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             // forcing exit 32.
             if (EffectiveDatabaseLocation is string db) {
                 args.Add($"-d \"{db}\"");
+                // #1121 — with several databases installed ASTAP picks one itself; name it instead,
+                // from the field of view (AstapStarDatabase.Select has the rule).
+                var installed = AstapStarDatabase.Databases(db);
+                if (AstapStarDatabase.Select(installed, imageProperties.FoVH) is string database) {
+                    Logger.Debug($"Plate solve - ASTAP star databases {string.Join(", ", installed)} installed; using {database} for a {imageProperties.FoVH.ToString("0.###", CultureInfo.InvariantCulture)}° field");
+                    args.Add($"-D {database}");
+                }
             } else if (databaseLocation is not null
                     && System.Threading.Interlocked.CompareExchange(ref databaseMissingWarned, 1, 0) == 0) {
                 Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' is missing or empty; leaving ASTAP to its default lookup. Download a database into it (see DEPLOY.md) or fix Options → Plate solving.");

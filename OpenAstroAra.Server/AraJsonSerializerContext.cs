@@ -185,6 +185,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(Phd2SettingsDto))]
 // §18.I plate-solve wire types (request/result were serving off the reflection fallback resolver).
 [JsonSerializable(typeof(CenterRequestDto))]
+[JsonSerializable(typeof(PlateSolveDatabaseStatusDto))]
 [JsonSerializable(typeof(PlateSolveRequestDto))]
 [JsonSerializable(typeof(PlateSolveResultDto))]
 [JsonSerializable(typeof(PlateSolveSettingsDto))]

@@ -70,6 +70,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void One_database_is_left_to_astap() {
+            var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "d80_0101.1476"), new byte[] { 1 });
+            try {
+                Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", dir)), Does.Not.Contain("-D "));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public void Several_databases_name_one_with_D() {
+            // #1121 — with more than one installed, ASTAP would pick on its own. The test frame is
+            // 48 px tall at ~1.9"/px, a ~0.03° field: narrower than D80's range, so the deepest wins.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "d80_0101.1476"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(dir, "h18_0101.1476"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(dir, "w08_0101.001"), new byte[] { 1 });
+            try {
+                var args = Args(new ASTAPSolver("/usr/bin/astap_cli", dir));
+                Assert.That(args, Does.Contain($"-d \"{dir}\" -D h18"));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void Unset_database_directory_passes_nothing() {
             Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", null)), Does.Not.Contain("-d "));
             Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", "  ")), Does.Not.Contain("-d "));

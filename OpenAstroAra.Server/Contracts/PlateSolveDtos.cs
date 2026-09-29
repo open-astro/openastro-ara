@@ -45,3 +45,17 @@ public record PlateSolveResultDto(
     double? Orientation,    // image rotation, degrees east-of-north
     double? PixelScale,     // arcsec / pixel
     double? SearchRadius);  // solved search radius, degrees
+
+/// <summary>
+/// #1121 — <c>GET /platesolve/database</c>: what the solver will find on the daemon, for Settings →
+/// Plate solving. <see cref="EffectivePath"/> is null when the configured directory is missing or
+/// empty (the fresh-install state before the DEPLOY.md star-database step), which is when every
+/// solve fails with ASTAP exit 32.
+/// </summary>
+public record PlateSolveDatabaseStatusDto(
+    string ConfiguredPath,                // the profile's index path, passed to ASTAP as -d
+    string? EffectivePath,                // ConfiguredPath when it holds files, else null
+    int FileCount,                        // files in ConfiguredPath (0 when missing)
+    IReadOnlyList<string> Databases,      // database abbreviations found there, e.g. ["d80"]
+    string SolverPath,                    // the profile's ASTAP binary
+    bool SolverFound);                    // whether that binary exists
