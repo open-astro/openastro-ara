@@ -12155,8 +12155,8 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
 | `Debug` | Capture pipeline state transitions, equipment polls; on in dev; off in production .deb |
 | `Information` | Sequence start/stop, equipment connect/disconnect, profile load, request entry/exit with timing |
 | `Warning` | Recoverable issues — retry attempts, deprecated API use, capacity warnings, simulator detected (dev only), pre-restart deferral per §34.7 |
-| `Error` | Unhandled exceptions at endpoint boundary, equipment connection failures after exhausted retries, sequence aborts due to faults |
-| `Fatal` | Startup failures preventing service from accepting connections — storage unavailable, DB migration aborted, cfitsio missing |
+| `Error` | Unhandled exceptions at endpoint boundary, equipment connection failures after exhausted retries, sequence aborts due to faults, cfitsio missing at boot (the daemon keeps running; §72.3) |
+| `Fatal` | Startup failures preventing service from accepting connections — storage unavailable, DB migration aborted |
 
 Production .deb defaults to `Information` minimum. Log pressure handling per §29.9 downgrades to `Warning` under disk pressure.
 
