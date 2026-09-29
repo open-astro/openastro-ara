@@ -427,6 +427,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// <see cref="WarmCameraTargetC"/> over <paramref name="duration"/> (a stall short of it — a cold
     /// night — is logged, not a failure), settle 20 s, then switch the cooler off. A cooler that is
     /// off (or whose state cannot be read) is never switched on; it only gets the cooler-off.
+    /// Cancellation (an operator stopping the sequence) skips the cooler-off and leaves the TEC
+    /// holding, unlike the §58 unattended warm ramp, which must always reach its cooler-off.
     /// </summary>
     public async Task<bool> WarmCamera(TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         const string operation = "Warming";
