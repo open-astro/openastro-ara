@@ -27,7 +27,7 @@ makes them.
 
 **Citation keys.** Code comments and the playbook still cite these files by name — `PORT_TODO`,
 `PORT_DECISIONS 2026-07-15`, `NEXTGEN §3.1`, `ROADMAP part 4` / `ROADMAP §8`, `PHD2-GAP gap 3`,
-`AUDIT #H3`, `TONIGHT_SKY`, `INTEGRATION_BUDGET`, `GAPS-ARA`. Each resolves at the last commit
+`AUDIT #H3`, `TONIGHT_SKY`, `INTEGRATION_BUDGET`, `RUN_REDESIGN`, `PLANNING_REDESIGN`, `GAPS-ARA`. Each resolves at the last commit
 that had them, `51cba5c40`:
 `https://github.com/open-astro/openastro-ara/blob/51cba5c40/design/<FILE>.md` (`archive/` for
 `GAPS-ARA` / `HANDOFF`, `AUDIT.MD` upper-case). A citation is a pointer to the reasoning, not a live

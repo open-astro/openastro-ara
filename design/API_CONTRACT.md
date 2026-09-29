@@ -52,7 +52,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Spec ref:** `OpenAstroAra.Server/Endpoints/SequenceEndpoints.cs` (§38.9 group), `OpenAstroAra.Server/Services/SequencerService.LiveEdit.cs`
 
-**Related:** design/RUN_REDESIGN.md (two moods — live mood gains scoped editing), PORT_PLAYBOOK.md §38
+**Related:** `RUN_REDESIGN`, the retired Run redesign doc (two moods — live mood gains scoped editing; citation key, see `design/README.md`), PORT_PLAYBOOK.md §38
 
 ### 2026-07-27 — §38.10 resume refinement (re-center + optional refocus)
 
@@ -64,7 +64,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Spec ref:** `OpenAstroAra.Server/Services/SequencerService.ResumeRefinement.cs`, `SequenceEndpoints.cs` resume route
 
-**Related:** §35 (SafetyReactionService recenter), §59 (autofocus executor), design/RUN_REDESIGN.md
+**Related:** §35 (SafetyReactionService recenter), §59 (autofocus executor), `RUN_REDESIGN` (retired; citation key, see `design/README.md`)
 
 ### 2026-08-05 — §12c.2 frame statistics + §44 mirror naming + §29 storage identifiers
 
