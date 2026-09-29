@@ -1,0 +1,139 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.PlateSolving;
+using OpenAstroAra.PlateSolving.Solvers;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// #1188 — <see cref="CLISolver"/> redirected the solver's stdout but never started reading it,
+    /// so the progress/log handlers were dead and a solver writing more than the pipe buffer
+    /// (64 KB) blocked on write until the solve timeout killed it. A <c>/bin/sh</c> script stands in
+    /// for the solver.
+    /// </summary>
+    [TestFixture]
+    public class CLISolverOutputTest {
+
+        private string dir = string.Empty;
+
+        [SetUp]
+        public void SetUp() {
+            Assume.That(!OperatingSystem.IsWindows(), "the fake solver is a POSIX shell script");
+            dir = Path.Combine(Path.GetTempPath(), "ara-clisolver-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+        }
+
+        [TearDown]
+        public void TearDown() {
+            if (Directory.Exists(dir)) {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        private string Script(string body) {
+            var path = Path.Combine(dir, "fake-solver.sh");
+            File.WriteAllText(path, body.Replace("\r\n", "\n", StringComparison.Ordinal));
+            return path;
+        }
+
+        // ~200 KB on stdout and ~130 KB on stderr, each past the 64 KB pipe buffer, then an end marker.
+        private const string ChattySolver = """
+            awk 'BEGIN { for (i = 0; i < 2000; i++) printf "out %05d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", i }'
+            echo STDOUT-END
+            awk 'BEGIN { for (i = 0; i < 1300; i++) printf "err %05d yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n", i }' >&2
+            echo STDERR-END >&2
+            exit 0
+            """;
+
+        [Test]
+        public async Task Solver_writing_past_the_pipe_buffer_completes_and_its_output_is_read() {
+            var solver = new FakeSolver(Script(ChattySolver));
+            var progress = new RecordingProgress();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var sw = Stopwatch.StartNew();
+
+            // Before the fix this blocked on the full pipe until the token cancelled (OperationCanceledException).
+            await solver.Run(progress, cts.Token);
+            sw.Stop();
+
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)), "solve should not wait for the timeout");
+            // Checked straight after the await: the streams are drained before StartCLI returns.
+            var statuses = progress.Statuses.ToList();
+            Assert.That(statuses, Does.Contain("STDOUT-END"));
+            Assert.That(statuses, Does.Contain("STDERR-END"));
+            Assert.That(statuses.Count(s => s.StartsWith("out ", StringComparison.Ordinal)), Is.EqualTo(2000));
+            Assert.That(statuses.Count(s => s.StartsWith("err ", StringComparison.Ordinal)), Is.EqualTo(1300));
+            Assert.That(statuses, Has.None.Empty, "blank or end-of-stream lines must not clear the status");
+
+            var lines = solver.Lines.ToList();
+            Assert.That(lines.Count(l => !l.StdErr), Is.EqualTo(2001));
+            Assert.That(lines.Count(l => l.StdErr), Is.EqualTo(1301));
+            Assert.That(lines, Does.Contain(("STDERR-END", true)));
+        }
+
+        [Test]
+        public void Cancellation_still_kills_a_hung_solver() {
+            var solver = new FakeSolver(Script("echo started\nsleep 30\n"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            var sw = Stopwatch.StartNew();
+
+            Assert.CatchAsync<OperationCanceledException>(() => solver.Run(null, cts.Token));
+
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)));
+        }
+
+        private sealed class RecordingProgress : IProgress<ApplicationStatus> {
+            public ConcurrentQueue<string> Statuses { get; } = new();
+            public void Report(ApplicationStatus value) => Statuses.Enqueue(value.Status);
+        }
+
+        private sealed class FakeSolver : CLISolver {
+            private readonly string script;
+
+            public FakeSolver(string script) : base("/bin/sh") {
+                this.script = script;
+            }
+
+            public ConcurrentQueue<(string Line, bool StdErr)> Lines { get; } = new();
+
+            public Task Run(IProgress<ApplicationStatus>? progress, CancellationToken ct) =>
+                StartCLI("unused.fits", "unused.ini", new PlateSolveParameter(), null!, progress, ct);
+
+            protected override void OnSolverOutput(string line, bool stdErr, IProgress<ApplicationStatus>? progress) {
+                Lines.Enqueue((line, stdErr));
+                base.OnSolverOutput(line, stdErr, progress);
+            }
+
+            protected override string GetArguments(string imageFilePath, string outputFilePath, PlateSolveParameter parameter,
+                    PlateSolveImageProperties imageProperties) => $"\"{script}\"";
+
+            protected override string GetLocalizedPlateSolverName() => "fake";
+
+            protected override string GetOutputPath(string imageFilePath) => imageFilePath + ".ini";
+
+            protected override PlateSolveResult ReadResult(string outputFilePath, PlateSolveParameter parameter,
+                    PlateSolveImageProperties imageProperties) => new PlateSolveResult { Success = false };
+        }
+    }
+}
