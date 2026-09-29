@@ -469,10 +469,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # §72.2 — install CFITSIO so OpenAstroAra.Fits can resolve the
-      # native library at runtime (build doesn't need it, but a future
-      # FitsImageTests step will). Runtime package only, matching the .deb's
-      # declared dependency; the binding resolves the versioned soname itself.
+      # §72.2 — install CFITSIO for the "dotnet test (Fits, Release)" step
+      # below (the build doesn't need it). Runtime package only, matching the
+      # .deb's declared dependency; the binding resolves the versioned soname
+      # itself. With CI set, FitsImageTests fail rather than skip when it
+      # doesn't load, and a Linux-only test pins libcfitsio.so.10 (#1120).
       - name: Install CFITSIO (Linux)
         run: |
           sudo apt-get update

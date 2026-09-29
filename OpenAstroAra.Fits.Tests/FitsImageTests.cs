@@ -21,34 +21,35 @@ public class FitsImageTests {
     private static string TempPath(string name) =>
         Path.Combine(Path.GetTempPath(), $"oara-fits-{Guid.NewGuid():N}-{name}");
 
-    // Phase 0.5p2 net10.0 conversion: CFITSIO is installed via apt
-    // (libcfitsio10) on the Linux CI runner per playbook §72.7. On macOS /
-    // Windows dev machines without the native we early-return so each test
-    // passes-through; xunit 2.x lacks Assert.Skip so no skipped marker.
-    private static readonly bool CfitsioAvailable = CheckCfitsio();
-    private static bool CheckCfitsio() {
-        try {
-            FitsLibraryProbe.EnsureLoadable();
-            return true;
-        } catch (DllNotFoundException) {
-            return false;          // native libcfitsio not installed
-        } catch (BadImageFormatException) {
-            return false;          // present but wrong architecture
-        } catch (EntryPointNotFoundException) {
-            return false;          // present but missing the probed symbol
+    // CFITSIO is installed via apt (libcfitsio10) on the Linux CI runner per
+    // playbook §72.7, so there a load failure fails every test (#1120) rather
+    // than letting the suite pass with nothing exercised. On dev machines
+    // without the native (macOS without the staged dylib, Windows) each test
+    // early-returns; xunit 2.x lacks Assert.Skip so no skipped marker.
+    private static readonly FitsLibraryProbeResult Probe = FitsLibraryProbe.Probe();
+
+    private static bool MustLoadCfitsio =>
+        OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
+
+    private static bool CfitsioReady() {
+        if (Probe.Loaded) return true;
+        if (MustLoadCfitsio) {
+            Assert.Fail($"CFITSIO must load on the Linux CI runner (install libcfitsio10): {Probe.Error}. " +
+                $"Tried: {string.Join(", ", Probe.Resolution.Tried)}");
         }
+        return false;
     }
 
     [Fact]
     public void CFitsIO_loads_on_startup() {
-        if (!CfitsioAvailable) return;
+        if (!CfitsioReady()) return;
         // §72.7 first test case: confirm the native library is resolvable.
         FitsLibraryProbe.EnsureLoadable();
     }
 
     [Fact]
     public void Write_read_round_trip_preserves_ushort_pixels() {
-        if (!CfitsioAvailable) return;
+        if (!CfitsioReady()) return;
         var path = TempPath("roundtrip.fits");
         try {
             const int w = 16;
@@ -90,7 +91,7 @@ public class FitsImageTests {
 
     [Fact]
     public void Write_read_round_trip_preserves_float_pixels() {
-        if (!CfitsioAvailable) return;
+        if (!CfitsioReady()) return;
         var path = TempPath("float-roundtrip.fits");
         try {
             const int w = 8;
@@ -115,7 +116,7 @@ public class FitsImageTests {
 
     [Fact]
     public void Buffer_length_mismatch_throws_argument_exception() {
-        if (!CfitsioAvailable) return;
+        if (!CfitsioReady()) return;
         var path = TempPath("mismatch.fits");
         try {
             using var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort);
@@ -131,7 +132,7 @@ public class FitsImageTests {
 
     [Fact]
     public void Stale_temp_file_is_purged_on_create() {
-        if (!CfitsioAvailable) return;
+        if (!CfitsioReady()) return;
         // §28.7 atomic-write defense: if a prior write crashed mid-flight
         // leaving a .tmp behind, Create() should purge it rather than fail
         // with EEXIST.
