@@ -4,8 +4,8 @@ OpenAstro Ara (ARA) is a derivative work of [N.I.N.A. (Nighttime Imaging 'N' Ast
 
 ## License
 
-This repository carries two licenses, split by directory (decided 2026-07-01 —
-see `design/PORT_DECISIONS.md`):
+This repository carries two licenses, split by directory (decided 2026-07-01;
+the record is `PORT_DECISIONS 2026-07-01`, resolved via `design/README.md`):
 
 - **Server/daemon and everything not listed below — Mozilla Public License,
   v. 2.0.** See `LICENSE.txt` for the full terms. This covers the NINA-derived
@@ -107,3 +107,14 @@ disclosure fresh):
 "N.I.N.A." and the N.I.N.A. logo are property of their respective owners. The OpenAstro Ara project does not use the N.I.N.A. wordmark or logo in any way that would imply endorsement.
 
 "Raspberry Pi" is a trademark of Raspberry Pi Ltd.
+
+## Methods used with permission
+
+- **Optimal sub-exposure criterion (`t = 10·R² / P`)** — the read-noise-limited sub-exposure
+  criterion popularised by **Dr. Robin Glover** (author of SharpCap) in his "How to Get Perfect
+  Subexposures" talk. Glover notes the approximation itself likely predates him, so it is credited as
+  the criterion he popularised, not one he invented. He gave explicit permission to use the equation in
+  Open Astro by email on 2026-06-30 and supplied the engineering caveats the client's optimal-sub model
+  follows (`client/openastroara_client/lib/util/optimal_sub.dart`). The original email is retained by
+  the maintainer and kept out of the repository to avoid publishing personal contact details; a
+  redacted copy can be attached to an issue on request. Any user-facing "Optimal Sub" UI attributes him.

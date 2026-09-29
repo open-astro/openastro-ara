@@ -655,7 +655,7 @@ jobs:
 
       # Publish self-contained for linux-arm64 only. The §13 deployment
       # target is Debian 13 / RPi 4-5 (arm64); per the 2026-05-26 decision
-      # logged in design/PORT_DECISIONS.md, we don't build for linux-x64
+      # logged in PORT_DECISIONS, we don't build for linux-x64
       # at all, which deviates from the §11.1 playbook spec but matches
       # the actual deployment surface. AOT is disabled for this first cut
       # — cross-compiling AOT from ubuntu-latest x64 host to linux-arm64

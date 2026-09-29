@@ -53,7 +53,7 @@ namespace OpenAstroAra.Core.Model {
     ///
     /// Parabolic (weighted least-squares, closed-form) is implemented here — NINA's default and the
     /// workhorse for well-behaved curves. Hyperbolic + trendline fits (§59.8 fallbacks for unusual star
-    /// profiles, which need nonlinear optimisation) are a follow-up sub-PR; see PORT_TODO.
+    /// profiles, which need nonlinear optimisation) are a follow-up sub-PR; see the P1–P5 issue backlog.
     /// </summary>
     public static class FocusCurveFit {
 

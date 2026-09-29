@@ -52,4 +52,4 @@
 - Polar alignment (§45) not yet implemented.
 - Dependency licenses audited release-safe (MPL-2.0-compatible; no GPL/AGPL/commercial in the daemon); `3rd-party-licenses.txt` at the repo root is generated from the full NuGet graph and kept fresh by CI.
 
-See [`design/PORT_PROGRESS.md`](../design/PORT_PROGRESS.md) for the full sub-PR-by-sub-PR breakdown.
+The full sub-PR-by-sub-PR breakdown lived in `design/PORT_PROGRESS.md`, retired 2026-09-28 (git history).

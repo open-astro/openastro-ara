@@ -555,8 +555,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request) {
         try {
             // LIGHT is deliberate, not an oversight: the §60.5 manual-capture endpoint takes light/
-            // test snapshots; calibration frames are sequencer-driven. See PORT_TODO.md "REST manual
-            // capture is LIGHT-only by design" for the optional ImageType-field follow-up.
+            // test snapshots; calibration frames are sequencer-driven. See #1177 for the optional
+            // ImageType-field follow-up.
             // The bool result is intentionally ignored (fire-and-forget): a false/failed capture is
             // already logged inside CaptureCoreAsync, and the pre-announced frame simply never lands
             // — unlike the sequencer path, there's no caller to surface a throw to.

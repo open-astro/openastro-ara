@@ -295,7 +295,7 @@ class SitePreferences {
   // base). The horizon altitude is the hard floor below which targets aren't
   // observed. §37.5: the max-sequence-runtime cap landed with its sequencer
   // consumer (0 = no limit); a soft-warning altitude stays deferred (see
-  // design/PORT_TODO.md).
+  // the P1–P5 issue backlog).
   double? hardMinAltitudeDeg;
   TwilightOption? twilight;
   int? maxSequenceRuntimeMin;

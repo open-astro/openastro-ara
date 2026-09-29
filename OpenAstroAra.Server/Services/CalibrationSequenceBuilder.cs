@@ -389,7 +389,7 @@ public static class CalibrationSequenceBuilder {
     /// Build the §40.6 resume-target body: one looped per-filter container —
     /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure(LIGHT)] × FrameCount — replaying
     /// the capture settings the session's lights actually used. The user adds the slew/center
-    /// steps (per-frame plate-solve coordinates aren't in the catalog yet — see PORT_TODO).
+    /// steps (per-frame plate-solve coordinates aren't in the catalog yet — see the P1–P5 issue backlog).
     /// </summary>
     public static JsonElement BuildResumeTargetBody(string name, IReadOnlyList<LightStepSpec> steps) {
         var items = new JsonArray();

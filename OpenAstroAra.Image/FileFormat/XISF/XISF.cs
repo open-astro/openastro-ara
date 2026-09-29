@@ -350,7 +350,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Verifies, decompresses, unshuffles and converts one data block. A checksum mismatch is an
         /// error, not a warning: a block that fails its own integrity check must never be handed on
-        /// as pixels (design/AUDIT.MD #H3).
+        /// as pixels (AUDIT #H3).
         /// </summary>
         private static ushort[] DecodeBlock(byte[] raw, string sampleFormat, XISFCompressionInfo compressionInfo, XISFChecksumType cksumType, string cksumHash, long expectedSamples, double boundsLow, double boundsHigh) {
             if (cksumType != XISFChecksumType.NONE) {

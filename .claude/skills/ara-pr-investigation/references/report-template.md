@@ -32,7 +32,7 @@ Walkthrough: where in the app the change lives (tab → screen → widget), what
 user will notice, anything that looks wrong or unfinished on screen.
 
 ### Server impact  (omit if none; be thorough if present)
-- Endpoints / contracts touched (design/API_CONTRACT.md if listed there)
+- Endpoints / contracts touched (openapi.yaml if listed there)
 - Behaviour change for a running daemon: startup, profile/state files, migrations
 - Hardware / Alpaca / guider paths affected, and whether they were exercised
   (local daemon, Pi rig, simulators) or only read

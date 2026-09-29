@@ -11,9 +11,8 @@
 /// defaults here are ints — not the string names the REST DTOs use.
 ///
 /// Only instructions that exist as real classes are listed; an unknown `$type`
-/// would deserialise to a skipped `Unknown*` placeholder on the daemon, so
-/// not-yet-ported instructions (Run Autofocus, Center) are intentionally absent
-/// (tracked in design/PORT_TODO.md) rather than faked.
+/// would deserialise to a skipped `Unknown*` placeholder on the daemon, so an
+/// instruction is added here only once its daemon class exists, never faked.
 library;
 
 import 'package:flutter/material.dart';

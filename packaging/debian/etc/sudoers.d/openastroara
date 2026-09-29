@@ -10,7 +10,7 @@
 # (usr/share/polkit-1/rules.d/50-openastroara-storage.rules); the daemon only
 # falls back to this sudo line on a dev rig that has no packaged unit. Guider
 # unit control is likewise a polkit rule (50-openastroara-guider.rules). The
-# update.sh line is still dead on a packaged install — see design/PORT_TODO.md
+# update.sh line is still dead on a packaged install — see #1122
 # "sudo helpers vs NoNewPrivileges".
 #
 # Mode 0440, owned by root:root, as Debian sudoers requires.

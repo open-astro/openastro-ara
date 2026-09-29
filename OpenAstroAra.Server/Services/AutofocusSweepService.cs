@@ -51,7 +51,7 @@ namespace OpenAstroAra.Server.Services;
 /// Implements the sequencer's <see cref="IAutofocusExecutor"/> seam, which unlocks
 /// <c>RunAutofocus</c>, <c>AutofocusAfterExposures</c>, and the meridian flip's
 /// <c>AutoFocusAfterFlip</c> in one stroke. Live end-to-end validation is deferred (no focuser
-/// on the dev rig — recorded in PORT_TODO); the orchestration is fully unit-tested with mocked
+/// on the dev rig — recorded in the P1–P5 issue backlog); the orchestration is fully unit-tested with mocked
 /// equipment and an injected focus metric.
 /// </summary>
 public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposable {

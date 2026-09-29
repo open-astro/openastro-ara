@@ -118,7 +118,7 @@ public sealed class SqliteSessionService : ISessionService {
     //   3. Synthesis from the catalog: per-filter looped LIGHT blocks replaying the modal
     //      (exposure, gain, offset, focuser) the session's lights used, one block per filter
     //      with the original frame count. (Slew/center steps are the user's to add — per-frame
-    //      plate-solve coordinates aren't in the catalog yet; tracked in PORT_TODO.)
+    //      plate-solve coordinates aren't in the catalog yet; tracked in the P1–P5 issue backlog.)
     public async Task<ResumeTargetResultDto> ResumeTargetAsync(Guid sessionId, ResumeTargetRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (_sequences is null) {
             throw new InvalidOperationException("resume-target requires the sequence store; none is wired.");

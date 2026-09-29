@@ -526,7 +526,7 @@ class SupersedeSelectorTest(unittest.TestCase):
         CI runs this suite, ships `jq` and not `gojq`, so in CI the only
         engine exercised is the one production does NOT use. The cross-check
         fires only where someone has both installed. Closing that gap means
-        installing gojq in the sanity job -- tracked in design/PORT_TODO.md,
+        installing gojq in the sanity job -- tracked in #1173,
         not done here because it edits ci.yml.
         """
         import subprocess

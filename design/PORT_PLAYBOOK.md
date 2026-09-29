@@ -28,115 +28,15 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 
 ---
 
-## Port completion status — section checklist
-
-**Maintained going forward; cross-reference `design/PORT_PROGRESS.md` Completed section for per-PR detail.** Updated 2026-07-09 (de-versioned + reconciled with PORT_TODO).
-
-Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where status needs confirming) · ⬜ pending / placeholder service · 🚫 deferred — see `design/ROADMAP.md` · ⚙️ agent operating rule, not a shippable feature.
-
-- ⚙️ **§0/§0.5/§3/§16/§18/§19/§20/§22/§24/§55** — operating rules, design principles, phased plan, merge model, "done" definition, roadmap. Process guidance, not features.
-- ✅ **§1** Branch + tracking files · ✅ **§2** Target stack (.NET 10 / Flutter / Alpaca, locked).
-- ✅ **§4** Phase 0.5 fork hygiene + demolition (`phase-0.5a..p-complete`) · ✅ **§5** Phase 1 .NET 10 (folded into 0.5p).
-- ✅ **§6** Phase 2 Alpaca-only equipment · ✅ **§7** Phase 3 PHD2 repoint · ✅ **§8** Phase 4 Server scaffold (`:5555`, `/healthz`).
-- ✅ **§9** Phase 5 API contract (`openapi.yaml`) · ✅ **§10** Phases 6-9 endpoints (141 routes) · ✅ **§11** Phase 10 smoke test.
-- ✅ **§12** Phases 11-13 Flutter client (shell, 7 tabs, wizard, settings; mobile → §41, ROADMAP).
-- 🟡 **§13** RPi deployment — DEPLOY.md + .deb-in-CI done; actual Pi install + smoke = **physical-blocked** (PORT_TODO).
-- 🟡 **§14** Testing — 14a-d + 14e sim pinning (#321) done; ~1,590 server + ~1,340 client tests; integration tests gated on sims/hardware.
-- ✅ **§15** Build + verification gate (analyzer gate warnings=errors + CI smoke gate) · ✅ **§17** Fork hygiene / MPL headers / NOTICE.md.
-- 🚫 **§21** Localization — en-only (non-English stripped 0.5e/f); i18n is on the ROADMAP.
-- ✅ **§23** Quick reference (+ §23.1 macOS dev-run) · ✅ **§25** Visual design — NINA UX cloned (placeholder icons).
-- 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 in-memory render **fully un-stubbed (#354–#358):** RenderBitmapSource/RenderImage, GetThumbnail, ReRender, Stretch, full-res Debayer, **DetectStars/UpdateAnalysis (from-scratch `StarDetector` — median+MAD threshold → blobs → flux-weighted centroid + HFR, no OpenCvSharp4)**. Only **libraw RAW decode** still pending (PORT_TODO).
-- ✅ **§27** Single-client connection policy — connect handshake + idempotent re-claim + 4004 takeover, server #705 + WILMA client #706 (2026-07-06): `ClientSessionService` slot with 30s modal / 60s dead-holder sweep, WS client→server half (X-Ara-Session bind, app-level ping/pong, connection.request/response), takeover + session-transferred modals.
-- ✅ **§28** Sequence durability + crash recovery (SQLite catalog + §28.2/.7/.8).
-- ✅ **§29** Storage / disk-space policy — storage settings + save-dir resolution + `DiskSpaceMonitor` (warn/critical levels, hard-stop abort → diagnostic → notification) + the §29 pre-capture critical-block gate (#702).
-- ✅ **§30** First-run + launch flow (`phase-11-complete`, mDNS + handshake).
-- 🟡 **§31** Time + location sync — site settings round-trip done; full waterfall = verify.
-- ✅ **§32** Network resilience (§60.9 WS resume + 30/60s heartbeat, #172-176).
-- 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates on the ROADMAP.
-- 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); **apt.openastro.net is LIVE (Joey, 2026-08-09)**: suite `trixie`/`main`/arm64, keyring at `repo/openastro-archive-keyring.gpg`, proven with alpacabridge 3.3.0 in the pool. Remaining: `openastroara-server` into the pool via the same upload flow (+ openastro-guider when packaged).
-- ✅ **§35** Safety policies (editable per-profile, #94) + the §35.4 unsafe-reaction engine (`SafetyReactionService`: SafetyMonitor poll → on_unsafe policy pause/abort + stop-guiding + park + auto-resume-when-safe, 2026-07-07). §35.1's granular weather-threshold triggers (wind/humidity/dew via ObservingConditions) + the §35.3 emergency-stop endpoint remain follow-ups (PORT_TODO).
-- ✅ **§36** Sky imagery + Data Manager — real Data Manager (packages, downloads, catalog reads) + §36 planetarium native-webview (#611) + catalog overlay drawer/persistence/labels (#639/#640/#650) + §36.8 Tonight's Sky planner (#612-#660). Six add-on DSO catalogs (Sharpless, LDN, Barnard, vdB, Abell PN, Arp) + offline-first seed bundle shipped #932 (2026-08-08) — the old "Sharpless data-blocked" note is closed; Herschel is a curated observing list over existing NGC/IC data, folded into the catalog backlog.
-- ✅ **§37** Profile setup wizard (18-screen + round-trip persistence).
-- ✅ **§38** Sequence format + NINA import + real execution engine (#319-320).
-- ✅ **§39** Calibration + dark library — full epic #670-#688 (2026-07-02): widened schema, flats/darks as generated sequences, calibration screen + library + bulk ops + Resume Target + stats CSV + previews + live `frame.complete` refresh.
-- ✅ **§40** Captured-image library (list/preview/thumbnail/download, bulk ops, hfr-analysis).
-- 🚫 **§41** Mobile companion — iOS/Android deferred (§18.G) — ROADMAP.
-- 🟡 **§42** Hardware fault recovery — guider-d crash-recovery (#351) done; the §42.2 guider-lost row is ENFORCED (2026-07-07: link drop mid-run → on_guider_lost pause/skip/abort via the §35 bulk-pause machinery); the rest of the §42.2 matrix (camera/mount/focuser/EFW rows) + §42.3 generalized hot-reconnect remain follow-ups.
-- ✅ **§43** Backup + restore — real `BackupService` (zip snapshots, §43-2 validated restore with atomic swap, snapshot download). · ✅ **§44** Real-time backup stream — server half + the WILMA puller/toggle/registry-entries LIVE (2026-07-07); footer/tile/per-frame-icon progress surfaces + the §44.4 token-bucket bandwidth cap landed 2026-07-08 (PORT_TODO §44 closed).
-- 🟢 **§45** Polar alignment — engine + client shipped (2026-07-30; #888 + follow-ups): full `PolarAlignService` state machine (2-point seed → tracking-off live adjust via §45.8 reverse-projection), guide-optics frame solver, `polar_align.*` WS stream, §45.12 profile section, §45.13 session log + complete endpoint, WILMA bullseye panel. Open: on-hardware solve-budget spike, auto-binning, bolt-calibration nudge, reticle mode (see PORT_TODO §45).
-- ✅ **§46** Notifications (SQLite, #201/203).
-- 🚫 **§47** Mosaic imaging — `PlaceholderMosaicService`; deferred — ROADMAP.
-- ✅ **§48** Auto-flats + dark library — dark library + matching-flats generation shipped inside the §39 epic; the §48.1/.2 prompt flow is ENFORCED server-side (2026-07-07: `calibration_capture_default` + prompt/decide/auto-execute on completion via §39.5, `IAutoFlatsService` served by the SequencerService singleton); the WILMA prompt dialog + Settings → Calibration panel client slice and the §48.3/.4 native FlatPanelFlats/SkyFlats instructions (auto-exposure + twilight timing) landed 2026-07-08 (3-PR arc). One accepted watch-item: per-filter probe bounds (#754, ROADMAP appendix).
-- ✅ **§49** API doc serving (Scalar UI) · ✅ **§50** Session analytics + Stats (SQLite, 8 views) · ✅ **§51** Real-time diagnostics (SQLite).
-- ✅ **§52** Mount Alpaca-only (AlpacaTelescope + sequencer mediator).
-- 🟡 **§53** Accessibility — baseline; full WCAG audit = ongoing.
-- ✅ **§54** Bug report + push channels — real `IBugReportService` (logs + profile + system-info bundle, §70-stripped) and Pushover/Telegram push forwarding of Warning+ notifications (#704).
-- ✅ **§56** Migrating from NINA (`.json` import).
-- 🟡 **§57** Stop Mount + slew safety — telescope abort/park done; full slew-safety policy = verify.
-- 🟡 **§58** Meridian flip — decision-logic trigger (#362) + the real §58.4 orchestration executor (#366, replacing the throwing placeholder + wiring the trigger into the sequencer factory) + the side-of-pier projection test matrix all landed; **functionally complete for the attended/auto flip, and the §58.9 four-layer unattended safety landed 2026-07-01** (#629 Layers 1+2: pre-flip flight check + in-slew watchdog; Layers 3+4 PR: hard post-flip plate-solve verification gate ±2° + park-on-failure safe rest; profile toggle `flip_safety_enabled` default ON + `expected_flip_slew_seconds`). §58.7 flip notifications, §58.8 first-flip confirm (+ daemon-owned rearm #701), and §58.10 dark-hours severity escalation (#700) landed 2026-07-05/06, and the §58.12 unattended-shutdown countdown landed 2026-07-06; remaining: refocus-after-flip (focuser-gated), §58.6 schema enums, §58.12 client settings entries, §58.13 morning summary — ROADMAP part 3. · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; the live V-curve sweep orchestration is built; remaining: live validation on a real focuser (hardware-gated), §59.7 backlash auto-discovery, and Smart Focus (§59.2-4, in progress — ROADMAP part 3).
-- ✅ **§60** API conventions (pagination, Idempotency-Key, RFC7807, 202-Accepted, WS envelope).
-- ✅ **§61** Smart settings search (⌘K, #110-123) · ✅ **§62** Dither policy.
-- 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) + e-2 §63.5 profile push (#371/#372/#373) + e-3 §63.4 profile-name mapping (#375 RPC classes + slug helper; e-3b connect select-or-create wiring) done; e-3c length-cap CLOSED 2026-07-06 (the fork stores profile names as wxConfig VALUES — no cap exists; collision disambiguation unnecessary); e-4 dark-library superseded by the §39 daemon-side library; §63.3 active poll + auto-reconnect landed 2026-07-07. Remaining: live integration runs (hardware-gated) + §63.4 profile-lifecycle hooks (ROADMAP part 4) + ~~§63.17 guider equipment management~~ **§63.17 SHIPPED 2026-07-28 (#877–#882 + restart/polish): choices/discover/apply/push/delete/restart endpoints + client pickers, invalidation banner — all guider config in Ara Client**.
-- ✅ **§64** Live View / Loop — camera `/liveview/start|stop` + status DTOs + drain-on-stop semantics shipped (was stale-listed as gated; verified against code 2026-07-05).
-- ✅ **§65** Image stretching + preview API (7 algorithms, variant cache, OSC colour #349; AutoStf bug fixed #354).
-- ✅ **§66** Server concurrency model · ✅ **§67** Security model (trusted-LAN no-auth; remote access on the ROADMAP).
-- 🟡 **§68** AlpacaBridge integration — Alpaca discovery/connect/drive done; full bridge contract = verify.
-- ✅ **§69** In-app contextual help (registry + tooltips).
-- 🚫 **§70** Profile + sequence sharing — `PlaceholderProfileShareService`; deferred — ROADMAP.
-- 🟡 **§71** Native AOT — paused for §38 Newtonsoft (`<PublishAot>` off; revisit via `[JsonPolymorphic]` post-release).
-- ✅ **§72** FITS library (cfitsio P/Invoke + atomic write, #197-200) · ✅ **§73** Exception handling (CA1031 boundaries, log-and-recover).
-- 🟡 **§74** Contributor/dev-onboarding doc — README + §23.1; full onboarding doc pending.
-- 🟡 **§75** Client distribution — Flutter builds all platforms; signed/store packaging on the ROADMAP.
-
-**Rollup:** the critical path — equipment discover→connect→capture→§72 FITS→§28 catalog→§65 preview→§38 sequencer→§63 guiding — is **✅ complete and live-validated**. Everything remaining (the 🟡 tails, the 🚫 deferrals, and all follow-on feature work) lives in **`design/ROADMAP.md`**, ordered as a design path. The first public release itself (§13/§34 RPi smoke + the `v0.0.1-ara.1` tag) is the **user/Pi-gated terminus**.
-
-**Repository:** single monorepo at `github.com/open-astro/openastro-ara`. Server (.NET) and client (Flutter) live in the same repo because the client is generated from the server's OpenAPI spec — they must move together. Final layout after the port:
-
-```
-openastro-ara/                              (repo root, default branch: master)
-├── README.md  NOTICE.md  LICENSE.txt  COPYING  AUTHORS
-├── CHANGELOG.md  CONTRIBUTING.md  3rd-party-licenses.txt
-├── docs/   (USER_GUIDE.md, RUNNING.md, DEPLOY.md, RELEASE_NOTES.md)
-├── global.json  OpenAstroAra.sln  .gitignore  Dockerfile
-├── .github/workflows/   (ci.yml, release.yml)
-│
-├── design/                                 ← working/design docs (NOT shipped)
-│   ├── README.md                           ← index of the design docs + where "what's left" lives
-│   ├── PORT_PLAYBOOK.md                    ← this file
-│   ├── COMMIT-PR-RULES.md                  ← per-PR strategy
-│   ├── PORT_DECISIONS.md                   ← created Phase 0.5 (append-only log)
-│   ├── PORT_TODO.md                        ← created Phase 0.5
-│   ├── PORT_PROGRESS.md                    ← created Phase 0.5
-│   ├── API_CONTRACT.md                     ← created Phase 5
-│   ├── PHD2-GAP.md  TONIGHT_SKY.md  NEXTGEN_PLANNING.md   ← integration/feature specs
-│   └── archive/                            ← closed-out docs (GAPS-ARA.md, HANDOFF.md)
-│
-├── OpenAstroAra.Core/                      ← server-side .NET projects at repo root
-├── OpenAstroAra.Astrometry/                  (kept at root, matching NINA's layout —
-├── OpenAstroAra.Profile/                      simpler port, no directory moves)
-├── OpenAstroAra.Image/
-├── OpenAstroAra.Equipment/
-├── OpenAstroAra.Sequencer/
-├── OpenAstroAra.PlateSolving/
-├── OpenAstroAra.Server/
-│   ├── openapi.yaml                        ← source of truth, regenerates Dart client
-│   ├── Program.cs
-│   └── Contracts/                          (DTOs)
-├── OpenAstroAra.Test/
-│
-└── client/
-    └── openastroara_client/                ← Flutter project (created in Phase 11)
-        ├── pubspec.yaml
-        ├── lib/
-        │   ├── main.dart
-        │   ├── api/generated/              ← regenerated from ../../OpenAstroAra.Server/openapi.yaml
-        │   ├── screens/  state/  theme.dart
-        │   └── ...
-        ├── ios/  android/  macos/  windows/  linux/
-        └── test/  integration_test/
-```
-
-**CI path filters** keep .NET jobs from running on `client/`-only changes and vice versa (see §14.3).
+> **Status of this document (2026-09-28).** The port is feature-complete. This file is now
+> the **product spec only** — the `§` coordinate system cited throughout the code, the PR reviews and
+> `COMMIT-PR-RULES.md`. The status rollups that used to live beside it (`ROADMAP.md`, `PORT_TODO.md`,
+> `PORT_PROGRESS.md`, the append-only `PORT_DECISIONS.md` log, the feature specs
+> and the audit) were retired the same day; **open work is tracked as GitHub issues labelled
+> `P1`–`P5`** (#1118–#1185 at retirement). The retired files remain in git history before that date;
+> `design/README.md` explains how to resolve a citation to one. `design/API_CONTRACT.md` stays live.
+> Passages below that describe those files, or a "checklist" / "roadmap" workflow, are historical
+> process notes and are not maintained.
 
 ---
 
@@ -227,7 +127,7 @@ openastro-ara/                              (repo root, default branch: master)
 - [§54 Bug report submission + PII handling](#54-bug-report-submission--pii-handling)
 
 **Forward-looking (§55–56)**
-- [§55 Roadmap (moved to design/ROADMAP.md)](#55-roadmap-moved-to-designroadmapmd)
+- [§55 Roadmap and permanent non-goals](#55-roadmap-and-permanent-non-goals)
 - [§56 Migrating from NINA](#56-migrating-from-nina)
 
 **API conventions (§60)**
@@ -251,16 +151,16 @@ openastro-ara/                              (repo root, default branch: master)
 
 ## 0. Read this first — operating rules
 
-1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, write a one-line note in `design/PORT_DECISIONS.md`, and continue.
+1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, record the call in the PR description (and in `design/API_CONTRACT.md` if it is a wire shape), and continue.
 2. **No scope creep.** This is a *port + restructure*, not a redesign. The sequencer, equipment state machines, profile schema, coordinate math, plate-solver integration, PHD2 client, and image processing logic all come from NINA as-is. Do not "improve" working logic — just move it across the new boundary.
-3. **No half-finished states.** Work on a per-PR feature branch cut from `master` (naming per §19.1, e.g. `phase/38k-13-focuser-mediator`); merge it back to `master` via PR. Each commit must leave the solution buildable for everything ported so far. (Workflow simplified 2026-06-02 — see §22 and `design/PORT_DECISIONS.md`; the former `port/ara` integration branch is retired.)
-4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it in `design/PORT_TODO.md`, and move on. Sweep TODOs in Phase 15.
+3. **No half-finished states.** Work on a per-PR feature branch cut from `master` (naming per §19.1, e.g. `phase/38k-13-focuser-mediator`); merge it back to `master` via PR. Each commit must leave the solution buildable for everything ported so far. (Workflow simplified 2026-06-02 — see §22 and PORT_DECISIONS 2026-06-02; the former `port/ara` integration branch is retired.)
+4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, open a GitHub issue with a `P1`–`P5` label for it, and move on. Sweep TODOs in Phase 15.
 5. **Verify continuously.** After every phase, run the build + tests gate in §15. Do not start the next phase until the gate is green for everything completed so far.
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
-7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred — see design/ROADMAP.md** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
+7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred — see the `P1`–`P5` issue backlog** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
-9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of PRs (each phase, plus sub-PRs within Phase 0.5 and Phase 12) cut from `master` and merged **directly back to `master`** — no integration branch. At the end of each phase or sub-phase, after the §15 gate is green: update `design/PORT_PROGRESS.md`, push the feature branch, open the PR, run the review poll-and-fix loop (see COMMIT-PR-RULES.md), and then, **immediately before the merge**, tag the PR's head with the tag-and-push sequence in §22.1 step 4 (the PR's head OID from `gh pr view --json headRefOid`, never `origin/<branch>` and never an unqualified `git tag`), which ends with the `git push origin <tag>` — the tag goes on last because §19.1 requires it on "the work being merged", and any review round that produces a fix commit moves that head (§22.1 step 4 already said "before merging the last PR of the phase"). A tagged PR merges with `--merge`, never `--squash`, or the squash rewrites the head and strands the tag. Then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; review quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean), deleting the branch on merge. After merge, pull the updated `master` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
-10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
+9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of PRs (each phase, plus sub-PRs within Phase 0.5 and Phase 12) cut from `master` and merged **directly back to `master`** — no integration branch. At the end of each phase or sub-phase, after the §15 gate is green: push the feature branch, open the PR, run the review poll-and-fix loop (see COMMIT-PR-RULES.md), and then, **immediately before the merge**, tag the PR's head with the tag-and-push sequence in §22.1 step 4 (the PR's head OID from `gh pr view --json headRefOid`, never `origin/<branch>` and never an unqualified `git tag`), which ends with the `git push origin <tag>` — the tag goes on last because §19.1 requires it on "the work being merged", and any review round that produces a fix commit moves that head (§22.1 step 4 already said "before merging the last PR of the phase"). A tagged PR merges with `--merge`, never `--squash`, or the squash rewrites the head and strands the tag. Then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; review quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean), deleting the branch on merge. After merge, pull the updated `master` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
+10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `git status`, the open PRs and the `P1`–`P5` issues to find out where to continue. See §20.
 
 ---
 
@@ -286,14 +186,7 @@ git checkout master && git pull          # always branch from up-to-date master
 git checkout -b phase/<N>-<short-name>   # e.g. phase/38k-13-focuser-mediator (§19.1 naming)
 ```
 
-Create four tracking files in the `design/` directory and commit them empty (`design/` already exists and contains `PORT_PLAYBOOK.md`, `GAPS-ARA.md`, `COMMIT-PR-RULES.md`):
-
-- `design/PORT_DECISIONS.md` — append-only log of every non-obvious decision, with file:line refs.
-- `design/PORT_TODO.md` — append-only list of every `TODO(port)` and `PORT_BLOCKED` you leave in code, grouped by phase.
-- `design/PORT_PROGRESS.md` — single-page status, see §20.1.
-- `design/API_CONTRACT.md` — append-only design log for the server↔client API; one entry per endpoint or wire-shape decision.
-
-**First commit:** `port(setup): add port tracking files`.
+Three of the four tracking files this section created (`PORT_DECISIONS.md`, `PORT_TODO.md`, `PORT_PROGRESS.md`) served the port and were **retired on 2026-09-28** — open work is GitHub issues (`P1`–`P5` labels); the files are in git history (citation keys in `design/README.md`). The fourth, `design/API_CONTRACT.md`, is kept as the live wire-shape log. This playbook, `COMMIT-PR-RULES.md` and `design/README.md` are required by CI's Sanity job.
 
 ---
 
@@ -401,7 +294,7 @@ Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client displa
 Phase 14  — Tests + GitHub Actions CI matrix
             §14, §14.3
 Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
-            §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see design/ROADMAP.md)
+            §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see the `P1`–`P5` issue backlog)
 ```
 
 **Sub-PR rhythm (Phase 0.5 + Phase 12):** Each sub-PR is opened as a separate GitHub PR targeting `master`. AI runs `scripts/pre-pr-check.sh` (§14.4) → opens PR with screenshots if user-visible UI changed → review poll-and-fix loop runs (per COMMIT-PR-RULES.md) → PR merges to `master` (branch deleted) → AI pulls updated `master` and starts the next sub-PR automatically.
@@ -774,7 +667,7 @@ NINA's `CompositionRoot.cs` is deeply WPF-entangled (UI VMs, dispatcher-affinity
 | NINA registration | Why dropped |
 |---|---|
 | `IApplicationMediator` | WPF app-lifecycle; no equivalent in headless server |
-| `IPluginProvider` / `IPluginLoader` | Plugin SDK deferred — see design/ROADMAP.md per §18.B |
+| `IPluginProvider` / `IPluginLoader` | Plugin SDK deferred — see the `P1`–`P5` issue backlog per §18.B |
 | All `*ViewModel` / `*VM` classes | UI layer; replaced by REST + WS event API |
 | `IDockManager` | AvalonDock layout; N/A (Flutter client) |
 | `IInputDialogService` / `IDialogService` | UI modal services; client handles modals |
@@ -1551,7 +1444,7 @@ e2e-smoke:
 
 **Why Linux x64 only in the initial release:**
 
-- Mobile builds deferred — see design/ROADMAP.md per §18.G (no iOS/Android in CI)
+- Mobile builds deferred — see the `P1`–`P5` issue backlog per §18.G (no iOS/Android in CI)
 - macOS + Windows E2E adds runner cost without much new coverage (UI is Flutter — identical rendering across desktop platforms)
 - Linux x64 is the native CI environment + matches the production Pi (Linux ARM64) closely enough that platform-specific UI bugs are caught in §14.2 widget tests + §14.6 manual UI screenshots
 - A future release may expand to macOS + Windows runners if Flutter platform-specific bugs emerge
@@ -1597,7 +1490,7 @@ dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -o
 ```
 
 Gate is green when:
-1. `dotnet build` succeeds with zero errors. Warnings logged in `design/PORT_DECISIONS.md`.
+1. `dotnet build` succeeds with zero errors. New warnings are noted in the PR description.
 2. `dotnet test` green for every previously-passing test (unit + integration per §14.1). Tests dependent on deleted WPF UI types from §4.2 are deleted (not skipped).
 3. `flutter analyze` returns no errors (warnings OK, logged).
 4. `flutter test` + `flutter test integration_test/` pass (per §14.2).
@@ -1607,13 +1500,13 @@ Gate is green when:
 8. For PRs touching user-visible Flutter UI: manual screenshots attached to the PR (per §14.6).
 7. From Phase 11: `flutter run -d macos` reaches the server-discovery screen without exceptions.
 
-If the gate fails and you cannot fix it within ~5 attempts, revert the last commit, write up the failure in `design/PORT_DECISIONS.md`, try a different approach. **Do not push a broken commit.**
+If the gate fails and you cannot fix it within ~5 attempts, revert the last commit, write up the failure in the PR (or a GitHub issue if you abandon the approach), try a different approach. **Do not push a broken commit.**
 
 ---
 
 ## 16. Stuck-state policy
 
-- **Compile error you can't immediately solve:** comment out the smallest region with `// PORT_BLOCKED: <reason>`, make the file compile with `throw new NotImplementedException("PORT_BLOCKED: <reason>")`, log to `design/PORT_TODO.md`. Move on.
+- **Compile error you can't immediately solve:** comment out the smallest region with `// PORT_BLOCKED: <reason>`, make the file compile with `throw new NotImplementedException("PORT_BLOCKED: <reason>")`, open a `P1`–`P5` GitHub issue for it. Move on.
 - **API design ambiguity:** pick a REST-conventional shape (nouns for resources, HTTP status codes per semantics), document in `design/API_CONTRACT.md`. Do not paralyze.
 - **Flutter package missing for a need (e.g., FITS parsing):** vendor a minimal implementation in `client/openastroara_client/lib/<feature>/` rather than depending on an unmaintained package.
 - **NINA logic depends on a WPF type internally (Dispatcher, RoutedEventArgs, etc.):** replace with `SynchronizationContext` or plain async/await. Patch in place.
@@ -1658,7 +1551,7 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 
 **Add in `design/`** (working/design docs, not shipped):
 - `design/API_CONTRACT.md` (API design log)
-- (Plus the existing `design/PORT_PLAYBOOK.md`, `design/GAPS-ARA.md`, `design/COMMIT-PR-RULES.md`, and the four tracking files created in §1.)
+- (Plus `design/PORT_PLAYBOOK.md` and `design/COMMIT-PR-RULES.md`. `archive/GAPS-ARA.md` and the §1 tracking files were retired on 2026-09-28.)
 
 ### 17.3 Per-file headers
 
@@ -1699,7 +1592,7 @@ Rules:
 ### 18.A — Updater: **DROP**
 No in-app updater. README points users to GitHub Releases. Server announces its version in `/api/v1/server/info`; client displays "Server version X — see GitHub for updates."
 
-### 18.B — Plugin system: **DEFERRED — see design/ROADMAP.md**
+### 18.B — Plugin system: **DEFERRED — see the `P1`–`P5` issue backlog**
 Phase 0.5 deletes `NINA.Plugin` entirely. No plugin loader, no browser UI in the client, no SDK published. Plugin design happens post-release once architecture is stable.
 
 ### 18.C — Telemetry: **LOCAL LOGS ONLY, NO NETWORK**
@@ -1724,13 +1617,13 @@ Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Ha
 - iOS/Android out of scope for the initial release (per §18.G + §41 mobile-deferred decision (ROADMAP))
 - `TODO(signing): revisit when project has funding` in release workflow
 
-### 18.G — Distribution formats: **DESKTOP ONLY for now; mobile deferred — see design/ROADMAP.md**
+### 18.G — Distribution formats: **DESKTOP ONLY for now; mobile deferred — see the `P1`–`P5` issue backlog**
 - **Server**: `.deb` for `arm64` via apt.openastro.net per §34 (primary); `.tar.gz` of self-contained publish (`linux-arm64`, `linux-x64`) as a fallback tarball for manual installs.
 - **Client (desktop only for now)**:
   - macOS: `.dmg` via `create-dmg`, unsigned (per §18.F)
   - Windows: `.zip` of release build (later `.msix`), unsigned
   - Linux desktop: AppImage (Flatpak optional)
-- **Client mobile (iOS / Android): deferred — see design/ROADMAP.md.** Mobile distribution requires:
+- **Client mobile (iOS / Android): deferred — see the `P1`–`P5` issue backlog.** Mobile distribution requires:
   - Apple Developer Program account ($99/yr) for any iOS distribution including TestFlight
   - Google Play Console account ($25 one-time) for Play Store distribution
   - Per-platform review processes (App Store ~2–7 days, Play Store ~hours-to-days)
@@ -1767,7 +1660,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **Planned (needs telescope-mediator plumbing; not release-critical):** gate the hinted attempt on mount sync/park state — when the mount reports no valid sync / parked / near-home, pass `Coordinates=null` up front to skip the doomed hinted pass and go straight to blind. This is prevention rather than recovery, and avoids one wasted solve attempt per bad-position event.
   - **Explicitly NOT doing — search-radius escalation.** The binary hinted (`-r 30`) → blind (`-r 180`) path already covers the bad-hint case. A larger *hinted* radius only slows ASTAP and raises false-match risk; multi-tier escalation adds complexity for no gain over the blind retry.
   - **Dependency on the FOV-aware `-d` work above:** blind failover only *succeeds* if the Pi-side database has adequate sky coverage at the rig's FOV. Wiring `-d <database_dir>` (the Phase 8 code gap) is therefore also failover insurance, not just a wide-field nicety.
-- **Astrometry.net**: **deferred — see design/ROADMAP.md.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for the initial release. Phase 8 strips astrometry.net call sites from inherited NINA code; a future release may add it back if there's user demand.
+- **Astrometry.net**: **deferred — see the `P1`–`P5` issue backlog.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for the initial release. Phase 8 strips astrometry.net call sites from inherited NINA code; a future release may add it back if there's user demand.
 - **PlateSolve2**: deleted entirely (Windows-only legacy).
 
 ---
@@ -1780,7 +1673,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 - **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
   - All required CI checks are `pass` — or `skipping` **because CI's documented path gate skipped them** (`.github/workflows/ci.yml`'s `changes` job, #1020: a docs-only PR skips six jobs — six check contexts, of which two are required: `server-build` and `registry-gate`. The other four — both Alpaca jobs, `analyzer-gate`, and `client-build`, which appears once under its literal uninterpolated name `Client (native build) — ${{ matrix.target }}` because a matrix skipped at job level never expands — are not required contexts but will also read `skipping`. The three required `client-test` legs are gated at step level and report `pass`, not `skipping`, because a matrix job skipped at job level never expands and its required contexts are never reported at all — see #1025). No `pending`, no `failure`. A `skipping` that is *not* attributable to that gate — a job skipped because one of its `needs:` failed, or by an `if:` the merging agent cannot account for — is **ambiguous, not clearance**: post `Held for human review` and stop. The distinction matters because GitHub counts a skipped required context as satisfied, so "skipped" alone cannot be trusted to mean "did not need to run"; the reason has to be checked. (Amended 2026-09-19 in PR #1021, which introduced the path gate, at the user's direction after the AI flagged that editing this gate autonomously was not its call.) **Second amendment, 2026-09-19, again at the user's direction** ("I want to make sure we are thinking thoughtful with CI so we are not running things when we do not need to"): the `changes` job now also emits `dotnet` and `client`, so the four NON-REQUIRED contexts above — both Alpaca jobs, `analyzer-gate`, and `client-build` — can read `skipping` on a PR that is **not** docs-only. A client-only PR skips the three `dotnet` jobs; a PR touching neither the .NET graph nor `client/` skips all four. That is attributable and therefore clearance. The two REQUIRED contexts (`server-build`, `registry-gate`) and the three step-gated `client-test` legs are deliberately left on `docs_only` alone, because a skipped required context is counted by GitHub as satisfied and a classifier bug there would merge a broken PR with nothing red. Classification is `scripts/classify-changed-paths.py`, unit-tested in `scripts/tests/` (which the Sanity job runs), including a differential against the shell it replaced; read that script to attribute a skip, and treat a skip it does not explain as ambiguous.
   - **The reviewer has actually reviewed the current head** — a `claude[bot]` comment (or `github-actions[bot]` on the fork path) whose `updated_at` is at or after the last push, carrying a sign-off marker (`Approved` / `Issues found`). A green `review` status check **does not satisfy** this gate on its own: that check only asserts a comment was posted, never that it was clean, and a comment older than the last push is the previous round's verdict on code that has since changed. The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
-  - All **Defects** in that review have been addressed via additional commits on the same sub-branch (per the review poll-and-fix loop in COMMIT-PR-RULES.md). **Notes never block a merge.** Disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
+  - All **Defects** in that review have been addressed via additional commits on the same sub-branch (per the review poll-and-fix loop in COMMIT-PR-RULES.md). **Notes never block a merge.** Disagreements have reasoned replies; out-of-scope items are tracked in the `P1`–`P5` issue backlog
   - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
   - At a phase boundary: verify the expected `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tag has been pushed for the work being merged
 
@@ -1818,8 +1711,8 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 19.5 Scope safety
 
-- Do not edit `design/PORT_PLAYBOOK.md`, `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` except to append entries per documented rules.
-- Do not edit `.git/`, `.claude/`. Exception (PORT_DECISIONS.md 2026-09-24, #1101): a
+- Do not edit `design/PORT_PLAYBOOK.md` rules autonomously (maintainer-authoritative); `design/API_CONTRACT.md` is append-only.
+- Do not edit `.git/`, `.claude/`. Exception (PORT_DECISIONS 2026-09-24, #1101): a
   maintainer's `chore/*` PR may add or change Claude Code skills under `.claude/skills/`,
   including their helper scripts; the port driver itself still never touches `.claude/`.
 - `.github/workflows/` is owned by the playbook: the full CI matrix per §14.3 lands at Phase 14. Pre-Phase-14 edits are permitted only to (a) replace the stale upstream NINA CI that would otherwise red-flag every PR (the progressive placeholder in `prep-ci`) and (b) grow that placeholder at the documented phase boundaries (Phase 0.5p, Phase 4, Phase 11) on the way to §14.3 (which, since #1036, documents the matrix as it stands rather than the target). Any other workflow change before Phase 14 requires explicit user instruction.
@@ -1828,37 +1721,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ## 20. Quota-resume protocol
 
-### 20.1 `design/PORT_PROGRESS.md` format
-
-```markdown
-# OpenAstro Ara — Port Progress
-
-## Current
-- Phase: 7 — Sequence endpoints
-- Started: 2026-XX-XX
-- Currently working on: <file or endpoint>
-
-## Completed
-- ✅ Phase 0.5 — Fork hygiene + project demolition (tag: phase-0.5-complete)
-- ✅ Phase 1 — Bump non-UI projects to .NET 10 (tag: phase-1-complete)
-- ... (one line per phase)
-
-## Next
-- After current task: <next file or endpoint>
-- After current phase: Phase 8 — Image endpoints
-```
-
-Updated on every commit. "Currently working on" must point at a specific file or endpoint, never "various refactoring."
-
-### 20.2 Resume procedure
-
-On session start (fresh or resumed):
-
-1. `git status` and `git log --oneline -20`.
-2. `cat PORT_PROGRESS.md`.
-3. `cat PORT_TODO.md`.
-
-Then resume the current task. If `git diff HEAD` shows uncommitted changes, finish them and commit. Otherwise pick up at the next file/endpoint per `design/PORT_PROGRESS.md`.
+Historical. The protocol resumed from `design/PORT_PROGRESS.md` + `design/PORT_TODO.md`, both retired 2026-09-28 (git history). A resumed session now reads `git status`, `git log --oneline -20`, the open PRs, and the `P1`–`P5` GitHub issues.
 
 ---
 
@@ -1874,7 +1737,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 
 ### 22.0 Merge model (simplified 2026-06-02 — integration branch retired)
 
-This is a **single-developer** port. Each PR branches from `master` and merges **directly back to `master`** once the §19.1 merge-gate clears — there is no `port/ara` integration branch and no separate promotion step. (History: an earlier two-step model branched sub-PRs into `port/ara` and periodically promoted `port/ara → master`. For a solo team that just doubled the PR count — a sub-PR *plus* a promotion PR per change — with no batching benefit, since promotions already happened every phase. Retired in favor of standard GitHub Flow; see `design/PORT_DECISIONS.md`.) Properties this preserves:
+This is a **single-developer** port. Each PR branches from `master` and merges **directly back to `master`** once the §19.1 merge-gate clears — there is no `port/ara` integration branch and no separate promotion step. (History: an earlier two-step model branched sub-PRs into `port/ara` and periodically promoted `port/ara → master`. For a solo team that just doubled the PR count — a sub-PR *plus* a promotion PR per change — with no batching benefit, since promotions already happened every phase. Retired in favor of standard GitHub Flow; see PORT_DECISIONS 2026-06-02.) Properties this preserves:
 
 - Visibility: `master` shows real progress continuously (it always did under periodic promotion; now with less ceremony).
 - Risk: each per-feature PR is small and independently revertable — the same property the old periodic promotion bought, without the extra hop.
@@ -1908,7 +1771,7 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
 
 ### 22.3 Phase 15 (final release pass)
 
-1. Sweep `design/PORT_TODO.md`: every `// TODO(port)` and `// PORT_BLOCKED` resolved or explicitly accepted in `design/PORT_DECISIONS.md`.
+1. Sweep every `// TODO(port)` and `// PORT_BLOCKED`: each is resolved, or explicitly accepted with a `P1`–`P5` GitHub issue (#1174 tracks the remainder).
 2. Run the gate one more time including `-c Release` and `flutter build` for every desktop platform (macOS / Windows / Linux per §18.G).
 3. Smoke test end-to-end:
    - Bring up `OpenAstroAra.Server` on a Linux ARM64 host (Pi or Docker).
@@ -1920,14 +1783,14 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
 4. Update `CHANGELOG.md` (per §33.7) — rename `## [Unreleased]` → `## [0.0.1-ara.1] — <date>` with sections:
    - Headless server + cross-platform desktop client architecture
    - Alpaca-only equipment (per §52, §68)
-   - Plugin support deferred — see design/ROADMAP.md
-   - Mobile (iOS / Android) deferred — see design/ROADMAP.md per §18.G + §41
+   - Plugin support deferred — see the `P1`–`P5` issue backlog
+   - Mobile (iOS / Android) deferred — see the `P1`–`P5` issue backlog per §18.G + §41
    - Behavioral parity goals vs. upstream NINA where applicable
    - Lineage attribution
    - Known issues, install instructions
    - Create fresh `## [Unreleased]` placeholder for the next release's work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: `design/PORT_DECISIONS.md` contents. The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
+6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: the release notes cut from `CHANGELOG.md` `[Unreleased]` (#1119). The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
 
 ---
 
@@ -2041,8 +1904,8 @@ connected device's state lives daemon-side, so the app reflects it on reconnect.
 - Smoke test in §22 (step 3) passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
 - No bundled native vendor SDKs, no WPF UI code, no plugin loader, no upstream-NINA branding (except attributions in NOTICE.md, AUTHORS, About, README per §17).
 - All MPL license headers preserved per §17.3.
-- `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` reflect the full history.
-- PR description summarizes the work and links the four tracking files.
+- Open work is captured as `P1`–`P5` GitHub issues; wire-shape decisions are in `design/API_CONTRACT.md`.
+- PR description summarizes the work and links the issues it closes or opens.
 
 Begin Phase 0.5.
 
@@ -2201,7 +2064,7 @@ These are deliberate departures, documented up front so the AI doesn't try to cl
 
 - **AvalonDock panel rearrangement** — not supported in the initial release. Static layout only.
 - **MGEN guider tab** — gone (NINA.MGEN deleted). Guider section is PHD2-only.
-- **Plugin browser tab** — gone (plugin support deferred — see design/ROADMAP.md).
+- **Plugin browser tab** — gone (plugin support deferred — see the `P1`–`P5` issue backlog).
 - **Built-in updater UI** — gone (per §18.A).
 - **Patreon / donate banner** — gone (per §18.D).
 - **Language picker** — gone (English-only, §18.E).
@@ -2691,7 +2554,7 @@ Server refuses to start if the DB's `__EFMigrationsHistory` contains migrations 
 - Server logs `DB_SCHEMA_AHEAD_OF_BINARY: db_max_migration=<name>, binary_max_migration=<name>` (critical)
 - Server exits with non-zero status; systemd restart loop keeps trying but failure persists
 - WILMA on next connect sees this via a `/healthz` (per Tier 2 health-check gap) or `/api/v1/server/state` 503 with `code: "schema_ahead_of_binary"`
-- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred — see design/ROADMAP.md; for now this is a DEPLOY.md manual SSH instruction)
+- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred — see the `P1`–`P5` issue backlog; for now this is a DEPLOY.md manual SSH instruction)
 
 ARA does **not** generate down-migrations in the initial release. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. A future release may reconsider for specific high-risk migration types.
 
@@ -3017,7 +2880,7 @@ openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
 ```
 
-On a packaged install neither line is reachable (NoNewPrivileges, above); the storage line serves dev rigs and the update line is pending the same template-unit treatment (design/PORT_TODO.md). Scope is narrow: only these two scripts, only as root, only nopasswd. The `openastroara` user has no shell (system user per §34.3), isn't reachable interactively, and the scripts validate their own inputs. No direct `/usr/bin/mount` or `/sbin/mkfs.ext4` permissions are granted — all storage operations route through the helpers so their validation logic can't be bypassed.
+On a packaged install neither line is reachable (NoNewPrivileges, above); the storage line serves dev rigs and the update line is pending the same template-unit treatment (the `P1`–`P5` issue backlog). Scope is narrow: only these two scripts, only as root, only nopasswd. The `openastroara` user has no shell (system user per §34.3), isn't reachable interactively, and the scripts validate their own inputs. No direct `/usr/bin/mount` or `/sbin/mkfs.ext4` permissions are granted — all storage operations route through the helpers so their validation logic can't be bypassed.
 
 **Helper script exit codes:**
 
@@ -3524,7 +3387,7 @@ When user clicks a non-active server:
    - Cross-server notifications surface in a separate "Other rigs" section of the §46 notification feed with the source server prefixed (`[joey-north] Sequence completed: NGC 7000 — 47 frames`)
    - Background watcher auto-closes if WILMA's process is killed or if the user switches WILMA's primary connection a second time (only one background watcher at a time in the initial release)
    - Critical/urgent notifications from the watched server can pop a modal in the active context — the user is reminded which Pi it's from
-   - This is the minimum-viable cross-rig awareness for the initial release; full concurrent multi-server is on the ROADMAP
+   - This is the minimum-viable cross-rig awareness for the initial release; full concurrent multi-server is on the `P1`–`P5` issue backlog
 
 **Settings → Servers panel (`[⚙ Manage servers]`):**
 
@@ -3567,7 +3430,7 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 - No cross-rig sequence orchestration ("alternate N frames on north, M frames on south")
 - No cross-rig single-emergency-stop button (each server has its own §35.3)
 
-**Concurrent multi-server roadmap** (see design/ROADMAP.md):
+**Concurrent multi-server roadmap** (see the `P1`–`P5` issue backlog):
 
 - Concurrent WebSocket connections, one per server
 - Tabbed top-level UI (one tab per server, plus a "Rigs overview" tab)
@@ -3610,7 +3473,7 @@ WebSocket events from background-watcher mode use the same shapes as §46 notifi
 - §32.4 + §32.5 — mDNS discovery + state hydration on connect
 - §35.5 — emergency alarms from watched servers still fire
 - §46 — notification feed (background-watcher notifications are a section within the same feed)
-- design/ROADMAP.md — concurrent multi-server entry
+- the `P1`–`P5` issue backlog — concurrent multi-server entry
 - §67 — security model (no auth between WILMA and any Pi in the initial release; switching adds no new attack surface)
 
 ---
@@ -3816,7 +3679,7 @@ Disconnect handling (§32.1–§32.5) is what WILMA does *after* the link breaks
 | **2.4 GHz Wi-Fi (Pi joined to home AP)** | Last resort | Range OK, but congestion + Bluetooth + microwave + neighbor APs cause drops. Power-save off + channel-pin same as above. Expect more §32 modal fires. |
 | **Pi AP mode (§32.6)** with WILMA on phone/laptop | Standard for field rigs | Best when there's no other network. Phone Wi-Fi power-save can drop the connection even with the Pi rock-solid — phone-side §32 reconnect is what saves it. |
 | **USB tethering** (phone-to-Pi) | Untested | May work; ARA doesn't test against it; community-supported. |
-| **Cellular hotspot upstream** | Not a thing for the initial release | LAN-only architecture per §67; cellular for remote-internet imaging is on the ROADMAP. |
+| **Cellular hotspot upstream** | Not a thing for the initial release | LAN-only architecture per §67; cellular for remote-internet imaging is on the `P1`–`P5` issue backlog. |
 
 **Wi-Fi power-save on the Pi side** (the dominant cause of "WS heartbeat missed" on Wi-Fi):
 
@@ -4283,7 +4146,7 @@ sudo apt install openastroara-server
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/set-usbfs-memory.sh
   ```
-  None of these is reachable from the packaged daemon (NoNewPrivileges); the storage line is the dev-rig fallback only, and the others are tracked in PORT_TODO "sudo helpers vs NoNewPrivileges"
+  None of these is reachable from the packaged daemon (NoNewPrivileges); the storage line is the dev-rig fallback only, and the others are tracked in the `P1`–`P5` issue backlog "sudo helpers vs NoNewPrivileges"
 - Creates data + log + config dirs at proper permissions
 - Installs `/etc/logrotate.d/openastroara` per §29.9
 - Enables + starts the service: `systemctl enable --now openastroara-server.service`
@@ -4704,7 +4567,7 @@ When a thumbnail exists locally, framing assistant uses it. When absent, framing
 | Asset | Size | Purpose |
 |---|---|---|
 | **Full DE440 ephemerides** | ~50 MB | Sub-milliarcsecond Sun/Moon/planet positions. Required for accurate Tonight's Sky planetarium planet rendering, comet motion-trail precision, occultation events. Without it, planetarium falls back to a minimal analytical formula for Sun/Moon only; planets are not shown. **Default-recommended in the wizard for any rig.** |
-| MPC asteroid catalog (bulk) | placeholder, future | Bulk asteroid layer (~1.4M numbered) — deferred — see design/ROADMAP.md per §36.8 |
+| MPC asteroid catalog (bulk) | placeholder, future | Bulk asteroid layer (~1.4M numbered) — deferred — see the `P1`–`P5` issue backlog per §36.8 |
 
 ### 36.3 Per-asset controls
 
@@ -4782,7 +4645,7 @@ Search bar at the top of the Planning tab (Explore mode):
 - **Offline**: fall back to bundled name resolver index (HYG common names + NGC/IC/M/HD/HIP/Tycho-2 designations + Bayer/Flamsteed + bundled comets). ~5-10 MB index, ~50-100k entries.
 - **Coordinate parsing**: accept RA/Dec strings in multiple formats (HH:MM:SS / decimal degrees / mixed).
 - **Comets**: searchable by designation (`C/2023 A3`) or common name (`Tsuchinshan-ATLAS`).
-- **Asteroids** (today): targeted lookup only (type "Ceres", "(1) Ceres", "433 Eros" → WILMA fetches that single object from MPC on demand). Bulk asteroid catalog deferred — see design/ROADMAP.md.
+- **Asteroids** (today): targeted lookup only (type "Ceres", "(1) Ceres", "433 Eros" → WILMA fetches that single object from MPC on demand). Bulk asteroid catalog deferred — see the `P1`–`P5` issue backlog.
 
 ### 36.9 Comet support
 
@@ -4841,7 +4704,7 @@ Flutter's desktop WebView story on Linux is patchy across packages (`webview_flu
 
 **Help-wiki entry:** the OpenAstro wiki documents the Linux WebView dependency install steps (typically `sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev` or equivalent per distro). If the user installs the missing deps + restarts WILMA, the embedded WebView typically works on the next launch.
 
-**Future path:** a pure-Flutter Skia sky-renderer (the ROADMAP entry now largely superseded by the #611 native Stellarium atlas) eliminates this Linux-only issue entirely — but that's a substantial design pass.
+**Future path:** a pure-Flutter Skia sky-renderer (the `P1`–`P5` issue backlog entry now largely superseded by the #611 native Stellarium atlas) eliminates this Linux-only issue entirely — but that's a substantial design pass.
 
 ### 36.11 Aladin Lite license requirements
 
@@ -5325,7 +5188,7 @@ Ship 3 templates with the `openastroara-server` .deb at `/opt/openastroara/templ
 |---|---|
 | `lrgb-dso.json` | LRGB on a DSO — luminance + RGB filters, dither cadence, auto-focus on temp change |
 | `narrowband-shoo.json` | SHO narrowband — Hα, OIII, SII filters with longer exposures |
-| `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion yet (deferred — see design/ROADMAP.md). User points at a comet from the §36.9 catalog. |
+| `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion yet (deferred — see the `P1`–`P5` issue backlog). User points at a comet from the §36.9 catalog. |
 
 No lunar / planetary templates here — the still-imaging template set is DSO + comets (§18.J); planetary capture is a different engine entirely (§77), and its sequencer clip plans arrive with §77 P5, not as templates in this set. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
 
@@ -5732,7 +5595,7 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 
 ## 41. Mobile companion mode (iOS / Android)
 
-**Scope status: SPEC ONLY — no mobile builds ship yet.** Mobile distribution is deferred — see design/ROADMAP.md per §18.G (requires funded Apple Developer + Play Console accounts + per-platform review workflow + ongoing signing maintenance). The §41 spec stays in the playbook because it informs today's API decisions (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) — so the server-side API surface is correct when mobile builds turn on. Flutter codebase already supports iOS/Android targets; what's missing is the distribution + signing + review pipeline, not the code.
+**Scope status: SPEC ONLY — no mobile builds ship yet.** Mobile distribution is deferred — see the `P1`–`P5` issue backlog per §18.G (requires funded Apple Developer + Play Console accounts + per-platform review workflow + ongoing signing maintenance). The §41 spec stays in the playbook because it informs today's API decisions (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) — so the server-side API surface is correct when mobile builds turn on. Flutter codebase already supports iOS/Android targets; what's missing is the distribution + signing + review pipeline, not the code.
 
 When mobile builds are enabled, no server changes are needed — the same WILMA codebase compiles for iOS/Android with platform-detection-driven shell selection per §41.4. The spec below describes the *intended* mobile UX; treat as future design with current API forward-compatibility.
 
@@ -6283,7 +6146,7 @@ Combined with §29's mandatory-USB design, this makes ARA's reliability model si
 
 ### 44.11 Out of initial scope
 
-Deferred — see design/ROADMAP.md:
+Deferred — see the `P1`–`P5` issue backlog:
 - **Multi-target streaming** (mirror to two desktops simultaneously)
 - **Cloud streaming** (rclone-based push to S3, Google Drive, etc.) — same protocol model but pull from a third-party endpoint
 - **Selective stream** (only stream frames matching certain filters / rated 3⭐+) — initial version streams everything
@@ -7694,7 +7557,7 @@ Modes:
 
 **Why notify_only is the initial default (instead of balanced):**
 
-1. **Thresholds are uncalibrated.** The 40% star-drop threshold, HFR 1.5× refocus trigger, etc. are educated defaults — not per-user-tuned values. per-user threshold calibration (§51.9) is on the ROADMAP; until then, the risk of false-positive auto-actions outweighs the benefit. A spurious auto-pause during a clean Bortle 1 session would teach users to distrust + disable the feature entirely.
+1. **Thresholds are uncalibrated.** The 40% star-drop threshold, HFR 1.5× refocus trigger, etc. are educated defaults — not per-user-tuned values. per-user threshold calibration (§51.9) is on the `P1`–`P5` issue backlog; until then, the risk of false-positive auto-actions outweighs the benefit. A spurious auto-pause during a clean Bortle 1 session would teach users to distrust + disable the feature entirely.
 2. **Matches competitor posture.** NINA has no smart corrections at all. ZWO ASIAir auto-pauses only on hardware safety signals (cloud sensor, rain). `notify_only` aligns ARA's out-of-box behavior with what users already expect from the rest of the ecosystem.
 3. **First-do-no-harm.** The diagnostic value (you see WHY a frame went bad) is preserved without surprise behavior. Power users who want auto-correction opt into `balanced` / `aggressive` in Settings → Diagnostics; that's a deliberate "I trust the smart features" choice rather than a default surprise.
 
@@ -7807,7 +7670,7 @@ This is the section that's worth showing in marketing screenshots: a side-by-sid
 
 ### 52.1 Alpaca-only is a permanent architectural commitment
 
-ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not become, native protocols.** This is not "deferred — see design/ROADMAP.md" — it's a permanent design choice. Reasons:
+ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not become, native protocols.** This is not "deferred — see the `P1`–`P5` issue backlog" — it's a permanent design choice. Reasons:
 
 | Standard | Conformance validation | Driver quality bar |
 |---|---|---|
@@ -7989,7 +7852,7 @@ No light-theme variant in the initial release — observatory astrophotography i
 - Light theme variant (observatory software is dark-themed)
 - Voice control or Switch Control specific testing beyond what Flutter handles automatically
 
-These are deferred — see design/ROADMAP.md if user demand or legal requirements emerge (e.g., observatory deploying ARA for public outreach may need formal compliance).
+These are deferred — see the `P1`–`P5` issue backlog if user demand or legal requirements emerge (e.g., observatory deploying ARA for public outreach may need formal compliance).
 
 ### 53.6 Acknowledgment
 
@@ -8156,19 +8019,30 @@ This matches the §18.C "no network telemetry" commitment: anything leaving the 
 
 ---
 
-## 55. Roadmap (moved to design/ROADMAP.md)
+## 55. Roadmap and permanent non-goals
 
-**Moved 2026-07-09.** The consolidated roadmap that lived here — previously organized by
-version tier (committed features / larger projects / out-of-scope) — is now
-[`design/ROADMAP.md`](ROADMAP.md): the single, version-free list of everything remaining,
-ordered as a design path (in-flight epic → release gates → dependency-ordered workstreams →
-themed feature backlog → verify passes → user-parked decisions → follow-ups appendix →
-permanent non-goals). The former §55.3 "out of scope indefinitely" list and §55.4 "what's NOT
-on this list" rationale moved there too (ROADMAP parts 11 and its closing note).
+**Moved 2026-07-09, retired 2026-09-28.** The consolidated roadmap that lived here moved to
+`design/ROADMAP.md` on 2026-07-09; that file was retired on 2026-09-28 and everything still open is
+now a GitHub issue labelled `P1`–`P5` (`gh issue list --label P1` … `--label P5`). Cross-references
+to "§55" or "(ROADMAP)" elsewhere in this playbook mean that backlog; where they name a ROADMAP part,
+the citation key in `design/README.md` resolves it.
 
-§ cross-references to "§55" throughout this playbook and the other design docs should be read
-as pointing at `design/ROADMAP.md`. This section number is retained because §s are never
-renumbered.
+**Out of scope permanently** (deliberately on no path — guard against scope-creep pull):
+
+- **Native INDI / INDIGO protocol support** — Alpaca-only forever per §52; bridges only.
+- **In-app FITS post-processing** (stacking, integration, gradient removal) — PixInsight / Siril /
+  APP territory. ARA captures and organizes; processing is its own tool category.
+- **Solar imaging specifics** (filter detection, prominence tracking) — solar imagers can use ARA;
+  ARA won't specialize for them.
+- **Mount homing mechanical-knob automation** — requires hardware; ARA guides the human.
+- **Astrometric measurement tools** (MPC astrometry submission, supernova-search workflows) —
+  research-grade, out of scope for the imaging tool.
+- *Planetary / lunar lucky-imaging was removed from this list on 2026-08-02* — it is in scope via
+  §77's native-SDK capture engine (#1179).
+
+If something seems missing it is likely already shipped, a speculative per-section idea (the
+playbook subsection is the reference), a settings knob rather than a feature, or outside ARA's
+product scope as listed above.
 
 ---
 
@@ -8192,7 +8066,7 @@ For existing NINA users coming to ARA, here's what's different and how to bring 
 |---|---|
 | Your NINA profile | Different schema; rebuild in the wizard (§37) — ~10-15 minutes for a typical rig |
 | Your AvalonDock UI layout | ARA's UI is fixed (§25); no dockable panels in the initial release |
-| NINA plugins | No plugin support yet; the plugin SDK is on the ROADMAP and authors must port to Avalonia-native API |
+| NINA plugins | No plugin support yet; the plugin SDK is on the `P1`–`P5` issue backlog and authors must port to Avalonia-native API |
 | Crowdin translations | English-only in the initial release (§18.E); other languages may return in future versions |
 | ASCOM COM equipment | Use AlpacaBridge on Windows to expose COM drivers as Alpaca (§52.2). Direct COM is gone permanently. |
 | Native vendor SDK support | All native SDKs removed (Nikon, Canon, ZWO direct, QHY direct, etc.). Use the vendor's Alpaca driver (most vendors ship one) or AlpacaBridge. |
@@ -8230,7 +8104,7 @@ If real users ask for it post-release, the path is:
 - Idempotent: re-running the import doesn't double-create rows (keyed by NINA's original timestamps)
 - Importer is **always optional** — never run automatically. User triggers explicitly.
 
-Not in the initial release. Tracked in design/ROADMAP.md if the user-demand signal materializes.
+Not in the initial release. Tracked in the `P1`–`P5` issue backlog if the user-demand signal materializes.
 
 ### 56.3 What's BETTER in ARA
 
@@ -8590,7 +8464,7 @@ the initial release's "no push notifications" limitation (§46.9) means the prac
 
 DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep at least one WILMA device running with audio enabled near where you sleep. The urgent-alarm pattern is your wake-up signal."*
 
-True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed on the ROADMAP per §46.9.
+True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed on the `P1`–`P5` issue backlog per §46.9.
 
 ### 58.12 Unattended-failure graceful shutdown (10-minute countdown)
 
@@ -8943,7 +8817,7 @@ Notification stays in the feed; user can revisit anytime.
 
 - Prescriptive screw-turning guidance (per-scope-model + per-mount-orientation; consequences of bad guidance are real — wait for the community-curated knowledge base (ROADMAP))
 - Auto-collimation routines (require motorized secondary or robotic collimation tools — out of scope)
-- Refractor collimation detection (signature is subtle in defocus images; deferred — see design/ROADMAP.md design pass)
+- Refractor collimation detection (signature is subtle in defocus images; deferred — see the `P1`–`P5` issue backlog design pass)
 
 ### 59.11 Failure handling
 
@@ -9529,7 +9403,7 @@ WILMA picks `recommended` unless the user-installed WILMA version doesn't suppor
 - §49 — Swagger UI shows both v1 + v2 specs side-by-side once v2 ships
 - §60.9 — WebSocket protocol versioning is independent (X-Ara-WS-Version header)
 - §71.3 — OpenAPI spec generated for both versions from endpoint metadata
-- design/ROADMAP.md — add a "first v2 API surface" entry when known breaking changes accumulate
+- the `P1`–`P5` issue backlog — add a "first v2 API surface" entry when known breaking changes accumulate
 
 ### 60.9 WebSocket wire protocol
 
@@ -10026,13 +9900,13 @@ Same `⌘K` / `Ctrl+K` shortcut, registry expands to include:
 
 VS Code's `Cmd+Shift+P` pattern applied to astrophotography. Builds on §61's foundation — the registry just gains new entry kinds (`ActionEntry`, `TargetEntry`, `SessionEntry`, etc.) with the same search/dropdown/inline-action UX.
 
-Committed on the ROADMAP.
+Committed on the `P1`–`P5` issue backlog.
 
 ### 61.11 Cross-section updates this enables
 
 - **§25 UI sections** — every settings-bearing section is re-evaluated through the "is this discoverable via search?" lens
 - **§37 wizard** — wizard remains the friendly setup flow; search is the friendly *re-find* flow afterwards
-- **design/ROADMAP.md** — general command palette explicitly listed as a committed expansion
+- **the `P1`–`P5` issue backlog** — general command palette explicitly listed as a committed expansion
 
 ---
 
@@ -10102,7 +9976,7 @@ If the profile has no guider configured OR PHD2 is connected but unresponsive: d
 
 > *"Dither requires a guider — your sequence will continue without dithering. Hot pixels may persist in stacked images."*
 
-Direct-mount-pulse dither (without guider) is technically possible but only useful for short-exposure workflows where dither matters less anyway. Deferred — see design/ROADMAP.md.
+Direct-mount-pulse dither (without guider) is technically possible but only useful for short-exposure workflows where dither matters less anyway. Deferred — see the `P1`–`P5` issue backlog.
 
 ### 62.8 Diagnostic-aware skip (the §59.9 pattern repeated)
 
@@ -10562,8 +10436,8 @@ Per §18.J, the Alpaca imaging path serves DSO + comets — high-frame-rate work
 - Single Save Current Frame action
 - Mutual exclusion with Sequence, Polar Align, Smart Focus, plate-solve (all use the same camera)
 
-**Out of scope for the initial release (deferred — see design/ROADMAP.md):**
-- Running-average / live stacking (covered by the live-stacking commitment in design/ROADMAP.md)
+**Out of scope for the initial release (deferred — see the `P1`–`P5` issue backlog):**
+- Running-average / live stacking (covered by the live-stacking commitment in the `P1`–`P5` issue backlog)
 - Multi-frame averaging for visible noise reduction during display
 
 **Out of scope for THIS surface (Live View is the Alpaca still-imaging preview):**
@@ -10822,7 +10696,7 @@ All searchable from the §61 omnibar.
 
 ## 65. Image stretching pipeline + preview API
 
-§40.2 generates two JPEG previews per captured FITS using the user's default stretch. This section specs the stretch palette, defaults policy, server-side compute + cache strategy, and the API knobs the client uses to request alternative renderings. All pixel processing happens server-side via OpenCvSharp4 (per §26); the WILMA client receives JPEGs over HTTP and never touches FITS pixels in the initial release (real-time client-side slider deferred — see design/ROADMAP.md, see §65.10).
+§40.2 generates two JPEG previews per captured FITS using the user's default stretch. This section specs the stretch palette, defaults policy, server-side compute + cache strategy, and the API knobs the client uses to request alternative renderings. All pixel processing happens server-side via OpenCvSharp4 (per §26); the WILMA client receives JPEGs over HTTP and never touches FITS pixels in the initial release (real-time client-side slider deferred — see the `P1`–`P5` issue backlog, see §65.10).
 
 ### 65.1 Stretch palette (initial set)
 
@@ -10868,7 +10742,7 @@ Server-side, on top of OpenCvSharp4 (per §26):
 - **Capture-time preview** (`<frame>.preview.jpg`): generated server-side at capture time, using the profile's `light_default` (or frame-type auto-override). Cached on disk alongside the FITS. Always exists for completed frames.
 - **Alternative stretches**: server compute on first request, cached at `<frame>.preview.<stretch-id>.jpg` (or `<frame>.preview.manual.<hash-of-params>.jpg` for manual stretch). Subsequent requests serve from cache.
 - **Manual stretch sliders (frame viewer)**: each slider drag fires `GET /api/v1/frames/{id}/preview?stretch=manual&blackpoint=...&midpoint=...&whitepoint=...` debounced 200 ms. Server computes + caches; cache key includes the rounded param values (3 decimal places) to bound the cache entry count.
-- **Client-side real-time slider (no server round-trip)**: deferred — see design/ROADMAP.md (see §65.10). the initial release's 200 ms debounce + LAN-only deployment makes server round-trip adequate for the slider UX.
+- **Client-side real-time slider (no server round-trip)**: deferred — see the `P1`–`P5` issue backlog (see §65.10). the initial release's 200 ms debounce + LAN-only deployment makes server round-trip adequate for the slider UX.
 
 ### 65.4 Cache strategy
 
@@ -11112,7 +10986,7 @@ Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure
 
 ### 66.8 Out of initial scope
 
-- Live performance dashboard in WILMA (deferred — see design/ROADMAP.md — `GET /api/v1/server/internal-state` + Stats "Pi performance" panel)
+- Live performance dashboard in WILMA (deferred — see the `P1`–`P5` issue backlog — `GET /api/v1/server/internal-state` + Stats "Pi performance" panel)
 - Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in the initial release
 - Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
 - Hot-reload of executor config without server restart
@@ -11275,7 +11149,7 @@ DEPLOY.md (per §34.6) documents:
 - **Public Wi-Fi (coffee shop, airport, hotel)**: don't. Image on private networks.
 - **Remote observatory access (over internet)**: out of scope for the initial release — use a VPN. A future release may add an opt-in remote-access mode with TLS + token auth.
 
-### 67.4 Remote-access mode (deferred — see design/ROADMAP.md)
+### 67.4 Remote-access mode (deferred — see the `P1`–`P5` issue backlog)
 
 When users want to image from a remote observatory over the internet, the open-LAN model breaks down — the internet has actual adversaries. The ROADMAP adds an opt-in **remote-access mode**:
 
@@ -11566,7 +11440,7 @@ Distinct from §43 backup/restore (same-user disaster recovery) and from §38 NI
 
 §38 already makes sequences shareable by construction (NINA-compatible JSON with no equipment-specific calibration baked in). §70 adds the profile side: an equipment-stripped export format + import flow that walks the recipient through wizard'ing their own gear into the donated template.
 
-ARA ships file-based sharing only today (email, USB stick, Discord attachments) — no central registry, no rating system, no curation. "OpenAstro Hub" is the bigger lift (see design/ROADMAP.md).
+ARA ships file-based sharing only today (email, USB stick, Discord attachments) — no central registry, no rating system, no curation. "OpenAstro Hub" is the bigger lift (see the `P1`–`P5` issue backlog).
 
 ### 70.1 What gets stripped — the share-vs-backup distinction
 
@@ -11768,7 +11642,7 @@ File extension `.araseq.json`. Import goes through the existing §38.4 import en
 
 ### 70.6 Future expansion — OpenAstro Hub (deferred)
 
-Per the ROADMAP, future releases add central infrastructure:
+Per the `P1`–`P5` issue backlog, future releases add central infrastructure:
 
 - **openastro.net/hub/profiles** — browseable catalog of community-shared profile templates with filters (rig class, FL range, sensor type, Bortle target)
 - **openastro.net/hub/sequences** — same for sequence templates
@@ -11818,7 +11692,7 @@ The §70 file format (`profile-share-v1`, `araseq.json`) is the on-disk wire for
 - §37 — wizard's "use existing template" mode is the import flow's landing destination
 - §38 — sequence file format is the basis for sequence sharing
 - §43 — backup/restore (same-user disaster recovery — keep distinct from §70's peer sharing)
-- design/ROADMAP.md — OpenAstro Hub entry
+- the `P1`–`P5` issue backlog — OpenAstro Hub entry
 - §61 + §69 — search + help registries surface the share/import affordances
 - §67 — security model (no auth in the initial release; share files are user-mediated, no server-to-server trust assumed)
 
@@ -11960,7 +11834,7 @@ Middleware works normally (AOT-compatible). Hosted services (background workers 
 
 ### 71.6 Plugin SDK (deferred) — AOT constraint propagates
 
-§10 + the ROADMAP commit to a plugin SDK. AOT rules out dynamic-load-of-arbitrary-DLLs-at-runtime — `Assembly.Load(string path)` doesn't work in a Native AOT executable.
+§10 + the `P1`–`P5` issue backlog commit to a plugin SDK. AOT rules out dynamic-load-of-arbitrary-DLLs-at-runtime — `Assembly.Load(string path)` doesn't work in a Native AOT executable.
 
 The plugin design pass (already deferred) must pick an AOT-compatible model:
 - **Option A:** plugins as separate processes communicating over a local UNIX socket / named pipe (process boundary; ARA Core stays pure AOT)
@@ -12102,7 +11976,7 @@ then falls back to the versioned sonames the distro packages actually ship:
 The fallback is not redundant with the assembly-level `DefaultDllImportSearchPaths`
 attribute; removing it reintroduces the Pi capture failure.
 
-Intended: if the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message referencing the §72.2 install docs. **Not implemented as of 2026-09-27:** `FitsLibraryProbe.EnsureLoadable()` exists but is called only from tests, so a missing library surfaces at the first FITS write as `DllNotFoundException` (tracked in PORT_TODO "No startup probe for CFITSIO").
+Intended: if the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message referencing the §72.2 install docs. **Not implemented as of 2026-09-27:** `FitsLibraryProbe.EnsureLoadable()` exists but is called only from tests, so a missing library surfaces at the first FITS write as `DllNotFoundException` (tracked in the `P1`–`P5` issue backlog "No startup probe for CFITSIO").
 
 ### 72.4 Managed wrapper layer
 
@@ -12504,7 +12378,7 @@ Phase 15 deliverable. Must:
 
 - Design rationale — that's in `design/PORT_PLAYBOOK.md` (link prominently)
 - Per-feature implementation guidance — in playbook sections
-- Architecture decisions — in playbook + GAPS-ARA.md
+- Architecture decisions — in the playbook and `design/README.md` "Standing decisions"
 - PR review criteria — in COMMIT-PR-RULES.md
 - Code style — enforced by `dotnet format` + `dart format` in the pre-PR gate; CONTRIBUTING.md just says "run them"
 
@@ -12532,7 +12406,7 @@ COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (
 
 ## 75. Client distribution — WILMA desktop packaging
 
-§18.G locks "desktop only in the initial release; mobile deferred — see design/ROADMAP.md" and names the three formats (`.dmg`, `.zip`, AppImage). §18.F locks "ship unsigned." This section spells out the build pipeline, per-OS install + first-run UX, distribution channels, and update mechanism so Phase 12/15 doesn't have to improvise.
+§18.G locks "desktop only in the initial release; mobile deferred — see the `P1`–`P5` issue backlog" and names the three formats (`.dmg`, `.zip`, AppImage). §18.F locks "ship unsigned." This section spells out the build pipeline, per-OS install + first-run UX, distribution channels, and update mechanism so Phase 12/15 doesn't have to improvise.
 
 Server-side distribution (.deb via apt.openastro.net) is §34 — completely separate concern, different release cadence, different audience (the Pi gets one binary; WILMA ships three per release tag).
 
@@ -12601,7 +12475,7 @@ Contents of the .zip:
 
 Install pattern: user unzips anywhere (typically `C:\Program Files\OpenAstro Ara\` or their Downloads folder); runs the .exe. No installer, no registry writes, no Start Menu shortcut auto-creation in the initial release — fully portable.
 
-**`.msix` deferred — see design/ROADMAP.md** because it requires either an EV signing cert (~$400/yr) or the user enabling sideloading/developer mode. The `.zip` route works without either.
+**`.msix` deferred — see the `P1`–`P5` issue backlog** because it requires either an EV signing cert (~$400/yr) or the user enabling sideloading/developer mode. The `.zip` route works without either.
 
 **SmartScreen warning is expected** — see §75.5.
 
@@ -12674,7 +12548,7 @@ The client ships from **GitHub Releases only** today — no Homebrew tap, no Cho
 - AUR (`yay -S openastroara-bin`) — Trivial PKGBUILD wrapping the AppImage
 - iOS / Android via App Store / Play Store (per §18.G mobile-deferred decision)
 
-**No auto-update inside the client** in the initial release (matches §18.A's drop-the-updater decision; same rationale applies to the WILMA app). On launch WILMA checks its embedded server binary's bundled version vs. the connected server (§33.2); WILMA's own version check against GitHub Releases happens via the same `/server/release-notes` modal pattern extended to the client — deferred — see design/ROADMAP.md since early users pull from Releases directly.
+**No auto-update inside the client** in the initial release (matches §18.A's drop-the-updater decision; same rationale applies to the WILMA app). On launch WILMA checks its embedded server binary's bundled version vs. the connected server (§33.2); WILMA's own version check against GitHub Releases happens via the same `/server/release-notes` modal pattern extended to the client — deferred — see the `P1`–`P5` issue backlog since early users pull from Releases directly.
 
 ### 75.7 Update mechanism (manual for now)
 
@@ -12786,7 +12660,7 @@ If a future release adds an in-app updater for the client, register the related 
 - §34 — Server-side .deb distribution (parallel, separate concern)
 - §36 — Bundled catalogs in `getApplicationDocumentsDirectory()`
 - §54.7 — Bug-report template (install-state field)
-- design/ROADMAP.md — distribution expansions (Homebrew, Chocolatey, AUR, mobile stores)
+- the `P1`–`P5` issue backlog — distribution expansions (Homebrew, Chocolatey, AUR, mobile stores)
 - §75.6 — Distribution channels
 - CONTRIBUTING.md (§74) — local build commands match the release workflow's
 

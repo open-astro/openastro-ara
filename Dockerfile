@@ -21,7 +21,7 @@
 # only `noble` (Ubuntu 24.04 LTS) and `azurelinux3.0`. We pick
 # `noble-chiseled` (the distroless variant) here: ~12MB, no shell, no
 # package manager, only the .NET runtime deps. Per the 2026-05-26
-# decision in design/PORT_DECISIONS.md, this is the new base for
+# decision in PORT_DECISIONS, this is the new base for
 # OpenAstroAra.Server. Despite the §13 RPi target being Debian, Docker
 # image base OS is independent of host OS — the chiseled image runs
 # fine on Debian-host containers.

@@ -328,7 +328,7 @@ Map<String, dynamic> buildTargetBlock({
 /// the camera warms up or the scope parks — else at the end. (An imported
 /// NINA sequence that wraps its end steps in an "End" CONTAINER is not
 /// detected — containers are indistinguishable from target blocks here; see
-/// design/PORT_TODO.md.) Throws [ArgumentError] when [root] isn't a
+/// the P1–P5 issue backlog.) Throws [ArgumentError] when [root] isn't a
 /// container — the caller should fall back to creating a fresh run instead.
 Map<String, dynamic> appendTargetToRunBody(
   Map<String, dynamic> root,
