@@ -1103,6 +1103,11 @@ public partial class Program {
             }
         }
 
+        // §72.3 / #1120 — same idea for CFITSIO: resolve it now so a missing or broken libcfitsio
+        // shows in the boot log with an install hint instead of at the first exposure's FITS write.
+        // Log-and-continue: the rest of the daemon (equipment, planning, the client UI) still works.
+        LogCfitsioProbe(app.Logger, OpenAstroAra.Fits.FitsLibraryProbe.Probe(), CfitsioInstallHint());
+
         LogListening(app.Logger, port);
         try {
             app.Run();
@@ -1128,6 +1133,36 @@ public partial class Program {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "OpenAstroAra.Server listening on :{Port}")]
     private static partial void LogListening(ILogger logger, int port);
+
+    /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
+    internal static void LogCfitsioProbe(ILogger logger, OpenAstroAra.Fits.FitsLibraryProbeResult result, string installHint) {
+        var resolution = result.Resolution;
+        var tried = resolution.Tried.Count == 0 ? "(resolver not reached)" : string.Join(", ", resolution.Tried);
+        if (!result.Loaded) {
+            LogCfitsioMissing(logger, installHint, tried, result.Error ?? "unknown error");
+        } else if (resolution.ExplicitPath is not null && !resolution.ExplicitPathLoaded) {
+            LogCfitsioExplicitPathIgnored(logger, resolution.ExplicitPath, resolution.LoadedFrom ?? "runtime default probing");
+        } else {
+            LogCfitsioLoaded(logger, resolution.LoadedFrom ?? "runtime default probing");
+        }
+    }
+
+    /// <summary>Platform-specific "how to install CFITSIO" text for the boot log (§72.2).</summary>
+    internal static string CfitsioInstallHint() =>
+        OperatingSystem.IsLinux() ? "sudo apt install libcfitsio10"
+        : OperatingSystem.IsMacOS() ? "brew install cfitsio, then rebuild so the dylib is staged next to the daemon (docs/RUNNING.md)"
+        : "vcpkg install cfitsio:x64-windows, then set OPENASTROARA_CFITSIO_PATH to the full path of cfitsio.dll";
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "CFITSIO loaded from {Source}")]
+    private static partial void LogCfitsioLoaded(ILogger logger, string source);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "OPENASTROARA_CFITSIO_PATH={Path} did not load; CFITSIO loaded from {Source} instead")]
+    private static partial void LogCfitsioExplicitPathIgnored(ILogger logger, string path, string source);
+
+    // The hint and candidates go first: the runtime's DllNotFoundException message lists every dlopen
+    // path it probed and runs to dozens of lines.
+    [LoggerMessage(Level = LogLevel.Error, Message = "Cannot load libcfitsio. Install via: {Hint}. Tried: {Tried}. Every capture will fail at the FITS write until it loads. Loader: {Error}")]
+    private static partial void LogCfitsioMissing(ILogger logger, string hint, string tried, string error);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Astrometry natives loaded (SOFA + NOVAS31)")]
     private static partial void LogAstrometryNativesPresent(ILogger logger);

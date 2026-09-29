@@ -94,8 +94,11 @@ curl http://localhost:5555/healthz   # → "ok"
 
 ### CFITSIO per OS
 
-The build doesn't need CFITSIO, but the capture path resolves it at runtime
-(`DllNotFoundException: 'cfitsio'` means it's missing).
+The build doesn't need CFITSIO, but the capture path resolves it at runtime. The
+server loads it at boot and logs either `CFITSIO loaded from …` or `Cannot load
+libcfitsio` with an install hint (a capture's `DllNotFoundException: 'cfitsio'` means
+the same thing). `OPENASTROARA_CFITSIO_PATH=/full/path/to/the/library` is tried
+before the default search, for a library outside the loader path.
 
 - **Linux:** `sudo apt-get install libcfitsio10` (Debian/Ubuntu). The runtime package is
   enough: the server resolves the versioned `libcfitsio.so.10` itself, so a dev box matches
