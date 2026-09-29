@@ -25,6 +25,7 @@ DEB = REPO_ROOT / "packaging" / "debian"
 UNIT = DEB / "etc" / "systemd" / "system" / "openastroara-server.service"
 POSTINST = DEB / "DEBIAN" / "postinst"
 TMPFILES = DEB / "usr" / "lib" / "tmpfiles.d" / "openastroara.conf"
+PLAYBOOK = REPO_ROOT / "design" / "PORT_PLAYBOOK.md"
 
 
 def rw_paths(unit_text: str) -> list[str]:
@@ -56,6 +57,9 @@ def postinst_dirs(text: str) -> set[str]:
         line = raw.strip()
         if line.startswith("#") or "mkdir" not in line:
             continue
+        # Only a line that starts with `mkdir` counts: `install -d`, `a && mkdir`
+        # or a mkdir inside a branch that may not run would be misread, so keep
+        # postinst's directory creation as plain top-level `mkdir -p` lines.
         words = shlex.split(line, comments=True)
         if words and words[0] == "mkdir":
             dirs.update(w for w in words[1:] if w.startswith("/"))
@@ -94,6 +98,11 @@ class UnitReadWritePathsTest(unittest.TestCase):
     def test_store_mount_point_is_optional(self):
         # The store only exists after the storage step; see the unit's comment.
         self.assertIn("-/media/openastroara", rw_paths(UNIT.read_text()))
+
+    def test_playbook_unit_block_matches_the_shipped_unit(self):
+        # §13.3 is the spec the unit is regenerated from; if it drifts, the next
+        # rewrite reintroduces the 226/NAMESPACE loop (#1186 review).
+        self.assertEqual(rw_paths(PLAYBOOK.read_text()), rw_paths(UNIT.read_text()))
 
     def test_parser_sees_the_unit(self):
         # A parser that silently finds nothing would pass the check above vacuously.
