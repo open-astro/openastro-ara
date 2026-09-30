@@ -317,6 +317,12 @@ here so this file's --check gate flags any drift):
     intact; the only change from upstream is a whole-solution `dotnet format`
     reformat (commit 7c66a58f0) — style only, no functional changes.
     https://spdx.org/licenses/LGPL-2.1.html
+  * IERS Bulletin A UT1-UTC series — IERS Rapid Service/Prediction Center,
+    U.S. Naval Observatory (OpenAstroAra.Astrometry/External/iers-dut1.tsv, a
+    snapshot of finals2000A.all + the bulletin's prediction formula taken by
+    scripts/update-dut1-table.py). Work of the U.S. Government — "Approved for
+    public release: distribution unlimited". Cited as a courtesy to IERS/USNO.
+    https://datacenter.iers.org/
 
 Engines and companions installed as SEPARATE packages (openastro-guider,
 alpacabridge, ASTAP) carry their own licenses and are not part of this

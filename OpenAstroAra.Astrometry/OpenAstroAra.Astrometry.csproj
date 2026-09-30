@@ -68,5 +68,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>External\JPLEPH</Link>
     </Content>
+    <!-- #1190 - the IERS Bulletin A UT1-UTC snapshot Dut1Table reads (regenerate with
+         scripts/update-dut1-table.py before a release). Embedded rather than copied so the
+         daemon has it wherever the assembly runs, offline included. -->
+    <EmbeddedResource Include="External\iers-dut1.tsv" LogicalName="OpenAstroAra.Astrometry.External.iers-dut1.tsv" />
   </ItemGroup>
 </Project>

@@ -208,6 +208,9 @@ The captures volume isn't ext4. See [Storage setup](#storage-setup-required).
 **journalctl shows "Cannot load libcfitsio" at boot, or captures fail with `DllNotFoundException: 'cfitsio'`**
 `sudo apt install libcfitsio10` — the .deb dependency should pull this in automatically, but if you're on a sparse distro you may need it explicitly. The daemon keeps running without it, but every capture fails at the FITS write. The boot line lists every candidate it tried; a library outside the loader path can be named with `OPENASTROARA_CFITSIO_PATH=/full/path/to/libcfitsio.so.10`. It loads a native library into the daemon, so set it only in the root-owned unit (`Environment=` in a `systemctl edit` drop-in), never in a shell profile.
 
+**journalctl shows "DUT1 requested ... past the bundled IERS table"**
+The daemon computes sidereal time with a bundled snapshot of the IERS UT1-UTC series (about a year of predictions past the release date). Past its end it extends the series with the IERS long-term formula, which stays within a few hundredths of a second for many months, so pointing is not affected in practice; a newer release carries a fresh table. To refresh in place, download <https://datacenter.iers.org/data/9/finals2000A.all> onto the Pi and name it with `OPENASTROARA_DUT1_TABLE=/full/path/finals2000A.all` in the root-owned unit (`Environment=` in a `systemctl edit` drop-in). The boot log line `IERS DUT1 table (...)` shows the span in use.
+
 **Client can't discover the daemon**
 - mDNS announces require LAN multicast — verify the Pi's network supports it (most home networks do; some enterprise networks block multicast)
 - Check the firewall: `sudo ufw status` — port 5555/tcp must be open
