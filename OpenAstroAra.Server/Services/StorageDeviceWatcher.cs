@@ -23,15 +23,15 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// §29 — notices a storage drive being plugged or pulled and tells live
 /// clients. Polls two cheap kernel views every 5 s (no exec, no privilege):
-/// the block-device names under <c>/sys/block</c> and whether the ARA store
-/// mount is present in <c>/proc/self/mounts</c>. On any change it broadcasts
+/// the block-device names under <c>/sys/block</c> and whether a disk of its
+/// own is mounted at the ARA store path per <c>/proc/self/mounts</c> (a line
+/// alone is not enough — see <see cref="StoreMountProbe"/>). On any change it broadcasts
 /// <c>storage.devices_changed</c> — clients re-fetch their device/space
 /// state, so an unplugged drive shows as gone within seconds instead of
 /// whenever something happened to refresh.
 /// </summary>
 public sealed partial class StorageDeviceWatcher : BackgroundService {
 
-    private const string MountPoint = "/media/openastroara";
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
 
     private readonly IWsBroadcaster? _ws;
@@ -98,9 +98,11 @@ public sealed partial class StorageDeviceWatcher : BackgroundService {
                 .Select(Path.GetFileName)
                 .Where(n => n is not null)
                 .OrderBy(n => n, StringComparer.Ordinal);
-            var mounted = File.ReadLines("/proc/self/mounts")
-                .Any(l => l.Split(' ') is { Length: > 1 } parts && parts[1] == MountPoint);
-            return string.Join(',', blocks) + "|store=" + (mounted ? "1" : "0");
+            var mounted = StoreMountProbe.IsStoreMounted();
+            if (mounted is null) {
+                return null;
+            }
+            return string.Join(',', blocks) + "|store=" + (mounted.Value ? "1" : "0");
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException) {
             return null;
         }

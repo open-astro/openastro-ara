@@ -41,10 +41,10 @@ PrivateDevices=false
 # step (configure-storage.sh) has run, so it is optional: on a fresh install it is
 # skipped, and a store mounted there later reaches this namespace by mount
 # propagation as a new rw mount (ProtectSystem= only re-marks mounts present at
-# start). Deliberately not created at install: the bind of an empty directory
-# shows up in the daemon's /proc/self/mounts as if a store were mounted, which is
-# how the daemon tells an ejected drive, and a tmpfiles `d` line that set the
-# owner would try to chown an exFAT store's root at every boot.
+# start). Deliberately not created at install: a tmpfiles `d` line that set the
+# owner would try to chown an exFAT store's root at every boot. (When the directory
+# does exist with no disk, systemd binds it into this namespace; the daemon tells
+# that bind from a real store by its source device — StoreMountProbe, #1207.)
 ReadWritePaths=/var/log/openastroara
 ReadWritePaths=/var/lib/openastroara
 ReadWritePaths=-/media/openastroara
