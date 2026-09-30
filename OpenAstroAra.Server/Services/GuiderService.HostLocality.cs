@@ -56,7 +56,7 @@ public sealed partial class GuiderService {
                 return true;
             }
             foreach (var local in localAddresses) {
-                if (local.Equals(ip)) {
+                if (SameAddress(local, ip)) {
                     return true;
                 }
             }
@@ -64,6 +64,12 @@ public sealed partial class GuiderService {
         }
         return SameMachineName(name, machineName);
     }
+
+    // IPAddress.Equals includes the IPv6 scope id, so the NIC's fe80::1234%2 would never match a
+    // profile host typed as fe80::1234. Compare the bytes only (family first: the byte arrays of an
+    // IPv4 and an IPv6 address can never collide in length, but be explicit).
+    private static bool SameAddress(IPAddress a, IPAddress b) =>
+        a.AddressFamily == b.AddressFamily && a.GetAddressBytes().AsSpan().SequenceEqual(b.GetAddressBytes());
 
     // "raspberrypi" == "raspberrypi.local" == "RASPBERRYPI.lan": compare the first DNS label.
     private static bool SameMachineName(string host, string machineName) {
@@ -78,12 +84,16 @@ public sealed partial class GuiderService {
     /// <summary>The production decision: the pure check against this machine's name and interface
     /// addresses, then — for a DNS name that is not ours — a bounded resolve so a name that points at
     /// one of our own addresses still counts as local. Never throws.</summary>
+    internal static Task<bool> IsLocalGuiderHostAsync(string host, CancellationToken ct) =>
+        IsLocalGuiderHostAsync(host, SafeMachineName(), SafeLocalAddresses(), Dns.GetHostAddressesAsync, ct);
+
+    /// <summary>The resolve step with its inputs injected, so the "a name that resolves to one of our
+    /// own addresses is local" rule is testable without a second machine or a live resolver.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "A network-information or DNS fault must degrade to 'not local' (no local unit is started for a host we cannot place), never break a connect.")]
-    internal static async Task<bool> IsLocalGuiderHostAsync(string host, CancellationToken ct) {
+        Justification = "A DNS fault must degrade to 'not local' (no local unit is started for a host we cannot place), never break a connect.")]
+    internal static async Task<bool> IsLocalGuiderHostAsync(string host, string machineName, IReadOnlyList<IPAddress> localAddresses,
+            Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken ct) {
         var name = host?.Trim().Trim('[', ']') ?? string.Empty;
-        var machineName = SafeMachineName();
-        var localAddresses = SafeLocalAddresses();
         if (IsLocalGuiderHost(name, machineName, localAddresses)) {
             return true;
         }
@@ -93,7 +103,7 @@ public sealed partial class GuiderService {
         try {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(HostResolveTimeout);
-            var resolved = await Dns.GetHostAddressesAsync(name, cts.Token).ConfigureAwait(false);
+            var resolved = await resolve(name, cts.Token).ConfigureAwait(false);
             foreach (var address in resolved) {
                 if (IsLocalGuiderHost(address.ToString(), machineName, localAddresses)) {
                     return true;

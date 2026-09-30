@@ -52,10 +52,11 @@ namespace OpenAstroAra.Test {
         }
 
         private static GuiderService NewService(HeadlessProfileService profile, GuiderRecoveryCoordinator recovery,
-                Mock<IGuiderProcessSupervisor> supervisor, Func<Guid?>? activeProfileId = null) =>
+                Mock<IGuiderProcessSupervisor> supervisor, Func<Guid?>? activeProfileId = null,
+                INotificationService? notifications = null) =>
             new(profile, recovery, NullLogger<GuiderService>.Instance, supervisor.Object,
                 ws: null, profileStore: null, sequencerResolver: () => Mock.Of<ISequencerService>(),
-                notifications: Mock.Of<INotificationService>(), faultLog: null,
+                notifications: notifications ?? Mock.Of<INotificationService>(), faultLog: null,
                 activeProfileIdResolver: activeProfileId) {
                 ReconnectAttemptInterval = TimeSpan.FromMilliseconds(200),
                 ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(20),
@@ -177,6 +178,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void IsLocalGuiderHost_ignores_the_IPv6_scope_id_of_an_interface_address() {
+            // The NIC reports its link-local address with a scope (fe80::1234%2); a profile host is
+            // typed without one. IPAddress.Equals compares the scope, so this needs a byte compare.
+            var addresses = new[] { IPAddress.Parse("fe80::1234%2") };
+            Assert.That(GuiderService.IsLocalGuiderHost("fe80::1234", "raspberrypi", addresses), Is.True);
+            Assert.That(GuiderService.IsLocalGuiderHost("[fe80::1234]", "raspberrypi", addresses), Is.True);
+            Assert.That(GuiderService.IsLocalGuiderHost("fe80::1235", "raspberrypi", addresses), Is.False);
+        }
+
+        [Test]
+        public async Task IsLocalGuiderHostAsync_counts_a_name_that_resolves_to_our_own_address_as_local() {
+            var ours = new[] { IPAddress.Parse("192.168.4.1") };
+            Task<IPAddress[]> Resolve(string name, CancellationToken _) => name switch {
+                "ara-alias.lan" => Task.FromResult(new[] { IPAddress.Parse("192.168.4.1") }),
+                "phd2-laptop.lan" => Task.FromResult(new[] { IPAddress.Parse("192.168.4.2") }),
+                _ => Task.FromException<IPAddress[]>(new System.Net.Sockets.SocketException()),
+            };
+            Assert.That(await GuiderService.IsLocalGuiderHostAsync("ara-alias.lan", "raspberrypi", ours, Resolve, CancellationToken.None), Is.True,
+                "a CNAME/alias for one of our own addresses is this machine");
+            Assert.That(await GuiderService.IsLocalGuiderHostAsync("phd2-laptop.lan", "raspberrypi", ours, Resolve, CancellationToken.None), Is.False);
+            Assert.That(await GuiderService.IsLocalGuiderHostAsync("nowhere.invalid", "raspberrypi", ours, Resolve, CancellationToken.None), Is.False,
+                "an unresolvable name cannot be the local unit; the resolver fault must not escape");
+            Assert.That(await GuiderService.IsLocalGuiderHostAsync("192.168.4.2", "raspberrypi", ours, Resolve, CancellationToken.None), Is.False,
+                "a literal never hits the resolver");
+        }
+
+        [Test]
         public async Task Connect_to_a_remote_host_never_asks_systemd_to_start_the_local_unit() {
             var supervisor = new Mock<IGuiderProcessSupervisor>();
             var profile = new HeadlessProfileService();
@@ -205,8 +233,9 @@ namespace OpenAstroAra.Test {
         public async Task Remote_host_recovery_skips_the_systemd_tree_and_still_reconnects() {
             await using var fake = StartFake();
             var supervisor = new Mock<IGuiderProcessSupervisor>();
+            var notifications = new Mock<INotificationService>();
             var profile = new HeadlessProfileService();
-            using var svc = NewService(profile, GatedRecovery(Task.CompletedTask, supervisor), supervisor, () => ProfileA);
+            using var svc = NewService(profile, GatedRecovery(Task.CompletedTask, supervisor), supervisor, () => ProfileA, notifications.Object);
             svc.IsLocalGuiderHostDecision = static (_, _) => Task.FromResult(false);
             await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
 
@@ -216,6 +245,10 @@ namespace OpenAstroAra.Test {
                 "a remote guider has no local unit to supervise");
             supervisor.Verify(s => s.RequestRestart(), Times.Never);
             supervisor.Verify(s => s.RequestStart(), Times.Never);
+            // The skipped coordinator would have posted "Guider connection lost"; with no sequence
+            // running the fault reaction stays quiet too, so the remote branch must alert on its own.
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d => d.Title == "Guider connection lost"), It.IsAny<CancellationToken>()), Times.Once,
+                "a dropped remote guider must be reported before the retry window runs");
         }
 
         [Test]

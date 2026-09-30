@@ -111,6 +111,13 @@ public sealed partial class GuiderService {
             if (!await IsLocalGuiderHostDecision(target.Host, token).ConfigureAwait(false)) {
                 token.ThrowIfCancellationRequested();
                 LogRemoteHostNoLocalRecovery(target.Host, target.Port);
+                // The coordinator would have posted its "Guider connection lost" here, and the §42.2
+                // fault reaction stays quiet on a LinkDown with no sequence running because it
+                // expects that — so a dropped remote guider must announce itself, or the user
+                // hears nothing until the grace window expires.
+                await NotifyFaultQuietlyAsync("Guider connection lost",
+                    $"Lost the link to the guider at {target.Host}:{target.Port}. It runs on another machine, so ARA cannot restart it; "
+                    + "retrying the connection within the guider retry window…").ConfigureAwait(false);
                 await TryAutoReconnectAsync(target, localUnitRestarted: false, token).ConfigureAwait(false);
                 return;
             }

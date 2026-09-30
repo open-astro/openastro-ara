@@ -181,7 +181,8 @@ public sealed partial class GuiderService {
     }
 
     // Source-appropriate copy. A LinkDown genuinely dropped the connection and the §63.3 recovery is
-    // restarting the guider (so "reconnect it" is correct). An EquipmentDisconnected left the guider
+    // bringing the guider back (a local unit restart, or just a reconnect loop for a guider on another
+    // machine — #1192 — so the copy names neither). An EquipmentDisconnected left the guider
     // connected — only the guide camera dropped — so the copy must NOT tell the user to reconnect the
     // guider or claim process recovery is running (neither is true).
     private static (string title, string message) BuildFaultCopy(GuiderFaultKind kind, GuiderLostAction action) {
@@ -201,13 +202,13 @@ public sealed partial class GuiderService {
         return action switch {
             GuiderLostAction.AbortSequence => ("Guiding lost — sequence aborted",
                 "The guider connection dropped mid-sequence and your safety policy is set to abort: the running sequence was aborted. "
-                + "Automatic process recovery is attempting to bring the guider back (see its own notification for the outcome)."),
+                + "Automatic recovery is attempting to bring the guider back (see its own notification for the outcome)."),
             GuiderLostAction.SkipTarget => ("Guiding lost — current target skipped",
                 "The guider connection dropped mid-sequence and your safety policy is set to skip: the current instructions were skipped and the sequence advances. "
                 + "Instructions that need the guider will fail until it is reconnected."),
             _ => ("Guiding lost — sequence paused",
                 "The guider connection dropped mid-sequence: the running sequence pauses at the current instruction so no more unguided frames burn sky time. "
-                + "Automatic process recovery is attempting to restart the guider; reconnect it (Equipment → Guider), then Resume the run."),
+                + "Automatic recovery is attempting to bring the guider back (see its own notification for the outcome); once it is reconnected, Resume the run."),
         };
     }
 
