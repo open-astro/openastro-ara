@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/util/slew_rates.dart';
 
 void main() {
   test('fromJson reads the TelescopeDto envelope (caps + runtime)', () {
@@ -48,6 +49,51 @@ void main() {
 
     final preConnect = MountStatus.fromJson(const {'state': 'connecting'});
     expect(preConnect.capabilities, isNull);
+  });
+
+  test('reads the MoveAxis rate bands beside the legacy endpoint list (#1126)',
+      () {
+    final m = MountStatus.fromJson(const {
+      'state': 'connected',
+      'capabilities': {
+        'can_move_axis': true,
+        'move_axis_rates_deg_per_sec': [6.0],
+        'move_axis_rate_bands_deg_per_sec': [
+          {'min': 0.0, 'max': 6.0},
+        ],
+      },
+      'runtime': {'state': 'idle'},
+    });
+    expect(m.capabilities!.axisRatesDegPerSec, [6.0]);
+    expect(m.capabilities!.axisRateBands, [const SlewRateBand(0.0, 6.0)]);
+    expect(m.capabilities!.padRateBands, [const SlewRateBand(0.0, 6.0)]);
+
+    // An older daemon sends only the endpoint list: the pad bands derive from it.
+    final legacy = MountStatus.fromJson(const {
+      'state': 'connected',
+      'capabilities': {
+        'can_move_axis': true,
+        'move_axis_rates_deg_per_sec': [2.0, 6.0],
+      },
+      'runtime': {'state': 'idle'},
+    });
+    expect(legacy.capabilities!.axisRateBands, isEmpty);
+    expect(legacy.capabilities!.padRateBands, [const SlewRateBand(2.0, 6.0)]);
+
+    // Bands take part in equality so a reconnect to different hardware re-seeds
+    // the picker.
+    final discrete = MountStatus.fromJson(const {
+      'state': 'connected',
+      'capabilities': {
+        'can_move_axis': true,
+        'move_axis_rates_deg_per_sec': [6.0],
+        'move_axis_rate_bands_deg_per_sec': [
+          {'min': 6.0, 'max': 6.0},
+        ],
+      },
+      'runtime': {'state': 'idle'},
+    });
+    expect(discrete.capabilities, isNot(equals(m.capabilities)));
   });
 
   test('RA/Dec sexagesimal formatters', () {

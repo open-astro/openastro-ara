@@ -1,3 +1,4 @@
+import '../util/slew_rates.dart';
 import 'equipment_device_status.dart';
 
 /// Mount (telescope) capabilities (read once on connect, nullable until then):
@@ -12,9 +13,17 @@ class MountCapabilities {
   final bool canFindHome;
   final bool canMoveAxis;
 
-  /// Primary-axis slew rates the mount offers (deg/sec, ascending), for the manual
-  /// direction pad's speed picker. Empty when the mount reports none.
+  /// Legacy endpoint list of the pad's MoveAxis rate bands (deg/sec,
+  /// ascending): both ends of every band, a zero minimum dropped. Kept for
+  /// daemons that predate [axisRateBands]; read through [padRateBands].
   final List<double> axisRatesDegPerSec;
+
+  /// The pad's MoveAxis rate bands (#1126): the primary axis's AxisRates
+  /// `[min, max]` bands, ascending, each clipped to the secondary axis's floor
+  /// and ceiling so one picked rate is honoured on both axes. A discrete rate
+  /// is `min == max`; "any speed up to max" has `min` 0. Empty when the mount
+  /// reports none or the daemon predates the field.
+  final List<SlewRateBand> axisRateBands;
 
   const MountCapabilities({
     required this.canSlew,
@@ -25,7 +34,15 @@ class MountCapabilities {
     required this.canFindHome,
     this.canMoveAxis = false,
     this.axisRatesDegPerSec = const [],
+    this.axisRateBands = const [],
   });
+
+  /// The bands the speed picker is built from: [axisRateBands] when the daemon
+  /// sent them, else the legacy endpoint list read the way it always was (one
+  /// rate is "up to max", two are one band, three or more are discrete steps).
+  List<SlewRateBand> get padRateBands => axisRateBands.isNotEmpty
+      ? axisRateBands
+      : slewRateBandsFromLegacyRates(axisRatesDegPerSec);
 
   factory MountCapabilities.fromJson(Map<String, dynamic> json) => MountCapabilities(
         canSlew: json['can_slew'] as bool? ?? false,
@@ -45,6 +62,22 @@ class MountCapabilities {
                 })
                 .toList() ??
             const [],
+        axisRateBands: (json['move_axis_rate_bands_deg_per_sec'] as List<dynamic>?)
+                ?.map((e) {
+                  if (e is! Map<String, dynamic>) {
+                    throw FormatException(
+                        'mount "move_axis_rate_bands_deg_per_sec" element is not an object (${e.runtimeType})');
+                  }
+                  final min = e['min'];
+                  final max = e['max'];
+                  if (min is! num || max is! num) {
+                    throw const FormatException(
+                        'mount "move_axis_rate_bands_deg_per_sec" band needs numeric "min" and "max"');
+                  }
+                  return SlewRateBand(min.toDouble(), max.toDouble());
+                })
+                .toList() ??
+            const [],
       );
 
   @override
@@ -58,9 +91,10 @@ class MountCapabilities {
           other.canSetTracking == canSetTracking &&
           other.canFindHome == canFindHome &&
           other.canMoveAxis == canMoveAxis &&
-          _listEq(other.axisRatesDegPerSec, axisRatesDegPerSec));
+          _listEq(other.axisRatesDegPerSec, axisRatesDegPerSec) &&
+          _listEq(other.axisRateBands, axisRateBands));
 
-  static bool _listEq(List<double> a, List<double> b) {
+  static bool _listEq<T>(List<T> a, List<T> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -70,7 +104,8 @@ class MountCapabilities {
 
   @override
   int get hashCode => Object.hash(canSlew, canSync, canPark, canUnpark,
-      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(axisRatesDegPerSec));
+      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(axisRatesDegPerSec),
+      Object.hashAll(axisRateBands));
 }
 
 /// Live status of the connected ASCOM Telescope

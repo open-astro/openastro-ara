@@ -809,20 +809,22 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         bool canMoveAxis;
         // The direction pad drives BOTH axes (N/S = secondary, E/W = primary, corners = both), so
         // gate it conservatively on the mount supporting MoveAxis on each — a mount that can move only
-        // one axis would silently fail the other half of the pad. The rate list below is read from the
-        // primary axis and assumed representative of both (the near-universal case for GEM/alt-az mounts).
+        // one axis would silently fail the other half of the pad. The bands below are the primary
+        // axis's, clipped to the secondary's floor and ceiling (PadBandsFrom, #1126).
         try {
             canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary) && c.CanMoveAxis(TelescopeAxis.Secondary);
         } catch (Exception) {
             canMoveAxis = false;
         }
+        var padBands = PadBandsFrom(pad);
         return new TelescopeCapabilitiesDto(
             CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
             CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,
             SupportedSiderealRates: ReadSiderealRates(c),
             FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm,
             CanMoveAxis: canMoveAxis,
-            MoveAxisRatesDegPerSec: AxisRatesFrom(pad));
+            MoveAxisRatesDegPerSec: [.. EndpointsOf(padBands)],
+            MoveAxisRateBandsDegPerSec: BandDtosOf(padBands));
     }
 
     /// <summary>The direction pad's two AxisRates reads (Primary, Secondary) as [Min,Max] bands, each
@@ -833,7 +835,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         (ReadAxisBands(c, TelescopeAxis.Primary), ReadAxisBands(c, TelescopeAxis.Secondary));
 
     // Both endpoints of every band (discrete rate → Min==Max), ascending + deduped, positive only —
-    // the shape the picker consumes.
+    // the LEGACY picker shape (`move_axis_rates_deg_per_sec`), kept for clients that predate the
+    // bands. It cannot tell (0, 6) from (6, 6) — both flatten to [6] — which is why the bands
+    // themselves ride the wire since #1126 (BandDtosOf).
     internal static SortedSet<double> EndpointsOf(IReadOnlyList<(double Min, double Max)> bands) {
         var rates = new SortedSet<double>();
         foreach (var (min, max) in bands) {
@@ -847,22 +851,43 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         return rates;
     }
 
-    private static List<double> AxisRatesFrom((IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) pad) {
-        // The direction pad drives BOTH axes with the same picked rate, but ASCOM allows each axis its
-        // own rate range, so a primary-only rate could be rejected on the secondary (N/S). Offer only
-        // rates the secondary axis can also honour: take the primary set, cap it at the secondary's
-        // max. A thrown/empty secondary applies no cap (the primary set is offered as-is).
+    /// <summary>The bands on the wire (#1126): <c>[{min, max}]</c> in the order given.</summary>
+    internal static List<MoveAxisRateBandDto> BandDtosOf(IReadOnlyList<(double Min, double Max)> bands) =>
+        bands.Select(b => new MoveAxisRateBandDto(b.Min, b.Max)).ToList();
+
+    /// <summary>The bands the direction pad may pick from: the primary axis's bands, each clipped to
+    /// the secondary axis's floor (its lowest Min) and ceiling (its highest Max), ascending by Min.
+    /// The pad drives BOTH axes with the same picked rate, but ASCOM allows each axis its own range,
+    /// so a rate the primary honours could be refused on the secondary (N/S): above its ceiling it
+    /// is capped, below its floor by more than <see cref="SnapUpBoundFactor"/> it is REFUSED (#1085)
+    /// — which used to leave a slow diagonal press moving E/W while N/S 409'd (#1126). Inside
+    /// [floor, ceiling] the secondary's snap never throws (a gap between its discrete steps snaps
+    /// to the nearest edge), so every rate inside a clipped band is never refused on either axis
+    /// (a gap on the secondary still snaps it to that axis's nearest step). A thrown
+    /// (null) or honestly-empty secondary applies no clip; when nothing survives the clip the
+    /// primary set is offered as-is rather than no speeds at all (better a rate the secondary may
+    /// snap than none). Internal static so the rule is unit-testable.</summary>
+    internal static List<(double Min, double Max)> PadBandsFrom((IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) pad) {
         if (pad.Primary is not { Count: > 0 }) {
             return [];
         }
-        var primary = EndpointsOf(pad.Primary);
-        var secondaryMax = MaxOf(pad.Secondary);
-        var usable = secondaryMax is > 0
-            ? primary.Where(r => r <= secondaryMax.Value + 1e-9).ToList()
-            : [.. primary];
-        // If the secondary is so much slower that nothing survives the cap, fall back to the primary
-        // set rather than show no speeds at all (better a rate the secondary may clamp than none).
-        return usable.Count > 0 ? usable : [.. primary];
+        var primary = pad.Primary.OrderBy(b => b.Min).ToList();
+        if (pad.Secondary is not { Count: > 0 }) {
+            return primary;
+        }
+        var floor = pad.Secondary.Min(b => b.Min);
+        var ceiling = pad.Secondary.Max(b => b.Max);
+        var usable = new List<(double Min, double Max)>();
+        foreach (var (min, max) in primary) {
+            var lo = Math.Max(min, floor);
+            var hi = Math.Min(max, ceiling);
+            var clipped = (lo, Math.Max(lo, hi));
+            // Two primary bands clipped to the same window would publish twice.
+            if (lo <= hi + 1e-9 && !usable.Contains(clipped)) {
+                usable.Add(clipped);
+            }
+        }
+        return usable.Count > 0 ? usable : primary;
     }
 
     // Every [Minimum, Maximum] rate band for one axis (discrete rate → Min==Max), ascending by Min,
