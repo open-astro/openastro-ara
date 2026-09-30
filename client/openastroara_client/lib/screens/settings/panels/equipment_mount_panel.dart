@@ -384,9 +384,11 @@ class _ManualMovePad extends ConsumerStatefulWidget {
 
 class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   double? _rate;
-  // Slew-speed options: the mount's own ladder when it reports three or more
-  // rates, else percentage presets of the max (1/5/10/25/50/100%) from the
-  // band's minimum up (#1085). Never exceeds the max.
+  // Slew-speed options, built from the mount's reported rate bands (#1126):
+  // the driver's own ladder when every band is a discrete step, else
+  // percentage presets of the max (1/5/10/25/50/100%) from the band's minimum
+  // up (#1085). Every option lies inside a band, so the default never asks
+  // for a rate the daemon refuses.
   List<SlewRateOption> _rateOptions = const [];
 
   static const int _primary = 0; // RA / Azimuth (E/W)
@@ -395,10 +397,10 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   @override
   void initState() {
     super.initState();
-    _rateOptions = buildSlewRateOptions(
-      widget.status.capabilities?.axisRatesDegPerSec ?? const [],
+    _rateOptions = buildSlewRateOptionsFromBands(
+      widget.status.capabilities?.padRateBands ?? const [],
     );
-    _rate = _defaultRate(_rateOptions);
+    _rate = defaultSlewRate(_rateOptions);
   }
 
   @override
@@ -408,21 +410,17 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
     // then reconnect to different hardware), re-seed _rate — otherwise it holds the
     // old mount's value: no chip shows selected and a nudge sends a stale rate the
     // new driver may reject or clamp with no feedback.
-    final oldRates =
-        old.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
-    final newRates =
-        widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
-    if (!_sameRates(oldRates, newRates)) {
-      _rateOptions = buildSlewRateOptions(newRates);
-      _rate = _defaultRate(_rateOptions);
+    final oldBands =
+        old.status.capabilities?.padRateBands ?? const <SlewRateBand>[];
+    final newBands =
+        widget.status.capabilities?.padRateBands ?? const <SlewRateBand>[];
+    if (!_sameBands(oldBands, newBands)) {
+      _rateOptions = buildSlewRateOptionsFromBands(newBands);
+      _rate = defaultSlewRate(_rateOptions);
     }
   }
 
-  // Default to a middle rate — a usable nudge without lurching at full speed.
-  static double? _defaultRate(List<SlewRateOption> options) =>
-      options.isEmpty ? null : options[(options.length - 1) ~/ 2].rateDegPerSec;
-
-  static bool _sameRates(List<double> a, List<double> b) {
+  static bool _sameBands(List<SlewRateBand> a, List<SlewRateBand> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -467,11 +465,10 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   }
 
   // Speed buttons: one ChoiceChip per slew-rate option (percentage presets of
-  // the max, from the band's minimum up, for a mount reporting one rate or one
-  // band; the driver's own ladder for three or more rates, #1085). The
-  // selected rate is what the direction pad sends at
-  // press time; it defaults to the middle option, so a fresh connect never
-  // lurches at full speed.
+  // the max, from the band's minimum up, for a mount reporting one continuous
+  // band; the driver's own ladder for discrete steps, #1085/#1126). The
+  // selected rate is what the direction pad sends at press time; it defaults
+  // to the middle option, so a fresh connect never lurches at full speed.
   Widget _speedPicker(List<SlewRateOption> options) {
     return Wrap(
       spacing: 8,

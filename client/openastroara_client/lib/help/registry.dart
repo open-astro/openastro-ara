@@ -1951,9 +1951,13 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.mount.manual_move',
     title: 'Manual movement',
     body:
-        'Nudges the mount in the chosen direction at the selected rate while you hold the button — for centering a '
-        'star by eye or testing that the mount responds. Rates are in multiples of sidereal speed: low rates (0.5–1×) '
-        'for fine centering, high rates for slewing across the sky. The center button is an immediate all-stop.',
+        'Nudges the mount in the chosen direction at the selected speed while you hold the button — for centering a '
+        'star by eye or testing that the mount responds. The speed chips are in degrees per second, taken from the '
+        'rates the mount itself reports: a mount that accepts any speed up to its maximum gets percentage presets of '
+        'that maximum (low ones for fine centering, 100% for crossing the sky), while a mount with fixed steps shows '
+        'exactly those steps. Speeds are limited to what both axes accept wherever the mount allows it, so a diagonal '
+        'press moves both axes. The '
+        'center button is an immediate all-stop.',
   ),
   'eq.dome.shutter': Help(
     key: 'eq.dome.shutter',
