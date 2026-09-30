@@ -13,8 +13,11 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Server;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System.Collections.Generic;
+using System.Text.Json;
 
 namespace OpenAstroAra.Test {
 
@@ -27,6 +30,7 @@ namespace OpenAstroAra.Test {
         // A discrete-rate mount: 0.5×, 2×, 8× sidereal-ish steps, then a slew band.
         private static readonly IReadOnlyList<(double Min, double Max)> Discrete = [(0.002, 0.002), (0.008, 0.008), (0.033, 0.033), (1.0, 4.0)];
         private static readonly double[] DiscreteEndpoints = [0.002, 0.008, 0.033, 1.0, 4.0];
+        private static readonly double[] SixOnly = [6.0];
 
         [Test]
         public void Stop_passes_through_without_a_rate_read() {
@@ -121,6 +125,83 @@ namespace OpenAstroAra.Test {
         public void Picker_endpoints_are_both_ends_of_every_positive_band_deduped_ascending() {
             var endpoints = TelescopeService.EndpointsOf(Discrete);
             Assert.That(endpoints, Is.EqualTo(DiscreteEndpoints));
+        }
+
+        [Test]
+        public void Endpoints_cannot_tell_a_discrete_rate_from_a_band_but_the_band_dtos_can() {
+            // #1126 — the legacy endpoint list flattens (0, 6) and (6, 6) to the same [6] (a zero
+            // minimum is dropped), so the client could not tell "any speed up to 6" from "6 only".
+            IReadOnlyList<(double Min, double Max)> continuous = [(0.0, 6.0)];
+            IReadOnlyList<(double Min, double Max)> discrete = [(6.0, 6.0)];
+            Assert.That(TelescopeService.EndpointsOf(continuous), Is.EqualTo(SixOnly));
+            Assert.That(TelescopeService.EndpointsOf(discrete), Is.EqualTo(SixOnly));
+            Assert.That(TelescopeService.BandDtosOf(continuous), Is.EqualTo(new[] { new MoveAxisRateBandDto(0.0, 6.0) }));
+            Assert.That(TelescopeService.BandDtosOf(discrete), Is.EqualTo(new[] { new MoveAxisRateBandDto(6.0, 6.0) }));
+            // Two discrete rates vs one band spanning them.
+            IReadOnlyList<(double Min, double Max)> twoSteps = [(0.004, 0.004), (2.0, 2.0)];
+            IReadOnlyList<(double Min, double Max)> oneSpan = [(0.004, 2.0)];
+            Assert.That(TelescopeService.EndpointsOf(twoSteps), Is.EqualTo(TelescopeService.EndpointsOf(oneSpan)));
+            Assert.That(TelescopeService.BandDtosOf(twoSteps), Has.Count.EqualTo(2));
+            Assert.That(TelescopeService.BandDtosOf(oneSpan), Is.EqualTo(new[] { new MoveAxisRateBandDto(0.004, 2.0) }));
+        }
+
+        [Test]
+        public void Bands_ride_the_wire_as_min_max_pairs_beside_the_legacy_endpoint_list() {
+            var caps = new TelescopeCapabilitiesDto(
+                CanSlew: true, CanSync: false, CanPark: false, CanUnpark: false,
+                CanSetTracking: true, CanPulseGuide: false, CanFindHome: false,
+                SupportedSiderealRates: new List<string>(),
+                CanMoveAxis: true,
+                MoveAxisRatesDegPerSec: [6.0],
+                MoveAxisRateBandsDegPerSec: [new MoveAxisRateBandDto(0.0, 6.0)]);
+            var json = JsonSerializer.Serialize(caps, AraJsonSerializerContext.Default.TelescopeCapabilitiesDto);
+            Assert.That(json, Does.Contain("\"move_axis_rates_deg_per_sec\":[6]"), "the endpoint list stays for older clients");
+            Assert.That(json, Does.Contain("\"move_axis_rate_bands_deg_per_sec\":[{\"min\":0,\"max\":6}]"));
+            var back = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.TelescopeCapabilitiesDto)!;
+            Assert.That(back.MoveAxisRateBandsDegPerSec, Is.EqualTo(new[] { new MoveAxisRateBandDto(0.0, 6.0) }));
+        }
+
+        [Test]
+        public void Pad_bands_are_the_primary_bands_clipped_to_the_secondary_floor_and_ceiling() {
+            // #1126 — the pad drives both axes with one rate. The secondary's ceiling was already
+            // applied; its FLOOR was not, so a slow diagonal press moved E/W and 409'd N/S.
+            IReadOnlyList<(double Min, double Max)> highFloor = [(2.0, 6.0)];
+            Assert.That(TelescopeService.PadBandsFrom((OneBand, highFloor)), Is.EqualTo(new[] { (2.0, 6.0) }));
+            IReadOnlyList<(double Min, double Max)> lowCeiling = [(0.001, 4.0)];
+            Assert.That(TelescopeService.PadBandsFrom((OneBand, lowCeiling)), Is.EqualTo(new[] { (0.001, 4.0) }));
+            // A discrete primary ladder loses the steps outside the secondary's range and the slew
+            // band is clipped, not dropped.
+            IReadOnlyList<(double Min, double Max)> midRange = [(0.01, 2.0)];
+            Assert.That(TelescopeService.PadBandsFrom((Discrete, midRange)), Is.EqualTo(new[] { (0.033, 0.033), (1.0, 2.0) }));
+            // A discrete secondary: only its floor and ceiling clip (its gaps snap, never refuse).
+            Assert.That(TelescopeService.PadBandsFrom((OneBand, Discrete)), Is.EqualTo(new[] { (0.002, 4.0) }));
+            // A thrown (null) or honestly-empty secondary applies no clip.
+            Assert.That(TelescopeService.PadBandsFrom((OneBand, null)), Is.EqualTo(OneBand));
+            Assert.That(TelescopeService.PadBandsFrom((OneBand, [])), Is.EqualTo(OneBand));
+            // Nothing survives the clip → the primary set as-is rather than no speeds at all.
+            IReadOnlyList<(double Min, double Max)> slowOnly = [(0.001, 0.5)];
+            Assert.That(TelescopeService.PadBandsFrom((slowOnly, highFloor)), Is.EqualTo(slowOnly));
+            // No primary → no speeds.
+            Assert.That(TelescopeService.PadBandsFrom((null, highFloor)), Is.Empty);
+            Assert.That(TelescopeService.PadBandsFrom(([], highFloor)), Is.Empty);
+        }
+
+        [Test]
+        public void Any_rate_inside_a_pad_band_is_accepted_by_both_axes_of_an_asymmetric_mount() {
+            // The diagonal press: the same rate goes to both axes, and neither may refuse it.
+            IReadOnlyList<(double Min, double Max)> primary = [(0.001, 6.016)];
+            IReadOnlyList<(double Min, double Max)> secondary = [(0.5, 0.5), (2.0, 4.0)];
+            var pad = TelescopeService.PadBandsFrom((primary, secondary));
+            Assert.That(pad, Is.EqualTo(new[] { (0.5, 4.0) }));
+            foreach (var (min, max) in pad) {
+                foreach (var rate in new[] { min, (min + max) / 2, max, max * 0.01 + min, min * 1.0001 }) {
+                    Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(rate, primary), $"primary refused {rate}");
+                    Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(rate, secondary), $"secondary refused {rate}");
+                    Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(-rate, secondary), $"secondary refused {-rate}");
+                }
+            }
+            // The unclipped primary floor is what used to be offered — and it 409s the secondary.
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, secondary));
         }
     }
 }

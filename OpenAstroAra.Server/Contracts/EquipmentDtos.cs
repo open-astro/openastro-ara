@@ -205,11 +205,22 @@ public sealed record TelescopeCapabilitiesDto(
     // the optics screen from a connected mount.
     double? FocalLengthMm = null,
     double? ApertureDiameterMm = null,
-    // Manual control: whether the mount supports MoveAxis on the primary axis, and
-    // the discrete primary-axis slew rates it offers (deg/sec, ascending) for the
-    // direction pad's speed selector. Empty when the mount reports no axis rates.
+    // Manual control: whether the mount supports MoveAxis on BOTH pad axes, and the
+    // rates the direction pad may ask for (deg/sec). `MoveAxisRateBandsDegPerSec`
+    // (#1126) is the authoritative shape: the primary axis's AxisRates [min, max]
+    // bands, ascending, each clipped to the secondary axis's floor and ceiling so
+    // one picked rate is honoured on both axes; a discrete rate is a band with
+    // min == max, a "any speed up to max" band has min 0. `MoveAxisRatesDegPerSec`
+    // is the legacy flattening of the same bands to their positive endpoints
+    // (ascending, deduped) kept for clients that predate the bands. Both empty
+    // when the mount reports no axis rates.
     bool CanMoveAxis = false,
-    IReadOnlyList<double>? MoveAxisRatesDegPerSec = null);
+    IReadOnlyList<double>? MoveAxisRatesDegPerSec = null,
+    IReadOnlyList<MoveAxisRateBandDto>? MoveAxisRateBandsDegPerSec = null);
+
+/// <summary>One MoveAxis rate band (deg/sec): the mount honours any magnitude in
+/// <c>[Min, Max]</c>; <c>Min == Max</c> is a single discrete rate (#1126).</summary>
+public sealed record MoveAxisRateBandDto(double Min, double Max);
 
 public sealed record TelescopeStateDto(
     string State,    // "idle" | "slewing" | "tracking" | "parked" | "unparking" | "error"

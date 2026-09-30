@@ -279,3 +279,17 @@ The card now keeps a known device's card while it is not live: name, state chip,
 **Spec ref:** `OpenAstroAra.Server/Endpoints/PlateSolveEndpoints.cs` (`GetDatabaseStatus`); `PlateSolveDatabaseStatusDto`.
 
 **Related:** §18.I of PORT_PLAYBOOK.md; #1094 (`-d` wiring); the `-D` selection in `AstapStarDatabase.Select`.
+
+---
+
+### 2026-09-29 — #1126 MoveAxis rate bands on the wire; pad bands clipped to the secondary's floor
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/telescope` (`capabilities` gains `move_axis_rate_bands_deg_per_sec`; `move_axis_rates_deg_per_sec` unchanged); the client's speed-preset ladder.
+
+**Decision:** `move_axis_rate_bands_deg_per_sec: [{ "min": number, "max": number }]` — the direction pad's rate bands (deg/s), ascending by `min`. Each is one of the primary axis's AxisRates `[Min, Max]` bands clipped to the secondary axis's floor (its lowest `Min`) AND ceiling (its highest `Max`); a discrete rate is a band with `min == max`, "any speed up to max" is a band with `min` 0. A thrown or honestly-empty secondary applies no clip; when nothing survives the clip the primary bands are published as-is (better a rate the secondary may snap than none). Empty when the mount reports no rates. `move_axis_rates_deg_per_sec` is kept as the legacy flattening of the same clipped bands to their positive endpoints (ascending, deduped) for clients that predate the bands. Client: the speed chips are built from the bands — every band discrete → the driver's steps verbatim (a single-rate mount gets one chip, which is the default); exactly one continuous band → the #1085 percentage ladder from its minimum up; several bands with a continuous one → the endpoints verbatim. The default chip is the middle option, which by construction lies inside a band. A daemon that sends only the endpoint list is read the old way (one rate = up to max, two = one band, three or more = steps).
+
+**Reasoning:** the endpoint list cannot tell `(0, 6)` from `(6, 6)` (both flatten to `[6]`), so the client built percentage presets for a fixed-rate mount and defaulted to 10 % of max — more than `SnapUpBoundFactor` (4×) below the only rate, refused with 409: a dead pad on a fresh connect. Separately, #1064 capped the offered rates at the secondary's maximum but not its minimum, so a diagonal press at a rate the primary honours could be refused on the secondary; inside `[floor, ceiling]` the snap never throws (a gap between discrete steps snaps to the nearest edge), so clipping to both bounds is exactly the guarantee the pad needs. A nested `{min, max}` object rather than a `[min, max]` pair keeps the two ends self-describing on the wire.
+
+**Spec ref:** `Contracts/EquipmentDtos.cs` (`TelescopeCapabilitiesDto.MoveAxisRateBandsDegPerSec`, `MoveAxisRateBandDto`), `Services/TelescopeService.cs` (`PadBandsFrom`, `BandDtosOf`, `EndpointsOf`), `client/…/lib/util/slew_rates.dart` (`SlewRateBand`, `buildSlewRateOptionsFromBands`, `defaultSlewRate`), `client/…/lib/models/mount_status.dart` (`MountCapabilities.axisRateBands` / `padRateBands`); tests in `TelescopeMoveAxisClampTest`, `slew_rates_test.dart`, `mount_status_test.dart`, `equipment_mount_panel_test.dart`.
+
+**Related:** #1126 (follow-ups of #1087), #1064, #1085, CHANGELOG [Unreleased]
