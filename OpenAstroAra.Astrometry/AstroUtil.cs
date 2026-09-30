@@ -397,17 +397,19 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="value"></param>
         /// <returns></returns>
         public static string DegreesToDMS(double value) {
-            return DegreesToDMS(value, "{0:00}° {1:00}' {2:00}\"");
+            return DegreesToDMS(value, "{0:00}° {1:00}' {2:00}\"", 360);
         }
 
-        private static string DegreesToDMS(double value, string pattern) {
+        /// <param name="wrapAt">
+        /// The leading field's period (24 for hours, 360 for degrees). When a value below it only reaches
+        /// it through rounding (23:59:59.96 → 24:00:00) the result wraps to zero (#1125). A value already
+        /// at or above it is formatted as given.
+        /// </param>
+        private static string DegreesToDMS(double value, string pattern, double wrapAt) {
             bool negative = false;
             if (value < 0) {
                 negative = true;
                 value = -value;
-            }
-            if (negative) {
-                pattern = "-" + pattern;
             }
 
             var degree = Math.Floor(value);
@@ -425,6 +427,15 @@ namespace OpenAstroAra.Astrometry {
                     arcmin = 0;
                     degree += 1;
                 }
+            }
+
+            if (degree >= wrapAt && value < wrapAt) {
+                /* The carry reached the wrap point: 24:00:00 is 00:00:00, 360° is 0°, with no sign */
+                degree = 0;
+                negative = false;
+            }
+            if (negative) {
+                pattern = "-" + pattern;
             }
 
             // Prevent "-0" when using ToString
@@ -454,7 +465,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="deg"></param>
         /// <returns></returns>
         public static string DegreesToHMS(double deg) {
-            return DegreesToDMS(DegreesToHours(deg), "{0:00}:{1:00}:{2:00}");
+            return DegreesToDMS(DegreesToHours(deg), "{0:00}:{1:00}:{2:00}", 24);
         }
 
         /// <summary>
@@ -465,7 +476,7 @@ namespace OpenAstroAra.Astrometry {
         public static string HoursToHMS(double hours) {
             if (hours == double.MaxValue) return string.Empty;
 
-            return DegreesToDMS(hours, "{0:00}:{1:00}:{2:00}");
+            return DegreesToDMS(hours, "{0:00}:{1:00}:{2:00}", 24);
         }
 
         /// <summary>
