@@ -10333,7 +10333,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
-| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5. Only when the profile's guider host is this machine (§63.3 host gate, #1192) — for a remote host it is a logged no-op that still returns 202 |
+| `POST` | `/api/v1/equipment/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5. Only when the profile's guider host is this machine (§63.3 host gate, #1192) — for a remote host it is a logged no-op that still returns 202 |
 | `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence |
 | `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
 | `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
