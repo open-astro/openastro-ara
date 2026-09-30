@@ -313,6 +313,7 @@ namespace OpenAstroAra.Test {
                 : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" // Topocentric: a JNOW mount (#1124 refuses an unknown one)
                 : null);
             var (hub, faults) = Hub();
 

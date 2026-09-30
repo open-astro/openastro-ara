@@ -139,6 +139,7 @@ namespace OpenAstroAra.Test {
                 : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "5.5"
                 : path.EndsWith("/declination", StringComparison.Ordinal) ? "20.0"
+                : path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" // Topocentric: a JNOW mount (#1124 refuses an unknown one)
                 : null);
             using var svc = new TelescopeService();
             await svc.ConnectAsync(new ConnectRequestDto(Device(box, DeviceType.Telescope)), null, CancellationToken.None);

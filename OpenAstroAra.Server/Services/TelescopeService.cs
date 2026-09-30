@@ -79,11 +79,12 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private int _secondaryFallbackLogged;
     private TelescopeStateDto _runtime = IdleRuntime;
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
-    // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member; Other is the
-    // honest pre-read sentinel (the mediator maps it to JNOW). Unlike the read-once capabilities, the
-    // read is retried each refresh until ONE confirmed success (_equatorialSystemKnown): a transient
-    // failure on the first pass must not permanently freeze the sentinel — a J2000 mount stuck on
-    // "Other" would silently receive un-precession-corrected slew targets forever.
+    // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member, so Other is only
+    // a placeholder and _equatorialSystemKnown is the truth: until it is set, a mediator slew/sync
+    // reads the system on demand and refuses if that fails, and GetInfo reports no pointing (#1124),
+    // instead of treating the placeholder as JNOW. Unlike the read-once capabilities, the read is
+    // retried each refresh until ONE confirmed success: a transient failure on the first pass must
+    // not leave the mount unslewable for the session.
     private EquatorialCoordinateType _equatorialSystemRaw = EquatorialCoordinateType.Other;
     private bool _equatorialSystemKnown;
     private int _refreshing;
