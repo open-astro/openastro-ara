@@ -862,7 +862,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     /// is capped, below its floor by more than <see cref="SnapUpBoundFactor"/> it is REFUSED (#1085)
     /// — which used to leave a slow diagonal press moving E/W while N/S 409'd (#1126). Inside
     /// [floor, ceiling] the secondary's snap never throws (a gap between its discrete steps snaps
-    /// to the nearest edge), so every rate inside a clipped band is honoured on both axes. A thrown
+    /// to the nearest edge), so every rate inside a clipped band is never refused on either axis
+    /// (a gap on the secondary still snaps it to that axis's nearest step). A thrown
     /// (null) or honestly-empty secondary applies no clip; when nothing survives the clip the
     /// primary set is offered as-is rather than no speeds at all (better a rate the secondary may
     /// snap than none). Internal static so the rule is unit-testable.</summary>
@@ -880,8 +881,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         foreach (var (min, max) in primary) {
             var lo = Math.Max(min, floor);
             var hi = Math.Min(max, ceiling);
-            if (lo <= hi + 1e-9) {
-                usable.Add((lo, Math.Max(lo, hi)));
+            var clipped = (lo, Math.Max(lo, hi));
+            // Two primary bands clipped to the same window would publish twice.
+            if (lo <= hi + 1e-9 && !usable.Contains(clipped)) {
+                usable.Add(clipped);
             }
         }
         return usable.Count > 0 ? usable : primary;

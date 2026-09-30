@@ -1955,7 +1955,8 @@ const Map<String, Help> helpRegistry = {
         'star by eye or testing that the mount responds. The speed chips are in degrees per second, taken from the '
         'rates the mount itself reports: a mount that accepts any speed up to its maximum gets percentage presets of '
         'that maximum (low ones for fine centering, 100% for crossing the sky), while a mount with fixed steps shows '
-        'exactly those steps. Only speeds both axes can honour are offered, so a diagonal press moves both axes. The '
+        'exactly those steps. Speeds are limited to what both axes accept wherever the mount allows it, so a diagonal '
+        'press moves both axes. The '
         'center button is an immediate all-stop.',
   ),
   'eq.dome.shutter': Help(

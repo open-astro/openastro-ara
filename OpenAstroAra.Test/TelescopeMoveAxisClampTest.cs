@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     public class TelescopeMoveAxisClampTest {
 
         private static readonly IReadOnlyList<(double Min, double Max)> OneBand = [(0.001, 6.016)];
+        private static readonly double[] LegacyFloorAndCeiling = [0.5, 4.0];
         // A discrete-rate mount: 0.5×, 2×, 8× sidereal-ish steps, then a slew band.
         private static readonly IReadOnlyList<(double Min, double Max)> Discrete = [(0.002, 0.002), (0.008, 0.008), (0.033, 0.033), (1.0, 4.0)];
         private static readonly double[] DiscreteEndpoints = [0.002, 0.008, 0.033, 1.0, 4.0];
@@ -184,6 +185,20 @@ namespace OpenAstroAra.Test {
             // No primary → no speeds.
             Assert.That(TelescopeService.PadBandsFrom((null, highFloor)), Is.Empty);
             Assert.That(TelescopeService.PadBandsFrom(([], highFloor)), Is.Empty);
+            // Two primary bands clipped to the same secondary window collapse to one on the wire.
+            IReadOnlyList<(double Min, double Max)> overlapping = [(0.5, 3.0), (1.0, 5.0)];
+            IReadOnlyList<(double Min, double Max)> narrow = [(2.0, 2.5)];
+            Assert.That(TelescopeService.PadBandsFrom((overlapping, narrow)), Is.EqualTo(new[] { (2.0, 2.5) }));
+        }
+
+        [Test]
+        public void Legacy_rate_list_is_the_endpoints_of_the_clipped_bands() {
+            // #1126 — the capabilities compose EndpointsOf(PadBandsFrom(pad)): the legacy list
+            // carries the secondary's floor too, not just its ceiling (a value that is not an
+            // endpoint of any primary band).
+            IReadOnlyList<(double Min, double Max)> secondary = [(0.5, 4.0)];
+            Assert.That(TelescopeService.EndpointsOf(TelescopeService.PadBandsFrom((OneBand, secondary))),
+                Is.EqualTo(LegacyFloorAndCeiling));
         }
 
         [Test]
