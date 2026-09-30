@@ -57,13 +57,16 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         private MeridianFlipTrigger CreateSUT() =>
             new(profileServiceMock.Object, telescopeMediatorMock.Object, executorMock.Object);
 
-        private void SetTelescope(double timeToMeridianFlipHours, bool connected = true, bool tracking = true, bool parked = false, bool atHome = false) {
+        private void SetTelescope(double timeToMeridianFlipHours, bool connected = true, bool tracking = true, bool parked = false, bool atHome = false, bool withCoordinates = true) {
             telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo {
                 Connected = connected,
                 TrackingEnabled = tracking,
                 AtPark = parked,
                 AtHome = atHome,
                 TimeToMeridianFlip = timeToMeridianFlipHours,
+                // A position is required to evaluate a flip (#1221); tests that want the "unknown position"
+                // guard opt out explicitly.
+                Coordinates = withCoordinates ? new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000) : null!,
             });
         }
 
@@ -112,6 +115,46 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         public void ShouldTrigger_returns_false_when_not_tracking() {
             SetTelescope(timeToMeridianFlipHours: 0, tracking: false);
             Assert.That(CreateSUT().ShouldTrigger(null, NextItem(TimeSpan.Zero).Object), Is.False);
+        }
+
+        [Test]
+        public void ShouldTrigger_returns_false_when_coordinates_are_unknown() {
+            // #1221: Coordinates stays null before the first position read, and for the whole session on a
+            // mount whose EquatorialSystem can't be read (#1220). The trigger must skip, not throw, even when
+            // the flip window has already arrived and the previous guards all pass.
+            settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(0);
+            SetTelescope(timeToMeridianFlipHours: 0, withCoordinates: false);
+
+            var sut = CreateSUT();
+            bool should = true;
+            Assert.DoesNotThrow(() => should = sut.ShouldTrigger(null, NextItem(TimeSpan.Zero).Object));
+            Assert.That(should, Is.False);
+            Assert.That(sut.EarliestFlipTime, Is.EqualTo(DateTime.MinValue));
+            Assert.That(sut.LatestFlipTime, Is.EqualTo(DateTime.MinValue));
+        }
+
+        [Test]
+        public void ShouldTrigger_returns_false_when_coordinates_are_unknown_with_side_of_pier() {
+            // Same guard on the side-of-pier path: ExpectedPierSide transforms the coordinates, so a null
+            // position must never reach it.
+            settingsMock.SetupGet(m => m.UseSideOfPier).Returns(true);
+            settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(0);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true,
+                TrackingEnabled = true,
+                TimeToMeridianFlip = TimeSpan.FromMinutes(4).TotalHours,
+                SiderealTime = 6,
+                SideOfPier = PierSide.pierEast,
+                Coordinates = null!,
+            });
+
+            bool should = true;
+            Assert.DoesNotThrow(() => should = CreateSUT().ShouldTrigger(null, NextItem(TimeSpan.FromMinutes(10)).Object));
+            Assert.That(should, Is.False);
         }
 
         [Test]
