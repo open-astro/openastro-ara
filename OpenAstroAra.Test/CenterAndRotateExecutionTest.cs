@@ -47,17 +47,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Unwired_executor_fails_loudly() {
+        public async Task Unwired_executor_fails_loudly() {
             var item = new CenterAndRotate(centeringExecutor: null) { Coordinates = SomeTarget() };
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
         }
 
         [Test]
-        public void Missing_coordinates_fail_loudly() {
+        public async Task Missing_coordinates_fail_loudly() {
             var executor = new Mock<ICenteringExecutor>();
             var item = new CenterAndRotate(executor.Object) { Coordinates = null! };
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
             executor.VerifyNoOtherCalls();
         }
@@ -80,14 +80,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Unconverged_centering_fails_the_instruction() {
+        public async Task Unconverged_centering_fails_the_instruction() {
             // An un-centred target would quietly ruin every subsequent frame — a false
             // return from the executor must fail the step, never continue.
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             var item = new CenterAndRotate(executor.Object) { Coordinates = SomeTarget() };
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
         }
 
@@ -118,14 +118,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_unconverged_rotate_or_centre_fails_the_instruction() {
+        public async Task An_unconverged_rotate_or_centre_fails_the_instruction() {
             // A mis-rotated or un-centred target would quietly ruin every subsequent frame.
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAndRotateAsync(It.IsAny<Coordinates>(), It.IsAny<double>(),
                     It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             var item = new CenterAndRotate(executor.Object, Rotator(connected: true).Object) { Coordinates = SomeTarget() };
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
         }
 
@@ -159,7 +159,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Clone_carries_the_wiring() {
+        public async Task Clone_carries_the_wiring() {
             // NINA runs CLONES of prototypes — losing the executor on Clone would turn
             // every real run back into the fail-loudly path.
             var executor = new Mock<ICenteringExecutor>();
@@ -167,7 +167,7 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(true);
             var prototype = new CenterAndRotate(executor.Object) { Coordinates = SomeTarget() };
             var clone = (CenterAndRotate)prototype.Clone();
-            Assert.DoesNotThrowAsync(() => clone.Execute(NoProgress, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => clone.Execute(NoProgress, CancellationToken.None));
             executor.Verify(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
         }
     }

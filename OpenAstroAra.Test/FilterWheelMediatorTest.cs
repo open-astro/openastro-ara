@@ -74,10 +74,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void ChangeFilter_null_filter_throws() {
+        public async Task ChangeFilter_null_filter_throws() {
             using var svc = new FilterWheelService();
             // ChangeFilter is async, so the guard surfaces on the returned Task.
-            Assert.ThrowsAsync<System.ArgumentNullException>(
+            await Assert.ThrowsAsync<System.ArgumentNullException>(
                 () => ((IFilterWheelMediator)svc).ChangeFilter(null!, progress: null, CancellationToken.None));
         }
 

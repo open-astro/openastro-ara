@@ -85,7 +85,7 @@ namespace OpenAstroAra.Test {
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Camera(coolerOn: true));
             using var svc = await ConnectedThermalSwitchAsync(box, camera);
 
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 0), CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("damage the camera"));
         }
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new TimeoutException("camera status hung"));
             using var svc = await ConnectedThermalSwitchAsync(box, camera);
 
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 0), CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("cooler state is unknown"));
         }
@@ -114,9 +114,9 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => Task.FromResult(Probes(camera) == 1), TimeSpan.FromSeconds(5), "the connect-time catch-up never probed the camera");
             const int probesAfterConnect = 1;
 
-            Assert.DoesNotThrowAsync(() => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 0), CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 0), CancellationToken.None));
             camera.Verify(c => c.GetAsync(It.IsAny<CancellationToken>()), Times.Exactly(probesAfterConnect + 1));
-            Assert.DoesNotThrowAsync(() => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 1), CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => svc.SetValueAsync("Switch-under-test", new SwitchValueRequestDto(0, 1), CancellationToken.None));
             camera.Verify(c => c.GetAsync(It.IsAny<CancellationToken>()), Times.Exactly(probesAfterConnect + 1), "a fan ON never consults the camera");
         }
 
@@ -139,7 +139,7 @@ namespace OpenAstroAra.Test {
 
             // Cooler OFF (the §58 warm ramp's final step): the fan-off write fails — the call must still
             // return normally so the ramp completes, and the failure is an op_error fault on the switch.
-            Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None));
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1));
                 Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.OpError));
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Test {
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Camera(coolerOn: true));
             using var svc = await ConnectedThermalSwitchAsync(box, camera);
 
-            var ex = Assert.ThrowsAsync<OpenAstroAra.Core.Model.SequenceEntityFailedException>(
+            var ex = await Assert.ThrowsAsync<OpenAstroAra.Core.Model.SequenceEntityFailedException>(
                 () => ((OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator)svc).SetSwitchValue(0, 0, new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("damage the camera"));
         }
@@ -198,12 +198,12 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
                 TimeSpan.FromSeconds(15), "camera never connected");
 
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -10, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -10, CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("cooling fan could not be started"));
             // Fan FIRST: the refusal happens before the cooler write, so nothing reached the camera.
             Assert.That(box.Puts.Select(p => p.Path), Has.None.EndsWith("/cooleron").And.None.EndsWith("/setccdtemperature"),
                 "a refused cooler-on commits nothing to the camera");
-            Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None),
+            await Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: false, targetTemperatureC: null, CancellationToken.None),
                 "cooler-off must still complete (the warm ramp's final step) even if the fan-off write fails");
         }
 
@@ -229,7 +229,7 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.Runtime is { CoolerStateKnown: false },
                 TimeSpan.FromSeconds(15), "the cooler state never became unreadable on a refresh");
 
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -10, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -10, CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("cooling fan could not be started"));
             Assert.That(box.Puts.Select(p => p.Path), Has.None.EndsWith("/cooleron"), "nothing committed to the camera");
         }
@@ -255,7 +255,7 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.Runtime.CoolerOn == true,
                 TimeSpan.FromSeconds(15), "camera never connected with its cooler reported on");
 
-            Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -5, CancellationToken.None),
+            await Assert.DoesNotThrowAsync(() => svc.SetCoolerAsync(enabled: true, targetTemperatureC: -5, CancellationToken.None),
                 "a ramp step (cooler already on) survives a failed fan write");
             actuator.Verify(a => a.SetFanValueAsync("sw-5", It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()), Times.Once,
                 "the fan-on is still attempted on every cooler-on (a stale cached value never skips it)");

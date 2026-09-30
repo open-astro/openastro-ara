@@ -178,7 +178,7 @@ namespace OpenAstroAra.Test {
             Assert.That(Convert.ToInt64(await ver.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture),
                 Is.EqualTo(4), "schema_version reflects the newest pass (§44 backup-stream columns bumped it to 4)");
 
-            Assert.DoesNotThrowAsync(() => new SqliteAraDatabase(_dir, logger: null).InitializeAsync(CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => new SqliteAraDatabase(_dir, logger: null).InitializeAsync(CancellationToken.None));
         }
 
         [Test]
@@ -263,7 +263,7 @@ namespace OpenAstroAra.Test {
 
             // Idempotence: a second initialize is a no-op (the DDL no longer matches).
             var again = new SqliteAraDatabase(_dir, logger: null);
-            Assert.DoesNotThrowAsync(() => again.InitializeAsync(CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => again.InitializeAsync(CancellationToken.None));
         }
     }
 }

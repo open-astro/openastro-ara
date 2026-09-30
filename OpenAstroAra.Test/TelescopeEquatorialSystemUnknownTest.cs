@@ -100,7 +100,7 @@ namespace OpenAstroAra.Test {
             await using var box = ScriptedAlpacaDevice.Start(Mount(() => EquatorialSystemUnreadable));
             using var svc = await ConnectAsync(box);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(J2000Target(), CancellationToken.None),
                 "a slew whose target frame is unknown must fail the instruction, not guess JNOW");
             Assert.That(PutReached(box, "slewtocoordinatesasync"), Is.False,

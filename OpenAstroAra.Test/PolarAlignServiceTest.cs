@@ -211,12 +211,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Start_without_a_connected_guider_throws() {
+        public async Task Start_without_a_connected_guider_throws() {
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
             using var svc = NewService(guider, new ScriptedSolver());
 
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
         }
 
         [Test]
@@ -226,7 +226,7 @@ namespace OpenAstroAra.Test {
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
             using var svc = NewService(guider, new ScriptedSolver(), NewMount(connected: false));
 
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
             Assert.That(paCalls, Is.Empty, "a failed preflight must not acquire the lease");
         }
 

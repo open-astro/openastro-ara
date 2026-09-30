@@ -116,7 +116,7 @@ namespace OpenAstroAra.Test {
             gate.SetResult(); // the unit reads Active → Recovered → auto-reconnect against the fake
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(20))).ConfigureAwait(false), Is.SameAs(run),
                 "the trigger never returned after recovery reconnected");
-            Assert.DoesNotThrowAsync(() => run, "a recovery that lands within the retry timeout must not fail the run");
+            await Assert.DoesNotThrowAsync(() => run, "a recovery that lands within the retry timeout must not fail the run");
             Assert.That(svc.GetInfo().Connected, Is.True);
         }
 
@@ -134,7 +134,7 @@ namespace OpenAstroAra.Test {
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(run),
                 "the trigger must give up once the retry timeout passes, not hang");
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => run);
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => run);
             Assert.That(sw.Elapsed, Is.GreaterThanOrEqualTo(grace - TimeSpan.FromMilliseconds(250)),
                 "the trigger failed before waiting out the retry timeout");
 
@@ -156,7 +156,7 @@ namespace OpenAstroAra.Test {
             Assert.That(trigger.ShouldTrigger(null, null), Is.True);
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(20))).ConfigureAwait(false), Is.SameAs(run));
-            Assert.DoesNotThrowAsync(() => run, "on a non-systemd host the trigger must reconnect the guider itself");
+            await Assert.DoesNotThrowAsync(() => run, "on a non-systemd host the trigger must reconnect the guider itself");
             Assert.That(svc.GetInfo().Connected, Is.True);
             supervisor.Verify(s => s.QueryStatusAsync(It.IsAny<CancellationToken>()), Times.Once,
                 "the reconnect must not start a second coordinator pass");
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(run),
                 "the plain reconnect must be bounded by the retry timeout");
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => run);
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => run);
             Assert.That(svc.GetInfo().Connected, Is.False);
         }
 

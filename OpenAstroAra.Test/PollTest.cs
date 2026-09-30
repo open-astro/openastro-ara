@@ -42,8 +42,8 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Throws_TimeoutException_naming_the_condition() {
-            var ex = Assert.ThrowsAsync<TimeoutException>(() => Poll.UntilAsync(
+        public async Task Throws_TimeoutException_naming_the_condition() {
+            var ex = await Assert.ThrowsAsync<TimeoutException>(() => Poll.UntilAsync(
                 () => false, TimeSpan.FromMilliseconds(100), "the thing that never happens", Tick));
 
             Assert.That(ex!.Message, Does.Contain("waiting for the thing that never happens"));
@@ -64,15 +64,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_already_cancelled_token_wins_over_the_re_probe() {
+        public async Task An_already_cancelled_token_wins_over_the_re_probe() {
             // With the deadline already reached the loop body never runs, so the
             // post-deadline re-probe is the only thing left — and a cancelled
             // waiter must not be answered with "the condition held after all".
             using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            await cts.CancelAsync();
             var probed = 0;
 
-            Assert.ThrowsAsync<OperationCanceledException>(() => Poll.UntilAsync(
+            await Assert.ThrowsAsync<OperationCanceledException>(() => Poll.UntilAsync(
                 () => { probed++; return true; },
                 TimeSpan.Zero,
                 "a condition whose waiter was already cancelled",
@@ -83,8 +83,8 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Rejects_a_blank_description() {
-            Assert.ThrowsAsync<ArgumentException>(() => Poll.UntilAsync(
+        public async Task Rejects_a_blank_description() {
+            await Assert.ThrowsAsync<ArgumentException>(() => Poll.UntilAsync(
                 () => true, TimeSpan.FromSeconds(1), "   "));
         }
     }

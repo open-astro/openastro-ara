@@ -110,7 +110,7 @@ namespace OpenAstroAra.Test {
                 if (dto?.State != EquipmentConnectionState.Connecting) break;
                 await System.Threading.Tasks.Task.Delay(50);
             }
-            var ex = Assert.ThrowsAsync<System.InvalidOperationException>(
+            var ex = await Assert.ThrowsAsync<System.InvalidOperationException>(
                 () => svc.SetValueAsync("dead-thermal", new SwitchValueRequestDto(0, 0), System.Threading.CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("not connected"));
             Assert.That(ex.Message, Does.Not.Contain("cooler"));
@@ -144,7 +144,7 @@ namespace OpenAstroAra.Test {
             // The interlock only engages for a known fan port; an unknown device keeps the
             // existing "not connected" refusal (→ 409) so nothing regresses for plain switches.
             using var svc = new SwitchService();
-            var ex = Assert.ThrowsAsync<System.InvalidOperationException>(
+            var ex = await Assert.ThrowsAsync<System.InvalidOperationException>(
                 () => svc.SetValueAsync("nope", new SwitchValueRequestDto(0, 0), System.Threading.CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("not connected"));
             await System.Threading.Tasks.Task.CompletedTask;

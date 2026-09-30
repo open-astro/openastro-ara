@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Telescope, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
             await svc.DisconnectAsync(null, CancellationToken.None); // supersede the dead connect before dispose
         }
 
@@ -183,22 +183,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void MoveAxisAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task MoveAxisAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new TelescopeService();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.MoveAxisAsync(0, 1.5, CancellationToken.None));
         }
 
         [Test]
-        public void SetTrackingAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task SetTrackingAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new TelescopeService();
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetTrackingAsync(true, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetTrackingAsync(true, CancellationToken.None));
         }
 
         [Test]
-        public void AbortSlewAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task AbortSlewAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new TelescopeService();
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.AbortSlewAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.AbortSlewAsync(CancellationToken.None));
         }
 
         [Test]
@@ -231,10 +231,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void GetAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task GetAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new TelescopeService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(() => svc.GetAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.GetAsync(CancellationToken.None));
         }
 
         [Test]
@@ -264,17 +264,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void SetTrackingAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task SetTrackingAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new TelescopeService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(() => svc.SetTrackingAsync(false, CancellationToken.None));
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.SetTrackingAsync(false, CancellationToken.None));
         }
 
         [Test]
-        public void AbortSlewAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task AbortSlewAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new TelescopeService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(() => svc.AbortSlewAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.AbortSlewAsync(CancellationToken.None));
         }
 
         private static async Task<TelescopeDto?> PollUntilNotConnectingAsync(TelescopeService svc) {

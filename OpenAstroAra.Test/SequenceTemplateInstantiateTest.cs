@@ -81,13 +81,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void InstantiateAsync_throws_KeyNotFound_for_unknown_template() {
+        public async Task InstantiateAsync_throws_KeyNotFound_for_unknown_template() {
             var sequenceService = new Mock<ISequenceService>();
             var svc = new PlaceholderSequenceTemplateService(sequenceService.Object);
 
             var request = new TemplateInstantiateRequestDto(NewSequenceName: "x", Parameters: null);
 
-            Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            await Assert.ThrowsAsync<KeyNotFoundException>(() =>
                 svc.InstantiateAsync("nonexistent-template", request, CancellationToken.None));
         }
     }

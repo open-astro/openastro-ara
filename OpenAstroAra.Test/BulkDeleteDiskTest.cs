@@ -118,7 +118,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Bulk_move_to_an_unknown_session_is_a_validation_error() {
             var (id, _) = await InsertFrameWithFilesAsync();
-            var ex = Assert.ThrowsAsync<ArgumentException>(() => _repo.BulkMoveAsync(
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() => _repo.BulkMoveAsync(
                 new BulkMoveRequestDto(FrameIds: [id], TargetSessionId: Guid.NewGuid()),
                 idempotencyKey: null, CancellationToken.None));
             Assert.That(ex!.ParamName, Is.EqualTo("request"),

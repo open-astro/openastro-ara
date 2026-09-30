@@ -81,9 +81,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Sync_null_coords_throws() {
+        public async Task Sync_null_coords_throws() {
             using var svc = new TelescopeService();
-            Assert.ThrowsAsync<System.ArgumentNullException>(
+            await Assert.ThrowsAsync<System.ArgumentNullException>(
                 () => ((ITelescopeMediator)svc).Sync((Coordinates)null!));
         }
 
@@ -151,9 +151,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void WaitForSlew_when_not_connected_completes() {
+        public async Task WaitForSlew_when_not_connected_completes() {
             using var svc = new TelescopeService();
-            Assert.DoesNotThrowAsync(() => ((ITelescopeMediator)svc).WaitForSlew(CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => ((ITelescopeMediator)svc).WaitForSlew(CancellationToken.None));
         }
 
         [Test]

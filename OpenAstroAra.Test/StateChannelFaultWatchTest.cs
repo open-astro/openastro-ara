@@ -327,7 +327,7 @@ namespace OpenAstroAra.Test {
                 TimeSpan.FromSeconds(15), "the mount to connect");
 
             var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                 ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None));
 
             lock (faults) {

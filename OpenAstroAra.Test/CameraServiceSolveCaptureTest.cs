@@ -77,23 +77,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Capture_without_a_camera_fails_as_not_connected_not_not_supported() {
+        public async Task Capture_without_a_camera_fails_as_not_connected_not_not_supported() {
             // The whole point: a disconnected camera is an ordinary equipment failure the
             // centering loop's attempt policy understands — not a "feature missing" throw.
             using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
             var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
             Assert.That(ex!.Message, Does.Contain("not connected"));
         }
 
         [Test]
-        public void Capture_without_a_legacy_profile_still_reaches_the_camera_check() {
+        public async Task Capture_without_a_legacy_profile_still_reaches_the_camera_check() {
             // The profile is only read by render paths the solver never calls, so its absence must
             // not be a failure mode of its own.
             using var svc = new CameraService();
             var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
             Assert.That(ex!.Message, Does.Contain("not connected"));
         }
@@ -136,10 +136,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Non_positive_exposure_is_rejected_before_touching_the_camera() {
+        public async Task Non_positive_exposure_is_rejected_before_touching_the_camera() {
             using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
             var seq = new CaptureSequence(0, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
                 svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
         }
     }

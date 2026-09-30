@@ -62,7 +62,7 @@ namespace OpenAstroAra.Test {
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.SafetyMonitor, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
             await svc.DisconnectAsync(null, CancellationToken.None); // supersede the dead connect before dispose
         }
 
@@ -131,10 +131,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void GetAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task GetAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new SafetyMonitorService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(
+            await Assert.ThrowsAsync<ObjectDisposedException>(
                 () => svc.GetAsync(CancellationToken.None));
         }
 

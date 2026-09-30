@@ -63,13 +63,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_already_cancelled_request_throws_before_connecting_and_remembers_nothing() {
+        public async Task An_already_cancelled_request_throws_before_connecting_and_remembers_nothing() {
             var store = new FakeSelectionStore();
             var connectCalled = false;
             using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            await cts.CancelAsync();
 
-            Assert.ThrowsAsync<OperationCanceledException>(() => EquipmentEndpoints.ConnectAndRememberAsync(
+            await Assert.ThrowsAsync<OperationCanceledException>(() => EquipmentEndpoints.ConnectAndRememberAsync(
                 Request(), store,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 cts.Token));
@@ -81,10 +81,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_failed_connect_does_not_remember_the_device() {
+        public async Task A_failed_connect_does_not_remember_the_device() {
             var store = new FakeSelectionStore();
 
-            Assert.ThrowsAsync<InvalidOperationException>(() => EquipmentEndpoints.ConnectAndRememberAsync(
+            await Assert.ThrowsAsync<InvalidOperationException>(() => EquipmentEndpoints.ConnectAndRememberAsync(
                 Request(), store,
                 () => throw new InvalidOperationException("bridge unreachable"),
                 CancellationToken.None));

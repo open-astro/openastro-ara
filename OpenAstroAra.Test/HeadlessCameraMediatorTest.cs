@@ -86,15 +86,15 @@ namespace OpenAstroAra.Test {
         // throw rather than fabricate an IExposureData (documented contract).
 
         [Test]
-        public void Download_returns_faulted_task_not_supported() {
+        public async Task Download_returns_faulted_task_not_supported() {
             var m = new HeadlessCameraMediator();
-            Assert.ThrowsAsync<NotSupportedException>(() => m.Download(CancellationToken.None));
+            await Assert.ThrowsAsync<NotSupportedException>(() => m.Download(CancellationToken.None));
         }
 
         [Test]
-        public void Capture_returns_faulted_task_not_supported() {
+        public async Task Capture_returns_faulted_task_not_supported() {
             var m = new HeadlessCameraMediator();
-            Assert.ThrowsAsync<NotSupportedException>(() => m.Capture(null!, CancellationToken.None, NoProgress));
+            await Assert.ThrowsAsync<NotSupportedException>(() => m.Capture(null!, CancellationToken.None, NoProgress));
         }
 
         [Test]

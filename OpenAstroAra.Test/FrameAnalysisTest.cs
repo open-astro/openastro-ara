@@ -72,8 +72,8 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void UpdateAnalysis_on_a_deleted_frame_is_a_silent_noop() {
-            Assert.DoesNotThrowAsync(() =>
+        public async Task UpdateAnalysis_on_a_deleted_frame_is_a_silent_noop() {
+            await Assert.DoesNotThrowAsync(() =>
                 _repo.UpdateAnalysisAsync(Guid.NewGuid(), 2.0, 50, CancellationToken.None));
         }
 

@@ -71,7 +71,7 @@ namespace OpenAstroAra.Test {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
             await cts.CancelAsync();
-            Assert.ThrowsAsync<TaskCanceledException>(() => wait.WaitAsync(TimeSpan.FromSeconds(2)));
+            await Assert.ThrowsAsync<TaskCanceledException>(() => wait.WaitAsync(TimeSpan.FromSeconds(2)));
             // The gate stays armed — abort wins over pause, it doesn't clear it.
             Assert.That(gate.IsPauseRequested, Is.True);
         }

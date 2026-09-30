@@ -327,19 +327,19 @@ public class ProfileShareServiceTest {
         // Right schema but no settings/rig_description — non-nullable on the record,
         // but source-gen JSON leaves them null, so the guard (not an NPE) must reject.
         using var noBody = JsonDocument.Parse("{\"schema_version\":\"profile-share-v1\"}");
-        Assert.ThrowsAsync<InvalidProfileShareException>(
+        await Assert.ThrowsAsync<InvalidProfileShareException>(
             () => svc.ImportPreviewAsync(wrongSchema.RootElement, CancellationToken.None));
-        Assert.ThrowsAsync<InvalidProfileShareException>(
+        await Assert.ThrowsAsync<InvalidProfileShareException>(
             () => svc.ImportPreviewAsync(empty.RootElement, CancellationToken.None));
-        Assert.ThrowsAsync<InvalidProfileShareException>(
+        await Assert.ThrowsAsync<InvalidProfileShareException>(
             () => svc.ImportPreviewAsync(noBody.RootElement, CancellationToken.None));
     }
 
     [Test]
-    public void Import_commit_with_unknown_token_throws() {
+    public async Task Import_commit_with_unknown_token_throws() {
         using var repo = new FakeRepo(DonorSnapshot());
         var svc = new ProfileShareService(repo);
-        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+        await Assert.ThrowsAsync<ProfileShareImportTokenException>(
             () => svc.ImportCommitAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
@@ -352,7 +352,7 @@ public class ProfileShareServiceTest {
 
         await svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None);
         // The token is consumed on first commit — a second use can't duplicate.
-        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+        await Assert.ThrowsAsync<ProfileShareImportTokenException>(
             () => svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None));
     }
 
@@ -368,7 +368,7 @@ public class ProfileShareServiceTest {
         var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
 
         clock.Advance(TimeSpan.FromMinutes(16)); // past the 15-min window
-        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+        await Assert.ThrowsAsync<ProfileShareImportTokenException>(
             () => svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None));
     }
 
@@ -383,7 +383,7 @@ public class ProfileShareServiceTest {
         for (var i = 0; i < ProfileShareService.MaxPendingImports; i++) {
             await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
         }
-        Assert.ThrowsAsync<ProfileShareImportThrottledException>(
+        await Assert.ThrowsAsync<ProfileShareImportThrottledException>(
             () => svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None));
     }
 

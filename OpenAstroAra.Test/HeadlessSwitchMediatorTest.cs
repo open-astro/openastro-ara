@@ -39,9 +39,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void SetSwitchValue_does_not_throw() {
+        public async Task SetSwitchValue_does_not_throw() {
             var m = new HeadlessSwitchMediator();
-            Assert.DoesNotThrowAsync(() =>
+            await Assert.DoesNotThrowAsync(() =>
                 m.SetSwitchValue(0, 1.0, new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 

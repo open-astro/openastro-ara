@@ -278,13 +278,13 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         }
 
         [Test]
-        public void Execute_throws_when_no_target_coordinates_are_available() {
+        public async Task Execute_throws_when_no_target_coordinates_are_available() {
             // Context has none AND the mount returns null (disconnected mid-decision) — fail loud, don't
             // continue un-flipped.
             telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns((Coordinates)null!);
             telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1 });
             var sut = CreateSUT();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
@@ -343,7 +343,7 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         }
 
         [Test]
-        public void Execute_throws_when_the_executor_reports_failure_and_no_pause_gate_is_wired() {
+        public async Task Execute_throws_when_the_executor_reports_failure_and_no_pause_gate_is_wired() {
             // No root/gate reachable (standalone execution): the only safe halt is
             // the old throw → Failed path. Continuing un-flipped is never an option.
             var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
@@ -353,7 +353,7 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
                 .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             var sut = CreateSUT();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
@@ -380,7 +380,7 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         }
 
         [Test]
-        public void Execute_still_throws_on_failure_when_the_root_has_no_gate() {
+        public async Task Execute_still_throws_on_failure_when_the_root_has_no_gate() {
             // A root without a wired gate (pause unavailable) must keep the halt path.
             var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
             telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(coords);
@@ -390,7 +390,7 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
                 .ReturnsAsync(false);
             var root = new SequenceRootContainer(); // PauseGate stays null
 
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => CreateSUT().Execute(root, new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 

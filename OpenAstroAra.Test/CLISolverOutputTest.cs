@@ -93,12 +93,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Cancellation_still_kills_a_hung_solver() {
+        public async Task Cancellation_still_kills_a_hung_solver() {
             var solver = new FakeSolver(Script("echo started\nsleep 30\n"));
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
             var sw = Stopwatch.StartNew();
 
-            Assert.CatchAsync<OperationCanceledException>(() => solver.Run(null, cts.Token));
+            await Assert.CatchAsync<OperationCanceledException>(() => solver.Run(null, cts.Token));
 
             Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)));
         }

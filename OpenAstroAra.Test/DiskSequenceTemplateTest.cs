@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
             Assert.That(list, Has.Count.EqualTo(3));
             Assert.That(list.Select(t => t.Name),
                 Is.EquivalentTo(ExpectedBuiltinTemplateNames));
-            Assert.That(list, Is.All.Matches<SequenceTemplateDto>(t => t.IsBuiltIn));
+            Assert.That(list, Is.All.Matches<SequenceTemplateDto>(t => t is { IsBuiltIn: true }));
         }
 
         [Test]

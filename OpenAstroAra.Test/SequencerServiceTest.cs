@@ -712,7 +712,7 @@ namespace OpenAstroAra.Test {
             await WaitForEventAsync(ws, "sequence.auto_flats_decided");
             Assert.That(persisted?.CalibrationCaptureDefault, Is.EqualTo("panel_at_end"));
 
-            Assert.ThrowsAsync<ArgumentException>(() =>
+            await Assert.ThrowsAsync<ArgumentException>(() =>
                 svc.ProvideDecisionAsync(id, new AutoFlatsDecisionRequestDto("do_a_barrel_roll", Remember: false), null, CancellationToken.None));
 
             await svc.AbortAsync(id, null, CancellationToken.None);

@@ -79,7 +79,7 @@ namespace OpenAstroAra.Test {
             Assert.That(move.IsCompleted, Is.False, "the wait is still confirming against the never-settling device");
             await svc.DisconnectAsync(null, CancellationToken.None);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => move,
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => move,
                 "a focuser at an unknown position must not read as a completed move");
         }
 
@@ -103,7 +103,7 @@ namespace OpenAstroAra.Test {
             Assert.That(move.IsCompleted, Is.False, "the wait is still confirming against the never-settling device");
             await svc.DisconnectAsync(null, CancellationToken.None);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => move,
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => move,
                 "a rotator at an unknown angle must not read as a completed move");
         }
 
@@ -126,7 +126,7 @@ namespace OpenAstroAra.Test {
             Assert.That(change.IsCompleted, Is.False, "the wait is still confirming against the never-landing wheel");
             await svc.DisconnectAsync(null, CancellationToken.None);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => change,
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => change,
                 "a wheel that never confirmed its slot must not hand back the requested filter");
         }
 
@@ -152,7 +152,7 @@ namespace OpenAstroAra.Test {
             Assert.That(slew.IsCompleted, Is.False, "the wait is still confirming against the never-settling mount");
             await svc.DisconnectAsync(null, CancellationToken.None);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => slew,
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => slew,
                 "a mount at an unknown pointing must not read as a completed slew");
         }
 
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Test {
             Assert.That(slew.IsCompleted, Is.False, "the wait is still confirming against the never-settling dome");
             await svc.DisconnectAsync(null, CancellationToken.None);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => slew,
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => slew,
                 "a dome at an unknown azimuth must not read as a completed slew");
         }
     }
