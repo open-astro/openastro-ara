@@ -184,6 +184,12 @@ Ara assumes you're asleep while it works:
   unresponsive) is caught the same way by an active liveness ping. When recovery succeeds, ARA
   reconnects automatically within your "guider retry timeout" window and notifies you — just
   Resume the paused run; if it can't reconnect in time, reconnect manually (Equipment → Guider).
+  The daemon restart only applies when the profile's guider host is the SBC itself (`localhost`,
+  its own name or address). A guider running on **another machine** (PHD2 on a laptop, say) is
+  not ARA's to restart: you get a "Guider connection lost" notification, ARA keeps retrying the
+  connection for the same retry window, and reconnects when that machine's guider is back. The
+  same rule gates the guider restart action (`POST /api/v1/equipment/guider/restart`), which
+  only restarts the SBC's own guider daemon.
 - **Meridian flips** run a guarded pipeline: a pre-flight check (predicted altitude, mount health,
   required equipment), an in-slew watchdog (stall/timeout/pier-side verification), a hard
   post-flip plate-solve gate (imaging does not resume on an unverified pointing), and a safe-rest

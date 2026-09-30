@@ -10181,6 +10181,13 @@ systemd's `Restart=on-failure` handles basic crash recovery. ARA layers addition
   - If `failed` (systemd gave up) → ARA fires **urgent** notification, guider-dependent ops disabled
   - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-guider`
 - Mid-guiding crash → §42.2 fault flow: pause sequence at safe point, critical notification, systemd auto-restarts
+- **Host gate (#1192)**: the unit above is the *local* `openastro-guider`, so the whole tree — the
+  connect-time `systemctl start`, the crash-recovery status poll/restart, and §63.12's manual
+  restart — runs only when the profile's guider host is this machine (blank, `localhost`, a
+  loopback/interface address, or this host's name). A remote guider host gets a "Guider
+  connection lost" notification and a plain reconnect loop for the same retry window; nothing
+  local is started or restarted. Recovery also pins the host:port and profile that were live at
+  the drop and abandons (log + Error) if a profile switch or a re-targeted profile changes them.
 
 ### 63.4 Per-ARA-profile to PHD2-profile mapping
 
@@ -10326,7 +10333,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
-| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5 |
+| `POST` | `/api/v1/equipment/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5. Only when the profile's guider host is this machine (§63.3 host gate, #1192) — for a remote host it is a logged no-op that still returns 202 |
 | `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence |
 | `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
 | `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |

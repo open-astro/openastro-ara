@@ -136,6 +136,15 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // issued it (CancelRecoveryLocked would cancel the reconnect loop's own token
     // mid-flight); every user/REST connect does.
     internal Task<OperationAcceptedDto> ConnectCoreAsync(GuiderConnectRequestDto request, string? idempotencyKey, bool supersedeRecovery) {
+        BeginConnect(request, supersedeRecovery, recoveringFor: null);
+        return Task.FromResult(Accepted("guider.connect", idempotencyKey));
+    }
+
+    // The connect prologue, atomic under _gate. Returns false only for a §63.3 auto-reconnect
+    // (recoveringFor set) whose target is no longer the active profile's guider (#1192): a profile
+    // switch since the drop must not have this pass write the OLD host:port into the NEW profile
+    // and dial it as a "recovery". Every user/mediator connect returns true.
+    private bool BeginConnect(GuiderConnectRequestDto request, bool supersedeRecovery, RecoveryTarget? recoveringFor) {
         ArgumentNullException.ThrowIfNull(request);
         long generation;
         PHD2Guider guider;
@@ -155,10 +164,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                     (requestHost is null or "" || string.Equals(requestHost, current.PHD2ServerHost, StringComparison.OrdinalIgnoreCase)) &&
                     (request.Port is null || request.Port == current.PHD2ServerPort);
                 if (sameTarget) {
-                    return Task.FromResult(Accepted("guider.connect", idempotencyKey));
+                    return true;
                 }
                 // Different target → fall through: the connect path below disposes the
                 // live guider and dials the new host/port.
+            }
+            if (recoveringFor is not null && RecoveryAbandonReasonLocked(recoveringFor) is { } reason) {
+                LogReconnectAbandoned(recoveringFor.Host, recoveringFor.Port, reason);
+                return false;
             }
             if (supersedeRecovery) {
                 // A fresh user connect supersedes any §63.3 recovery still polling
@@ -197,7 +210,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
         // 202 contract: do the blocking connect off-thread; GetAsync reports the outcome.
         _ = Task.Run(() => ConnectInBackground(guider, generation, connectToken), CancellationToken.None);
-        return Task.FromResult(Accepted("guider.connect", idempotencyKey));
+        return true;
     }
 
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
@@ -281,6 +294,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         // attempt was already superseded — otherwise we'd log + systemctl-start spuriously for a
         // connect that's being torn down. The OCE is handled cleanly in ConnectInBackground.
         ct.ThrowIfCancellationRequested();
+        // #1192: the unit the supervisor starts is the LOCAL openastro-guider. A profile that points
+        // at a guider on another machine gets no start and no wait — go straight to the connect,
+        // which fails into Error (and §63.3 recovery) if that box really is down.
+        if (!await IsLocalGuiderHostDecision(host, ct).ConfigureAwait(false)) {
+            ct.ThrowIfCancellationRequested();
+            LogRemoteHostNoLocalStart(host, port);
+            return;
+        }
         LogGuiderNotReachableStarting(host, port);
         _supervisor.RequestStart();
         // Re-probe until the unit comes up, bounded by a ~10s wall-clock deadline (so the worst
