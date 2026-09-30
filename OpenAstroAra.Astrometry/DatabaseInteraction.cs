@@ -26,8 +26,8 @@ namespace OpenAstroAra.Astrometry {
     // rotation parameters etc.). Phase 0.5p deleted the underlying schema types per §56
     // NINA-DB-greenfield without porting the consumers. Daemon DB design (per §56) is
     // future work. For now this class preserves the two methods callers actually need:
-    //   - GetUt1Utc: returns 0 (no IERS earth-rotation table available; SOFA topocentric
-    //     transforms still work, just without sub-second UT1-UTC correction)
+    //   - GetUt1Utc: UT1-UTC from the bundled IERS Bulletin A snapshot (Dut1Table, #1190);
+    //     NINA read the same series from its earthrotationparameters SQLite table
     //   - GetDisplayAlias: pure-CPU Levenshtein alias matcher; no DB needed, kept as-is
     // The other former methods (GetConstellations, GetObjectTypes, GetBrightStars,
     // GetConstellationsWithStars, GetConstellationBoundaries, GetCatalogues,
@@ -41,13 +41,18 @@ namespace OpenAstroAra.Astrometry {
         public DatabaseInteraction(string connectionString) {
         }
 
+        /// <summary>
+        /// UT1-UTC in seconds at <paramref name="date"/>, from <see cref="Dut1Table.Bundled"/>
+        /// (the embedded IERS Bulletin A snapshot, or the <c>OPENASTROARA_DUT1_TABLE</c> override).
+        /// Dates outside the table get the table's documented fallback and never throw.
+        /// </summary>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-            Justification = "Per the Microsoft CA1822 guidance, suppressed because marking this externally-visible member static would be a breaking API change; it is also instance-by-design (a stub that will read from the per-instance daemon DB connection when the IERS table is restored).")]
+            Justification = "Per the Microsoft CA1822 guidance, suppressed because marking this externally-visible member static would be a breaking API change; it is also instance-by-design (a daemon-DB-backed table refreshed by the Data Manager would be per-instance).")]
         public Task<double> GetUt1Utc(DateTime date, CancellationToken token) {
             if (token.IsCancellationRequested) {
                 return Task.FromCanceled<double>(token);
             }
-            return Task.FromResult(0d);
+            return Task.FromResult(Dut1Table.Bundled.Lookup(date));
         }
 
         public static string GetDisplayAlias(string searchName, IReadOnlyList<string> aliases) {
