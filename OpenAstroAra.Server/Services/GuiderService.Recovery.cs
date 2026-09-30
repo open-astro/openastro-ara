@@ -49,9 +49,43 @@ public sealed partial class GuiderService {
         _recovering = true;
         _recoveryPassCts = new CancellationTokenSource();
         var token = _recoveryPassCts.Token;
+        // #1192: pin the pass to the connection that dropped. A profile switch during the pass
+        // (POST /profiles/{id}/select swaps the live store without touching the guider) must not
+        // turn "recover profile A's guider" into a connect to profile B's.
+        var target = CaptureRecoveryTargetLocked();
         // Assigned under _gate before the pass's finally can take the gate, so a reader that sees
         // _recovering == true always gets this pass's task.
-        _recoveryPassTask = Task.Run(() => RunRecoveryAsync(token), CancellationToken.None);
+        _recoveryPassTask = Task.Run(() => RunRecoveryAsync(target, token), CancellationToken.None);
+    }
+
+    // The active profile's guider target + identity, read under _gate.
+    private RecoveryTarget CaptureRecoveryTargetLocked() {
+        var settings = _profileService.ActiveProfile.GuiderSettings;
+        return new RecoveryTarget(settings.PHD2ServerHost ?? string.Empty, settings.PHD2ServerPort, _activeProfileIdResolver?.Invoke());
+    }
+
+    // Null while the pass's target is still the active profile's guider; else the reason to stop.
+    private string? RecoveryAbandonReasonLocked(RecoveryTarget target) {
+        var settings = _profileService.ActiveProfile.GuiderSettings;
+        return RecoveryAbandonReason(target, settings.PHD2ServerHost ?? string.Empty, settings.PHD2ServerPort, _activeProfileIdResolver?.Invoke());
+    }
+
+    /// <summary>#1192 — the connection a recovery pass is recovering: the host:port that dropped and
+    /// the ARA profile that was active when it dropped (null without a profile repository — benches).
+    /// Captured at link-down, compared before every reconnect attempt.</summary>
+    internal sealed record RecoveryTarget(string Host, int Port, Guid? ProfileId);
+
+    /// <summary>Why a recovery pass must be abandoned, or null while its target is still current:
+    /// the active profile changed (a profile switch never carries a recovery across), or the active
+    /// profile's guider target no longer matches the connection that dropped.</summary>
+    internal static string? RecoveryAbandonReason(RecoveryTarget target, string activeHost, int activePort, Guid? activeProfileId) {
+        if (activeProfileId != target.ProfileId) {
+            return $"the active profile changed from {target.ProfileId?.ToString() ?? "(none)"} to {activeProfileId?.ToString() ?? "(none)"}";
+        }
+        if (!string.Equals(activeHost?.Trim(), target.Host.Trim(), StringComparison.OrdinalIgnoreCase) || activePort != target.Port) {
+            return $"the profile's guider target changed from {target.Host}:{target.Port} to {activeHost}:{activePort}";
+        }
+        return null;
     }
 
     // Cancel an in-flight recovery pass. Called under _gate when the guider state changes out from
@@ -69,8 +103,17 @@ public sealed partial class GuiderService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background recovery boundary: the §63.3 tree shells out to systemctl and emits notifications; any escape must be contained so a recovery failure can't crash the daemon. Log-and-recover.")]
-    private async Task RunRecoveryAsync(CancellationToken token) {
+    private async Task RunRecoveryAsync(RecoveryTarget target, CancellationToken token) {
         try {
+            // #1192: the coordinator supervises the LOCAL openastro-guider unit. A guider on another
+            // machine has nothing here to poll or restart — its own host supervises it — so skip the
+            // systemd tree and just retry the connection within the grace window.
+            if (!await IsLocalGuiderHostDecision(target.Host, token).ConfigureAwait(false)) {
+                token.ThrowIfCancellationRequested();
+                LogRemoteHostNoLocalRecovery(target.Host, target.Port);
+                await TryAutoReconnectAsync(target, localUnitRestarted: false, token).ConfigureAwait(false);
+                return;
+            }
             var outcome = await _recovery.RecoverAsync(token).ConfigureAwait(false);
             if (outcome == GuiderRecoveryOutcome.Recovered) {
                 // §63.3 auto-reconnect: the systemd unit is active again, but ARA's
@@ -79,7 +122,7 @@ public sealed partial class GuiderService {
                 // an unattended night doesn't stay guider-less over a recovered
                 // crash. Runs under the same pass token — a user connect/disconnect
                 // cancels it (their action supersedes).
-                await TryAutoReconnectAsync(token).ConfigureAwait(false);
+                await TryAutoReconnectAsync(target, localUnitRestarted: true, token).ConfigureAwait(false);
             }
         } catch (OperationCanceledException) {
             // Cancelled by a new connect/disconnect or by Dispose — the user/host moved on.
@@ -98,13 +141,14 @@ public sealed partial class GuiderService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort reconnect: any fault leaves the guider in Error for the user to reconnect manually (the pre-auto-reconnect behavior); logged, never rethrown into the recovery pass.")]
-    private async Task TryAutoReconnectAsync(CancellationToken token) {
+    private async Task TryAutoReconnectAsync(RecoveryTarget target, bool localUnitRestarted, CancellationToken token) {
         try {
             var (graceSeconds, grace) = ReconnectGraceWindow();
             var deadline = DateTimeOffset.UtcNow + grace;
 
-            string host;
-            int port;
+            // #1192: reconnect to the connection that DROPPED (the pass's target), never to
+            // whatever the active profile says now — and stop the moment they disagree.
+            var (host, port) = (target.Host, target.Port);
             lock (_gate) {
                 // Only auto-reconnect over the Error state this pass created; if the
                 // user already reconnected (Connected/Connecting) or gave up
@@ -112,9 +156,6 @@ public sealed partial class GuiderService {
                 if (_disposed || _state != EquipmentConnectionState.Error) {
                     return;
                 }
-                var settings = _profileService.ActiveProfile.GuiderSettings;
-                host = settings.PHD2ServerHost;
-                port = settings.PHD2ServerPort;
             }
             LogReconnectStarted(host, port, graceSeconds);
 
@@ -124,7 +165,14 @@ public sealed partial class GuiderService {
                         return; // the user (or a prior attempt) settled it
                     }
                 }
-                await ConnectCoreAsync(new GuiderConnectRequestDto(host, port), idempotencyKey: null, supersedeRecovery: false).ConfigureAwait(false);
+                // A profile switch (or a re-targeted profile) since the drop makes this pass's guider
+                // no longer the one in use: BeginConnect refuses (false, logged) and we leave Error
+                // for the new profile's own connect — the sequencer's ConnectEquipment /
+                // ReconnectTrigger and the user's connect both go to the ACTIVE profile's target (a
+                // clean restart, not a carry-over).
+                if (!BeginConnect(new GuiderConnectRequestDto(host, port), supersedeRecovery: false, recoveringFor: target)) {
+                    return;
+                }
 
                 // The connect runs 202-style in the background; poll its outcome
                 // until it settles (Connected or back to Error) or the grace expires.
@@ -134,7 +182,10 @@ public sealed partial class GuiderService {
                     if (state == EquipmentConnectionState.Connected) {
                         LogReconnectSucceeded();
                         await NotifyFaultQuietlyAsync("Guider reconnected automatically",
-                            "The guider process was recovered and ARA reconnected to it. Guiding settings were re-pushed on connect. "
+                            (localUnitRestarted
+                                ? "The guider process was recovered and ARA reconnected to it. "
+                                : $"The guider at {host}:{port} is reachable again and ARA reconnected to it. ")
+                            + "Guiding settings were re-pushed on connect. "
                             + "If your sequence was paused by the guider loss, Resume it when ready.").ConfigureAwait(false);
                         return;
                     }
@@ -148,8 +199,10 @@ public sealed partial class GuiderService {
 
             token.ThrowIfCancellationRequested();
             LogReconnectGaveUp(graceSeconds);
-            await NotifyFaultQuietlyAsync("Guider recovered but not reconnected",
-                "The guider process was restarted, but ARA could not re-establish its connection within the retry window. "
+            await NotifyFaultQuietlyAsync(localUnitRestarted ? "Guider recovered but not reconnected" : "Guider not reconnected",
+                (localUnitRestarted
+                    ? "The guider process was restarted, but ARA could not re-establish its connection within the retry window. "
+                    : $"The guider at {host}:{port} runs on another machine (ARA cannot restart it) and did not come back within the retry window. ")
                 + "Reconnect it manually (Equipment → Guider), then Resume any paused run.").ConfigureAwait(false);
         } catch (OperationCanceledException) {
             // User action superseded the auto-reconnect — nothing to report.
@@ -190,4 +243,7 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(EventId = 6338, Level = LogLevel.Error, Message = "§63.3 auto-reconnect failed; the guider stays in Error for a manual reconnect")]
     private partial void LogReconnectFailed(Exception exception);
+
+    [LoggerMessage(EventId = 6366, Level = LogLevel.Warning, Message = "§63.3 auto-reconnect to {Host}:{Port} abandoned: {Reason}. The guider stays in Error; connect the active profile's guider")]
+    private partial void LogReconnectAbandoned(string host, int port, string reason);
 }
