@@ -261,6 +261,16 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 return false;
             }
 
+            // Coordinates is null until the first position read, and stays null for the whole session on a
+            // mount whose EquatorialSystem can't be read (#1220). The dedup distance and the side-of-pier
+            // projection below both dereference it, so treat an unknown position as "can't evaluate" (#1221).
+            if (telescopeInfo.Coordinates == null) {
+                EarliestFlipTime = DateTime.MinValue;
+                LatestFlipTime = DateTime.MinValue;
+                Logger.Warning("Meridian Flip - Telescope position is unknown (no coordinates reported). Skip flip evaluation");
+                return false;
+            }
+
             // When side of pier is disabled - check if the last flip time was less than 11 hours ago and further check if the current position is similar to the last flip position. If all are true, no flip is required.
             if (UseSideOfPier == false && (DateTime.Now - lastFlipTime) < TimeSpan.FromHours(11) && lastFlipCoordinates != null && (lastFlipCoordinates - telescopeInfo.Coordinates).Distance.ArcMinutes < 20) {
                 //A flip for the same target is only expected every 12 hours on planet earth and

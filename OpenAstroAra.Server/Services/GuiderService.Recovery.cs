@@ -36,6 +36,9 @@ public sealed partial class GuiderService {
     // The in-flight recovery pass's CTS, or null when idle. All access is under _gate.
     private CancellationTokenSource? _recoveryPassCts;
     private bool _recovering; // true while a pass is running; guarded by _gate (single-flight)
+    // The most recent pass's task (#1123): the sequencer mediator's Connect() awaits it rather than
+    // starting a second pass. Only meaningful while _recovering; guarded by _gate.
+    private Task _recoveryPassTask = Task.CompletedTask;
 
     // Begin a recovery pass for an unexpected drop. Called from OnConnectionLost while holding _gate;
     // the work runs off-thread so we never block the lock or the listener.
@@ -46,7 +49,9 @@ public sealed partial class GuiderService {
         _recovering = true;
         _recoveryPassCts = new CancellationTokenSource();
         var token = _recoveryPassCts.Token;
-        _ = Task.Run(() => RunRecoveryAsync(token), CancellationToken.None);
+        // Assigned under _gate before the pass's finally can take the gate, so a reader that sees
+        // _recovering == true always gets this pass's task.
+        _recoveryPassTask = Task.Run(() => RunRecoveryAsync(token), CancellationToken.None);
     }
 
     // Cancel an in-flight recovery pass. Called under _gate when the guider state changes out from
@@ -95,14 +100,8 @@ public sealed partial class GuiderService {
         Justification = "Best-effort reconnect: any fault leaves the guider in Error for the user to reconnect manually (the pre-auto-reconnect behavior); logged, never rethrown into the recovery pass.")]
     private async Task TryAutoReconnectAsync(CancellationToken token) {
         try {
-            int graceSeconds;
-            try {
-                graceSeconds = _profileStore?.GetSafetyPolicies().GuiderRetryTimeoutSec ?? 60;
-            } catch (Exception ex) {
-                LogReconnectPolicyReadFailed(ex);
-                graceSeconds = 60;
-            }
-            var deadline = DateTimeOffset.UtcNow + ReconnectGraceFromSeconds(graceSeconds);
+            var (graceSeconds, grace) = ReconnectGraceWindow();
+            var deadline = DateTimeOffset.UtcNow + grace;
 
             string host;
             int port;
@@ -157,6 +156,21 @@ public sealed partial class GuiderService {
         } catch (Exception ex) {
             LogReconnectFailed(ex);
         }
+    }
+
+    // The profile's guider_retry_timeout_sec and the grace window it maps to. Shared by the §63.3
+    // auto-reconnect and the sequencer mediator's Connect() (#1123) so both honour the same bound.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A profile-store read failure must not break a reconnect; fall back to the 60 s default and log.")]
+    private (int Seconds, TimeSpan Window) ReconnectGraceWindow() {
+        int graceSeconds;
+        try {
+            graceSeconds = _profileStore?.GetSafetyPolicies().GuiderRetryTimeoutSec ?? 60;
+        } catch (Exception ex) {
+            LogReconnectPolicyReadFailed(ex);
+            graceSeconds = 60;
+        }
+        return (graceSeconds, ReconnectGraceFromSeconds(graceSeconds));
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Guider crash-recovery pass threw")]

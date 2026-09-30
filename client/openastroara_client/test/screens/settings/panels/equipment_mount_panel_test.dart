@@ -15,6 +15,7 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/util/slew_rates.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -89,6 +90,7 @@ MountStatus _status({
   bool canFindHome = false,
   bool canMoveAxis = false,
   List<double> axisRates = const [],
+  List<SlewRateBand> axisRateBands = const [],
   bool tracking = false,
   bool parked = false,
   String runtimeState = 'idle',
@@ -107,6 +109,7 @@ MountStatus _status({
     canFindHome: canFindHome,
     canMoveAxis: canMoveAxis,
     axisRatesDegPerSec: axisRates,
+    axisRateBands: axisRateBands,
   ),
   runtimeState: runtimeState,
   rightAscensionHours: 5.5,
@@ -330,6 +333,40 @@ void main() {
       expect(find.byIcon(Icons.north), findsOneWidget);
       expect(find.text('Manual control'), findsNothing);
       expect(find.widgetWithText(FilledButton, 'GoTo'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a single-rate mount (6, 6) gets one chip, selected, and the pad sends it',
+    (tester) async {
+      // #1126 — the legacy list [6.0] built six percentage presets and defaulted
+      // to 0.6 °/s, which the daemon refused (409): a dead pad. The band says
+      // the mount offers 6 °/s only.
+      await _wideSurface(tester);
+      final api = await _pump(
+        tester,
+        _status(
+          canMoveAxis: true,
+          axisRates: const [6.0],
+          axisRateBands: const [SlewRateBand(6.0, 6.0)],
+        ),
+      );
+      expect(find.byType(ChoiceChip), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, '6°/s'), findsOneWidget);
+      expect(find.textContaining('%'), findsNothing);
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.north)),
+      );
+      await tester.pump();
+      expect(
+        api.calls.any(
+          (c) => c.startsWith('command:moveaxis') && c.endsWith('rate=6.0'),
+        ),
+        isTrue,
+        reason: 'the only rate is the default, no chip tap needed',
+      );
+      await hold.up();
+      await tester.pump();
     },
   );
 

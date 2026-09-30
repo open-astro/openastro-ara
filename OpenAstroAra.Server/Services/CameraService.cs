@@ -1340,12 +1340,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// True when the configured save directory sits under the §29 store
     /// mount point but nothing is mounted there — i.e. the drive was
     /// ejected (or fell off) and a write would land on the root disk.
+    /// "Mounted" means a filesystem of its own, not merely a line at the
+    /// path — systemd binds the empty directory into the service namespace
+    /// after a restart with no disk (#1207; see <see cref="StoreMountProbe"/>).
     /// Best-effort: an unreadable /proc/self/mounts never blocks capture.
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-capture probe over profile + /proc reads; a probe fault must degrade to 'capture proceeds'. CA1031's log-and-recover boundary applies.")]
     internal bool StoreEjected(out string saveDirectory) {
-        const string mountPoint = "/media/openastroara";
+        const string mountPoint = StoreMountProbe.MountPoint;
         saveDirectory = string.Empty;
         try {
             if (_profileStore is null || !OperatingSystem.IsLinux()) {
@@ -1357,13 +1360,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 return false;
             }
             saveDirectory = dir;
-            foreach (var line in File.ReadLines("/proc/self/mounts")) {
-                var parts = line.Split(' ');
-                if (parts.Length > 1 && parts[1] == mountPoint) {
-                    return false; // store is mounted — all good
-                }
-            }
-            return true;
+            // null (unreadable table) → "not ejected": a probe fault must
+            // never cost the user a frame.
+            return StoreMountProbe.IsStoreMounted() == false;
         } catch (Exception ex) {
             LogPreCaptureDiskProbeFailed(ex);
             return false;
