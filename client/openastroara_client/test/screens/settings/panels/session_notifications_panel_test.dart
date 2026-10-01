@@ -6,10 +6,15 @@ import 'package:openastroara/settings/registry.dart';
 import 'package:openastroara/state/settings/settings_search.dart';
 
 void main() {
-  // #1189: nothing posts an OS notification, so the toggle is hidden until a
-  // channel exists. The profile field stays for round-tripping.
-  group('OS desktop notification toggle (#1189)', () {
-    testWidgets('is not shown in the Notifications panel', (tester) async {
+  // #1189: nothing shows a banner or posts an OS notification, so both
+  // channel toggles are hidden until one exists. The profile fields stay
+  // for round-tripping.
+  const hidden = {
+    'In-app banner': 'session.notifications.in_app_banner',
+    'OS desktop notification': 'session.notifications.os_desktop',
+  };
+  group('Unwired notification channel toggles (#1189)', () {
+    testWidgets('are not shown in the Notifications panel', (tester) async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -24,25 +29,25 @@ void main() {
         child: MaterialApp(home: Scaffold(body: SessionNotificationsPanel())),
       ));
       await tester.pump();
-      expect(find.text('OS desktop notification'), findsNothing);
-      // The live channels are still there.
-      expect(find.text('In-app banner'), findsOneWidget);
+      for (final label in hidden.keys) {
+        expect(find.text(label), findsNothing, reason: label);
+      }
+      // The live channel is still there.
       expect(find.text('Play a sound for safety alerts'), findsOneWidget);
     });
 
-    test('is not registered as a setting', () {
-      expect(
-        settingsRegistry.where((s) => s.id == 'session.notifications.os_desktop'),
-        isEmpty,
-      );
+    test('are not registered as settings', () {
+      for (final id in hidden.values) {
+        expect(settingsRegistry.where((s) => s.id == id), isEmpty, reason: id);
+      }
     });
 
-    test('settings search no longer returns it', () {
+    test('settings search no longer returns them', () {
       final index = buildSearchIndex();
-      for (final q in ['desktop', 'toast', 'OS desktop notification']) {
+      for (final q in ['desktop', 'toast', 'banner', ...hidden.keys]) {
         expect(
           searchSettings(index, q)
-              .where((e) => e.settingId == 'session.notifications.os_desktop'),
+              .where((e) => hidden.values.contains(e.settingId)),
           isEmpty,
           reason: 'query "$q"',
         );
