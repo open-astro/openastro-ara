@@ -1,6 +1,6 @@
 #!/bin/sh
 # Entry point of openastroara-update@.service (§33 client-pushed update, #1122):
-# runs apply-update.sh as root on the daemon's behalf, with the two arguments the
+# runs apply-update.sh as root on the daemon's behalf, with the three arguments the
 # daemon left in
 #   /run/openastroara/update/<id>.request   (staged .deb path, port, drain seconds)
 # and writes

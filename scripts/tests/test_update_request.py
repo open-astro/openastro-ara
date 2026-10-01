@@ -59,21 +59,21 @@ class UpdateRequestWrapper(unittest.TestCase):
         env = dict(os.environ, DIR=str(self.dir), HELPER=str(self.helper), ID=rid, STATUS=status, CODE=str(code))
         return subprocess.run(["sh", str(WRAPPER), rid], env=env, capture_output=True, text=True, timeout=30)
 
-    def test_round_trip_passes_two_args_keeps_the_request_while_running_and_writes_the_result(self) -> None:
-        (self.dir / "abc123.request").write_text("/var/lib/openastroara/updates/abc123.deb\n5555\n")
+    def test_round_trip_passes_three_args_keeps_the_request_while_running_and_writes_the_result(self) -> None:
+        (self.dir / "abc123.request").write_text("/var/lib/openastroara/updates/abc123.deb\n5555\n5\n")
         r = self.run_wrapper("abc123", status="rolled_back", code=3)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.seen.read_text().strip(), "present",
                          "the request must exist while the helper runs, or the daemon reads 404 instead of pending")
         result = (self.dir / "abc123.result").read_text().splitlines()
         self.assertEqual(result[0], "3", "line 1 is the helper's exit code")
-        self.assertIn("argc=2 [/var/lib/openastroara/updates/abc123.deb] [5555]", result)
+        self.assertIn("argc=3 [/var/lib/openastroara/updates/abc123.deb] [5555] [5]", result)
         self.assertIn("status=rolled_back", result)
         self.assertFalse((self.dir / "abc123.request").exists(), "removed once the result is in place")
         self.assertEqual(sorted(p.name for p in self.dir.iterdir()), ["abc123.result"], "no temp files left in the exchange dir")
 
     def test_bad_ids_symlinks_and_oversized_requests_are_refused_without_running_the_helper(self) -> None:
-        (self.dir / "big.request").write_text("a\nb\nc\n")
+        (self.dir / "big.request").write_text("a\nb\nc\nd\n")   # one over MAX_ARGS=3
         target = Path(self.tmp.name) / "elsewhere"
         target.write_text("x\n")
         (self.dir / "link.request").symlink_to(target)

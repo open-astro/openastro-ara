@@ -4,7 +4,7 @@ Documentation=https://github.com/open-astro/openastro-ara
 # Root-side half of the §33 client-pushed update (#1122). openastroara-server.service
 # runs with NoNewPrivileges=true, so the daemon cannot install a package itself. It
 # stages the uploaded .deb under /var/lib/openastroara/updates, writes one request
-# file to /run/openastroara/update/<id>.request (staged path, then its own port) and
+# file to /run/openastroara/update/<id>.request (staged path, its port, drain seconds) and
 # asks systemd over D-Bus to start this instance; polkit authorises exactly that
 # (50-openastroara-update.rules). The instance installs the package as root, restarts
 # the daemon, checks /healthz and rolls back to the previous package if the new one
