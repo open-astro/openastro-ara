@@ -50,9 +50,10 @@ namespace OpenAstroAra.Server.Services;
 /// returning <c>true</c> only when reached — reusing the cancellation+wall-clock-bounded launcher
 /// from the focuser/rotator/dome mediators. The tracking writes are prompt synchronous calls.
 /// The §28 centering loop also drives <see cref="Sync(Coordinates)"/> (a real
-/// <c>SyncToCoordinates</c>, epoch-transformed + capability/parked-guarded). Members no registered
-/// consumer reaches (MoveAxis, PulseGuide, the topocentric slews, MeridianFlip, custom tracking rates,
-/// snap port, DestinationSideOfPier) stay no-op stubs — each is documented at its declaration.
+/// <c>SyncToCoordinates</c>, epoch-transformed + capability/parked-guarded), and the §58.4
+/// <see cref="MeridianFlip"/> is the pier-side hint + goto the flip executor runs (#1238). Members no
+/// registered consumer reaches (MoveAxis, PulseGuide, the topocentric slews, custom tracking rates,
+/// snap port) stay no-op stubs — each is documented at its declaration.
 /// </summary>
 public sealed partial class TelescopeService : ITelescopeMediator {
 
@@ -685,12 +686,94 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
     }
 
+    // ── §58.4 — the flip slew (#1238) ─────────────────────────────────────────────────────────────
+    // What NINA's AscomTelescope.MeridianFlip does: make sure the mount tracks, and when the profile
+    // uses side of pier and the driver can set it, command the pier side the target should be on
+    // after the flip (the mount's own flip, for drivers that need the hint), then an ordinary goto
+    // to the same target — a GEM past the meridian lands on the other side on its own. The goto is
+    // the shared slew core (epoch transform, parked/unknown-system guards, bounded settle), so the
+    // MeridianFlipExecutor's watchdog, settle, recenter and VerifySideOfPier wrap a real flip. The
+    // cache is refreshed before returning so the §58.5 verification reads the POST-flip pier side,
+    // not the 2 s-old one.
+    public async Task<bool> MeridianFlip(Coordinates targetCoordinates, CancellationToken token) {
+        ArgumentNullException.ThrowIfNull(targetCoordinates);
+        var client = ConnectedClientOrNull();
+        if (client is null) {
+            return false;
+        }
+        if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
+            await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
+        }
+        var slewed = await SlewToCoordinatesAsync(targetCoordinates, token).ConfigureAwait(false);
+        RefreshCacheOnce();
+        return slewed;
+    }
+
+    // The pier-side hint: only when the driver advertises CanSetPierSide, the current side is
+    // known, and it differs from the side the target is expected on at the current LST. A driver
+    // that rejects the write (some only accept it from a specific state) just leaves the goto to
+    // do the flip, as before. Best-effort by design — it never fails the flip on its own.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort pier-side hint ahead of the flip goto: any driver/HTTP failure here is logged and the goto still runs (the mount flips on its own past the meridian). CA1031's log-and-recover boundary applies.")]
+    private async Task CommandDestinationPierSideAsync(AlpacaTelescope client, Coordinates target, CancellationToken token) {
+        try {
+            if (!client.CanSetPierSide) {
+                return;
+            }
+            var info = GetInfo();
+            if (info.SideOfPier == PierSide.pierUnknown || double.IsNaN(info.SiderealTime)) {
+                return; // nothing to compare against — the goto alone flips
+            }
+            var expected = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(target, Angle.ByHours(info.SiderealTime));
+            if (expected == info.SideOfPier) {
+                return;
+            }
+            LogFlipPierSideCommanded(expected);
+            client.SideOfPier = expected == PierSide.pierWest ? PointingState.ThroughThePole : PointingState.Normal;
+            // Some mounts start the flip slew on the write itself; let it settle before the goto.
+            await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false);
+        } catch (OperationCanceledException) when (token.IsCancellationRequested) {
+            throw;
+        } catch (Exception ex) {
+            LogFlipPierSideFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Meridian flip: commanding pier side {PierSide} ahead of the flip goto (§58.4)")]
+    private partial void LogFlipPierSideCommanded(PierSide pierSide);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Meridian flip: the pier-side hint was refused; the flip goto runs without it")]
+    private partial void LogFlipPierSideFailed(Exception ex);
+
+    // The driver's own answer for which side a goto to these coordinates would land on, in the
+    // mount's native epoch (best-effort: pierUnknown when the driver cannot say or the frame is
+    // not known yet). The §28 centering path and the flip executor's callers may consult it.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Optional-property read boundary: DestinationSideOfPier is unimplemented on many drivers; the read falls back to pierUnknown rather than failing the caller. CA1031's log-and-recover boundary applies.")]
+    public PierSide DestinationSideOfPier(Coordinates coordinates) {
+        ArgumentNullException.ThrowIfNull(coordinates);
+        AlpacaTelescope? client;
+        EquatorialCoordinateType system;
+        lock (_gate) {
+            client = !_disposed && _state == EquipmentConnectionState.Connected && _equatorialSystemKnown ? _client : null;
+            system = _equatorialSystemRaw;
+        }
+        if (client is null) {
+            return PierSide.pierUnknown;
+        }
+        try {
+            var target = TransformBestEffort(coordinates, MapSlewEpoch(system));
+            return MapPointingState(client.DestinationSideOfPier(target.RA, target.Dec));
+        } catch (Exception) {
+            return PierSide.pierUnknown;
+        }
+    }
+
     // ── Unconsumed mediator surface — documented no-op stubs ─────────────────────────────────────
     // No registered headless instruction reaches these: MoveAxis/PulseGuide are interactive-GUI /
-    // guider-calibration aids; DestinationSideOfPier belongs to the plate-solve/Center path (not ported
-    // yet); the topocentric slews back SlewScopeToAltAz (not registered); MeridianFlip is the imaging-loop
-    // trigger orchestration (lands with the capture path); custom tracking rates and the snap port have no
-    // headless consumer. Each reports "didn't succeed" like the stub.
+    // guider-calibration aids; the topocentric slews back SlewScopeToAltAz (not registered); custom
+    // tracking rates and the snap port have no headless consumer. Each reports "didn't succeed"
+    // like the stub.
 
     public void MoveAxis(TelescopeAxes axis, double rate) { }
     public void PulseGuide(GuideDirections direction, int duration) { }
@@ -702,12 +785,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token) =>
         Task.FromResult(false);
 
-    public Task<bool> MeridianFlip(Coordinates targetCoordinates, CancellationToken token) =>
-        Task.FromResult(false);
-
     public bool SetCustomTrackingRate(SiderealShiftTrackingRate rate) => false;
     public bool SendToSnapPort(bool start) => false;
-    public PierSide DestinationSideOfPier(Coordinates coordinates) => PierSide.pierUnknown;
 
     // Connection lifecycle is REST-driven; these mirror the headless stub. The instructions never
     // call them.

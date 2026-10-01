@@ -42,9 +42,18 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
 
     /// <summary>Script-value prefix that turns the answer into a driver error envelope.</summary>
     public const string ErrorPrefix = "!error:";
+    /// <summary>Script-value prefix for ASCOM's not-implemented error (0x400): how a driver
+    /// declines an optional property for good (the client raises NotImplementedException).</summary>
+    public const string NotImplementedPrefix = "!notimpl:";
 
     /// <summary>The script value for a driver error carrying <paramref name="message"/>.</summary>
     public static string Error(string message) => ErrorPrefix + message;
+
+    /// <summary>The script value for a not-implemented answer carrying <paramref name="message"/>.</summary>
+    public static string NotImplemented(string message) => NotImplementedPrefix + message;
+
+    /// <summary>Every GET path answered, in order (lower-cased, like the responder sees it).</summary>
+    public ConcurrentQueue<string> Gets { get; } = new();
 
     private readonly HttpListener _listener;
     private readonly CancellationTokenSource _cts = new();
@@ -88,6 +97,7 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
             }
             var value = "true";
             if (ctx.Request.HttpMethod == "GET") {
+                Gets.Enqueue(ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "");
                 var scripted = _responder?.Invoke(ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "");
                 if (scripted is not null) {
                     value = scripted;
@@ -105,6 +115,9 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
             var body = value.StartsWith(ErrorPrefix, StringComparison.Ordinal)
                 ? Encoding.UTF8.GetBytes(
                     $$"""{"Value":null,"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":1280,"ErrorMessage":{{JsonSerializer.Serialize(value[ErrorPrefix.Length..])}}}""")
+                : value.StartsWith(NotImplementedPrefix, StringComparison.Ordinal)
+                ? Encoding.UTF8.GetBytes(
+                    $$"""{"Value":null,"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":1024,"ErrorMessage":{{JsonSerializer.Serialize(value[NotImplementedPrefix.Length..])}}}""")
                 : Encoding.UTF8.GetBytes(
                     $$"""{"Value":{{value}},"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":0,"ErrorMessage":""}""");
             try {
