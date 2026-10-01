@@ -12,12 +12,16 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -295,7 +299,12 @@ namespace OpenAstroAra.Test {
                 path.EndsWith("/connected", StringComparison.Ordinal) ? Volatile.Read(ref connected)
                 : path.EndsWith("/maxswitch", StringComparison.Ordinal) ? "0"
                 : null);
-            using var svc = new SwitchService();
+            var ws = new Mock<IWsBroadcaster>();
+            var events = new List<(string Type, JsonElement Payload)>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
+                .Returns(Task.CompletedTask);
+            using var svc = new SwitchService(events: new EquipmentEventPublisher(ws.Object));
             var device = new DiscoveredDeviceDto(
                 UniqueId: "switch-under-test", Name: "Bench Power Box", Type: DeviceType.Switch,
                 HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
@@ -317,6 +326,19 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(100);
             }
             Assert.That(box.Puts.Any(IsDisconnectPut), Is.True, "the Error entry's client was never released (no Connected=False reached the device)");
+
+            // §60.9 — the removal is pushed, so a second open client drops the card now rather
+            // than on its next poll: exactly one state_changed flagged removed, for THIS switch.
+            List<JsonElement> removals;
+            lock (events) {
+                removals = events.Where(e => e.Type == WsEventCatalog.EquipmentStateChanged
+                        && e.Payload.TryGetProperty("removed", out var r) && r.GetBoolean())
+                    .Select(e => e.Payload).ToList();
+            }
+            Assert.That(removals, Has.Count.EqualTo(1), "one removal event");
+            Assert.That(removals[0].GetProperty("device_type").GetString(), Is.EqualTo("switch"));
+            Assert.That(removals[0].GetProperty("device_id").GetString(), Is.EqualTo("switch-under-test"));
+            Assert.That(removals[0].GetProperty("state").GetString(), Is.EqualTo("disconnected"));
         }
 
         private static async Task WaitForStateAsync(SwitchService svc, string deviceId, EquipmentConnectionState state, TimeSpan timeout) {
