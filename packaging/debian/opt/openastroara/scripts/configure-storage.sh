@@ -103,16 +103,17 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     # and systemd starts each request as its own unit), so the rebuild is done under an
     # exclusive lock on a sibling lock file and through a per-call temp name (#1135): a
     # fixed name let two concurrent rebuilds clobber each other's temp file. The lock
-    # lives next to fstab, not on fstab itself, so the rename below never replaces the
-    # locked inode out from under the other holder. flock(1) is util-linux, present on
-    # every supported image; a box without it degrades to the unlocked rebuild.
+    # lives under /run (tmpfs, gone at reboot, never beside fstab in /etc), not on fstab
+    # itself, so the rename below never replaces the locked inode out from under the
+    # other holder. flock(1) is util-linux, present on every supported image; a box
+    # without it degrades to the unlocked rebuild.
     tmp=$(mktemp "${FSTAB}.ara-XXXXXX") || { echo "ERROR: fstab_tmp_failed"; exit 8; }
     # An early exit between here and the rename (id lookup failing under set -e, the
     # lock timing out) must not leave a uniquely named temp file beside fstab.
     trap 'rm -f "$tmp"' EXIT
     lockfd=
     if command -v flock >/dev/null 2>&1; then
-        exec 9>"${FSTAB}.ara-lock"
+        exec 9>"${FSTAB_LOCK:-/run/openastroara-fstab.lock}"
         flock -w 30 9 || { rm -f "$tmp"; echo "ERROR: fstab_locked"; exit 8; }
         lockfd=9
     fi
