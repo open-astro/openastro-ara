@@ -139,7 +139,7 @@ namespace OpenAstroAra.Test {
             foreach (string group in new[] { "/api/v1/storage", "/api/v1/frames", "/api/v1/equipment/guider", "/api/v1/profiles", "/api/v1/sequences" }) {
                 Assert.That(yaml, Does.Contain(group), $"{group} missing from the generated document");
             }
-            Assert.That(yaml.Split('\n').Where(l => l.StartsWith("  /api/v1/image", StringComparison.Ordinal)), Is.Empty,
+            Assert.That(yaml.Split('\n').Where(l => l.StartsWith("  /api/v1/image/", StringComparison.Ordinal) || l.StartsWith("  /api/v1/image:", StringComparison.Ordinal)), Is.Empty,
                 "the retired /image group (now /frames) must not come back");
         }
     }

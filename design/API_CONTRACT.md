@@ -329,7 +329,12 @@ Resume protocol — optional FIRST client message after the upgrade:
         seq (daemon restarted); the connection continues as fresh — the
         socket is NOT closed; rehydrate with GET /api/v1/server/state
   { "resumed": false }  (no code)
-      → the first message was not a resume request; fresh subscription.
+      → JSON whose resume_token is absent, empty or whitespace ({} works as an
+        explicit "fresh, please"); fresh subscription.
+  No reply at all, fresh subscription, when the first message is not a resume
+  request: malformed JSON, a binary frame, a first message over 16 KB, or the
+  client sending nothing within the 5 s resume window. Clients must not
+  wait for a resume reply unless they sent a resume request.
 
 Event envelope (every server-sent message, WsEventEnvelopeDto):
   { "type": "frame.complete", "ts": "2026-05-23T19:14:33.123Z",

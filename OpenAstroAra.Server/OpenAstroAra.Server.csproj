@@ -59,6 +59,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- openapi.yaml is a snapshot of what these two serialise (#1131): after bumping
+         either, refresh it with OPENASTROARA_UPDATE_OPENAPI=1 dotnet test
+         OpenAstroAra.Test (filter OpenApiContractSnapshotTest) and commit the diff. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <!-- GHSA-v5pm-xwqc-g5wc: pin the patched Microsoft.OpenApi (≥ 2.7.5 fixes the
          circular-schema-reference parsing DoS) over the transitive 2.0.0 that
