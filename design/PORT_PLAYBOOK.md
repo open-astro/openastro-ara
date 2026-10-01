@@ -210,7 +210,7 @@ Three of the four tracking files this section created (`PORT_DECISIONS.md`, `POR
 | Logging | Serilog (already in NINA) → file sink at `/var/log/openastroara/` (Linux) |
 | Discovery | mDNS announce `_openastroara._tcp.local` via `Zeroconf` NuGet |
 | Deployment | systemd service `openastroara-server.service`, runs as `openastroara` user |
-| Target hardware | RPi 4 (4GB+) or Pi 5 (any), ARM64 Linux (Raspberry Pi OS Bookworm / Ubuntu 24.04 ARM64). Also runs on x64 Linux for development. |
+| Target hardware | RPi 4 (4GB+) or Pi 5 (any), ARM64 Linux (Raspberry Pi OS / Debian **Trixie or newer**, see §13.1; Bookworm's glibc 2.36 is too old for the §14e natives and the .deb refuses to install there). Also runs on x64 Linux for development. |
 | Inherited from NINA | `Core`, `Astrometry`, `Profile`, `Image`, `Equipment`, `Sequencer`, `Platesolving` |
 | Deleted from NINA | main `NINA` (WPF host), `NINA.WPF.Base`, `NINA.CustomControlLibrary`, `NINA.MGEN`, `NINA.Plugin`, `NINA.Setup`, `NINA.SetupBundle`, `nikoncswrapper`, all vendor SDK folders, DirectShow webcam code |
 
@@ -844,6 +844,16 @@ The consolidated `AraWsEvent` type catalog lives in `OpenAstroAra.Server/Contrac
 ---
 
 ## 11. Phase 10 — Server smoke test
+
+> **Superseded (2026-10-01, #1130).** The recipes below were the Phase 10 smoke test
+> and are kept for history. The shipping path is the `.deb` from
+> `packaging/build-deb.sh` (which refuses a publish dir without the §14e natives)
+> installed per `docs/DEPLOY.md`; the Docker image is the CI end-to-end probe
+> only (`Dockerfile`, `ci.yml` "Build Docker image (arm64)"), built from the
+> `publish/arm64/` tree **plus** `libsofa.so`/`libnovas31.so`. The base image is
+> `runtime-deps:10.0-noble-chiseled-arm64v8`, not the `bookworm-slim` shown
+> below. Do not copy `publish/arm64/` to `/opt/openastroara/` by hand on a Pi:
+> the `.deb` owns that tree, the unit and the storage helpers.
 
 ### 11.1 Cross-platform publish
 
@@ -4118,8 +4128,8 @@ sudo apt install openastroara-server
 ### 34.2 Package details
 
 - Name: `openastroara-server` (lowercase, hyphens per Debian convention)
-- Arch: **arm64** (works on RPi 4/5, Orange Pi 5, RockChip SBCs — anywhere Debian-family + ARM64 runs)
-- Depends: `libc6`, `libgcc-s1`, `libstdc++6`, runtime essentials
+- Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
+- Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli` (authoritative list: `packaging/debian/DEBIAN/control.template`)
 - Recommends: `alpaca-bridge`, `openastro-phd2` (pulled in by default; opt-out with `--no-install-recommends`)
 - Suggests: `gpsd` (for USB GPS time sync per §31)
 
@@ -11905,7 +11915,7 @@ ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsf
 **Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
 
 ```
-Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd
+Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd, astap-cli
 ```
 
 `libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.

@@ -1,6 +1,6 @@
 # Deploying OpenAstro Ara
 
-This guide covers running `OpenAstroAra.Server` on a Raspberry Pi. Reference platform is **Raspberry Pi 4 (4 GB+) or Pi 5** on **64-bit Debian Trixie** or newer. Other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Trixie arm64 work best-effort.
+This guide covers running `OpenAstroAra.Server` on a Raspberry Pi. Reference platform is **Raspberry Pi 4 (4 GB+) or Pi 5** on **64-bit Debian Trixie** or newer. Other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Trixie arm64 work best-effort. Bookworm is not supported: its glibc (2.36) is too old for the bundled astrometry libraries, so the package refuses to install there (`libc6 (>= 2.38)`) rather than installing and failing at boot.
 
 The Flutter client (`OpenAstroAra.Client`) runs on macOS, iOS, Android, Windows, and Linux desktops — pull the appropriate build from [Releases](https://github.com/open-astro/openastro-ara/releases).
 
