@@ -2,7 +2,7 @@
 
 Append-only design log for the server↔client REST + WebSocket API. One entry per endpoint or wire-shape decision.
 
-**Still live (kept when the other design-status docs were retired on 2026-09-28).** `OpenAstroAra.Server/openapi.yaml` covers only a fraction of the mapped routes and lists some that no longer exist (#1131), so until it is regenerated this log plus the endpoint sources under `OpenAstroAra.Server/Endpoints/` are the contract. Append an entry here in the PR that adds or changes a wire shape; breaking changes inside `/api/v1/` (permitted within v0.x) are recorded here too.
+**Still live (kept when the other design-status docs were retired on 2026-09-28).** Since #1131 `OpenAstroAra.Server/openapi.yaml` is a generated snapshot of the daemon's own OpenAPI document (every mapped REST route; `OpenApiContractSnapshotTest` fails CI when it drifts), so the REST contract is that file plus the endpoint sources under `OpenAstroAra.Server/Endpoints/`. What the generator cannot express — the WebSocket wire protocol — lives in the section at the end of this file. Append an entry here in the PR that adds or changes a wire shape; breaking changes inside `/api/v1/` (permitted within v0.x) are recorded here too.
 
 This file captures the *reasoning* behind each contract decision — DTO shapes, idempotency choices, WebSocket event taxonomy, error-shape conventions — for future contributors who need to understand "why does endpoint X look like this."
 
@@ -293,3 +293,93 @@ The card now keeps a known device's card while it is not live: name, state chip,
 **Spec ref:** `Contracts/EquipmentDtos.cs` (`TelescopeCapabilitiesDto.MoveAxisRateBandsDegPerSec`, `MoveAxisRateBandDto`), `Services/TelescopeService.cs` (`PadBandsFrom`, `BandDtosOf`, `EndpointsOf`), `client/…/lib/util/slew_rates.dart` (`SlewRateBand`, `buildSlewRateOptionsFromBands`, `defaultSlewRate`), `client/…/lib/models/mount_status.dart` (`MountCapabilities.axisRateBands` / `padRateBands`); tests in `TelescopeMoveAxisClampTest`, `slew_rates_test.dart`, `mount_status_test.dart`, `equipment_mount_panel_test.dart`.
 
 **Related:** #1126 (follow-ups of #1087), #1064, #1085, CHANGELOG [Unreleased]
+
+---
+
+## WebSocket wire protocol (`/api/v1/ws`)
+
+Moved verbatim from the hand-written `openapi.yaml` header when that file became a generated snapshot (#1131, 2026-10-01). OpenAPI 3.1 paths cannot express WebSocket endpoints; this section is the source of truth for independent client implementations, with the live token catalogue in `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs`.
+
+```
+
+Endpoint: ws://{host}:{port}/api/v1/ws  (NOT /api/v1/stream — common mistake)
+
+Upgrade headers:
+  X-Ara-WS-Version: 1                  (required; mismatched → 426 Upgrade Required)
+  Sec-WebSocket-Extensions: permessage-deflate  (default; omit to disable compression)
+
+Frame size:    1 MB max (REST cap is 64 KB per §60.3; WS is larger to accommodate
+               batched notifications + resume replay bursts).
+Compression:   permessage-deflate enabled by default; ~70% savings on JSON traffic.
+Heartbeat:     server sends a WS ping every 30 s; client must pong within 60 s.
+               2 consecutive missed pongs → server closes with code 1011
+               (reason: server_initiated_disconnect_unresponsive_client).
+               Client should likewise close + trigger §32 reconnect modal if no
+               server activity (ping OR event) seen for 90 s.
+
+Resume protocol: after the WebSocket upgrade completes, the client may send
+its FIRST message as a JSON resume request:
+  { "resume_token": "<opaque-string-from-prior-server-state-snapshot>" }
+Server responds with one of:
+  { "resumed": true,  "missed_events": <n>, "last_event_id": "<id>" }
+    → server then immediately replays missed events as normal events
+  { "resumed": false, "code": "resume_token_expired", "reason": "..." }
+    → fresh subscription, no replay
+  { "resumed": false, "code": "resume_token_invalid" }
+    → client should clear local cursor + reconnect fresh
+If the client's first message is anything OTHER than a resume request,
+server treats the connection as fresh (no replay).
+Resume tokens are issued by REST `GET /api/v1/server/state` and have
+a 1-hour validity window. After that, fall back to fresh /state rehydrate.
+
+Event envelope (every server-sent message):
+  { "type": "frame.complete",
+    "ts":   "2026-05-23T19:14:33.123Z",
+    "id":   "evt-7f3a9b",                # monotonic per server boot
+    "payload": { ...event-specific... } }
+
+Close codes:
+  1000 — Normal closure (both directions)
+  1001 — Going away (network change, app backgrounded)
+  1009 — Frame too large (>1 MB)
+  1011 — Server-side error / unresponsive client / client_too_slow backpressure
+  1012 — Service restart imminent (pairs with server.restart_imminent event per §34.7)
+  4001 — (v0.1.0 only) Auth required / token invalid (remote-access mode per §67.4)
+  4002 — Resume token expired (client clears local + reconnects with REST snapshot)
+  4003 — WS protocol version mismatch (X-Ara-WS-Version negotiation failed)
+  4004 — Single-client policy: another WILMA took over (§27)
+
+Backpressure: per-client send buffer limited to 256 messages (§66.2). If exceeded,
+server closes with code 1011 + reason `client_too_slow`. Client reconnects with
+resume protocol to catch up.
+
+Event catalog (see §60.10 for full schemas):
+  equipment.state         — connection + per-device runtime state changes
+  sequence.progress       — frame-completion, target-switch, instruction-step events
+  sequence.run_items_changed — §38.9 live mid-run edit applied (add/remove/move of a
+                            pending item); instructions_total may change mid-run —
+                            consumers must re-read totals from each progress snapshot
+  frame.complete          — new frame written to library; payload includes preview URL
+  frame.analyzed          — §59.5 post-capture star analysis landed: {frame_id, hfr, star_count}
+  log.line                — server log emission (filterable per channel subscribe)
+  notification            — §46 in-app feed entry (info / warning / critical / urgent)
+  diagnostic.alert        — §51 real-time acquisition diagnostic flag
+  server.restart_imminent — pairs with 1012 close per §34.7 update flow
+  operation.{started|progress|complete|failed} — long-running op state from REST 202s
+
+Sequence-run event ORDERING contract (§60.9):
+  * A run's terminal event (sequence.complete / sequence.stopped / sequence.aborted /
+    sequence.failed) MAY arrive WITHOUT a preceding sequence.started — an abort/stop
+    that lands in the window between run acceptance and the worker executing skips
+    the (would-be misleading) started event. Consumers must not assume a strict
+    started → terminal pairing.
+  * sequence.progress is GUARANTEED to never arrive after the same run's terminal
+    event: the server seals+drains its progress publisher before every terminal
+    emit. Progress events are coalesced under load (at most one publish in flight;
+    bursts collapse to a trailing publish carrying the freshest state), so
+    consumers must treat each progress payload as a snapshot, not a delta stream.
+  * instructions_completed / instructions_total count SEQUENCE INSTRUCTIONS (tree
+    leaves), not camera exposures — renamed from the misleading frames_* while the
+    wire had no external consumers. A true exposure counter can arrive later as a
+    separate frames_* pair without a second rename.
+```

@@ -4130,7 +4130,7 @@ sudo apt install openastroara-server
 - Name: `openastroara-server` (lowercase, hyphens per Debian convention)
 - Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
 - Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli` (authoritative list: `packaging/debian/DEBIAN/control.template`)
-- Recommends: `alpaca-bridge`, `openastro-phd2` (pulled in by default; opt-out with `--no-install-recommends`)
+- Recommends: `alpacabridge`, `openastro-guider` (pulled in by default; opt-out with `--no-install-recommends`)
 - Suggests: `gpsd` (for USB GPS time sync per §31)
 
 ### 34.3 Post-install hooks (handled by .deb's postinst script)

@@ -75,7 +75,7 @@ public static partial class WebSocketEndpoints {
                     // §60.9 requires version 1, via the X-Ara-WS-Version header OR the
                     // ws_version query parameter — browser WebSockets can't set request
                     // headers, so the query param is the web client's only channel (the
-                    // header wins when both are present). Per openapi.yaml line 674, a
+                    // header wins when both are present). Per API_CONTRACT.md (WebSocket section), a
                     // mismatched/missing version is rejected pre-upgrade with 426 —
                     // close-code 4003 only applies if version negotiation fails *after*
                     // a successful upgrade, which can't happen with a pre-handshake check.

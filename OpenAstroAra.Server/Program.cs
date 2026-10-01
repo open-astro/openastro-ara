@@ -82,7 +82,14 @@ public partial class Program {
         builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
             p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
-        builder.Services.AddOpenApi();
+        // §49 — the document is served at /openapi/v1.json and snapshotted into
+        // openapi.yaml by OpenApiContractSnapshotTest (#1131); keep the info block
+        // fixed so the snapshot does not churn with the host process or release.
+        builder.Services.AddOpenApi(o => o.AddDocumentTransformer((doc, _, _) => {
+            doc.Info.Title = "OpenAstro Ara REST API";
+            doc.Info.Version = "v1";
+            return Task.CompletedTask;
+        }));
 
         // §60.6 — enums on the wire serialize as all-lowercase strings (no
         // separators) so the OpenAPI DeviceType token set (`filterwheel`,
@@ -908,8 +915,8 @@ public partial class Program {
         // so the framework can negotiate the protocol upgrade.
         //   KeepAliveInterval = 30s — server-initiated RFC 6455 ping cadence
         //   KeepAliveTimeout  = 60s — close the socket if no pong/data arrives
-        //                              within this window (matches openapi.yaml
-        //                              line 680: "client must pong within 60s",
+        //                              within this window (matches API_CONTRACT.md
+        //                              WebSocket section: "client must pong within 60 s",
         //                              2 consecutive missed pongs → server closes).
         // .NET 10's KeepAliveTimeout enforces the unresponsive-client teardown
         // automatically; the close code emitted by the framework is 1011

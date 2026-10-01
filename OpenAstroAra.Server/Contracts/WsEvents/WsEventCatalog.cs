@@ -26,7 +26,8 @@ namespace OpenAstroAra.Server.Contracts.WsEvents;
 //
 // To add a new event:
 //   1. Add the type token here (kebab/dot-notation).
-//   2. Document the payload schema in openapi.yaml under #/components/schemas/Ws*.
+//   2. Document the payload in design/API_CONTRACT.md (WebSocket section); the
+//      generated openapi.yaml cannot carry WebSocket shapes (#1131).
 //   3. Register the emit-point with IWsBroadcaster.
 //
 // Event envelope is { "type": "<token>", "ts": "<rfc3339>",
