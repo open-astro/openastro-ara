@@ -28,17 +28,36 @@ esac
 REQ="$DIR/$ID.request"
 RES="$DIR/$ID.result"
 
-if [ -L "$REQ" ] || [ ! -f "$REQ" ]; then
-    echo "update-request: $REQ is not a regular file" >&2
+# Private root-only work directory, outside the daemon-owned exchange dir.
+WORK=$(mktemp -d "$(dirname "$(dirname "$DIR")")/openastroara-update.XXXXXX") || exit 9
+trap 'rm -rf "$WORK"' EXIT
+TMP="$WORK/result"
+
+publish() {   # publish <exit code> <output>
+    { printf '%s\n' "$1"; printf '%s\n' "$2"; } > "$TMP"
+    chmod 0644 "$TMP"
+    mv -fT "$TMP" "$RES"
+    rm -f "$REQ"
+}
+
+# A refused request still gets a result and loses its request file: left behind, it would
+# read as "pending" and block every later apply until the daemon's 15 min staleness cutoff.
+refuse() {
+    echo "update-request: $1" >&2
+    publish 9 "status=failed
+ERROR: $1"
     exit 9
+}
+
+if [ -L "$REQ" ] || [ ! -f "$REQ" ]; then
+    refuse "$REQ is not a regular file"
 fi
 
 n=0
 while IFS= read -r line || [ -n "$line" ]; do
     n=$((n + 1))
     if [ "$n" -gt "$MAX_ARGS" ]; then
-        echo "update-request: too many arguments in $REQ" >&2
-        exit 9
+        refuse "too many arguments in $REQ"
     fi
     set -- "$@" "$line"
 done < "$REQ"
@@ -47,20 +66,11 @@ shift   # drop the request id; the rest is the helper's argv
 # no result" as pending, and the helper restarts the daemon mid-run, so the new process
 # must still see it. (rm never follows a symlink, so removing it later as root is safe.)
 
-WORK=$(mktemp -d "$(dirname "$(dirname "$DIR")")/openastroara-update.XXXXXX") || exit 9
-trap 'rm -rf "$WORK"' EXIT
-TMP="$WORK/result"
 rc=0
 out=$("$HELPER" "$@" 2>"$WORK/stderr") || rc=$?
 if [ -s "$WORK/stderr" ]; then
     cat "$WORK/stderr" >&2
     [ -n "$out" ] || out=$(cat "$WORK/stderr")
 fi
-{
-    printf '%s\n' "$rc"
-    printf '%s\n' "$out"
-} > "$TMP"
-chmod 0644 "$TMP"
-mv -fT "$TMP" "$RES"
-rm -f "$REQ"
+publish "$rc" "$out"
 exit 0

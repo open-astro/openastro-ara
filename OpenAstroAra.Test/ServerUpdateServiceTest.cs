@@ -32,7 +32,12 @@ namespace OpenAstroAra.Test {
     /// dpkg tools (faked at the process seam), the request file + <c>systemctl start --no-block</c>
     /// hand-off with the <c>server.restart_imminent</c> event, and the result-file parse.</summary>
     [TestFixture]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "Every service Service() creates is tracked and disposed in TearDown.")]
     public class ServerUpdateServiceTest {
+
+        private readonly List<ServerUpdateService> created = [];
+        private static readonly string[] OneWinsOneRefused = ["pending", "update_in_progress"];
 
         private static readonly string[] ExpectedCompare = ["--compare-versions", "0.0.2-ara.1", "gt", "0.0.1-ara.1"];
 
@@ -67,13 +72,27 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
+            created.ForEach(c => c.Dispose());
+            created.Clear();
             try { Directory.Delete(root, recursive: true); } catch (IOException) { }
         }
 
-        private ServerUpdateService Service() => new(NullLogger.Instance, paths, ws.Object, 5555, (file, args, _) => {
-            calls.Add((file, args));
+        private TimeSpan delay = TimeSpan.Zero;
+        private string delayedTool = "";
+
+        private ServerUpdateService Service() {
+            var svc = Create();
+            created.Add(svc);
+            return svc;
+        }
+
+        private ServerUpdateService Create() => new(NullLogger.Instance, paths, ws.Object, 5555, async (file, args, _) => {
+            lock (calls) { calls.Add((file, args)); }
+            if (file == delayedTool && delay > TimeSpan.Zero) {
+                await Task.Delay(delay, CancellationToken.None);
+            }
             var key = file == "dpkg" ? $"dpkg {args[0]}" : file;
-            return Task.FromResult(answers.TryGetValue(key, out var a) ? a : (127, $"{file}: not found"));
+            return answers.TryGetValue(key, out var a) ? a : (127, $"{file}: not found");
         });
 
         private static MemoryStream Body(int bytes = 4096) => new(Encoding.ASCII.GetBytes(new string('x', bytes)));
@@ -198,6 +217,39 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<ServerUpdateRejectedException>(() => svc.ApplyAsync(second.Id, CancellationToken.None));
             Assert.That(ex!.Reason, Is.EqualTo("update_in_progress"));
             Assert.That(published, Is.Empty, "no restart is announced for a refused apply");
+        }
+
+        [Test]
+        public async Task Two_applies_arriving_together_start_exactly_one_helper() {
+            var svc = Service();
+            var a = await svc.StageAsync(Body(), 4096, null, CancellationToken.None);
+            var b = await svc.StageAsync(Body(), 4096, null, CancellationToken.None);
+            calls.Clear();
+            // Apply inspects the package (dpkg-deb) before the in-flight check; slowing that
+            // lets both calls reach the check together, which is exactly the double-click race.
+            delayedTool = "dpkg-deb";
+            delay = TimeSpan.FromMilliseconds(300);
+            var results = await Task.WhenAll(
+                Outcome(svc.ApplyAsync(a.Id, CancellationToken.None)),
+                Outcome(svc.ApplyAsync(b.Id, CancellationToken.None)));
+            Assert.That(results, Is.EquivalentTo(OneWinsOneRefused));
+            Assert.That(calls.Count(c => c.File == "systemctl"), Is.EqualTo(1));
+
+            static async Task<string> Outcome(Task<OpenAstroAra.Server.Contracts.ServerUpdateStatusDto> t) {
+                try { return (await t).Status; } catch (ServerUpdateRejectedException ex) { return ex.Reason; }
+            }
+        }
+
+        [TestCase("too_large", 413)]
+        [TestCase("unknown_id", 404)]
+        [TestCase("update_in_progress", 409)]
+        [TestCase("not_packaged", 409)]
+        [TestCase("not_newer", 422)]
+        public void Every_refusal_maps_to_its_status_with_the_token_as_title(string reason, int status) {
+            var result = OpenAstroAra.Server.Endpoints.ServerUpdateEndpoints.Rejected(new ServerUpdateRejectedException(reason, "detail"));
+            var problem = (Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult)result;
+            Assert.That(problem.StatusCode, Is.EqualTo(status));
+            Assert.That(problem.ProblemDetails.Title, Is.EqualTo(reason));
         }
 
         [Test]

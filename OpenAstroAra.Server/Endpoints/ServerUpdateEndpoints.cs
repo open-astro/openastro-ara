@@ -36,8 +36,9 @@ public static class ServerUpdateEndpoints {
         update.MapPost("",
                 async (HttpContext http, IServerUpdateService svc, CancellationToken ct) => {
                     if (http.Request.ContentLength is long len && len > ServerUpdateService.MaxUploadBytes) {
-                        return Results.Problem(detail: "Upload exceeds the size limit.",
-                            statusCode: StatusCodes.Status413PayloadTooLarge);
+                        // Same shape as the service's copy-time refusal: title is the stable token.
+                        return Rejected(new ServerUpdateRejectedException("too_large",
+                            $"Upload exceeds {ServerUpdateService.MaxUploadBytes / (1024 * 1024)} MiB."));
                     }
                     http.Features.Get<IHttpMaxRequestBodySizeFeature>()?.MaxRequestBodySize = ServerUpdateService.MaxUploadBytes;
                     try {
@@ -82,7 +83,7 @@ public static class ServerUpdateEndpoints {
         return app;
     }
 
-    private static IResult Rejected(ServerUpdateRejectedException ex) {
+    internal static IResult Rejected(ServerUpdateRejectedException ex) {
         var status = ex.Reason switch {
             "unknown_id" => StatusCodes.Status404NotFound,
             "too_large" => StatusCodes.Status413PayloadTooLarge,

@@ -82,7 +82,16 @@ class UpdateRequestWrapper(unittest.TestCase):
                 r = self.run_wrapper(rid)
                 self.assertEqual(r.returncode, 9, r.stderr)
                 self.assertFalse(self.seen.exists(), "helper never ran")
-                self.assertFalse(any(p.suffix == ".result" for p in self.dir.iterdir()))
+        # Refused requests with a valid id get a failed result and lose the request file, so
+        # they neither read as pending nor block the next apply.
+        for rid in ["big", "link", "missing"]:
+            with self.subTest(f"result for {rid}"):
+                res = self.dir / f"{rid}.result"
+                self.assertTrue(res.exists())
+                self.assertEqual(res.read_text().splitlines()[0], "9")
+                self.assertIn("status=failed", res.read_text())
+                self.assertFalse((self.dir / f"{rid}.request").exists())
+        self.assertEqual(target.read_text(), "x\n", "the symlinked request's target is untouched")
 
     def test_a_planted_symlink_at_the_result_name_is_replaced_not_followed(self) -> None:
         victim = Path(self.tmp.name) / "victim"

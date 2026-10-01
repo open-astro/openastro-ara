@@ -67,7 +67,10 @@ mkdir -p "$ROLLBACK_DIR" && chmod 0700 "$ROLLBACK_DIR" || fail "cannot create $R
 WORK=$(mktemp -d "$ROLLBACK_DIR/incoming.XXXXXX") || fail "cannot create a work directory"
 trap 'rm -rf "$WORK"' EXIT
 COPY="$WORK/upload.deb"
-cp "$DEB" "$COPY" || fail "could not copy the staged package"
+# -P: copy a symlink swapped in after the checks above as a link, then refuse it, rather
+# than letting root's cp follow it.
+cp -P "$DEB" "$COPY" || fail "could not copy the staged package"
+[ -L "$COPY" ] && fail "staged package became a symlink"
 rm -f "$DEB"
 
 field() { "$DPKG_DEB" -f "$COPY" "$1" 2>/dev/null; }
@@ -126,8 +129,15 @@ if ! "$DPKG" -i "$NEW_DEB"; then
     fi
     exit 2
 fi
-"$SYSTEMCTL" restart "$UNIT" || true
+# postinst normally starts the unit; restart only if it is not running (a hand-disabled
+# unit, or a postinst that left it stopped) so a healthy start is not bounced.
+"$SYSTEMCTL" is-active --quiet "$UNIT" || "$SYSTEMCTL" restart "$UNIT" || true
 if wait_healthy; then
+    # Keep only what a rollback can use: the version now running and the one before it.
+    for f in "$ROLLBACK_DIR"/*.deb; do
+        [ -f "$f" ] || continue
+        case "$f" in "$NEW_DEB"|"$OLD_DEB") ;; *) rm -f "$f" ;; esac
+    done
     echo "status=applied"
     exit 0
 fi

@@ -85,7 +85,7 @@ internal sealed record ServerUpdatePaths(string StageDirectory, string RequestDi
 /// option. The helper keeps the previously installed package and reinstalls it when the new
 /// daemon does not answer <c>/healthz</c>.
 /// </summary>
-public sealed partial class ServerUpdateService : IServerUpdateService {
+public sealed partial class ServerUpdateService : IServerUpdateService, IDisposable {
 
     /// <summary>Hard cap on an upload; the arm64 self-contained .deb is ~40 MB.</summary>
     internal const long MaxUploadBytes = 256L * 1024 * 1024;
@@ -165,6 +165,22 @@ public sealed partial class ServerUpdateService : IServerUpdateService {
             throw new ServerUpdateRejectedException("unknown_id", "Unknown update id (not staged, or already applied).");
         }
         var (_, version, _) = await InspectAsync(file, ct).ConfigureAwait(false);
+        // The in-flight scan, the request write and the start are one critical section: two
+        // applies arriving together (a double-click, two clients) must not both see an empty
+        // exchange directory. The service is a singleton, so a process-wide gate suffices.
+        await applyGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await ApplyLockedAsync(id, file, version, ct).ConfigureAwait(false);
+        } finally {
+            applyGate.Release();
+        }
+    }
+
+    private readonly SemaphoreSlim applyGate = new(1, 1);
+
+    public void Dispose() => applyGate.Dispose();
+
+    private async Task<ServerUpdateStatusDto> ApplyLockedAsync(string id, string file, string version, CancellationToken ct) {
         Directory.CreateDirectory(paths.RequestDirectory);
         // One install at a time: two helpers would race dpkg's lock and each other's rollback.
         // A request file lives until its helper has written the result (update-request.sh);

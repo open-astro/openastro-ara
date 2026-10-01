@@ -50,6 +50,9 @@ cat "$STATE/installed"
 """
 SYSTEMCTL_STUB = r"""#!/bin/sh
 echo "systemctl $*" >> "$LOG"
+# report the unit stopped so the helper's restart path is exercised
+[ "$1" = is-active ] && exit 1
+exit 0
 """
 CURL_STUB = r"""#!/bin/sh
 # healthy only when the installed version is not marked unhealthy
@@ -170,6 +173,13 @@ class ApplyUpdate(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.rollback.iterdir()), ["1.0.deb", "2.0.deb"],
                          "the work dir is cleaned up; only the two kept packages remain")
         self.assertEqual(oct(self.rollback.stat().st_mode & 0o777), "0o700")
+
+    def test_old_rollback_copies_are_pruned_after_a_healthy_update(self) -> None:
+        self.rollback.mkdir(mode=0o700)
+        (self.rollback / "0.5.deb").write_text("ancient")
+        r = self.run_helper()
+        self.assertIn("status=applied", r.stdout)
+        self.assertEqual(sorted(p.name for p in self.rollback.iterdir()), ["1.0.deb", "2.0.deb"])
 
     def test_a_symlinked_stage_directory_is_refused(self) -> None:
         real = Path(self.tmp.name) / "real-stage"
