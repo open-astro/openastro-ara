@@ -731,7 +731,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogFlipPierSideCommanded(expected);
             client.SideOfPier = expected == PierSide.pierWest ? PointingState.ThroughThePole : PointingState.Normal;
             // Some mounts start the flip slew on the write itself; let it settle before the goto.
-            await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false);
+            // A mount still moving at the bound gets the goto anyway (the executor's watchdog
+            // owns that case), but say so in the log.
+            if (!await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false)) {
+                LogFlipPierSideStillMoving();
+            }
         } catch (OperationCanceledException) when (token.IsCancellationRequested) {
             throw;
         } catch (Exception ex) {
@@ -744,6 +748,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Meridian flip: the pier-side hint was refused; the flip goto runs without it")]
     private partial void LogFlipPierSideFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Meridian flip: the mount was still moving after the pier-side write when the settle bound expired; issuing the flip goto anyway")]
+    private partial void LogFlipPierSideStillMoving();
 
     // The driver's own answer for which side a goto to these coordinates would land on, in the
     // mount's native epoch (best-effort: pierUnknown when the driver cannot say or the frame is
