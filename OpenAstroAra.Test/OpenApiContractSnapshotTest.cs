@@ -110,6 +110,10 @@ namespace OpenAstroAra.Test {
             string path = SnapshotPath();
             string generated = await RenderAsync(app.Services);
             if (Environment.GetEnvironmentVariable(UpdateEnvVar) == "1") {
+                // The rewrite is a local refresh step; under CI it would turn the drift gate
+                // into a silent pass, so refuse it there.
+                Assert.That(Environment.GetEnvironmentVariable("CI"), Is.Null.Or.Empty,
+                    $"{UpdateEnvVar}=1 is for local refreshes only; CI must compare, not rewrite");
                 await File.WriteAllTextAsync(path, generated);
                 Assert.Pass($"rewrote {path}");
             }

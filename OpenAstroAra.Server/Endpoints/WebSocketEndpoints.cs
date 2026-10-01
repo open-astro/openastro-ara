@@ -548,9 +548,9 @@ public static partial class WebSocketEndpoints {
             return (0, null);
         }
 
-        // v0.0.1: resume_token is the base-10 stringified last-seen sequence
-        // number. Real opaque-token + 1-hour validity ties in with REST
-        // /api/v1/server/state.ws_resume_token in a follow-up sub-PR.
+        // resume_token is the base-10 stringified last-seen sequence number
+        // (API_CONTRACT.md, WebSocket section). An opaque token with a time
+        // window tied to /api/v1/server/state.ws_resume_token is design intent.
         if (!long.TryParse(request.ResumeToken, out var lastSeenSeq) || lastSeenSeq < 0) {
             await SendResumeResponseAsync(conn, new WsResumeResponseDto(
                 Resumed: false,

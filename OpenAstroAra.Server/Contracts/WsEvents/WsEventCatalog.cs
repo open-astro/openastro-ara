@@ -297,9 +297,9 @@ public sealed record WsEventEnvelopeDto(
 
 /// <summary>
 /// Optional first message a client may send after the §60.9 WS upgrade
-/// completes. <c>ResumeToken</c> is the opaque string returned by REST
-/// <c>GET /api/v1/server/state.ws_resume_token</c> in a prior session;
-/// for v0.0.1 it's the base-10 stringified last-seen sequence number.
+/// completes. <c>ResumeToken</c> is the base-10 stringified last-seen
+/// sequence number (an opaque token issued by REST
+/// <c>GET /api/v1/server/state.ws_resume_token</c> is design intent, #1131).
 /// </summary>
 public sealed record WsResumeRequestDto(string? ResumeToken);
 

@@ -298,92 +298,71 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ## WebSocket wire protocol (`/api/v1/ws`)
 
-Moved from the hand-written `openapi.yaml` header when that file became a generated snapshot (#1131, 2026-10-01); the close-code, frame-size, compression and backpressure lines were reconciled with the code at the same time (4001/4003 reserved, no WS frame cap or compression, 1000-event drop-oldest buffer). OpenAPI 3.1 paths cannot express WebSocket endpoints; this section is the source of truth for independent client implementations, with the live token catalogue in `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs`.
+Written from the code when `openapi.yaml` became a generated snapshot (#1131, 2026-10-01): OpenAPI 3.1 cannot express WebSocket endpoints, so this section is the contract for independent clients. Sources: `Endpoints/WebSocketEndpoints.cs`, `Endpoints/WsClientConnection.cs`, `Services/PlaceholderWsServices.cs`, `Services/ClientSessionService.cs`, and the token catalogue `Contracts/WsEvents/WsEventCatalog.cs` (which `GET /api/v1/ws/catalog` also serves). Where the original §60.9 design went further than the code, that is said explicitly as *design intent*.
 
 ```
+Endpoint:   ws://{host}:{port}/api/v1/ws        (not /api/v1/stream)
+Version:    X-Ara-WS-Version: 1 header, or ?ws_version=1 for browser clients
+            (the header wins when both are present). Missing or wrong → the
+            upgrade is refused with HTTP 426 + a Problem body; no socket exists,
+            so no close code is involved.
+Frame size: Kestrel/WebSocket defaults; no Ara-specific cap today
+            (design intent: 1 MB).
+Compression: none; the server does not opt in to permessage-deflate
+            (design intent).
+Heartbeat:  server WS ping every 30 s (KeepAliveInterval); the socket is
+            closed if nothing arrives within 60 s (KeepAliveTimeout).
+            Design intent for clients: close + reconnect (§32 modal) after 90 s
+            with no server activity.
 
-Endpoint: ws://{host}:{port}/api/v1/ws  (NOT /api/v1/stream — common mistake)
-
-Upgrade headers:
-  X-Ara-WS-Version: 1                  (required; mismatched → 426 Upgrade Required)
-  Sec-WebSocket-Extensions: permessage-deflate  (default; omit to disable compression)
-
-Frame size:    no explicit WS cap beyond Kestrel's defaults today (the planned 1 MB cap
-               and the §60.3 64 KB REST comparison were design intent, not code).
-Compression:   not enabled (permessage-deflate was design intent; the server does not
-               opt in to DangerousEnableCompression).
-Heartbeat:     server sends a WS ping every 30 s; client must pong within 60 s.
-               2 consecutive missed pongs → server closes with code 1011
-               (reason: server_initiated_disconnect_unresponsive_client).
-               Client should likewise close + trigger §32 reconnect modal if no
-               server activity (ping OR event) seen for 90 s.
-
-Resume protocol: after the WebSocket upgrade completes, the client may send
-its FIRST message as a JSON resume request:
-  { "resume_token": "<opaque-string-from-prior-server-state-snapshot>" }
-Server responds with one of:
-  { "resumed": true,  "missed_events": <n>, "last_event_id": "<id>" }
-    → server then immediately replays missed events as normal events
+Resume protocol — optional FIRST client message after the upgrade:
+  { "resume_token": "<last seen seq, base-10>" }
+  The token is the last `seq` the client saw (v0.x; an opaque token with a
+  time window tied to GET /api/v1/server/state is design intent). Replies:
+  { "resumed": true,  "missed_events": n, "last_event_id": "<seq>" }
+      → the missed events (≤ 1000, the in-memory replay window) are then
+        sent as ordinary events
+  { "resumed": false, "code": "resume_token_invalid", "reason": "..." }
+      → not a non-negative integer; the connection continues as fresh
   { "resumed": false, "code": "resume_token_expired", "reason": "..." }
-    → fresh subscription, no replay
-  { "resumed": false, "code": "resume_token_invalid" }
-    → client should clear local cursor + reconnect fresh
-If the client's first message is anything OTHER than a resume request,
-server treats the connection as fresh (no replay).
-Resume tokens are issued by REST `GET /api/v1/server/state` and have
-a 1-hour validity window. After that, fall back to fresh /state rehydrate.
+      → older than the 1000-event window, or newer than the server's current
+        seq (daemon restarted); the connection continues as fresh — the
+        socket is NOT closed; rehydrate with GET /api/v1/server/state
+  { "resumed": false }  (no code)
+      → the first message was not a resume request; fresh subscription.
 
-Event envelope (every server-sent message):
-  { "type": "frame.complete",
-    "ts":   "2026-05-23T19:14:33.123Z",
-    "id":   "evt-7f3a9b",                # monotonic per server boot
-    "payload": { ...event-specific... } }
+Event envelope (every server-sent message, WsEventEnvelopeDto):
+  { "type": "frame.complete", "ts": "2026-05-23T19:14:33.123Z",
+    "seq": 1234, "payload": { ... } }
+  `seq` is a monotonic int64 per server boot and doubles as the resume token.
+  There is no `id` field.
 
-Close codes:
-  1000 — Normal closure (both directions)
-  1001 — Going away (network change, app backgrounded)
-  1009 — Frame too large (>1 MB)
-  1011 — Server-side error / unresponsive client / client_too_slow backpressure
-  1012 — Service restart imminent (pairs with server.restart_imminent event per §34.7)
-  4001 — reserved for auth required / token invalid (remote-access mode, §67.4; not
-         emitted today — v0.x has no auth)
-  4002 — Resume token expired (client clears local + reconnects with REST snapshot)
-  4003 — reserved; a missing or mismatched X-Ara-WS-Version is rejected BEFORE the
-         upgrade with HTTP 426 (WebSocketEndpoints.cs), so no socket exists to close
-  4004 — Single-client policy: another WILMA took over (§27, ClientSessionService)
+Close codes the server sends:
+  1000 — normal closure (shutdown: "server closing")
+  4004 — single-client policy: another client took over (§27,
+         ClientSessionService.TakeoverCloseCode)
+  Everything else the client sees is the framework's (1001 going away,
+  1011 internal error, keep-alive expiry). Design intent, not emitted:
+  1009 frame too large, 1012 restart imminent (the `server.restart_imminent`
+  event exists; the close does not), 4001 auth, 4002 resume expired (it is a
+  JSON reply, above), 4003 version mismatch (it is a 426).
 
-Backpressure: per-subscriber bounded buffer of 1000 events, drop-oldest when full
-(`PlaceholderWsServices.PerSubscriberCapacity`); a slow client silently loses the oldest
-events rather than being closed with `client_too_slow` (design intent from §66.2, not
-implemented). It catches up through the resume protocol on reconnect.
-
-Event catalog (see §60.10 for full schemas):
-  equipment.state         — connection + per-device runtime state changes
-  sequence.progress       — frame-completion, target-switch, instruction-step events
-  sequence.run_items_changed — §38.9 live mid-run edit applied (add/remove/move of a
-                            pending item); instructions_total may change mid-run —
-                            consumers must re-read totals from each progress snapshot
-  frame.complete          — new frame written to library; payload includes preview URL
-  frame.analyzed          — §59.5 post-capture star analysis landed: {frame_id, hfr, star_count}
-  log.line                — server log emission (filterable per channel subscribe)
-  notification            — §46 in-app feed entry (info / warning / critical / urgent)
-  diagnostic.alert        — §51 real-time acquisition diagnostic flag
-  server.restart_imminent — pairs with 1012 close per §34.7 update flow
-  operation.{started|progress|complete|failed} — long-running op state from REST 202s
+Backpressure: a bounded per-subscriber buffer of 1000 events, drop-oldest when
+full (PlaceholderWsServices.PerSubscriberCapacity). A slow client loses the
+oldest events and catches up via the resume protocol on its next connect;
+it is not closed (design intent: close 1011 `client_too_slow`).
 
 Sequence-run event ORDERING contract (§60.9):
-  * A run's terminal event (sequence.complete / sequence.stopped / sequence.aborted /
-    sequence.failed) MAY arrive WITHOUT a preceding sequence.started — an abort/stop
-    that lands in the window between run acceptance and the worker executing skips
-    the (would-be misleading) started event. Consumers must not assume a strict
-    started → terminal pairing.
-  * sequence.progress is GUARANTEED to never arrive after the same run's terminal
-    event: the server seals+drains its progress publisher before every terminal
-    emit. Progress events are coalesced under load (at most one publish in flight;
-    bursts collapse to a trailing publish carrying the freshest state), so
-    consumers must treat each progress payload as a snapshot, not a delta stream.
-  * instructions_completed / instructions_total count SEQUENCE INSTRUCTIONS (tree
-    leaves), not camera exposures — renamed from the misleading frames_* while the
-    wire had no external consumers. A true exposure counter can arrive later as a
-    separate frames_* pair without a second rename.
+  * A run's terminal event (sequence.complete / .stopped / .aborted / .failed)
+    MAY arrive without a preceding sequence.started — an abort or stop that
+    lands between run acceptance and the worker executing skips the (would-be
+    misleading) started event. Do not assume a strict started → terminal pair.
+  * sequence.progress never arrives after the same run's terminal event: the
+    server seals and drains its progress publisher before every terminal emit.
+    Progress events are coalesced under load (at most one publish in flight;
+    bursts collapse to a trailing publish with the freshest state), so treat
+    each progress payload as a snapshot, not a delta.
+  * instructions_completed / instructions_total count SEQUENCE INSTRUCTIONS
+    (tree leaves), not camera exposures (renamed from frames_* while the wire
+    had no external consumers, §60.9).
 ```
