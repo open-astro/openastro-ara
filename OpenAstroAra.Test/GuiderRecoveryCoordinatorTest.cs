@@ -194,19 +194,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Cancellation_propagates_out_of_recovery() {
+        public async Task Cancellation_propagates_out_of_recovery() {
             var supervisor = new FakeSupervisor(GuiderProcessStatus.Activating);
             using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            await cts.CancelAsync();
             // Delay that throws on a cancelled token so the loop observes cancellation pre-poll.
             var coordinator = NewCoordinator(supervisor, out _, out _,
                 delay: static (_, ct) => Task.FromCanceled(ct));
 
-            Assert.ThrowsAsync<TaskCanceledException>(() => coordinator.RecoverAsync(cts.Token));
+            await Assert.ThrowsAsync<TaskCanceledException>(() => coordinator.RecoverAsync(cts.Token));
         }
 
         [Test]
-        public void Cancellation_mid_loop_propagates() {
+        public async Task Cancellation_mid_loop_propagates() {
             // The unit never resolves (always activating); cancel after the first poll completes so
             // cancellation is observed mid-loop, not pre-loop.
             var supervisor = new FakeSupervisor(GuiderProcessStatus.Activating);
@@ -220,7 +220,7 @@ namespace OpenAstroAra.Test {
                     }
                 });
 
-            Assert.ThrowsAsync<OperationCanceledException>(() => coordinator.RecoverAsync(cts.Token));
+            await Assert.ThrowsAsync<OperationCanceledException>(() => coordinator.RecoverAsync(cts.Token));
             Assert.That(delayCalls, Is.EqualTo(2), "cancellation should land on the second loop iteration");
         }
 

@@ -104,10 +104,9 @@ namespace OpenAstroAra.Test {
             proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
             using var client = new HttpClient();
 
-            // NUnit's ThrowsAsync runs the delegate synchronously and RETURNS the
-            // exception (it is not a Task) — capture + assert non-null so the check is
-            // unmistakably exercised.
-            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+            // NUnit 5's ThrowsAsync returns a Task of the exception — await it, then
+            // assert non-null so the check is unmistakably exercised.
+            var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
                 await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false));
             Assert.That(ex, Is.Not.Null);
             Assert.That(proxy.LastHandlerFault, Is.Null, "a Drop is intentional, not a handler crash");
@@ -210,7 +209,7 @@ namespace OpenAstroAra.Test {
             using var client = new HttpClient();
 
             var sw = Stopwatch.StartNew();
-            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+            var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
                 await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false));
             sw.Stop();
 
@@ -231,7 +230,7 @@ namespace OpenAstroAra.Test {
             using var client = new HttpClient();
 
             var sw = Stopwatch.StartNew();
-            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+            var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
                 await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false));
             sw.Stop();
 

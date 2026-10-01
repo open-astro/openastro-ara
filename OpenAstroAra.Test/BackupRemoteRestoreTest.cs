@@ -171,24 +171,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Remote_restore_without_sha256_is_rejected_synchronously() {
+        public async Task Remote_restore_without_sha256_is_rejected_synchronously() {
             using var svc = NewService(new FakeFetcher(), new RecordingRestorer());
-            Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
+            await Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
                 () => svc.RestoreZipAsync(Req(RemoteUrl, sha: null), null, CancellationToken.None));
         }
 
         [TestCase("nothex!!nothex!!nothex!!nothex!!nothex!!nothex!!nothex!!nothex!!")] // 64 chars, not hex
         [TestCase("abc123")] // too short
-        public void Remote_restore_with_a_malformed_sha256_is_rejected_synchronously(string sha) {
+        public async Task Remote_restore_with_a_malformed_sha256_is_rejected_synchronously(string sha) {
             using var svc = NewService(new FakeFetcher(), new RecordingRestorer());
-            Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
+            await Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
                 () => svc.RestoreZipAsync(Req(RemoteUrl, sha), null, CancellationToken.None));
         }
 
         [Test]
-        public void Remote_restore_without_a_configured_fetcher_is_rejected_synchronously() {
+        public async Task Remote_restore_without_a_configured_fetcher_is_rejected_synchronously() {
             using var svc = NewService(fetcher: null, new RecordingRestorer());
-            Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
+            await Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
                 () => svc.RestoreZipAsync(Req(RemoteUrl, new string('a', 64)), null, CancellationToken.None));
         }
 
@@ -242,10 +242,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_relative_unknown_snapshot_url_is_still_a_404_not_a_remote_attempt() {
+        public async Task A_relative_unknown_snapshot_url_is_still_a_404_not_a_remote_attempt() {
             using var svc = NewService(new FakeFetcher(), new RecordingRestorer());
             var relative = new Uri("/api/v1/backup/snapshot/" + Guid.NewGuid().ToString("D") + "/download", UriKind.Relative);
-            Assert.ThrowsAsync<BackupSnapshotNotFoundException>(
+            await Assert.ThrowsAsync<BackupSnapshotNotFoundException>(
                 () => svc.RestoreZipAsync(Req(relative, sha: null), null, CancellationToken.None));
         }
 
@@ -289,18 +289,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_null_backup_source_url_is_a_clean_422_not_an_NRE() {
+        public async Task A_null_backup_source_url_is_a_clean_422_not_an_NRE() {
             // The DTO declares the Uri non-nullable but the JSON deserializer doesn't enforce it at
             // runtime — "backup_source_url": null must keep the pre-remote-support 422 behaviour.
             using var svc = NewService(new FakeFetcher(), new RecordingRestorer());
-            Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
+            await Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
                 () => svc.RestoreZipAsync(Req(null!, sha: null), null, CancellationToken.None));
         }
 
         [Test]
-        public void A_non_http_scheme_is_not_a_remote_source() {
+        public async Task A_non_http_scheme_is_not_a_remote_source() {
             using var svc = NewService(new FakeFetcher(), new RecordingRestorer());
-            Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
+            await Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
                 () => svc.RestoreZipAsync(Req(new Uri("ftp://host/backup.zip"), new string('a', 64)), null, CancellationToken.None));
         }
     }

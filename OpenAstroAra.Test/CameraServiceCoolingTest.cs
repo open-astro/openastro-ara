@@ -239,7 +239,7 @@ namespace OpenAstroAra.Test {
             var (svc, _) = await ConnectedAsync(cam, onDelay: n => { if (n == 2) { cts.Cancel(); } });
             using var __ = svc;
 
-            Assert.CatchAsync<OperationCanceledException>(
+            await Assert.CatchAsync<OperationCanceledException>(
                 () => svc.CoolCamera(-10, TimeSpan.FromMinutes(1), new StatusLog(), cts.Token));
 
             Assert.That(cam.Setpoints, Has.Count.EqualTo(3), "two ramp steps, then the hold");
@@ -384,7 +384,7 @@ namespace OpenAstroAra.Test {
             var item = new OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera(svc) { Temperature = -10, Duration = 0 };
 
             Assert.That(item.Validate(), Is.True, string.Join(", ", item.Issues));
-            Assert.DoesNotThrowAsync(() => item.Execute(new StatusLog(), CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => item.Execute(new StatusLog(), CancellationToken.None));
             Assert.That(cam.Setpoints[^1], Is.EqualTo(-10.0));
         }
     }

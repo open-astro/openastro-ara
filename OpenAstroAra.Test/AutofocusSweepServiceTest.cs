@@ -186,7 +186,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Cancellation_propagates_and_restores() {
+        public async Task Cancellation_propagates_and_restores() {
             var (focuser, moves) = Focuser();
             using var cts = new CancellationTokenSource();
             var probes = 0;
@@ -196,7 +196,7 @@ namespace OpenAstroAra.Test {
                     if (++probes == 3) cts.Cancel(); // abort mid-sweep
                     return Result(1.5, 42);
                 });
-            Assert.ThrowsAsync<OperationCanceledException>(
+            await Assert.ThrowsAsync<OperationCanceledException>(
                 () => svc.RunAutofocusAsync(NoProgress, cts.Token));
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "a cancelled sweep must not strand focus at a probe position");
         }

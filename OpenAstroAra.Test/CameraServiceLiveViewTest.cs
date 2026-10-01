@@ -32,46 +32,46 @@ namespace OpenAstroAra.Test {
     public class CameraServiceLiveViewTest {
 
         [Test]
-        public void StartLiveViewAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task StartLiveViewAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new CameraService();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None));
         }
 
         [Test]
-        public void StartLiveViewAsync_rejects_nonpositive_exposure_before_connected_check() {
+        public async Task StartLiveViewAsync_rejects_nonpositive_exposure_before_connected_check() {
             using var svc = new CameraService();
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(0), CancellationToken.None));
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(-1.5), CancellationToken.None));
         }
 
         [Test]
-        public void StartLiveViewAsync_rejects_exposure_over_the_cap() {
+        public async Task StartLiveViewAsync_rejects_exposure_over_the_cap() {
             using var svc = new CameraService();
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(120), CancellationToken.None));
         }
 
         [Test]
-        public void StartLiveViewAsync_accepts_the_exposure_cap_boundary() {
+        public async Task StartLiveViewAsync_accepts_the_exposure_cap_boundary() {
             using var svc = new CameraService();
             // 15.0 is the inclusive cap: it must pass validation and fall through to the
             // connection check (InvalidOperation), NOT be rejected as out-of-range.
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(15.0), CancellationToken.None));
         }
 
         [Test]
-        public void StartLiveViewAsync_rejects_invalid_binning() {
+        public async Task StartLiveViewAsync_rejects_invalid_binning() {
             using var svc = new CameraService();
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 0), CancellationToken.None));
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinY: 0), CancellationToken.None));
             // Absurdly large binning is rejected up front (cap is 16) rather than failing per-frame.
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 9999), CancellationToken.None));
         }
 
@@ -83,7 +83,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void GetLiveViewStatus_is_idle_before_any_start() {
+        public async Task GetLiveViewStatus_is_idle_before_any_start() {
             using var svc = new CameraService();
             var status = svc.GetLiveViewStatus();
             Assert.Multiple(() => {
@@ -96,10 +96,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Placeholder_live_view_surface_is_inert() {
+        public async Task Placeholder_live_view_surface_is_inert() {
             var svc = new PlaceholderCameraService();
-            Assert.DoesNotThrowAsync(() => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None));
-            Assert.DoesNotThrowAsync(() => svc.StopLiveViewAsync());
+            await Assert.DoesNotThrowAsync(() => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => svc.StopLiveViewAsync());
             Assert.That(svc.GetLiveViewStatus().Active, Is.False);
             Assert.That(svc.GetLiveViewFrame(), Is.Null);
         }

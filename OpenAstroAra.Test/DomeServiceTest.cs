@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Dome, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
             await svc.DisconnectAsync(null, CancellationToken.None); // supersede the dead connect before dispose
         }
 
@@ -130,35 +130,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void FindHomeAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task FindHomeAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new DomeService();
             Assert.Throws<InvalidOperationException>(
                 () => { _ = svc.FindHomeAsync(null, CancellationToken.None); });
         }
 
         [Test]
-        public void AbortSlewAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task AbortSlewAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new DomeService();
             // Async method — the connected check throws via the returned task.
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.AbortSlewAsync(null, CancellationToken.None));
         }
 
         [Test]
-        public void SetParkAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task SetParkAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new DomeService();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.SetParkAsync(null, CancellationToken.None));
         }
 
         [Test]
-        public void SyncToAzimuthAsync_validates_range_before_the_connected_check() {
+        public async Task SyncToAzimuthAsync_validates_range_before_the_connected_check() {
             using var svc = new DomeService();
             // Same [0, 360) rule and precedence as SlewAsync: a bad azimuth is a 400
             // even while disconnected; a good azimuth on a disconnected dome is a 409.
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.SyncToAzimuthAsync(new DomeSlewRequestDto(360), null, CancellationToken.None));
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.SyncToAzimuthAsync(new DomeSlewRequestDto(180), null, CancellationToken.None));
         }
 
@@ -189,10 +189,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void GetAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task GetAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new DomeService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(() => svc.GetAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.GetAsync(CancellationToken.None));
         }
 
         [Test]

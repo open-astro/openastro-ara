@@ -267,7 +267,7 @@ namespace OpenAstroAra.Test {
             // instruction (§42.2 — the throw is what engages Attempts retries + instruction_failed;
             // before it, a dead dew-heater write read as success to the sequence).
             proxy.InjectFault(new AlpacaFaultRule { Method = "setswitchvalue", Fault = AlpacaFault.Drop() });
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                 ((ISwitchMediator)svc).SetSwitchValue(0, 1.0, progress: null!, CancellationToken.None));
 
             lock (faults) {

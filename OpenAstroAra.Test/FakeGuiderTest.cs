@@ -160,7 +160,7 @@ namespace OpenAstroAra.Test {
             // the remaining paths for the analyzer.
             client.Dispose();
 
-            Assert.DoesNotThrowAsync(() => guider.BroadcastAsync(PhdEvents.StarLost()));
+            await Assert.DoesNotThrowAsync(() => guider.BroadcastAsync(PhdEvents.StarLost()));
         }
 
         private static async Task WaitForConnectionsAsync(FakeGuider guider, int expected) {

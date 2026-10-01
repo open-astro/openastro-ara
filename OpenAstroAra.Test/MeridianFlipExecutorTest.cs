@@ -276,7 +276,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void MeridianFlip_propagates_cancellation_and_restores_tracking() {
+        public async Task MeridianFlip_propagates_cancellation_and_restores_tracking() {
             SetupProfile(recenter: true);
             using var cts = new CancellationTokenSource();
             telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
@@ -284,7 +284,7 @@ namespace OpenAstroAra.Test {
                 .ThrowsAsync(new OperationCanceledException());
             var sut = CreateSUT();
 
-            Assert.ThrowsAsync<OperationCanceledException>(
+            await Assert.ThrowsAsync<OperationCanceledException>(
                 () => sut.MeridianFlip(Target, TimeSpan.Zero, Progress, cts.Token));
             // Cancellation still restores tracking before propagating...
             telescope.Verify(t => t.SetTrackingEnabled(true), Times.AtLeastOnce);
@@ -294,10 +294,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void MeridianFlip_throws_on_a_null_target() {
+        public async Task MeridianFlip_throws_on_a_null_target() {
             SetupProfile();
             var sut = CreateSUT();
-            Assert.ThrowsAsync<ArgumentNullException>(
+            await Assert.ThrowsAsync<ArgumentNullException>(
                 () => sut.MeridianFlip(null!, TimeSpan.Zero, Progress, CancellationToken.None));
         }
 
@@ -736,7 +736,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Stopping_the_sequence_during_the_window_leaves_the_flag_unconfirmed() {
+        public async Task Stopping_the_sequence_during_the_window_leaves_the_flag_unconfirmed() {
             // The user's "no" is cancellation: it propagates as CANCELLED (not a failed flip),
             // nothing was touched, and the flag stays false so the next attempt announces again.
             SetupProfile(recenter: true);
@@ -744,9 +744,9 @@ namespace OpenAstroAra.Test {
             SetupHealthyTrackingMount();
             var sut = CreateSafetySUT();
             using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            await cts.CancelAsync();
 
-            Assert.CatchAsync<OperationCanceledException>(
+            await Assert.CatchAsync<OperationCanceledException>(
                 () => sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, cts.Token));
             profileStore.Verify(p => p.UpdateSafetyPolicies(It.IsAny<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>()), Times.Never,
                 "an unconsented window must not confirm");

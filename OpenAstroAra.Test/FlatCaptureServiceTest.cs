@@ -173,7 +173,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Cancellation_mid_set_propagates_and_still_turns_the_panel_off() {
+        public async Task Cancellation_mid_set_propagates_and_still_turns_the_panel_off() {
             using var cts = new CancellationTokenSource();
             imagingMock
                 .Setup(x => x.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<string>()))
@@ -183,7 +183,7 @@ namespace OpenAstroAra.Test {
                     return (IExposureData)null!;
                 });
 
-            Assert.CatchAsync<OperationCanceledException>(
+            await Assert.CatchAsync<OperationCanceledException>(
                 () => CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), cts.Token));
             Assert.That(panel.LightRequests.Last(), Is.False, "the finally must restore the light even on cancel");
         }
@@ -223,20 +223,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void FlatPanelFlats_throws_when_no_executor_is_wired() {
+        public async Task FlatPanelFlats_throws_when_no_executor_is_wired() {
             var item = new FlatPanelFlats(flatCaptureExecutor: null);
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
         [Test]
-        public void FlatPanelFlats_throws_when_the_executor_reports_failure() {
+        public async Task FlatPanelFlats_throws_when_the_executor_reports_failure() {
             var executor = new Mock<IFlatCaptureExecutor>();
             executor
                 .Setup(x => x.CaptureFlatSetAsync(It.IsAny<FlatSetRequest>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             var item = new FlatPanelFlats(executor.Object);
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
@@ -259,10 +259,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void FlatPanelFlats_rejects_a_misconfigured_plan_naming_the_fields() {
+        public async Task FlatPanelFlats_rejects_a_misconfigured_plan_naming_the_fields() {
             var executor = new Mock<IFlatCaptureExecutor>();
             var item = new FlatPanelFlats(executor.Object) { MinExposureSec = 5, MaxExposureSec = 1 };
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("misconfigured"));
             executor.VerifyNoOtherCalls();
@@ -370,7 +370,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Sky_cancellation_mid_set_propagates() {
+        public async Task Sky_cancellation_mid_set_propagates() {
             using var cts = new CancellationTokenSource();
             scene.AduPerSecond = 25000;
             imagingMock
@@ -381,25 +381,25 @@ namespace OpenAstroAra.Test {
                     return (IExposureData)null!;
                 });
 
-            Assert.CatchAsync<OperationCanceledException>(
+            await Assert.CatchAsync<OperationCanceledException>(
                 () => CreateSUT().CaptureSkyFlatSetAsync(SkyRequest(), new Progress<ApplicationStatus>(), cts.Token));
         }
 
         [Test]
-        public void SkyFlats_throws_when_no_executor_is_wired() {
+        public async Task SkyFlats_throws_when_no_executor_is_wired() {
             var item = new SkyFlats(flatCaptureExecutor: null);
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
         [Test]
-        public void SkyFlats_throws_when_the_executor_reports_failure() {
+        public async Task SkyFlats_throws_when_the_executor_reports_failure() {
             var executor = new Mock<IFlatCaptureExecutor>();
             executor
                 .Setup(x => x.CaptureSkyFlatSetAsync(It.IsAny<SkyFlatSetRequest>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             var item = new SkyFlats(executor.Object);
-            Assert.ThrowsAsync<SequenceEntityFailedException>(
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
@@ -423,10 +423,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void SkyFlats_rejects_a_target_outside_the_stop_window_naming_the_fields() {
+        public async Task SkyFlats_rejects_a_target_outside_the_stop_window_naming_the_fields() {
             var executor = new Mock<IFlatCaptureExecutor>();
             var item = new SkyFlats(executor.Object) { TargetAdu = 25000, StopAtMaxAdu = 20000 };
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("misconfigured"));
             executor.VerifyNoOtherCalls();

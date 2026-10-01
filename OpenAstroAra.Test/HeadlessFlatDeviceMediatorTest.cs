@@ -32,19 +32,19 @@ namespace OpenAstroAra.Test {
     public class HeadlessFlatDeviceMediatorTest {
 
         [Test]
-        public void GetInfo_returns_not_connected() {
+        public async Task GetInfo_returns_not_connected() {
             var m = new HeadlessFlatDeviceMediator();
             Assert.That(m.GetInfo().Connected, Is.False);
         }
 
         [Test]
-        public void Cover_ops_do_not_throw() {
+        public async Task Cover_ops_do_not_throw() {
             var m = new HeadlessFlatDeviceMediator();
             var p = new Progress<ApplicationStatus>();
-            Assert.DoesNotThrowAsync(() => m.OpenCover(p, CancellationToken.None));
-            Assert.DoesNotThrowAsync(() => m.CloseCover(p, CancellationToken.None));
-            Assert.DoesNotThrowAsync(() => m.SetBrightness(50, p, CancellationToken.None));
-            Assert.DoesNotThrowAsync(() => m.ToggleLight(true, p, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => m.OpenCover(p, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => m.CloseCover(p, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => m.SetBrightness(50, p, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => m.ToggleLight(true, p, CancellationToken.None));
         }
 
         [Test]

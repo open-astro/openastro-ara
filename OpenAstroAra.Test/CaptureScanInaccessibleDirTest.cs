@@ -98,7 +98,7 @@ namespace OpenAstroAra.Test {
             }
 
             CaptureScanResult result = null!;
-            Assert.DoesNotThrowAsync(async () =>
+            await Assert.DoesNotThrowAsync(async () =>
                 result = await _scan.RunAsync(CancellationToken.None),
                 "an unreadable subdirectory must be walked past, never thrown out of");
 

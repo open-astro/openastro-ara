@@ -61,7 +61,7 @@ namespace OpenAstroAra.Test {
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Camera, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ForgetAsync(CancellationToken.None));
             await svc.DisconnectAsync(null, CancellationToken.None); // supersede the dead connect before dispose
         }
 
@@ -72,49 +72,49 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void StartExposureAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task StartExposureAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new CameraService();
             Assert.Throws<InvalidOperationException>(
                 () => { _ = svc.StartExposureAsync(new ExposureRequestDto(1.0, Gain: null), null, CancellationToken.None); });
         }
 
         [Test]
-        public void CaptureForAnalysisAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task CaptureForAnalysisAsync_when_not_connected_throws_InvalidOperation() {
             // §59 — a probe capture on a disconnected camera must fail loudly (a silent
             // gap in the sweep's measurements would corrupt the focus curve).
             using var svc = new CameraService();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.CaptureForAnalysisAsync(1.0, binning: 1, CancellationToken.None));
         }
 
         [Test]
-        public void CaptureForAnalysisAsync_rejects_nonpositive_exposure_before_connected_check() {
+        public async Task CaptureForAnalysisAsync_rejects_nonpositive_exposure_before_connected_check() {
             using var svc = new CameraService();
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.CaptureForAnalysisAsync(0, binning: 1, CancellationToken.None));
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.CaptureForAnalysisAsync(-1, binning: 1, CancellationToken.None));
         }
 
         [Test]
-        public void CaptureForAnalysisAsync_rejects_out_of_range_binning() {
+        public async Task CaptureForAnalysisAsync_rejects_out_of_range_binning() {
             // An over-short binning would otherwise WRAP in ApplyExposureSettings' narrowing
             // cast and TrySet would log-and-skip — a silently mis-binned AF probe.
             using var svc = new CameraService();
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.CaptureForAnalysisAsync(1.0, binning: 0, CancellationToken.None));
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.CaptureForAnalysisAsync(1.0, binning: short.MaxValue + 1, CancellationToken.None));
         }
 
         [Test]
-        public void CaptureForAnalysisAsync_rejects_nan_and_infinite_exposures() {
+        public async Task CaptureForAnalysisAsync_rejects_nan_and_infinite_exposures() {
             // NaN comparisons are always false, so a bare `<= 0` guard lets NaN through to the
             // device call — and the §59 sweep feeds COMPUTED exposures into this seam.
             using var svc = new CameraService();
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.CaptureForAnalysisAsync(double.NaN, binning: 1, CancellationToken.None));
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.CaptureForAnalysisAsync(double.PositiveInfinity, binning: 1, CancellationToken.None));
         }
 
@@ -146,24 +146,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void AbortExposureAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task AbortExposureAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new CameraService();
             // Async method: the guard surfaces on the returned Task.
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.AbortExposureAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.AbortExposureAsync(CancellationToken.None));
         }
 
         [Test]
-        public void SetReadoutModeAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task SetReadoutModeAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new CameraService();
-            Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetReadoutModeAsync(0, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetReadoutModeAsync(0, CancellationToken.None));
         }
 
         [Test]
-        public void SetReadoutModeAsync_rejects_a_negative_index_before_the_connected_check() {
+        public async Task SetReadoutModeAsync_rejects_a_negative_index_before_the_connected_check() {
             using var svc = new CameraService();
             // Same precedence as dome Slew/Sync: a structurally-bad index is a 400 even
             // while disconnected; a plausible index on a disconnected camera is a 409.
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.SetReadoutModeAsync(-1, CancellationToken.None));
         }
 

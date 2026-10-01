@@ -39,11 +39,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_throwing_device_abort_still_pauses_the_sequence() {
+        public async Task A_throwing_device_abort_still_pauses_the_sequence() {
             // §57.4 step 2's whole point: a driver error must not leave the run firing exposures
             // at a mount that may still be moving.
             var paused = false;
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 MountStopHandler.ExecuteAsync(
                     () => throw new InvalidOperationException("driver went away"),
                     () => { paused = true; return Task.CompletedTask; }));

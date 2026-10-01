@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void PortsUnreadable_is_false_when_any_port_was_read() {
+        public async Task PortsUnreadable_is_false_when_any_port_was_read() {
             // A partially-readable device is degraded, not lost — the per-port skips
             // already keep the readable ones.
             Assert.That(SwitchService.PortsUnreadable(advertised: 24, portsRead: 1), Is.False);
@@ -218,20 +218,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void SetValueAsync_for_an_unknown_device_number_throws_InvalidOperation() {
+        public async Task SetValueAsync_for_an_unknown_device_number_throws_InvalidOperation() {
             using var svc = new SwitchService();
-            Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<InvalidOperationException>(
                 () => svc.SetValueAsync("no-such-switch", new SwitchValueRequestDto(0, 1.0), CancellationToken.None));
         }
 
         [Test]
-        public void SetValueAsync_with_out_of_range_PortId_throws_ArgumentOutOfRange() {
+        public async Task SetValueAsync_with_out_of_range_PortId_throws_ArgumentOutOfRange() {
             using var svc = new SwitchService();
             // PortId > short.MaxValue would silently wrap on the (short) cast — must throw instead, and
             // before the connection lookup so the range contract holds regardless of state.
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.SetValueAsync("uid", new SwitchValueRequestDto(40000, 1.0), CancellationToken.None));
-            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.SetValueAsync("uid", new SwitchValueRequestDto(-1, 1.0), CancellationToken.None));
         }
 
@@ -252,17 +252,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void GetAllAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task GetAllAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new SwitchService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(() => svc.GetAllAsync(CancellationToken.None));
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.GetAllAsync(CancellationToken.None));
         }
 
         [Test]
-        public void SetValueAsync_after_Dispose_throws_ObjectDisposedException() {
+        public async Task SetValueAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new SwitchService();
             svc.Dispose();
-            Assert.ThrowsAsync<ObjectDisposedException>(
+            await Assert.ThrowsAsync<ObjectDisposedException>(
                 () => svc.SetValueAsync("uid", new SwitchValueRequestDto(0, 1.0), CancellationToken.None));
         }
 

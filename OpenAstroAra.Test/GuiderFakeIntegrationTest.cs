@@ -491,7 +491,7 @@ namespace OpenAstroAra.Test {
             Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
                 "the service never reached Connected against the fake guider");
 
-            Assert.ThrowsAsync<GuiderRpcException>(
+            await Assert.ThrowsAsync<GuiderRpcException>(
                 () => svc.PushGuiderProfileAsync("push-fail", CancellationToken.None),
                 "a push whose equipment reconnect fails must surface, not return 202");
         }

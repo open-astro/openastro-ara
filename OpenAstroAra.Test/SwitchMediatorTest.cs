@@ -60,17 +60,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void SetSwitchValue_when_not_connected_completes_without_throwing() {
+        public async Task SetSwitchValue_when_not_connected_completes_without_throwing() {
             using var svc = new SwitchService();
-            Assert.DoesNotThrowAsync(() =>
+            await Assert.DoesNotThrowAsync(() =>
                 ((ISwitchMediator)svc).SetSwitchValue(0, 1.0, progress: null!, CancellationToken.None));
         }
 
         [Test]
-        public void SetSwitchValue_after_Dispose_completes_without_throwing() {
+        public async Task SetSwitchValue_after_Dispose_completes_without_throwing() {
             var svc = new SwitchService();
             svc.Dispose();
-            Assert.DoesNotThrowAsync(() =>
+            await Assert.DoesNotThrowAsync(() =>
                 ((ISwitchMediator)svc).SetSwitchValue(0, 1.0, progress: null!, CancellationToken.None));
         }
 
@@ -151,17 +151,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Targeted_SetSwitchValue_when_not_connected_completes_without_throwing() {
+        public async Task Targeted_SetSwitchValue_when_not_connected_completes_without_throwing() {
             using var svc = new SwitchService();
-            Assert.DoesNotThrowAsync(() => ((ISwitchDeviceTargeting)svc)
+            await Assert.DoesNotThrowAsync(() => ((ISwitchDeviceTargeting)svc)
                 .SetSwitchValue(2, 0, 1.0, progress: null!, CancellationToken.None));
         }
 
         [Test]
-        public void Targeted_SetSwitchValue_after_Dispose_completes_without_throwing() {
+        public async Task Targeted_SetSwitchValue_after_Dispose_completes_without_throwing() {
             var svc = new SwitchService();
             svc.Dispose();
-            Assert.DoesNotThrowAsync(() => ((ISwitchDeviceTargeting)svc)
+            await Assert.DoesNotThrowAsync(() => ((ISwitchDeviceTargeting)svc)
                 .SetSwitchValue(2, 0, 1.0, progress: null!, CancellationToken.None));
         }
 

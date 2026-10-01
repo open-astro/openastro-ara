@@ -183,9 +183,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_empty_exposure_list_is_rejected() {
+        public async Task An_empty_exposure_list_is_rejected() {
             using var svc = new SqliteDarkLibraryService(_db);
-            Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+            await Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
                 ExposureSecondsList: [],
                 GainList: [100],
                 TargetTemperatureCList: [-10.0],
@@ -314,9 +314,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_temperature_list_of_only_NaN_is_rejected_not_silently_ambient() {
+        public async Task A_temperature_list_of_only_NaN_is_rejected_not_silently_ambient() {
             using var svc = new SqliteDarkLibraryService(_db);
-            Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+            await Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
                 ExposureSecondsList: [60],
                 GainList: [100],
                 TargetTemperatureCList: [double.NaN],

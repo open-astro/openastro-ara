@@ -103,19 +103,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void CenterOnTarget_throws_on_a_null_target() {
+        public async Task CenterOnTarget_throws_on_a_null_target() {
             using var sut = CreateSUT(new Mock<IProfileService>().Object, new Mock<IPlateSolverFactory>().Object);
-            Assert.ThrowsAsync<ArgumentNullException>(
+            await Assert.ThrowsAsync<ArgumentNullException>(
                 () => sut.CenterOnTarget(null!, null, null, CancellationToken.None));
         }
 
         [Test]
-        public void CenterOnTarget_throws_when_no_active_profile_is_loaded() {
+        public async Task CenterOnTarget_throws_when_no_active_profile_is_loaded() {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile).Returns((IProfile)null!);
             using var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
-            Assert.ThrowsAsync<PlateSolverConfigurationException>(
+            await Assert.ThrowsAsync<PlateSolverConfigurationException>(
                 () => sut.CenterOnTarget(target, null, null, CancellationToken.None));
         }
 
@@ -124,14 +124,14 @@ namespace OpenAstroAra.Test {
         [TestCase(double.NaN, 3.8)]   // focal length NaN (default)
         [TestCase(800.0, 0.0)]        // pixel size zero
         [TestCase(800.0, double.NaN)] // pixel size NaN
-        public void CenterOnTarget_throws_when_focal_length_or_pixel_size_is_unconfigured(double focalLength, double pixelSize) {
+        public async Task CenterOnTarget_throws_when_focal_length_or_pixel_size_is_unconfigured(double focalLength, double pixelSize) {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(new Mock<IPlateSolveSettings>().Object);
             profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(focalLength);
             profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(pixelSize);
             using var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
-            Assert.ThrowsAsync<PlateSolverConfigurationException>(
+            await Assert.ThrowsAsync<PlateSolverConfigurationException>(
                 () => sut.CenterOnTarget(target, null, null, CancellationToken.None));
         }
 
@@ -252,9 +252,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void CenterAndRotate_throws_when_no_rotator_is_wired() {
+        public async Task CenterAndRotate_throws_when_no_rotator_is_wired() {
             using var sut = CreateSUT(new Mock<IProfileService>().Object, new Mock<IPlateSolverFactory>().Object);
-            Assert.ThrowsAsync<PlateSolverConfigurationException>(
+            await Assert.ThrowsAsync<PlateSolverConfigurationException>(
                 () => sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None));
         }
     }
