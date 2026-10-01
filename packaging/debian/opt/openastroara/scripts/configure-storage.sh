@@ -99,10 +99,28 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     # grep exit 1 just means "no previous ARA line" (fine); exit >1 means the
     # read itself failed — committing that would drop every existing entry
     # and brick the next boot, so bail instead.
+    # Two helper instances can run at once (the daemon's endpoints do not serialise,
+    # and systemd starts each request as its own unit), so the rebuild is done under an
+    # exclusive lock on a sibling lock file and through a per-call temp name (#1135): a
+    # fixed name let two concurrent rebuilds clobber each other's temp file. The lock
+    # lives under /run (tmpfs, gone at reboot, never beside fstab in /etc), not on fstab
+    # itself, so the rename below never replaces the locked inode out from under the
+    # other holder. flock(1) is util-linux, present on every supported image; a box
+    # without it degrades to the unlocked rebuild.
+    tmp=$(mktemp "${FSTAB}.ara-XXXXXX") || { echo "ERROR: fstab_tmp_failed"; exit 8; }
+    # An early exit between here and the rename (id lookup failing under set -e, the
+    # lock timing out) must not leave a uniquely named temp file beside fstab.
+    trap 'rm -f "$tmp"' EXIT
+    lockfd=
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"${FSTAB_LOCK:-/run/openastroara-fstab.lock}"
+        flock -w 30 9 || { rm -f "$tmp"; echo "ERROR: fstab_locked"; exit 8; }
+        lockfd=9
+    fi
     rc=0
-    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "${FSTAB}.ara-tmp" || rc=$?
+    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "$tmp" || rc=$?
     if [ "$rc" -gt 1 ]; then
-        rm -f "${FSTAB}.ara-tmp"
+        rm -f "$tmp"
         echo "ERROR: fstab_unreadable"
         exit 8
     fi
@@ -112,14 +130,16 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
         uid=$(id -u "$OWNER")
         gid=$(id -g "$OWNER")
         printf 'UUID=%s  %s  exfat  defaults,noatime,uid=%s,gid=%s,fmask=0113,dmask=0002,nofail,x-systemd.device-timeout=10  0  0\n' \
-            "$uuid" "$MOUNT_POINT" "$uid" "$gid" >> "${FSTAB}.ara-tmp"
+            "$uuid" "$MOUNT_POINT" "$uid" "$gid" >> "$tmp"
     else
         printf 'UUID=%s  %s  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2\n' \
-            "$uuid" "$MOUNT_POINT" >> "${FSTAB}.ara-tmp"
+            "$uuid" "$MOUNT_POINT" >> "$tmp"
     fi
-    chmod 644 "${FSTAB}.ara-tmp"
+    chmod 644 "$tmp"
     sync
-    mv "${FSTAB}.ara-tmp" "$FSTAB"
+    mv "$tmp" "$FSTAB"
+    trap - EXIT
+    [ -z "$lockfd" ] || exec 9>&-
     systemctl daemon-reload 2>/dev/null || true
 }
 

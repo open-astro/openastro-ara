@@ -52,6 +52,16 @@ namespace OpenAstroAra.Server.Services {
         Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct);
     }
 
+    /// <summary>#1135 — where the storage helper, its systemd template unit and the
+    /// request/result exchange live. <see cref="Default"/> is the packaged layout; tests
+    /// point all three at a temp directory and run the real wrapper script.</summary>
+    internal sealed record StorageHelperPaths(string HelperPath, string HelperUnitTemplate, string RequestDirectory) {
+        public static StorageHelperPaths Default { get; } = new(
+            StorageDeviceService.DefaultHelperPath,
+            StorageDeviceService.DefaultHelperUnitTemplate,
+            StorageDeviceService.DefaultRequestDirectory);
+    }
+
     /// <summary>
     /// §29.1 storage configuration. Enumeration is a plain <c>lsblk -J</c> read
     /// (no privilege); every mutating operation runs
@@ -66,19 +76,75 @@ namespace OpenAstroAra.Server.Services {
     /// packaged unit falls back to the sudoers-scoped direct invocation.
     /// </summary>
     public sealed partial class StorageDeviceService : IStorageDeviceService {
-        internal const string HelperPath = "/opt/openastroara/scripts/configure-storage.sh";
+        internal const string DefaultHelperPath = "/opt/openastroara/scripts/configure-storage.sh";
         internal const string MountPoint = "/media/openastroara";
         /// <summary>Template unit installed by the .deb; its presence selects the
         /// request-file path over direct sudo.</summary>
-        internal const string HelperUnitTemplate = "/etc/systemd/system/openastroara-storage@.service";
+        internal const string DefaultHelperUnitTemplate = "/etc/systemd/system/openastroara-storage@.service";
         /// <summary>Daemon-owned exchange directory (tmpfiles.d): <c>&lt;id&gt;.request</c>
         /// in, <c>&lt;id&gt;.result</c> out.</summary>
-        internal const string RequestDirectory = "/run/openastroara/storage";
+        internal const string DefaultRequestDirectory = "/run/openastroara/storage";
 
         private readonly ILogger logger;
+        private readonly StorageHelperPaths paths;
+        // #1135 — the external-command seam (lsblk/findmnt/sudo/systemctl). Tests swap it to
+        // run the packaged wrapper script directly in place of `systemctl start`, so the
+        // request/result round trip is exercised end to end without root or systemd.
+        private readonly Func<string, string[], CancellationToken, Task<(int ExitCode, string Output)>> run;
 
-        public StorageDeviceService(ILogger<StorageDeviceService> logger) {
+        public StorageDeviceService(ILogger<StorageDeviceService> logger)
+            : this(logger, StorageHelperPaths.Default, null) {
+        }
+
+        internal StorageDeviceService(ILogger<StorageDeviceService> logger, StorageHelperPaths paths,
+                Func<string, string[], CancellationToken, Task<(int ExitCode, string Output)>>? run) {
             this.logger = logger;
+            this.paths = paths;
+            this.run = run ?? RunAsync;
+            SweepStaleExchangeFiles();
+        }
+
+        internal string HelperPath => paths.HelperPath;
+        internal string HelperUnitTemplate => paths.HelperUnitTemplate;
+        internal string RequestDirectory => paths.RequestDirectory;
+
+        /// <summary>
+        /// #1135 — startup sweep of the exchange directory. Every request carries a fresh id and
+        /// the daemon deletes its own pair after the round trip, so anything still there belongs
+        /// to a request the daemon no longer awaits: a request cancelled mid-configure deleted a
+        /// result that did not exist yet, and the wrapper's later rename left <c>&lt;id&gt;.result</c>
+        /// in tmpfs until reboot; a request file without a unit run behind it (a crash between
+        /// the write and the start) would otherwise sit there too. The directory is tmpfs, so
+        /// the sweep is cheap and only runs when it exists. Internal for direct testing.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort startup housekeeping of the daemon's own tmpfs exchange; an unreadable directory or a file that vanished mid-sweep must never fail service construction (log-and-continue boundary).")]
+        internal int SweepStaleExchangeFiles() {
+            if (!Directory.Exists(paths.RequestDirectory)) {
+                return 0;
+            }
+            var swept = 0;
+            try {
+                foreach (var file in Directory.EnumerateFiles(paths.RequestDirectory)) {
+                    var ext = Path.GetExtension(file);
+                    if (ext is not (".request" or ".result")) {
+                        continue; // not ours — the directory is tmpfiles.d-owned, but stay narrow
+                    }
+                    try {
+                        File.Delete(file);
+                        swept++;
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                        LogStaleExchangeFileKept(logger, file, ex.Message);
+                    }
+                }
+            } catch (Exception ex) {
+                LogStaleExchangeSweepFailed(logger, ex);
+                return swept;
+            }
+            if (swept > 0) {
+                LogStaleExchangeSwept(logger, swept, paths.RequestDirectory);
+            }
+            return swept;
         }
 
         public async Task<IReadOnlyList<StorageDeviceDto>> ListAsync(CancellationToken ct) {
@@ -168,7 +234,7 @@ namespace OpenAstroAra.Server.Services {
         /// Keep in lock-step with the helper's refuse_if_system_disk: a miss
         /// here offers the system disk for format.
         /// </summary>
-        private static async Task<IReadOnlySet<string>> SystemDisksAsync(CancellationToken ct) {
+        private async Task<IReadOnlySet<string>> SystemDisksAsync(CancellationToken ct) {
             var set = new HashSet<string>(StringComparer.Ordinal);
             foreach (var target in new[] { "/", "/boot", "/boot/firmware" }) {
                 var source = (await RunCaptureAsync("findmnt", ["-no", "SOURCE", target], ct).ConfigureAwait(false))?.Trim();
@@ -350,9 +416,9 @@ namespace OpenAstroAra.Server.Services {
         /// and systemctl's own stderr is the best diagnostic. Dev rig with no
         /// packaged unit: <c>sudo -n</c> directly, as before.
         /// </summary>
-        private static async Task<(int ExitCode, string Output)> RunHelperAsync(string[] helperArgs, CancellationToken ct) {
+        private async Task<(int ExitCode, string Output)> RunHelperAsync(string[] helperArgs, CancellationToken ct) {
             if (!File.Exists(HelperUnitTemplate)) {
-                return await RunAsync("sudo", ["-n", HelperPath, .. helperArgs], ct).ConfigureAwait(false);
+                return await run("sudo", ["-n", HelperPath, .. helperArgs], ct).ConfigureAwait(false);
             }
             // The packaged unit is present, so this IS a packaged install and sudo
             // is dead under NoNewPrivileges: a missing exchange directory (cleared
@@ -372,7 +438,7 @@ namespace OpenAstroAra.Server.Services {
                 // One argument per line; the wrapper rebuilds argv from it. An
                 // empty confirm label must survive as an empty line.
                 await File.WriteAllTextAsync(requestPath, string.Join('\n', helperArgs) + "\n", ct).ConfigureAwait(false);
-                var (exitCode, output) = await RunAsync("systemctl", ["start", $"openastroara-storage@{id}.service"], ct).ConfigureAwait(false);
+                var (exitCode, output) = await run("systemctl", ["start", $"openastroara-storage@{id}.service"], ct).ConfigureAwait(false);
                 if (!File.Exists(resultPath)) {
                     return (exitCode == 0 ? -1 : exitCode,
                         string.IsNullOrWhiteSpace(output) ? "storage helper unit produced no result" : output);
@@ -414,8 +480,8 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private static async Task<string?> RunCaptureAsync(string file, string[] args, CancellationToken ct) {
-            var (exitCode, output) = await RunAsync(file, args, ct).ConfigureAwait(false);
+        private async Task<string?> RunCaptureAsync(string file, string[] args, CancellationToken ct) {
+            var (exitCode, output) = await run(file, args, ct).ConfigureAwait(false);
             return exitCode == 0 ? output : null;
         }
 
@@ -480,5 +546,14 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Storage configure for UUID {Uuid} failed: {Code} {Detail}.")]
         private static partial void LogConfigureFailed(ILogger logger, string uuid, string code, string detail);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Storage exchange: swept {Count} stale request/result file(s) from {Directory} (#1135).")]
+        private static partial void LogStaleExchangeSwept(ILogger logger, int count, string directory);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Storage exchange: could not remove stale file {File}: {Reason}.")]
+        private static partial void LogStaleExchangeFileKept(ILogger logger, string file, string reason);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Storage exchange: startup sweep failed.")]
+        private static partial void LogStaleExchangeSweepFailed(ILogger logger, Exception ex);
     }
 }

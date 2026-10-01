@@ -15,4 +15,8 @@
 #
 # Mode 0440, owned by root:root, as Debian sudoers requires.
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
+# Keep env_reset (the default) on this entry: configure-storage.sh honours an FSTAB_LOCK
+# override and its wrapper storage-request.sh honours DIR/HELPER (for the daemon's tests,
+# #1135); a SETENV/env_keep here would let the daemon user steer root to paths of its
+# choosing.
 openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh

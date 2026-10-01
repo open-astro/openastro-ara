@@ -24,8 +24,12 @@
 # daemon user could already hand it under the old sudoers rule.
 set -u
 
-DIR=/run/openastroara/storage
-HELPER=/opt/openastroara/scripts/configure-storage.sh
+# DIR/HELPER honour an environment override (#1135) so the exchange round trip can be
+# exercised outside the packaged layout — the daemon's tests run this script against a
+# temp directory and a stand-in helper. The unit never sets either, so production keeps
+# the fixed paths; a caller that can set root's environment could already run anything.
+DIR=${DIR:-/run/openastroara/storage}
+HELPER=${HELPER:-/opt/openastroara/scripts/configure-storage.sh}
 MAX_ARGS=8
 
 ID=${1:-}
@@ -57,9 +61,10 @@ shift   # drop the request id; the rest is the helper's argv
 rm -f "$REQ"
 
 # Private root-only work directory on the same tmpfs as $DIR (so the final mv
-# is a rename, never a copy through the destination name). Nothing the daemon
-# user does can reach a path under it.
-WORK=$(mktemp -d /run/openastroara-storage.XXXXXX) || exit 9
+# is a rename, never a copy through the destination name), two levels up from
+# the exchange directory (/run for the packaged layout) so it is outside the
+# daemon-owned tree. Nothing the daemon user does can reach a path under it.
+WORK=$(mktemp -d "$(dirname "$(dirname "$DIR")")/openastroara-storage.XXXXXX") || exit 9
 trap 'rm -rf "$WORK"' EXIT
 TMP="$WORK/result"
 rc=0

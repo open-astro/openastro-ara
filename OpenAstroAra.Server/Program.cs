@@ -233,6 +233,10 @@ public partial class Program {
         // reaction service stamps its outcome onto the same row. Constructor
         // activation injects both optional deps.
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
+        // Singleton on purpose: the service sweeps stale request/result files from the storage
+        // exchange in its constructor (#1135), which is only safe because exactly one instance is
+        // built — resolved eagerly after Build() below, so the sweep really runs at boot and
+        // before any request can be in flight. Do not make this scoped/transient.
         builder.Services.AddSingleton<IStorageDeviceService, StorageDeviceService>();
         // Registered (not just constructed at startup) so POST /storage/rescan
         // can run the same scan on demand — see the endpoint for why that
@@ -1136,6 +1140,11 @@ public partial class Program {
         // shows in the boot log with an install hint instead of at the first exposure's FITS write.
         // Log-and-continue: the rest of the daemon (equipment, planning, the client UI) still works.
         LogCfitsioProbe(app.Logger, OpenAstroAra.Fits.FitsLibraryProbe.Probe(), CfitsioInstallHint());
+
+        // #1135 — build the storage service now so its constructor sweep of the request/result
+        // exchange happens at boot, not on the first /storage request (a lazily resolved singleton
+        // would otherwise leave a cancelled request's leftover in tmpfs for the whole uptime).
+        _ = app.Services.GetRequiredService<IStorageDeviceService>();
 
         LogListening(app.Logger, port);
         return app;
