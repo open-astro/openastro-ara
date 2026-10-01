@@ -796,23 +796,14 @@ const List<Setting> settingsRegistry = [
     profilePath: 'storage.backup_retention_count',
   ),
 
-  // §54 Notifications — 11 fields (4 channels + 7 triggers). State lives in
+  // §54 Notifications — 14 fields (7 channel/delivery + 7 triggers). State lives in
   // `notificationsSettingsProvider`.
   // Channels.
-  Setting(
-    id: 'session.notifications.in_app_banner',
-    label: 'In-app banner',
-    description: 'Show a transient banner inside Ara when an event fires.',
-    keywords: ['banner', 'in-app', 'notification', 'toast', 'popup'],
-    path: ['Settings', 'Your night', 'Notifications'],
-    type: SettingType.bool(),
-    defaultValue: true,
-    profilePath: 'notifications.in_app_banner',
-  ),
-  // `session.notifications.os_desktop` is deliberately not registered: no
-  // code posts an OS notification yet (#1189). The profile field survives
-  // the round-trip in `notificationsSettingsProvider` so it can be re-added
-  // once a channel exists.
+  // `session.notifications.in_app_banner` and `.os_desktop` are deliberately
+  // not registered: nothing shows a banner or posts an OS notification yet
+  // (#1189). The profile fields survive the round-trip in
+  // `notificationsSettingsProvider` so they can be re-added once a channel
+  // exists.
   Setting(
     id: 'session.notifications.sound_alert',
     label: 'Sound alert',

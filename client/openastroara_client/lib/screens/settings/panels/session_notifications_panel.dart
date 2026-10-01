@@ -104,11 +104,6 @@ class _SessionNotificationsPanelState
         const SizedBox(height: 8),
         const SettingsSectionHeader('Channels'),
         SettingsSwitchRow(
-          label: 'In-app banner',
-          value: s.inAppBanner,
-          onChanged: n.setInAppBanner,
-        ),
-        SettingsSwitchRow(
           label: 'Play a sound for safety alerts',
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
