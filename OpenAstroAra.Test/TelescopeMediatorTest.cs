@@ -168,9 +168,15 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Unconsumed_surface_reports_failure_stubs() {
             using var svc = new TelescopeService();
-            Assert.That(((ITelescopeMediator)svc).DestinationSideOfPier(SampleTarget()), Is.EqualTo(PierSide.pierUnknown));
             Assert.That(((ITelescopeMediator)svc).SendToSnapPort(true), Is.False);
             Assert.DoesNotThrow(() => ((ITelescopeMediator)svc).MoveAxis(TelescopeAxes.Primary, 1.0));
+        }
+
+        [Test]
+        public void DestinationSideOfPier_when_not_connected_is_unknown() {
+            // The connected path (a real driver read, #1238) lives in TelescopeMeridianFlipSlewTest.
+            using var svc = new TelescopeService();
+            Assert.That(((ITelescopeMediator)svc).DestinationSideOfPier(SampleTarget()), Is.EqualTo(PierSide.pierUnknown));
         }
 
         [Test]

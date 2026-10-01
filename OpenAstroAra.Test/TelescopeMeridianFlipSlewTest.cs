@@ -47,8 +47,9 @@ namespace OpenAstroAra.Test {
 
         // A JNOW mount (no precession natives) sitting ON the target already, so the goto's settle
         // (not slewing + pointing near) passes at once. sideOfPier/canSetPierSide are the knobs.
-        private static Func<string, string?> Mount(double raHours, string sideOfPier, string canSetPierSide) => path =>
-            path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1"
+        private static Func<string, string?> Mount(double raHours, string sideOfPier, string canSetPierSide, string? destinationSideOfPier = null) => path =>
+            path.EndsWith("/destinationsideofpier", StringComparison.Ordinal) ? destinationSideOfPier
+            : path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1"
             : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
             : path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
             : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
@@ -160,6 +161,35 @@ namespace OpenAstroAra.Test {
                 using var svc = new TelescopeService(profileService: profileService);
                 Assert.That(await ((ITelescopeMediator)svc).MeridianFlip(new Coordinates(Angle.ByHours(6), Angle.ByDegree(30), Epoch.JNOW), CancellationToken.None), Is.False);
                 Assert.That(box.Puts, Is.Empty);
+            }
+        }
+
+        [Test]
+        public async Task DestinationSideOfPier_asks_the_driver_in_the_mounts_frame_and_maps_the_answer() {
+            // ThroughThePole (1) from the driver → pierWest; the query carries the target in the
+            // mount's native frame (JNOW here, so untransformed).
+            await using var box = ScriptedAlpacaDevice.Start(Mount(6.0, sideOfPier: "0", canSetPierSide: "false", destinationSideOfPier: "1"));
+            var (profile, profileService) = ProfileWith(useSideOfPier: true);
+            using (profile) {
+                using var svc = await ConnectAsync(box, profileService);
+                var target = new Coordinates(Angle.ByHours(9.5), Angle.ByDegree(-12.0), Epoch.JNOW);
+
+                Assert.That(((ITelescopeMediator)svc).DestinationSideOfPier(target), Is.EqualTo(PierSide.pierWest));
+
+                var query = box.Gets.Last(g => g.EndsWith("/destinationsideofpier", StringComparison.Ordinal));
+                Assert.That(query, Is.Not.Null, "the driver was asked");
+            }
+        }
+
+        [Test]
+        public async Task DestinationSideOfPier_is_unknown_when_the_driver_cannot_say() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount(6.0, sideOfPier: "0", canSetPierSide: "false",
+                destinationSideOfPier: ScriptedAlpacaDevice.NotImplemented("DestinationSideOfPier is not implemented")));
+            var (profile, profileService) = ProfileWith(useSideOfPier: true);
+            using (profile) {
+                using var svc = await ConnectAsync(box, profileService);
+                Assert.That(((ITelescopeMediator)svc).DestinationSideOfPier(new Coordinates(Angle.ByHours(9.5), Angle.ByDegree(-12.0), Epoch.JNOW)),
+                    Is.EqualTo(PierSide.pierUnknown));
             }
         }
 
