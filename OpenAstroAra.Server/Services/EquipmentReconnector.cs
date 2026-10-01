@@ -31,12 +31,17 @@ public interface IEquipmentReconnector {
     /// (Guider connects via PHD2, not this Alpaca flow).</summary>
     Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct);
 
-    /// <summary>Reconnect the remembered device(s) for <paramref name="type"/> — every remembered
-    /// switch for <see cref="DeviceType.Switch"/>, otherwise the single remembered device. Returns
-    /// how many devices were <see cref="ReconnectOutcome.Attempted"/> (remembered + connectable) and
-    /// how many had a connect <see cref="ReconnectOutcome.Dispatched"/> without throwing, so the
-    /// caller can tell "nothing remembered" (0 attempted) from "dispatching in background" (≥1
-    /// dispatched) from "every dispatch failed synchronously" (attempted &gt; 0, 0 dispatched).</summary>
+    /// <summary>Reconnect the known device(s) for <paramref name="type"/> — every remembered
+    /// switch for <see cref="DeviceType.Switch"/>, otherwise the single remembered device, or, when
+    /// nothing is remembered for a single-instance type, the device its service still retains
+    /// (#1127: the wizard's store-only forget keeps the retained record, and the card names that
+    /// one). Returns how many devices were <see cref="ReconnectOutcome.Attempted"/> (remembered or
+    /// retained, and connectable) and how many had a connect
+    /// <see cref="ReconnectOutcome.Dispatched"/> without throwing, so the caller can tell "neither
+    /// remembered nor retained" (0 attempted) from "dispatching in background" (≥1 dispatched) from
+    /// "every dispatch failed synchronously" (attempted &gt; 0, 0 dispatched). The §42.3 fault
+    /// reaction ladder uses the same call, so a device removed from auto-connect but still held by
+    /// its service is hot-reconnected after a fault too.</summary>
     Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct);
 
     /// <summary>The connection state of the device service for <paramref name="type"/>, so a
@@ -48,8 +53,8 @@ public interface IEquipmentReconnector {
 }
 
 /// <summary>Outcome of a <see cref="IEquipmentReconnector.ReconnectAsync"/> call.
-/// <paramref name="Attempted"/> is the count of remembered + connectable devices a connect was tried
-/// for; <paramref name="Dispatched"/> is how many of those returned from <c>ConnectAsync</c> without
+/// <paramref name="Attempted"/> is the count of connectable devices a connect was tried for — the
+/// remembered ones, or the service's retained device when nothing is remembered (#1127); <paramref name="Dispatched"/> is how many of those returned from <c>ConnectAsync</c> without
 /// throwing (each then connects in the background). <c>Dispatched &lt; Attempted</c> means some
 /// devices failed to even dispatch (e.g. their Alpaca server is down on a rig restart).</summary>
 public readonly record struct ReconnectOutcome(int Attempted, int Dispatched);

@@ -476,10 +476,12 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.CompleteAsync(key, ct)));
 
         // ─── Manual reconnect (§52.1) ───
-        // Reconnect the remembered device(s) for the type without re-running discovery (the same
-        // path auto-connect-on-boot uses). 202 when at least one connect was dispatched; 404 when
-        // nothing has ever been connected for the type (so there's nothing to reconnect). Switch
-        // reconnects every remembered switch. Guider has no entry — it connects via PHD2, not this flow.
+        // Reconnect the known device(s) for the type without re-running discovery (the same path
+        // auto-connect-on-boot uses): the remembered entry, or — for a single-instance type with
+        // nothing remembered — the device its service still retains, which is the one the card
+        // names (#1127). 202 when at least one connect was dispatched; 404 when neither is known
+        // (nothing has ever been connected for the type, or it was removed). Switch reconnects
+        // every remembered switch. Guider has no entry — it connects via PHD2, not this flow.
         camera.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Camera, ct));
         telescope.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Telescope, ct));
         focuser.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Focuser, ct));
