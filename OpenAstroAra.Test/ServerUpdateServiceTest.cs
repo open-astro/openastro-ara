@@ -184,7 +184,42 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<ServerUpdateRejectedException>(() => svc.ApplyAsync(staged.Id, CancellationToken.None));
             Assert.That(ex!.Reason, Is.EqualTo("helper_unavailable"));
             Assert.That(ex.Message, Does.Contain("Access denied"));
+            Assert.That(published, Is.Empty, "a refused start must not announce a restart");
             Assert.That(File.Exists(Path.Combine(paths.RequestDirectory, staged.Id + ".request")), Is.False);
+        }
+
+        [Test]
+        public async Task A_second_apply_while_one_is_running_is_refused() {
+            var svc = Service();
+            var first = await svc.StageAsync(Body(), 4096, null, CancellationToken.None);
+            var second = await svc.StageAsync(Body(), 4096, null, CancellationToken.None);
+            await svc.ApplyAsync(first.Id, CancellationToken.None);
+            published.Clear();
+            var ex = await Assert.ThrowsAsync<ServerUpdateRejectedException>(() => svc.ApplyAsync(second.Id, CancellationToken.None));
+            Assert.That(ex!.Reason, Is.EqualTo("update_in_progress"));
+            Assert.That(published, Is.Empty, "no restart is announced for a refused apply");
+        }
+
+        [Test]
+        public async Task A_request_older_than_the_helper_timeout_does_not_block_a_new_apply() {
+            Directory.CreateDirectory(paths.RequestDirectory);
+            var dead = Path.Combine(paths.RequestDirectory, "0bad.request");
+            await File.WriteAllTextAsync(dead, "x");
+            File.SetLastWriteTimeUtc(dead, DateTime.UtcNow - ServerUpdateService.HelperTimeout - TimeSpan.FromMinutes(1));
+            var svc = Service();
+            var staged = await svc.StageAsync(Body(), 4096, null, CancellationToken.None);
+            Assert.That((await svc.ApplyAsync(staged.Id, CancellationToken.None)).Status, Is.EqualTo("pending"));
+        }
+
+        [Test]
+        public async Task Uploads_older_than_a_day_are_swept_on_the_next_upload() {
+            Directory.CreateDirectory(paths.StageDirectory);
+            var old = Path.Combine(paths.StageDirectory, "0123abcd.deb");
+            await File.WriteAllTextAsync(old, "x");
+            File.SetLastWriteTimeUtc(old, DateTime.UtcNow - ServerUpdateService.StaleUploadAge - TimeSpan.FromMinutes(1));
+            var staged = await Service().StageAsync(Body(), 4096, null, CancellationToken.None);
+            Assert.That(File.Exists(old), Is.False);
+            Assert.That(File.Exists(Path.Combine(paths.StageDirectory, staged.Id + ".deb")), Is.True);
         }
 
         [Test]

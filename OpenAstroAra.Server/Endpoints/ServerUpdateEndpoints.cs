@@ -86,7 +86,7 @@ public static class ServerUpdateEndpoints {
         var status = ex.Reason switch {
             "unknown_id" => StatusCodes.Status404NotFound,
             "too_large" => StatusCodes.Status413PayloadTooLarge,
-            "not_packaged" or "helper_unavailable" => StatusCodes.Status409Conflict,
+            "not_packaged" or "helper_unavailable" or "update_in_progress" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status422UnprocessableEntity,
         };
         return Results.Problem(title: ex.Reason, detail: ex.Message, statusCode: status);

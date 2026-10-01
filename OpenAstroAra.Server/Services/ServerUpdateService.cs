@@ -123,6 +123,7 @@ public sealed partial class ServerUpdateService : IServerUpdateService {
             ?? throw new ServerUpdateRejectedException("not_packaged", "dpkg does not report openastroara-server as installed.");
 
         Directory.CreateDirectory(paths.StageDirectory);
+        SweepStaleUploads();
         var id = Guid.NewGuid().ToString("N");
         var file = Path.Combine(paths.StageDirectory, id + ".deb");
         long size;
@@ -165,13 +166,26 @@ public sealed partial class ServerUpdateService : IServerUpdateService {
         }
         var (_, version, _) = await InspectAsync(file, ct).ConfigureAwait(false);
         Directory.CreateDirectory(paths.RequestDirectory);
+        // One install at a time: two helpers would race dpkg's lock and each other's rollback.
+        // A request file lives until its helper has written the result (update-request.sh);
+        // one older than the unit's 15 min TimeoutStartSec belongs to a helper that died or
+        // refused it, and must not block every later update.
+        var inFlight = false;
+        foreach (var r in Directory.EnumerateFiles(paths.RequestDirectory, "*.request")) {
+            if (DateTime.UtcNow - File.GetLastWriteTimeUtc(r) < HelperTimeout) {
+                inFlight = true;
+                break;
+            }
+        }
+        if (inFlight) {
+            throw new ServerUpdateRejectedException("update_in_progress", "Another update is being applied; wait for it to finish.");
+        }
         var requestPath = Path.Combine(paths.RequestDirectory, id + ".request");
         // One argument per line, like the storage request: the staged file and the port the
         // helper should probe for /healthz once the new daemon is up.
         await File.WriteAllTextAsync(requestPath,
             file + "\n" + listenPort.ToString(CultureInfo.InvariantCulture) + "\n", ct).ConfigureAwait(false);
 
-        PublishRestartImminent(id, version);
         // --no-block: the oneshot restarts THIS process part-way through, so a blocking start
         // would never return. The result file is what reports the outcome (GetStatusAsync).
         var (exitCode, output) = await run("systemctl", ["start", "--no-block", $"openastroara-update@{id}.service"], ct)
@@ -181,6 +195,9 @@ public sealed partial class ServerUpdateService : IServerUpdateService {
             throw new ServerUpdateRejectedException("helper_unavailable",
                 string.IsNullOrWhiteSpace(output) ? "systemd refused to start the update helper." : output.Trim());
         }
+        // Announce only once systemd accepted the job: a refused start must not leave clients
+        // waiting for a restart that never comes.
+        PublishRestartImminent(id, version);
         LogApplyStarted(id, version);
         return new ServerUpdateStatusDto(id, "pending", null, version, false, string.Empty);
     }
@@ -288,6 +305,21 @@ public sealed partial class ServerUpdateService : IServerUpdateService {
         };
         using var doc = JsonDocument.Parse(payload.ToJsonString());
         _ = ws.PublishAsync(WsEventCatalog.ServerRestartImminent, doc.RootElement.Clone(), CancellationToken.None);
+    }
+
+    /// <summary>An upload that was never applied is dead weight (up to the cap each) on the
+    /// SD card. Anything older than a day goes on the next upload.</summary>
+    internal static readonly TimeSpan StaleUploadAge = TimeSpan.FromDays(1);
+
+    /// <summary>Matches <c>TimeoutStartSec=15min</c> on openastroara-update@.service.</summary>
+    internal static readonly TimeSpan HelperTimeout = TimeSpan.FromMinutes(15);
+
+    private void SweepStaleUploads() {
+        foreach (var f in Directory.EnumerateFiles(paths.StageDirectory, "*.deb")) {
+            if (DateTime.UtcNow - File.GetLastWriteTimeUtc(f) > StaleUploadAge) {
+                TryDelete(f);
+            }
+        }
     }
 
     internal static bool IsRequestId(string id) => StorageDeviceService.UuidShape().IsMatch(id);

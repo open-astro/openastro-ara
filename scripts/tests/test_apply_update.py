@@ -171,6 +171,13 @@ class ApplyUpdate(unittest.TestCase):
                          "the work dir is cleaned up; only the two kept packages remain")
         self.assertEqual(oct(self.rollback.stat().st_mode & 0o777), "0o700")
 
+    def test_a_symlinked_stage_directory_is_refused(self) -> None:
+        real = Path(self.tmp.name) / "real-stage"
+        self.stage.rename(real)
+        self.stage.symlink_to(real)
+        self.assert_refused(self.run_helper(deb=str(self.stage / "abc123.deb")))
+        self.assertTrue((real / "abc123.deb").exists(), "root never touched the file behind the link")
+
     def test_a_non_numeric_port_is_refused(self) -> None:
         self.assert_refused(self.run_helper(port="5555;reboot"))
 

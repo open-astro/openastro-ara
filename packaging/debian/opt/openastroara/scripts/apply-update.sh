@@ -56,6 +56,9 @@ esac
 case "${DEB#"$STAGE_DIR"/}" in
     */*) fail "staged package must be directly under $STAGE_DIR" ;;
 esac
+# The daemon user owns /var/lib/openastroara and could swap updates/ itself for a symlink
+# to another directory; refuse that as well as a symlinked file.
+[ -L "$STAGE_DIR" ] && fail "stage directory is a symlink"
 [ -L "$DEB" ] && fail "staged package is a symlink"
 [ -f "$DEB" ] || fail "staged package not found"
 

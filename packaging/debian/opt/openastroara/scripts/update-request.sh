@@ -16,7 +16,7 @@
 set -u
 
 # DIR/HELPER honour an environment override so the round trip can be exercised
-# outside the packaged layout (the daemon's tests). The unit never sets either.
+# outside the packaged layout (scripts/tests/test_update_request.py). The unit never sets either.
 DIR=${DIR:-/run/openastroara/update}
 HELPER=${HELPER:-/opt/openastroara/scripts/apply-update.sh}
 MAX_ARGS=2
@@ -43,7 +43,9 @@ while IFS= read -r line || [ -n "$line" ]; do
     set -- "$@" "$line"
 done < "$REQ"
 shift   # drop the request id; the rest is the helper's argv
-rm -f "$REQ"
+# The request stays until the result is in place: the daemon reads "request present,
+# no result" as pending, and the helper restarts the daemon mid-run, so the new process
+# must still see it. (rm never follows a symlink, so removing it later as root is safe.)
 
 WORK=$(mktemp -d "$(dirname "$(dirname "$DIR")")/openastroara-update.XXXXXX") || exit 9
 trap 'rm -rf "$WORK"' EXIT
@@ -60,4 +62,5 @@ fi
 } > "$TMP"
 chmod 0644 "$TMP"
 mv -fT "$TMP" "$RES"
+rm -f "$REQ"
 exit 0
