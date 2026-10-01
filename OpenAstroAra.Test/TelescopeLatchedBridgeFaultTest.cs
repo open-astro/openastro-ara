@@ -75,6 +75,14 @@ namespace OpenAstroAra.Test {
             Assert.Fail(failure);
         }
 
+        /// <summary>TripLatchedBridgeFault sets Error under the gate and publishes the fault
+        /// after releasing it, so a wait on the state alone can observe Error with the fault
+        /// still in flight (#1255: 0 rows under CI load). Wait for the row, then the state.</summary>
+        private static async Task WaitForTripAsync(TelescopeService svc, List<EquipmentFaultEvent> faults, int count, string failure) {
+            await WaitForAsync(() => { lock (faults) { return faults.Count >= count; } }, TimeSpan.FromSeconds(15), failure);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Error, TimeSpan.FromSeconds(15), failure);
+        }
+
         private static async Task<EquipmentConnectionState?> StateOf(TelescopeService svc) =>
             (await svc.GetAsync(CancellationToken.None))?.State;
 
@@ -93,7 +101,7 @@ namespace OpenAstroAra.Test {
 
             // The blip: the bridge keeps saying Connected but every read is the latched error.
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
-            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Error, TimeSpan.FromSeconds(15),
+            await WaitForTripAsync(svc, faults, 1,
                 "a latched bridge must trip the mount to Error (the probe streak alone never does — Connected stays true)");
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1));
@@ -118,7 +126,7 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.RightAscensionHours is 6.0,
                 TimeSpan.FromSeconds(15), "the position never came back after the bridge recovered");
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
-            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Error, TimeSpan.FromSeconds(15), "a new episode must trip again");
+            await WaitForTripAsync(svc, faults, 2, "a new episode must trip again");
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(2));
             }
@@ -140,15 +148,18 @@ namespace OpenAstroAra.Test {
             Volatile.Write(ref slewing, "true");
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await Task.Delay(TimeSpan.FromSeconds(5)); // several ticks: latched reads, but a goto in flight
+            string published;
+            lock (faults) { published = string.Join("; ", faults.Select(f => f.Details)); }
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected),
-                "a reconnect mid-goto would abandon a moving mount — the slew's own watchdog and the next tick own it");
+                "a reconnect mid-goto would abandon a moving mount — the slew's own watchdog and the next tick own it"
+                + (published.Length == 0 ? "" : $" (faults published: {published})"));
             lock (faults) {
                 Assert.That(faults.Where(f => f.Details?.Contains("#1193", StringComparison.Ordinal) == true), Is.Empty);
             }
 
             // The slew ends with the bridge still latched: now it trips.
             Volatile.Write(ref slewing, "false");
-            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Error, TimeSpan.FromSeconds(15), "trips once the slew is over");
+            await WaitForTripAsync(svc, faults, 1, "trips once the slew is over");
         }
     }
 }
