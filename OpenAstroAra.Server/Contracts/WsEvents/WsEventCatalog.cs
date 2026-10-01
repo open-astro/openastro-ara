@@ -304,9 +304,10 @@ public sealed record WsEventEnvelopeDto(
 public sealed record WsResumeRequestDto(string? ResumeToken);
 
 /// <summary>
-/// Server response to a <see cref="WsResumeRequestDto"/>. Three shapes
-/// per openapi.yaml §60.9 docs:
+/// Server response to a <see cref="WsResumeRequestDto"/>. Four shapes, per
+/// design/API_CONTRACT.md (WebSocket section):
 /// <list type="bullet">
+///   <item><c>{ resumed: false }</c> (no code) → the token was absent or empty; fresh subscription</item>
 ///   <item><c>{ resumed: true,  missed_events: N, last_event_id: "..." }</c> → replay follows immediately</item>
 ///   <item><c>{ resumed: false, code: "resume_token_expired" }</c> → fresh subscription, no replay</item>
 ///   <item><c>{ resumed: false, code: "resume_token_invalid" }</c> → client should clear local cursor</item>
