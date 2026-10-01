@@ -51,6 +51,27 @@ namespace OpenAstroAra.Server;
 public partial class Program {
 
     public static void Main(string[] args) {
+        var app = BuildApp(args);
+        try {
+            app.Run();
+        } finally {
+            // Flush the §29.9 Serilog file sink even when app.Run() unwinds via an
+            // exception — the daemon's own logs are the first thing reached for
+            // after a crash, so the last lines must not be lost.
+            Log.CloseAndFlush();
+        }
+    }
+
+    /// <summary>
+    /// Everything <see cref="Main"/> does before <c>app.Run()</c>: the §8.1 service graph, the
+    /// middleware and endpoint maps, the startup reconciliation and the boot probes. Split out
+    /// (#1128) so a test can build the REAL composition root — the one the daemon boots with — and
+    /// resolve from it without listening on a port: #1089 found <c>IGuiderMediator</c> had silently
+    /// reverted to the headless stub because nothing ever built this graph outside <c>Main</c>.
+    /// Kestrel binds only in <c>Run</c>, so building is side-effect-free on the network; the profile
+    /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
+    /// </summary>
+    internal static WebApplication BuildApp(string[] args) {
         var builder = WebApplication.CreateSlimBuilder(args);
 
         // Kestrel port: env var > appsettings > default 5555 (per §2.1).
@@ -1117,14 +1138,7 @@ public partial class Program {
         LogCfitsioProbe(app.Logger, OpenAstroAra.Fits.FitsLibraryProbe.Probe(), CfitsioInstallHint());
 
         LogListening(app.Logger, port);
-        try {
-            app.Run();
-        } finally {
-            // Flush the §29.9 Serilog file sink even when app.Run() unwinds via an
-            // exception — the daemon's own logs are the first thing reached for
-            // after a crash, so the last lines must not be lost.
-            Log.CloseAndFlush();
-        }
+        return app;
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Startup reconciliation: {Outcome} (previous sequence: {SeqId})")]
