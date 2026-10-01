@@ -1,0 +1,25 @@
+[Unit]
+Description=OpenAstro Ara update helper (request %i)
+Documentation=https://github.com/open-astro/openastro-ara
+# Root-side half of the §33 client-pushed update (#1122). openastroara-server.service
+# runs with NoNewPrivileges=true, so the daemon cannot install a package itself. It
+# stages the uploaded .deb under /var/lib/openastroara/updates, writes one request
+# file to /run/openastroara/update/<id>.request (staged path, then its own port) and
+# asks systemd over D-Bus to start this instance; polkit authorises exactly that
+# (50-openastroara-update.rules). The instance installs the package as root, restarts
+# the daemon, checks /healthz and rolls back to the previous package if the new one
+# never answers, then leaves <id>.result for the (new) daemon to read.
+
+[Service]
+Type=oneshot
+ExecStart=/opt/openastroara/scripts/update-request.sh %i
+# dpkg -i plus a health wait plus a possible rollback; never let a distro default kill it
+# between the two installs.
+TimeoutStartSec=15min
+# This unit restarts openastroara-server.service while it runs. It must not be in that
+# unit's stop/kill scope, and it needs the real root filesystem for dpkg, so no mount
+# namespacing or ProtectSystem here.
+KillMode=process
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openastroara-update

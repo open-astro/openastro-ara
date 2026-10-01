@@ -251,6 +251,9 @@ public partial class Program {
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
         // before any request can be in flight. Do not make this scoped/transient.
         builder.Services.AddSingleton<IStorageDeviceService, StorageDeviceService>();
+        // §33 client-pushed update (#1122): same root-helper escalation shape as storage.
+        builder.Services.AddSingleton(new ServerListenPort(port));
+        builder.Services.AddSingleton<IServerUpdateService, ServerUpdateService>();
         // Registered (not just constructed at startup) so POST /storage/rescan
         // can run the same scan on demand — see the endpoint for why that
         // matters once a user can change disks without restarting.
@@ -965,6 +968,7 @@ public partial class Program {
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
         // functional today). /api/v1/server/info already lives directly in this file.
         app.MapServerStateEndpoints();
+        app.MapServerUpdateEndpoints();
         app.MapConnectionEndpoints(); // §27 — connect/disconnect/session (single-client policy)
         app.MapNotificationEndpoints();
         app.MapStatsEndpoints();

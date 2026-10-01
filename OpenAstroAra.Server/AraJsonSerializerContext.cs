@@ -58,6 +58,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(AlpacaDeviceNamesResponseDto))]
 [JsonSerializable(typeof(ApiSurfaceVersionDto))]
 [JsonSerializable(typeof(ApiVersionsDto))]
+[JsonSerializable(typeof(ServerUpdateStagedDto))]
+[JsonSerializable(typeof(ServerUpdateStatusDto))]
 [JsonSerializable(typeof(AutoFlatsDecisionRequestDto))]
 [JsonSerializable(typeof(AutofocusSettingsDto))]
 [JsonSerializable(typeof(BackupStreamStatusDto))]

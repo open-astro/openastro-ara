@@ -294,6 +294,17 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Related:** #1126 (follow-ups of #1087), #1064, #1085, CHANGELOG [Unreleased]
 
+
+---
+
+### 2026-10-01 — §33 client-pushed update (#1122)
+
+**Decision:** three routes under `/api/v1/server/update`. `POST ""` takes the `.deb` as a raw body (not multipart: one file, no fields, streamable from the client) with an optional `X-Update-Sha256`, returns 202 `ServerUpdateStagedDto { id, package, version, installed_version, size_bytes }`. `POST /{id}/apply` returns 202 `ServerUpdateStatusDto` with `status: "pending"` after emitting `server.restart_imminent { reason: "update", update_id, version, in_seconds }`. `GET /{id}` returns the same DTO with `pending | applied | rolled_back | failed`, readable from the restarted daemon. Refusals are Problem responses whose `title` is a stable token: `not_packaged`/`helper_unavailable` (409), `too_large` (413), `unknown_id` (404), `not_a_package`/`wrong_package`/`wrong_architecture`/`not_newer`/`checksum_mismatch`/`empty` (422).
+
+**Why:** the restart happens between apply and the outcome, so the outcome has to outlive the process — it lives in the root helper's result file on tmpfs, keyed by the id the client already holds. A `.deb` rather than the §33.3 sketch's tarball keeps dpkg the owner of `/opt/openastroara`.
+
+**Spec ref:** `Endpoints/ServerUpdateEndpoints.cs`, `Services/ServerUpdateService.cs`, `packaging/debian/opt/openastroara/scripts/{update-request,apply-update}.sh`, playbook §33.3.
+
 ---
 
 ## WebSocket wire protocol (`/api/v1/ws`)

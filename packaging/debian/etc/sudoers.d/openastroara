@@ -1,20 +1,17 @@
-# openastroara user gets passwordless sudo for two specific scripts only.
+# openastroara user gets passwordless sudo for one specific script only.
 # Validated by `visudo -cf` during package build per §34.3.
 #
-# update.sh   — invoked by the WILMA-push update flow (§33)
 # configure-storage.sh — invoked by the storage-config flow (§29.1.4)
 #
 # NOTE: the openastroara-server unit sets NoNewPrivileges=true, under which sudo
-# (setuid) refuses to run, so NEITHER line below is reachable from the packaged
+# (setuid) refuses to run, so the line below is not reachable from the packaged
 # daemon. Storage goes through openastroara-storage@.service + a polkit rule
 # (usr/share/polkit-1/rules.d/50-openastroara-storage.rules); the daemon only
 # falls back to this sudo line on a dev rig that has no packaged unit. Guider
-# unit control is likewise a polkit rule (50-openastroara-guider.rules). The
-# update.sh line is still dead on a packaged install — see #1122
-# "sudo helpers vs NoNewPrivileges".
+# unit control and the §33 update push (#1122, openastroara-update@.service)
+# are likewise polkit rules, with no sudo fallback at all.
 #
 # Mode 0440, owned by root:root, as Debian sudoers requires.
-openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
 # Keep env_reset (the default) on this entry: configure-storage.sh honours an FSTAB_LOCK
 # override and its wrapper storage-request.sh honours DIR/HELPER (for the daemon's tests,
 # #1135); a SETENV/env_keep here would let the daemon user steer root to paths of its
