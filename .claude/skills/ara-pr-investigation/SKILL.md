@@ -68,9 +68,10 @@ Project rules that turn into findings when violated:
 - A new user-facing setting needs a `settings/registry.dart` entry (§61.4); a
   new ⓘ icon needs a `help/registry.dart` entry (§69.4). CI's registry gate
   catches the mechanical part; you check that the text is accurate.
-- `OpenAstroAra.Server/openapi.yaml` and the endpoint sources are the client/daemon contract
-  (`design/API_CONTRACT.md` is the reasoning log, and `openapi.yaml` is incomplete, #1131); a server change to
-  a listed endpoint without a doc change is a defect.
+- `OpenAstroAra.Server/openapi.yaml` (generated snapshot of every mapped REST route, #1131) and the
+  endpoint sources are the client/daemon contract; `design/API_CONTRACT.md` is the reasoning log and
+  holds the WebSocket protocol. A route change without the regenerated snapshot fails
+  `OpenApiContractSnapshotTest`; a wire-shape change without an API_CONTRACT entry is a defect.
 - New or changed logic ships with tests (§14.7). Note tests that only assert
   the happy path the body already claims.
 - Bare `grep` on this machine is ugrep and silently skips files; use

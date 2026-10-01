@@ -75,7 +75,7 @@ public static partial class WebSocketEndpoints {
                     // §60.9 requires version 1, via the X-Ara-WS-Version header OR the
                     // ws_version query parameter — browser WebSockets can't set request
                     // headers, so the query param is the web client's only channel (the
-                    // header wins when both are present). Per openapi.yaml line 674, a
+                    // header wins when both are present). Per API_CONTRACT.md (WebSocket section), a
                     // mismatched/missing version is rejected pre-upgrade with 426 —
                     // close-code 4003 only applies if version negotiation fails *after*
                     // a successful upgrade, which can't happen with a pre-handshake check.
@@ -548,9 +548,9 @@ public static partial class WebSocketEndpoints {
             return (0, null);
         }
 
-        // v0.0.1: resume_token is the base-10 stringified last-seen sequence
-        // number. Real opaque-token + 1-hour validity ties in with REST
-        // /api/v1/server/state.ws_resume_token in a follow-up sub-PR.
+        // resume_token is the base-10 stringified last-seen sequence number
+        // (API_CONTRACT.md, WebSocket section). An opaque token with a time
+        // window tied to /api/v1/server/state.ws_resume_token is design intent.
         if (!long.TryParse(request.ResumeToken, out var lastSeenSeq) || lastSeenSeq < 0) {
             await SendResumeResponseAsync(conn, new WsResumeResponseDto(
                 Resumed: false,

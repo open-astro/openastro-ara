@@ -4130,7 +4130,7 @@ sudo apt install openastroara-server
 - Name: `openastroara-server` (lowercase, hyphens per Debian convention)
 - Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
 - Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli` (authoritative list: `packaging/debian/DEBIAN/control.template`)
-- Recommends: `alpaca-bridge`, `openastro-phd2` (pulled in by default; opt-out with `--no-install-recommends`)
+- Recommends: `alpacabridge`, `openastro-guider` (pulled in by default; opt-out with `--no-install-recommends`)
 - Suggests: `gpsd` (for USB GPS time sync per §31)
 
 ### 34.3 Post-install hooks (handled by .deb's postinst script)
@@ -7055,7 +7055,7 @@ Original plan was `Swashbuckle.AspNetCore` + classic Swagger UI v5.x. Revised pe
 
 ARA uses **Microsoft.AspNetCore.OpenApi** (built-in, AOT-friendly, generates the spec at build time from endpoint metadata) to produce the OpenAPI document, and **Scalar.AspNetCore** to render the interactive docs UI. Scalar's rendering is visually similar to Swagger UI v5.x and equally familiar to ASCOM Alpaca consumers ([ascom-standards.org/api/](https://ascom-standards.org/api/) uses the same conceptual surface).
 
-Source-of-truth spec is **generated** from endpoint metadata at build time (code-first per §71.3); `OpenAstroAra.Server/openapi.yaml` is committed for change tracking + Dart client generation but regenerated on every build (CI fails if regen produces a diff).
+Source-of-truth spec is **generated** from endpoint metadata at build time (code-first per §71.3); `OpenAstroAra.Server/openapi.yaml` is committed for change tracking + Dart client generation and regenerated through `OpenApiContractSnapshotTest` (`OPENASTROARA_UPDATE_OPENAPI=1`), which fails CI when the committed file drifts from the mapped routes (#1131).
 
 ### 49.2 Endpoints
 
@@ -10410,7 +10410,7 @@ Shipped surface note: the §63.12 table planned `/api/v1/guider/*`; what shipped
 
 Six gated PRs, server-first pairs:
 
-1. **Server — discovery & choices.** Add new `Phd2Method` request/response classes for `get_equipment_choices` + `discover_alpaca_servers` (no RPC classes exist for these yet — unlike the PR 2/4 RPCs below, whose wrappers are already in the tree) and expose them as `GET /api/v1/equipment/guider/choices` and `POST /api/v1/equipment/guider/discover`. Choices DTO carries camera/mount/aux-mount/rotator lists as reported by the daemon. FakeGuider coverage. (The per-device guider routes are deliberately absent from openapi.yaml — same as the shipped darklibrary endpoints — so no spec change.)
+1. **Server — discovery & choices.** Add new `Phd2Method` request/response classes for `get_equipment_choices` + `discover_alpaca_servers` (no RPC classes exist for these yet — unlike the PR 2/4 RPCs below, whose wrappers are already in the tree) and expose them as `GET /api/v1/equipment/guider/choices` and `POST /api/v1/equipment/guider/discover`. Choices DTO carries camera/mount/aux-mount/rotator lists as reported by the daemon. FakeGuider coverage. (The per-device guider routes are deliberately absent from the hand-written openapi.yaml of the time (the #1131 generated snapshot lists them) — same as the shipped darklibrary endpoints — so no spec change.)
 2. **Server — equipment apply & on-demand profile push.** Extend the §63.5 on-connect push with selected guide camera (`set_selected_camera_id`), Alpaca server (`set_alpaca_server`), and mount/aux-mount/rotator via `set_profile_setup`; persist selections in `Phd2Settings`. Add `POST /api/v1/equipment/guider/profile/push` (disconnect-update-reconnect per §63.11 precondition retry) emitting `guider.profile_pushed`. Verify rotator field support against the daemon's `jsonrpc_api.md`; if absent, file upstream (per the #57 pattern) and ship the rest without blocking.
 3. **Client — guider equipment panel.** Expand `equipment_guider_panel.dart` with a Guider Equipment section: discover button, pickers for guide camera / mount / rotator fed by the choices endpoint, optics fields regrouped alongside, explicit Apply (= profile push) with pushed/failed feedback. Wizard guider step gains the same pickers. Search registry `eq.guider.equipment.*`.
 4. **Server — dark-library management.** `DELETE /api/v1/equipment/guider/darklibrary` (`delete_calibration_files`, wrapper exists); emit `guider.dark_library.invalidated` (`reason: guide_camera_changed`) when the applied guide camera differs from the one the library was built with.
@@ -11796,7 +11796,7 @@ app.MapScalarApiReference();   // /api/v1/docs UI
 
 Endpoint metadata (descriptions, tags, response shapes) declared inline via `.WithName("GetFrame")`, `.WithDescription("...")`, `.Produces<FrameDto>(200, "application/json")`. §49 Swagger UI conventions carry over; the renderer changes from `swagger-ui` to Scalar's renderer (visually similar, ASCOM-ecosystem-friendly).
 
-**Phase 5 implication:** the OpenAPI generation approach is **code-first via endpoint metadata** — the source code is the source of truth; `openapi.yaml` is the generated artifact (committed for change tracking + Dart client generation, regenerated on every build, CI fails if regen produces a diff against committed version). Closes Tier-1 gap #3 from the fourth review pass.
+**Phase 5 implication:** the OpenAPI generation approach is **code-first via endpoint metadata** — the source code is the source of truth; `openapi.yaml` is the generated artifact (committed for change tracking + Dart client generation; since #1131 regenerated through `OpenApiContractSnapshotTest`, which fails CI when the committed file drifts). Closes Tier-1 gap #3 from the fourth review pass.
 
 ### 71.4 EF Core migrations — compiled models + source-gen migrations
 

@@ -26,7 +26,8 @@ namespace OpenAstroAra.Server.Contracts.WsEvents;
 //
 // To add a new event:
 //   1. Add the type token here (kebab/dot-notation).
-//   2. Document the payload schema in openapi.yaml under #/components/schemas/Ws*.
+//   2. Document the payload in design/API_CONTRACT.md (WebSocket section); the
+//      generated openapi.yaml cannot carry WebSocket shapes (#1131).
 //   3. Register the emit-point with IWsBroadcaster.
 //
 // Event envelope is { "type": "<token>", "ts": "<rfc3339>",
@@ -296,16 +297,17 @@ public sealed record WsEventEnvelopeDto(
 
 /// <summary>
 /// Optional first message a client may send after the §60.9 WS upgrade
-/// completes. <c>ResumeToken</c> is the opaque string returned by REST
-/// <c>GET /api/v1/server/state.ws_resume_token</c> in a prior session;
-/// for v0.0.1 it's the base-10 stringified last-seen sequence number.
+/// completes. <c>ResumeToken</c> is the base-10 stringified last-seen
+/// sequence number (an opaque token issued by REST
+/// <c>GET /api/v1/server/state.ws_resume_token</c> is design intent, #1131).
 /// </summary>
 public sealed record WsResumeRequestDto(string? ResumeToken);
 
 /// <summary>
-/// Server response to a <see cref="WsResumeRequestDto"/>. Three shapes
-/// per openapi.yaml §60.9 docs:
+/// Server response to a <see cref="WsResumeRequestDto"/>. Four shapes, per
+/// design/API_CONTRACT.md (WebSocket section):
 /// <list type="bullet">
+///   <item><c>{ resumed: false }</c> (no code) → the token was absent or empty; fresh subscription</item>
 ///   <item><c>{ resumed: true,  missed_events: N, last_event_id: "..." }</c> → replay follows immediately</item>
 ///   <item><c>{ resumed: false, code: "resume_token_expired" }</c> → fresh subscription, no replay</item>
 ///   <item><c>{ resumed: false, code: "resume_token_invalid" }</c> → client should clear local cursor</item>

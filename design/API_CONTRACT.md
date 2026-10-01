@@ -2,7 +2,7 @@
 
 Append-only design log for the server↔client REST + WebSocket API. One entry per endpoint or wire-shape decision.
 
-**Still live (kept when the other design-status docs were retired on 2026-09-28).** `OpenAstroAra.Server/openapi.yaml` covers only a fraction of the mapped routes and lists some that no longer exist (#1131), so until it is regenerated this log plus the endpoint sources under `OpenAstroAra.Server/Endpoints/` are the contract. Append an entry here in the PR that adds or changes a wire shape; breaking changes inside `/api/v1/` (permitted within v0.x) are recorded here too.
+**Still live (kept when the other design-status docs were retired on 2026-09-28).** Since #1131 `OpenAstroAra.Server/openapi.yaml` is a generated snapshot of the daemon's own OpenAPI document (every mapped REST route; `OpenApiContractSnapshotTest` fails CI when it drifts), so the REST contract is that file plus the endpoint sources under `OpenAstroAra.Server/Endpoints/`. What the generator cannot express — the WebSocket wire protocol — lives in the section at the end of this file. Append an entry here in the PR that adds or changes a wire shape; breaking changes inside `/api/v1/` (permitted within v0.x) are recorded here too.
 
 This file captures the *reasoning* behind each contract decision — DTO shapes, idempotency choices, WebSocket event taxonomy, error-shape conventions — for future contributors who need to understand "why does endpoint X look like this."
 
@@ -77,7 +77,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** statistics computed rig-side because the client only ever holds the stretched JPEG — the numbers must come from the raw pixels, and the Pi already has them in memory at preview time. `relative_path` rather than client-side re-derivation because only the server knows which template expanded and against which store root.
 
-**Spec ref:** `OpenAstroAra.Server/Endpoints/ImageEndpoints.cs` (histogram), `Services/BackupStreamService.cs`, `Services/StorageDeviceService.cs`. NOTE: `openapi.yaml` is broadly stale (frozen pre-§29/§44/§45/§63/§64 — see PORT_TODO "openapi.yaml refresh") and does not yet describe these.
+**Spec ref:** `OpenAstroAra.Server/Endpoints/ImageEndpoints.cs` (histogram), `Services/BackupStreamService.cs`, `Services/StorageDeviceService.cs`. NOTE: `openapi.yaml` was broadly stale when this was written (frozen pre-§29/§44/§45/§63/§64); superseded by the #1131 regenerated snapshot, which describes these.
 
 **Related:** PR #923 (§29 arc), branch backup-mirror-names (§44 naming, §12c.2 statistics), CHANGELOG [Unreleased]
 
@@ -89,7 +89,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** journaling's real benefit is bounded blast radius + automatic repair; with temp+rename frame writes, an on-rig fsck one tap away, the §28.8 rescan, and the mirror as second copy, that benefit no longer outweighed native take-home readability. NTFS (journaled + Windows-native) lost on macOS being read-only and the younger ntfs3 driver; FAT32 is disqualified by the 4 GB file cap (§77 SER); LKL/desktop ext4 drivers rejected (kernel-fork dependency, GPL, privileged raw-device access, corruption risk in the very scenario ext4 was chosen against).
 
-**Spec ref:** `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`--fs`, `--check`), `Services/StorageDeviceService.cs`, `Endpoints/SystemEndpoints.cs`. openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`--fs`, `--check`), `Services/StorageDeviceService.cs`, `Endpoints/SystemEndpoints.cs`. openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** PR #923 (§29 arc), CHANGELOG [Unreleased]
 
@@ -107,7 +107,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** header echo (not a JSON envelope) keeps the preview response a plain image body — existing consumers unaffected, and the knobs are metadata about the render, which is what headers are for. Seeds reuse the exact pinned artifacts + SHA path rather than a parallel format so one verification chain covers network and bundle installs.
 
-**Spec ref:** `Endpoints/ImageEndpoints.cs`, `Endpoints/SystemEndpoints.cs`, `Services/{DataManagerService,SkyCatalogService,SkyCatalogReader,PreviewCacheMaintenance,ThumbnailWarmerService}.cs`, `packaging/{build-deb.sh,seed-manifest.tsv}`. openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `Endpoints/ImageEndpoints.cs`, `Endpoints/SystemEndpoints.cs`, `Services/{DataManagerService,SkyCatalogService,SkyCatalogReader,PreviewCacheMaintenance,ThumbnailWarmerService}.cs`, `packaging/{build-deb.sh,seed-manifest.tsv}`. openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** branch library-photos-redesign, CHANGELOG [Unreleased]
 
@@ -119,7 +119,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** the client re-implemented a cruder copy of the sequencer's duration model (exposure × iterations + 15 s/instruction) because run state never exposed it — a duplicate of execution-side logic that drifted as instructions gained real estimates. The daemon owns the tree and its statuses, so it is the only place a remaining figure that credits completed passes can be computed.
 
-**Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSeconds`, `EmitAsync`), `Services/SequencerService.LiveEdit.cs`, `Contracts/SequenceDtos.cs`. openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSeconds`, `EmitAsync`), `Services/SequencerService.LiveEdit.cs`, `Contracts/SequenceDtos.cs`. openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** #1068 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
 
@@ -143,7 +143,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** this was the one place the Flutter client reached equipment without the daemon, and it failed whenever the client machine could not route to the rig's Alpaca LAN. Only the JSON body is parsed and only names come out, on a trusted-LAN surface (§52/§67).
 
-**Spec ref:** `Services/AlpacaManagementClient.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`), `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto`). openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `Services/AlpacaManagementClient.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`), `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto`). openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** #1067 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
 ### 2026-09-20 — #1066 filter-wheel first-connect home moves daemon-side
@@ -293,3 +293,81 @@ The card now keeps a known device's card while it is not live: name, state chip,
 **Spec ref:** `Contracts/EquipmentDtos.cs` (`TelescopeCapabilitiesDto.MoveAxisRateBandsDegPerSec`, `MoveAxisRateBandDto`), `Services/TelescopeService.cs` (`PadBandsFrom`, `BandDtosOf`, `EndpointsOf`), `client/…/lib/util/slew_rates.dart` (`SlewRateBand`, `buildSlewRateOptionsFromBands`, `defaultSlewRate`), `client/…/lib/models/mount_status.dart` (`MountCapabilities.axisRateBands` / `padRateBands`); tests in `TelescopeMoveAxisClampTest`, `slew_rates_test.dart`, `mount_status_test.dart`, `equipment_mount_panel_test.dart`.
 
 **Related:** #1126 (follow-ups of #1087), #1064, #1085, CHANGELOG [Unreleased]
+
+---
+
+## WebSocket wire protocol (`/api/v1/ws`)
+
+Written from the code when `openapi.yaml` became a generated snapshot (#1131, 2026-10-01): OpenAPI 3.1 cannot express WebSocket endpoints, so this section is the contract for independent clients. Sources: `Endpoints/WebSocketEndpoints.cs`, `Endpoints/WsClientConnection.cs`, `Services/PlaceholderWsServices.cs`, `Services/ClientSessionService.cs`, and the token catalogue `Contracts/WsEvents/WsEventCatalog.cs` (which `GET /api/v1/ws/catalog` also serves). Where the original §60.9 design went further than the code, that is said explicitly as *design intent*.
+
+```
+Endpoint:   ws://{host}:{port}/api/v1/ws        (not /api/v1/stream)
+Version:    X-Ara-WS-Version: 1 header, or ?ws_version=1 for browser clients
+            (the header wins when both are present). Missing or wrong → the
+            upgrade is refused with HTTP 426 + a Problem body; no socket exists,
+            so no close code is involved.
+Frame size: Kestrel/WebSocket defaults; no Ara-specific cap today
+            (design intent: 1 MB).
+Compression: none; the server does not opt in to permessage-deflate
+            (design intent).
+Heartbeat:  server WS ping every 30 s (KeepAliveInterval); the socket is
+            closed if nothing arrives within 60 s (KeepAliveTimeout).
+            Design intent for clients: close + reconnect (§32 modal) after 90 s
+            with no server activity.
+
+Resume protocol — optional FIRST client message after the upgrade:
+  { "resume_token": "<last seen seq, base-10>" }
+  The token is the last `seq` the client saw (v0.x; an opaque token with a
+  time window tied to GET /api/v1/server/state is design intent). Replies:
+  { "resumed": true,  "missed_events": n, "last_event_id": "<seq>" }
+      → the missed events (≤ 1000, the in-memory replay window) are then
+        sent as ordinary events
+  { "resumed": false, "code": "resume_token_invalid", "reason": "..." }
+      → not a non-negative integer; the connection continues as fresh
+  { "resumed": false, "code": "resume_token_expired", "reason": "..." }
+      → older than the 1000-event window, or newer than the server's current
+        seq (daemon restarted); the connection continues as fresh — the
+        socket is NOT closed; rehydrate with GET /api/v1/server/state
+  { "resumed": false }  (no code)
+      → JSON whose resume_token is absent, empty or whitespace ({} works as an
+        explicit "fresh, please"); fresh subscription.
+  No reply at all, fresh subscription, when the first message is not a resume
+  request: malformed JSON, a binary frame, a first message over 16 KB, or the
+  client sending nothing within the 5 s resume window. Clients must not
+  wait for a resume reply unless they sent a resume request.
+
+Event envelope (every server-sent message, WsEventEnvelopeDto):
+  { "type": "frame.complete", "ts": "2026-05-23T19:14:33.123Z",
+    "seq": 1234, "payload": { ... } }
+  `seq` is a monotonic int64 per server boot and doubles as the resume token.
+  There is no `id` field.
+
+Close codes the server sends:
+  1000 — normal closure (shutdown: "server closing")
+  4004 — single-client policy: another client took over (§27,
+         ClientSessionService.TakeoverCloseCode)
+  Everything else the client sees is the framework's (1001 going away,
+  1011 internal error, keep-alive expiry). Design intent, not emitted:
+  1009 frame too large, 1012 restart imminent (the `server.restart_imminent`
+  event exists; the close does not), 4001 auth, 4002 resume expired (it is a
+  JSON reply, above), 4003 version mismatch (it is a 426).
+
+Backpressure: a bounded per-subscriber buffer of 1000 events, drop-oldest when
+full (PlaceholderWsServices.PerSubscriberCapacity). A slow client loses the
+oldest events and catches up via the resume protocol on its next connect;
+it is not closed (design intent: close 1011 `client_too_slow`).
+
+Sequence-run event ORDERING contract (§60.9):
+  * A run's terminal event (sequence.complete / .stopped / .aborted / .failed)
+    MAY arrive without a preceding sequence.started — an abort or stop that
+    lands between run acceptance and the worker executing skips the (would-be
+    misleading) started event. Do not assume a strict started → terminal pair.
+  * sequence.progress never arrives after the same run's terminal event: the
+    server seals and drains its progress publisher before every terminal emit.
+    Progress events are coalesced under load (at most one publish in flight;
+    bursts collapse to a trailing publish with the freshest state), so treat
+    each progress payload as a snapshot, not a delta.
+  * instructions_completed / instructions_total count SEQUENCE INSTRUCTIONS
+    (tree leaves), not camera exposures (renamed from frames_* while the wire
+    had no external consumers, §60.9).
+```
