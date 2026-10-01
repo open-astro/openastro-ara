@@ -672,7 +672,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'Pushover is a paid (one-time \$5) push-notification service that delivers messages to your phone or desktop. '
         'To use: sign up at pushover.net, then copy the User Key from your dashboard into this field.\n\n'
-        'Leave empty to disable Pushover delivery entirely. Other channels (in-app banner, OS notification, sound) work independently.',
+        'Leave empty to disable Pushover delivery entirely. The sound alert works independently.',
     learnMoreUrl: 'https://pushover.net/',
     relatedSettings: ['session.notifications.telegram_bot_token'],
   ),

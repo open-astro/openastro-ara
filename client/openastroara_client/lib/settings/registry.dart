@@ -796,7 +796,7 @@ const List<Setting> settingsRegistry = [
     profilePath: 'storage.backup_retention_count',
   ),
 
-  // §54 Notifications — 10 fields (3 channels + 7 triggers). State lives in
+  // §54 Notifications — 14 fields (7 channel/delivery + 7 triggers). State lives in
   // `notificationsSettingsProvider`.
   // Channels.
   // `session.notifications.in_app_banner` and `.os_desktop` are deliberately
