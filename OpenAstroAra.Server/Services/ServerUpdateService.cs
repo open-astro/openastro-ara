@@ -197,10 +197,11 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
             throw new ServerUpdateRejectedException("update_in_progress", "Another update is being applied; wait for it to finish.");
         }
         var requestPath = Path.Combine(paths.RequestDirectory, id + ".request");
-        // One argument per line, like the storage request: the staged file and the port the
-        // helper should probe for /healthz once the new daemon is up.
+        // One argument per line, like the storage request: the staged file, the port the
+        // helper probes for /healthz, and the drain time this daemon announces.
         await File.WriteAllTextAsync(requestPath,
-            file + "\n" + listenPort.ToString(CultureInfo.InvariantCulture) + "\n", ct).ConfigureAwait(false);
+            file + "\n" + listenPort.ToString(CultureInfo.InvariantCulture) + "\n"
+            + DrainSeconds.ToString(CultureInfo.InvariantCulture) + "\n", ct).ConfigureAwait(false);
 
         // --no-block: the oneshot restarts THIS process part-way through, so a blocking start
         // would never return. The result file is what reports the outcome (GetStatusAsync).
@@ -224,6 +225,9 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
         }
         var resultPath = Path.Combine(paths.RequestDirectory, id + ".result");
         if (File.Exists(resultPath)) {
+            // The helper has its own copy; the upload is ours to remove (root deliberately
+            // doesn't touch the daemon-owned stage directory beyond reading it).
+            TryDelete(Path.Combine(paths.StageDirectory, id + ".deb"));
             return ParseResult(id, await File.ReadAllTextAsync(resultPath, ct).ConfigureAwait(false));
         }
         if (File.Exists(Path.Combine(paths.RequestDirectory, id + ".request"))) {
@@ -316,8 +320,8 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
             ["reason"] = "update",
             ["update_id"] = id,
             ["version"] = version,
-            // The helper waits this long for the old daemon to drain before dpkg runs.
-            ["in_seconds"] = 5,
+            // The helper waits this long (it reads it from the request) before dpkg runs.
+            ["in_seconds"] = DrainSeconds,
         };
         using var doc = JsonDocument.Parse(payload.ToJsonString());
         _ = ws.PublishAsync(WsEventCatalog.ServerRestartImminent, doc.RootElement.Clone(), CancellationToken.None);
@@ -326,6 +330,10 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
     /// <summary>An upload that was never applied is dead weight (up to the cap each) on the
     /// SD card. Anything older than a day goes on the next upload.</summary>
     internal static readonly TimeSpan StaleUploadAge = TimeSpan.FromDays(1);
+
+    /// <summary>How long the helper lets the old daemon drain before dpkg; announced in
+    /// <c>server.restart_imminent.in_seconds</c> and handed to the helper on the request.</summary>
+    internal const int DrainSeconds = 5;
 
     /// <summary>Matches <c>TimeoutStartSec=15min</c> on openastroara-update@.service.</summary>
     internal static readonly TimeSpan HelperTimeout = TimeSpan.FromMinutes(15);

@@ -175,8 +175,8 @@ namespace OpenAstroAra.Test {
 
             Assert.That(status.Status, Is.EqualTo("pending"));
             var request = await File.ReadAllTextAsync(Path.Combine(paths.RequestDirectory, staged.Id + ".request"));
-            Assert.That(request, Is.EqualTo(Path.Combine(paths.StageDirectory, staged.Id + ".deb") + "\n5555\n"),
-                "staged path then the daemon's port, one per line, like the storage request");
+            Assert.That(request, Is.EqualTo(Path.Combine(paths.StageDirectory, staged.Id + ".deb") + "\n5555\n5\n"),
+                "staged path, the daemon's port and the drain time, one per line, like the storage request");
             var start = calls.Single(c => c.File == "systemctl");
             Assert.That(start.Args, Is.EqualTo(new[] { "start", "--no-block", $"openastroara-update@{staged.Id}.service" }.ToList()),
                 "--no-block: the helper restarts this process before a blocking start could return");
@@ -185,6 +185,8 @@ namespace OpenAstroAra.Test {
             Assert.That(evt.Payload.GetProperty("reason").GetString(), Is.EqualTo("update"));
             Assert.That(evt.Payload.GetProperty("version").GetString(), Is.EqualTo("0.0.2-ara.1"));
             Assert.That(evt.Payload.GetProperty("update_id").GetString(), Is.EqualTo(staged.Id));
+            Assert.That(evt.Payload.GetProperty("in_seconds").GetInt32(), Is.EqualTo(ServerUpdateService.DrainSeconds),
+                "the announced drain is the one handed to the helper");
         }
 
         [Test]
@@ -284,6 +286,8 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.Combine(paths.RequestDirectory, staged.Id + ".result"),
                 "3\nfrom=0.0.1-ara.1\nto=0.0.2-ara.1\nrollback=available\nnew daemon did not answer /healthz within 90s\nstatus=rolled_back\n");
             var status = await svc.GetStatusAsync(staged.Id, CancellationToken.None);
+            Assert.That(File.Exists(Path.Combine(paths.StageDirectory, staged.Id + ".deb")), Is.False,
+                "the daemon removes its own upload once the result is in");
             Assert.Multiple(() => {
                 Assert.That(status!.Status, Is.EqualTo("rolled_back"));
                 Assert.That(status.FromVersion, Is.EqualTo("0.0.1-ara.1"));

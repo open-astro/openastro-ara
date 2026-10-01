@@ -3916,7 +3916,7 @@ Daemon (unprivileged):
   5. 202 { id, version, installed_version, size_bytes }
      ↓
 POST /api/v1/server/update/{id}/apply   (409 update_in_progress while another apply runs)
-  - writes /run/openastroara/update/<id>.request (staged path, daemon port); the wrapper keeps
+  - writes /run/openastroara/update/<id>.request (staged path, daemon port, drain seconds); the wrapper keeps
     it until <id>.result is in place, so GET reads "pending" the whole time
   - systemctl start --no-block openastroara-update@<id>.service   (polkit: 50-openastroara-update.rules)
   - only once systemd accepted: emits server.restart_imminent { reason: "update", update_id, version, in_seconds: 5 }
@@ -3928,7 +3928,8 @@ openastroara-update@<id> (root oneshot → update-request.sh → apply-update.sh
     re-validates package, architecture and version on that copy
   - keeps the running version there as <old>.deb (first push on an apt install falls back
     to /var/cache/apt/archives)
-  - waits 5 s for the daemon to drain, dpkg -i, systemctl restart openastroara-server
+  - waits the announced drain time (5 s, passed on the request), dpkg -i (prerm stops and
+    postinst starts the daemon); restarts it only if postinst left it stopped
   - polls http://127.0.0.1:<port>/healthz for 90 s
      ↓
    healthy                                   dpkg fails, or /healthz silent

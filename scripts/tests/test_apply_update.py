@@ -113,7 +113,7 @@ class ApplyUpdate(unittest.TestCase):
         self.assertIn("to=2.0", r.stdout)
         self.assertIn("rollback=available", r.stdout)
         self.assertEqual(self.installed(), "2.0")
-        self.assertFalse(self.deb.exists(), "the upload leaves the daemon-writable stage dir")
+        self.assertTrue(self.deb.exists(), "root never deletes in the daemon-owned stage dir; the daemon does")
         self.assertTrue((self.rollback / "1.0.deb").exists(), "the running version is kept for rollback")
         self.assertTrue((self.rollback / "2.0.deb").exists(), "and the new one, for the next update's rollback")
         self.assertIn("systemctl restart openastroara-server.service", self.log.read_text())
@@ -169,7 +169,7 @@ class ApplyUpdate(unittest.TestCase):
     def test_root_writes_only_to_the_rollback_dir(self) -> None:
         r = self.run_helper()
         self.assertIn("status=applied", r.stdout)
-        self.assertEqual(list(self.stage.iterdir()), [], "nothing left in, or written to, the daemon-owned stage dir")
+        self.assertEqual([p.name for p in self.stage.iterdir()], ["abc123.deb"], "root neither writes nor deletes in the stage dir")
         self.assertEqual(sorted(p.name for p in self.rollback.iterdir()), ["1.0.deb", "2.0.deb"],
                          "the work dir is cleaned up; only the two kept packages remain")
         self.assertEqual(oct(self.rollback.stat().st_mode & 0o777), "0o700")
@@ -187,6 +187,24 @@ class ApplyUpdate(unittest.TestCase):
         self.stage.symlink_to(real)
         self.assert_refused(self.run_helper(deb=str(self.stage / "abc123.deb")))
         self.assertTrue((real / "abc123.deb").exists(), "root never touched the file behind the link")
+
+    def run_with_drain(self, drain: str) -> subprocess.CompletedProcess[str]:
+        # No DRAIN_SECONDS override: the third argument (from the request) must be used.
+        env = {k: v for k, v in os.environ.items() if k != "DRAIN_SECONDS"}
+        env.update(STAGE_DIR=str(self.stage), ROLLBACK_DIR=str(self.rollback), APT_CACHE=str(self.apt),
+                   DPKG=self.tools["dpkg"], DPKG_DEB=self.tools["dpkg-deb"], DPKG_QUERY=self.tools["dpkg-query"],
+                   SYSTEMCTL=self.tools["systemctl"], CURL=self.tools["curl"],
+                   HEALTH_TIMEOUT="2", STATE=str(self.state), LOG=str(self.log))
+        return subprocess.run(["sh", str(HELPER), str(self.deb), "5555", drain],
+                              env=env, capture_output=True, text=True, timeout=60)
+
+    def test_the_drain_time_comes_from_the_request(self) -> None:
+        r = self.run_with_drain("1")
+        self.assertIn("draining the running daemon for 1s", r.stdout)
+        self.assertIn("status=applied", r.stdout)
+
+    def test_a_non_numeric_drain_time_is_refused(self) -> None:
+        self.assert_refused(self.run_with_drain("1;id"))
 
     def test_a_non_numeric_port_is_refused(self) -> None:
         self.assert_refused(self.run_helper(port="5555;reboot"))

@@ -2,7 +2,7 @@
 # Entry point of openastroara-update@.service (§33 client-pushed update, #1122):
 # runs apply-update.sh as root on the daemon's behalf, with the two arguments the
 # daemon left in
-#   /run/openastroara/update/<id>.request   (line 1: staged .deb path, line 2: port)
+#   /run/openastroara/update/<id>.request   (staged .deb path, port, drain seconds)
 # and writes
 #   /run/openastroara/update/<id>.result    (line 1: helper exit code, then the
 #                                            helper's output, which carries the
@@ -19,7 +19,7 @@ set -u
 # outside the packaged layout (scripts/tests/test_update_request.py). The unit never sets either.
 DIR=${DIR:-/run/openastroara/update}
 HELPER=${HELPER:-/opt/openastroara/scripts/apply-update.sh}
-MAX_ARGS=2
+MAX_ARGS=3
 
 ID=${1:-}
 case "$ID" in

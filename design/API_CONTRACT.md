@@ -301,6 +301,8 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Decision:** three routes under `/api/v1/server/update`. `POST ""` takes the `.deb` as a raw body (not multipart: one file, no fields, streamable from the client) with an optional `X-Update-Sha256`, returns 202 `ServerUpdateStagedDto { id, package, version, installed_version, size_bytes }`. `POST /{id}/apply` returns 202 `ServerUpdateStatusDto` with `status: "pending"`, emitting `server.restart_imminent { reason: "update", update_id, version, in_seconds }` only after systemd accepted the helper job; one apply at a time. `GET /{id}` returns the same DTO with `pending | applied | rolled_back | failed`, readable from the restarted daemon. Refusals are Problem responses whose `title` is a stable token: `not_packaged`/`helper_unavailable`/`update_in_progress` (409), `too_large` (413), `unknown_id` (404), `not_a_package`/`wrong_package`/`wrong_architecture`/`not_newer`/`checksum_mismatch`/`empty` (422).
 
+The result lives on tmpfs, so after a **reboot** `GET /{id}` is 404: clients treat a 404 after an apply as "outcome unknown" and compare `/api/v1/server/info`'s version with the one they pushed.
+
 **Why:** the restart happens between apply and the outcome, so the outcome has to outlive the process — it lives in the root helper's result file on tmpfs, keyed by the id the client already holds. A `.deb` rather than the §33.3 sketch's tarball keeps dpkg the owner of `/opt/openastroara`.
 
 **Spec ref:** `Endpoints/ServerUpdateEndpoints.cs`, `Services/ServerUpdateService.cs`, `packaging/debian/opt/openastroara/scripts/{update-request,apply-update}.sh`, playbook §33.3.

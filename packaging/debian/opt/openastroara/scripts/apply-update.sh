@@ -1,5 +1,5 @@
 #!/bin/sh
-# apply-update.sh <staged.deb> <daemon-port>   — runs as root (openastroara-update@.service)
+# apply-update.sh <staged.deb> <daemon-port> [<drain-seconds>]   — runs as root (openastroara-update@.service)
 #
 # §33 client-pushed update (#1122). Installs a .deb the daemon staged, then proves the new
 # daemon answers /healthz; if it does not, reinstalls the package that was running before.
@@ -30,12 +30,14 @@ DPKG_QUERY=${DPKG_QUERY:-dpkg-query}
 SYSTEMCTL=${SYSTEMCTL:-systemctl}
 CURL=${CURL:-curl}
 HEALTH_TIMEOUT=${HEALTH_TIMEOUT:-90}
-DRAIN_SECONDS=${DRAIN_SECONDS:-5}
 PACKAGE=openastroara-server
 UNIT=openastroara-server.service
 
 DEB=${1:-}
 PORT=${2:-5555}
+# The daemon passes the same value it announced in server.restart_imminent.in_seconds, so the
+# two cannot drift; the environment override is for tests.
+DRAIN_SECONDS=${DRAIN_SECONDS:-${3:-5}}
 
 fail() {
     echo "status=failed"
@@ -45,6 +47,9 @@ fail() {
 
 case "$PORT" in
     ''|*[!0-9]*) fail "bad port '$PORT'" ;;
+esac
+case "$DRAIN_SECONDS" in
+    ''|*[!0-9]*) fail "bad drain time '$DRAIN_SECONDS'" ;;
 esac
 
 # The staged path must sit directly in STAGE_DIR, be a regular file, and not a symlink: the
@@ -71,7 +76,9 @@ COPY="$WORK/upload.deb"
 # than letting root's cp follow it.
 cp -P "$DEB" "$COPY" || fail "could not copy the staged package"
 [ -L "$COPY" ] && fail "staged package became a symlink"
-rm -f "$DEB"
+# Root does not delete the original: STAGE_DIR's parent is daemon-owned, so the directory
+# could be swapped for a symlink between the checks and an rm. The daemon removes its own
+# upload once it reads the result (and sweeps leftovers after a day).
 
 field() { "$DPKG_DEB" -f "$COPY" "$1" 2>/dev/null; }
 NEW_PKG=$(field Package)
@@ -116,8 +123,8 @@ wait_healthy() {
 echo "draining the running daemon for ${DRAIN_SECONDS}s"
 sleep "$DRAIN_SECONDS"
 echo "installing $NEW_VER"
-# prerm stops the unit and postinst starts it again; the restart is explicit anyway so a
-# postinst that leaves it stopped (or a hand-disabled unit) still comes back.
+# prerm stops the unit and postinst starts it again. If dpkg fails, the rollback install
+# below is followed by an explicit restart; on success see the is-active check after it.
 if ! "$DPKG" -i "$NEW_DEB"; then
     echo "dpkg -i failed; reinstalling $OLD_VER"
     if [ -f "$OLD_DEB" ] && "$DPKG" -i "$OLD_DEB"; then
