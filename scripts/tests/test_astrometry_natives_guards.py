@@ -40,10 +40,15 @@ class Libc6Dependency(unittest.TestCase):
 
 class NativesGuards(unittest.TestCase):
     def test_build_deb_refuses_a_publish_dir_without_the_natives(self) -> None:
+        # The guard is one `[ -f "$PUBLISH_DIR/$lib" ] || { ...; exit 1; }` line
+        # inside a loop over both libraries; tie the test to exactly that.
         text = BUILD_DEB.read_text()
         for lib in NATIVES:
-            self.assertIn(lib, text)
-        self.assertIn("exit 1", text)
+            self.assertRegex(text, rf"for lib in [^\n]*\b{re.escape(lib)}\b")
+        self.assertRegex(
+            text,
+            r'\[ -f "\$PUBLISH_DIR/\$lib" \] \|\| \{[^\n]*exit 1;',
+        )
 
     def test_dockerfile_copies_each_native_explicitly(self) -> None:
         # The chiseled base has no shell, so the guard is a COPY whose source

@@ -4128,8 +4128,8 @@ sudo apt install openastroara-server
 ### 34.2 Package details
 
 - Name: `openastroara-server` (lowercase, hyphens per Debian convention)
-- Arch: **arm64** (works on RPi 4/5, Orange Pi 5, RockChip SBCs — anywhere Debian-family + ARM64 runs)
-- Depends: `libc6`, `libgcc-s1`, `libstdc++6`, runtime essentials
+- Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
+- Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli` (authoritative list: `packaging/debian/DEBIAN/control.template`)
 - Recommends: `alpaca-bridge`, `openastro-phd2` (pulled in by default; opt-out with `--no-install-recommends`)
 - Suggests: `gpsd` (for USB GPS time sync per §31)
 
@@ -11915,7 +11915,7 @@ ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsf
 **Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
 
 ```
-Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd
+Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd, astap-cli
 ```
 
 `libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.
