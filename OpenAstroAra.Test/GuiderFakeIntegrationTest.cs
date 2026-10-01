@@ -709,6 +709,81 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_camera_reconnect_resolves_the_camera_drop_row_without_rearming_the_reaction() {
+            // #1191: EquipmentReconnected is the camera-drop fault's own recovery signal. It must stamp
+            // THAT row resolved (not wait for the next guider connect), post an Info notification, and
+            // leave the one-shot reaction latched — a second drop in the same episode must not pause
+            // the sequence again (a flapping camera must not skip/abort per cycle).
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetSafetyPolicies()).Returns(GuiderLostPolicy("pause_and_retry"));
+            var sequencer = new Mock<ISequencerService>();
+            var pauses = 0;
+            var pauseRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => { Interlocked.Increment(ref pauses); pauseRequested.TrySetResult(); })
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+
+            var faultLog = new Mock<IFaultLogService>();
+            EquipmentFaultEvent? recorded = null;
+            faultLog.Setup(f => f.RecordFaultAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<CancellationToken>()))
+                .Callback<EquipmentFaultEvent, CancellationToken>((f, _) => recorded = f)
+                .Returns(Task.CompletedTask);
+            faultLog.Setup(f => f.ResolveOnReconnectAsync(DeviceType.Guider, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(0);
+            EquipmentFaultEvent? resolved = null;
+            var resolvedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            faultLog.Setup(f => f.ResolveAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+                .Callback<EquipmentFaultEvent, DateTimeOffset, CancellationToken>((f, _, _) => { resolved = f; resolvedTcs.TrySetResult(); })
+                .ReturnsAsync(true);
+            var notifications = new Mock<INotificationService>();
+            var posted = new List<NotificationDto>();
+            var infoTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Callback<NotificationDto, CancellationToken>((n, _) => {
+                    lock (posted) { posted.Add(n); }
+                    if (n.Severity == NotificationSeverity.Info) { infoTcs.TrySetResult(); }
+                })
+                .Returns(Task.CompletedTask);
+
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: profiles.Object, sequencerResolver: () => sequencer.Object,
+                notifications: notifications.Object, faultLog: faultLog.Object);
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await Task.WhenAny(pauseRequested.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(pauseRequested.Task), "the camera drop never ran the on_guider_lost policy");
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+            Assert.That(await Task.WhenAny(resolvedTcs.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(resolvedTcs.Task), "the camera reconnect never resolved the camera-drop fault row");
+            Assert.That(resolved, Is.SameAs(recorded), "the resolved row is the one the drop recorded (natural key)");
+            Assert.That(await Task.WhenAny(infoTcs.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(infoTcs.Task), "the user was not told the camera is back");
+            NotificationDto info;
+            lock (posted) { info = posted.Find(n => n.Severity == NotificationSeverity.Info)!; }
+            Assert.That(info.Title, Does.Contain("reconnected"));
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State,
+                Is.EqualTo(EquipmentConnectionState.Connected));
+
+            // The one-shot stays latched: a second drop in the same episode records nothing new and
+            // does not pause again; a second reconnect has no open row to resolve.
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+            await Task.Delay(500).ConfigureAwait(false);
+            Assert.That(Volatile.Read(ref pauses), Is.EqualTo(1), "a flapping camera must not re-trigger the policy per cycle");
+            faultLog.Verify(f => f.ResolveAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Test]
         public async Task A_structured_equipment_fault_reacts_per_policy_but_stays_connected() {
             // §42.2 (openastro-guider #57): the daemon reports the guide camera dropped
             // (EquipmentDisconnected). The guider LINK is still up, so — unlike a socket drop — the

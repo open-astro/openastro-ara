@@ -11,6 +11,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
@@ -49,6 +50,12 @@ public sealed partial class GuiderService {
     // an EquipmentDisconnected fault stays Connected and so never clears the latch — a later, strictly
     // more severe LinkDown must still be able to react (see BeginFaultReactionLocked).
     private GuiderFaultKind? _latchedFaultKind;
+    // Guarded by _gate. The §42.5 row of the camera-drop fault that latched this episode, held until
+    // the guider reports the camera back (EquipmentReconnected, #1191) so that row can be resolved
+    // the moment the device recovers instead of on the next guider connect. Null when no camera-drop
+    // row is open; cleared on the next connect (SetStateLocked) and superseded by a LinkDown (a dead
+    // link brings no reconnect event — the next connect's ResolveOnReconnectAsync closes the row).
+    private EquipmentFaultEvent? _openCameraDropFault;
 
     internal enum GuiderLostAction { PauseAndRetry, SkipTarget, AbortSequence }
 
@@ -106,11 +113,38 @@ public sealed partial class GuiderService {
                 : "guide camera disconnected — guider link still up",
             DateTimeOffset.UtcNow);
         RecordFaultQuietly(fault);
+        _openCameraDropFault = kind == GuiderFaultKind.EquipmentDisconnected ? fault : null;
         // Fire-and-forget one-shot: ReactToGuidingLossAsync owns no disposables,
         // catches everything itself, and each rung uses CancellationToken.None
         // deliberately (a daemon shutdown mid-reaction should still finish
         // pausing the run — the sequencer's own shutdown path wins regardless).
         _ = Task.Run(() => ReactToGuidingLossAsync(kind, fault), CancellationToken.None);
+    }
+
+    // #1191 — the guider reports the lost device back. Resolves the open camera-drop row (the device
+    // behind it recovered; the link never went down, so nothing else would close it until the next
+    // guider connect) and tells the user guiding can resume. Deliberately does NOT re-arm the one-shot
+    // reaction (_latchedFaultKind stays set): a flapping guide camera must not skip/abort per cycle.
+    private void OnEquipmentReconnected(object? sender, EquipmentReconnectedEventArgs e) {
+        EquipmentFaultEvent? fault;
+        lock (_gate) {
+            if (_disposed || !ReferenceEquals(sender, _guider) || _state != EquipmentConnectionState.Connected
+                    || !AffectsGuiding(e.DeviceType)) {
+                return;
+            }
+            fault = _openCameraDropFault;
+            _openCameraDropFault = null;
+        }
+        if (fault is null) {
+            return; // no open camera-drop row this episode (an unsolicited or repeated reconnect)
+        }
+        LogCameraReconnected(e.DeviceType);
+        _ = Task.Run(async () => {
+            await ResolveFaultQuietlyAsync(fault, DateTimeOffset.UtcNow).ConfigureAwait(false);
+            await NotifyQuietlyAsync(NotificationSeverity.Info, "Guide camera reconnected",
+                "The guider reported the guide camera is back. Guiding can resume; if a sequence was paused "
+                + "by the drop, Resume the run.").ConfigureAwait(false);
+        }, CancellationToken.None);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -226,9 +260,12 @@ public sealed partial class GuiderService {
         }
     }
 
+    private Task NotifyFaultQuietlyAsync(string title, string message) =>
+        NotifyQuietlyAsync(NotificationSeverity.Critical, title, message);
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Notification store faults must never mask the fault reaction itself (the §58.7 precedent). Log-and-recover boundary.")]
-    private async Task NotifyFaultQuietlyAsync(string title, string message) {
+    private async Task NotifyQuietlyAsync(NotificationSeverity severity, string title, string message) {
         if (_notifications is null) {
             return;
         }
@@ -236,7 +273,7 @@ public sealed partial class GuiderService {
             await _notifications.CreateAsync(new NotificationDto(
                 Id: Guid.NewGuid(),
                 PostedUtc: DateTimeOffset.UtcNow,
-                Severity: NotificationSeverity.Critical,
+                Severity: severity,
                 Category: NotificationCategory.Equipment,
                 Title: title,
                 Message: message,
@@ -280,11 +317,25 @@ public sealed partial class GuiderService {
         }
     }
 
+    // #1191 — stamp resolved_at on the one row the recovered device belongs to.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort fault-log resolve on a fire-and-forget task; any store fault is logged. Log-and-recover boundary.")]
+    private async Task ResolveFaultQuietlyAsync(EquipmentFaultEvent fault, DateTimeOffset resolvedUtc) {
+        if (_faultLog is null) {
+            return;
+        }
+        try {
+            await _faultLog.ResolveAsync(fault, resolvedUtc, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogFaultLogWriteFailed(ex);
+        }
+    }
+
     // §42.5 — an observed reconnect resolves this guider's open disconnect rows (the same
-    // semantics EquipmentEventPublisher gives Alpaca devices). The camera-drop row (link
-    // still up) also closes here — its true recovery signal needs the guider#57 structured
-    // reconnect events (#1191), and closing on the next guider connect is
-    // the conservative approximation until then.
+    // semantics EquipmentEventPublisher gives Alpaca devices). A camera-drop row (link still
+    // up) normally closes earlier, on the guider's EquipmentReconnected event (#1191); this
+    // is the backstop for one whose reconnect never arrived (the link died first, or the
+    // daemon abandoned the device — guider#66).
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort fault-log resolve on a fire-and-forget task; any store fault is logged. Log-and-recover boundary.")]
     private void ResolveGuiderFaultsQuietly() {
@@ -321,4 +372,7 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(EventId = 4226, Level = LogLevel.Warning, Message = "§42.2 fault notification post failed (best-effort)")]
     private partial void LogFaultNotifyFailed(Exception exception);
+
+    [LoggerMessage(EventId = 4229, Level = LogLevel.Information, Message = "§42.2 guider reports its {DeviceType} back — resolving the open camera-drop fault row (#1191); the one-shot reaction stays latched")]
+    private partial void LogCameraReconnected(string deviceType);
 }

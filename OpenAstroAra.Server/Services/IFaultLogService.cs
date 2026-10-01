@@ -52,6 +52,16 @@ public interface IFaultLogService {
     /// Returns the number of rows resolved.</summary>
     Task<int> ResolveOnReconnectAsync(DeviceType deviceType, DateTimeOffset resolvedUtc, CancellationToken ct);
 
+    /// <summary>Stamp <c>resolved_at</c> on ONE fault's row (natural-keyed like
+    /// <see cref="RecordActionAsync"/>) — the device behind that specific fault
+    /// reported itself back (#1191: the guide camera behind a camera-drop row,
+    /// via the guider's EquipmentReconnected event, while the guider link never
+    /// went down). <c>action_taken</c> is untouched, and an already-resolved row
+    /// keeps its earlier stamp. Upserts like the action path: the detection insert
+    /// is fire-and-forget, so a reconnect that lands first creates the row
+    /// resolved and the late insert no-ops. Returns true when a row was stamped.</summary>
+    Task<bool> ResolveAsync(EquipmentFaultEvent fault, DateTimeOffset resolvedUtc, CancellationToken ct);
+
     /// <summary>Fault history, newest first. All filters are optional and AND-combined;
     /// <paramref name="equipmentType"/> and <paramref name="faultType"/> take the
     /// lowercase wire tokens (see <see cref="FaultDto"/>).</summary>

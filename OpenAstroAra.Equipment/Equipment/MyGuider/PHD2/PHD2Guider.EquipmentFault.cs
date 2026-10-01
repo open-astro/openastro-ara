@@ -20,15 +20,30 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     // Distinct from PHD2ConnectionLost: the guide LINK is still up (the daemon is alive and self-
     // reconnecting), so this is a guiding-degraded condition, not a link drop — the session reacts per
     // the on_guider_lost policy but stays Connected (no §63.3 recovery). The paired EquipmentReconnected
-    // event is informational (logged in ProcessEvent); it drives no reaction.
+    // event is the device's recovery signal (#1191): it closes the fault's §42.5 row and tells the user,
+    // but drives no reaction and never re-arms the one-shot (a flapping device must not re-trigger
+    // skip/abort per cycle).
     public sealed partial class PHD2Guider {
 
         /// <summary>Raised when the daemon reports a device disconnect (e.g. the guide camera dropped).
         /// A guiding-degraded fault — the guide link itself is still up.</summary>
         public event EventHandler<EquipmentFaultEventArgs>? EquipmentFault;
 
+        /// <summary>Raised when the daemon reports a device it had lost is back (the guide camera
+        /// reconnected) — the recovery signal for the matching <see cref="EquipmentFault"/>.</summary>
+        public event EventHandler<EquipmentReconnectedEventArgs>? EquipmentReconnected;
+
         private void RaiseEquipmentFault(string deviceType, string reason, bool reconnecting) =>
             EquipmentFault?.Invoke(this, new EquipmentFaultEventArgs(deviceType, reason, reconnecting));
+
+        private void RaiseEquipmentReconnected(string deviceType) =>
+            EquipmentReconnected?.Invoke(this, new EquipmentReconnectedEventArgs(deviceType));
+    }
+
+    /// <summary>A daemon-reported device reconnect (#1191) — the device named in an earlier
+    /// <see cref="EquipmentFaultEventArgs"/> is back.</summary>
+    public sealed class EquipmentReconnectedEventArgs(string deviceType) : EventArgs {
+        public string DeviceType { get; } = deviceType;
     }
 
     /// <summary>A daemon-reported device disconnect (§42.2). <see cref="Reconnecting"/> means the daemon

@@ -395,6 +395,52 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(alreadyResolved.AddMinutes(1)), "an already-resolved row keeps its original resolution time");
         }
 
+        // ─── #1191 — ResolveAsync: one row, by the fault's natural key ────────────────────────
+
+        [Test]
+        public async Task Resolve_stamps_only_the_named_fault_and_keeps_its_action() {
+            var cameraDrop = Fault(DeviceType.Guider, detectedUtc: Detected, deviceId: null);
+            var otherGuiderRow = Fault(DeviceType.Guider, detectedUtc: Detected + TimeSpan.FromMinutes(1), deviceId: null);
+            await service.RecordFaultAsync(cameraDrop, CancellationToken.None);
+            await service.RecordActionAsync(cameraDrop, "pause_and_retry", resolvedUtc: null, CancellationToken.None);
+            await service.RecordFaultAsync(otherGuiderRow, CancellationToken.None);
+
+            Assert.That(await service.ResolveAsync(cameraDrop, Resolved, CancellationToken.None), Is.True);
+
+            var rows = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items;
+            var resolved = rows.Single(r => r.DetectedUtc == Detected);
+            Assert.That(resolved.ResolvedUtc, Is.EqualTo(Resolved));
+            Assert.That(resolved.ActionTaken, Is.EqualTo("pause_and_retry"), "the reaction's stamp is what it DID, untouched");
+            Assert.That(rows.Single(r => r.DetectedUtc != Detected).ResolvedUtc, Is.Null,
+                "a sibling disconnect row of the same device type is not this reconnect's business (unlike ResolveOnReconnectAsync)");
+        }
+
+        [Test]
+        public async Task Resolve_keeps_an_earlier_resolution_and_reports_no_change() {
+            var fault = Fault(DeviceType.Guider, detectedUtc: Detected, deviceId: null);
+            await service.RecordFaultAsync(fault, CancellationToken.None);
+            await service.RecordActionAsync(fault, "recovered", Resolved, CancellationToken.None);
+
+            Assert.That(await service.ResolveAsync(fault, Resolved + TimeSpan.FromHours(1), CancellationToken.None), Is.False);
+            var row = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items.Single();
+            Assert.That(row.ResolvedUtc, Is.EqualTo(Resolved), "first resolution wins");
+        }
+
+        [Test]
+        public async Task Resolve_before_the_detection_landed_creates_the_row_resolved_and_the_late_writes_keep_it() {
+            // Detection and the action persist fire-and-forget off the reaction; a camera that
+            // comes back within milliseconds can resolve first.
+            var fault = Fault(DeviceType.Guider, detectedUtc: Detected, deviceId: null);
+            Assert.That(await service.ResolveAsync(fault, Resolved, CancellationToken.None), Is.True);
+            await service.RecordFaultAsync(fault, CancellationToken.None);
+            await service.RecordActionAsync(fault, "notify_only", resolvedUtc: null, CancellationToken.None);
+
+            var row = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items.Single();
+            Assert.That(row.ResolvedUtc, Is.EqualTo(Resolved));
+            Assert.That(row.ActionTaken, Is.EqualTo("notify_only"));
+            Assert.That(row.Details, Is.EqualTo("3 probes failed"), "the late detection insert no-ops; the row carries the fault's details");
+        }
+
         [Test]
         public void A_connected_transition_at_the_publisher_resolves_the_fault_log() {
             var ws = new Mock<IWsBroadcaster>();

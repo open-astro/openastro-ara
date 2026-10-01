@@ -147,6 +147,58 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
         }
     }
 
+    public async Task<bool> ResolveAsync(EquipmentFaultEvent fault, DateTimeOffset resolvedUtc, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(fault);
+        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            await using var conn = _db.OpenConnection();
+            var stamp = resolvedUtc.ToString("O");
+            await using (var update = conn.CreateCommand()) {
+                // action_taken stays what the reaction DID; an earlier resolved_at wins.
+                update.CommandText = """
+                    UPDATE faults SET resolved_at = $resolved
+                    WHERE equipment_type = $etype AND fault_type = $ftype
+                      AND detected_at = $detected AND equipment_id IS $eid
+                      AND resolved_at IS NULL;
+                    """;
+                BindNaturalKey(update, fault);
+                update.Parameters.AddWithValue("$resolved", stamp);
+                if (await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0) {
+                    LogResolvedFault(fault.DeviceType, fault.Details);
+                    await CorrelateAffectedFramesQuietlyAsync(conn, stamp, ct).ConfigureAwait(false);
+                    return true;
+                }
+            }
+            if (await FindByNaturalKeyAsync(conn, fault, ct).ConfigureAwait(false) is not null) {
+                return false; // the row exists and was already resolved
+            }
+            // Detection hasn't landed yet — create the row resolved; the late insert no-ops
+            // and a late action stamp keeps this resolved_at (its COALESCE).
+            await using var insert = conn.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO faults
+                    (id, session_id, detected_at, equipment_type, equipment_id,
+                     equipment_name, fault_type, details, action_taken, resolved_at,
+                     affected_frames)
+                VALUES
+                    ($id, $session, $detected, $etype, $eid, $ename, $ftype, $details,
+                     NULL, $resolved, NULL);
+                """;
+            BindNaturalKey(insert, fault);
+            insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            insert.Parameters.AddWithValue("$session", (object?)_sessions?.Current?.ToString() ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$ename", (object?)fault.DeviceName ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$details", (object?)fault.Details ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$resolved", stamp);
+            await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            LogResolvedFault(fault.DeviceType, fault.Details);
+            await CorrelateAffectedFramesQuietlyAsync(conn, stamp, ct).ConfigureAwait(false);
+            return true;
+        } finally {
+            _writeGate.Release();
+        }
+    }
+
     public async Task<int> ResolveOnReconnectAsync(DeviceType deviceType, DateTimeOffset resolvedUtc, CancellationToken ct) {
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
         try {
@@ -370,6 +422,9 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} reconnected — {Count} unresolved disconnect fault(s) marked resolved (§42.5)")]
     private partial void LogResolvedOnReconnect(DeviceType deviceType, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} fault resolved by its device's own reconnect — {Details} (§42.5, #1191)")]
+    private partial void LogResolvedFault(DeviceType deviceType, string? details);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fault log: {Count} frame(s) correlated onto fault {FaultId} (§42.6)")]
     private partial void LogFramesCorrelated(int count, string faultId);
