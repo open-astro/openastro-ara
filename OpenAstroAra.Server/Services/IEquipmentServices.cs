@@ -29,6 +29,15 @@ public interface IEquipmentDiscoveryService {
     Task<IReadOnlyList<DiscoveredDeviceDto>> DiscoverAsync(DeviceType type, bool forceRefresh, CancellationToken ct);
 }
 
+/// <summary>#1127 — a single-instance equipment service that retains its selected device
+/// (<c>GetAsync</c> non-null) even while disconnected. The remembered-selection store and this
+/// record can diverge (the wizard's store-only <c>DELETE …/remembered</c> keeps the retained
+/// device), and the card's Reconnect names the retained one, so the reconnector falls back to it
+/// when nothing is remembered. Null when nothing is retained or the service is disposed.</summary>
+public interface IRetainedDeviceSource {
+    DiscoveredDeviceDto? RetainedDevice { get; }
+}
+
 public interface ICameraService {
     Task<CameraDto?> GetAsync(CancellationToken ct);
     // True when no exposure (sequenced, one-off REST, or live-view frame) holds

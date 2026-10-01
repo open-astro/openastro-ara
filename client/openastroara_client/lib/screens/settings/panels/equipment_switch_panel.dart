@@ -305,9 +305,11 @@ class _SwitchCard extends ConsumerWidget {
                     onPressed: () => _connect(context, ref),
                   ),
                 // The stuck-device escape hatch: a dead/duplicate switch stays
-                // listed until removed. Only while NOT connected (the server
-                // refuses removal of a live switch — disconnect first).
-                if (!device.isConnected)
+                // listed until removed. Only while NOT live — the same gate as
+                // Disconnect/Connect above: the server refuses removal of a
+                // connected OR connecting switch (disconnect first), so a
+                // mid-connect card must not offer a Remove that 409s (#1127).
+                if (!live)
                   IconButton(
                     tooltip: 'Remove this switch',
                     icon: const Icon(Icons.delete_outline, size: 18),

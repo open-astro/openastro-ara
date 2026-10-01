@@ -48,7 +48,18 @@ namespace OpenAstroAra.Server.Services;
 /// REST-only: the <c>ICameraMediator</c>/<c>IImagingMediator</c> unification (the
 /// <c>TakeExposure</c> instruction) is the follow-up increment.
 /// </summary>
-public sealed partial class CameraService : ICameraService, IDisposable {
+public sealed partial class CameraService : ICameraService, IRetainedDeviceSource, IDisposable {
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice {
+        get {
+            lock (_gate) {
+                return _disposed ? null : _device;
+            }
+        }
+    }
+
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ImageReadyPollInterval = TimeSpan.FromMilliseconds(250);
@@ -271,7 +282,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
                 throw new InvalidOperationException("the camera is connected — disconnect it before removing it");
             }
+            var removed = _device;
             _device = null;
+            // §60.9 — a second open client drops its card on this instead of waiting for its
+            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
+            _events?.Removed(DeviceType.Camera, removed.UniqueId, removed.Name);
             return true;
         }
     }

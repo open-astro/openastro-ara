@@ -47,7 +47,18 @@ namespace OpenAstroAra.Server.Services;
 /// reads the live device) — that surface lives in the <c>SafetyMonitorService.Mediator.cs</c>
 /// partial; one singleton is registered for both interfaces per playbook §8.1.
 /// </summary>
-public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDisposable {
+public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetainedDeviceSource, IDisposable {
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice {
+        get {
+            lock (_gate) {
+                return _disposed ? null : _device;
+            }
+        }
+    }
+
 
     // §32.4 — how often the background loop refreshes the cached IsSafe while connected. The
     // cache is therefore at most this stale; GetAsync/GetInfo serve it without a per-call HTTP read.
@@ -193,7 +204,11 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
                 throw new InvalidOperationException("the safety monitor is connected — disconnect it before removing it");
             }
+            var removed = _device;
             _device = null;
+            // §60.9 — a second open client drops its card on this instead of waiting for its
+            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
+            _events?.Removed(DeviceType.SafetyMonitor, removed.UniqueId, removed.Name);
             return true;
         }
     }

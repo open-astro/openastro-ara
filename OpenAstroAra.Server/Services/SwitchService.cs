@@ -148,18 +148,35 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
 
     public Task<bool> RemoveAsync(string deviceId, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        AlpacaSwitch? client;
+        SwitchConnection conn;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (!_connections.TryGetValue(deviceId, out var conn)) {
+            if (!_connections.TryGetValue(deviceId, out var found)) {
                 return Task.FromResult(false);
             }
-            if (ProjectDto(conn).State == EquipmentConnectionState.Connected) {
+            conn = found;
+            // #1127 — live means Connecting too: a mid-connect removal would let the adopt path
+            // land a client into an entry nobody tracks any more. Same gate as the card's.
+            if (conn.State is EquipmentConnectionState.Connected or EquipmentConnectionState.Connecting) {
                 throw new InvalidOperationException(
                     "the switch is connected — disconnect it before removing it");
             }
+            // An Error reached from Connected (§42.3 trip) still holds the adopted client; dropping
+            // the entry without releasing it leaked the driver connection (#1127). Supersede any
+            // late adopt and hand the client to the same off-lock teardown DisconnectAsync uses.
+            conn.Generation++;
+            client = conn.Client;
+            conn.Client = null;
             _connections.Remove(deviceId);
-            return Task.FromResult(true);
         }
+        if (client is not null) {
+            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
+        }
+        // §60.9 — the device left the known list: a second open client drops its card on this
+        // instead of waiting for its next poll (#1127).
+        _events?.Removed(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name);
+        return Task.FromResult(true);
     }
 
     public Task<SwitchDto?> GetAsync(string deviceId, CancellationToken ct) {

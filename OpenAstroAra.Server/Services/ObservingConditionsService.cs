@@ -39,7 +39,18 @@ namespace OpenAstroAra.Server.Services;
 /// data (<c>IWeatherDataMediator</c> is only a connect/disconnect dependency), so this does not
 /// unify with that mediator — it stays the headless stub.
 /// </summary>
-public sealed partial class ObservingConditionsService : IObservingConditionsService, IDisposable {
+public sealed partial class ObservingConditionsService : IObservingConditionsService, IRetainedDeviceSource, IDisposable {
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice {
+        get {
+            lock (_gate) {
+                return _disposed ? null : _device;
+            }
+        }
+    }
+
 
     // §32.4 — how often the background loop refreshes the cached readings while connected.
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
@@ -168,7 +179,11 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
             if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
                 throw new InvalidOperationException("the weather station is connected — disconnect it before removing it");
             }
+            var removed = _device;
             _device = null;
+            // §60.9 — a second open client drops its card on this instead of waiting for its
+            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
+            _events?.Removed(DeviceType.ObservingConditions, removed.UniqueId, removed.Name);
             return true;
         }
     }

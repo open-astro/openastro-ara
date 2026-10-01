@@ -69,6 +69,54 @@ namespace OpenAstroAra.Test {
             Assert.That(outcome.Dispatched, Is.EqualTo(0));
         }
 
+        // #1127 — a mocked service that also exposes a retained device.
+        private static Mock<T> Retaining<T>(DiscoveredDeviceDto? retained) where T : class {
+            var mock = new Mock<T>();
+            mock.As<IRetainedDeviceSource>().SetupGet(s => s.RetainedDevice).Returns(retained);
+            return mock;
+        }
+
+        [Test]
+        public async Task ReconnectAsync_falls_back_to_the_retained_device_when_nothing_is_remembered() {
+            // The wizard's store-only DELETE …/remembered leaves the service holding the device the
+            // card names; Reconnect must dispatch THAT record, not answer 404.
+            var retained = Device(DeviceType.Focuser, "foc-retained");
+            var foc = Retaining<IFocuserService>(retained);
+            foc.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(), (typeof(IFocuserService), foc.Object));
+
+            var outcome = await r.ReconnectAsync(DeviceType.Focuser, CancellationToken.None);
+
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
+            Assert.That(outcome.Dispatched, Is.EqualTo(1));
+            foc.Verify(s => s.ConnectAsync(It.Is<ConnectRequestDto>(c => c.Device.UniqueId == "foc-retained"), null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task ReconnectAsync_prefers_the_remembered_entry_over_the_retained_device() {
+            // Both present (and diverged): the remembered entry is the auto-connect truth, so it wins
+            // and the retained record is NOT dispatched on top of it.
+            var foc = Retaining<IFocuserService>(Device(DeviceType.Focuser, "foc-retained"));
+            foc.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(Device(DeviceType.Focuser, "foc-remembered")), (typeof(IFocuserService), foc.Object));
+
+            var outcome = await r.ReconnectAsync(DeviceType.Focuser, CancellationToken.None);
+
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
+            foc.Verify(s => s.ConnectAsync(It.Is<ConnectRequestDto>(c => c.Device.UniqueId == "foc-remembered"), null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task ReconnectAsync_still_404s_when_neither_remembered_nor_retained() {
+            var foc = Retaining<IFocuserService>(null);
+            var r = Build(new FakeStore(), (typeof(IFocuserService), foc.Object));
+            var outcome = await r.ReconnectAsync(DeviceType.Focuser, CancellationToken.None);
+            Assert.That(outcome.Attempted, Is.EqualTo(0));
+            foc.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Never);
+        }
+
         [Test]
         public async Task ReconnectAsync_dispatches_a_single_instance_connect() {
             var cam = new Mock<ICameraService>();

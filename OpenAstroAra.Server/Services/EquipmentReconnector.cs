@@ -31,12 +31,17 @@ public interface IEquipmentReconnector {
     /// (Guider connects via PHD2, not this Alpaca flow).</summary>
     Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct);
 
-    /// <summary>Reconnect the remembered device(s) for <paramref name="type"/> — every remembered
-    /// switch for <see cref="DeviceType.Switch"/>, otherwise the single remembered device. Returns
-    /// how many devices were <see cref="ReconnectOutcome.Attempted"/> (remembered + connectable) and
-    /// how many had a connect <see cref="ReconnectOutcome.Dispatched"/> without throwing, so the
-    /// caller can tell "nothing remembered" (0 attempted) from "dispatching in background" (≥1
-    /// dispatched) from "every dispatch failed synchronously" (attempted &gt; 0, 0 dispatched).</summary>
+    /// <summary>Reconnect the known device(s) for <paramref name="type"/> — every remembered
+    /// switch for <see cref="DeviceType.Switch"/>, otherwise the single remembered device, or, when
+    /// nothing is remembered for a single-instance type, the device its service still retains
+    /// (#1127: the wizard's store-only forget keeps the retained record, and the card names that
+    /// one). Returns how many devices were <see cref="ReconnectOutcome.Attempted"/> (remembered or
+    /// retained, and connectable) and how many had a connect
+    /// <see cref="ReconnectOutcome.Dispatched"/> without throwing, so the caller can tell "neither
+    /// remembered nor retained" (0 attempted) from "dispatching in background" (≥1 dispatched) from
+    /// "every dispatch failed synchronously" (attempted &gt; 0, 0 dispatched). The §42.3 fault
+    /// reaction ladder uses the same call, so a device removed from auto-connect but still held by
+    /// its service is hot-reconnected after a fault too.</summary>
     Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct);
 
     /// <summary>The connection state of the device service for <paramref name="type"/>, so a
@@ -48,8 +53,8 @@ public interface IEquipmentReconnector {
 }
 
 /// <summary>Outcome of a <see cref="IEquipmentReconnector.ReconnectAsync"/> call.
-/// <paramref name="Attempted"/> is the count of remembered + connectable devices a connect was tried
-/// for; <paramref name="Dispatched"/> is how many of those returned from <c>ConnectAsync</c> without
+/// <paramref name="Attempted"/> is the count of connectable devices a connect was tried for — the
+/// remembered ones, or the service's retained device when nothing is remembered (#1127); <paramref name="Dispatched"/> is how many of those returned from <c>ConnectAsync</c> without
 /// throwing (each then connects in the background). <c>Dispatched &lt; Attempted</c> means some
 /// devices failed to even dispatch (e.g. their Alpaca server is down on a rig restart).</summary>
 public readonly record struct ReconnectOutcome(int Attempted, int Dispatched);
@@ -114,7 +119,15 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // FlatDevice/CoverCalibrator are the same physical device under two tokens
         // (ASCOM type vs NINA concept), so a remembered "CoverCalibrator" still satisfies
         // a "FlatDevice" reconnect (and vice-versa).
-        foreach (var device in remembered.Where(d => SameGroup(d.Type, type))) {
+        var candidates = remembered.Where(d => SameGroup(d.Type, type)).ToList();
+        // #1127 — the card names the service's RETAINED device, and the store can have forgotten
+        // it (the wizard's store-only DELETE …/remembered) while the service still holds it. With
+        // nothing remembered, reconnect what the card shows rather than answer 404 to a device the
+        // daemon plainly knows. Single-instance types only: the switch registry is addressed by id.
+        if (candidates.Count == 0 && ResolveRetained(type) is { } retained) {
+            candidates.Add(retained);
+        }
+        foreach (var device in candidates) {
             var connect = ResolveConnect(device.Type, device, ct);
             if (connect is null) {
                 continue;
@@ -140,6 +153,24 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // synchronously" (attempted > 0 but dispatched == 0) so the caller isn't told
         // "reconnecting…" when every device failed on the spot.
         return new ReconnectOutcome(attempted, dispatched);
+    }
+
+    // #1127 — the single-instance service's retained record for the type (null when the service
+    // is a placeholder or holds nothing). Internal for direct unit testing.
+    internal DiscoveredDeviceDto? ResolveRetained(DeviceType type) {
+        object? service = type.Canonical() switch {
+            DeviceType.Camera => _services.GetService<ICameraService>(),
+            DeviceType.Telescope => _services.GetService<ITelescopeService>(),
+            DeviceType.Focuser => _services.GetService<IFocuserService>(),
+            DeviceType.FilterWheel => _services.GetService<IFilterWheelService>(),
+            DeviceType.Rotator => _services.GetService<IRotatorService>(),
+            DeviceType.Dome => _services.GetService<IDomeService>(),
+            DeviceType.SafetyMonitor => _services.GetService<ISafetyMonitorService>(),
+            DeviceType.ObservingConditions => _services.GetService<IObservingConditionsService>(),
+            DeviceType.FlatDevice or DeviceType.CoverCalibrator => _services.GetService<IFlatDeviceService>(),
+            _ => null,
+        };
+        return (service as IRetainedDeviceSource)?.RetainedDevice;
     }
 
     public async Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) {

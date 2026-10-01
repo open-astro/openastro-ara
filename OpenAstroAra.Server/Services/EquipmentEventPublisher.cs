@@ -105,6 +105,30 @@ public sealed partial class EquipmentEventPublisher {
         }
     }
 
+    /// <summary>Publish that a device left the daemon's known list (the card's Remove, #1127):
+    /// an <c>equipment.state_changed</c> carrying <c>state: "disconnected"</c> and
+    /// <c>removed: true</c>. The same event the clients already refresh on, so a second open
+    /// client re-reads the type and drops the card (its GET is a 404 now) instead of showing a
+    /// device the daemon no longer has until its next poll. No alias: a removal is not a
+    /// connection transition.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into a device removal path. CA1031's log-and-recover boundary applies.")]
+    public void Removed(DeviceType deviceType, string? deviceId, string? deviceName) {
+        try {
+            var payload = new JsonObject {
+                ["device_type"] = deviceType.ToString().ToLowerInvariant(),
+                ["device_id"] = deviceId,
+                ["device_name"] = deviceName,
+                ["state"] = EquipmentConnectionState.Disconnected.ToString().ToLowerInvariant(),
+                ["removed"] = true,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            Publish(WsEventCatalog.EquipmentStateChanged, doc.RootElement.Clone());
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "§42.5 resolution is best-effort off a connect path: a store fault is logged and dropped, never propagated — and the task is fire-and-forget, so the catch also keeps it from dying unobserved. CA1031's log-and-recover boundary applies.")]
     private async System.Threading.Tasks.Task ResolveQuietlyAsync(DeviceType deviceType) {

@@ -596,6 +596,24 @@ void main() {
     expect(find.byTooltip('Remove this switch'), findsNothing);
   });
 
+  testWidgets('a connecting switch offers no Remove either (#1127)', (
+    tester,
+  ) async {
+    // The server refuses removal of a Connecting switch too; the card's gate
+    // matches it so a mid-connect Remove can't 409.
+    await _pump(tester, [
+      const SwitchDevice(
+        deviceId: 'mid-1',
+        alpacaDeviceNumber: 0,
+        name: 'Hub',
+        connectionState: SwitchConnectionState.connecting,
+        ports: [],
+      ),
+    ]);
+    expect(find.byTooltip('Remove this switch'), findsNothing);
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
+  });
+
   testWidgets('a disconnected switch offers Connect, not Disconnect', (
     tester,
   ) async {
