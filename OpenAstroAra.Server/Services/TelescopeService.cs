@@ -100,6 +100,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // through GetInfo for its pier-side projection and the §58.5 flip verification compares it
     // before/after the flip slew. pierUnknown until read, and whenever the mount cannot say.
     private PierSide _sideOfPier = PierSide.pierUnknown;
+    // Latched (under _gate) once the driver answers SideOfPier with a not-implemented error, so the
+    // 2 s refresh stops spending a GET per tick on a property it will never get (#1238 review);
+    // reset with the rest of the per-device state on connect.
+    private bool _sideOfPierUnsupported;
     // #1193 — AlpacaBridge latches "Mount communications compromised" after a mount Wi-Fi blip and
     // keeps answering Connected=true, so the §42.3 probe streak never trips; only a disconnect +
     // reconnect of the telescope clears it. The refresh tick recognises the latched error on the
@@ -595,7 +599,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client, out var readError);
-            var sideOfPier = ReadSideOfPier(client);
+            bool readPierSide;
+            lock (_gate) {
+                readPierSide = !_sideOfPierUnsupported;
+            }
+            var (sideOfPier, pierSideUnsupported) = readPierSide ? ReadSideOfPier(client) : (PierSide.pierUnknown, true);
             // #1193 — the bridge's latched fault answers the probe but fails the reads. Never
             // during a slew (the reconnect would abandon a moving mount mid-goto; the slew's own
             // watchdog and the next tick get it), and once per episode.
@@ -632,6 +640,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         ? runtime with { TargetRightAscensionHours = null, TargetDeclinationDegrees = null }
                         : runtime;
                     _sideOfPier = sideOfPier;
+                    if (pierSideUnsupported && !_sideOfPierUnsupported) {
+                        _sideOfPierUnsupported = true;
+                        LogSideOfPierUnsupported(_device?.Name ?? "?");
+                    }
                     if (caps is not null) {
                         _capabilities = caps;
                     }
@@ -825,15 +837,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // an optional property on many drivers, so a throw (not implemented, transient) reads as
     // pierUnknown, which every consumer already treats as "cannot say" (the trigger ignores the
     // pier side, the §58.5 verification only warns).
+    // Unsupported = the driver said so (ASCOM's not-implemented family), which is terminal for the
+    // session; any other failure is transient and read again next tick.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: SideOfPier is optional and throws PropertyNotImplemented on many drivers; the read falls back to pierUnknown rather than failing the whole refresh. CA1031's log-and-recover boundary applies.")]
-    private static PierSide ReadSideOfPier(AlpacaTelescope c) {
+    private static (PierSide SideOfPier, bool Unsupported) ReadSideOfPier(AlpacaTelescope c) {
         try {
-            return MapPointingState(c.SideOfPier);
+            return (MapPointingState(c.SideOfPier), false);
+        } catch (ASCOM.NotImplementedException) {
+            return (PierSide.pierUnknown, true);
         } catch (Exception) {
-            return PierSide.pierUnknown;
+            return (PierSide.pierUnknown, false);
         }
     }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Telescope '{Device}' does not implement SideOfPier — pier side stays unknown this session (no further reads)")]
+    private partial void LogSideOfPierUnsupported(string device);
 
     // ASCOM PointingState → NINA PierSide: the library renamed the Platform's PierSide enum, and its
     // own docs pin Normal = pierEast, ThroughThePole = pierWest. Anything else is unknown.
@@ -1064,6 +1083,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _sideOfPier = PierSide.pierUnknown; // #1229 — nor its pier side
+                    _sideOfPierUnsupported = false;      // the new device may answer it
                     // _bridgeFaultTripped is deliberately NOT reset here: the §42.3 ladder's reconnect
                     // comes through this path, and a bridge still latched after it must stay one
                     // episode (#1193). A hand-connected different device clears it on its first clean tick.
