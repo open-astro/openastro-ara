@@ -77,7 +77,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** statistics computed rig-side because the client only ever holds the stretched JPEG — the numbers must come from the raw pixels, and the Pi already has them in memory at preview time. `relative_path` rather than client-side re-derivation because only the server knows which template expanded and against which store root.
 
-**Spec ref:** `OpenAstroAra.Server/Endpoints/ImageEndpoints.cs` (histogram), `Services/BackupStreamService.cs`, `Services/StorageDeviceService.cs`. NOTE: `openapi.yaml` is broadly stale (frozen pre-§29/§44/§45/§63/§64 — see PORT_TODO "openapi.yaml refresh") and does not yet describe these.
+**Spec ref:** `OpenAstroAra.Server/Endpoints/ImageEndpoints.cs` (histogram), `Services/BackupStreamService.cs`, `Services/StorageDeviceService.cs`. NOTE: `openapi.yaml` was broadly stale when this was written (frozen pre-§29/§44/§45/§63/§64); superseded by the #1131 regenerated snapshot, which describes these.
 
 **Related:** PR #923 (§29 arc), branch backup-mirror-names (§44 naming, §12c.2 statistics), CHANGELOG [Unreleased]
 
@@ -89,7 +89,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** journaling's real benefit is bounded blast radius + automatic repair; with temp+rename frame writes, an on-rig fsck one tap away, the §28.8 rescan, and the mirror as second copy, that benefit no longer outweighed native take-home readability. NTFS (journaled + Windows-native) lost on macOS being read-only and the younger ntfs3 driver; FAT32 is disqualified by the 4 GB file cap (§77 SER); LKL/desktop ext4 drivers rejected (kernel-fork dependency, GPL, privileged raw-device access, corruption risk in the very scenario ext4 was chosen against).
 
-**Spec ref:** `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`--fs`, `--check`), `Services/StorageDeviceService.cs`, `Endpoints/SystemEndpoints.cs`. openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`--fs`, `--check`), `Services/StorageDeviceService.cs`, `Endpoints/SystemEndpoints.cs`. openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** PR #923 (§29 arc), CHANGELOG [Unreleased]
 
@@ -107,7 +107,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** header echo (not a JSON envelope) keeps the preview response a plain image body — existing consumers unaffected, and the knobs are metadata about the render, which is what headers are for. Seeds reuse the exact pinned artifacts + SHA path rather than a parallel format so one verification chain covers network and bundle installs.
 
-**Spec ref:** `Endpoints/ImageEndpoints.cs`, `Endpoints/SystemEndpoints.cs`, `Services/{DataManagerService,SkyCatalogService,SkyCatalogReader,PreviewCacheMaintenance,ThumbnailWarmerService}.cs`, `packaging/{build-deb.sh,seed-manifest.tsv}`. openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `Endpoints/ImageEndpoints.cs`, `Endpoints/SystemEndpoints.cs`, `Services/{DataManagerService,SkyCatalogService,SkyCatalogReader,PreviewCacheMaintenance,ThumbnailWarmerService}.cs`, `packaging/{build-deb.sh,seed-manifest.tsv}`. openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** branch library-photos-redesign, CHANGELOG [Unreleased]
 
@@ -119,7 +119,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** the client re-implemented a cruder copy of the sequencer's duration model (exposure × iterations + 15 s/instruction) because run state never exposed it — a duplicate of execution-side logic that drifted as instructions gained real estimates. The daemon owns the tree and its statuses, so it is the only place a remaining figure that credits completed passes can be computed.
 
-**Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSeconds`, `EmitAsync`), `Services/SequencerService.LiveEdit.cs`, `Contracts/SequenceDtos.cs`. openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `Services/RunEtaEstimator.cs`, `Services/SequencerService.cs` (`RunState.EstimatedSeconds`, `EmitAsync`), `Services/SequencerService.LiveEdit.cs`, `Contracts/SequenceDtos.cs`. openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** #1068 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
 
@@ -143,7 +143,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Reasoning:** this was the one place the Flutter client reached equipment without the daemon, and it failed whenever the client machine could not route to the rig's Alpaca LAN. Only the JSON body is parsed and only names come out, on a trusted-LAN surface (§52/§67).
 
-**Spec ref:** `Services/AlpacaManagementClient.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`), `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto`). openapi.yaml still pending its refresh (PORT_TODO).
+**Spec ref:** `Services/AlpacaManagementClient.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`), `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto`). openapi.yaml was still pending its refresh when this was written; superseded by the #1131 regenerated snapshot.
 
 **Related:** #1067 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
 ### 2026-09-20 — #1066 filter-wheel first-connect home moves daemon-side
@@ -298,7 +298,7 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ## WebSocket wire protocol (`/api/v1/ws`)
 
-Moved from the hand-written `openapi.yaml` header when that file became a generated snapshot (#1131, 2026-10-01); the close-code list was reconciled with the code at the same time (4001/4003 are reserved, not emitted). OpenAPI 3.1 paths cannot express WebSocket endpoints; this section is the source of truth for independent client implementations, with the live token catalogue in `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs`.
+Moved from the hand-written `openapi.yaml` header when that file became a generated snapshot (#1131, 2026-10-01); the close-code, frame-size, compression and backpressure lines were reconciled with the code at the same time (4001/4003 reserved, no WS frame cap or compression, 1000-event drop-oldest buffer). OpenAPI 3.1 paths cannot express WebSocket endpoints; this section is the source of truth for independent client implementations, with the live token catalogue in `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs`.
 
 ```
 
@@ -308,9 +308,10 @@ Upgrade headers:
   X-Ara-WS-Version: 1                  (required; mismatched → 426 Upgrade Required)
   Sec-WebSocket-Extensions: permessage-deflate  (default; omit to disable compression)
 
-Frame size:    1 MB max (REST cap is 64 KB per §60.3; WS is larger to accommodate
-               batched notifications + resume replay bursts).
-Compression:   permessage-deflate enabled by default; ~70% savings on JSON traffic.
+Frame size:    no explicit WS cap beyond Kestrel's defaults today (the planned 1 MB cap
+               and the §60.3 64 KB REST comparison were design intent, not code).
+Compression:   not enabled (permessage-deflate was design intent; the server does not
+               opt in to DangerousEnableCompression).
 Heartbeat:     server sends a WS ping every 30 s; client must pong within 60 s.
                2 consecutive missed pongs → server closes with code 1011
                (reason: server_initiated_disconnect_unresponsive_client).
@@ -351,9 +352,10 @@ Close codes:
          upgrade with HTTP 426 (WebSocketEndpoints.cs), so no socket exists to close
   4004 — Single-client policy: another WILMA took over (§27, ClientSessionService)
 
-Backpressure: per-client send buffer limited to 256 messages (§66.2). If exceeded,
-server closes with code 1011 + reason `client_too_slow`. Client reconnects with
-resume protocol to catch up.
+Backpressure: per-subscriber bounded buffer of 1000 events, drop-oldest when full
+(`PlaceholderWsServices.PerSubscriberCapacity`); a slow client silently loses the oldest
+events rather than being closed with `client_too_slow` (design intent from §66.2, not
+implemented). It catches up through the resume protocol on reconnect.
 
 Event catalog (see §60.10 for full schemas):
   equipment.state         — connection + per-device runtime state changes

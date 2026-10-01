@@ -6,7 +6,7 @@ in [`../docs/`](../docs/)).
 | Doc | What it is |
 |---|---|
 | [`PORT_PLAYBOOK.md`](PORT_PLAYBOOK.md) | **The product spec.** Addressed by `§` numbers cited throughout the code, the PR reviews and the process rules. Never renumber. |
-| [`API_CONTRACT.md`](API_CONTRACT.md) | **The wire-shape reasoning log** (append-only). `OpenAstroAra.Server/openapi.yaml` is incomplete (#1131), so this log plus the endpoint sources are the contract; append an entry in the PR that adds or changes a wire shape. |
+| [`API_CONTRACT.md`](API_CONTRACT.md) | **The wire-shape reasoning log** (append-only). `OpenAstroAra.Server/openapi.yaml` is a generated snapshot of every REST route (drift fails `OpenApiContractSnapshotTest`, #1131); this log holds the reasoning and the WebSocket protocol. Append an entry in the PR that adds or changes a wire shape. |
 | [`COMMIT-PR-RULES.md`](COMMIT-PR-RULES.md) | **The process rules**: branch naming, PR rhythm, the §19.1 merge gate (all checks green + review body clean), review-loop discipline. Referenced by CI, the PR template and the registry-gate scripts. |
 
 ## Where "what's left" lives

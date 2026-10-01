@@ -72,7 +72,13 @@ public partial class Program {
     /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
     /// </summary>
     internal static WebApplication BuildApp(string[] args) {
-        var builder = WebApplication.CreateSlimBuilder(args);
+        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions {
+            Args = args,
+            // The OpenAPI generator tags untagged routes (/healthz, /server/info) with the
+            // application name; pin it so the openapi.yaml snapshot reads the same from the
+            // daemon and from any test host (#1131).
+            ApplicationName = "OpenAstroAra.Server",
+        });
 
         // Kestrel port: env var > appsettings > default 5555 (per §2.1).
         var port = ResolvePort(builder.Configuration);

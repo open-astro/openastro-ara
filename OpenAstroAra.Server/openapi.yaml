@@ -18,7 +18,7 @@ paths:
   /healthz:
     get:
       tags:
-        - testhost
+        - OpenAstroAra.Server
       responses:
         '200':
           description: OK
@@ -39,7 +39,7 @@ paths:
   /api/v1/server/info:
     get:
       tags:
-        - testhost
+        - OpenAstroAra.Server
       responses:
         '200':
           description: OK
@@ -11047,7 +11047,7 @@ components:
           items:
             type: string
 tags:
-  - name: testhost
+  - name: OpenAstroAra.Server
   - name: Health
   - name: Equipment
   - name: Autofocus

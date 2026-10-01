@@ -121,7 +121,7 @@ namespace OpenAstroAra.Test {
             string[] have = committed.Split('\n');
             int line = Enumerable.Range(0, Math.Min(want.Length, have.Length)).FirstOrDefault(i => want[i] != have[i], Math.Min(want.Length, have.Length));
             Assert.Fail(
-                $"OpenAstroAra.Server/openapi.yaml is out of date with the mapped routes (first difference at line {line + 1}:\n"
+                $"OpenAstroAra.Server/openapi.yaml is out of date with the mapped routes, or the Microsoft.OpenApi serializer changed with a package bump (first difference at line {line + 1}):\n"
                 + $"  generated: {(line < want.Length ? want[line] : "<end>")}\n"
                 + $"  committed: {(line < have.Length ? have[line] : "<end>")}\n"
                 + $"Refresh with {UpdateEnvVar}=1 dotnet test OpenAstroAra.Test --filter {nameof(OpenApiContractSnapshotTest)} and commit the result (#1131).");
