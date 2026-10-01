@@ -582,9 +582,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
             // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
+            // this probe is the transport-level disconnect source: Connected throws on transport
             // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
+            // (not one blip) trips the device to Error + publishes the §42.2 fault. The other
+            // source is the #1193 latched-fault check just below, for a bridge that still answers
+            // the probe while refusing every read.
             if (!ProbeConnected(client)) {
                 if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
                     TripConnectionLost(client);
@@ -601,9 +603,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 if (!runtime.State.Equals("slewing", StringComparison.Ordinal) && TripLatchedBridgeFault(client, readError)) {
                     return; // tripped to Error — nothing from this pass is worth committing
                 }
-            } else if (readError is null) {
+            } else {
+                // A tick with no latched error ends the episode — including one where some other
+                // read threw (a driver that always refuses AtHome, say): only the latch itself may
+                // hold the flag, or that driver's next latch episode would never be detected.
                 lock (_gate) {
-                    _bridgeFaultTripped = false; // a clean read ends the episode
+                    _bridgeFaultTripped = false;
                 }
             }
             // The two pad-axis AxisRates reads feed BOTH the caps DTO's rate list and the #1064
@@ -1059,6 +1064,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _sideOfPier = PierSide.pierUnknown; // #1229 — nor its pier side
+                    // _bridgeFaultTripped is deliberately NOT reset here: the §42.3 ladder's reconnect
+                    // comes through this path, and a bridge still latched after it must stay one
+                    // episode (#1193). A hand-connected different device clears it on its first clean tick.
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
