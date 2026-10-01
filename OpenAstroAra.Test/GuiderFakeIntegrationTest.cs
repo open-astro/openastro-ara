@@ -774,10 +774,14 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(EquipmentConnectionState.Connected));
 
             // The one-shot stays latched: a second drop in the same episode records nothing new and
-            // does not pause again; a second reconnect has no open row to resolve.
+            // does not pause again; a second reconnect has no open row to resolve. The events arrive
+            // in order on one stream, so a state change broadcast AFTER them is the observable
+            // "they have been processed" signal (no fixed delay).
             await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
-            await Task.Delay(500).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null,
+                "the trailing AppState never landed, so the flapping events cannot be assumed processed");
             Assert.That(Volatile.Read(ref pauses), Is.EqualTo(1), "a flapping camera must not re-trigger the policy per cycle");
             faultLog.Verify(f => f.ResolveAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
                 Times.Once);
