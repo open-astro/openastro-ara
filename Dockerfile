@@ -8,9 +8,11 @@
 #   dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 \
 #     --self-contained -p:PublishAot=false -o ./publish/arm64
 #   CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
-# A local `docker build .` from a publish dir that skipped the natives produces an
-# image whose boot log warns "Astrometry natives incomplete" (CI's arm64 e2e step
-# fails on that line; a local build does not guard itself).
+# The explicit COPY of the two natives below is the build-time guard (#1130): the
+# chiseled base has no shell for a `RUN test -f`, but COPY of a missing source
+# fails the build with a clear error instead of producing an image whose boot
+# log warns "Astrometry natives incomplete". Same rule packaging/build-deb.sh
+# enforces for the .deb.
 #
 # Base: runtime-deps chiseled — because --self-contained bundles the
 # .NET + ASP.NET Core runtime DLLs into the publish output, so the base
@@ -29,6 +31,9 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-arm64v8
 
 WORKDIR /app
 COPY publish/arm64/ ./
+# Natives guard — see the header. Re-copying the same files is a no-op in the
+# image; a publish dir that skipped scripts/build-astrometry-natives.sh fails here.
+COPY publish/arm64/libsofa.so publish/arm64/libnovas31.so ./
 
 # Default Kestrel port per OpenAstroAra.Server/Program.cs ResolvePort:
 # env OPENASTROARA_PORT > appsettings OpenAstroAra:Port > 5555 default.
