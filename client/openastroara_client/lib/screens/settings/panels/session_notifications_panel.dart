@@ -109,11 +109,6 @@ class _SessionNotificationsPanelState
           onChanged: n.setInAppBanner,
         ),
         SettingsSwitchRow(
-          label: 'OS desktop notification',
-          value: s.osDesktop,
-          onChanged: n.setOsDesktop,
-        ),
-        SettingsSwitchRow(
           label: 'Play a sound for safety alerts',
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
