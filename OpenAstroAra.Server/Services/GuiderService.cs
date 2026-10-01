@@ -200,6 +200,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // §42.2: a structured device fault (guide camera dropped) — the link stays up, so this runs
             // the on_guider_lost policy without dropping to Error or starting §63.3 recovery.
             guider.EquipmentFault += OnEquipmentFault;
+            guider.EquipmentReconnected += OnEquipmentReconnected; // #1191 — closes that fault's row
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _guider = guider;
             generation = ++_connectGeneration;
@@ -474,6 +475,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // A fresh successful connection starts a new fault episode: the §42.2
             // reaction may fire again on the next mid-session loss.
             _latchedFaultKind = null;
+            _openCameraDropFault = null; // #1191 — the connect's ResolveOnReconnectAsync closes it
             // §42.5 — the reconnect resolves this guider's open disconnect fault rows (the
             // same observed-reconnect semantics the Alpaca devices get from the publisher
             // hook); best-effort and off-lock.
@@ -489,6 +491,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guider.PHD2ConnectionLost -= OnConnectionLost;
             _guider.GuideEvent -= OnGuideStep;
             _guider.EquipmentFault -= OnEquipmentFault;
+            _guider.EquipmentReconnected -= OnEquipmentReconnected;
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;
