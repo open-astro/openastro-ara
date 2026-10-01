@@ -233,6 +233,9 @@ public partial class Program {
         // reaction service stamps its outcome onto the same row. Constructor
         // activation injects both optional deps.
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
+        // Singleton on purpose: the service sweeps stale request/result files from the storage
+        // exchange in its constructor (#1135), which is only safe because exactly one instance is
+        // built, at boot, before any request can be in flight. Do not make this scoped/transient.
         builder.Services.AddSingleton<IStorageDeviceService, StorageDeviceService>();
         // Registered (not just constructed at startup) so POST /storage/rescan
         // can run the same scan on demand — see the endpoint for why that

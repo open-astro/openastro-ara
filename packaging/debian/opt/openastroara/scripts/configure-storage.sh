@@ -106,7 +106,10 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     # lives next to fstab, not on fstab itself, so the rename below never replaces the
     # locked inode out from under the other holder. flock(1) is util-linux, present on
     # every supported image; a box without it degrades to the unlocked rebuild.
-    tmp=$(mktemp "${FSTAB}.ara-XXXXXX") || { echo "ERROR: fstab_unreadable"; exit 8; }
+    tmp=$(mktemp "${FSTAB}.ara-XXXXXX") || { echo "ERROR: fstab_tmp_failed"; exit 8; }
+    # An early exit between here and the rename (id lookup failing under set -e, the
+    # lock timing out) must not leave a uniquely named temp file beside fstab.
+    trap 'rm -f "$tmp"' EXIT
     lockfd=
     if command -v flock >/dev/null 2>&1; then
         exec 9>"${FSTAB}.ara-lock"
@@ -134,6 +137,7 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     chmod 644 "$tmp"
     sync
     mv "$tmp" "$FSTAB"
+    trap - EXIT
     [ -z "$lockfd" ] || exec 9>&-
     systemctl daemon-reload 2>/dev/null || true
 }
