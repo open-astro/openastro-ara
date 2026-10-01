@@ -298,7 +298,7 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ## WebSocket wire protocol (`/api/v1/ws`)
 
-Moved verbatim from the hand-written `openapi.yaml` header when that file became a generated snapshot (#1131, 2026-10-01). OpenAPI 3.1 paths cannot express WebSocket endpoints; this section is the source of truth for independent client implementations, with the live token catalogue in `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs`.
+Moved from the hand-written `openapi.yaml` header when that file became a generated snapshot (#1131, 2026-10-01); the close-code list was reconciled with the code at the same time (4001/4003 are reserved, not emitted). OpenAPI 3.1 paths cannot express WebSocket endpoints; this section is the source of truth for independent client implementations, with the live token catalogue in `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs`.
 
 ```
 
@@ -344,10 +344,12 @@ Close codes:
   1009 — Frame too large (>1 MB)
   1011 — Server-side error / unresponsive client / client_too_slow backpressure
   1012 — Service restart imminent (pairs with server.restart_imminent event per §34.7)
-  4001 — (v0.1.0 only) Auth required / token invalid (remote-access mode per §67.4)
+  4001 — reserved for auth required / token invalid (remote-access mode, §67.4; not
+         emitted today — v0.x has no auth)
   4002 — Resume token expired (client clears local + reconnects with REST snapshot)
-  4003 — WS protocol version mismatch (X-Ara-WS-Version negotiation failed)
-  4004 — Single-client policy: another WILMA took over (§27)
+  4003 — reserved; a missing or mismatched X-Ara-WS-Version is rejected BEFORE the
+         upgrade with HTTP 426 (WebSocketEndpoints.cs), so no socket exists to close
+  4004 — Single-client policy: another WILMA took over (§27, ClientSessionService)
 
 Backpressure: per-client send buffer limited to 256 messages (§66.2). If exceeded,
 server closes with code 1011 + reason `client_too_slow`. Client reconnects with

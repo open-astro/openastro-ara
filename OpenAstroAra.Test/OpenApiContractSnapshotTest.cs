@@ -27,8 +27,8 @@ namespace OpenAstroAra.Test {
 
     /// <summary>#1131 — <c>OpenAstroAra.Server/openapi.yaml</c> is a snapshot of the spec the
     /// daemon generates at runtime (<c>AddOpenApi()</c> / <c>MapOpenApi()</c>, served at
-    /// <c>/openapi/v1.json</c>). The hand-written file froze at 28 paths against ~300 mapped
-    /// routes and listed routes that no longer existed; this fixture pulls the document out of
+    /// <c>/openapi/v1.json</c>). The hand-written file froze at 28 paths against ~200 live
+    /// paths (~300 route+verb mappings) and listed routes that no longer existed; this fixture pulls the document out of
     /// the real composition root, serialises it the same way every time, and fails when the
     /// committed file differs. To refresh after an endpoint change:
     /// <code>OPENASTROARA_UPDATE_OPENAPI=1 dotnet test OpenAstroAra.Test --filter OpenApiContractSnapshotTest</code>
@@ -53,7 +53,7 @@ namespace OpenAstroAra.Test {
             "#\n" +
             "# Conventions that the generator cannot express live in design/API_CONTRACT.md:\n" +
             "# URL-versioned /api/v1, trusted-LAN (no auth, §67), WebSocket event envelope at\n" +
-            "# /api/v1/stream (token catalogue: Contracts/WsEvents/WsEventCatalog.cs).\n" +
+            "# /api/v1/ws (token catalogue: Contracts/WsEvents/WsEventCatalog.cs).\n" +
             "\n";
 
         private string profileDir = null!;
@@ -135,7 +135,8 @@ namespace OpenAstroAra.Test {
             foreach (string group in new[] { "/api/v1/storage", "/api/v1/frames", "/api/v1/equipment/guider", "/api/v1/profiles", "/api/v1/sequences" }) {
                 Assert.That(yaml, Does.Contain(group), $"{group} missing from the generated document");
             }
-            Assert.That(yaml, Does.Not.Contain("/api/v1/image:"), "the retired /image group must not come back");
+            Assert.That(yaml.Split('\n').Where(l => l.StartsWith("  /api/v1/image", StringComparison.Ordinal)), Is.Empty,
+                "the retired /image group (now /frames) must not come back");
         }
     }
 }

@@ -8,7 +8,7 @@
 #
 # Conventions that the generator cannot express live in design/API_CONTRACT.md:
 # URL-versioned /api/v1, trusted-LAN (no auth, §67), WebSocket event envelope at
-# /api/v1/stream (token catalogue: Contracts/WsEvents/WsEventCatalog.cs).
+# /api/v1/ws (token catalogue: Contracts/WsEvents/WsEventCatalog.cs).
 
 openapi: '3.1.1'
 info:
