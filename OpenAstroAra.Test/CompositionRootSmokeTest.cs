@@ -32,7 +32,13 @@ namespace OpenAstroAra.Test {
     /// ever built the Program.cs graph; this one fails the moment an alias points anywhere but the
     /// live service singleton. The two headless-on-purpose mediators are pinned as such.</summary>
     [TestFixture]
-    [NonParallelizable] // sets the process-wide profile-dir environment variable
+    // Sets the process-wide profile-dir environment variable and replaces the global Serilog
+    // logger (BuildApp installs the §29.9 file sink, as Main does); any future fixture that also
+    // calls BuildApp needs the same isolation. Building is network-free today — Kestrel binds in
+    // Run, and no singleton the startup reconciliation or boot probes resolve opens a socket or
+    // starts Alpaca discovery in its constructor — but it does run the real startup side effects
+    // against the temp dir (SQLite catalog, the capture scan, the orphan sweeps).
+    [NonParallelizable]
     public class CompositionRootSmokeTest {
 
         private string profileDir = null!;
@@ -55,6 +61,9 @@ namespace OpenAstroAra.Test {
             // release the file so the directory can go (Main's finally does the same after Run).
             await Serilog.Log.CloseAndFlushAsync();
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previousProfileDir);
+            // The pooled SQLite handle would keep the catalog file open past DisposeAsync on
+            // Windows and leave the temp dir behind.
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             try {
                 Directory.Delete(profileDir, recursive: true);
             } catch (IOException) {
@@ -99,10 +108,16 @@ namespace OpenAstroAra.Test {
         public void The_REST_services_and_their_mediator_aliases_are_one_singleton() {
             // Playbook §8.1: one singleton backs both the REST service and the mediator, so a REST
             // connect is what the sequencer sees. A second registration path would split them.
+            AssertSame<ISafetyMonitorService, ISafetyMonitorMediator>();
             AssertSame<ITelescopeService, ITelescopeMediator>();
             AssertSame<IGuiderService, IGuiderMediator>();
+            AssertSame<IFocuserService, IFocuserMediator>();
             AssertSame<ICameraService, ICameraMediator>();
+            AssertSame<ICameraService, IImagingMediator>();
+            AssertSame<IFilterWheelService, IFilterWheelMediator>();
+            AssertSame<IRotatorService, IRotatorMediator>();
             AssertSame<ISwitchService, ISwitchMediator>();
+            AssertSame<IDomeService, IDomeMediator>();
         }
     }
 }
