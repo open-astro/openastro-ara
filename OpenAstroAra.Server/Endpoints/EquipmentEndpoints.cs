@@ -321,38 +321,15 @@ public static partial class EquipmentEndpoints {
         // SwitchDto carries no host/port, so the client can't rebuild a /connect body; the daemon
         // still holds the discovery record. 404 when the id is unknown (removed, or never connected
         // this session): the client then falls back to Add switch. Idempotent when already live.
-        sw.MapPost("/{id}/connect", async (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) => {
-            var accepted = await svc.ReconnectAsync(id, key, ct);
-            return accepted is null ? Results.NotFound() : Results.Accepted(value: accepted);
-        });
+        sw.MapPost("/{id}/connect", (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
+            ConnectSwitchAsync(id, key, svc, ct));
         // Remove a stuck/dead switch from the known list AND its remembered auto-connect entry —
-        // the stuck-device escape hatch. A Connected switch is refused (409): disconnect first, so a
-        // removal on live hardware is always an explicit two-step. Unknown id → 404 (idempotent
-        // clients treat it as already-gone).
-        sw.MapDelete("/{id}", async (string id, ISwitchService svc, IEquipmentSelectionStore selectionStore,
-                Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => {
-            try {
-                if (!await svc.RemoveAsync(id, ct)) {
-                    return Results.NotFound();
-                }
-            } catch (System.InvalidOperationException ex) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            }
-            // Best-effort: the switch is ALREADY removed from the live registry — a selection-store
-            // I/O failure must not turn the removal into a 500 (the caller would retry into a 404
-            // and the stale remembered entry could resurrect the device on boot unnoticed). Log it
-            // so the operator knows to expect one auto-connect ghost until the next forget.
-            try {
-                await selectionStore.ForgetSwitchAsync(id, ct);
-            } catch (System.IO.IOException ex) {
-                LogSwitchForgetFailed(logger, ex, id);
-            } catch (System.UnauthorizedAccessException ex) {
-                // Not an IOException subclass — a read-only profile dir would otherwise 500 the
-                // removal despite the guarantee above (review r5).
-                LogSwitchForgetFailed(logger, ex, id);
-            }
-            return Results.NoContent();
-        });
+        // the stuck-device escape hatch. A live (Connecting/Connected) switch is refused (409):
+        // disconnect first, so a removal on live hardware is always an explicit two-step. Unknown
+        // id → 404 (idempotent clients treat it as already-gone).
+        sw.MapDelete("/{id}", (string id, ISwitchService svc, IEquipmentSelectionStore selectionStore,
+                Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
+            RemoveSwitchAsync(id, svc, selectionStore, logger, ct));
         // A write needs a live switch, so the errors map (per the file's convention): an out-of-range
         // PortId → 400; no connected switch at {id} (unknown id or not Connected) → 409 Conflict —
         // instead of an opaque 500.
@@ -560,15 +537,50 @@ public static partial class EquipmentEndpoints {
         return System.Math.Clamp(scaled, 1, totalSteps);
     }
 
+    // The card's Connect for a KNOWN switch (see the route comment). Extracted for unit testing.
+    public static async Task<IResult> ConnectSwitchAsync(string id, string? idempotencyKey, ISwitchService svc, CancellationToken ct) {
+        var accepted = await svc.ReconnectAsync(id, idempotencyKey, ct);
+        return accepted is null ? Results.NotFound() : Results.Accepted(value: accepted);
+    }
+
+    // The card's Remove for a switch (see the route comment). Extracted for unit testing (#1127).
+    // The catch filter keeps ObjectDisposedException (an InvalidOperationException subclass) out of
+    // the 409: a request racing the daemon's shutdown is a server fault, not a "disconnect first".
+    public static async Task<IResult> RemoveSwitchAsync(string id, ISwitchService svc, IEquipmentSelectionStore selectionStore,
+            Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) {
+        try {
+            if (!await svc.RemoveAsync(id, ct)) {
+                return Results.NotFound();
+            }
+        } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+        // Best-effort: the switch is ALREADY removed from the live registry — a selection-store
+        // I/O failure must not turn the removal into a 500 (the caller would retry into a 404
+        // and the stale remembered entry could resurrect the device on boot unnoticed). Log it
+        // so the operator knows to expect one auto-connect ghost until the next forget.
+        try {
+            await selectionStore.ForgetSwitchAsync(id, ct);
+        } catch (System.IO.IOException ex) {
+            LogSwitchForgetFailed(logger, ex, id);
+        } catch (System.UnauthorizedAccessException ex) {
+            // Not an IOException subclass — a read-only profile dir would otherwise 500 the
+            // removal despite the guarantee above (review r5).
+            LogSwitchForgetFailed(logger, ex, id);
+        }
+        return Results.NoContent();
+    }
+
     // The card's Remove for a single-instance type: drop the service's retained device (409 while it
     // is live), then forget the remembered auto-connect entry. The store forget is best-effort like
     // the switch's — the device is already gone from the live service, so a profile-dir I/O failure
     // must not turn the removal into a 500; log it so the operator expects one auto-connect ghost.
-    private static async Task<IResult> RemoveDeviceAsync(System.Func<Task<bool>> forget, IEquipmentSelectionStore store,
+    // Public for unit testing (#1127); the catch filter is the same shutdown-race rule as the switch's.
+    public static async Task<IResult> RemoveDeviceAsync(System.Func<Task<bool>> forget, IEquipmentSelectionStore store,
             DeviceType type, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) {
         try {
             await forget();
-        } catch (System.InvalidOperationException ex) {
+        } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
         try {

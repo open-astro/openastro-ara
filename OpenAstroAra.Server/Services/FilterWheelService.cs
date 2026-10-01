@@ -33,7 +33,18 @@ namespace OpenAstroAra.Server.Services;
 /// Mirrors the established control-device template. REST-only — the <c>IFilterWheelMediator</c>
 /// unification (SwitchFilter instruction) is the follow-up.
 /// </summary>
-public sealed partial class FilterWheelService : IFilterWheelService, IDisposable {
+public sealed partial class FilterWheelService : IFilterWheelService, IRetainedDeviceSource, IDisposable {
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice {
+        get {
+            lock (_gate) {
+                return _disposed ? null : _device;
+            }
+        }
+    }
+
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly FilterWheelStateDto IdleRuntime = new("idle", null);
@@ -155,7 +166,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
                 throw new InvalidOperationException("the filter wheel is connected — disconnect it before removing it");
             }
+            var removed = _device;
             _device = null;
+            // §60.9 — a second open client drops its card on this instead of waiting for its
+            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
+            _events?.Removed(DeviceType.FilterWheel, removed.UniqueId, removed.Name);
             return true;
         }
     }

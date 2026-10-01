@@ -12,10 +12,15 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -50,6 +55,32 @@ namespace OpenAstroAra.Test {
 
             // The card's Remove: the status GET reads 404 again, as before any device was selected.
             Assert.That(await svc.GetAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ForgetAsync_publishes_a_removed_state_changed_and_clears_the_retained_record() {
+            // #1127 — a second open client drops its card on the event instead of waiting for its
+            // next poll, and the reconnector's retained-device fallback sees nothing afterwards.
+            var ws = new Mock<IWsBroadcaster>();
+            var events = new List<(string Type, JsonElement Payload)>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
+                .Returns(Task.CompletedTask);
+            using var svc = new FocuserService(events: new EquipmentEventPublisher(ws.Object));
+            var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            Assert.That(((IRetainedDeviceSource)svc).RetainedDevice?.UniqueId, Is.EqualTo("uid"), "retained while disconnected");
+
+            Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.True);
+
+            Assert.That(((IRetainedDeviceSource)svc).RetainedDevice, Is.Null);
+            (string Type, JsonElement Payload) removed;
+            lock (events) {
+                removed = events.Last(e => e.Type == WsEventCatalog.EquipmentStateChanged);
+            }
+            Assert.That(removed.Payload.GetProperty("removed").GetBoolean(), Is.True, "the last state_changed is the removal");
+            Assert.That(removed.Payload.GetProperty("device_id").GetString(), Is.EqualTo("uid"));
         }
 
         [Test]

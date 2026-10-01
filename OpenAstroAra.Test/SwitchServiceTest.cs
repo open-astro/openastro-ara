@@ -15,7 +15,9 @@
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.TestHarness.Alpaca;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -264,6 +266,68 @@ namespace OpenAstroAra.Test {
             svc.Dispose();
             await Assert.ThrowsAsync<ObjectDisposedException>(
                 () => svc.SetValueAsync("uid", new SwitchValueRequestDto(0, 1.0), CancellationToken.None));
+        }
+
+        // ─── #1127 — RemoveAsync: live gate + Error-client release ───────────────────────────
+
+        [Test]
+        public async Task RemoveAsync_refuses_a_connecting_switch_and_an_unknown_id_is_false() {
+            using var svc = new SwitchService();
+            Assert.That(await svc.RemoveAsync("never-seen", CancellationToken.None), Is.False);
+            // A black-hole address keeps the connect in flight long enough to observe Connecting.
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-slow", 0, host: "10.255.255.1")), null, CancellationToken.None);
+            var dto = await svc.GetAsync("uid-slow", CancellationToken.None);
+            Assume.That(dto?.State, Is.EqualTo(EquipmentConnectionState.Connecting), "the connect must still be in flight for this probe");
+            await Assert.ThatAsync(() => svc.RemoveAsync("uid-slow", CancellationToken.None), Throws.TypeOf<InvalidOperationException>(),
+                "a mid-connect removal would let the adopt land in an untracked entry");
+            Assert.That(await svc.GetAsync("uid-slow", CancellationToken.None), Is.Not.Null, "refused means kept");
+        }
+
+        [Test]
+        [Category("bench")] // loopback-only, runs in the default job too
+        public async Task RemoveAsync_releases_the_client_of_a_switch_that_tripped_to_Error() {
+            // Connect to a scripted switch, then have it answer Connected=false until the §42.3
+            // streak trips the entry to Error — the entry still holds the adopted client. Remove
+            // must release it: the teardown's Connected=false PUT reaching the device is the proof
+            // (before #1127 the entry was dropped and the client leaked, no PUT ever arrived).
+            var connected = "true";
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/connected", StringComparison.Ordinal) ? Volatile.Read(ref connected)
+                : path.EndsWith("/maxswitch", StringComparison.Ordinal) ? "0"
+                : null);
+            using var svc = new SwitchService();
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "switch-under-test", Name: "Bench Power Box", Type: DeviceType.Switch,
+                HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None);
+            await WaitForStateAsync(svc, "switch-under-test", EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15));
+
+            Volatile.Write(ref connected, "false");
+            await WaitForStateAsync(svc, "switch-under-test", EquipmentConnectionState.Error, TimeSpan.FromSeconds(30));
+            // The connect itself PUT Connected=True; the release is the LATER Connected=False.
+            static bool IsDisconnectPut((string Path, string Body) p) =>
+                p.Path.EndsWith("/connected", StringComparison.Ordinal) && p.Body.Contains("False", StringComparison.OrdinalIgnoreCase);
+            Assume.That(box.Puts.Any(IsDisconnectPut), Is.False, "nothing has released the client yet");
+
+            Assert.That(await svc.RemoveAsync("switch-under-test", CancellationToken.None), Is.True);
+            Assert.That(await svc.GetAsync("switch-under-test", CancellationToken.None), Is.Null, "gone from the known list");
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (DateTime.UtcNow < deadline && !box.Puts.Any(IsDisconnectPut)) {
+                await Task.Delay(100);
+            }
+            Assert.That(box.Puts.Any(IsDisconnectPut), Is.True, "the Error entry's client was never released (no Connected=False reached the device)");
+        }
+
+        private static async Task WaitForStateAsync(SwitchService svc, string deviceId, EquipmentConnectionState state, TimeSpan timeout) {
+            var deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline) {
+                if ((await svc.GetAsync(deviceId, CancellationToken.None))?.State == state) {
+                    return;
+                }
+                await Task.Delay(100);
+            }
+            Assert.Fail($"{deviceId} never reached {state}");
         }
 
         private static async Task<SwitchDto?> PollUntilNotConnectingAsync(SwitchService svc, string deviceId) {

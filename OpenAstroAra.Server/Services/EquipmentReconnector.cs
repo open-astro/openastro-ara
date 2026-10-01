@@ -114,7 +114,15 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // FlatDevice/CoverCalibrator are the same physical device under two tokens
         // (ASCOM type vs NINA concept), so a remembered "CoverCalibrator" still satisfies
         // a "FlatDevice" reconnect (and vice-versa).
-        foreach (var device in remembered.Where(d => SameGroup(d.Type, type))) {
+        var candidates = remembered.Where(d => SameGroup(d.Type, type)).ToList();
+        // #1127 — the card names the service's RETAINED device, and the store can have forgotten
+        // it (the wizard's store-only DELETE …/remembered) while the service still holds it. With
+        // nothing remembered, reconnect what the card shows rather than answer 404 to a device the
+        // daemon plainly knows. Single-instance types only: the switch registry is addressed by id.
+        if (candidates.Count == 0 && ResolveRetained(type) is { } retained) {
+            candidates.Add(retained);
+        }
+        foreach (var device in candidates) {
             var connect = ResolveConnect(device.Type, device, ct);
             if (connect is null) {
                 continue;
@@ -140,6 +148,24 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // synchronously" (attempted > 0 but dispatched == 0) so the caller isn't told
         // "reconnecting…" when every device failed on the spot.
         return new ReconnectOutcome(attempted, dispatched);
+    }
+
+    // #1127 — the single-instance service's retained record for the type (null when the service
+    // is a placeholder or holds nothing). Internal for direct unit testing.
+    internal DiscoveredDeviceDto? ResolveRetained(DeviceType type) {
+        object? service = type.Canonical() switch {
+            DeviceType.Camera => _services.GetService<ICameraService>(),
+            DeviceType.Telescope => _services.GetService<ITelescopeService>(),
+            DeviceType.Focuser => _services.GetService<IFocuserService>(),
+            DeviceType.FilterWheel => _services.GetService<IFilterWheelService>(),
+            DeviceType.Rotator => _services.GetService<IRotatorService>(),
+            DeviceType.Dome => _services.GetService<IDomeService>(),
+            DeviceType.SafetyMonitor => _services.GetService<ISafetyMonitorService>(),
+            DeviceType.ObservingConditions => _services.GetService<IObservingConditionsService>(),
+            DeviceType.FlatDevice or DeviceType.CoverCalibrator => _services.GetService<IFlatDeviceService>(),
+            _ => null,
+        };
+        return (service as IRetainedDeviceSource)?.RetainedDevice;
     }
 
     public async Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) {

@@ -56,6 +56,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Removed_publishes_state_changed_flagged_removed_and_no_alias() {
+            // #1127 — the card's Remove: the same event the clients refresh on, so a second open
+            // client re-reads the type and drops the card; no connection alias, it is not a transition.
+            var (publisher, broadcaster) = NewPublisher();
+            publisher.Removed(DeviceType.Focuser, "foc-1", "Bench focuser");
+            Assert.That(broadcaster.Events, Has.Count.EqualTo(1));
+            var (type, payload) = broadcaster.Events[0];
+            Assert.That(type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged));
+            Assert.That(payload.GetProperty("device_type").GetString(), Is.EqualTo("focuser"));
+            Assert.That(payload.GetProperty("device_id").GetString(), Is.EqualTo("foc-1"));
+            Assert.That(payload.GetProperty("state").GetString(), Is.EqualTo("disconnected"));
+            Assert.That(payload.GetProperty("removed").GetBoolean(), Is.True);
+        }
+
+        [Test]
         public void Connected_publishes_state_changed_plus_the_connected_alias() {
             var (publisher, broadcaster) = NewPublisher();
 

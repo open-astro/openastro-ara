@@ -34,7 +34,18 @@ namespace OpenAstroAra.Server.Services;
 /// supersede, §32.4 background-refresh cache, AbortSlew-before-disconnect). REST-only — the
 /// <c>IDomeMediator</c> unification is the follow-up.
 /// </summary>
-public sealed partial class DomeService : IDomeService, IDisposable {
+public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, IDisposable {
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice {
+        get {
+            lock (_gate) {
+                return _disposed ? null : _device;
+            }
+        }
+    }
+
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly DomeStateDto IdleRuntime = new("idle", null, false, false, false);
@@ -134,7 +145,11 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
                 throw new InvalidOperationException("the dome is connected — disconnect it before removing it");
             }
+            var removed = _device;
             _device = null;
+            // §60.9 — a second open client drops its card on this instead of waiting for its
+            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
+            _events?.Removed(DeviceType.Dome, removed.UniqueId, removed.Name);
             return true;
         }
     }
