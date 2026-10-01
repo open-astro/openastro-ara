@@ -70,22 +70,7 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             if (await FindByNaturalKeyAsync(conn, fault, ct).ConfigureAwait(false) is not null) {
                 return; // the reaction's action landed first and created the row
             }
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
-                INSERT INTO faults
-                    (id, session_id, detected_at, equipment_type, equipment_id,
-                     equipment_name, fault_type, details, action_taken, resolved_at,
-                     affected_frames)
-                VALUES
-                    ($id, $session, $detected, $etype, $eid, $ename, $ftype, $details,
-                     NULL, NULL, NULL);
-                """;
-            BindNaturalKey(cmd, fault);
-            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-            cmd.Parameters.AddWithValue("$session", (object?)_sessions?.Current?.ToString() ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("$ename", (object?)fault.DeviceName ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("$details", (object?)fault.Details ?? DBNull.Value);
-            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await InsertRowAsync(conn, fault, action: null, resolvedUtc: null, ct).ConfigureAwait(false);
             LogFaultRecorded(fault.DeviceType, fault.Kind);
         } finally {
             _writeGate.Release();
@@ -121,24 +106,7 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             // Detection hasn't landed yet (it persists fire-and-forget off the hub) —
             // create the row with the action already stamped; the late detection
             // insert then no-ops against the natural key.
-            await using var insert = conn.CreateCommand();
-            insert.CommandText = """
-                INSERT INTO faults
-                    (id, session_id, detected_at, equipment_type, equipment_id,
-                     equipment_name, fault_type, details, action_taken, resolved_at,
-                     affected_frames)
-                VALUES
-                    ($id, $session, $detected, $etype, $eid, $ename, $ftype, $details,
-                     $action, $resolved, NULL);
-                """;
-            BindNaturalKey(insert, fault);
-            insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-            insert.Parameters.AddWithValue("$session", (object?)_sessions?.Current?.ToString() ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$ename", (object?)fault.DeviceName ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$details", (object?)fault.Details ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$action", action);
-            insert.Parameters.AddWithValue("$resolved", (object?)resolvedUtc?.ToString("O") ?? DBNull.Value);
-            await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await InsertRowAsync(conn, fault, action, resolvedUtc, ct).ConfigureAwait(false);
             if (resolvedUtc is DateTimeOffset stampedOnInsert) {
                 await CorrelateAffectedFramesQuietlyAsync(conn, stampedOnInsert.ToString("O"), ct).ConfigureAwait(false);
             }
@@ -174,23 +142,7 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             }
             // Detection hasn't landed yet — create the row resolved; the late insert no-ops
             // and a late action stamp keeps this resolved_at (its COALESCE).
-            await using var insert = conn.CreateCommand();
-            insert.CommandText = """
-                INSERT INTO faults
-                    (id, session_id, detected_at, equipment_type, equipment_id,
-                     equipment_name, fault_type, details, action_taken, resolved_at,
-                     affected_frames)
-                VALUES
-                    ($id, $session, $detected, $etype, $eid, $ename, $ftype, $details,
-                     NULL, $resolved, NULL);
-                """;
-            BindNaturalKey(insert, fault);
-            insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-            insert.Parameters.AddWithValue("$session", (object?)_sessions?.Current?.ToString() ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$ename", (object?)fault.DeviceName ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$details", (object?)fault.Details ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$resolved", stamp);
-            await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await InsertRowAsync(conn, fault, action: null, resolvedUtc, ct).ConfigureAwait(false);
             LogResolvedFault(fault.DeviceType, fault.Details);
             await CorrelateAffectedFramesQuietlyAsync(conn, stamp, ct).ConfigureAwait(false);
             return true;
@@ -374,6 +326,30 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
         cmd.Parameters.AddWithValue("$ftype", EquipmentFaultHub.WireToken(fault.Kind));
         cmd.Parameters.AddWithValue("$detected", fault.DetectedUtc.ToString("O"));
         cmd.Parameters.AddWithValue("$eid", (object?)fault.DeviceId ?? DBNull.Value);
+    }
+
+    // The one INSERT every write path uses — detection (nothing stamped), an action that beat
+    // the detection, or a resolution that beat it (#1191) — so the column list lives once.
+    private async Task InsertRowAsync(SqliteConnection conn, EquipmentFaultEvent fault, string? action,
+            DateTimeOffset? resolvedUtc, CancellationToken ct) {
+        await using var insert = conn.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO faults
+                (id, session_id, detected_at, equipment_type, equipment_id,
+                 equipment_name, fault_type, details, action_taken, resolved_at,
+                 affected_frames)
+            VALUES
+                ($id, $session, $detected, $etype, $eid, $ename, $ftype, $details,
+                 $action, $resolved, NULL);
+            """;
+        BindNaturalKey(insert, fault);
+        insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+        insert.Parameters.AddWithValue("$session", (object?)_sessions?.Current?.ToString() ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$ename", (object?)fault.DeviceName ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$details", (object?)fault.Details ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$action", (object?)action ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$resolved", (object?)resolvedUtc?.ToString("O") ?? DBNull.Value);
+        await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static async Task<string?> FindByNaturalKeyAsync(SqliteConnection conn, EquipmentFaultEvent fault, CancellationToken ct) {
