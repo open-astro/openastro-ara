@@ -26,6 +26,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
@@ -81,10 +82,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache (no blocking HTTP on
     /// the sequence thread). Never throws after Dispose — a running sequence may poll during shutdown,
     /// in which case it reports "not connected". Populates the fields the registered instructions'
-    /// Validate/Execute read (Connected, AtPark, CanFindHome, TrackingModes) plus the cheap
-    /// position/state fields already in the cache; the remaining ~30 TelescopeInfo members (sidereal
-    /// time, meridian bookkeeping, guide rates, axis rates, …) stay at their defaults — no headless
-    /// instruction consumes them and each would need additional per-poll device reads.
+    /// Validate/Execute read (Connected, AtPark, CanFindHome, TrackingModes), the cheap
+    /// position/state fields already in the cache, and the meridian bookkeeping the
+    /// <c>MeridianFlipTrigger</c> evaluates at every item boundary (#1229): <c>SideOfPier</c> from the
+    /// mount, <c>SiderealTime</c> from the profile site longitude, <c>TimeToMeridianFlip</c> through
+    /// the shared <see cref="OpenAstroAra.Astrometry.MeridianFlip.TimeToMeridianFlip"/> rule. The remaining TelescopeInfo
+    /// members (guide rates, axis rates, …) stay at their defaults — no headless instruction consumes
+    /// them and each would need additional per-poll device reads.
     /// </summary>
     public TelescopeInfo GetInfo() {
         lock (_gate) {
@@ -106,6 +110,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 CanFindHome = connected && caps?.CanFindHome == true,
                 CanPark = connected && caps?.CanPark == true,
                 CanSetTrackingEnabled = connected && caps?.CanSetTracking == true,
+                SideOfPier = connected ? _sideOfPier : PierSide.pierUnknown,
+                SiderealTime = double.NaN,
+                TimeToMeridianFlip = double.NaN,
             };
             // #1124 — RA/Dec whose frame hasn't been read yet has no honest epoch label: leave the
             // pointing unset (frames record no RA/DEC/EQUINOX, as before the first position read)
@@ -117,7 +124,51 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             if (connected && caps is not null) {
                 PopulateTrackingModes(info.TrackingModes, caps);
             }
+            // #1229 — the meridian bookkeeping. Every "can't say" lands as NaN (the TelescopeInfo
+            // default of 0 read as "the flip window is NOW" to the trigger's side-of-pier-disabled
+            // branch, which fired a flip at the first boundary of every run on a tracking mount).
+            if (connected) {
+                var profile = _profileService?.ActiveProfile;
+                (info.SiderealTime, info.TimeToMeridianFlip) = MeridianBookkeeping(
+                    info.Coordinates, info.SideOfPier, profile?.MeridianFlipSettings,
+                    profile?.AstrometrySettings.Longitude, UtcNow());
+            }
             return info;
+        }
+    }
+
+    // Injectable clock for the sidereal-time bookkeeping (tests pin the instant).
+    internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// #1229 — the two trigger inputs, from the cached position + the profile site rather than the
+    /// mount's own clock (the profile is the authority for every other sky computation: the §58.9
+    /// altitude floor, Tonight's Sky, polar alignment — one sky model). Local sidereal time in hours
+    /// from the site longitude; time to the flip in hours through the NINA rule the trigger's
+    /// window math expects (<c>MaxMinutesAfterMeridian</c> shift + the side-of-pier 12 h deferrals).
+    /// NaN for either when it cannot be computed: no site, no position, no flip settings, or the
+    /// J2000→JNOW transform's natives missing — the trigger skips a NaN with a warning, which is
+    /// the safe side (a flip never fires on a guess). Extracted (internal) for direct unit testing.
+    /// </summary>
+    internal static (double SiderealTimeHours, double TimeToMeridianFlipHours) MeridianBookkeeping(
+            Coordinates? coordinates, PierSide sideOfPier, IMeridianFlipSettings? flipSettings,
+            double? siteLongitudeDeg, DateTimeOffset atUtc) {
+        if (siteLongitudeDeg is not double longitude || double.IsNaN(longitude)) {
+            return (double.NaN, double.NaN);
+        }
+        var lstHours = SiteAstrometry.LocalSiderealTimeDeg(atUtc, longitude) / 15.0;
+        if (coordinates is null || flipSettings is null) {
+            return (lstHours, double.NaN);
+        }
+        try {
+            var timeToFlip = OpenAstroAra.Astrometry.MeridianFlip.TimeToMeridianFlip(flipSettings, coordinates, Angle.ByHours(lstHours), sideOfPier);
+            return (lstHours, timeToFlip.TotalHours);
+        } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
+                or BadImageFormatException or TypeInitializationException) {
+            // Same native-load failure set TransformBestEffort tolerates: a J2000 mount's position
+            // needs the SOFA/NOVAS precession to JNOW, and a dev box without the natives must
+            // degrade to "unknown" (NaN), never to a flip time computed in the wrong frame.
+            return (lstHours, double.NaN);
         }
     }
 

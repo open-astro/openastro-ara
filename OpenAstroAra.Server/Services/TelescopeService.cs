@@ -17,8 +17,10 @@ using ASCOM.Common.Alpaca;
 using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using PierSide = OpenAstroAra.Core.Enums.PierSide;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -51,6 +53,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
     private readonly IWsBroadcaster? _ws;
+    // #1229 — the site longitude and the flip window for the meridian bookkeeping GetInfo serves
+    // the MeridianFlipTrigger (SiderealTime / TimeToMeridianFlip). Optional: without it both stay
+    // NaN and the trigger's own NaN guard keeps it inert, never "flip now".
+    private readonly IProfileService? _profileService;
     private readonly DeviceConnectionProbe _probe = new();
     private readonly MountTrackingWatch _trackingWatch = new();
     // §57.8 — slew lifecycle events from observed IsSlewing transitions (internal for tests).
@@ -78,6 +84,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private static readonly TimeSpan AxisRatesSettleWindow = TimeSpan.FromSeconds(30);
     private int _secondaryFallbackLogged;
     private TelescopeStateDto _runtime = IdleRuntime;
+    // #1229 — the mount's reported pointing state, read on the same refresh as the runtime. Not
+    // part of the REST TelescopeStateDto (no client consumer); the MeridianFlipTrigger reads it
+    // through GetInfo for its pier-side projection and the §58.5 flip verification compares it
+    // before/after the flip slew. pierUnknown until read, and whenever the mount cannot say.
+    private PierSide _sideOfPier = PierSide.pierUnknown;
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
     // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member, so Other is only
     // a placeholder and _equatorialSystemKnown is the truth: until it is set, a mediator slew/sync
@@ -93,11 +104,12 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private bool _disposed;
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null) {
+            IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null) {
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _events = events;
         _faults = faults;
         _ws = ws;
+        _profileService = profileService;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -558,6 +570,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
+            var sideOfPier = ReadSideOfPier(client);
             // The two pad-axis AxisRates reads feed BOTH the caps DTO's rate list and the #1064
             // clamp cache — one pair of GETs, only while either still needs them.
             var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
@@ -578,6 +591,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _runtime = TargetLatch.Observe(runtime.TargetRightAscensionHours, runtime.TargetDeclinationDegrees)
                         ? runtime with { TargetRightAscensionHours = null, TargetDeclinationDegrees = null }
                         : runtime;
+                    _sideOfPier = sideOfPier;
                     if (caps is not null) {
                         _capabilities = caps;
                     }
@@ -756,6 +770,29 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         var state = ResolveRuntimeState(slewing, parked, tracking);
         return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, targetRa, targetDec);
     }
+
+    // #1229 — the mount's SideOfPier (ASCOM PointingState), per-field best-effort like ReadRuntime:
+    // an optional property on many drivers, so a throw (not implemented, transient) reads as
+    // pierUnknown, which every consumer already treats as "cannot say" (the trigger ignores the
+    // pier side, the §58.5 verification only warns).
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: SideOfPier is optional and throws PropertyNotImplemented on many drivers; the read falls back to pierUnknown rather than failing the whole refresh. CA1031's log-and-recover boundary applies.")]
+    private static PierSide ReadSideOfPier(AlpacaTelescope c) {
+        try {
+            return MapPointingState(c.SideOfPier);
+        } catch (Exception) {
+            return PierSide.pierUnknown;
+        }
+    }
+
+    // ASCOM PointingState → NINA PierSide: the library renamed the Platform's PierSide enum, and its
+    // own docs pin Normal = pierEast, ThroughThePole = pierWest. Anything else is unknown.
+    // Extracted (internal) for direct unit testing.
+    internal static PierSide MapPointingState(PointingState state) => state switch {
+        PointingState.Normal => PierSide.pierEast,
+        PointingState.ThroughThePole => PierSide.pierWest,
+        _ => PierSide.pierUnknown,
+    };
 
     /// <summary>
     /// Maps raw mount flags to the runtime-state token. Precedence: a slew in
@@ -976,6 +1013,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
+                    _sideOfPier = PierSide.pierUnknown; // #1229 — nor its pier side
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
