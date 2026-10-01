@@ -11,6 +11,8 @@ import '../../services/profile_api.dart';
 class NotificationsSettings {
   // Channels.
   final bool inAppBanner;
+  // Kept only so saved profiles round-trip: no OS notification channel is
+  // wired and the toggle is hidden (#1189). Don't read this until one is.
   final bool osDesktop;
   final bool soundAlert;
   final String pushoverToken;

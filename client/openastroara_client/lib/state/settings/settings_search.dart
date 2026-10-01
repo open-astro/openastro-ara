@@ -188,7 +188,6 @@ const Map<String, List<String>> _panelKeywords = {
     'pushover',
     'telegram',
     'banner',
-    'desktop',
     'sound',
     'alert',
     'alarm',
