@@ -19,6 +19,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,13 +29,22 @@ namespace OpenAstroAra.TestHarness.Alpaca;
 /// A minimal loopback Alpaca device whose per-property GET answers are scripted: the responder
 /// receives the lower-cased request path (e.g. <c>/api/v1/telescope/0/tracking</c>) and returns
 /// the JSON literal to put in the Alpaca envelope's <c>Value</c> (e.g. <c>"true"</c>,
-/// <c>"false"</c>, <c>"3.5"</c>), or null for the default <c>true</c>. Every PUT answers success.
+/// <c>"false"</c>, <c>"3.5"</c>), or null for the default <c>true</c>. A value of the form
+/// <c>"!error:&lt;message&gt;"</c> answers an Alpaca DRIVER error envelope instead (ErrorNumber
+/// 0x500, the message verbatim), which the client raises as a DriverException — how a bridge
+/// reports a latched mount fault (#1193). Every PUT answers success.
 /// Swap the responder at runtime (<see cref="Respond"/>) to script a state change mid-test —
 /// e.g. a mount silently dropping <c>Tracking</c>. Type-mismatched reads (a bool where the
 /// client expects an int) throw client-side and fall back to that field's default, exactly like
 /// the fixed-value stub the §42.3 disconnect E2E uses.
 /// </summary>
 public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
+
+    /// <summary>Script-value prefix that turns the answer into a driver error envelope.</summary>
+    public const string ErrorPrefix = "!error:";
+
+    /// <summary>The script value for a driver error carrying <paramref name="message"/>.</summary>
+    public static string Error(string message) => ErrorPrefix + message;
 
     private readonly HttpListener _listener;
     private readonly CancellationTokenSource _cts = new();
@@ -92,8 +102,11 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                     // serving, or the device silently stops answering for the rest of the test.
                 }
             }
-            var body = Encoding.UTF8.GetBytes(
-                $$"""{"Value":{{value}},"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":0,"ErrorMessage":""}""");
+            var body = value.StartsWith(ErrorPrefix, StringComparison.Ordinal)
+                ? Encoding.UTF8.GetBytes(
+                    $$"""{"Value":null,"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":1280,"ErrorMessage":{{JsonSerializer.Serialize(value[ErrorPrefix.Length..])}}}""")
+                : Encoding.UTF8.GetBytes(
+                    $$"""{"Value":{{value}},"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":0,"ErrorMessage":""}""");
             try {
                 ctx.Response.ContentType = "application/json";
                 ctx.Response.ContentLength64 = body.Length;

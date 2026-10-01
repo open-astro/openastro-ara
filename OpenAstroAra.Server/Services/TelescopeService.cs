@@ -100,6 +100,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // through GetInfo for its pier-side projection and the §58.5 flip verification compares it
     // before/after the flip slew. pierUnknown until read, and whenever the mount cannot say.
     private PierSide _sideOfPier = PierSide.pierUnknown;
+    // #1193 — AlpacaBridge latches "Mount communications compromised" after a mount Wi-Fi blip and
+    // keeps answering Connected=true, so the §42.3 probe streak never trips; only a disconnect +
+    // reconnect of the telescope clears it. The refresh tick recognises the latched error on the
+    // per-field reads and trips the mount to Error with a Disconnected fault, which hands it to the
+    // §42.3 ladder (bounded reconnects, fault log, notification, card). Guarded by _gate: true from
+    // the trip until a tick reads the mount with no driver error, so a bridge that stays latched
+    // after the reconnect is one episode, not a trip per tick.
+    private bool _bridgeFaultTripped;
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
     // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member, so Other is only
     // a placeholder and _equatorialSystemKnown is the truth: until it is set, a mediator slew/sync
@@ -574,9 +582,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
             // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
+            // this probe is the transport-level disconnect source: Connected throws on transport
             // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
+            // (not one blip) trips the device to Error + publishes the §42.2 fault. The other
+            // source is the #1193 latched-fault check just below, for a bridge that still answers
+            // the probe while refusing every read.
             if (!ProbeConnected(client)) {
                 if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
                     TripConnectionLost(client);
@@ -584,8 +594,23 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 return; // the device didn't answer — skip this pass's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client);
+            var runtime = ReadRuntime(client, out var readError);
             var sideOfPier = ReadSideOfPier(client);
+            // #1193 — the bridge's latched fault answers the probe but fails the reads. Never
+            // during a slew (the reconnect would abandon a moving mount mid-goto; the slew's own
+            // watchdog and the next tick get it), and once per episode.
+            if (readError is not null && IsLatchedBridgeFault(readError)) {
+                if (!runtime.State.Equals("slewing", StringComparison.Ordinal) && TripLatchedBridgeFault(client, readError)) {
+                    return; // tripped to Error — nothing from this pass is worth committing
+                }
+            } else {
+                // A tick with no latched error ends the episode — including one where some other
+                // read threw (a driver that always refuses AtHome, say): only the latch itself may
+                // hold the flag, or that driver's next latch episode would never be detected.
+                lock (_gate) {
+                    _bridgeFaultTripped = false;
+                }
+            }
             // The two pad-axis AxisRates reads feed BOTH the caps DTO's rate list and the #1064
             // clamp cache — one pair of GETs, only while either still needs them.
             var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
@@ -755,15 +780,27 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Telescope '{Device}' tracking recovered — watch re-armed (§42.2)")]
     private partial void LogTrackingRecovered(string device);
 
+    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) => ReadRuntime(c, out _);
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) {
-        bool slewing;
-        try { slewing = c.Slewing; } catch (Exception) { slewing = false; }
-        double? ra;
-        try { ra = c.RightAscension; } catch (Exception) { ra = null; }
-        double? dec;
-        try { dec = c.Declination; } catch (Exception) { dec = null; }
+        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read (the first exception is reported to the caller for #1193). CA1031's log-and-recover boundary applies.")]
+    // readError: the first exception any per-field read threw (null when every read answered), so
+    // the refresh can recognise a driver-reported latched fault (#1193) without changing the
+    // per-field fallback semantics. The target registers are left out of it: they legitimately
+    // throw before the first target is set.
+    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c, out Exception? readError) {
+        Exception? first = null;
+        T Read<T>(Func<T> read, T fallback) {
+            try {
+                return read();
+            } catch (Exception ex) {
+                first ??= ex;
+                return fallback;
+            }
+        }
+        var slewing = Read(() => c.Slewing, false);
+        var ra = Read<double?>(() => c.RightAscension, null);
+        var dec = Read<double?>(() => c.Declination, null);
         // §57.9 — the slew/sync destination, read back from the mount's own target registers.
         // Same per-field best-effort boundary as RA/Dec: a mount that throws
         // PropertyNotImplemented (or InvalidOperationException before the first target is set)
@@ -772,12 +809,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         try { targetRa = c.TargetRightAscension; } catch (Exception) { targetRa = null; }
         double? targetDec;
         try { targetDec = c.TargetDeclination; } catch (Exception) { targetDec = null; }
-        bool tracking;
-        try { tracking = c.Tracking; } catch (Exception) { tracking = false; }
-        bool parked;
-        try { parked = c.AtPark; } catch (Exception) { parked = false; }
-        bool atHome;
-        try { atHome = c.AtHome; } catch (Exception) { atHome = false; }
+        var tracking = Read(() => c.Tracking, false);
+        var parked = Read(() => c.AtPark, false);
+        var atHome = Read(() => c.AtHome, false);
+        readError = first;
 
         // §42.9 — resolve the runtime-state token from the raw mount flags via
         // the shared helper so the precedence (incl. the parked-over-slewing
@@ -1029,6 +1064,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _sideOfPier = PierSide.pierUnknown; // #1229 — nor its pier side
+                    // _bridgeFaultTripped is deliberately NOT reset here: the §42.3 ladder's reconnect
+                    // comes through this path, and a bridge still latched after it must stay one
+                    // episode (#1193). A hand-connected different device clears it on its first clean tick.
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
@@ -1145,6 +1183,49 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope '{Device}' stopped answering — marked Error (§42.3)")]
     private partial void LogConnectionLost(string device);
+
+    // #1193 — the phrases AlpacaBridge reports once it has latched after a mount link blip. Matched
+    // on the whole exception chain (the Alpaca client wraps the bridge's text in a DriverException).
+    // Extracted (internal) for direct unit testing.
+    private static readonly string[] LatchedBridgeFaultPhrases = ["communications compromised"];
+
+    internal static bool IsLatchedBridgeFault(Exception? ex) {
+        for (var e = ex; e is not null; e = e.InnerException) {
+            foreach (var phrase in LatchedBridgeFaultPhrases) {
+                if (e.Message.Contains(phrase, StringComparison.OrdinalIgnoreCase)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Same transition as the probe streak, with its own fault details so the log says what
+    // happened, and latched once per episode (see _bridgeFaultTripped). The §42.3 ladder's
+    // reconnect is the disconnect + reconnect that clears the bridge. Returns true when it tripped.
+    private bool TripLatchedBridgeFault(AlpacaTelescope probed, Exception error) {
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (_bridgeFaultTripped || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
+                return false;
+            }
+            _bridgeFaultTripped = true;
+            device = _device;
+            SetState(EquipmentConnectionState.Error);
+            _probe.Reset();
+            _trackingWatch.Reset();
+            SlewWatch.Reset();
+        }
+        LogBridgeFaultLatched(device?.Name ?? "?", error.Message);
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope, device?.UniqueId, device?.Name,
+            EquipmentFaultKind.Disconnected,
+            $"bridge reports a latched mount fault ({error.Message}) — reconnecting clears it (#1193)",
+            DateTimeOffset.UtcNow));
+        return true;
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope '{Device}' reports a latched bridge fault ('{Error}') — marked Error for the §42.3 reconnect (#1193)")]
+    private partial void LogBridgeFaultLatched(string device, string error);
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
