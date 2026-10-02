@@ -38,20 +38,6 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
     // the exception unhandled-future through the FirstRunScreen handler.
     state = await AsyncValue.guard(() => svc.loadAll());
   }
-
-  /// Swap a saved rig's address for the one it answers from now (#1129).
-  Future<void> replace(AraServer old, AraServer moved) async {
-    final svc = ref.read(savedServerServiceProvider);
-    try {
-      await svc.saveAll(SavedServerService.relocated(await svc.loadAll(), old, moved));
-    } catch (_) {
-      // Keyring trouble: still move on in memory, as add() does.
-      state = AsyncValue.data(
-          SavedServerService.relocated(state.value ?? const <AraServer>[], old, moved));
-      return;
-    }
-    state = await AsyncValue.guard(() => svc.loadAll());
-  }
 }
 
 final savedServersProvider =

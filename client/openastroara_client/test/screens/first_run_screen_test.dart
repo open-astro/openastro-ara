@@ -1,19 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/first_run_screen.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
+import 'package:openastroara/services/server_api.dart';
+import 'package:openastroara/state/launch_gate_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/server_state.dart';
 
-/// Counts the cache resets the screen asks for; discovery itself is inert.
+/// Counts the cache resets the screen asks for; discovery yields [rigs].
 class _FakeDiscovery extends ServerDiscoveryService {
+  _FakeDiscovery([this.rigs = const []]);
+  final List<AraServer> rigs;
   int resets = 0;
   final blocked = ValueNotifier<bool>(false);
 
   @override
-  Stream<AraServer> discover({bool sweepEverything = false}) => const Stream.empty();
+  Stream<AraServer> discover() => Stream.fromIterable(rigs);
 
   @override
   void resetSweepCache() => resets++;
@@ -95,5 +101,64 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  // #1129: nothing is remembered between launches, so every launch scans; a
+  // scan that settles on exactly one rig connects to it without a tap.
+  group('auto-connect', () {
+    // Stand-ins for whatever the scan returns this launch — test data only.
+    const rigA = AraServer(hostname: 'rig-a.test', port: 5555, mdnsName: 'openastro');
+    const rigB = AraServer(hostname: 'rig-b.test', port: 5555, mdnsName: 'openastro');
+
+    Future<ProviderContainer> pump(WidgetTester tester, List<AraServer> rigs,
+        {bool chooserRequested = false}) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final container = ProviderContainer(overrides: [
+        discoveryServiceProvider.overrideWithValue(_FakeDiscovery(rigs)),
+        serverHandshakeProvider.overrideWith((ref) async {
+          final s = ref.watch(selectedServerProvider);
+          return s == null ? null : const ServerInfo(name: 'openastro', version: '1', apiVersion: 'v1');
+        }),
+      ]);
+      addTearDown(container.dispose);
+      if (chooserRequested) container.read(serverChooserRequestedProvider.notifier).request();
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: FirstRunScreen()),
+      ));
+      await tester.pump();
+      return container;
+    }
+
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump(autoConnectSettle + const Duration(milliseconds: 100));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('one rig on the network: connects without a tap', (tester) async {
+      final c = await pump(tester, const [rigA]);
+      expect(c.read(selectedServerProvider), isNull, reason: 'waits for the scan to settle');
+      await settle(tester);
+      expect(c.read(selectedServerProvider), rigA);
+      expect(await c.read(savedServersProvider.future), [rigA], reason: 'confirmed for this session');
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('two rigs: never picks one for you', (tester) async {
+      final c = await pump(tester, const [rigA, rigB]);
+      await settle(tester);
+      expect(c.read(selectedServerProvider), isNull);
+      expect(await c.read(savedServersProvider.future), isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('opened to choose a rig: lists it, does not auto-connect', (tester) async {
+      final c = await pump(tester, const [rigA], chooserRequested: true);
+      await settle(tester);
+      expect(find.text('openastro'), findsOneWidget);
+      expect(c.read(selectedServerProvider), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   });
 }

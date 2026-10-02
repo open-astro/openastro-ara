@@ -4,7 +4,13 @@ import 'dart:io';
 import 'dart:typed_data' show BytesBuilder;
 
 import 'package:flutter/foundation.dart'
-    show ValueListenable, ValueNotifier, debugPrint, visibleForTesting;
+    show
+        TargetPlatform,
+        ValueListenable,
+        ValueNotifier,
+        debugPrint,
+        defaultTargetPlatform,
+        visibleForTesting;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -62,7 +68,17 @@ class ServerDiscoveryService {
   /// Android, so on Android the browse died in `start()` every pass and logged
   /// it every tick (#1129). Same client, minus that one option there.
   static MDnsClient _platformMdnsClient() =>
-      MDnsClient(rawDatagramSocketFactory: platformDatagramBind(false));
+      MDnsClient(rawDatagramSocketFactory: productionDatagramBind());
+
+  /// The bind production uses on the platform this runs on.
+  /// defaultTargetPlatform rather than dart:io Platform so a test can pin the
+  /// wiring itself, not just the helper (#1129 review: a hard-coded flag here
+  /// passed every helper test while Android kept the broken bind).
+  @visibleForTesting
+  static RawDatagramSocketFactory productionDatagramBind({
+    RawDatagramSocketFactory bind = RawDatagramSocket.bind,
+  }) =>
+      platformDatagramBind(defaultTargetPlatform == TargetPlatform.android, bind: bind);
 
   /// The rig's own name from a PTR answer: `openastro._openastroara._tcp.local`
   /// → `openastro` (the list showed the whole service name, #1129).
@@ -137,11 +153,7 @@ class ServerDiscoveryService {
   /// empty (grace timer) or finishes empty, and an mDNS answer drops the
   /// sweep strands. Results dedupe by endpoint; the stream closes when every
   /// started strategy is done.
-  ///
-  /// [sweepEverything]: also sweep from the start and keep sweeping after mDNS
-  /// answers — for finding one particular rig wherever it now is (#1129),
-  /// where an mDNS answer from a different rig must not stop the search.
-  Stream<AraServer> discover({bool sweepEverything = false}) {
+  Stream<AraServer> discover() {
     final controller = StreamController<AraServer>();
     final seen = <String>{};
     var pending = 1; // the mDNS strand; the sweep adds itself if started
@@ -207,7 +219,7 @@ class ServerDiscoveryService {
       (s) {
         if (!sawMdnsResult) {
           sawMdnsResult = true;
-          if (!sweepEverything) dropSweepStrands();
+          dropSweepStrands();
         }
         emit(s);
       },
@@ -215,7 +227,7 @@ class ServerDiscoveryService {
       onDone: () {
         // mDNS finished with nothing — the sweep is the only hope; start it
         // BEFORE done() so pending can't hit zero and close the stream first.
-        if (!sawMdnsResult || sweepEverything) maybeStartSweep();
+        if (!sawMdnsResult) maybeStartSweep();
         done();
       },
     );
@@ -234,13 +246,9 @@ class ServerDiscoveryService {
         },
       );
     }
-    if (sweepEverything) {
-      maybeStartSweep();
-    } else {
-      grace = Timer(mdnsGracePeriod, () {
-        if (!sawMdnsResult) maybeStartSweep();
-      });
-    }
+    grace = Timer(mdnsGracePeriod, () {
+      if (!sawMdnsResult) maybeStartSweep();
+    });
     // Cancellation MUST propagate (review r4): the connect screen invalidates
     // its discovery provider every ~4 s, and without this each tick stacked a
     // fresh full sweep on top of the still-running previous ones — multiple
@@ -607,7 +615,6 @@ class ServerDiscoveryService {
         hostname: host,
         port: defaultPort,
         mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
-        serverUuid: json['server_uuid'] as String,
       );
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {

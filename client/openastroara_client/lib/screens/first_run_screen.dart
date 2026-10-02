@@ -22,11 +22,20 @@ class FirstRunScreen extends ConsumerStatefulWidget {
   ConsumerState<FirstRunScreen> createState() => _FirstRunScreenState();
 }
 
+/// How long the scan list must stay at exactly one rig before the app
+/// connects to it on its own (#1129).
+const Duration autoConnectSettle = Duration(seconds: 3);
+
 class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   final _discovered = <AraServer>{};
   final _manualHostCtrl = TextEditingController();
   final _manualPortCtrl = TextEditingController(text: '5555');
   Timer? _rescanTimer;
+  Timer? _autoConnectTimer;
+
+  /// The rig chosen by [_scheduleAutoConnect]; continue as soon as its
+  /// handshake succeeds.
+  AraServer? _autoSelected;
 
   @override
   void initState() {
@@ -51,6 +60,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   void dispose() {
     _rescanTimer?.cancel();
+    _autoConnectTimer?.cancel();
     _manualHostCtrl.dispose();
     _manualPortCtrl.dispose();
     super.dispose();
@@ -59,7 +69,19 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen(discoveredServersProvider, (prev, next) {
-      next.whenData((server) => setState(() => _discovered.add(server)));
+      next.whenData((server) {
+        if (_discovered.contains(server)) return;
+        setState(() => _discovered.add(server));
+        _scheduleAutoConnect();
+      });
+    });
+    ref.listen(serverHandshakeProvider, (prev, next) {
+      final auto = _autoSelected;
+      if (auto != null && next.asData?.value != null &&
+          ref.read(selectedServerProvider) == auto) {
+        _autoSelected = null;
+        unawaited(_confirm(auto));
+      }
     });
     final selected = ref.watch(selectedServerProvider);
     final handshake = ref.watch(serverHandshakeProvider);
@@ -171,21 +193,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               _HandshakePanel(
                 handshake: handshake,
                 server: selected,
-                onConfirm: () async {
-                  // Record the rig's identity with its address, so a later
-                  // move to another address can be followed (#1129).
-                  final info = handshake.asData?.value;
-                  await ref.read(savedServersProvider.notifier).add(
-                      info?.serverUuid == null
-                          ? selected
-                          : selected.copyWith(serverUuid: info!.serverUuid));
-                  // A Launchpad-forced visit ends here: the server is chosen,
-                  // so the router may resume the normal flow (profile box).
-                  ref.read(serverChooserRequestedProvider.notifier).clear();
-                  // The _RootRouter watching savedServersProvider rebuilds
-                  // and swaps in AppShell automatically once the list is
-                  // non-empty.
-                },
+                onConfirm: () => _confirm(selected),
               ),
           ],
         ),
@@ -211,6 +219,31 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     ref
         .read(selectedServerProvider.notifier)
         .select(AraServer(hostname: host, port: port));
+  }
+
+  Future<void> _confirm(AraServer server) async {
+    await ref.read(savedServersProvider.notifier).add(server);
+    // A Launchpad-forced visit ends here: the server is chosen, so the router
+    // may resume the normal flow (profile box). The _RootRouter watching
+    // savedServersProvider swaps the screen once the list is non-empty.
+    ref.read(serverChooserRequestedProvider.notifier).clear();
+  }
+
+  /// #1129 — nothing is remembered between launches, so every launch scans.
+  /// When the scan settles on exactly one rig, connect to it without a tap.
+  /// Never when the user opened this list to choose (Launchpad / "Choose a
+  /// different rig"), has picked or typed something, or two rigs answered.
+  void _scheduleAutoConnect() {
+    _autoConnectTimer?.cancel();
+    _autoConnectTimer = Timer(autoConnectSettle, () {
+      if (!mounted || _discovered.length != 1) return;
+      if (ref.read(serverChooserRequestedProvider)) return;
+      if (ref.read(selectedServerProvider) != null) return;
+      if (_manualHostCtrl.text.trim().isNotEmpty) return;
+      final only = _discovered.single;
+      _autoSelected = only;
+      ref.read(selectedServerProvider.notifier).select(only);
+    });
   }
 }
 
@@ -246,7 +279,7 @@ class _HandshakePanel extends StatelessWidget {
                     FilledButton.icon(
                       onPressed: onConfirm,
                       icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Save & continue'),
+                      label: const Text('Continue'),
                     ),
                   ],
                 ),

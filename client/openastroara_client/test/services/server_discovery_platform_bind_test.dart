@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
 
@@ -37,5 +38,35 @@ void main() {
       await bindLikeMulticastDns(false);
       expect(calls.single['reusePort'], isTrue);
     });
+  });
+
+  // The production wiring, not just the helper: a hard-coded flag here once
+  // passed the tests above while Android kept the refused bind (#1129 review).
+  group('productionDatagramBind', () {
+    late bool? sawReusePort;
+    Future<RawDatagramSocket> record(dynamic host, int port,
+        {bool reuseAddress = true, bool reusePort = false, int ttl = 1}) {
+      sawReusePort = reusePort;
+      return Future.error(const SocketException('fake'));
+    }
+
+    tearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    for (final (platform, expected) in [
+      (TargetPlatform.android, false),
+      (TargetPlatform.iOS, true),
+      (TargetPlatform.macOS, true),
+    ]) {
+      test('$platform binds with reusePort: $expected', () async {
+        debugDefaultTargetPlatformOverride = platform;
+        sawReusePort = null;
+        final bind = ServerDiscoveryService.productionDatagramBind(bind: record);
+        await expectLater(
+          bind(InternetAddress.anyIPv4, 5353, reusePort: true),
+          throwsA(isA<SocketException>()),
+        );
+        expect(sawReusePort, expected);
+      });
+    }
   });
 }

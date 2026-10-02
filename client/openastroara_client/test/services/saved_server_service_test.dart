@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 
-// The real service against the package's in-memory mock backend — the
-// move-to-end contract behind activeServerProvider ("last-confirmed = active")
-// lives here, so it gets tested on the real persistence round-trip.
+// The move-to-end contract behind activeServerProvider ("last-confirmed =
+// active") lives here. Since #1129 the list is session-only: nothing is
+// written to the device, and the list older versions stored is wiped.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -67,21 +67,29 @@ void main() {
     expect(loaded.single.serverVersion, '0.0.2');
   });
 
-  // #1129: the rig's identity survives storage, and a rig found at a new
-  // address replaces the old entry as the active one.
-  test('serverUuid round-trips through storage', () async {
+  // #1129: a rig's address (and name) can change every night, so nothing is
+  // remembered between launches — every launch scans.
+  test('confirming a rig writes nothing to the device', () async {
     final svc = SavedServerService();
-    await svc.add(const AraServer(hostname: '192.168.1.235', port: 5555, serverUuid: 'uuid-pi4'));
-    expect((await svc.loadAll()).single.serverUuid, 'uuid-pi4');
+    await svc.add(rigA);
+    expect(await const FlutterSecureStorage().readAll(), isEmpty);
   });
 
-  test('relocated() swaps the old address for the new one, last = active, metadata kept', () {
-    const old = AraServer(hostname: '192.168.1.234', port: 5555, mdnsName: 'openastro', serverVersion: '1.0', serverUuid: 'u');
-    const moved = AraServer(hostname: '192.168.1.235', port: 5555);
-    final out = SavedServerService.relocated(const [old, rigA], old, moved);
-    expect(out.map((s) => s.hostname), ['observatory', '192.168.1.235']);
-    expect(out.last.mdnsName, 'openastro');
-    expect(out.last.serverVersion, '1.0');
-    expect(out.last.serverUuid, 'u');
+  test('a new launch starts with no rigs', () async {
+    await SavedServerService().add(rigA);
+    expect(await SavedServerService().loadAll(), isEmpty);
+  });
+
+  test('the address list older versions stored is wiped on first load', () async {
+    // What an older version of the app left on the device (test data only).
+    FlutterSecureStorage.setMockInitialValues({
+      SavedServerService.legacyStorageKey: '[{"hostname":"old-rig.test","port":5555}]',
+      'unrelated.key': 'kept',
+    });
+    final loaded = await SavedServerService().loadAll();
+    expect(loaded, isEmpty, reason: 'an old saved address is never used');
+    final left = await const FlutterSecureStorage().readAll();
+    expect(left.containsKey(SavedServerService.legacyStorageKey), isFalse);
+    expect(left['unrelated.key'], 'kept');
   });
 }

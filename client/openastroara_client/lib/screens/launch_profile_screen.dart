@@ -1,16 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/profile_list.dart';
-import '../models/server.dart';
 import '../state/launch_gate_state.dart';
 import '../state/profile_management_state.dart';
 import '../state/saved_server_state.dart';
-import '../state/server_state.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/plan_offline_button.dart';
 import '../widgets/profile/profile_import_flow.dart';
@@ -37,63 +33,17 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   /// Guards [Image] against double-clicks while the select RPC is in flight.
   bool _entering = false;
 
-  /// #1129 — the saved address didn't answer, so the rig is searched for on
-  /// the whole network by its uuid. One search per saved address: a rig that
-  /// is genuinely off must not trigger an endless loop of sweeps.
-  AraServer? _searchedFor;
-  bool _searching = false;
-  bool _searchFailed = false;
-
-  /// Connection-level failures only: a rig that answered with an error is
-  /// where it should be.
-  static bool _unreachable(Object e) =>
-      e is SocketException ||
-      (e is DioException &&
-          (e.type == DioExceptionType.connectionError ||
-              e.type == DioExceptionType.connectionTimeout));
-
-  Future<void> _searchFor(AraServer saved) async {
-    setState(() {
-      _searchedFor = saved;
-      _searching = true;
-      _searchFailed = false;
-    });
-    final found = await ref.read(serverRelocatorProvider).relocate(saved);
-    if (!mounted) return;
-    if (found != null) {
-      // The active server changes, so the profile list reloads from the new
-      // address on its own.
-      await ref.read(savedServersProvider.notifier).replace(saved, found);
-    }
-    if (!mounted) return;
-    setState(() {
-      _searching = false;
-      _searchFailed = found == null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(profileManagementProvider);
     final server = ref.watch(activeServerProvider);
-    // Checked on every build, not only on a change into the error state: the
-    // error may already be cached when this screen (re)appears. _searchedFor
-    // keeps it to one search per saved address.
-    final error = async.error;
-    if (error != null && server != null && !_searching &&
-        _searchedFor != server && _unreachable(error)) {
-      _searchedFor = server;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_searchFor(server));
-      });
-    }
     final serverLabel =
         server == null ? null : (server.mdnsName ?? server.hostname);
 
     return Scaffold(
       body: Center(
         // Scrolls when the card is taller than the window (phone landscape,
-        // the compact desktop launch window, or the extra not-found line).
+        // the compact desktop launch window).
         child: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -118,11 +68,10 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                               style: const TextStyle(
                                   color: AraColors.textSecondary)),
                         ),
-                        // A saved rig that moved or went away left this screen
-                        // a dead end: Retry, offline, or a new profile on the
-                        // same unreachable rig (#1129, seen on an iPad and a
-                        // Pixel with a stale address). Same chooser the shell's
-                        // Launchpad action opens.
+                        // A rig that went away mid-launch left this screen a
+                        // dead end: Retry, offline, or a new profile on the
+                        // same unreachable rig (#1129). Back to the network
+                        // scan — the same chooser the shell's Launchpad opens.
                         TextButton(
                           onPressed: () => ref
                               .read(serverChooserRequestedProvider.notifier)
@@ -133,21 +82,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  // While the rig is being searched for, say so — whatever the
-                  // profile list is doing (Riverpod retries the failed load
-                  // meanwhile, which would otherwise show a bare spinner).
-                  ...(_searching
-                      ? [
-                          const Center(child: CircularProgressIndicator()),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Looking for ${serverLabel ?? 'your rig'} on your '
-                            "network — it isn't answering at its saved address.",
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: AraColors.textSecondary),
-                          ),
-                        ]
-                      : async.when(
+                  ...async.when(
                     loading: () => const [
                       Center(child: CircularProgressIndicator()),
                     ],
@@ -158,23 +93,10 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: AraColors.textSecondary),
                       ),
-                      if (_searchFailed) ...[
-                        const SizedBox(height: 8),
-                        const Text(
-                          "It isn't anywhere else on your network either. Check "
-                          "it's powered on, or choose a different rig.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AraColors.textSecondary),
-                        ),
-                      ],
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
-                        onPressed: () {
-                          // A retry may search again (the rig may have just
-                          // been switched on somewhere new).
-                          setState(() => _searchedFor = null);
-                          ref.invalidate(profileManagementProvider);
-                        },
+                        onPressed: () =>
+                            ref.invalidate(profileManagementProvider),
                         icon: const Icon(Icons.refresh, size: 18),
                         label: const Text('Retry'),
                       ),
@@ -185,7 +107,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                       const PlanOfflineButton(),
                     ],
                     data: (list) => _profileControls(list),
-                  )),
+                  ),
                   const SizedBox(height: 24),
                   const Row(children: [
                     Expanded(child: Divider()),
