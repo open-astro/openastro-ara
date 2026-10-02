@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/first_run_screen.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
+import 'package:openastroara/services/multicast_lock.dart';
 import 'package:openastroara/services/server_api.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -159,6 +161,50 @@ void main() {
       expect(find.text('openastro'), findsOneWidget);
       expect(c.read(selectedServerProvider), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+
+  // #1129: Android drops mDNS answers without a multicast lock; the scan
+  // screen holds it only while it is open (battery), nowhere else.
+  group('multicast lock', () {
+    late List<String> calls;
+    const channel = MethodChannel('openastroara/multicast_lock');
+
+    setUp(() {
+      calls = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return null;
+      });
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+      MulticastLock.isAndroid = () => defaultTargetPlatform == TargetPlatform.android;
+    });
+
+    Future<void> openAndClose(WidgetTester tester) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [discoveryServiceProvider.overrideWithValue(_FakeDiscovery())],
+        child: const MaterialApp(home: FirstRunScreen()),
+      ));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+
+    testWidgets('Android: held while the scan screen is open', (tester) async {
+      MulticastLock.isAndroid = () => true;
+      await openAndClose(tester);
+      expect(calls, ['acquire', 'release']);
+    });
+
+    testWidgets('other platforms: never touched', (tester) async {
+      MulticastLock.isAndroid = () => false;
+      await openAndClose(tester);
+      expect(calls, isEmpty);
     });
   });
 }

@@ -77,7 +77,8 @@ class _HelpDialog extends ConsumerWidget {
             ),
             _DiagnosticRow(label: 'Active server', value: activeServer),
             _DiagnosticRow(
-              label: 'Saved servers',
+              // Session-only since #1129: rigs confirmed since launch.
+              label: 'Rigs this session',
               value: '${servers.value?.length ?? 0}',
             ),
             // Listens to the log's status so an error recorded while the
@@ -150,7 +151,7 @@ class _HelpDialog extends ConsumerWidget {
 OpenAstroAra diagnostics:
   app version: $version
   active server: $activeServer
-  saved servers: ${servers.value?.length ?? 0}
+  rigs this session: ${servers.value?.length ?? 0}
   $clientLog
 
 Steps to reproduce:

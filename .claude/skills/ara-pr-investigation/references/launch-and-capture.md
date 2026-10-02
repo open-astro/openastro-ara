@@ -72,9 +72,10 @@ open build/macos/Build/Products/Debug/openastroara.app
   a terminal-launched app inherits the terminal's grant — #1111). If the
   first-run/connect screen appears with no rig listed, either allow the app
   under System Settings → Privacy & Security → Local Network and tap ⟳, or
-  enter host `localhost` port `5555` by hand (or `openastro.lan`). The user's
-  machine already has a saved server in `org.openastro.openastroara.plist`, so
-  usually the app connects straight away — say which daemon it connected to.
+  enter host `localhost` port `5555` by hand (or `openastro.lan`). The client
+  stores no server (#1129): every launch scans, and when exactly one rig
+  answers it connects on its own after ~3 s — say which daemon it connected to.
+  With several rigs answering, pick one.
 - Linux hosts: `flutter build linux --debug` and run the bundle; on Wayland
   prefix `GDK_BACKEND=x11`.
 - Do not run `dart format` on files the PR touched — it restyles whole files.
@@ -114,7 +115,7 @@ argument, so someone has to click. Two ways, in order of preference:
    on Retina and includes a shadow margin, so map through the window's
    position rather than reading pixel coordinates straight off the image.
    Known targets on a fresh 960×712 window at (x,y): hostname field
-   (x+379, y+620), Use (x+909, y+620), Save & continue (x+122, y+661); on the
+   (x+379, y+620), Use (x+909, y+620), Continue (x+122, y+661); on the
    main shell the Tonight's Sky button sits at (x+w-70, y+116).
 2. **Not granted** (the default here): capture what the app opens on, then
    tell the user exactly what to click ("Planning tab → Tonight's Sky, expand a

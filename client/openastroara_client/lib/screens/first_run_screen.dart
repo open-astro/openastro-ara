@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
+import '../services/multicast_lock.dart';
 import '../services/server_api.dart';
 import '../state/launch_gate_state.dart';
 import '../state/saved_server_state.dart';
@@ -40,6 +41,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   void initState() {
     super.initState();
+    // Android drops mDNS answers without a multicast lock; hold it only while
+    // this screen scans (#1129).
+    unawaited(MulticastLock.acquire());
     // mDNS lookup is one-shot per provider instance, so a daemon that starts up
     // after the first scan would never appear. Re-run discovery on a loop while
     // this screen is shown so freshly-started servers turn up on their own
@@ -59,6 +63,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
 
   @override
   void dispose() {
+    unawaited(MulticastLock.release());
     _rescanTimer?.cancel();
     _autoConnectTimer?.cancel();
     _manualHostCtrl.dispose();
@@ -77,7 +82,12 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     });
     ref.listen(serverHandshakeProvider, (prev, next) {
       final auto = _autoSelected;
-      if (auto != null && next.asData?.value != null &&
+      if (auto == null) return;
+      if (next.hasError) {
+        // The auto-picked rig didn't answer the handshake: leave it on screen
+        // with its error for the user, and don't continue on a later retry.
+        _autoSelected = null;
+      } else if (next.asData?.value != null &&
           ref.read(selectedServerProvider) == auto) {
         _autoSelected = null;
         unawaited(_confirm(auto));

@@ -92,7 +92,8 @@ class OpenAstroAraApp extends StatelessWidget {
   }
 }
 
-/// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
+/// §30.1 launch sequence: FirstRunScreen (the network scan — nothing is stored
+/// between launches, #1129) → the
 /// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
 /// once the user clicks [Image] and the launch gate passes. "Plan offline"
 /// (§2 — the client is a planning workstation, not a thin viewer) bypasses both
@@ -146,7 +147,7 @@ class _RootRouter extends ConsumerWidget {
         // Log internal details for debug; UI shows a generic message so
         // exception text can't leak into the user-facing surface.
         developer.log(
-          'Failed to load saved servers',
+          'Failed to load the session rig list',
           name: 'openastroara.saved_servers',
           error: e,
           stackTrace: st,
@@ -160,7 +161,7 @@ class _RootRouter extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Failed to load saved servers. Please try again.'),
+                  const Text('Something went wrong starting up. Please try again.'),
                   const SizedBox(height: 12),
                   // Self-gated on a cached profile existing.
                   const PlanOfflineButton(),

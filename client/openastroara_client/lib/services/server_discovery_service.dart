@@ -124,6 +124,29 @@ class ServerDiscoveryService {
   ValueListenable<bool> get localNetworkBlocked => _localNetworkBlocked;
   final ValueNotifier<bool> _localNetworkBlocked = ValueNotifier(false);
 
+  /// iOS refuses raw multicast sockets to every app that lacks Apple's
+  /// `com.apple.developer.networking.multicast` entitlement — even with
+  /// Local Network allowed (`NSBonjourServices` only covers Apple's own
+  /// Bonjour API, which `multicast_dns` does not use). The send always fails
+  /// there, so the browse is skipped and the subnet sweep runs at once; its
+  /// failure was also what raised a false "iOS is blocking local network
+  /// access" banner while the sweep had found the rig (#1129).
+  @visibleForTesting
+  static bool get rawMulticastAllowed => defaultTargetPlatform != TargetPlatform.iOS;
+
+  /// errno values for "the remote host answered and refused the port":
+  /// ECONNREFUSED on macOS/iOS (61), Linux/Android (111) and Windows (10061).
+  /// Proof that unicast to the LAN works, whatever runs on that host.
+  static const _refusedErrnos = {61, 111, 10061};
+
+  /// The sweep's verdict on Local Network access where mDNS can't give one
+  /// (iOS): blocked only if no host on the subnet answered at all — not the
+  /// rig, not even the router refusing the port — and some probe came back
+  /// with an OS refusal. A rig that is simply off leaves the router answering.
+  @visibleForTesting
+  static bool sweepSaysBlocked({required bool anyHostAnswered, required int blockedFailures}) =>
+      !anyHostAnswered && blockedFailures > 0;
+
   /// errno values a blocked multicast send comes back with: EHOSTUNREACH
   /// (65 on macOS/BSD, 113 on Linux; macOS Local Network denial), EPERM (1)
   /// and EACCES (13) for a sandbox or firewall, and their WinSock
@@ -173,6 +196,8 @@ class ServerDiscoveryService {
     }
 
     void emit(AraServer s) {
+      // A rig answered, by whatever path: the local network is reachable.
+      _localNetworkBlocked.value = false;
       if (!controller.isClosed && seen.add('${s.hostname}:${s.port}')) {
         controller.add(s);
       }
@@ -215,7 +240,9 @@ class ServerDiscoveryService {
       sweepSub = null;
     }
 
-    mdnsSub = (mdnsSource ?? _mdnsDiscover)().listen(
+    mdnsSub = (mdnsSource ??
+            (rawMulticastAllowed ? _mdnsDiscover : () => const Stream<AraServer>.empty()))()
+        .listen(
       (s) {
         if (!sawMdnsResult) {
           sawMdnsResult = true;
@@ -566,6 +593,9 @@ class ServerDiscoveryService {
       // the /24s, and an unbounded fan-out could hit fd limits on constrained
       // stacks.
       const batch = 64;
+      var hits = 0;
+      var anyHostAnswered = false;
+      var blockedFailures = 0;
       for (var i = 0; i < hosts.length; i += batch) {
         // A batch that finds nothing has no yield (= no generator suspension
         // point), so cancellation must be checked explicitly or a cancelled
@@ -574,9 +604,20 @@ class ServerDiscoveryService {
         final probes = [
           for (final h in hosts.skip(i).take(batch)) _probe(client, h),
         ];
-        for (final s in await Future.wait(probes)) {
-          if (s != null) yield s;
+        for (final r in await Future.wait(probes)) {
+          anyHostAnswered |= r.answered;
+          if (r.blocked) blockedFailures++;
+          if (r.server != null) {
+            hits++;
+            yield r.server!;
+          }
         }
+      }
+      // Where mDNS can't report a blocked network (iOS), a finished sweep
+      // does. Elsewhere the mDNS path owns the flag.
+      if (!rawMulticastAllowed && hits == 0) {
+        _localNetworkBlocked.value = sweepSaysBlocked(
+            anyHostAnswered: anyHostAnswered, blockedFailures: blockedFailures);
       }
     } finally {
       client.close(force: true);
@@ -585,14 +626,18 @@ class ServerDiscoveryService {
 
   /// GET /api/v1/server/info with tight timeouts; a parseable payload with
   /// a server_uuid is the "this really is an Ara daemon" check. Any failure
-  /// (refused, timeout, non-JSON) means "not a daemon" — never an error.
-  Future<AraServer?> _probe(HttpClient client, String host) async {
+  /// (refused, timeout, non-JSON) means "not a daemon" — never an error. The
+  /// result also says whether the host answered at all and whether the OS
+  /// refused the connection, for [sweepSaysBlocked].
+  Future<_ProbeResult> _probe(HttpClient client, String host) async {
+    var answered = false;
     try {
       final req = await client
           .getUrl(Uri.parse('http://$host:$defaultPort/api/v1/server/info'))
           .timeout(const Duration(milliseconds: 900));
       final res = await req.close().timeout(const Duration(milliseconds: 1200));
-      if (res.statusCode != 200) return null;
+      answered = true;
+      if (res.statusCode != 200) return const _ProbeResult(answered: true);
       // Byte-capped read (review r3): probes hit arbitrary subnet hosts, and
       // a device that trickles a large body just under the time cap would
       // hold its slot ~3 s. /server/info is a few hundred bytes; anything
@@ -608,19 +653,42 @@ class ServerDiscoveryService {
           .timeout(const Duration(milliseconds: 1200));
       final json = jsonDecode(utf8.decode(bytes.takeBytes()));
       if (json is! Map<String, dynamic> || json['server_uuid'] is! String) {
-        return null;
+        return const _ProbeResult(answered: true);
       }
       final nickname = json['nickname'];
-      return AraServer(
-        hostname: host,
-        port: defaultPort,
-        mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
+      return _ProbeResult(
+        answered: true,
+        server: AraServer(
+          hostname: host,
+          port: defaultPort,
+          mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
+        ),
       );
       // ignore: avoid_catches_without_on_clauses
-    } catch (_) {
-      return null; // not an Ara daemon (or unreachable) — skip silently
+    } catch (e) {
+      // Not an Ara daemon (or unreachable) — skip silently.
+      if (e is SocketException) {
+        final errno = e.osError?.errorCode;
+        if (_refusedErrnos.contains(errno)) return const _ProbeResult(answered: true);
+        if (_isBlockedSend(e)) return const _ProbeResult(blocked: true);
+      }
+      return _ProbeResult(answered: answered);
     }
   }
+}
+
+/// What one sweep probe learned about its host.
+class _ProbeResult {
+  const _ProbeResult({this.server, this.answered = false, this.blocked = false});
+
+  /// The Ara daemon found there, if any.
+  final AraServer? server;
+
+  /// The host responded at all (HTTP, or a TCP refusal of the port).
+  final bool answered;
+
+  /// The OS refused the connection (Local Network denial, sandbox).
+  final bool blocked;
 }
 
 /// One subnet sweep shared by every discovery pass that starts while it is

@@ -964,8 +964,8 @@ jobs:
     # Native compile gate (desktop + Android + iOS). `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO
-    # "§36 CEF 149 helpers" / the #600 review). Building all three desktop
-    # targets catches native link/plugin regressions (webview_all platform
+    # "§36 CEF 149 helpers" / the #600 review). Building every target (three
+    # desktop + Android + iOS) catches native link/plugin regressions (webview_all platform
     # views, secure-storage backends, CMake/Xcode project drift) before
     # merge. Release mode matches what ships.
     strategy:
@@ -1057,13 +1057,16 @@ jobs:
       - name: Launcher icons match icon_sources/
         # #1129 — the per-platform icons are generated, then committed. Re-run
         # the generator once (on the Linux leg; it is pure Dart) and fail if
-        # anything it writes differs from what is checked in.
+        # anything it writes differs from what is checked in. Only the icon
+        # outputs are compared: the build above may legitimately touch other
+        # tracked files (pubspec.lock, plugin registrants).
         if: matrix.target == 'linux'
         working-directory: client/openastroara_client
         run: |
           set -euo pipefail
           dart run flutter_launcher_icons
-          if ! git diff --exit-code --stat -- . ; then
+          icon_paths=(android/app/src/main/res ios/Runner/Assets.xcassets/AppIcon.appiconset macos/Runner/Assets.xcassets/AppIcon.appiconset windows/runner/resources)
+          if ! git diff --exit-code --stat -- "${icon_paths[@]}" ; then
             echo "::error::Launcher icons are stale: run 'dart run flutter_launcher_icons' in client/openastroara_client and commit the result."
             exit 1
           fi

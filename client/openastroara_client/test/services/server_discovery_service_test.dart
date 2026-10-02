@@ -757,4 +757,50 @@ void _preferLocalSubnetTests() {
       );
     });
   });
+
+  // #1129: on an iPad that had found the rig, a banner claimed "iOS is
+  // blocking local network access". iOS refuses raw multicast to apps without
+  // Apple's multicast entitlement, so the mDNS send always failed there.
+  group('iOS discovery', () {
+    tearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    test('iOS never opens the multicast socket and sweeps at once', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      var mdnsClients = 0;
+      const rig = AraServer(hostname: 'rig.test', port: 5555);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () {
+          mdnsClients++;
+          return _AsyncSendErrorMdns();
+        },
+        localAddresses: () async => const ['192.0.2.10'],
+        sweepSource: () => Stream.value(rig),
+      );
+      final sw = Stopwatch()..start();
+      expect(await svc.discover().toList(), [rig]);
+      expect(mdnsClients, 0);
+      expect(sw.elapsed, lessThan(ServerDiscoveryService.mdnsGracePeriod),
+          reason: 'no mDNS grace wait before the sweep');
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('blocked only when nothing on the subnet answered and the OS refused', () {
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 40), isTrue);
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: true, blockedFailures: 40), isFalse,
+          reason: 'the router refusing the port proves the LAN is reachable (the rig is just off)');
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 0), isFalse,
+          reason: 'silent timeouts are a quiet network, not a denial');
+    });
+  });
+
+  test('a rig found by the sweep clears a banner the mDNS send raised', () async {
+    final svc = ServerDiscoveryService(
+      mdnsClientFactory: () => _AsyncSendErrorMdns(),
+      localAddresses: () async => const ['192.0.2.10'],
+      sweepSource: () => Stream.value(const AraServer(hostname: 'rig.test', port: 5555)),
+    );
+    final found = await svc.discover().toList();
+    expect(found, hasLength(1));
+    expect(svc.localNetworkBlocked.value, isFalse);
+  });
 }

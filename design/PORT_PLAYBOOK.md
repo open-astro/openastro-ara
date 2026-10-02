@@ -1900,8 +1900,9 @@ cd client/openastroara_client
 flutter build macos --debug    # or: flutter run -d macos  (foreground only)
 open build/macos/Build/Products/Debug/openastroara.app
 ```
-The saved server persists, so subsequent launches skip first-run and reconnect; a
-connected device's state lives daemon-side, so the app reflects it on reconnect.
+Every launch scans the network (nothing about the rig is stored, #1129); with one
+rig on the network the app connects on its own. A connected device's state lives
+daemon-side, so the app reflects it on reconnect.
 
 ---
 
@@ -3165,7 +3166,9 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 
 ### 30.3 Subsequent launches
 
-Splash → (auto-connect to saved server, no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+Splash → network scan → (exactly one rig answers: auto-connect, no auth per §67; several: pick one) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+
+Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the sweep alone, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it.
 
 ### 30.4 Add a Profile
 
@@ -3185,10 +3188,10 @@ Modal with a file picker:
 
 ### 30.6 Server connection management
 
-- Saved servers list (hostname + last-seen IP/port + version) in WILMA's local state
+- No saved servers (#1129): the confirmed rig is held for the session only; every launch scans again (§30.3)
 - No auth tokens to manage per §67
-- Settings → Server panel: shows current server + connection state, "Forget this server" button
-- Forget = removes the saved server entry; next launch shows the discovery flow for that server again (Pi-side state is unaffected)
+- Settings → Server panel: shows current server + connection state
+- **Choose a different rig** (profile box) and the shell's Launchpad action return to the scan list (Pi-side state is unaffected)
 - the planned remote-access mode (§67.4, ROADMAP) is when tokens come back, scoped to remote endpoints only
 
 §61 search registry entries (§30.2-§30.6 coverage):
