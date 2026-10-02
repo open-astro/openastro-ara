@@ -1027,6 +1027,13 @@ void _preferLocalSubnetTests() {
       expect(r.server, isNull);
       expect(r.answered, isTrue);
       expect(r.blocked, isFalse);
-    });
+    },
+        // Windows retries a refused SYN for ~2 s before reporting it, past the
+        // probe's 800 ms connect timeout, so a closed port reads as a timeout
+        // there. The refusal verdict only feeds the iOS banner, so nothing
+        // depends on it on Windows (CI windows-latest, #1129).
+        skip: Platform.isWindows
+            ? 'Windows reports a refused connect only after ~2 s of SYN retries'
+            : false);
   });
 }

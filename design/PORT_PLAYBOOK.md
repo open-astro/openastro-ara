@@ -3465,7 +3465,7 @@ WebSocket events from background-watcher mode use the same shapes as §46 notifi
 ### 30.8.2 §61 search registry
 
 - `app.servers.switch` — keywords: `switch server, change pi, multi-pi, multi-rig, observatory, two scopes, multiple servers`
-- `app.servers.manage` — keywords: `manage servers, forget server, rename pi, server list, default server, auto-connect`
+- `app.servers.manage` — keywords: `manage servers, rename pi, server list, choose rig, rescan` (no forget/default/auto-connect: nothing is stored and the user always picks, #1129)
 - `app.servers.watcher` — keywords: `background watcher, monitor other rig, notifications from other pi, cross-rig notifications`
 
 ### 30.8.3 §14 test cases
