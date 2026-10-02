@@ -3896,42 +3896,58 @@ WILMA connects → compatibility analyzer runs
 
 ### 33.3 Update push flow
 
+> **Built 2026-10-01 (#1122).** The original sketch (tarball + sudo'd `update.sh` +
+> `dpkg-divert`) could not work: the daemon's unit runs with `NoNewPrivileges=true`, under
+> which sudo refuses to run, and swapping files under a dpkg-owned tree fights the package
+> manager. What shipped pushes the **`.deb` itself** and escalates the same way the §29.1.4
+> storage helper does.
+
 ```
-[Update Ara Core] clicked
+[Update Ara Core] clicked (client holds an openastroara-server_<ver>_arm64.deb it downloaded earlier)
      ↓
-WILMA streams bundled tarball to POST /api/v1/server/update
-   Headers: X-Update-Version, X-Update-Sha256
-   Body: gzipped tarball, Content-Type: application/octet-stream
-   (no auth per §67 — trusted LAN; SHA-256 verification is the integrity gate)
+POST /api/v1/server/update            raw body, Content-Type application/vnd.debian.binary-package
+   optional X-Update-Sha256           checked against the received bytes (catches a truncated upload)
      ↓
-Server:
-  1. Validate version + sha256
-  2. Save tarball to /opt/openastroara/staging/
-  3. Verify checksum
-  4. Extract to /opt/openastroara/staging/extracted/
-  5. Pre-flight: run "new-binary --version" — must succeed in 5s
-  6. Invoke /opt/openastroara/update.sh (privileged helper)
-  7. Reply 202 Accepted, begin shutdown
+Daemon (unprivileged):
+  1. Refuse unless openastroara-update@.service exists (packaged install) — 409 not_packaged
+  2. Stream to /var/lib/openastroara/updates/<id>.deb, 256 MiB cap (413)
+  3. dpkg-deb -f: Package must be openastroara-server, Architecture must match dpkg --print-architecture
+  4. dpkg --compare-versions <new> gt <installed> — 422 not_newer otherwise
+  5. 202 { id, version, installed_version, size_bytes }
      ↓
-update.sh (run as root via NOPASSWD sudoers — see DEPLOY.md):
-  - dpkg-divert old binary so APT respects local override
-  - Atomic: mv current → previous; mv staging/extracted → current
-  - systemctl restart openastroara-server
+POST /api/v1/server/update/{id}/apply   (409 update_in_progress while another apply runs)
+  - writes /run/openastroara/update/<id>.request (staged path, daemon port, drain seconds); the wrapper keeps
+    it until <id>.result is in place, so GET reads "pending" the whole time
+  - systemctl start --no-block openastroara-update@<id>.service   (polkit: 50-openastroara-update.rules)
+  - only once systemd accepted: emits server.restart_imminent { reason: "update", update_id, version, in_seconds: 5 }
+  - 202 { status: "pending" }
      ↓
-New binary boots → smoke test (responds to /api/v1/server/info within 30s)
+openastroara-update@<id> (root oneshot → update-request.sh → apply-update.sh):
+  - checks the staged path (directly under the stage dir, regular file, not a symlink), copies
+    it into /var/lib/openastroara-rollback (root 0700, outside the daemon's tree), and
+    re-validates package, architecture and version on that copy
+  - keeps the running version there as <old>.deb (first push on an apt install falls back
+    to /var/cache/apt/archives)
+  - waits the announced drain time (5 s, passed on the request), dpkg -i (prerm stops and
+    postinst starts the daemon); restarts it only if postinst left it stopped
+  - polls http://127.0.0.1:<port>/healthz for 90 s
      ↓
-   succeeds                          fails to start
-     ↓                                      ↓
-Client reconnects, versions match.    systemd watchdog triggers rollback:
-Modal closes.                           mv previous → current; restart
-                                       Client sees old version still; modal:
-                                       "Update failed, rolled back."
+   healthy                                   dpkg fails, or /healthz silent
+     ↓                                              ↓
+status=applied                               dpkg -i rollback/<old>.deb; restart
+                                             status=rolled_back (or failed if no rollback copy)
+     ↓
+GET /api/v1/server/update/{id} on the restarted daemon reads <id>.result:
+{ status: applied | rolled_back | failed | pending, from_version, to_version, rollback_available, output }
 ```
+
+Not built yet (client side, separate work): the WILMA download-ahead cache and the
+[Update Ara Core] button that drives these three calls.
 
 ### 33.4 Trust & integrity (current)
 
 - No auth on the endpoint per §67 (trusted-LAN posture); same as every other ARA endpoint
-- **SHA-256 checksum match before swap** — the integrity gate. An attacker would need to upload a binary whose SHA-256 matches the one they declared, which requires already possessing a legitimate signed binary; mere LAN access isn't enough
+- **SHA-256 match when the client declares one** (`X-Update-Sha256`). As built (#1122) this is a transfer-integrity check, not an authenticity gate: the uploader declares the hash, so it proves the bytes arrived intact, nothing more. Authenticity is the §33.6 Ed25519 signature work (#1167); until then the trust model is the §67 trusted LAN plus the explicit user click. In plain words: **anyone who can reach the daemon on the LAN can install a package that runs as root**, the same as every other unauthenticated endpoint that already controls the rig — keep the rig off untrusted networks until #1167 lands
 - WILMA's UX requires the user to click [Update Ara Core] — opportunistic API access can't trigger an update silently
 - **Future addition (with remote-access mode)**: Ed25519 signature verification with Open Astro's pinned public key (so the user can't push a tampered binary to their own Pi by accident or malice; provides strong integrity even on hostile networks once remote-access mode ships)
 
@@ -4129,7 +4145,7 @@ sudo apt install openastroara-server
 
 - Name: `openastroara-server` (lowercase, hyphens per Debian convention)
 - Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
-- Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli` (authoritative list: `packaging/debian/DEBIAN/control.template`)
+- Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli`, `curl` (the §33 update helper's `/healthz` probe) (authoritative list: `packaging/debian/DEBIAN/control.template`)
 - Recommends: `alpacabridge`, `openastro-guider` (pulled in by default; opt-out with `--no-install-recommends`)
 - Suggests: `gpsd` (for USB GPS time sync per §31)
 
@@ -11915,7 +11931,7 @@ ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsf
 **Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
 
 ```
-Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd, astap-cli
+Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd, astap-cli, curl
 ```
 
 `libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.

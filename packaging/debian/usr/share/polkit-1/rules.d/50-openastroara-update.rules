@@ -1,0 +1,25 @@
+// Allow the openastroara service user to start instances of the root-owned
+// update helper unit (openastroara-update@<request-id>.service, §33, #1122).
+// The daemon's own unit runs with NoNewPrivileges=true, so sudo/setuid cannot
+// be used for dpkg; instead it asks systemd over D-Bus to run the
+// helper, and this rule authorises exactly that. Scoped to one unit template
+// and the start verb; stop, mask, edit and every other unit stay NOT_HANDLED
+// (which falls through to the default: admin auth, i.e. denied for a service
+// user). Same shape as 50-openastroara-storage.rules.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "openastroara") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    if (typeof unit !== "string" || unit.indexOf("openastroara-update@") !== 0
+            || unit.lastIndexOf(".service") !== unit.length - ".service".length) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.lookup("verb") === "start") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

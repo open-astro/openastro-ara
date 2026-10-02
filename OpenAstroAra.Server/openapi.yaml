@@ -3362,6 +3362,100 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/LogEntryDto'
+  /api/v1/server/update:
+    post:
+      tags:
+        - ServerUpdate
+      summary: Upload an openastroara-server .deb to stage it for an in-place update (#1122). Optional X-Update-Sha256 header is checked against the received bytes.
+      operationId: StageServerUpdate
+      requestBody:
+        content:
+          application/vnd.debian.binary-package:
+            schema:
+              type: string
+              format: byte
+          application/octet-stream:
+            schema:
+              type: string
+              format: byte
+        required: true
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerUpdateStagedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '413':
+          description: Payload Too Large
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/v1/server/update/{id}/apply':
+    post:
+      tags:
+        - ServerUpdate
+      summary: Install a staged update through the root helper; the daemon emits server.restart_imminent and restarts.
+      operationId: ApplyServerUpdate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerUpdateStatusDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/v1/server/update/{id}':
+    get:
+      tags:
+        - ServerUpdate
+      summary: 'Outcome of an applied update (pending / applied / rolled_back / failed), readable after the restart.'
+      operationId: GetServerUpdateStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerUpdateStatusDto'
+        '404':
+          description: Not Found
   /api/v1/server/connect:
     post:
       tags:
@@ -9984,6 +10078,55 @@ components:
           $ref: '#/components/schemas/JsonElement'
         notifications_summary:
           $ref: '#/components/schemas/JsonElement'
+    ServerUpdateStagedDto:
+      required:
+        - id
+        - package
+        - version
+        - installed_version
+        - size_bytes
+      type: object
+      properties:
+        id:
+          type: string
+        package:
+          type: string
+        version:
+          type: string
+        installed_version:
+          type: string
+        size_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+    ServerUpdateStatusDto:
+      required:
+        - id
+        - status
+        - from_version
+        - to_version
+        - rollback_available
+        - output
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        from_version:
+          type:
+            - 'null'
+            - string
+        to_version:
+          type:
+            - 'null'
+            - string
+        rollback_available:
+          type: boolean
+        output:
+          type: string
     SessionDto:
       required:
         - id
@@ -11061,6 +11204,7 @@ tags:
   - name: Diagnostics
   - name: Faults
   - name: Server
+  - name: ServerUpdate
   - name: Connection
   - name: Notifications
   - name: Stats
