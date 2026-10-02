@@ -2052,7 +2052,7 @@ Three stacked sections, each collapsible:
 `Row` along the bottom of the main window:
 - Left: local time + sidereal time (computed from server's reported lat/long)
 - Center: current operation ("Capturing target M42 — frame 4/20, 180s") + progress bar
-- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1") + "Forget this server" button (clears the saved server entry; doesn't affect Pi-side state)
+- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1"). Nothing about the rig is stored on the client (#1129), so there is no "Forget this server"; the Launchpad action returns to the network scan
 
 ### 25.8 Mobile differences
 

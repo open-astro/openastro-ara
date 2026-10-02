@@ -80,6 +80,11 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         _scheduleAutoConnect();
       });
     });
+    // Picking (or typing) anything else cancels a pending auto-connect, so a
+    // later re-pick of that rig still waits for the Continue tap.
+    ref.listen(selectedServerProvider, (prev, next) {
+      if (next != _autoSelected) _autoSelected = null;
+    });
     ref.listen(serverHandshakeProvider, (prev, next) {
       final auto = _autoSelected;
       if (auto == null) return;
@@ -240,20 +245,48 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   }
 
   /// #1129 — nothing is remembered between launches, so every launch scans.
-  /// When the scan settles on exactly one rig, connect to it without a tap.
-  /// Never when the user opened this list to choose (Launchpad / "Choose a
-  /// different rig"), has picked or typed something, or two rigs answered.
+  /// When the scan has finished and found exactly one rig, connect to it
+  /// without a tap. Never when the user opened this list to choose
+  /// (Launchpad / "Choose a different rig"), has picked or typed something,
+  /// or two different rigs answered.
   void _scheduleAutoConnect() {
     _autoConnectTimer?.cancel();
-    _autoConnectTimer = Timer(autoConnectSettle, () {
-      if (!mounted || _discovered.length != 1) return;
-      if (ref.read(serverChooserRequestedProvider)) return;
-      if (ref.read(selectedServerProvider) != null) return;
-      if (_manualHostCtrl.text.trim().isNotEmpty) return;
-      final only = _discovered.single;
-      _autoSelected = only;
-      ref.read(selectedServerProvider.notifier).select(only);
-    });
+    _autoConnectTimer = Timer(autoConnectSettle, _tryAutoConnect);
+  }
+
+  bool get _mayAutoConnect =>
+      mounted &&
+      !ref.read(serverChooserRequestedProvider) &&
+      ref.read(selectedServerProvider) == null &&
+      _manualHostCtrl.text.trim().isEmpty;
+
+  Future<void> _tryAutoConnect() async {
+    if (!_mayAutoConnect || _discovered.isEmpty) return;
+    // A subnet sweep still probing can turn up a second rig seconds after the
+    // first (it walks .1–.254 in batches); decide only once it is done.
+    if (ref.read(discoveryServiceProvider).sweepInFlight) {
+      _autoConnectTimer = Timer(const Duration(seconds: 1), _tryAutoConnect);
+      return;
+    }
+    final candidates = _discovered.toList();
+    AraServer? pick;
+    if (candidates.length == 1) {
+      pick = candidates.single;
+    } else {
+      // One rig on two addresses (Ethernet + Wi-Fi, or a dead second
+      // interface) is still one rig: count the identities that answer. Two
+      // different rigs — even both named "openastro" — are never guessed.
+      final identify = ref.read(rigIdentityProvider);
+      final ids = await Future.wait(candidates.map(identify));
+      if (!_mayAutoConnect) return;
+      final answering = {for (final id in ids) ?id};
+      if (answering.length == 1) {
+        pick = candidates[ids.indexWhere((id) => id != null)];
+      }
+    }
+    if (pick == null) return;
+    _autoSelected = pick;
+    ref.read(selectedServerProvider.notifier).select(pick);
   }
 }
 

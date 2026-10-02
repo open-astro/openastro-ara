@@ -1066,7 +1066,11 @@ jobs:
           set -euo pipefail
           dart run flutter_launcher_icons
           icon_paths=(android/app/src/main/res ios/Runner/Assets.xcassets/AppIcon.appiconset macos/Runner/Assets.xcassets/AppIcon.appiconset windows/runner/resources)
-          if ! git diff --exit-code --stat -- "${icon_paths[@]}" ; then
+          # git diff misses files the generator newly creates (a new density),
+          # so check for untracked ones too.
+          untracked="$(git status --porcelain --untracked-files=all -- "${icon_paths[@]}")"
+          if ! git diff --exit-code --stat -- "${icon_paths[@]}" || [ -n "$untracked" ]; then
+            [ -n "$untracked" ] && echo "$untracked"
             echo "::error::Launcher icons are stale: run 'dart run flutter_launcher_icons' in client/openastroara_client and commit the result."
             exit 1
           fi

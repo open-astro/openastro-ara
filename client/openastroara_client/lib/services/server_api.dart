@@ -26,13 +26,14 @@ class ServerApi {
   Future<ServerInfo> getInfo() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/server/info');
     final data = res.data ?? <String, dynamic>{};
-    // The daemon's ServerInfoDto sends nickname/api; name and api_version are
-    // older spellings kept as fallbacks.
+    // The daemon's ServerInfoDto sends nickname/api/server_uuid; name and
+    // api_version are older spellings kept as fallbacks.
     final nickname = data['nickname'] as String?;
     return ServerInfo(
       name: (nickname != null && nickname.isNotEmpty ? nickname : data['name'] as String?) ?? 'OpenAstro Ara',
       version: data['version'] as String? ?? 'unknown',
       apiVersion: data['api'] as String? ?? data['api_version'] as String? ?? 'unknown',
+      serverUuid: data['server_uuid'] as String?,
     );
   }
 
@@ -171,9 +172,14 @@ class ServerInfo {
   final String version;
   final String apiVersion;
 
+  /// The rig's identity. Never stored (#1129); used within a scan to tell
+  /// one rig answering on two addresses from two rigs sharing a name.
+  final String? serverUuid;
+
   const ServerInfo({
     required this.name,
     required this.version,
     required this.apiVersion,
+    this.serverUuid,
   });
 }

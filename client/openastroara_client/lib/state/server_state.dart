@@ -12,6 +12,20 @@ final discoveryServiceProvider = Provider<ServerDiscoveryService>(
   (ref) => ServerDiscoveryService(),
 );
 
+/// A rig's identity (`server_uuid`) for the scan in progress — never stored
+/// (#1129). Lets the scan screen count one rig answering on two addresses
+/// (Ethernet + Wi-Fi) as one rig. Null when the address doesn't answer.
+final rigIdentityProvider = Provider<Future<String?> Function(AraServer)>(
+  (ref) => (server) async {
+    try {
+      return (await ServerApi(server).getInfo()).serverUuid;
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      return null;
+    }
+  },
+);
+
 /// Live stream of servers discovered by mDNS. The UI listens to this and
 /// updates the list as each `_openastroara._tcp.local` SRV record arrives.
 final discoveredServersProvider = StreamProvider.autoDispose<AraServer>(

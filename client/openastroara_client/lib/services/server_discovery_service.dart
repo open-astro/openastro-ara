@@ -139,6 +139,19 @@ class ServerDiscoveryService {
   /// Proof that unicast to the LAN works, whatever runs on that host.
   static const _refusedErrnos = {61, 111, 10061};
 
+  /// What a failed probe says about the host: refused the port (it answered,
+  /// so the LAN is reachable), or the OS refused the connection (blocked).
+  /// Timeouts and other failures say neither.
+  @visibleForTesting
+  static ({bool answered, bool blocked}) probeErrorOutcome(Object error) {
+    if (error is SocketException) {
+      final errno = error.osError?.errorCode;
+      if (_refusedErrnos.contains(errno)) return (answered: true, blocked: false);
+      if (_isBlockedSend(error)) return (answered: false, blocked: true);
+    }
+    return (answered: false, blocked: false);
+  }
+
   /// The sweep's verdict on Local Network access where mDNS can't give one
   /// (iOS): blocked only if no host on the subnet answered at all — not the
   /// rig, not even the router refusing the port — and some probe came back
@@ -198,6 +211,7 @@ class ServerDiscoveryService {
     void emit(AraServer s) {
       // A rig answered, by whatever path: the local network is reachable.
       _localNetworkBlocked.value = false;
+      _lastRigSeen = DateTime.now();
       if (!controller.isClosed && seen.add('${s.hostname}:${s.port}')) {
         controller.add(s);
       }
@@ -313,7 +327,9 @@ class ServerDiscoveryService {
     void onSocketError(Object error, StackTrace stack) {
       debugPrint('[discovery] mDNS socket error: $error');
       sawSocketError = true;
-      if (hasNetwork && _isBlockedSend(error)) {
+      final rigJustAnswered = _lastRigSeen != null &&
+          DateTime.now().difference(_lastRigSeen!) < _rigSeenVouchesFor;
+      if (hasNetwork && _isBlockedSend(error) && !rigJustAnswered) {
         _localNetworkBlocked.value = true;
       }
     }
@@ -429,6 +445,20 @@ class ServerDiscoveryService {
   /// attaches to the running sweep (or replays one that just finished) and
   /// the sweep only stops once nobody has listened for [sweepAbandonGrace].
   SweepRun? _sweepRun;
+
+  /// A subnet sweep is still probing. The scan screen waits for it before
+  /// auto-connecting: a second rig higher up the subnet can turn up seconds
+  /// after the first (#1129). Overridable for tests.
+  bool get sweepInFlight {
+    final run = _sweepRun;
+    return run != null && !run.finished && !run.abandoned;
+  }
+
+  /// When a rig last answered, by any path. A failed mDNS send right after a
+  /// rig answered says nothing about access, so it doesn't re-raise the
+  /// banner (#1129: it flickered on a denied Mac while the rig was listed).
+  DateTime? _lastRigSeen;
+  static const _rigSeenVouchesFor = Duration(seconds: 30);
 
   /// Forget the shared sweep: an in-flight run is discarded and a finished
   /// one is no longer replayed, so the next pass probes the subnet afresh.
@@ -667,12 +697,8 @@ class ServerDiscoveryService {
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       // Not an Ara daemon (or unreachable) — skip silently.
-      if (e is SocketException) {
-        final errno = e.osError?.errorCode;
-        if (_refusedErrnos.contains(errno)) return const _ProbeResult(answered: true);
-        if (_isBlockedSend(e)) return const _ProbeResult(blocked: true);
-      }
-      return _ProbeResult(answered: answered);
+      final outcome = probeErrorOutcome(e);
+      return _ProbeResult(answered: answered || outcome.answered, blocked: outcome.blocked);
     }
   }
 }

@@ -803,4 +803,51 @@ void _preferLocalSubnetTests() {
     expect(found, hasLength(1));
     expect(svc.localNetworkBlocked.value, isFalse);
   });
+
+  // #1129 review: the sweep's "blocked" verdict rests on how a failed probe
+  // is classified — a refusal proves the LAN works; an OS refusal is a block.
+  group('probeErrorOutcome', () {
+    SocketException err(int errno) => SocketException('x', osError: OSError('x', errno));
+
+    test('a refused port means the host answered', () {
+      for (final errno in [61, 111, 10061]) {
+        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
+            (answered: true, blocked: false), reason: 'errno $errno');
+      }
+    });
+
+    test('an OS refusal means blocked', () {
+      for (final errno in [65, 113, 1, 13, 10013, 10065]) {
+        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
+            (answered: false, blocked: true), reason: 'errno $errno');
+      }
+    });
+
+    test('timeouts and other failures say neither', () {
+      expect(ServerDiscoveryService.probeErrorOutcome(TimeoutException('x')),
+          (answered: false, blocked: false));
+      expect(ServerDiscoveryService.probeErrorOutcome(err(60)),
+          (answered: false, blocked: false), reason: 'ETIMEDOUT');
+      expect(ServerDiscoveryService.probeErrorOutcome(const FormatException('x')),
+          (answered: false, blocked: false));
+    });
+  });
+
+  // #1129 review: on a denied Mac every 4 s pass's failing mDNS send re-raised
+  // the banner the found rig had just cleared, so it flickered.
+  test('a failed mDNS send right after a rig answered does not re-raise the banner', () async {
+    var pass = 0;
+    final svc = ServerDiscoveryService(
+      mdnsClientFactory: () => _AsyncSendErrorMdns(),
+      localAddresses: () async => const ['192.0.2.10'],
+      sweepSource: () => pass++ == 0
+          ? Stream.value(const AraServer(hostname: 'rig.test', port: 5555))
+          : const Stream<AraServer>.empty(),
+    );
+    await svc.discover().toList(); // the sweep finds the rig
+    expect(svc.localNetworkBlocked.value, isFalse);
+    svc.resetSweepCache();
+    await svc.discover().toList(); // next pass: mDNS send fails again
+    expect(svc.localNetworkBlocked.value, isFalse);
+  });
 }

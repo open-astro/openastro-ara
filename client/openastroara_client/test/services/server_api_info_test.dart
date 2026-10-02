@@ -26,7 +26,8 @@ Future<ServerInfo> infoFrom(Map<String, Object?> body) {
 }
 
 void main() {
-  // #1129: getInfo must read the daemon's ServerInfoDto keys (nickname, api);
+  // #1129: getInfo must read the daemon's ServerInfoDto keys (nickname, api,
+  // server_uuid);
   // it read name/api_version, so every rig showed as "OpenAstro Ara".
   test('reads the daemon ServerInfoDto shape', () async {
     final info = await infoFrom({
@@ -37,6 +38,7 @@ void main() {
       'mdns_service': '_openastroara._tcp',
       'tier': 'core',
     });
+    expect(info.serverUuid, '1f0c6e2a-0000-4000-8000-000000000001');
     expect(info.name, 'openastro');
     expect(info.version, '1.0.0.0');
     expect(info.apiVersion, 'v1');
