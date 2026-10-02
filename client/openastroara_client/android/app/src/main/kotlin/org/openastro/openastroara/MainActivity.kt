@@ -38,15 +38,26 @@ class MainActivity : FlutterActivity() {
         super.onPause()
     }
 
+    // Both fail silent, matching lib/services/multicast_lock.dart: without the
+    // lock discovery falls back to the subnet sweep. A SecurityException (the
+    // manifest permission missing) must not escape into the method channel.
     private fun hold() {
-        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
-        val lock = multicastLock ?: wifi.createMulticastLock("openastroara-mdns").apply {
-            setReferenceCounted(false)
-        }.also { multicastLock = it }
-        if (!lock.isHeld) lock.acquire()
+        try {
+            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
+            val lock = multicastLock ?: wifi.createMulticastLock("openastroara-mdns").apply {
+                setReferenceCounted(false)
+            }.also { multicastLock = it }
+            if (!lock.isHeld) lock.acquire()
+        } catch (e: SecurityException) {
+            multicastLock = null
+        }
     }
 
     private fun drop() {
-        multicastLock?.let { if (it.isHeld) it.release() }
+        try {
+            multicastLock?.let { if (it.isHeld) it.release() }
+        } catch (e: RuntimeException) {
+            // Already released by the system (e.g. Wi-Fi turned off).
+        }
     }
 }

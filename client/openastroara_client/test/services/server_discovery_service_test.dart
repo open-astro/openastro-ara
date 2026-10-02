@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -910,6 +911,122 @@ void _preferLocalSubnetTests() {
       final found = await svc.discover().toList();
       expect(found.single.hostname, '192.0.2.20');
       expect(found.single.mdnsName, 'openastro');
+    });
+  });
+
+  // #1129 review: the code that writes the iOS banner is the sweep's own
+  // tally, not just the helpers — run the REAL sweep (host list and per-host
+  // probe swapped in) under iOS and check the flag it leaves.
+  group('iOS sweep verdict', () {
+    tearDown(() => debugDefaultTargetPlatformOverride = null);
+    final hosts = [for (var n = 1; n <= 10; n++) '192.0.2.$n'];
+
+    ServerDiscoveryService sweeping(Future<ProbeResult> Function(String) probe) =>
+        ServerDiscoveryService(
+          mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
+          localAddresses: () async => const ['192.0.2.100'],
+          sweepHosts: () async => hosts,
+          probeHost: probe,
+        );
+
+    test('every host refusing the port (rig off, LAN fine): no banner', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = sweeping((_) async => const ProbeResult(answered: true));
+      expect(await svc.discover().toList(), isEmpty);
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('every connect refused by the OS: banner', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = sweeping((_) async => const ProbeResult(blocked: true));
+      expect(await svc.discover().toList(), isEmpty);
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
+
+    test('a rig found: listed, and the banner clears', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      const rig = AraServer(hostname: '192.0.2.7', port: 5555, mdnsName: 'openastro');
+      final svc = sweeping((h) async => h == '192.0.2.7'
+          ? const ProbeResult(answered: true, server: rig)
+          : const ProbeResult(blocked: true));
+      expect(await svc.discover().toList(), [rig]);
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('iOS reuses a recent sweep instead of re-walking the subnet every pass', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      var probes = 0;
+      final svc = sweeping((_) async {
+        probes++;
+        return const ProbeResult(answered: true);
+      });
+      await svc.discover().toList();
+      await svc.discover().toList(); // the next ~4 s pass, inside the replay window
+      expect(probes, hosts.length);
+    });
+  });
+
+  test('ENETUNREACH counts as an OS refusal for the sweep', () {
+    for (final errno in [51, 101, 10051]) {
+      expect(
+          ServerDiscoveryService.probeErrorOutcome(
+              SocketException('x', osError: OSError('x', errno))),
+          (answered: false, blocked: true),
+          reason: 'errno $errno');
+    }
+  });
+
+  // The real HTTP probe against loopback: what it reports for an Ara daemon,
+  // for some other HTTP server, and for a closed port.
+  group('probe (real HTTP)', () {
+    Future<HttpServer> serve(int status, Object body) async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) {
+        req.response
+          ..statusCode = status
+          ..headers.contentType = ContentType.json
+          ..write(body is String ? body : jsonEncode(body));
+        req.response.close();
+      });
+      return server;
+    }
+
+    test('an Ara daemon is found, under its nickname', () async {
+      final http = await serve(200, {'server_uuid': 'u', 'nickname': 'openastro'});
+      addTearDown(() => http.close(force: true));
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
+      expect(r.server?.mdnsName, 'openastro');
+      expect(r.server?.port, http.port);
+      expect(r.answered, isTrue);
+    });
+
+    test('another HTTP server answered, but is not a rig', () async {
+      final http = await serve(404, 'nope');
+      addTearDown(() => http.close(force: true));
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue, reason: 'proof the LAN is reachable');
+    });
+
+    test('a host that replied with garbage still answered', () async {
+      // The reply arrives, then parsing throws: the catch must keep the
+      // "answered" it already saw, or a LAN full of non-rig web servers
+      // would read as blocked.
+      final http = await serve(200, 'not json at all');
+      addTearDown(() => http.close(force: true));
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue);
+    });
+
+    test('a closed port is a refusal: answered, not blocked', () async {
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = probe.port;
+      await probe.close();
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue);
+      expect(r.blocked, isFalse);
     });
   });
 }

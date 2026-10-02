@@ -35,15 +35,13 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
-### Fixed
-- **The app scans for your rig every time instead of remembering an address.** It used to save the rig's IP address and reconnect to it, so a rig that moved (backyard to a remote site, a new DHCP lease, Ethernet to Wi-Fi) left the app stuck on "your rig didn't answer" with no way out. Nothing about the rig is stored on the device any more — every launch scans the local network and lists every rig it finds, and you pick yours (it never picks for you, since a site can have several). Once connected, a dropped link still reconnects to that rig on its own. Addresses saved by older versions are deleted on first launch. A **Choose a different rig** button on the profile screen goes back to the scan list. (#1129)
-- **Android finds rigs on the network.** mDNS discovery never worked on Android (the socket option it used is refused there, and the app never took Android's multicast lock); both are fixed, verified on a Pixel Tablet against a live rig. (#1129)
-- **Small client fixes found on a Pixel and an iPad:** the rig list shows the rig's name instead of its full service name; the profile screen no longer says "Connected to" a rig that isn't answering; the live-update connection no longer logs an "Uncaught error" on every retry; connection errors say "this iPhone or iPad" / "this Android device" instead of "this computer"; the iOS Local Network banner points at the right Settings path; the profile card scrolls instead of overflowing on short screens. (#1129)
-
 ### Changed
 - **CI builds Android and iOS.** The native-build matrix now compiles a release APK and an unsigned iOS build, and checks that the committed launcher icons match `icon_sources/`. (#1129)
 
 ### Fixed
+- **The app scans for your rig every time instead of remembering an address.** It used to save the rig's IP address and reconnect to it, so a rig that moved (backyard to a remote site, a new DHCP lease, Ethernet to Wi-Fi) left the app stuck on "your rig didn't answer" with no way out. Nothing about the rig is stored on the device any more — every launch scans the local network and lists every rig it finds, and you pick yours (it never picks for you, since a site can have several). Once connected, a dropped link still reconnects to that rig on its own. Addresses saved by older versions are deleted on first launch. A **Choose a different rig** button on the profile screen goes back to the scan list. (#1129)
+- **Android finds rigs on the network.** mDNS discovery never worked on Android (the socket option it used is refused there, and the app never took Android's multicast lock); both are fixed, verified on a Pixel Tablet against a live rig. (#1129)
+- **Small client fixes found on a Pixel and an iPad:** the rig list shows the rig's name instead of its full service name; the profile screen no longer says "Connected to" a rig that isn't answering; the live-update connection no longer logs an "Uncaught error" on every retry; connection errors say "this iPhone or iPad" / "this Android device" instead of "this computer"; the iOS Local Network banner points at the right Settings path; the profile card scrolls instead of overflowing on short screens. (#1129)
 - **Update rollback follow-ups (found on the Pi).** A pushed update that was rolled back left the rejected package (~70 MB) in the root-only rollback folder; it is now removed. The package's runtime paths use `/run` instead of the legacy `/var/run`, so installing no longer prints systemd-tmpfiles warnings. (#1122)
 
 ### Added

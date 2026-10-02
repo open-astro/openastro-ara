@@ -37,8 +37,8 @@ import '../models/server.dart';
 /// sees no further probe traffic. [resetSweepCache] (the ⟳ Rescan) forgets
 /// the shared run so a daemon that went away is re-probed, not replayed.
 ///
-/// Both paths yield numeric-IP hostnames, so the saved server never carries
-/// a `.local` name that only resolves while multicast is healthy.
+/// Both paths yield numeric-IP hostnames, so the session's chosen rig never
+/// carries a `.local` name that only resolves while multicast is healthy.
 class ServerDiscoveryService {
   static const String serviceType = '_openastroara._tcp.local';
   static const int defaultPort = 5555;
@@ -61,8 +61,17 @@ class ServerDiscoveryService {
     this.sweepAbandonGrace = const Duration(seconds: 2),
     MDnsClient Function()? mdnsClientFactory,
     Future<List<String>> Function()? localAddresses,
+    @visibleForTesting this.sweepHosts,
+    @visibleForTesting this.probeHost,
   }) : _mdnsClientFactory = mdnsClientFactory ?? _platformMdnsClient,
        _localAddresses = localAddresses ?? _localIPv4Addresses;
+
+  /// Test seams for the REAL sweep (unlike [sweepSource], which replaces it
+  /// whole): the hosts it walks, and what probing one host finds. With these
+  /// a test runs the sweep's own tally — hits, hosts that answered, OS
+  /// refusals — and the iOS banner verdict it writes (#1129 review).
+  final Future<List<String>> Function()? sweepHosts;
+  final Future<ProbeResult> Function(String host)? probeHost;
 
   /// `multicast_dns` binds with `reusePort: true`, which `dart:io` rejects on
   /// Android, so on Android the browse died in `start()` every pass and logged
@@ -139,6 +148,12 @@ class ServerDiscoveryService {
   /// Proof that unicast to the LAN works, whatever runs on that host.
   static const _refusedErrnos = {61, 111, 10061};
 
+  /// ENETUNREACH (51 macOS/iOS, 101 Linux/Android, 10051 Windows): a unicast
+  /// connect to a host on our own subnet that can't even be routed is the OS
+  /// refusing it. Counted for the sweep only — an mDNS send can fail this way
+  /// on a machine with no multicast route, which isn't a permission problem.
+  static const _sweepOnlyBlockedErrnos = {51, 101, 10051};
+
   /// What a failed probe says about the host: refused the port (it answered,
   /// so the LAN is reachable), or the OS refused the connection (blocked).
   /// Timeouts and other failures say neither.
@@ -147,7 +162,9 @@ class ServerDiscoveryService {
     if (error is SocketException) {
       final errno = error.osError?.errorCode;
       if (_refusedErrnos.contains(errno)) return (answered: true, blocked: false);
-      if (_isBlockedSend(error)) return (answered: false, blocked: true);
+      if (_isBlockedSend(error) || _sweepOnlyBlockedErrnos.contains(errno)) {
+        return (answered: false, blocked: true);
+      }
     }
     return (answered: false, blocked: false);
   }
@@ -224,6 +241,11 @@ class ServerDiscoveryService {
       // hits. A join that only replayed a finished run must not block the
       // fresh sweep this pass is entitled to.
       if (joinSub != null && !(_sweepRun?.finished ?? true)) return;
+      // iOS has no mDNS answer to cut sweeping short, so each ~4 s pass would
+      // start a fresh 254-host sweep for as long as the scan screen is open.
+      // A pass that joined a recent sweep (in flight or finished within
+      // [sweepReplayWindow]) already carries its hits; don't start another.
+      if (!rawMulticastAllowed && joinSub != null) return;
       sweepStarted = true;
       pending++;
       // Clear the handle when the strand finishes on its own: a later
@@ -351,7 +373,7 @@ class ServerDiscoveryService {
             )) {
           // Resolve the SRV target to its numeric IPv4 while the multicast
           // channel is provably working (we just heard the record). Saving
-          // the .local hostname instead locks the saved server to mDNS
+          // the .local hostname instead ties the chosen rig to mDNS
           // resolution forever — on a flaky-multicast network the daemon
           // then reads as "down" even though it answers by IP.
           //
@@ -580,37 +602,12 @@ class ServerDiscoveryService {
   /// found nothing.
   Stream<AraServer> _sweepDiscover({bool Function()? isCancelled}) async* {
     final cancelledNow = isCancelled ?? () => false;
-    final List<NetworkInterface> interfaces;
-    try {
-      interfaces = await NetworkInterface.list(
-        type: InternetAddressType.IPv4,
-        includeLoopback: false,
-      );
-      // ignore: avoid_catches_without_on_clauses
-    } catch (_) {
-      return; // no interface enumeration (sandbox?) — mDNS path remains
-    }
-    final bases = <String>{};
-    final own = <String>{};
-    for (final i in interfaces) {
-      if (_isTunnel(i)) continue;
-      for (final a in i.addresses) {
-        final parts = a.address.split('.');
-        if (parts.length == 4) {
-          bases.add(parts.sublist(0, 3).join('.'));
-          own.add(a.address);
-        }
-      }
-    }
-    if (bases.isEmpty) return;
+    final hosts = await (sweepHosts ?? _subnetHosts)();
+    if (hosts.isEmpty) return;
     final client = HttpClient()
       ..connectionTimeout = const Duration(milliseconds: 800);
+    final probe = probeHost ?? (String h) => _probe(client, h);
     try {
-      final hosts = <String>[
-        for (final base in bases)
-          for (var n = 1; n < 255; n++)
-            if (!own.contains('$base.$n')) '$base.$n',
-      ];
       // Batches of 64 (review r1): several interfaces (Wi-Fi + VPN) multiply
       // the /24s, and an unbounded fan-out could hit fd limits on constrained
       // stacks.
@@ -624,7 +621,7 @@ class ServerDiscoveryService {
         // pass would keep probing every remaining batch (review r4).
         if (cancelledNow()) return;
         final probes = [
-          for (final h in hosts.skip(i).take(batch)) _probe(client, h),
+          for (final h in hosts.skip(i).take(batch)) probe(h),
         ];
         for (final r in await Future.wait(probes)) {
           anyHostAnswered |= r.answered;
@@ -646,20 +643,64 @@ class ServerDiscoveryService {
     }
   }
 
+  /// Every other host of every local (non-tunnel) /24; empty when interface
+  /// enumeration is unavailable (sandbox?).
+  static Future<List<String>> _subnetHosts() async {
+    final List<NetworkInterface> interfaces;
+    try {
+      interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      return const []; // no interface enumeration (sandbox?) — mDNS path remains
+    }
+    final bases = <String>{};
+    final own = <String>{};
+    for (final i in interfaces) {
+      if (_isTunnel(i)) continue;
+      for (final a in i.addresses) {
+        final parts = a.address.split('.');
+        if (parts.length == 4) {
+          bases.add(parts.sublist(0, 3).join('.'));
+          own.add(a.address);
+        }
+      }
+    }
+    return [
+      for (final base in bases)
+        for (var n = 1; n < 255; n++)
+          if (!own.contains('$base.$n')) '$base.$n',
+    ];
+  }
+
+  /// [_probe] against one host and port, for the loopback test of the real
+  /// HTTP path (#1129 review).
+  @visibleForTesting
+  static Future<ProbeResult> probeForTest(String host, int port) async {
+    final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 800);
+    try {
+      return await _probe(client, host, port: port);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   /// GET /api/v1/server/info with tight timeouts; a parseable payload with
   /// a server_uuid is the "this really is an Ara daemon" check. Any failure
   /// (refused, timeout, non-JSON) means "not a daemon" — never an error. The
   /// result also says whether the host answered at all and whether the OS
   /// refused the connection, for [sweepSaysBlocked].
-  Future<_ProbeResult> _probe(HttpClient client, String host) async {
+  static Future<ProbeResult> _probe(HttpClient client, String host, {int port = defaultPort}) async {
     var answered = false;
     try {
       final req = await client
-          .getUrl(Uri.parse('http://$host:$defaultPort/api/v1/server/info'))
+          .getUrl(Uri.parse('http://$host:$port/api/v1/server/info'))
           .timeout(const Duration(milliseconds: 900));
       final res = await req.close().timeout(const Duration(milliseconds: 1200));
       answered = true;
-      if (res.statusCode != 200) return const _ProbeResult(answered: true);
+      if (res.statusCode != 200) return const ProbeResult(answered: true);
       // Byte-capped read (review r3): probes hit arbitrary subnet hosts, and
       // a device that trickles a large body just under the time cap would
       // hold its slot ~3 s. /server/info is a few hundred bytes; anything
@@ -675,14 +716,14 @@ class ServerDiscoveryService {
           .timeout(const Duration(milliseconds: 1200));
       final json = jsonDecode(utf8.decode(bytes.takeBytes()));
       if (json is! Map<String, dynamic> || json['server_uuid'] is! String) {
-        return const _ProbeResult(answered: true);
+        return const ProbeResult(answered: true);
       }
       final nickname = json['nickname'];
-      return _ProbeResult(
+      return ProbeResult(
         answered: true,
         server: AraServer(
           hostname: host,
-          port: defaultPort,
+          port: port,
           mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
         ),
       );
@@ -690,14 +731,15 @@ class ServerDiscoveryService {
     } catch (e) {
       // Not an Ara daemon (or unreachable) — skip silently.
       final outcome = probeErrorOutcome(e);
-      return _ProbeResult(answered: answered || outcome.answered, blocked: outcome.blocked);
+      return ProbeResult(answered: answered || outcome.answered, blocked: outcome.blocked);
     }
   }
 }
 
-/// What one sweep probe learned about its host.
-class _ProbeResult {
-  const _ProbeResult({this.server, this.answered = false, this.blocked = false});
+/// What one sweep probe learned about its host. Public for the sweep's test
+/// seams ([ServerDiscoveryService.probeHost]).
+class ProbeResult {
+  const ProbeResult({this.server, this.answered = false, this.blocked = false});
 
   /// The Ara daemon found there, if any.
   final AraServer? server;

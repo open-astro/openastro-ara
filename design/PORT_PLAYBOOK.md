@@ -3429,7 +3429,7 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 | joey-north + joey-south both answer the scan after WILMA restarts | Show the scan list (no auto-connect). Don't surprise users by auto-connecting to a random Pi. (#1129: the scan never auto-picks, even with one rig.) |
 | Two rigs share a nickname | Treated as two rigs (different `server_uuid`); never auto-picked; the list shows the address as discriminator |
 | A rig's hostname/IP changes (DHCP lease moved it) | Nothing to update: the next launch's scan finds it wherever it is (#1129) |
-| Saved server reports a different UUID than expected (Pi was reflashed) | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |
+| A rig the user picked by name reports a different UUID than before (Pi was reflashed) — planned, see the superseded note above | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |
 
 **Notification scoping:**
 
@@ -3458,7 +3458,7 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/v1/server/info` | GET | Lightweight identity probe — returns `{server_uuid, nickname, version, mDNS_name, started_at}`. Called by WILMA's background discovery loop to confirm a saved server's identity. Cheap (no DB hit); separate from `/healthz`. |
+| `/api/v1/server/info` | GET | Lightweight identity probe — returns `{server_uuid, nickname, version, mDNS_name, started_at}`. Called by the scan (the subnet sweep's identity check) and the first-run handshake |
 
 WebSocket events from background-watcher mode use the same shapes as §46 notification events; WILMA's client-side routing distinguishes them by the connection they arrived on, not by event structure.
 
