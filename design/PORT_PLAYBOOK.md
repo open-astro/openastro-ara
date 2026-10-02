@@ -4157,10 +4157,10 @@ sudo apt install openastroara-server
   - `video` — V4L2 cameras + some vendor cameras that use kernel video interfaces
   - `plugdev` — USB hotplug events (cleaner device enumeration)
 - Drops `/etc/systemd/system/openastroara-server.service` (hardened unit per §13)
-- Drops `/usr/lib/tmpfiles.d/openastroara.conf` for `/var/run/openastroara/` (per §34.7 sequence lock)
+- Drops `/usr/lib/tmpfiles.d/openastroara.conf` for `/run/openastroara/` (per §34.7 sequence lock)
 - Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
 - Installs `/opt/openastroara/scripts/configure-storage.sh` (mode 0750, owned by root:openastroara) — per §29.1.4
-- Installs the root-side half of the §29.1.4 storage flow (the daemon's unit sets `NoNewPrivileges=true`, under which sudo cannot run): the template unit `/etc/systemd/system/openastroara-storage@.service`, its entry point `/opt/openastroara/scripts/storage-request.sh` (rebuilds the helper's argv from `/run/openastroara/storage/<id>.request`, writes `<id>.result`), the polkit rule `/usr/share/polkit-1/rules.d/50-openastroara-storage.rules` that lets the service user start exactly that unit, and the `/var/run/openastroara/storage` tmpfiles entry
+- Installs the root-side half of the §29.1.4 storage flow (the daemon's unit sets `NoNewPrivileges=true`, under which sudo cannot run): the template unit `/etc/systemd/system/openastroara-storage@.service`, its entry point `/opt/openastroara/scripts/storage-request.sh` (rebuilds the helper's argv from `/run/openastroara/storage/<id>.request`, writes `<id>.result`), the polkit rule `/usr/share/polkit-1/rules.d/50-openastroara-storage.rules` that lets the service user start exactly that unit, and the `/run/openastroara/storage` tmpfiles entry
 - Installs `/opt/openastroara/scripts/set-usbfs-memory.sh` (mode 0750, owned by root:openastroara) — per §77.1
   capture tuning. Validates its single argument is an integer in [16, 1000], writes it to
   `/sys/module/usbcore/parameters/usbfs_memory_mb` (live), and persists it for boot via
@@ -4249,15 +4249,15 @@ That's it. No tarball install, no manual systemd setup, no manual user creation 
 
 **Server-side (writes the lock):**
 
-- On sequence START (or transition to `paused`): server writes `/var/run/openastroara/sequence.lock` (mode 0644, owned by `openastroara:openastroara`). Content is a single line: `<sequence_id> <start_iso8601> <last_heartbeat_iso8601>`. Updated every 30 s while sequence is active.
+- On sequence START (or transition to `paused`): server writes `/run/openastroara/sequence.lock` (mode 0644, owned by `openastroara:openastroara`). Content is a single line: `<sequence_id> <start_iso8601> <last_heartbeat_iso8601>`. Updated every 30 s while sequence is active.
 - On sequence STOP / ABORT / COMPLETE: server removes the lock atomically.
 - On server graceful shutdown (SIGTERM): server removes the lock as part of cleanup.
 - On server crash: lock remains stale; server's startup routine (§28.2) detects + removes any lock whose `last_heartbeat` is > 5 min old before starting recovery.
 
-`/var/run/openastroara/` is a tmpfs created at boot via `/usr/lib/tmpfiles.d/openastroara.conf` (shipped by .deb postinst):
+`/run/openastroara/` is a tmpfs created at boot via `/usr/lib/tmpfiles.d/openastroara.conf` (shipped by .deb postinst):
 
 ```
-d /var/run/openastroara 0755 openastroara openastroara - -
+d /run/openastroara 0755 openastroara openastroara - -
 ```
 
 **postinst-side (reads the lock, defers restart):**
@@ -4265,7 +4265,7 @@ d /var/run/openastroara 0755 openastroara openastroara - -
 The .deb postinst's restart block runs:
 
 ```bash
-LOCKFILE=/var/run/openastroara/sequence.lock
+LOCKFILE=/run/openastroara/sequence.lock
 FLAGFILE=/var/lib/openastroara/.needs-restart
 
 if [ -e "$LOCKFILE" ]; then

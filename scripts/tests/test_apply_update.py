@@ -141,6 +141,16 @@ class ApplyUpdate(unittest.TestCase):
         r = self.run_helper()
         self.assertIn("rollback=unavailable", r.stdout)
         self.assertIn("status=failed", r.stdout)
+        self.assertIn("recover:", r.stdout, "the operator is told how to get out of a broken install")
+        self.assertEqual(list(self.rollback.iterdir()), [], "the unhealthy package is not kept either")
+
+    def test_a_failed_dpkg_install_with_no_rollback_copy_keeps_nothing(self) -> None:
+        for f in self.apt.iterdir():
+            f.unlink()
+        (self.state / "fail-install-2.0").touch()
+        r = self.run_helper()
+        self.assertIn("status=failed", r.stdout)
+        self.assertEqual(list(self.rollback.iterdir()), [])
 
     def assert_refused(self, r: subprocess.CompletedProcess[str]) -> None:
         self.assertIn("status=failed", r.stdout)

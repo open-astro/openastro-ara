@@ -139,6 +139,7 @@ if ! "$DPKG" -i "$NEW_DEB"; then
         echo "status=rolled_back"
     else
         "$SYSTEMCTL" restart "$UNIT" || true
+        discard_new
         echo "status=failed"
     fi
     exit 2
@@ -163,5 +164,10 @@ if [ -f "$OLD_DEB" ] && "$DPKG" -i "$OLD_DEB"; then
     echo "status=rolled_back"
     exit 3
 fi
+# The new version is installed but unhealthy and there is no previous package to go back
+# to; its .deb is no use as a future rollback target either. Say how to get out of it.
+discard_new
+echo "recover: push a working openastroara-server .deb from the client once the daemon answers,"
+echo "or on the rig: sudo apt-get install --reinstall openastroara-server (with network)"
 echo "status=failed"
 exit 3
