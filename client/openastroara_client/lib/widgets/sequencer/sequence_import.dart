@@ -176,7 +176,7 @@ Future<String?> importSequenceFromJson(
         result = SequenceImportResult(
             createdSequenceId: id, name: name, warnings: translated.warnings);
       } on DioException catch (e) {
-        // A saved server isn't a reachable server. Pure transport failure
+        // A chosen server isn't necessarily a reachable one. Pure transport failure
         // (no response at all) → degrade to a local draft, same as
         // create_imaging_run: the translation isn't lost, and the draft's
         // stamped pushKey dedupes if the create actually landed.

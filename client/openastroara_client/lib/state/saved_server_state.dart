@@ -18,14 +18,14 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
 
   Future<void> add(AraServer server) async {
     final svc = ref.read(savedServerServiceProvider);
-    // Persist first, but on failure still update in-memory state so the
-    // user isn't blocked on first-run by a transient keyring/storage
-    // error. The next loadAll() will reconcile if/when persistence works.
+    // The session-only service (#1129) can't fail here, but a test double or
+    // a future backend can: on failure still update in-memory state so the
+    // user is never blocked from connecting.
     try {
       await svc.add(server);
     } catch (_) {
       // Mirror the service's move-to-end + per-field metadata merge, so the
-      // active pick and stored details don't depend on the keyring working.
+      // active pick doesn't depend on the service succeeding.
       final current = state.value ?? const <AraServer>[];
       state = AsyncValue.data([
         ...current.where((s) => s != server),
@@ -53,8 +53,9 @@ final savedServersProvider =
 /// `savedServersProvider…last` at a call site — so an explicit multi-server
 /// switcher (§55.1) only has to change this one definition.
 final activeServerProvider = Provider<AraServer?>((ref) {
-  // asData?.value is null while the saved-servers list is still loading (initial
-  // async storage read) or on error, and the list once it's data — so a null
+  // asData?.value is null while the session's server list is still loading (the
+  // first load, which also wipes the legacy stored list) or on error, and the
+  // list once it's data — so a null
   // here means "no active server yet", whether not-yet-loaded or genuinely empty.
   // Both collapse to the same safe, retryable outcome at the call site.
   final servers = ref.watch(savedServersProvider).asData?.value;
@@ -62,9 +63,9 @@ final activeServerProvider = Provider<AraServer?>((ref) {
 });
 
 /// Awaitable variant of [activeServerProvider] for providers that must not
-/// collapse "still loading the saved list" into "no server" (e.g. a panel
-/// that would flash its connect-a-server empty state during the initial
-/// storage read). Resolves to null only once the list is KNOWN empty.
+/// collapse "still loading the session list" into "no server" (e.g. a panel
+/// that would flash its connect-a-server empty state during the first load).
+/// Resolves to null only once the list is KNOWN empty.
 final activeServerFutureProvider = FutureProvider<AraServer?>((ref) async {
   final servers = await ref.watch(savedServersProvider.future);
   return servers.isEmpty ? null : servers.last;

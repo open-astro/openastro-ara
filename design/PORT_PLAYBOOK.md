@@ -1900,8 +1900,9 @@ cd client/openastroara_client
 flutter build macos --debug    # or: flutter run -d macos  (foreground only)
 open build/macos/Build/Products/Debug/openastroara.app
 ```
-The saved server persists, so subsequent launches skip first-run and reconnect; a
-connected device's state lives daemon-side, so the app reflects it on reconnect.
+Every launch scans the network (nothing about the rig is stored, #1129) and you
+pick the rig from the list. A connected device's state lives daemon-side, so the
+app reflects it on reconnect.
 
 ---
 
@@ -2051,7 +2052,7 @@ Three stacked sections, each collapsible:
 `Row` along the bottom of the main window:
 - Left: local time + sidereal time (computed from server's reported lat/long)
 - Center: current operation ("Capturing target M42 — frame 4/20, 180s") + progress bar
-- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1") + "Forget this server" button (clears the saved server entry; doesn't affect Pi-side state)
+- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1"). Nothing about the rig is stored on the client (#1129), so there is no "Forget this server"; the Launchpad action returns to the network scan
 
 ### 25.8 Mobile differences
 
@@ -3165,7 +3166,9 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 
 ### 30.3 Subsequent launches
 
-Splash → (auto-connect to saved server, no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+Splash → network scan → user picks the rig (no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+
+Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the sweep alone, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user always taps the one they mean. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
 
 ### 30.4 Add a Profile
 
@@ -3185,10 +3188,10 @@ Modal with a file picker:
 
 ### 30.6 Server connection management
 
-- Saved servers list (hostname + last-seen IP/port + version) in WILMA's local state
+- No saved servers (#1129): the confirmed rig is held for the session only; every launch scans again (§30.3)
 - No auth tokens to manage per §67
-- Settings → Server panel: shows current server + connection state, "Forget this server" button
-- Forget = removes the saved server entry; next launch shows the discovery flow for that server again (Pi-side state is unaffected)
+- Settings → Server panel: shows current server + connection state
+- **Choose a different rig** (profile box) and the shell's Launchpad action return to the scan list (Pi-side state is unaffected)
 - the planned remote-access mode (§67.4, ROADMAP) is when tokens come back, scoped to remote endpoints only
 
 §61 search registry entries (§30.2-§30.6 coverage):
@@ -3197,8 +3200,8 @@ Modal with a file picker:
 - `profiles.add` — keywords: `add profile, new profile, create profile, new rig, fresh profile`
 - `profiles.import` — keywords: `import profile, nina profile, .profile.xml, .profile.json, load profile`
 - `profiles.duplicate` — keywords: `duplicate profile, copy profile, clone profile, branch profile`
-- `profiles.forget_server` — keywords: `forget server, remove server, delete server, clear saved server, untrust server`
-- `connection.servers_list` — keywords: `servers, saved servers, server list, known servers, available servers` (NOTE: detailed multi-server UX in §30.8)
+- `connection.choose_rig` — keywords: `choose rig, change rig, different rig, switch server, rescan, find rig` (the profile box's **Choose a different rig** / Launchpad → network scan; nothing to forget since #1129)
+- `connection.servers_list` — keywords: `servers, rigs, server list, available servers, rigs on network` (the scan list; detailed multi-server UX in §30.8)
 
 ### 30.7 Equipment-change check on profile load
 
@@ -3331,9 +3334,11 @@ User can search "equipment changed" and jump to the equipment-change-check scree
 
 ARA's typical deployment is one Pi per rig. Observatory operators sometimes run two scopes on two Pis simultaneously, controlled from a single WILMA app. ARA supports this today via **one-server-at-a-time** with explicit server switching — distinct from §27's per-server single-client policy, which governs how many WILMAs can talk to one Pi. This section governs how one WILMA tracks multiple Pis.
 
-**Current model: known servers list + one active connection at a time.**
+> **Superseded in part (#1129, 2026-10-02):** the client stores no server list. Every launch scans the network and the user picks the rig; nothing is picked automatically, and nothing is stored. The "known/saved servers", "[Save + Connect]", default-on-launch and saved-server rows below predate that decision and describe planned multi-server UX, not current behaviour.
 
-WILMA maintains a local list of known servers (per §30.6) with per-server metadata: nickname, last-seen address, last-seen version, last-connected timestamp, last-known online state. WILMA is connected to exactly one server at any moment; switching disconnects the current connection cleanly before establishing the new one.
+**Current model: one active connection at a time, chosen from the scan.**
+
+WILMA is connected to exactly one server at any moment; switching (Launchpad / **Choose a different rig**) returns to the network scan and disconnects the current connection cleanly before establishing the new one.
 
 **Why not concurrent connections in the initial release:**
 
@@ -3343,7 +3348,7 @@ Multi-server-concurrent introduces per-server state forking throughout WILMA (pe
 
 - mDNS discovery (§32.4) finds *all* ARA servers on the LAN, not just the previously-connected ones
 - Discovery flow runs continuously in the background (low-frequency) so the Servers menu shows up-to-date online/offline indicators for known servers + any newly-discovered ones
-- A discovered-but-unsaved server appears in the menu as "Available: <name>" with [Save + Connect]
+- Every discovered server appears in the scan list; picking one connects for the session (nothing is saved, #1129)
 
 **Servers menu UI (always available in WILMA app shell, top-left next to server name):**
 
@@ -3421,10 +3426,10 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 
 | Scenario | Behavior |
 |---|---|
-| User has joey-north + joey-south saved; both come up after rebooting WILMA | Auto-connect to default-on-launch if set; otherwise show server picker (no auto-connect). Don't surprise users by auto-connecting to a random Pi. |
-| Two saved servers have the same nickname (user typo) | Disambiguated by stable server UUID; menu shows hostname + IP as discriminator |
-| Saved server's hostname/IP changes (DHCP lease moved it) | mDNS rediscovery finds it by service name + UUID, updates the saved address; user sees one momentary "reconnecting…" toast, no manual action |
-| Saved server reports a different UUID than expected (Pi was reflashed) | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |
+| joey-north + joey-south both answer the scan after WILMA restarts | Show the scan list (no auto-connect). Don't surprise users by auto-connecting to a random Pi. (#1129: the scan never auto-picks, even with one rig.) |
+| Two rigs share a nickname | Treated as two rigs (different `server_uuid`); never auto-picked; the list shows the address as discriminator |
+| A rig's hostname/IP changes (DHCP lease moved it) | Nothing to update: the next launch's scan finds it wherever it is (#1129) |
+| A rig the user picked by name reports a different UUID than before (Pi was reflashed) — planned, see the superseded note above | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |
 
 **Notification scoping:**
 
@@ -3453,14 +3458,14 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/v1/server/info` | GET | Lightweight identity probe — returns `{server_uuid, nickname, version, mDNS_name, started_at}`. Called by WILMA's background discovery loop to confirm a saved server's identity. Cheap (no DB hit); separate from `/healthz`. |
+| `/api/v1/server/info` | GET | Lightweight identity probe — returns `{server_uuid, nickname, version, mDNS_name, started_at}`. Called by the scan (the subnet sweep's identity check) and the first-run handshake |
 
 WebSocket events from background-watcher mode use the same shapes as §46 notification events; WILMA's client-side routing distinguishes them by the connection they arrived on, not by event structure.
 
 ### 30.8.2 §61 search registry
 
 - `app.servers.switch` — keywords: `switch server, change pi, multi-pi, multi-rig, observatory, two scopes, multiple servers`
-- `app.servers.manage` — keywords: `manage servers, forget server, rename pi, server list, default server, auto-connect`
+- `app.servers.manage` — keywords: `manage servers, rename pi, server list, choose rig, rescan` (no forget/default/auto-connect: nothing is stored and the user always picks, #1129)
 - `app.servers.watcher` — keywords: `background watcher, monitor other rig, notifications from other pi, cross-rig notifications`
 
 ### 30.8.3 §14 test cases
@@ -3479,7 +3484,7 @@ WebSocket events from background-watcher mode use the same shapes as §46 notifi
 ### 30.8.4 Cross-references
 
 - §27 — single-client policy (per-server; complementary to §30.8 single-active-server-per-WILMA)
-- §30.6 — saved servers list (§30.8 extends with switching UX + discovery + watcher mode)
+- §30.6 — server connection management: session-only, scan every launch (#1129); §30.8 extends with switching UX + discovery + watcher mode
 - §32.4 + §32.5 — mDNS discovery + state hydration on connect
 - §35.5 — emergency alarms from watched servers still fire
 - §46 — notification feed (background-watcher notifications are a section within the same feed)
@@ -3720,12 +3725,12 @@ Pi 4 / Pi 5 hardware **does not** support WoL on the onboard Ethernet (the Broad
 
 ARA does NOT advertise WoL support. A future release may add a Settings → System → "remote wake" UI surface IF the project picks up an external-wake-device integration; deferred to community signal.
 
-**DHCP behavior + "use saved server" reliability:**
+**DHCP behavior:**
 
-§30.6's "use saved server" persists `host` (IP or hostname) + port. If the Pi gets a new DHCP lease (router reboot, lease expiration, manual ifdown/up), the IP changes and saved hosts break. Two mitigations DEPLOY.md recommends:
+Since #1129 the client stores no address: every launch scans (mDNS plus the subnet sweep; the sweep alone on iOS), so a new DHCP lease (router reboot, lease expiration, manual ifdown/up) needs no client-side mitigation. For SSH and other by-hand access DEPLOY.md still suggests:
 
-1. **DHCP reservation by MAC** on the home router (preferred) — Pi keeps the same IP across reboots
-2. **mDNS hostname `araserver.local`** (fallback) — `avahi-daemon` ships with Trixie; ARA Core publishes `_openastroara._tcp.local` per §30.7.1 + §32.3. WILMA's discovery falls back to mDNS when the cached IP fails.
+1. **DHCP reservation by MAC** on the home router — the Pi keeps the same IP across reboots
+2. **mDNS hostname `araserver.local`** — `avahi-daemon` ships with Trixie; ARA Core publishes `_openastroara._tcp.local` per §30.7.1 + §32.3
 
 If both fail (LAN with no mDNS support — some enterprise networks block multicast), the user re-runs §30.7.1 auto-detect to find the Pi.
 
@@ -3772,7 +3777,7 @@ These aren't ARA bugs; they're network reality. §32.5 reconnect-on-recovery han
 
 - §13.1 — Pi hardware support (Ethernet vs Wi-Fi chipset behavior baseline)
 - §13.2 — USB hub advisory (related hardware-reliability theme)
-- §30.6 — "use saved server" (depends on stable IP / mDNS hostname)
+- §30.3 / §30.6 — scan every launch, no stored address (#1129)
 - §30.7.1 — Alpaca + ARA mDNS discovery (the fallback path)
 - §32.1–§32.5 — disconnect/reconnect handling (this section is the pre-failure advisory)
 - §32.6 — Pi Wi-Fi mode (AP vs client; this section adds power-save + DHCP guidance)

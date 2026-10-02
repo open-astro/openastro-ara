@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
+import '../services/multicast_lock.dart';
 import '../services/server_api.dart';
 import '../state/launch_gate_state.dart';
 import '../state/saved_server_state.dart';
@@ -31,6 +32,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   void initState() {
     super.initState();
+    // Android drops mDNS answers without a multicast lock; hold it only while
+    // this screen scans (#1129).
+    unawaited(MulticastLock.acquire());
     // mDNS lookup is one-shot per provider instance, so a daemon that starts up
     // after the first scan would never appear. Re-run discovery on a loop while
     // this screen is shown so freshly-started servers turn up on their own
@@ -50,6 +54,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
 
   @override
   void dispose() {
+    unawaited(MulticastLock.release());
     _rescanTimer?.cancel();
     _manualHostCtrl.dispose();
     _manualPortCtrl.dispose();
@@ -59,6 +64,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen(discoveredServersProvider, (prev, next) {
+      // Every rig found is listed and the user taps the one they want —
+      // never picked automatically, even when only one answered: a site can
+      // have several rigs, some not yet up (#1129).
       next.whenData((server) => setState(() => _discovered.add(server)));
     });
     final selected = ref.watch(selectedServerProvider);
@@ -171,15 +179,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               _HandshakePanel(
                 handshake: handshake,
                 server: selected,
-                onConfirm: () async {
-                  await ref.read(savedServersProvider.notifier).add(selected);
-                  // A Launchpad-forced visit ends here: the server is chosen,
-                  // so the router may resume the normal flow (profile box).
-                  ref.read(serverChooserRequestedProvider.notifier).clear();
-                  // The _RootRouter watching savedServersProvider rebuilds
-                  // and swaps in AppShell automatically once the list is
-                  // non-empty.
-                },
+                onConfirm: () => _confirm(selected),
               ),
           ],
         ),
@@ -205,6 +205,14 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     ref
         .read(selectedServerProvider.notifier)
         .select(AraServer(hostname: host, port: port));
+  }
+
+  Future<void> _confirm(AraServer server) async {
+    await ref.read(savedServersProvider.notifier).add(server);
+    // A Launchpad-forced visit ends here: the server is chosen, so the router
+    // may resume the normal flow (profile box). The _RootRouter watching
+    // savedServersProvider swaps the screen once the list is non-empty.
+    ref.read(serverChooserRequestedProvider.notifier).clear();
   }
 }
 
@@ -240,7 +248,7 @@ class _HandshakePanel extends StatelessWidget {
                     FilledButton.icon(
                       onPressed: onConfirm,
                       icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Save & continue'),
+                      label: const Text('Continue'),
                     ),
                   ],
                 ),
@@ -283,11 +291,26 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
       'auto-discovery cannot see your rig. Allow it in System Settings → '
       'Privacy & Security → Local Network, then tap ⟳. Adding the rig '
       'manually below works regardless.';
+  static const iosMessage =
+      'iOS is blocking local network access for OpenAstro Ara, so '
+      'auto-discovery cannot see your rig. Turn it on in Settings → '
+      'Privacy & Security → Local Network → OpenAstro Ara, then tap ⟳. '
+      'Adding the rig manually below works regardless.';
   static const otherMessage =
       'This device is blocking local network (multicast) access for '
       'OpenAstro Ara, so auto-discovery cannot see your rig. Check its '
       'network privacy settings, then tap ⟳. Adding the rig manually below '
       'works regardless.';
+
+  /// Where the setting lives differs per OS (#1129); the rest get the generic
+  /// wording. defaultTargetPlatform rather than dart:io Platform so tests can
+  /// override it.
+  @visibleForTesting
+  static String messageFor(TargetPlatform platform) => switch (platform) {
+        TargetPlatform.macOS => macMessage,
+        TargetPlatform.iOS => iosMessage,
+        _ => otherMessage,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +330,7 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  Platform.isMacOS ? macMessage : otherMessage,
+                  messageFor(defaultTargetPlatform),
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.onErrorContainer),
                 ),

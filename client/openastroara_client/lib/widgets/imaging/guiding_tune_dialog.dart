@@ -61,8 +61,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
 
   // listenManual subscriptions are NOT auto-cancelled with the widget — kept
   // so dispose() can close it. The retry matters even for an on-demand dialog:
-  // the profile API can still be null at open (saved servers resolve
-  // asynchronously), and without it Apply would stay silently disabled for the
+  // the profile API can still be null at open (the session's server list
+  // resolves asynchronously), and without it Apply would stay silently disabled for the
   // whole dialog session.
   ProviderSubscription<ProfileApi?>? _profileApiSub;
 

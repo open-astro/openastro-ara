@@ -31,6 +31,11 @@ class WsSocket {
 /// Opens the socket for a URL + headers. Injectable for tests.
 typedef WsConnector = WsSocket Function(Uri url, Map<String, String> headers);
 
+/// The production dial, exposed for the #1129 test that a failed connect
+/// surfaces no uncaught error.
+@visibleForTesting
+WsSocket defaultWsConnect(Uri url, Map<String, String> headers) => _defaultConnect(url, headers);
+
 WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
   // Cross-platform dial: native uses IOWebSocketChannel (dart:io) so the
   // X-Ara-WS-Version header can be set; browsers cannot set WebSocket request
@@ -40,6 +45,11 @@ WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
   final WebSocketChannel channel = kIsWeb
       ? WebSocketChannel.connect(url)
       : IOWebSocketChannel.connect(url, headers: headers);
+  // A failed dial (rig off, stale address) also completes `ready` with the
+  // error. The stream's onError already tears the link down and schedules the
+  // reconnect; with no listener on `ready` the same failure surfaced again as
+  // an "Uncaught error" log line on every retry (#1129, seen on a Pixel).
+  unawaited(channel.ready.catchError((Object _) {}));
   return WsSocket(
     stream: channel.stream,
     send: (m) => channel.sink.add(m),

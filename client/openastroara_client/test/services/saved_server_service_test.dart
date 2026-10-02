@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 
-// The real service against the package's in-memory mock backend — the
-// move-to-end contract behind activeServerProvider ("last-confirmed = active")
-// lives here, so it gets tested on the real persistence round-trip.
+// The move-to-end contract behind activeServerProvider ("last-confirmed =
+// active") lives here. Since #1129 the list is session-only: nothing is
+// written to the device, and the list older versions stored is wiped.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -65,5 +65,31 @@ void main() {
     expect(loaded, hasLength(1));
     expect(loaded.single.mdnsName, 'ara-obs');
     expect(loaded.single.serverVersion, '0.0.2');
+  });
+
+  // #1129: a rig's address (and name) can change every night, so nothing is
+  // remembered between launches — every launch scans.
+  test('confirming a rig writes nothing to the device', () async {
+    final svc = SavedServerService();
+    await svc.add(rigA);
+    expect(await const FlutterSecureStorage().readAll(), isEmpty);
+  });
+
+  test('a new launch starts with no rigs', () async {
+    await SavedServerService().add(rigA);
+    expect(await SavedServerService().loadAll(), isEmpty);
+  });
+
+  test('the address list older versions stored is wiped on first load', () async {
+    // What an older version of the app left on the device (test data only).
+    FlutterSecureStorage.setMockInitialValues({
+      SavedServerService.legacyStorageKey: '[{"hostname":"old-rig.test","port":5555}]',
+      'unrelated.key': 'kept',
+    });
+    final loaded = await SavedServerService().loadAll();
+    expect(loaded, isEmpty, reason: 'an old saved address is never used');
+    final left = await const FlutterSecureStorage().readAll();
+    expect(left.containsKey(SavedServerService.legacyStorageKey), isFalse);
+    expect(left['unrelated.key'], 'kept');
   });
 }

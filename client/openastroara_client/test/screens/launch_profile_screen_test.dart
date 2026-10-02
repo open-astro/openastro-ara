@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:openastroara/screens/launch_profile_screen.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 
 /// In-memory ProfileApi double — same shape as the one in
 /// profile_management_state_test.dart, plus a select-error injector.
@@ -199,4 +201,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.deleteCalls, isEmpty);
   });
+
+  // #1129: the header read "Connected to openastro" while the profile load
+  // said the rig didn't answer, and the screen had no way back to the scan.
+  testWidgets('an unreachable rig is named, not reported as connected', (tester) async {
+    final api = _UnreachableApi();
+    final container = ProviderContainer(overrides: [
+      profileApiProvider.overrideWithValue(api),
+      activeServerProvider.overrideWithValue(
+          const AraServer(hostname: 'rig.local', port: 5555, mdnsName: 'openastro')),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: LaunchProfileScreen()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Rig: openastro'), findsOneWidget);
+    expect(find.textContaining('Connected to'), findsNothing);
+    expect(find.textContaining("didn't answer"), findsOneWidget);
+
+    // ...and the screen is no longer a dead end: the rig chooser opens.
+    expect(container.read(serverChooserRequestedProvider), isFalse);
+    await tester.tap(find.text('Choose a different rig'));
+    await tester.pump();
+    expect(container.read(serverChooserRequestedProvider), isTrue);
+  });
+}
+
+class _UnreachableApi extends _FakeApi {
+  @override
+  Future<ProfileList> listProfiles() async => throw DioException.connectionError(
+        requestOptions: RequestOptions(path: '/api/v1/profiles'),
+        reason: 'No route to host',
+      );
 }

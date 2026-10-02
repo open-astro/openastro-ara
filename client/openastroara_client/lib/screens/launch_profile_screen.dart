@@ -42,6 +42,9 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
 
     return Scaffold(
       body: Center(
+        // Scrolls when the card is taller than the window (phone landscape,
+        // the compact desktop launch window).
+        child: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Card(
@@ -55,8 +58,28 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                       style: Theme.of(context).textTheme.headlineSmall),
                   if (serverLabel != null) ...[
                     const SizedBox(height: 4),
-                    Text('Connected to $serverLabel',
-                        style: const TextStyle(color: AraColors.textSecondary)),
+                    // The profile list below is what proves the rig answers;
+                    // this line only names which rig was chosen (#1129: it
+                    // said "Connected to" while the rig was unreachable).
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text('Rig: $serverLabel',
+                              style: const TextStyle(
+                                  color: AraColors.textSecondary)),
+                        ),
+                        // A rig that went away mid-launch left this screen a
+                        // dead end: Retry, offline, or a new profile on the
+                        // same unreachable rig (#1129). Back to the network
+                        // scan — the same chooser the shell's Launchpad opens.
+                        TextButton(
+                          onPressed: () => ref
+                              .read(serverChooserRequestedProvider.notifier)
+                              .request(),
+                          child: const Text('Choose a different rig'),
+                        ),
+                      ],
+                    ),
                   ],
                   const SizedBox(height: 24),
                   ...async.when(
@@ -120,6 +143,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

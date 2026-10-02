@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -55,6 +56,43 @@ class _AddressLookupFailsMdns extends MDnsClient {
       ]);
     }
     return Stream<T>.error(const SocketException('no route to multicast'));
+  }
+
+  @override
+  void stop() {}
+}
+
+/// Answers PTR, SRV and A for one rig: the happy path, end to end.
+class _AnsweringMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {}
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    if (T == PtrResourceRecord) {
+      return Stream<T>.fromIterable([
+        const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'openastro._openastroara._tcp.local') as T,
+      ]);
+    }
+    if (T == SrvResourceRecord) {
+      return Stream<T>.fromIterable([
+        const SrvResourceRecord('openastro._openastroara._tcp.local', 0,
+            target: 'openastro.local', port: 5555, priority: 0, weight: 0) as T,
+      ]);
+    }
+    return Stream<T>.fromIterable([
+      IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('192.0.2.20')) as T,
+    ]);
   }
 
   @override
@@ -756,5 +794,246 @@ void _preferLocalSubnetTests() {
         ['192.168.1.2', '192.168.1.3'],
       );
     });
+  });
+
+  // #1129: on an iPad that had found the rig, a banner claimed "iOS is
+  // blocking local network access". iOS refuses raw multicast to apps without
+  // Apple's multicast entitlement, so the mDNS send always failed there.
+  group('iOS discovery', () {
+    tearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    test('iOS never opens the multicast socket and sweeps at once', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      var mdnsClients = 0;
+      const rig = AraServer(hostname: 'rig.test', port: 5555);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () {
+          mdnsClients++;
+          return _AsyncSendErrorMdns();
+        },
+        localAddresses: () async => const ['192.0.2.10'],
+        sweepSource: () => Stream.value(rig),
+      );
+      final sw = Stopwatch()..start();
+      expect(await svc.discover().toList(), [rig]);
+      expect(mdnsClients, 0);
+      expect(sw.elapsed, lessThan(ServerDiscoveryService.mdnsGracePeriod),
+          reason: 'no mDNS grace wait before the sweep');
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('blocked only when nothing on the subnet answered and the OS refused', () {
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 40), isTrue);
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: true, blockedFailures: 40), isFalse,
+          reason: 'the router refusing the port proves the LAN is reachable (the rig is just off)');
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 0), isFalse,
+          reason: 'silent timeouts are a quiet network, not a denial');
+    });
+  });
+
+  test('a rig found by the sweep clears a banner the mDNS send raised', () async {
+    final svc = ServerDiscoveryService(
+      mdnsClientFactory: () => _AsyncSendErrorMdns(),
+      localAddresses: () async => const ['192.0.2.10'],
+      sweepSource: () => Stream.value(const AraServer(hostname: 'rig.test', port: 5555)),
+    );
+    final found = await svc.discover().toList();
+    expect(found, hasLength(1));
+    expect(svc.localNetworkBlocked.value, isFalse);
+  });
+
+  // #1129 review: the sweep's "blocked" verdict rests on how a failed probe
+  // is classified — a refusal proves the LAN works; an OS refusal is a block.
+  group('probeErrorOutcome', () {
+    SocketException err(int errno) => SocketException('x', osError: OSError('x', errno));
+
+    test('a refused port means the host answered', () {
+      for (final errno in [61, 111, 10061, 1225]) {
+        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
+            (answered: true, blocked: false), reason: 'errno $errno');
+      }
+    });
+
+    test('an OS refusal means blocked', () {
+      for (final errno in [65, 113, 1, 13, 10013, 10065]) {
+        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
+            (answered: false, blocked: true), reason: 'errno $errno');
+      }
+    });
+
+    test('timeouts and other failures say neither', () {
+      expect(ServerDiscoveryService.probeErrorOutcome(TimeoutException('x')),
+          (answered: false, blocked: false));
+      expect(ServerDiscoveryService.probeErrorOutcome(err(60)),
+          (answered: false, blocked: false), reason: 'ETIMEDOUT');
+      expect(ServerDiscoveryService.probeErrorOutcome(const FormatException('x')),
+          (answered: false, blocked: false));
+    });
+  });
+
+  // #1129 review: on a denied Mac every 4 s pass's failing mDNS send re-raised
+  // the banner the found rig had just cleared, so it flickered.
+  test('a failed mDNS send right after a rig answered does not re-raise the banner', () async {
+    var pass = 0;
+    final svc = ServerDiscoveryService(
+      mdnsClientFactory: () => _AsyncSendErrorMdns(),
+      localAddresses: () async => const ['192.0.2.10'],
+      sweepSource: () => pass++ == 0
+          ? Stream.value(const AraServer(hostname: 'rig.test', port: 5555))
+          : const Stream<AraServer>.empty(),
+    );
+    await svc.discover().toList(); // the sweep finds the rig
+    expect(svc.localNetworkBlocked.value, isFalse);
+    svc.resetSweepCache();
+    await svc.discover().toList(); // next pass: mDNS send fails again
+    expect(svc.localNetworkBlocked.value, isFalse);
+  });
+
+  // #1129: the rig list showed `openastro._openastroara._tcp.local`.
+  group('instanceName', () {
+    test('strips the service suffix', () {
+      expect(ServerDiscoveryService.instanceName('openastro._openastroara._tcp.local'), 'openastro');
+      expect(ServerDiscoveryService.instanceName('My Rig._openastroara._tcp.local'), 'My Rig');
+    });
+
+    test('leaves the bare service type and other names alone', () {
+      expect(ServerDiscoveryService.instanceName('_openastroara._tcp.local'), '_openastroara._tcp.local');
+      expect(ServerDiscoveryService.instanceName('._openastroara._tcp.local'), '._openastroara._tcp.local');
+      expect(ServerDiscoveryService.instanceName('openastro.local'), 'openastro.local');
+    });
+
+    test('an mDNS answer reaches the list under the rig\'s own name', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _AnsweringMdns.new,
+        localAddresses: () async => const ['192.0.2.10'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.single.hostname, '192.0.2.20');
+      expect(found.single.mdnsName, 'openastro');
+    });
+  });
+
+  // #1129 review: the code that writes the iOS banner is the sweep's own
+  // tally, not just the helpers — run the REAL sweep (host list and per-host
+  // probe swapped in) under iOS and check the flag it leaves.
+  group('iOS sweep verdict', () {
+    tearDown(() => debugDefaultTargetPlatformOverride = null);
+    final hosts = [for (var n = 1; n <= 10; n++) '192.0.2.$n'];
+
+    ServerDiscoveryService sweeping(Future<ProbeResult> Function(String) probe) =>
+        ServerDiscoveryService(
+          mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
+          localAddresses: () async => const ['192.0.2.100'],
+          sweepHosts: () async => hosts,
+          probeHost: probe,
+        );
+
+    test('every host refusing the port (rig off, LAN fine): no banner', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = sweeping((_) async => const ProbeResult(answered: true));
+      expect(await svc.discover().toList(), isEmpty);
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('every connect refused by the OS: banner', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = sweeping((_) async => const ProbeResult(blocked: true));
+      expect(await svc.discover().toList(), isEmpty);
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
+
+    test('a rig found: listed, and the banner clears', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      const rig = AraServer(hostname: '192.0.2.7', port: 5555, mdnsName: 'openastro');
+      final svc = sweeping((h) async => h == '192.0.2.7'
+          ? const ProbeResult(answered: true, server: rig)
+          : const ProbeResult(blocked: true));
+      expect(await svc.discover().toList(), [rig]);
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test('iOS reuses a recent sweep instead of re-walking the subnet every pass', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      var probes = 0;
+      final svc = sweeping((_) async {
+        probes++;
+        return const ProbeResult(answered: true);
+      });
+      await svc.discover().toList();
+      await svc.discover().toList(); // the next ~4 s pass, inside the replay window
+      expect(probes, hosts.length);
+    });
+  });
+
+  test('ENETUNREACH counts as an OS refusal for the sweep', () {
+    for (final errno in [51, 101, 10051]) {
+      expect(
+          ServerDiscoveryService.probeErrorOutcome(
+              SocketException('x', osError: OSError('x', errno))),
+          (answered: false, blocked: true),
+          reason: 'errno $errno');
+    }
+  });
+
+  // The real HTTP probe against loopback: what it reports for an Ara daemon,
+  // for some other HTTP server, and for a closed port.
+  group('probe (real HTTP)', () {
+    Future<HttpServer> serve(int status, Object body) async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) {
+        req.response
+          ..statusCode = status
+          ..headers.contentType = ContentType.json
+          ..write(body is String ? body : jsonEncode(body));
+        req.response.close();
+      });
+      return server;
+    }
+
+    test('an Ara daemon is found, under its nickname', () async {
+      final http = await serve(200, {'server_uuid': 'u', 'nickname': 'openastro'});
+      addTearDown(() => http.close(force: true));
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
+      expect(r.server?.mdnsName, 'openastro');
+      expect(r.server?.port, http.port);
+      expect(r.answered, isTrue);
+    });
+
+    test('another HTTP server answered, but is not a rig', () async {
+      final http = await serve(404, 'nope');
+      addTearDown(() => http.close(force: true));
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue, reason: 'proof the LAN is reachable');
+    });
+
+    test('a host that replied with garbage still answered', () async {
+      // The reply arrives, then parsing throws: the catch must keep the
+      // "answered" it already saw, or a LAN full of non-rig web servers
+      // would read as blocked.
+      final http = await serve(200, 'not json at all');
+      addTearDown(() => http.close(force: true));
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue);
+    });
+
+    test('a closed port is a refusal: answered, not blocked', () async {
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = probe.port;
+      await probe.close();
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue);
+      expect(r.blocked, isFalse);
+    },
+        // Windows retries a refused SYN for ~2 s before reporting it, past the
+        // probe's 800 ms connect timeout, so a closed port reads as a timeout
+        // there. The refusal verdict only feeds the iOS banner, so nothing
+        // depends on it on Windows (CI windows-latest, #1129).
+        skip: Platform.isWindows
+            ? 'Windows reports a refused connect only after ~2 s of SYN retries'
+            : false);
   });
 }

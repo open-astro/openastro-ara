@@ -961,11 +961,11 @@ jobs:
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
-    # Native desktop compile gate. `client-test` only runs analyze + test —
+    # Native compile gate (desktop + Android + iOS). `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO
-    # "§36 CEF 149 helpers" / the #600 review). Building all three desktop
-    # targets catches native link/plugin regressions (webview_all platform
+    # "§36 CEF 149 helpers" / the #600 review). Building every target (three
+    # desktop + Android + iOS) catches native link/plugin regressions (webview_all platform
     # views, secure-storage backends, CMake/Xcode project drift) before
     # merge. Release mode matches what ships.
     strategy:
@@ -978,6 +978,13 @@ jobs:
             target: linux
           - os: windows-latest
             target: windows
+          # #1129 — the two mobile platforms were never compiled in CI. The
+          # Ubuntu image ships the Android SDK and a JDK, so no extra setup
+          # actions; iOS builds unsigned (no certificates on the runner).
+          - os: ubuntu-latest
+            target: android
+          - os: macos-latest
+            target: ios
     runs-on: ${{ matrix.os }}
     # Cap a hung native build well below the 6h Actions default (a healthy
     # release build finishes in single-digit minutes on every OS).
@@ -1036,7 +1043,37 @@ jobs:
         working-directory: client/openastroara_client
         # ARA_BUILD_DATE stamps the About panel / bug-report version line
         # ("0.0.1a+1 (2026-08-09)"); local builds show "(dev)" instead.
-        run: flutter build ${{ matrix.target }} --release --dart-define=ARA_BUILD_DATE="$(date -u +%Y-%m-%d)"
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            android) args=(apk) ;;
+            ios) args=(ios --no-codesign) ;;
+            *) args=("$TARGET") ;;
+          esac
+          flutter build "${args[@]}" --release --dart-define=ARA_BUILD_DATE="$(date -u +%Y-%m-%d)"
+
+      - name: Launcher icons match icon_sources/
+        # #1129 — the per-platform icons are generated, then committed. Re-run
+        # the generator once (on the Linux leg; it is pure Dart) and fail if
+        # anything it writes differs from what is checked in. Only the icon
+        # outputs are compared: the build above may legitimately touch other
+        # tracked files (pubspec.lock, plugin registrants).
+        if: matrix.target == 'linux'
+        working-directory: client/openastroara_client
+        run: |
+          set -euo pipefail
+          dart run flutter_launcher_icons
+          icon_paths=(android/app/src/main/res ios/Runner/Assets.xcassets/AppIcon.appiconset macos/Runner/Assets.xcassets/AppIcon.appiconset windows/runner/resources)
+          # git diff misses files the generator newly creates (a new density),
+          # so check for untracked ones too.
+          untracked="$(git status --porcelain --untracked-files=all -- "${icon_paths[@]}")"
+          if ! git diff --exit-code --stat -- "${icon_paths[@]}" || [ -n "$untracked" ]; then
+            [ -n "$untracked" ] && echo "$untracked"
+            echo "::error::Launcher icons are stale: run 'dart run flutter_launcher_icons' in client/openastroara_client and commit the result."
+            exit 1
+          fi
 
   unicode:
     name: Unicode scan

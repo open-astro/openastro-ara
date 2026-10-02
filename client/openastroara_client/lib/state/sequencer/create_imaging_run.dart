@@ -399,7 +399,7 @@ Future<ImagingRunResult?> createImagingRun(
   try {
     id = await api.create(targetName, body, idempotencyKey: createKey);
   } on DioException catch (e) {
-    // §2 offline planning — a SAVED server whose daemon is down/unreachable
+    // §2 offline planning — a chosen server whose daemon is down/unreachable
     // still yields a non-null api, so "offline" surfaces here as a transport
     // failure. Degrade the create to a local draft rather than losing the
     // plan. Only transport-level failures qualify: a daemon that RESPONDED

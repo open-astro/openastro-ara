@@ -8,8 +8,9 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// Stored as a small JSON file in the app-support directory, same pattern as
 /// [PlanetariumPrefsService] / [BackupStreamPrefsService]. Deliberately NOT
-/// flutter_secure_storage: that's the keyring, reserved for the saved-server
-/// credentials — a display preference doesn't belong there (it can prompt for
+/// flutter_secure_storage: that's the keyring (the client now only touches it
+/// to wipe the legacy saved-server list, #1129) — a display preference doesn't
+/// belong there (it can prompt for
 /// keychain access on macOS, and silently never persists on a Linux box with
 /// no secret service, which is exactly the field-laptop case night mode is
 /// for).
