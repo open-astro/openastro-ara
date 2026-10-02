@@ -48,7 +48,7 @@ PrivateDevices=false
 ReadWritePaths=/var/log/openastroara
 ReadWritePaths=/var/lib/openastroara
 ReadWritePaths=-/media/openastroara
-ReadWritePaths=/var/run/openastroara
+ReadWritePaths=/run/openastroara
 ReadWritePaths=/etc/openastroara
 
 # Network restrictions

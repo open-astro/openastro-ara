@@ -124,12 +124,15 @@ class ApplyUpdate(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("status=rolled_back", r.stdout)
         self.assertEqual(self.installed(), "1.0")
+        self.assertEqual(sorted(p.name for p in self.rollback.iterdir()), ["1.0.deb"],
+                         "the package that never came up is not kept (seen on the Pi, 2026-10-01)")
 
     def test_a_failed_dpkg_install_is_rolled_back(self) -> None:
         (self.state / "fail-install-2.0").touch()
         r = self.run_helper()
         self.assertIn("status=rolled_back", r.stdout)
         self.assertEqual(self.installed(), "1.0")
+        self.assertEqual(sorted(p.name for p in self.rollback.iterdir()), ["1.0.deb"])
 
     def test_no_rollback_copy_reports_unavailable_and_failed(self) -> None:
         for f in self.apt.iterdir():

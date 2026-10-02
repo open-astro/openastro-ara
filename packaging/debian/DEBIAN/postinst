@@ -39,7 +39,7 @@ case "$1" in
             setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server
         fi
 
-        # 5. Refresh systemd-tmpfiles so /var/run/openastroara appears now
+        # 5. Refresh systemd-tmpfiles so /run/openastroara appears now
         #    (and on every boot).
         systemd-tmpfiles --create /usr/lib/tmpfiles.d/openastroara.conf || true
 

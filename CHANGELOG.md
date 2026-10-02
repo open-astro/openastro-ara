@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+- **Update rollback follow-ups (found on the Pi).** A pushed update that was rolled back left the rejected package (~70 MB) in the root-only rollback folder; it is now removed. The package's runtime paths use `/run` instead of the legacy `/var/run`, so installing no longer prints systemd-tmpfiles warnings. (#1122)
+
 ### Added
 - **Update the server from the client with no internet (§33).** At a dark site apt can't reach the archive, so the rig had no way to take an update. The daemon now accepts a pushed `openastroara-server` `.deb` (`POST /api/v1/server/update`, then `/{id}/apply`): it checks the package name, architecture, that it is newer than what's installed, and an optional SHA-256, then hands it to a root helper unit that installs it, restarts the daemon, and **rolls back to the previous version automatically** if the new one doesn't come up healthy within 90 s. Clients get a `server.restart_imminent` event first and can read the outcome after the restart (`GET /api/v1/server/update/{id}`). Escalation is a polkit-scoped systemd oneshot like the storage helper — the daemon itself never gains privileges — and the dead `update.sh` sudoers line is gone. The client button that drives this is separate work. (#1122)
 

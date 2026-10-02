@@ -1123,7 +1123,7 @@ PrivateDevices=false   # cameras + USB serial need /dev access via udev rules
 ReadWritePaths=/var/log/openastroara
 ReadWritePaths=/var/lib/openastroara
 ReadWritePaths=-/media/openastroara
-ReadWritePaths=/var/run/openastroara
+ReadWritePaths=/run/openastroara
 ReadWritePaths=/etc/openastroara
 
 # Network restrictions
