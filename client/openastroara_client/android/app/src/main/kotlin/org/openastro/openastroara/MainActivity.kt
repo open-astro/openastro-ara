@@ -15,6 +15,7 @@ class MainActivity : FlutterActivity() {
     // in the manifest.
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wanted = false
+    private var securityLogged = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -50,6 +51,12 @@ class MainActivity : FlutterActivity() {
             if (!lock.isHeld) lock.acquire()
         } catch (e: SecurityException) {
             multicastLock = null
+            // Logged once: a missing CHANGE_WIFI_MULTICAST_STATE should be
+            // visible, not retried silently on every resume.
+            if (!securityLogged) {
+                securityLogged = true
+                android.util.Log.w("openastroara", "multicast lock refused: ${e.message}")
+            }
         }
     }
 

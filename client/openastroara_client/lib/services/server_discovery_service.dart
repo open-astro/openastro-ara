@@ -144,9 +144,11 @@ class ServerDiscoveryService {
   static bool get rawMulticastAllowed => defaultTargetPlatform != TargetPlatform.iOS;
 
   /// errno values for "the remote host answered and refused the port":
-  /// ECONNREFUSED on macOS/iOS (61), Linux/Android (111) and Windows (10061).
+  /// ECONNREFUSED on macOS/iOS (61), Linux/Android (111), and on Windows both
+  /// WSAECONNREFUSED (10061) and ERROR_CONNECTION_REFUSED (1225) — dart:io on
+  /// Windows reports the latter for a refused connect (seen in CI).
   /// Proof that unicast to the LAN works, whatever runs on that host.
-  static const _refusedErrnos = {61, 111, 10061};
+  static const _refusedErrnos = {61, 111, 10061, 1225};
 
   /// ENETUNREACH (51 macOS/iOS, 101 Linux/Android, 10051 Windows): a unicast
   /// connect to a host on our own subnet that can't even be routed is the OS

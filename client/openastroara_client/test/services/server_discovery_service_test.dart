@@ -848,7 +848,7 @@ void _preferLocalSubnetTests() {
     SocketException err(int errno) => SocketException('x', osError: OSError('x', errno));
 
     test('a refused port means the host answered', () {
-      for (final errno in [61, 111, 10061]) {
+      for (final errno in [61, 111, 10061, 1225]) {
         expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
             (answered: true, blocked: false), reason: 'errno $errno');
       }
