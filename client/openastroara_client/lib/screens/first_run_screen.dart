@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -172,7 +172,13 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                 handshake: handshake,
                 server: selected,
                 onConfirm: () async {
-                  await ref.read(savedServersProvider.notifier).add(selected);
+                  // Record the rig's identity with its address, so a later
+                  // move to another address can be followed (#1129).
+                  final info = handshake.asData?.value;
+                  await ref.read(savedServersProvider.notifier).add(
+                      info?.serverUuid == null
+                          ? selected
+                          : selected.copyWith(serverUuid: info!.serverUuid));
                   // A Launchpad-forced visit ends here: the server is chosen,
                   // so the router may resume the normal flow (profile box).
                   ref.read(serverChooserRequestedProvider.notifier).clear();
@@ -283,11 +289,26 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
       'auto-discovery cannot see your rig. Allow it in System Settings → '
       'Privacy & Security → Local Network, then tap ⟳. Adding the rig '
       'manually below works regardless.';
+  static const iosMessage =
+      'iOS is blocking local network access for OpenAstro Ara, so '
+      'auto-discovery cannot see your rig. Turn it on in Settings → '
+      'Privacy & Security → Local Network → OpenAstro Ara, then tap ⟳. '
+      'Adding the rig manually below works regardless.';
   static const otherMessage =
       'This device is blocking local network (multicast) access for '
       'OpenAstro Ara, so auto-discovery cannot see your rig. Check its '
       'network privacy settings, then tap ⟳. Adding the rig manually below '
       'works regardless.';
+
+  /// Where the setting lives differs per OS (#1129); the rest get the generic
+  /// wording. defaultTargetPlatform rather than dart:io Platform so tests can
+  /// override it.
+  @visibleForTesting
+  static String messageFor(TargetPlatform platform) => switch (platform) {
+        TargetPlatform.macOS => macMessage,
+        TargetPlatform.iOS => iosMessage,
+        _ => otherMessage,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +328,7 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  Platform.isMacOS ? macMessage : otherMessage,
+                  messageFor(defaultTargetPlatform),
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.onErrorContainer),
                 ),

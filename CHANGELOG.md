@@ -36,6 +36,14 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Fixed
+- **The app finds your rig even after its address changes.** The client remembered only the address it first connected to, so a rig that got a new address (DHCP, Ethernet ↔ Wi-Fi) left the app stuck on "your rig didn't answer" with no way out. It now also remembers the rig's identity, and when the saved address doesn't answer it searches the whole local network (mDNS plus the full subnet sweep), finds the same rig wherever it is and carries on — on every platform. Rigs saved before this update are matched by name, but only when exactly one rig has that name. A **Choose a different rig** button on the profile screen opens the rig list at any time. (#1129)
+- **Android finds rigs on the network.** mDNS discovery never worked on Android (the socket option it used is refused there, and the app never took Android's multicast lock); both are fixed, verified on a Pixel Tablet against a live rig. (#1129)
+- **Small client fixes found on a Pixel and an iPad:** the rig list shows the rig's name instead of its full service name; the profile screen no longer says "Connected to" a rig that isn't answering; the live-update connection no longer logs an "Uncaught error" on every retry; connection errors say "this iPhone or iPad" / "this Android device" instead of "this computer"; the iOS Local Network banner points at the right Settings path; the profile card scrolls instead of overflowing on short screens. (#1129)
+
+### Changed
+- **CI builds Android and iOS.** The native-build matrix now compiles a release APK and an unsigned iOS build, and checks that the committed launcher icons match `icon_sources/`. (#1129)
+
+### Fixed
 - **Update rollback follow-ups (found on the Pi).** A pushed update that was rolled back left the rejected package (~70 MB) in the root-only rollback folder; it is now removed. The package's runtime paths use `/run` instead of the legacy `/var/run`, so installing no longer prints systemd-tmpfiles warnings. (#1122)
 
 ### Added

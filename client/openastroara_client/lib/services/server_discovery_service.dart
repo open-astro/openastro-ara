@@ -55,8 +55,36 @@ class ServerDiscoveryService {
     this.sweepAbandonGrace = const Duration(seconds: 2),
     MDnsClient Function()? mdnsClientFactory,
     Future<List<String>> Function()? localAddresses,
-  }) : _mdnsClientFactory = mdnsClientFactory ?? MDnsClient.new,
+  }) : _mdnsClientFactory = mdnsClientFactory ?? _platformMdnsClient,
        _localAddresses = localAddresses ?? _localIPv4Addresses;
+
+  /// `multicast_dns` binds with `reusePort: true`, which `dart:io` rejects on
+  /// Android, so on Android the browse died in `start()` every pass and logged
+  /// it every tick (#1129). Same client, minus that one option there.
+  static MDnsClient _platformMdnsClient() =>
+      MDnsClient(rawDatagramSocketFactory: platformDatagramBind(false));
+
+  /// The rig's own name from a PTR answer: `openastro._openastroara._tcp.local`
+  /// → `openastro` (the list showed the whole service name, #1129).
+  static String instanceName(String domainName) {
+    const suffix = '.$serviceType';
+    return domainName.endsWith(suffix) && domainName.length > suffix.length
+        ? domainName.substring(0, domainName.length - suffix.length)
+        : domainName;
+  }
+
+  /// The bind `MDnsClient` gets: `RawDatagramSocket.bind`, except that
+  /// `reusePort` is dropped when [isAndroid]. Public for the test.
+  static RawDatagramSocketFactory platformDatagramBind(
+    bool isAndroid, {
+    RawDatagramSocketFactory bind = RawDatagramSocket.bind,
+  }) =>
+      (dynamic host, int port,
+              {bool reuseAddress = true, bool reusePort = false, int ttl = 1}) =>
+          bind(host, port,
+              reuseAddress: reuseAddress,
+              reusePort: isAndroid ? false : reusePort,
+              ttl: ttl);
 
   /// Test seam for the local IPv4 enumeration (production uses
   /// `NetworkInterface.list`).
@@ -109,7 +137,11 @@ class ServerDiscoveryService {
   /// empty (grace timer) or finishes empty, and an mDNS answer drops the
   /// sweep strands. Results dedupe by endpoint; the stream closes when every
   /// started strategy is done.
-  Stream<AraServer> discover() {
+  ///
+  /// [sweepEverything]: also sweep from the start and keep sweeping after mDNS
+  /// answers — for finding one particular rig wherever it now is (#1129),
+  /// where an mDNS answer from a different rig must not stop the search.
+  Stream<AraServer> discover({bool sweepEverything = false}) {
     final controller = StreamController<AraServer>();
     final seen = <String>{};
     var pending = 1; // the mDNS strand; the sweep adds itself if started
@@ -175,7 +207,7 @@ class ServerDiscoveryService {
       (s) {
         if (!sawMdnsResult) {
           sawMdnsResult = true;
-          dropSweepStrands();
+          if (!sweepEverything) dropSweepStrands();
         }
         emit(s);
       },
@@ -183,7 +215,7 @@ class ServerDiscoveryService {
       onDone: () {
         // mDNS finished with nothing — the sweep is the only hope; start it
         // BEFORE done() so pending can't hit zero and close the stream first.
-        if (!sawMdnsResult) maybeStartSweep();
+        if (!sawMdnsResult || sweepEverything) maybeStartSweep();
         done();
       },
     );
@@ -202,9 +234,13 @@ class ServerDiscoveryService {
         },
       );
     }
-    grace = Timer(mdnsGracePeriod, () {
-      if (!sawMdnsResult) maybeStartSweep();
-    });
+    if (sweepEverything) {
+      maybeStartSweep();
+    } else {
+      grace = Timer(mdnsGracePeriod, () {
+        if (!sawMdnsResult) maybeStartSweep();
+      });
+    }
     // Cancellation MUST propagate (review r4): the connect screen invalidates
     // its discovery provider every ~4 s, and without this each tick stacked a
     // fresh full sweep on top of the still-running previous ones — multiple
@@ -324,7 +360,7 @@ class ServerDiscoveryService {
             yield AraServer(
               hostname: host,
               port: srv.port,
-              mdnsName: ptr.domainName,
+              mdnsName: instanceName(ptr.domainName),
             );
           }
         }
@@ -571,6 +607,7 @@ class ServerDiscoveryService {
         hostname: host,
         port: defaultPort,
         mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
+        serverUuid: json['server_uuid'] as String,
       );
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {

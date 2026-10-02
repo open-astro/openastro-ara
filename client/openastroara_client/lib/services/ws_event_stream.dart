@@ -40,6 +40,11 @@ WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
   final WebSocketChannel channel = kIsWeb
       ? WebSocketChannel.connect(url)
       : IOWebSocketChannel.connect(url, headers: headers);
+  // A failed dial (rig off, stale address) also completes `ready` with the
+  // error. The stream's onError already tears the link down and schedules the
+  // reconnect; with no listener on `ready` the same failure surfaced again as
+  // an "Uncaught error" log line on every retry (#1129, seen on a Pixel).
+  unawaited(channel.ready.catchError((Object _) {}));
   return WsSocket(
     stream: channel.stream,
     send: (m) => channel.sink.add(m),

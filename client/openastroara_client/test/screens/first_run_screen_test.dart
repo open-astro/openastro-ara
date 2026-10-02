@@ -13,7 +13,7 @@ class _FakeDiscovery extends ServerDiscoveryService {
   final blocked = ValueNotifier<bool>(false);
 
   @override
-  Stream<AraServer> discover() => const Stream.empty();
+  Stream<AraServer> discover({bool sweepEverything = false}) => const Stream.empty();
 
   @override
   void resetSweepCache() => resets++;
@@ -71,5 +71,29 @@ void main() {
     expect(find.textContaining('blocking local network'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  // #1129: the setting lives in a different place per OS.
+  testWidgets('the Local Network banner names the right settings path per platform',
+      (tester) async {
+    for (final (platform, needle) in [
+      (TargetPlatform.iOS, 'Settings → Privacy & Security → Local Network → OpenAstro Ara'),
+      (TargetPlatform.macOS, 'System Settings → Privacy & Security → Local Network'),
+      (TargetPlatform.android, 'network privacy settings'),
+    ]) {
+      debugDefaultTargetPlatformOverride = platform;
+      final fake = _FakeDiscovery();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [discoveryServiceProvider.overrideWithValue(fake)],
+          child: const MaterialApp(home: FirstRunScreen()),
+        ),
+      );
+      fake.blocked.value = true;
+      await tester.pump();
+      expect(find.textContaining(needle), findsOneWidget, reason: '$platform');
+      await tester.pumpWidget(const SizedBox.shrink());
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

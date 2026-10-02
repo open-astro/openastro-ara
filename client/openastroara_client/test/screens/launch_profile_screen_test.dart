@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +11,11 @@ import 'package:openastroara/screens/launch_profile_screen.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/server_state.dart';
+import 'package:openastroara/services/server_relocator.dart';
+import 'package:openastroara/services/saved_server_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// In-memory ProfileApi double — same shape as the one in
 /// profile_management_state_test.dart, plus a select-error injector.
@@ -199,4 +207,99 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.deleteCalls, isEmpty);
   });
+
+  // #1129, seen on a Pixel with a stale saved address: the header read
+  // "Connected to openastro" while the profile load said the rig didn't answer.
+  testWidgets('an unreachable rig is named, not reported as connected', (tester) async {
+    final api = _UnreachableApi();
+    final container = ProviderContainer(overrides: [
+      profileApiProvider.overrideWithValue(api),
+      // Nowhere else on the network either (no real scan inside a unit test).
+      serverRelocatorProvider.overrideWithValue(
+          ServerRelocator(discoverEverything: () => const Stream.empty(), uuidOf: (_) async => null)),
+      activeServerProvider.overrideWithValue(
+          const AraServer(hostname: '192.168.1.234', port: 5555, mdnsName: 'openastro')),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: LaunchProfileScreen()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Rig: openastro'), findsOneWidget);
+    expect(find.textContaining('Connected to'), findsNothing);
+    expect(find.textContaining("didn't answer"), findsOneWidget);
+    expect(find.textContaining("isn't anywhere else on your network"), findsOneWidget,
+        reason: 'the automatic search ran and found nothing');
+
+    // ...and the screen is no longer a dead end: the rig chooser opens.
+    expect(container.read(serverChooserRequestedProvider), isFalse);
+    await tester.tap(find.text('Choose a different rig'));
+    await tester.pump();
+    expect(container.read(serverChooserRequestedProvider), isTrue);
+  });
+
+  // #1129: a rig that stopped answering at its saved address is searched for
+  // on the whole network and, when found, saved at its new address.
+  testWidgets('an unreachable rig is found at its new address and saved there', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const old = AraServer(hostname: '192.168.1.234', port: 5555, mdnsName: 'openastro', serverUuid: 'uuid-pi4');
+    const moved = AraServer(hostname: '192.168.1.235', port: 5555, mdnsName: 'openastro', serverUuid: 'uuid-pi4');
+    await SavedServerService().add(old);
+
+    final gate = Completer<void>();
+    final searchedFor = <String>[];
+    final relocator = ServerRelocator(
+      discoverEverything: () async* {
+        await gate.future;
+        yield moved;
+      },
+      uuidOf: (_) async => null,
+    );
+    final container = ProviderContainer(overrides: [
+      profileApiProvider.overrideWithValue(_UnreachableApi()),
+      serverRelocatorProvider.overrideWithValue(_RecordingRelocator(relocator, searchedFor)),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: LaunchProfileScreen()),
+    ));
+    // The saved list loads from storage first; the profile load then fails.
+    for (var i = 0; i < 5 && searchedFor.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(searchedFor, ['192.168.1.234']);
+    await tester.pump(); // the frame the search's setState asked for
+    expect(find.textContaining('Looking for openastro on your network'), findsOneWidget);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+    final saved = await container.read(savedServersProvider.future);
+    expect(saved.last.hostname, '192.168.1.235', reason: 'the moved rig is now the active one');
+    expect(saved.where((s) => s.hostname == '192.168.1.234'), isEmpty);
+  });
+}
+
+class _RecordingRelocator implements ServerRelocator {
+  _RecordingRelocator(this.inner, this.calls);
+  final ServerRelocator inner;
+  final List<String> calls;
+
+  @override
+  Duration get timeout => inner.timeout;
+
+  @override
+  Future<AraServer?> relocate(AraServer saved) {
+    calls.add(saved.hostname);
+    return inner.relocate(saved);
+  }
+}
+
+class _UnreachableApi extends _FakeApi {
+  @override
+  Future<ProfileList> listProfiles() async => throw DioException.connectionError(
+        requestOptions: RequestOptions(path: '/api/v1/profiles'),
+        reason: 'No route to host',
+      );
 }

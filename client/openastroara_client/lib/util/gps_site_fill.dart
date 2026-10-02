@@ -64,8 +64,7 @@ ClientPlatform get clientPlatform {
 
 /// What to call the machine running the client, in user-facing copy. The app
 /// ships on macOS, Windows, Linux, Android and iOS, so "this Mac" is wrong
-/// most of the time.
-@visibleForTesting
+/// most of the time. Shared with friendly_error.dart's "same network as …".
 String thisDeviceLabel(ClientPlatform p) => switch (p) {
   ClientPlatform.macOS => 'this Mac',
   ClientPlatform.windows => 'this PC',

@@ -10,20 +10,28 @@ class AraServer {
   final String? mdnsName;
   final String? serverVersion;
 
+  /// The daemon's `server_uuid` from `/api/v1/server/info`: the rig's identity,
+  /// independent of the address it happens to have today. Lets the client find
+  /// the same rig again after DHCP moves it (#1129); null for entries saved
+  /// before it was recorded and for unconfirmed mDNS results.
+  final String? serverUuid;
+
   const AraServer({
     required this.hostname,
     required this.port,
     this.mdnsName,
     this.serverVersion,
+    this.serverUuid,
   });
 
   String get baseUrl => 'http://$hostname:$port';
 
-  AraServer copyWith({String? serverVersion}) => AraServer(
+  AraServer copyWith({String? serverVersion, String? serverUuid, String? mdnsName}) => AraServer(
         hostname: hostname,
         port: port,
-        mdnsName: mdnsName,
+        mdnsName: mdnsName ?? this.mdnsName,
         serverVersion: serverVersion ?? this.serverVersion,
+        serverUuid: serverUuid ?? this.serverUuid,
       );
 
   @override
@@ -34,5 +42,5 @@ class AraServer {
   int get hashCode => Object.hash(hostname, port);
 
   @override
-  String toString() => 'AraServer($hostname:$port, mdns=$mdnsName, ver=$serverVersion)';
+  String toString() => 'AraServer($hostname:$port, mdns=$mdnsName, ver=$serverVersion, uuid=$serverUuid)';
 }

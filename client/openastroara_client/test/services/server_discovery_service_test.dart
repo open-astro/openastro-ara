@@ -757,4 +757,25 @@ void _preferLocalSubnetTests() {
       );
     });
   });
+
+  // #1129: finding one particular rig must look everywhere — an mDNS answer
+  // from some other rig may not stop the sweep.
+  group('sweepEverything', () {
+    const viaMdns = AraServer(hostname: '192.168.1.123', port: 5555);
+    const viaSweep = AraServer(hostname: '192.168.1.235', port: 5555);
+
+    ServerDiscoveryService svc() => ServerDiscoveryService(
+          mdnsSource: () => Stream.value(viaMdns),
+          sweepSource: () => Stream.value(viaSweep),
+        );
+
+    test('a normal pass stops at the mDNS answer', () async {
+      expect(await svc().discover().toList(), [viaMdns]);
+    });
+
+    test('sweepEverything also returns what only the sweep sees', () async {
+      expect(await svc().discover(sweepEverything: true).toList(),
+          unorderedEquals([viaMdns, viaSweep]));
+    });
+  });
 }

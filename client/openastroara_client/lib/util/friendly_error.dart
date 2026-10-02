@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 
 /// Turns whatever went wrong into a sentence a person can act on.
 ///
@@ -36,7 +37,7 @@ String friendlyError(Object error, {String action = 'do that'}) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.connectionError =>
         "$prefix — your rig didn't answer. Check it's powered on and on the "
-            'same network as this computer.',
+            'same network as ${thisDeviceLabel(clientPlatform)}.',
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout =>
         '$prefix — your rig took too long to answer. It may be busy; try again '
@@ -59,7 +60,7 @@ String friendlyError(Object error, {String action = 'do that'}) {
 
   if (error is SocketException) {
     return "$prefix — your rig didn't answer. Check it's powered on and on the "
-        'same network as this computer.';
+        'same network as ${thisDeviceLabel(clientPlatform)}.';
   }
   if (error is FileSystemException) {
     final reason = error.osError?.message;

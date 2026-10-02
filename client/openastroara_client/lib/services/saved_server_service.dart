@@ -70,7 +70,26 @@ class SavedServerService {
       port: server.port,
       mdnsName: server.mdnsName ?? prior.mdnsName,
       serverVersion: server.serverVersion ?? prior.serverVersion,
+      serverUuid: server.serverUuid ?? prior.serverUuid,
     );
+  }
+
+  /// The list after the rig saved as [old] was found at [moved]: [old] (and
+  /// any stale entry at [moved]'s address) removed, [moved] last so it is the
+  /// active one, carrying [old]'s metadata where [moved] has none (#1129).
+  static List<AraServer> relocated(List<AraServer> existing, AraServer old, AraServer moved) {
+    AraServer? prior;
+    for (final s in existing) {
+      if (s == old) prior = s;
+    }
+    final merged = AraServer(
+      hostname: moved.hostname,
+      port: moved.port,
+      mdnsName: moved.mdnsName ?? prior?.mdnsName,
+      serverVersion: moved.serverVersion ?? prior?.serverVersion,
+      serverUuid: moved.serverUuid ?? prior?.serverUuid,
+    );
+    return [...existing.where((s) => s != old && s != moved), merged];
   }
 
   Map<String, dynamic> _serverToJson(AraServer s) => <String, dynamic>{
@@ -78,6 +97,7 @@ class SavedServerService {
         'port': s.port,
         if (s.mdnsName != null) 'mdnsName': s.mdnsName,
         if (s.serverVersion != null) 'serverVersion': s.serverVersion,
+        if (s.serverUuid != null) 'serverUuid': s.serverUuid,
       };
 
   AraServer? _serverFromJson(Map<String, dynamic> j) {
@@ -89,6 +109,7 @@ class SavedServerService {
       port: port,
       mdnsName: j['mdnsName'] as String?,
       serverVersion: j['serverVersion'] as String?,
+      serverUuid: j['serverUuid'] as String?,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/server.dart';
 import '../services/server_api.dart';
 import '../services/server_discovery_service.dart';
+import '../services/server_relocator.dart';
 
 /// Single-source Riverpod providers for the first-run flow.
 /// State persistence to flutter_secure_storage lands in the Phase 11 follow-up
@@ -10,6 +11,11 @@ import '../services/server_discovery_service.dart';
 
 final discoveryServiceProvider = Provider<ServerDiscoveryService>(
   (ref) => ServerDiscoveryService(),
+);
+
+/// Finds a saved rig at a new address (#1129). A provider so tests can swap it.
+final serverRelocatorProvider = Provider<ServerRelocator>(
+  (ref) => ServerRelocator.forService(ref.watch(discoveryServiceProvider)),
 );
 
 /// Live stream of servers discovered by mDNS. The UI listens to this and

@@ -66,4 +66,22 @@ void main() {
     expect(loaded.single.mdnsName, 'ara-obs');
     expect(loaded.single.serverVersion, '0.0.2');
   });
+
+  // #1129: the rig's identity survives storage, and a rig found at a new
+  // address replaces the old entry as the active one.
+  test('serverUuid round-trips through storage', () async {
+    final svc = SavedServerService();
+    await svc.add(const AraServer(hostname: '192.168.1.235', port: 5555, serverUuid: 'uuid-pi4'));
+    expect((await svc.loadAll()).single.serverUuid, 'uuid-pi4');
+  });
+
+  test('relocated() swaps the old address for the new one, last = active, metadata kept', () {
+    const old = AraServer(hostname: '192.168.1.234', port: 5555, mdnsName: 'openastro', serverVersion: '1.0', serverUuid: 'u');
+    const moved = AraServer(hostname: '192.168.1.235', port: 5555);
+    final out = SavedServerService.relocated(const [old, rigA], old, moved);
+    expect(out.map((s) => s.hostname), ['observatory', '192.168.1.235']);
+    expect(out.last.mdnsName, 'openastro');
+    expect(out.last.serverVersion, '1.0');
+    expect(out.last.serverUuid, 'u');
+  });
 }
