@@ -108,6 +108,12 @@ if [ -f "$OLD_DEB" ]; then echo "rollback=available"; else echo "rollback=unavai
 NEW_DEB="$ROLLBACK_DIR/$NEW_VER.deb"
 mv -f "$COPY" "$NEW_DEB" || fail "could not keep the new package"
 
+# A package that failed (dpkg error, or never healthy) is no use for a later rollback and
+# costs ~70 MB of SD card; drop it whenever the outcome is not "applied".
+discard_new() {
+    [ -n "${NEW_DEB:-}" ] && [ "$NEW_DEB" != "${OLD_DEB:-}" ] && rm -f "$NEW_DEB"
+}
+
 healthy() {
     "$CURL" -fsS -m 3 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1
 }
@@ -129,9 +135,11 @@ if ! "$DPKG" -i "$NEW_DEB"; then
     echo "dpkg -i failed; reinstalling $OLD_VER"
     if [ -f "$OLD_DEB" ] && "$DPKG" -i "$OLD_DEB"; then
         "$SYSTEMCTL" restart "$UNIT" || true
+        discard_new
         echo "status=rolled_back"
     else
         "$SYSTEMCTL" restart "$UNIT" || true
+        discard_new
         echo "status=failed"
     fi
     exit 2
@@ -152,8 +160,14 @@ echo "new daemon did not answer /healthz within ${HEALTH_TIMEOUT}s"
 if [ -f "$OLD_DEB" ] && "$DPKG" -i "$OLD_DEB"; then
     "$SYSTEMCTL" restart "$UNIT" || true
     if wait_healthy; then echo "rolled back to $OLD_VER"; else echo "rollback installed but /healthz still silent"; fi
+    discard_new
     echo "status=rolled_back"
     exit 3
 fi
+# The new version is installed but unhealthy and there is no previous package to go back
+# to; its .deb is no use as a future rollback target either. Say how to get out of it.
+discard_new
+echo "recover: push a working openastroara-server .deb from the client once the daemon answers,"
+echo "or on the rig: sudo apt-get install --reinstall openastroara-server (with network)"
 echo "status=failed"
 exit 3

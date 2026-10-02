@@ -23,7 +23,7 @@ case "$1" in
         if getent group openastroara > /dev/null; then
             delgroup --quiet --system openastroara > /dev/null || true
         fi
-        rm -rf /var/run/openastroara
+        rm -rf /run/openastroara
         rm -f /etc/sudoers.d/openastroara
         ;;
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
