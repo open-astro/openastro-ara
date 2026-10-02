@@ -73,9 +73,9 @@ open build/macos/Build/Products/Debug/openastroara.app
   first-run/connect screen appears with no rig listed, either allow the app
   under System Settings → Privacy & Security → Local Network and tap ⟳, or
   enter host `localhost` port `5555` by hand (or `openastro.lan`). The client
-  stores no server (#1129): every launch scans, and when exactly one rig
-  answers it connects on its own after ~3 s — say which daemon it connected to.
-  With several rigs answering, pick one.
+  stores no server (#1129): every launch scans and lists what it finds; tap
+  the rig (it never auto-picks, even with one rig) — say which daemon you
+  connected to.
 - Linux hosts: `flutter build linux --debug` and run the bundle; on Wayland
   prefix `GDK_BACKEND=x11`.
 - Do not run `dart format` on files the PR touched — it restyles whole files.

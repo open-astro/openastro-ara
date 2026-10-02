@@ -1900,9 +1900,9 @@ cd client/openastroara_client
 flutter build macos --debug    # or: flutter run -d macos  (foreground only)
 open build/macos/Build/Products/Debug/openastroara.app
 ```
-Every launch scans the network (nothing about the rig is stored, #1129); with one
-rig on the network the app connects on its own. A connected device's state lives
-daemon-side, so the app reflects it on reconnect.
+Every launch scans the network (nothing about the rig is stored, #1129) and you
+pick the rig from the list. A connected device's state lives daemon-side, so the
+app reflects it on reconnect.
 
 ---
 
@@ -3166,9 +3166,9 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 
 ### 30.3 Subsequent launches
 
-Splash → network scan → (exactly one rig answers: auto-connect, no auth per §67; several: pick one) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+Splash → network scan → user picks the rig (no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
 
-Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the sweep alone, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. Auto-connect waits until the scan has finished (no subnet sweep still probing, then 3 s with no new rig; with several addresses each is asked for its `server_uuid`, up to 2 s more), so it typically takes a few seconds, longer on iOS. A rig on two addresses counts once. If two different rigs answered, the scan screen never picks one later on its own — the user taps, even if one of them goes away.
+Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the sweep alone, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user always taps the one they mean. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
 
 ### 30.4 Add a Profile
 
@@ -3334,7 +3334,7 @@ User can search "equipment changed" and jump to the equipment-change-check scree
 
 ARA's typical deployment is one Pi per rig. Observatory operators sometimes run two scopes on two Pis simultaneously, controlled from a single WILMA app. ARA supports this today via **one-server-at-a-time** with explicit server switching — distinct from §27's per-server single-client policy, which governs how many WILMAs can talk to one Pi. This section governs how one WILMA tracks multiple Pis.
 
-> **Superseded in part (#1129, 2026-10-02):** the client stores no server list. Every launch scans the network; exactly one rig answering auto-connects, several → the user picks; a rig is identified within a scan by its `server_uuid`, never stored. The "known/saved servers", "[Save + Connect]", default-on-launch and saved-server rows below predate that decision and describe planned multi-server UX, not current behaviour.
+> **Superseded in part (#1129, 2026-10-02):** the client stores no server list. Every launch scans the network and the user picks the rig; nothing is picked automatically, and nothing is stored. The "known/saved servers", "[Save + Connect]", default-on-launch and saved-server rows below predate that decision and describe planned multi-server UX, not current behaviour.
 
 **Current model: one active connection at a time, chosen from the scan.**
 
@@ -3426,7 +3426,7 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 
 | Scenario | Behavior |
 |---|---|
-| joey-north + joey-south both answer the scan after WILMA restarts | Show the scan list (no auto-connect). Don't surprise users by auto-connecting to a random Pi. (#1129: auto-connect only when exactly one rig answers.) |
+| joey-north + joey-south both answer the scan after WILMA restarts | Show the scan list (no auto-connect). Don't surprise users by auto-connecting to a random Pi. (#1129: the scan never auto-picks, even with one rig.) |
 | Two rigs share a nickname | Treated as two rigs (different `server_uuid`); never auto-picked; the list shows the address as discriminator |
 | A rig's hostname/IP changes (DHCP lease moved it) | Nothing to update: the next launch's scan finds it wherever it is (#1129) |
 | Saved server reports a different UUID than expected (Pi was reflashed) | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |

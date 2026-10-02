@@ -446,14 +446,6 @@ class ServerDiscoveryService {
   /// the sweep only stops once nobody has listened for [sweepAbandonGrace].
   SweepRun? _sweepRun;
 
-  /// A subnet sweep is still probing. The scan screen waits for it before
-  /// auto-connecting: a second rig higher up the subnet can turn up seconds
-  /// after the first (#1129). Overridable for tests.
-  bool get sweepInFlight {
-    final run = _sweepRun;
-    return run != null && !run.finished && !run.abandoned;
-  }
-
   /// When a rig last answered, by any path. A failed mDNS send right after a
   /// rig answered says nothing about access, so it doesn't re-raise the
   /// banner (#1129: it flickered on a denied Mac while the rig was listed).

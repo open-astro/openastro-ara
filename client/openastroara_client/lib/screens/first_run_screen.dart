@@ -23,20 +23,11 @@ class FirstRunScreen extends ConsumerStatefulWidget {
   ConsumerState<FirstRunScreen> createState() => _FirstRunScreenState();
 }
 
-/// How long the scan list must stay at exactly one rig before the app
-/// connects to it on its own (#1129).
-const Duration autoConnectSettle = Duration(seconds: 3);
-
 class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   final _discovered = <AraServer>{};
   final _manualHostCtrl = TextEditingController();
   final _manualPortCtrl = TextEditingController(text: '5555');
   Timer? _rescanTimer;
-  Timer? _autoConnectTimer;
-
-  /// The rig chosen by [_scheduleAutoConnect]; continue as soon as its
-  /// handshake succeeds.
-  AraServer? _autoSelected;
 
   @override
   void initState() {
@@ -65,7 +56,6 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   void dispose() {
     unawaited(MulticastLock.release());
     _rescanTimer?.cancel();
-    _autoConnectTimer?.cancel();
     _manualHostCtrl.dispose();
     _manualPortCtrl.dispose();
     super.dispose();
@@ -74,29 +64,10 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen(discoveredServersProvider, (prev, next) {
-      next.whenData((server) {
-        if (_discovered.contains(server)) return;
-        setState(() => _discovered.add(server));
-        _scheduleAutoConnect();
-      });
-    });
-    // Picking (or typing) anything else cancels a pending auto-connect, so a
-    // later re-pick of that rig still waits for the Continue tap.
-    ref.listen(selectedServerProvider, (prev, next) {
-      if (next != _autoSelected) _autoSelected = null;
-    });
-    ref.listen(serverHandshakeProvider, (prev, next) {
-      final auto = _autoSelected;
-      if (auto == null) return;
-      if (next.hasError) {
-        // The auto-picked rig didn't answer the handshake: leave it on screen
-        // with its error for the user, and don't continue on a later retry.
-        _autoSelected = null;
-      } else if (next.asData?.value != null &&
-          ref.read(selectedServerProvider) == auto) {
-        _autoSelected = null;
-        unawaited(_confirm(auto));
-      }
+      // Every rig found is listed and the user taps the one they want —
+      // never picked automatically, even when only one answered: a site can
+      // have several rigs, some not yet up (#1129).
+      next.whenData((server) => setState(() => _discovered.add(server)));
     });
     final selected = ref.watch(selectedServerProvider);
     final handshake = ref.watch(serverHandshakeProvider);
@@ -242,51 +213,6 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     // may resume the normal flow (profile box). The _RootRouter watching
     // savedServersProvider swaps the screen once the list is non-empty.
     ref.read(serverChooserRequestedProvider.notifier).clear();
-  }
-
-  /// #1129 — nothing is remembered between launches, so every launch scans.
-  /// When the scan has finished and found exactly one rig, connect to it
-  /// without a tap. Never when the user opened this list to choose
-  /// (Launchpad / "Choose a different rig"), has picked or typed something,
-  /// or two different rigs answered.
-  void _scheduleAutoConnect() {
-    _autoConnectTimer?.cancel();
-    _autoConnectTimer = Timer(autoConnectSettle, _tryAutoConnect);
-  }
-
-  bool get _mayAutoConnect =>
-      mounted &&
-      !ref.read(serverChooserRequestedProvider) &&
-      ref.read(selectedServerProvider) == null &&
-      _manualHostCtrl.text.trim().isEmpty;
-
-  Future<void> _tryAutoConnect() async {
-    if (!_mayAutoConnect || _discovered.isEmpty) return;
-    // A subnet sweep still probing can turn up a second rig seconds after the
-    // first (it walks .1–.254 in batches); decide only once it is done.
-    if (ref.read(discoveryServiceProvider).sweepInFlight) {
-      _autoConnectTimer = Timer(const Duration(seconds: 1), _tryAutoConnect);
-      return;
-    }
-    final candidates = _discovered.toList();
-    AraServer? pick;
-    if (candidates.length == 1) {
-      pick = candidates.single;
-    } else {
-      // One rig on two addresses (Ethernet + Wi-Fi, or a dead second
-      // interface) is still one rig: count the identities that answer. Two
-      // different rigs — even both named "openastro" — are never guessed.
-      final identify = ref.read(rigIdentityProvider);
-      final ids = await Future.wait(candidates.map(identify));
-      if (!_mayAutoConnect) return;
-      final answering = {for (final id in ids) ?id};
-      if (answering.length == 1) {
-        pick = candidates[ids.indexWhere((id) => id != null)];
-      }
-    }
-    if (pick == null) return;
-    _autoSelected = pick;
-    ref.read(selectedServerProvider.notifier).select(pick);
   }
 }
 

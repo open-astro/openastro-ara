@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,29 +8,18 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/first_run_screen.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
 import 'package:openastroara/services/multicast_lock.dart';
-import 'package:openastroara/services/server_api.dart';
-import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/server_state.dart';
 
-/// Counts the cache resets the screen asks for; discovery yields [rigs] and
-/// then whatever [later] pushes; [sweeping] stands in for a sweep in flight.
+/// Counts the cache resets the screen asks for; discovery yields [rigs].
 class _FakeDiscovery extends ServerDiscoveryService {
   _FakeDiscovery([this.rigs = const []]);
   final List<AraServer> rigs;
-  final later = StreamController<AraServer>.broadcast();
-  bool sweeping = false;
   int resets = 0;
   final blocked = ValueNotifier<bool>(false);
 
   @override
-  Stream<AraServer> discover() async* {
-    yield* Stream.fromIterable(rigs);
-    yield* later.stream;
-  }
-
-  @override
-  bool get sweepInFlight => sweeping;
+  Stream<AraServer> discover() => Stream.fromIterable(rigs);
 
   @override
   void resetSweepCache() => resets++;
@@ -116,151 +103,26 @@ void main() {
     }
   });
 
-  // #1129: nothing is remembered between launches, so every launch scans; a
-  // scan that settles on exactly one rig connects to it without a tap.
-  group('auto-connect', () {
-    // Stand-ins for whatever the scan returns this launch — test data only.
-    const rigA = AraServer(hostname: 'rig-a.test', port: 5555, mdnsName: 'openastro');
-    const rigB = AraServer(hostname: 'rig-b.test', port: 5555, mdnsName: 'openastro');
-
-    Future<ProviderContainer> pump(WidgetTester tester, List<AraServer> rigs,
-        {bool chooserRequested = false,
-        _FakeDiscovery? discovery,
-        Map<String, String?> ids = const {}}) async {
-      FlutterSecureStorage.setMockInitialValues({});
-      final container = ProviderContainer(overrides: [
-        discoveryServiceProvider.overrideWithValue(discovery ?? _FakeDiscovery(rigs)),
-        // A rig's identity, by address — the test's stand-in for /server/info.
-        rigIdentityProvider.overrideWithValue((s) async => ids[s.hostname]),
-        serverHandshakeProvider.overrideWith((ref) async {
-          final s = ref.watch(selectedServerProvider);
-          return s == null ? null : const ServerInfo(name: 'openastro', version: '1', apiVersion: 'v1');
-        }),
-      ]);
-      addTearDown(container.dispose);
-      if (chooserRequested) container.read(serverChooserRequestedProvider.notifier).request();
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: FirstRunScreen()),
-      ));
-      await tester.pump();
-      return container;
-    }
-
-    Future<void> settle(WidgetTester tester) async {
-      await tester.pump(autoConnectSettle + const Duration(milliseconds: 100));
-      await tester.pump();
-      await tester.pump();
-    }
-
-    testWidgets('one rig on the network: connects without a tap', (tester) async {
-      final c = await pump(tester, const [rigA]);
-      expect(c.read(selectedServerProvider), isNull, reason: 'waits for the scan to settle');
-      await settle(tester);
-      expect(c.read(selectedServerProvider), rigA);
-      expect(await c.read(savedServersProvider.future), [rigA], reason: 'confirmed for this session');
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    testWidgets('two rigs: never picks one for you', (tester) async {
-      final c = await pump(tester, const [rigA, rigB], ids: {'rig-a.test': 'uuid-a', 'rig-b.test': 'uuid-b'});
-      await settle(tester);
-      expect(c.read(selectedServerProvider), isNull);
-      expect(await c.read(savedServersProvider.future), isEmpty);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    // #1129 review: the sweep walks .1–.254 in batches, so a second rig can
-    // turn up well after the first; deciding at the first hit picked rig A.
-    testWidgets('a second rig found late by a slow sweep: still never picks', (tester) async {
-      final discovery = _FakeDiscovery(const [rigA])..sweeping = true;
-      final c = await pump(tester, const [], discovery: discovery,
-          ids: {'rig-a.test': 'uuid-a', 'rig-b.test': 'uuid-b'});
-      await settle(tester);
-      await tester.pump(const Duration(seconds: 2));
-      expect(c.read(selectedServerProvider), isNull, reason: 'waits for the sweep');
-      discovery.later.add(rigB);
-      await tester.pump();
-      discovery.sweeping = false;
-      await settle(tester);
-      await tester.pump(const Duration(seconds: 2));
-      expect(c.read(selectedServerProvider), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    testWidgets('one rig: connects once the sweep has finished, not before', (tester) async {
-      final discovery = _FakeDiscovery(const [rigA])..sweeping = true;
-      final c = await pump(tester, const [], discovery: discovery);
-      await settle(tester);
-      expect(c.read(selectedServerProvider), isNull);
-      discovery.sweeping = false;
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump();
-      await tester.pump();
-      expect(c.read(selectedServerProvider), rigA);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    testWidgets('one rig on two addresses counts as one rig', (tester) async {
-      const wired = AraServer(hostname: 'rig-eth.test', port: 5555, mdnsName: 'openastro');
-      const wifi = AraServer(hostname: 'rig-wlan.test', port: 5555, mdnsName: 'openastro');
-      final c = await pump(tester, const [wired, wifi],
-          ids: {'rig-eth.test': 'uuid-a', 'rig-wlan.test': 'uuid-a'});
-      await settle(tester);
-      expect(c.read(selectedServerProvider), wired);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    testWidgets('a dead second address is skipped for the one that answers', (tester) async {
-      const dead = AraServer(hostname: 'rig-dead.test', port: 5555, mdnsName: 'openastro');
-      final c = await pump(tester, const [dead, rigA], ids: {'rig-a.test': 'uuid-a'});
-      await settle(tester);
-      expect(c.read(selectedServerProvider), rigA);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    testWidgets('picking another rig cancels a pending auto-connect', (tester) async {
-      FlutterSecureStorage.setMockInitialValues({});
-      final gate = Completer<void>();
-      final container = ProviderContainer(overrides: [
-        discoveryServiceProvider.overrideWithValue(_FakeDiscovery(const [rigA])),
-        rigIdentityProvider.overrideWithValue((_) async => 'uuid-a'),
-        // The handshake is slow, so the user can change their mind mid-way.
-        serverHandshakeProvider.overrideWith((ref) async {
-          final s = ref.watch(selectedServerProvider);
-          if (s == null) return null;
-          await gate.future;
-          return const ServerInfo(name: 'openastro', version: '1', apiVersion: 'v1');
-        }),
-      ]);
-      addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: FirstRunScreen()),
-      ));
-      await tester.pump();
-      await settle(tester);
-      expect(container.read(selectedServerProvider), rigA, reason: 'auto-picked, handshake pending');
-
-      container.read(selectedServerProvider.notifier).select(rigB); // user taps another rig
-      await tester.pump();
-      container.read(selectedServerProvider.notifier).select(rigA); // ...and back
-      await tester.pump();
-      gate.complete();
-      await tester.pump();
-      await tester.pump();
-      expect(await container.read(savedServersProvider.future), isEmpty,
-          reason: 'a hand-picked rig waits for the Continue tap');
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    testWidgets('opened to choose a rig: lists it, does not auto-connect', (tester) async {
-      final c = await pump(tester, const [rigA], chooserRequested: true);
-      await settle(tester);
-      expect(find.text('openastro'), findsOneWidget);
-      expect(c.read(selectedServerProvider), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
+  // #1129: every launch scans, and the user always taps the rig — a site can
+  // have four or five, some not up yet, so even a lone rig is never picked
+  // automatically.
+  testWidgets('a rig found is listed and waits for the user to pick it', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const rig = AraServer(hostname: 'rig-a.test', port: 5555, mdnsName: 'openastro');
+    final container = ProviderContainer(overrides: [
+      discoveryServiceProvider.overrideWithValue(_FakeDiscovery(const [rig])),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: FirstRunScreen()),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 30));
+    expect(find.text('openastro'), findsOneWidget);
+    expect(container.read(selectedServerProvider), isNull);
+    expect(await container.read(savedServersProvider.future), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   // #1129: Android drops mDNS answers without a multicast lock; the scan
