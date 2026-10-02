@@ -31,6 +31,11 @@ class WsSocket {
 /// Opens the socket for a URL + headers. Injectable for tests.
 typedef WsConnector = WsSocket Function(Uri url, Map<String, String> headers);
 
+/// The production dial, exposed for the #1129 test that a failed connect
+/// surfaces no uncaught error.
+@visibleForTesting
+WsSocket defaultWsConnect(Uri url, Map<String, String> headers) => _defaultConnect(url, headers);
+
 WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
   // Cross-platform dial: native uses IOWebSocketChannel (dart:io) so the
   // X-Ara-WS-Version header can be set; browsers cannot set WebSocket request

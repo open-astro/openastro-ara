@@ -61,6 +61,43 @@ class _AddressLookupFailsMdns extends MDnsClient {
   void stop() {}
 }
 
+/// Answers PTR, SRV and A for one rig: the happy path, end to end.
+class _AnsweringMdns extends MDnsClient {
+  @override
+  Future<void> start({
+    InternetAddress? listenAddress,
+    NetworkInterfacesFactory? interfacesFactory,
+    int mDnsPort = 5353,
+    InternetAddress? mDnsAddress,
+    Function? onError,
+  }) async {}
+
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    if (T == PtrResourceRecord) {
+      return Stream<T>.fromIterable([
+        const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'openastro._openastroara._tcp.local') as T,
+      ]);
+    }
+    if (T == SrvResourceRecord) {
+      return Stream<T>.fromIterable([
+        const SrvResourceRecord('openastro._openastroara._tcp.local', 0,
+            target: 'openastro.local', port: 5555, priority: 0, weight: 0) as T,
+      ]);
+    }
+    return Stream<T>.fromIterable([
+      IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('192.0.2.20')) as T,
+    ]);
+  }
+
+  @override
+  void stop() {}
+}
+
 /// Starts, then fails the very first query send the way macOS does when the
 /// app has no Local Network permission: a synchronous SocketException with
 /// errno 65 (EHOSTUNREACH) out of RawDatagramSocket.send inside lookup().
@@ -849,5 +886,30 @@ void _preferLocalSubnetTests() {
     svc.resetSweepCache();
     await svc.discover().toList(); // next pass: mDNS send fails again
     expect(svc.localNetworkBlocked.value, isFalse);
+  });
+
+  // #1129: the rig list showed `openastro._openastroara._tcp.local`.
+  group('instanceName', () {
+    test('strips the service suffix', () {
+      expect(ServerDiscoveryService.instanceName('openastro._openastroara._tcp.local'), 'openastro');
+      expect(ServerDiscoveryService.instanceName('My Rig._openastroara._tcp.local'), 'My Rig');
+    });
+
+    test('leaves the bare service type and other names alone', () {
+      expect(ServerDiscoveryService.instanceName('_openastroara._tcp.local'), '_openastroara._tcp.local');
+      expect(ServerDiscoveryService.instanceName('._openastroara._tcp.local'), '._openastroara._tcp.local');
+      expect(ServerDiscoveryService.instanceName('openastro.local'), 'openastro.local');
+    });
+
+    test('an mDNS answer reaches the list under the rig\'s own name', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _AnsweringMdns.new,
+        localAddresses: () async => const ['192.0.2.10'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.single.hostname, '192.0.2.20');
+      expect(found.single.mdnsName, 'openastro');
+    });
   });
 }

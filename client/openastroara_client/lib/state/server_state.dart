@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
@@ -17,11 +18,20 @@ final discoveryServiceProvider = Provider<ServerDiscoveryService>(
 /// (Ethernet + Wi-Fi) as one rig. Null when the address doesn't answer.
 final rigIdentityProvider = Provider<Future<String?> Function(AraServer)>(
   (ref) => (server) async {
+    // Short timeouts: this only decides auto-connect, and a dead address must
+    // not hold the decision for the default 3 s + 5 s.
+    final dio = Dio(BaseOptions(
+      baseUrl: server.baseUrl,
+      connectTimeout: const Duration(seconds: 2),
+      receiveTimeout: const Duration(seconds: 2),
+    ));
     try {
-      return (await ServerApi(server).getInfo()).serverUuid;
+      return (await ServerApi(server, dio: dio).getInfo()).serverUuid;
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       return null;
+    } finally {
+      dio.close(force: true);
     }
   },
 );
