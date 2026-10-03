@@ -248,4 +248,7 @@ public sealed class PlaceholderPolarAlignService : IPolarAlignService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("polar-align.stop", idempotencyKey));
     public Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("polar-align.complete", idempotencyKey));
+    public Task<OperationAcceptedDto> RequestCaptureAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromException<OperationAcceptedDto>(new InvalidOperationException("polar alignment is not running"));
+    public Task<byte[]?> GetLiveFrameJpegAsync(CancellationToken ct) => Task.FromResult<byte[]?>(null);
 }

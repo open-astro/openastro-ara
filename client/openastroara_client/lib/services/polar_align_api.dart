@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../models/polar_align.dart';
@@ -10,6 +12,8 @@ abstract interface class PolarAlignClient {
   Future<void> start();
   Future<void> stop();
   Future<void> complete();
+  Future<void> requestCapture();
+  Future<Uint8List?> getLiveFrame();
   Future<PolarAlignSettings> getSettings();
   Future<PolarAlignSettings> putSettings(PolarAlignSettings settings);
   void close();
@@ -62,6 +66,30 @@ class PolarAlignApi implements PolarAlignClient {
   @override
   Future<void> complete() async {
     await _dio.post<void>('/api/v1/equipment/polaralign/complete');
+  }
+
+  /// Single-frame mode: take the next adjust frame. 202-Accepted; a 409
+  /// outside the adjust phase.
+  @override
+  Future<void> requestCapture() async {
+    await _dio.post<void>('/api/v1/equipment/polaralign/capture');
+  }
+
+  /// The guide camera's latest frame as JPEG bytes (the live view), or
+  /// `null` when the server has none to serve (`404`).
+  @override
+  Future<Uint8List?> getLiveFrame() async {
+    try {
+      final res = await _dio.get<List<int>>(
+        '/api/v1/equipment/polaralign/frame.jpg',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final data = res.data;
+      return data == null ? null : Uint8List.fromList(data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   @override

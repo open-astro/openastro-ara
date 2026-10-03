@@ -12,6 +12,7 @@ abstract final class PolarAlignWsEvents {
   static const started = 'polar_align.started';
   static const stopped = 'polar_align.stopped';
   static const progress = 'polar_align.progress';
+  static const frameStarted = 'polar_align.frame_started';
   static const frameComplete = 'polar_align.frame_complete';
   static const paused = 'polar_align.paused';
   static const error = 'polar_align.error';
@@ -39,6 +40,14 @@ class PolarAlignLive {
   final String? errorReason;
   final String? errorMessage;
 
+  /// The frame being captured/solved right now: when this client saw its
+  /// `frame_started` and its exposure. Null between frames.
+  final DateTime? frameStartedAt;
+  final double? frameExposureSeconds;
+
+  /// The most recent finished frame (timings + solved pointing).
+  final PolarAlignFrameInfo? lastFrame;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -49,7 +58,13 @@ class PolarAlignLive {
     this.consecutiveSolveFailures = 0,
     this.errorReason,
     this.errorMessage,
+    this.frameStartedAt,
+    this.frameExposureSeconds,
+    this.lastFrame,
   });
+
+  /// True between a frame's `frame_started` and its `frame_complete`.
+  bool get frameInProgress => frameStartedAt != null;
 
   PolarAlignLive copyWith({
     String? phase,
@@ -61,6 +76,10 @@ class PolarAlignLive {
     int? consecutiveSolveFailures,
     String? errorReason,
     String? errorMessage,
+    DateTime? frameStartedAt,
+    double? frameExposureSeconds,
+    PolarAlignFrameInfo? lastFrame,
+    bool clearFrameInProgress = false,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -73,6 +92,13 @@ class PolarAlignLive {
             consecutiveSolveFailures ?? this.consecutiveSolveFailures,
         errorReason: errorReason ?? this.errorReason,
         errorMessage: errorMessage ?? this.errorMessage,
+        frameStartedAt: clearFrameInProgress
+            ? null
+            : frameStartedAt ?? this.frameStartedAt,
+        frameExposureSeconds: clearFrameInProgress
+            ? null
+            : frameExposureSeconds ?? this.frameExposureSeconds,
+        lastFrame: lastFrame ?? this.lastFrame,
       );
 }
 
@@ -80,15 +106,17 @@ double? _num(Map<String, dynamic> payload, String key) =>
     (payload[key] as num?)?.toDouble();
 
 /// Pure fold of one WS event into the live routine view. Returns null when the
-/// event is not a `polar_align.*` event (no state write). Exposed for unit
-/// tests.
-PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event) {
+/// event is not a `polar_align.*` event (no state write). [now] stamps a
+/// `frame_started` (injectable for tests). Exposed for unit tests.
+PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
+    {DateTime Function() now = DateTime.now}) {
   switch (event.type) {
     case PolarAlignWsEvents.started:
       // A fresh routine: drop everything from the previous run.
       return const PolarAlignLive(phase: PolarAlignStates.seeding);
     case PolarAlignWsEvents.stopped:
-      return current.copyWith(phase: PolarAlignStates.stopped);
+      return current.copyWith(
+          phase: PolarAlignStates.stopped, clearFrameInProgress: true);
     case PolarAlignWsEvents.paused:
       return current.copyWith(phase: PolarAlignStates.paused);
     case PolarAlignWsEvents.progress:
@@ -101,13 +129,23 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event) {
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
       );
+    case PolarAlignWsEvents.frameStarted:
+      return current.copyWith(
+        frameStartedAt: now(),
+        frameExposureSeconds: _num(event.payload, 'exposure_seconds'),
+      );
     case PolarAlignWsEvents.frameComplete:
       final failures =
           (event.payload['consecutive_solve_failures'] as num?)?.toInt() ?? 0;
-      return current.copyWith(consecutiveSolveFailures: failures);
+      return current.copyWith(
+        consecutiveSolveFailures: failures,
+        lastFrame: PolarAlignFrameInfo.fromJson(event.payload),
+        clearFrameInProgress: true,
+      );
     case PolarAlignWsEvents.error:
       return current.copyWith(
         phase: PolarAlignStates.failed,
+        clearFrameInProgress: true,
         errorReason: event.payload['reason'] is String
             ? event.payload['reason'] as String
             : 'internal_error',
@@ -168,6 +206,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       altErrorArcmin: status.altitudeAdjustmentArcmin,
       azErrorArcmin: status.azimuthAdjustmentArcmin,
       totalErrorArcmin: status.currentErrorArcmin,
+      lastFrame: status.lastFrame,
     );
 
 final polarAlignLiveProvider =

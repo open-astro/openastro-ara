@@ -84,12 +84,15 @@ public static class WsEventCatalog {
     public const string GuiderDarkLibraryInvalidated = "guider.dark_library.invalidated";
     // §45 polar alignment — the routine lifecycle (started/stopped) plus the engine's live stream:
     // progress per solved iteration ({iteration, altitude/azimuth/total_error_arcmin, zone, solved}),
-    // frame_complete per capture ({frame_id, solved, consecutive_solve_failures}), paused when
+    // frame_started when a capture begins ({frame_id, exposure_seconds}), frame_complete per capture
+    // ({frame_id, solved, consecutive_solve_failures, exposure_seconds, capture_ms, solve_ms?, ra_deg?,
+    // dec_deg?}), paused when
     // 5 consecutive solves fail (§45.11 — the loop keeps retrying and resumes on the next good
     // solve), and error on a fatal routine failure ({reason, message}).
     public const string PolarAlignStarted = "polar_align.started";
     public const string PolarAlignStopped = "polar_align.stopped";
     public const string PolarAlignProgress = "polar_align.progress";
+    public const string PolarAlignFrameStarted = "polar_align.frame_started";
     public const string PolarAlignFrameComplete = "polar_align.frame_complete";
     public const string PolarAlignPaused = "polar_align.paused";
     public const string PolarAlignError = "polar_align.error";

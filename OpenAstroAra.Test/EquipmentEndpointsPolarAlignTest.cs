@@ -71,6 +71,17 @@ namespace OpenAstroAra.Test {
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }
 
+        [Test]
+        public async Task Capture_outside_the_adjust_phase_maps_to_409() {
+            var svc = new Mock<IPolarAlignService>();
+            svc.Setup(s => s.RequestCaptureAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("polar alignment is not in the adjust phase"));
+
+            var result = await EquipmentEndpoints.PolarAlignCaptureAsync(svc.Object, null, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+        }
+
         private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
 
         private static string? ProblemTypeOf(IResult result) => (result as ProblemHttpResult)?.ProblemDetails.Type;

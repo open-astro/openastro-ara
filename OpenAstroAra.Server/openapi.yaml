@@ -1399,6 +1399,25 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/polaralign/frame.jpg:
+    get:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/polaralign/capture:
+    post:
+      tags:
+        - Equipment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
   /api/v1/autofocus/calibration:
     get:
       tags:
@@ -5026,6 +5045,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PolarAlignSettingsDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/plate-solve:
     get:
       tags:
@@ -9097,6 +9122,9 @@ components:
             - string
           format: double
           default: 2
+        loop_mode:
+          type: string
+          default: loop
     ProblemDetails:
       type: object
       properties:

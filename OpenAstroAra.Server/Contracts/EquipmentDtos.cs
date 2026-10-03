@@ -538,7 +538,22 @@ public sealed record PolarAlignStateDto(
     double? AzimuthAdjustmentArcmin,
     double? AltitudeAdjustmentArcmin,
     int FramesCaptured,
-    string? LastFrameId);
+    string? LastFrameId,
+    // Single-frame mode: the adjust loop is parked until POST /polaralign/capture.
+    bool WaitingForCapture = false,
+    PolarAlignLastFrameDto? LastFrame = null);
+
+/// <summary>§45 the most recent polar-align frame: its exposure, how long the capture (exposure +
+/// download) and the plate solve took, and the solved apparent-of-date pointing when it solved.</summary>
+public sealed record PolarAlignLastFrameDto(
+    string FrameId,
+    bool Solved,
+    double ExposureSeconds,
+    int CaptureMs,
+    int? SolveMs,
+    double? RaDeg,
+    double? DecDeg,
+    DateTimeOffset CompletedAt);
 
 public sealed record PolarAlignFrameDto(
     string FrameId,

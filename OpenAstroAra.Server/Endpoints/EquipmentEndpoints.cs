@@ -474,6 +474,14 @@ public static partial class EquipmentEndpoints {
         // with the achieved error so the dashboard can surface PA quality.
         polar.MapPost("/complete", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.CompleteAsync(key, ct)));
+        // Live view: the guide camera's latest frame as a JPEG (proxied from the guider daemon).
+        polar.MapGet("/frame.jpg", async (IPolarAlignService svc, CancellationToken ct) =>
+            await svc.GetLiveFrameJpegAsync(ct) is byte[] jpeg
+                ? Results.File(jpeg, "image/jpeg")
+                : Results.NotFound());
+        // Single-frame mode: take the next adjust frame. 409 outside the adjust phase.
+        polar.MapPost("/capture", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCaptureAsync(svc, key, ct));
 
         // ─── Manual reconnect (§52.1) ───
         // Reconnect the known device(s) for the type without re-running discovery (the same path
@@ -664,6 +672,14 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        }
+    }
+
+    public static async Task<IResult> PolarAlignCaptureAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.RequestCaptureAsync(idempotencyKey, ct));
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 

@@ -193,6 +193,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(PlateSolveSettingsDto))]
 [JsonSerializable(typeof(PolarAlignFrameDto))]
 [JsonSerializable(typeof(PolarAlignStateDto))]
+[JsonSerializable(typeof(PolarAlignLastFrameDto))]
 [JsonSerializable(typeof(ProfileShareDto))]
 [JsonSerializable(typeof(ProfileShareImportPreviewDto))]
 [JsonSerializable(typeof(ProfileShareImportCommitRequest))]

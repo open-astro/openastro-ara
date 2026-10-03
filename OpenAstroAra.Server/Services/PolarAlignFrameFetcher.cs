@@ -32,6 +32,10 @@ public interface IPolarAlignFrameFetcher {
     /// failure — the caller counts it as one failed solve. The fetcher owns the URI derivation
     /// so benches with ephemeral fake-guider ports never build (possibly out-of-range) URIs.</summary>
     Task FetchAsync(string host, int rpcPort, string filename, string destinationPath, CancellationToken ct);
+
+    /// <summary>The daemon's JPEG of its most recent camera frame (the polar-align live view).
+    /// Throws on any transport/HTTP failure.</summary>
+    Task<byte[]> FetchLiveFrameJpegAsync(string host, int rpcPort, CancellationToken ct);
 }
 
 /// <summary>HttpClient-backed fetcher. One shared client (socket reuse across the adjust loop's
@@ -62,6 +66,13 @@ public sealed class HttpPolarAlignFrameFetcher : IPolarAlignFrameFetcher, IDispo
                 try { File.Delete(tmp); } catch (IOException) { }
             }
         }
+    }
+
+    public async Task<byte[]> FetchLiveFrameJpegAsync(string host, int rpcPort, CancellationToken ct) {
+        var source = OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.LiveFrameUri(host, rpcPort);
+        using var response = await _http.GetAsync(source, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
     }
 
     public void Dispose() => _http.Dispose();
