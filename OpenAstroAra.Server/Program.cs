@@ -393,13 +393,6 @@ public partial class Program {
                 () => (sp.GetService<IPolarAlignService>() as PolarAlignService)?.IsActive ?? false,
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
                 syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null));
-        // The by-hand rotation readout (a run's Rotate camera by hand step on a rig without a rotator):
-        // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done".
-        builder.Services.AddSingleton<IRotationAssistService>(sp =>
-            new RotationAssistService(
-                (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>(),
-                () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
-                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
@@ -956,6 +949,16 @@ public partial class Program {
                 flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(),
                 // Rotate camera by hand — the plate-solve readout for rigs without a rotator.
                 rotationAssist: sp.GetRequiredService<IRotationAssistService>()));
+        // The by-hand rotation readout (a run's Rotate camera by hand step on a rig without a rotator):
+        // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done".
+        builder.Services.AddSingleton<IRotationAssistService>(sp =>
+            new RotationAssistService(
+                // Development only (SyntheticSky): the angle comes from a file instead of a plate solve.
+                sp.GetService<SyntheticSkySettings>() is not null
+                    ? new SyntheticPositionAngleSolver(profileDir)
+                    : (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>(),
+                () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();

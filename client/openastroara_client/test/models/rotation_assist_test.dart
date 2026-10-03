@@ -104,6 +104,12 @@ void main() {
         RotateAdvice.keepGoing,
       );
     });
+    test('overshooting past the target (sign flip, smaller delta) is still go back', () {
+      final h = rotationHint(_status([_s(1, 11), _s(2, -6)]));
+      expect(h.advice, RotateAdvice.goBack);
+      expect(h.detail, contains('past it'));
+      expect(h.detail, contains('6.0°'));
+    });
     test('an errored readout says so', () {
       expect(
         rotationHint(_status([_s(1, 20)], state: 'error')).advice,

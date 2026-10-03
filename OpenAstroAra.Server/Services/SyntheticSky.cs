@@ -161,3 +161,32 @@ public sealed class SyntheticGuideFrames {
         return (SyntheticSky.Render(Width, Height, hfr, seed: 11, stars: 25, frameSeed: Interlocked.Increment(ref _frame)), Width, Height);
     }
 }
+
+/// <summary>
+/// Development only (SyntheticSky): the by-hand rotation readout's solver without a sky. The "camera
+/// angle" is read from <c>synthetic-position-angle</c> in the profile directory on every solve (one
+/// number, degrees); editing the file stands in for turning the camera. Missing or unreadable → the
+/// solve "fails", which exercises the readout's failure path too.
+/// </summary>
+public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
+    public const string FileName = "synthetic-position-angle";
+    private readonly string _path;
+
+    public SyntheticPositionAngleSolver(string profileDir) {
+        _path = System.IO.Path.Combine(profileDir, FileName);
+    }
+
+    public async Task<double?> SolvePositionAngleAsync(CancellationToken ct) {
+        await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(false); // a capture + solve takes a moment
+        try {
+            var text = (await System.IO.File.ReadAllTextAsync(_path, ct).ConfigureAwait(false)).Trim();
+            return double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pa)
+                ? pa
+                : null;
+        } catch (System.IO.IOException) {
+            return null;
+        } catch (UnauthorizedAccessException) {
+            return null;
+        }
+    }
+}

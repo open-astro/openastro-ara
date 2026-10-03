@@ -198,6 +198,16 @@ RotationHint rotationHint(RotationAssistStatus status) {
       'Turn the camera about $size either way, then watch which way the number goes.',
     );
   }
+  // A sign flip means the turn went PAST the target: the remaining delta is
+  // smaller, but the way back is the other way.
+  final passed = (latest.deltaDeg > 0) != (before.deltaDeg > 0);
+  if (passed) {
+    return RotationHint(
+      RotateAdvice.goBack,
+      'Go back',
+      'You went past it — back the other way, about $size.',
+    );
+  }
   if (latest.deltaDeg.abs() < before.deltaDeg.abs()) {
     return RotationHint(
       RotateAdvice.keepGoing,

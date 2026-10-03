@@ -395,9 +395,13 @@ void main() {
         rig: const RigCapabilities(focuser: true),
       );
       final t = types(b);
-      expect(t.indexOf(rotateCameraByHandType), 0);
-      expect(t.indexOf(centerAndRotateType), 1);
-      expect(childrenOf(b)[0]['PositionAngle'], 299.0);
+      // Slew to the target first (the readout needs the target's field), turn
+      // by hand there, then Center and Rotate re-centres.
+      expect(t.indexOf(slewScopeToRaDecType), 0);
+      expect(t.indexOf(rotateCameraByHandType), 1);
+      expect(t.indexOf(centerAndRotateType), 2);
+      expect(childrenOf(b)[1]['PositionAngle'], 299.0);
+      expect(childrenOf(b)[0]['Coordinates'], childrenOf(b)[2]['Coordinates']);
       // With a rotator the step is not needed; without an angle neither is.
       expect(types(block(RigCapabilities.everything)), isNot(contains(rotateCameraByHandType)));
       final noAngle = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, rig: RigCapabilities.nothing);
@@ -407,6 +411,7 @@ void main() {
         rig: const RigCapabilities(rotator: true),
       );
       expect(types(withRotator), isNot(contains(rotateCameraByHandType)));
+      expect(types(withRotator), isNot(contains(slewScopeToRaDecType)));
       expect(types(withRotator), contains(centerAndRotateType));
     });
 

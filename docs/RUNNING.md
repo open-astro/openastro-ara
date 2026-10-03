@@ -96,6 +96,9 @@ curl http://localhost:5555/healthz   # → "ok"
   whose focus drifts through best and back. The real detector, fit, confirmation frame and
   rendering run on them. Ignored outside `ASPNETCORE_ENVIRONMENT=Development`; a loud warning
   is logged at startup. Needs the simulators' focuser connected.
+  With the synthetic sky on, the by-hand rotation readout (`Rotate camera by hand`) reads its
+  "solved" position angle from `<profile dir>/synthetic-position-angle` (one number, degrees) on
+  every solve instead of plate-solving — edit the file to stand in for turning the camera.
 - The solution builds with `TreatWarningsAsErrors=true` + `AnalysisMode=All`. If your
   local SDK surfaces analyzer warnings that block `dotnet run`, append
   `-p:TreatWarningsAsErrors=false` — a run-time-only relaxation that touches no files.
