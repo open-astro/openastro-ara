@@ -183,18 +183,22 @@ public sealed partial class AutofocusSweepService {
     }
 
     /// <summary>Production travel source: an absolute focuser's cached [Min, Max] once its driver has
-    /// reported a real range; null for a relative focuser, an unreported range, or no focuser.</summary>
+    /// reported a real range; unbounded for a relative focuser (its tracked position has no travel stop
+    /// at 0, so clamping there would pin every sweep near the start); null for an unreported range or
+    /// no focuser, which keeps the sweep at or above 0.</summary>
     internal static async Task<(int Min, int Max)?> FocuserTravelAsync(IFocuserService focusers, CancellationToken ct) =>
-        (await focusers.GetAsync(ct).ConfigureAwait(false))?.Capabilities is { AbsoluteFocuser: true, MaxPosition: > 0 } caps
-            ? (caps.MinPosition, caps.MaxPosition)
-            : null;
+        (await focusers.GetAsync(ct).ConfigureAwait(false))?.Capabilities switch {
+            { AbsoluteFocuser: false } => (int.MinValue, int.MaxValue),
+            { MaxPosition: > 0 } caps => (caps.MinPosition, caps.MaxPosition),
+            _ => null,
+        };
 
     /// <summary>Clamp a fine-sweep centre so every probe, from <c>centre − Steps·StepSize</c> up to the
     /// overshoot at <c>centre + Steps·StepSize + StepSize</c>, lies inside <paramref name="travel"/>.
     /// A travel too short for the whole sweep only keeps the bottom probe at or above the minimum.</summary>
     internal static int ClampSweepCentre(int centre, AutofocusSettingsDto settings, (int Min, int Max) travel) {
         var halfWidth = settings.Steps * settings.StepSize;
-        var lowest = travel.Min + halfWidth;
+        var lowest = travel.Min == int.MinValue ? int.MinValue : travel.Min + halfWidth;
         var highest = travel.Max == int.MaxValue ? int.MaxValue : travel.Max - halfWidth - settings.StepSize;
         return highest >= lowest ? Math.Clamp(centre, lowest, highest) : Math.Max(centre, lowest);
     }

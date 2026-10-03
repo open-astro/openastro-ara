@@ -215,7 +215,7 @@ namespace OpenAstroAra.Test {
         }
 
         [TestCase(true, 30_000, 0, 30_000)]
-        [TestCase(false, 30_000, null, null)] // relative focuser: positions are not absolute travel
+        [TestCase(false, 30_000, int.MinValue, int.MaxValue)] // relative focuser: no travel stop
         [TestCase(true, 0, null, null)]       // range not reported yet
         public async Task FocuserTravel_is_the_absolute_focusers_reported_range(bool absolute, int maxPosition, int? min, int? max) {
             var focusers = new Mock<IFocuserService>();
@@ -240,6 +240,17 @@ namespace OpenAstroAra.Test {
         public void ClampSweepCentre_keeps_every_probe_inside_the_travel(int centre, int expected) =>
             Assert.That(AutofocusSweepService.ClampSweepCentre(centre, Settings(steps: 4, stepSize: 100), (0, 12_000)),
                 Is.EqualTo(expected));
+
+        [TestCase(100, 400)]   // travel shorter than one sweep: only the bottom probe is kept at 0
+        [TestCase(700, 700)]
+        public void ClampSweepCentre_on_a_travel_shorter_than_the_sweep_keeps_the_bottom_probe_in(int centre, int expected) =>
+            Assert.That(AutofocusSweepService.ClampSweepCentre(centre, Settings(steps: 4, stepSize: 100), (0, 600)),
+                Is.EqualTo(expected));
+
+        [Test]
+        public void ClampSweepCentre_leaves_an_unbounded_travel_alone() =>
+            Assert.That(AutofocusSweepService.ClampSweepCentre(-250, Settings(steps: 4, stepSize: 100), (int.MinValue, int.MaxValue)),
+                Is.EqualTo(-250));
 
         [Test]
         public async Task Coarse_search_keeps_the_start_when_it_already_brackets_focus() {
