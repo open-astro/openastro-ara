@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,9 +24,20 @@ class _FakePolarAlignClient implements PolarAlignClient {
   @override
   Future<void> complete() async => calls.add('complete');
   @override
+  Future<void> requestCapture() async => calls.add('capture');
+  Uint8List? frame;
+  @override
+  Future<Uint8List?> getLiveFrame() async {
+    calls.add('frame');
+    return frame;
+  }
+  @override
   Future<PolarAlignSettings> getSettings() async => settings;
   @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings s) async => s;
+  Future<PolarAlignSettings> putSettings(PolarAlignSettings s) async {
+    calls.add('put');
+    return settings = s;
+  }
   @override
   void close() {}
 }
@@ -81,6 +94,13 @@ void main() {
           reason: 'negative alt (axis below the pole) draws below center — positive canvas y');
       final clamped = bullseyeDotFraction(300, 400, 30);
       expect(clamped.distance, closeTo(1.0, 1e-9));
+    });
+
+    test('RA/Dec render as sexagesimal', () {
+      expect(formatRaHms(138.6667), '09h14m40s');
+      expect(formatRaHms(359.9999), '00h00m00s');
+      expect(formatDecDms(87.1822), '+87°10′56″');
+      expect(formatDecDms(-5.5), '−05°30′00″');
     });
 
     test('formatArcmin renders signed arcminutes', () {
@@ -143,6 +163,8 @@ void main() {
       final done = tester.widget<FilledButton>(find.byKey(const Key('polar-align-done')));
       expect(done.onPressed, isNull, reason: '27.3′ is outside the 1′ tolerance — Done disabled');
 
+      await tester.ensureVisible(find.byKey(const Key('polar-align-abort')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('polar-align-abort')));
       await tester.pumpAndSettle();
       expect(api.calls, ['stop']);
@@ -162,9 +184,109 @@ void main() {
       await tester.pumpAndSettle();
       await _expand(tester);
 
+      await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('polar-align-done')));
       await tester.pumpAndSettle();
       expect(api.calls, ['complete']);
+    });
+
+    testWidgets('single mode shows Take Frame and posts a capture request', (tester) async {
+      final api = _FakePolarAlignClient()
+        ..settings = const PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            totalErrorArcmin: 30,
+          )));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('polar-align-take-frame')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-align-take-frame')));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['capture']);
+    });
+
+    testWidgets('loop mode has no Take Frame; switching to Single saves it', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-take-frame')), findsNothing);
+
+      await tester.ensureVisible(find.text('Single'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Single'));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['put']);
+      expect(api.settings.loopMode, PolarAlignLoopModes.single);
+      expect(find.byKey(const Key('polar-align-take-frame')), findsOneWidget);
+    });
+
+    testWidgets('a new exposure is saved; an invalid one is refused', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive()));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('polar-align-exposure')), '2.5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.settings.exposureSeconds, 2.5);
+
+      await tester.enterText(find.byKey(const Key('polar-align-exposure')), '0');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.settings.exposureSeconds, 2.5);
+      expect(find.textContaining('Exposure must be'), findsOneWidget);
+    });
+
+    testWidgets('shows the last frame timings and solved pointing', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            totalErrorArcmin: 30,
+            lastFrame: PolarAlignFrameInfo(
+              frameId: 'live-4',
+              solved: true,
+              exposureSeconds: 1,
+              captureMs: 1620,
+              solveMs: 480,
+              raDeg: 138.6667,
+              decDeg: 87.1822,
+            ),
+          )));
+      await tester.pumpAndSettle();
+      expect(find.text('Last frame: 1.0 s exposure · capture 1.6 s · solve 0.5 s'), findsOneWidget);
+      expect(find.text('Solved: RA 09h14m40s  Dec +87°10′56″'), findsOneWidget);
+    });
+
+    testWidgets('an active routine shows the guide camera live view', (tester) async {
+      // 1x1 PNG — any image format Image.memory decodes works for the view.
+      const png = <int>[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ];
+      final api = _FakePolarAlignClient()
+        ..status = const PolarAlignStatus(state: PolarAlignStates.adjusting, currentErrorArcmin: 30)
+        ..frame = Uint8List.fromList(png);
+      await tester.pumpWidget(_harness(
+          api, const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
+      await tester.pumpAndSettle();
+
+      expect(api.calls, contains('frame'));
+      expect(find.byKey(const Key('polar-align-live-view')), findsOneWidget);
+      // The other controls stay alongside it.
+      expect(find.byKey(const Key('polar-align-exposure')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-mode')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-readout')), findsOneWidget);
     });
 
     testWidgets('paused shows the no-solve banner', (tester) async {

@@ -52,6 +52,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public static Uri CaptureFrameUri(string host, int rpcPort, string filename) =>
             new($"http://{host}:{rpcPort + HttpPortOffsetFromRpc}/api/capture/{Uri.EscapeDataString(filename)}");
 
+        /// <summary>The daemon's stretched JPEG of its most recent camera frame (the web UI's live
+        /// view), on the same HTTP endpoint as <see cref="CaptureFrameUri"/>.</summary>
+        public static Uri LiveFrameUri(string host, int rpcPort) =>
+            new($"http://{host}:{rpcPort + HttpPortOffsetFromRpc}/api/frame.jpg");
+
         /// <summary>Raised when the daemon finishes a <c>capture_single_frame</c> (the RPC itself acks
         /// immediately). <see cref="SingleFrameCompleteEventArgs.Path"/> is the DAEMON-LOCAL saved-FITS
         /// location; <see cref="SingleFrameCompleteEventArgs.Filename"/> (guider#77 builds) is the bare

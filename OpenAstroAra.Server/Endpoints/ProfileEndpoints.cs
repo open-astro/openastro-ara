@@ -216,11 +216,20 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's §45 polar-alignment settings.");
 
         profile.MapPut("/polar-align", (PolarAlignSettingsDto body, IProfileStore store) => {
+            if (!(double.IsFinite(body.ExposureSeconds) && body.ExposureSeconds > 0 && body.ExposureSeconds <= 60)) {
+                return Results.Problem(detail: "exposure_seconds must be greater than 0 and at most 60",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            if (body.LoopMode is not (PolarAlignLoopModes.Loop or PolarAlignLoopModes.SingleFrame)) {
+                return Results.Problem(detail: "loop_mode must be \"loop\" or \"single\"",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             store.PutPolarAlignSettings(body);
             return Results.Ok(body);
         })
             .Accepts<PolarAlignSettingsDto>("application/json")
             .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("PutPolarAlignSettings")
             .WithSummary("Replace the active profile's §45 polar-alignment settings.");
 
