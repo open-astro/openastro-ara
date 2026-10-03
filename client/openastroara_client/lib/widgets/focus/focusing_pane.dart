@@ -13,7 +13,7 @@ import 'focus_section.dart';
 import 'guide_focus_card.dart';
 import 'v_curve_chart.dart';
 
-/// Setup → Focusing: two tabs, Main telescope then Guide camera — the order is
+/// Setup → Smart Focus: two tabs, Main telescope then Guide camera — the order is
 /// the order of work (an OAG only focuses once the main scope has), and each
 /// instrument gets the whole pane. The main tab carries a check once the scope
 /// is focused this session.
@@ -58,7 +58,7 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
           child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Focusing', style: theme.textTheme.titleLarge),
+                  Text('Smart Focus', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 4),
                   Text(
                     'Main telescope first, then the guide camera.',

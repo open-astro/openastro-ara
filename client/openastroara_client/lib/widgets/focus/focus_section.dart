@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/ara_colors.dart';
 import '../help_icon.dart';
 
-/// One instrument on the Focusing pane: a flat, borderless group (rounded
+/// One instrument on the Smart Focus pane: a flat, borderless group (rounded
 /// panel fill, generous padding) with a headline row — title + ⓘ on the left,
 /// the one primary action on the right — and a body. The headline carries the
 /// state in words ("In focus · HFR 1.42"), so there is no separate chip.

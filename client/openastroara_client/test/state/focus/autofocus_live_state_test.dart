@@ -7,11 +7,39 @@ import 'package:openastroara/state/setup/setup_readiness.dart';
 
 void main() {
   group('applyRunSnapshot', () {
-    test('a completed run marks the session as focused', () {
-      const current = AutofocusLive();
-      final next = applyRunSnapshot(current, const AutofocusRun(state: AutofocusRunStates.complete, finalPosition: 100));
+    test('a run that completes during this session marks it as focused', () {
+      final running = applyRunSnapshot(
+          const AutofocusLive(), AutofocusRun(state: AutofocusRunStates.running, startedUtc: DateTime.utc(2026, 10, 3, 21)));
+      expect(running.focusedThisSession, isFalse);
+      final next = applyRunSnapshot(running,
+          AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 21), finalPosition: 100));
       expect(next.focusedThisSession, isTrue);
       expect(next.run.finalPosition, 100);
+    });
+
+    test('a run already complete on the first snapshot is from an earlier session', () {
+      // Ara keeps its last run until it restarts: last night's 05:40 run must not
+      // tick the Smart Focus step (or open the OAG gate) tonight.
+      final lastNight = AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 5, 40));
+      final first = applyRunSnapshot(const AutofocusLive(), lastNight);
+      expect(first.focusedThisSession, isFalse);
+      expect(first.run.isComplete, isTrue, reason: 'the old run is still shown');
+      expect(applyRunSnapshot(first, lastNight).focusedThisSession, isFalse,
+          reason: 'seeing the same old run again on a later refresh does not count either');
+    });
+
+    test('an earlier session\'s run with no start time still never counts', () {
+      const old = AutofocusRun(state: AutofocusRunStates.complete);
+      final first = applyRunSnapshot(const AutofocusLive(), old);
+      expect(applyRunSnapshot(first, old).focusedThisSession, isFalse);
+    });
+
+    test('a new run that completes after an earlier session\'s run counts', () {
+      final first = applyRunSnapshot(const AutofocusLive(),
+          AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 5, 40)));
+      final next = applyRunSnapshot(
+          first, AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 21, 15)));
+      expect(next.focusedThisSession, isTrue);
     });
 
     test('focusedThisSession survives a later failed run', () {

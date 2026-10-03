@@ -383,7 +383,7 @@ public partial class Program {
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 () => sp.GetService<IGuideFocusService>()));
-        // Setup → Focusing: the guide-camera focus loop (frames through the guider, measured here).
+        // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>
             new GuideFocusService(
@@ -636,7 +636,7 @@ public partial class Program {
         builder.Services.AddSingleton<ImageHistoryService>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.Interfaces.IImageHistory>(sp =>
             sp.GetRequiredService<ImageHistoryService>());
-        // §59.12 — the run record the Setup tab's Focusing pane reads (GET /api/v1/autofocus/state) and the
+        // §59.12 — the run record the Setup tab's Smart Focus pane reads (GET /api/v1/autofocus/state) and the
         // cancel seam (POST /api/v1/autofocus/cancel). One per daemon: one sweep runs at a time.
         builder.Services.AddSingleton<AutofocusRunTracker>();
         // §59 — the live autofocus V-curve sweep (probe → HFR → curve fit → move-to-best).

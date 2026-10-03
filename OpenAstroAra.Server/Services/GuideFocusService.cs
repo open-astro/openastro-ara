@@ -51,7 +51,7 @@ public interface IGuideFocusService {
 }
 
 /// <summary>
-/// Focus assistant for the GUIDE camera (Setup → Focusing, second card). Ara never opens the guide camera
+/// Focus assistant for the GUIDE camera (Setup → Smart Focus, second card). Ara never opens the guide camera
 /// itself — on an off-axis guider or a guide scope it is the guider daemon's device, and two Alpaca clients
 /// driving one sensor is exactly the failure that broke guiding when the guide camera was connected as the
 /// main camera. Instead the loop borrows frames THROUGH the guider the way polar alignment does (§45

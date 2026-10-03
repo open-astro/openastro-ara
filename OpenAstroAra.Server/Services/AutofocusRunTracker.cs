@@ -24,7 +24,7 @@ namespace OpenAstroAra.Server.Services;
 /// The daemon-side record of the current / most recent autofocus run (§59.12 "UI during an AF run",
 /// served at <c>GET /api/v1/autofocus/state</c>). <see cref="AutofocusSweepService"/> writes it as the
 /// run progresses — every probe, the fit, the final measured focus and a rendered frame — so a client
-/// that opens the Focusing pane mid-run (or after a reconnect that skipped the WS events) rehydrates
+/// that opens the Smart Focus pane mid-run (or after a reconnect that skipped the WS events) rehydrates
 /// the whole picture from one GET instead of reconstructing it from the event stream.
 ///
 /// Also the cancel seam: the sweep registers its run's <see cref="CancellationTokenSource"/> here so

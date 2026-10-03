@@ -61,9 +61,9 @@ devices are discovered on the LAN, and the daemon remembers your choices for aut
 If a device drops mid-session, the daemon attempts hot-reconnects and raises a diagnostic; the
 health pill (see §9) turns amber/red until it clears.
 
-### Focusing (Setup → Focusing)
+### Smart Focus (Setup → Smart Focus)
 
-The Setup tab's checklist has a **Focusing** step between Connect equipment and Polar align.
+The Setup tab's checklist has a **Smart Focus** step between Connect equipment and Polar align.
 
 - **Main telescope** — **Run autofocus** starts the daemon's sweep with your autofocus settings and
   shows it live: the coarse search, then every probe on the V-curve, the fitted curve and the best

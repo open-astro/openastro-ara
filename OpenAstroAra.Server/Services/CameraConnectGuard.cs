@@ -23,7 +23,7 @@ namespace OpenAstroAra.Server.Services;
 /// guider daemon holds its camera open while connected; Ara connecting that device as the MAIN camera too
 /// puts two clients on one sensor (each one's connect/disconnect and exposures land on the other — the
 /// failure that wrecked guiding when the guide camera was picked as the main camera to focus it). The guide
-/// camera is focused through Setup → Focusing instead, which borrows frames through the guider.
+/// camera is focused through Setup → Smart Focus instead, which borrows frames through the guider.
 /// Pure — unit-tested.
 /// </summary>
 public static class CameraConnectGuard {
@@ -67,5 +67,5 @@ public static class CameraConnectGuard {
 
     /// <summary>The 409 detail shown to the user.</summary>
     public static string Detail(DiscoveredDeviceDto device, Phd2SettingsDto phd2) =>
-        $"'{device?.Name}' is the guider's camera ({phd2?.GuiderCamera}). Connecting it as the main camera while the guider is connected would put two programs on one sensor and break guiding. To focus the guide camera use Setup → Focusing, which reads frames through the guider; to really use it as the main camera, disconnect the guider first.";
+        $"'{device?.Name}' is the guider's camera ({phd2?.GuiderCamera}). Connecting it as the main camera while the guider is connected would put two programs on one sensor and break guiding. To focus the guide camera use Setup → Smart Focus, which reads frames through the guider; to really use it as the main camera, disconnect the guider first.";
 }

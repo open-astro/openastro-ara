@@ -231,7 +231,7 @@ public static partial class EquipmentEndpoints {
             // keeps done sane either way: a bigger live sweep clamps at this
             // total, a smaller one settles to it below.
             var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
-            // §59.12 — this run is the user's (the Focusing pane / focuser panel), not a sequence's.
+            // §59.12 — this run is the user's (the Smart Focus pane / focuser panel), not a sequence's.
             tracker.StampNextTrigger("manual");
             var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
                 var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
@@ -246,7 +246,7 @@ public static partial class EquipmentEndpoints {
                 });
                 var ok = await autofocus.RunAutofocusAsync(progress, ct);
                 if (!ok) {
-                    // A Cancel from the Focusing pane (POST /api/v1/autofocus/cancel) ends the sweep without
+                    // A Cancel from the Smart Focus pane (POST /api/v1/autofocus/cancel) ends the sweep without
                     // cancelling THIS job's token — read the run record so the job lands as `cancelled`, not
                     // as a failure the user did not cause.
                     if (tracker.State == "cancelled") {
@@ -414,7 +414,7 @@ public static partial class EquipmentEndpoints {
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
 
-        // Guide-camera focus loop (Setup → Focusing): frames borrowed through the guider, measured here.
+        // Guide-camera focus loop (Setup → Smart Focus): frames borrowed through the guider, measured here.
         // start: 202; 400 bad exposure/binning; 409 not connected / guiding / polar aligning / already running.
         // stop: 204 once the in-flight frame has drained. status + the latest rendered frame (204 until one).
         guider.MapPost("/focus/start", async ([FromBody] GuideFocusStartRequestDto request, IGuideFocusService focus, CancellationToken ct) => {

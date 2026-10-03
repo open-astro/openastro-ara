@@ -55,7 +55,7 @@ public static class AutofocusEndpoints {
 
         // §59.12 — the current / most recent run as one snapshot (probes for the V-curve, the sampled fit
         // curve, the final measured focus, frame availability). `idle` until the first run since boot. The
-        // Focusing pane hydrates from this on open and after a WS reconnect, then follows autofocus.* events.
+        // Smart Focus pane hydrates from this on open and after a WS reconnect, then follows autofocus.* events.
         autofocus.MapGet("/state", (AutofocusRunTracker tracker) => Results.Ok(tracker.Snapshot()))
             .Produces<AutofocusRunDto>(StatusCodes.Status200OK)
             .WithName("GetAutofocusState");

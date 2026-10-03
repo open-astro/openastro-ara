@@ -44,7 +44,7 @@ public sealed record AutofocusCurveFitDto(
 
 /// <summary>
 /// The daemon's current (or most recent) autofocus run as one snapshot — everything the Setup tab's
-/// Focusing pane renders: the probes for the V-curve, the fit, the final measured focus, and whether a
+/// Smart Focus pane renders: the probes for the V-curve, the fit, the final measured focus, and whether a
 /// rendered frame of the focused field is available at <c>GET /api/v1/autofocus/frame</c>.
 /// <c>State</c>: <c>idle</c> (never ran since boot) | <c>running</c> | <c>complete</c> | <c>failed</c> |
 /// <c>cancelled</c>. <c>Phase</c> while running: <c>smart</c> | <c>coarse</c> | <c>sweep</c> |

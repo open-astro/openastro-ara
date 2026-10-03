@@ -89,7 +89,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // The focuser's absolute travel [Min, Max] when the driver has reported it, else null: the sweep
     // then keeps to positions >= 0 with no upper bound (the device validates the top).
     private readonly Func<CancellationToken, Task<(int Min, int Max)?>>? _travelRange;
-    // §59.12 — the run snapshot the Setup tab's Focusing pane renders (probes, fit, final focus, frame) and
+    // §59.12 — the run snapshot the Setup tab's Smart Focus pane renders (probes, fit, final focus, frame) and
     // the cancel seam. Optional: tests of the sweep maths run without it.
     private readonly AutofocusRunTracker? _tracker;
     // One sweep at a time — the focuser is a single physical axis, and interleaved sweeps would
@@ -136,7 +136,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// <inheritdoc/>
     public async Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
         await _sweepGate.WaitAsync(token).ConfigureAwait(false);
-        // The run's own cancellation source, linked to the caller's token: the §59.12 Focusing pane cancels a
+        // The run's own cancellation source, linked to the caller's token: the §59.12 Smart Focus pane cancels a
         // run through the tracker (POST /api/v1/autofocus/cancel) whoever started it — the focuser endpoint's
         // job or a sequence instruction — and that must cancel the sweep, not just the job polling it.
         using var runCts = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -303,7 +303,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
             // §59.12 — one confirmation frame AT best focus: the measured in-focus HFR (not the fit's
-            // prediction) and the picture of the focused field the Focusing pane shows. Best-effort.
+            // prediction) and the picture of the focused field the Smart Focus pane shows. Best-effort.
             var (finalHfr, finalStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
             await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
@@ -443,7 +443,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         }
     }
 
-    // §64's renderer (auto-stretch + star rings, ≤1024 px) gives the Focusing pane its picture. Frames too
+    // §64's renderer (auto-stretch + star rings, ≤1024 px) gives the Smart Focus pane its picture. Frames too
     // small to carry stars (unit-test stubs) are skipped; a render fault never touches the sweep.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cosmetic: a failed JPEG render must never fail or stall the sweep. Log-and-recover boundary.")]
@@ -651,7 +651,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: the confirmation frame at best focus could not be measured — reporting the fit's predicted HFR instead")]
     private partial void LogConfirmFailed(Exception ex);
 
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: could not render the probe frame for the Focusing pane — the sweep continues")]
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: could not render the probe frame for the Smart Focus pane — the sweep continues")]
     private partial void LogRenderFailed(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: completed sweep could not be recorded into the session history — the §59.5 triggers keep their previous reference point")]

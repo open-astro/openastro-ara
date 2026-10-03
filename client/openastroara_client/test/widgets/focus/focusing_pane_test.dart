@@ -83,7 +83,7 @@ void main() {
   testWidgets('idle pane shows both cards with the run button disabled without a focuser', (t) async {
     await t.pumpWidget(_harness());
     await t.pump();
-    expect(find.text('Focusing'), findsOneWidget);
+    expect(find.text('Smart Focus'), findsOneWidget);
     expect(find.text('Main telescope'), findsOneWidget); // tab
     expect(find.text('Guide camera'), findsOneWidget); // tab
     expect(find.text('MAIN TELESCOPE'), findsOneWidget);

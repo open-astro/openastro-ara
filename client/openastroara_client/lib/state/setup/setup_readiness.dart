@@ -66,7 +66,7 @@ SetupStepState polarAlignStepState(PolarAlignLive live) {
   return SetupStepState.pending;
 }
 
-/// Focusing readiness from the live autofocus view. Pure — unit-tested.
+/// Smart Focus readiness from the live autofocus view. Pure — unit-tested.
 ///
 /// done = a run completed this app session (or the user marked the scope as
 /// already in focus); inProgress = a run is underway; problem = the last run

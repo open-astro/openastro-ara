@@ -111,7 +111,7 @@ public static class WsEventCatalog {
     public const string AutofocusStarted = "autofocus.started";
     public const string AutofocusShotComplete = "autofocus.shot_complete";
     public const string AutofocusFallbackClassic = "autofocus.fallback_classic";
-    // §59.12/§59.15 — the Classic sweep's live stream for the Setup tab's Focusing pane. `step_complete`
+    // §59.12/§59.15 — the Classic sweep's live stream for the Setup tab's Smart Focus pane. `step_complete`
     // per probe (coarse search and fine sweep alike): { step_index, phase: "coarse"|"fine", position, hfr,
     // stars, kept, total_steps } — `kept` false is a probe the sweep measured but dropped (too few stars).
     // `curve_fit` once per sweep attempt: { algorithm, r_squared, best_position, predicted_hfr, usable,

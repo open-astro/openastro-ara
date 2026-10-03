@@ -66,7 +66,7 @@ void main() {
     await t.pump();
     expect(find.text('Tonight'), findsOneWidget);
     expect(find.text('Connect equipment'), findsWidgets); // row + pane title
-    expect(find.text('Focusing'), findsOneWidget);
+    expect(find.text('Smart Focus'), findsOneWidget);
     expect(find.text('Main scope and guide camera'), findsOneWidget);
     expect(find.text('Polar align'), findsOneWidget);
     expect(find.text('Calibration frames'), findsOneWidget);
@@ -78,7 +78,7 @@ void main() {
   testWidgets('selecting Focusing shows the focusing pane', (t) async {
     await t.pumpWidget(_harness());
     await t.pump();
-    await t.tap(find.text('Focusing'));
+    await t.tap(find.text('Smart Focus'));
     await t.pumpAndSettle();
     expect(find.byType(FocusingPane), findsOneWidget);
     expect(find.text('Main telescope'), findsOneWidget);

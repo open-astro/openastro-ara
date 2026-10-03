@@ -89,7 +89,7 @@ curl http://localhost:5555/healthz   # → "ok"
   `OPENASTROARA_PROFILE_DIR=/tmp/ara dotnet run --project OpenAstroAra.Server`.
 - No auth — the daemon assumes a trusted LAN (playbook §67).
 - **Synthetic sky (Development only).** The Alpaca camera simulator renders noise, so the
-  focus instruments (Setup → Focusing) cannot be seen working against it. With
+  focus instruments (Setup → Smart Focus) cannot be seen working against it. With
   `OPENASTROARA_SYNTHETIC_SKY=best=24600,hfr=1.4,scale=350` (all three keys optional) the
   daemon renders a star field in place of camera frames: autofocus probes blur with the
   simulator focuser's distance from `best`, and the guide-camera focus loop draws from a field

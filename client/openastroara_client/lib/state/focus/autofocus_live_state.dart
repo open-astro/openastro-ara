@@ -23,7 +23,7 @@ abstract final class AutofocusWsEvents {
   static bool isAutofocus(String type) => type.startsWith('autofocus.');
 }
 
-/// What the Focusing pane's main-telescope card renders: the daemon's run
+/// What the Smart Focus pane's main-telescope card renders: the daemon's run
 /// record, the rendered frame that goes with it, and the client-side bits
 /// (a start/cancel in flight, the last request error).
 class AutofocusLive {
@@ -37,6 +37,14 @@ class AutofocusLive {
   /// guide-camera card. A failed/cancelled run does not count.
   final bool focusedThisSession;
 
+  /// True after the first run snapshot of this session has been applied.
+  final bool hydrated;
+
+  /// When the first snapshot showed an already-complete run, its start time:
+  /// that run is from an earlier app session and never sets
+  /// [focusedThisSession]. Ara keeps its last run until it restarts.
+  final DateTime? staleRunStartedUtc;
+
   const AutofocusLive({
     this.run = AutofocusRun.idle,
     this.frame,
@@ -44,6 +52,8 @@ class AutofocusLive {
     this.busy = false,
     this.error,
     this.focusedThisSession = false,
+    this.hydrated = false,
+    this.staleRunStartedUtc,
   });
 
   static const idle = AutofocusLive();
@@ -57,6 +67,8 @@ class AutofocusLive {
     bool clearError = false,
     bool clearFrame = false,
     bool? focusedThisSession,
+    bool? hydrated,
+    DateTime? staleRunStartedUtc,
   }) =>
       AutofocusLive(
         run: run ?? this.run,
@@ -65,18 +77,31 @@ class AutofocusLive {
         busy: busy ?? this.busy,
         error: clearError ? null : (error ?? this.error),
         focusedThisSession: focusedThisSession ?? this.focusedThisSession,
+        hydrated: hydrated ?? this.hydrated,
+        staleRunStartedUtc: staleRunStartedUtc ?? this.staleRunStartedUtc,
       );
 }
 
 /// Pure: fold a run snapshot into the live view (frame handled separately).
-/// Exposed for unit tests.
-AutofocusLive applyRunSnapshot(AutofocusLive current, AutofocusRun run) =>
-    current.copyWith(
-      run: run,
-      focusedThisSession: current.focusedThisSession || run.isComplete,
-      // A new run drops the previous run's picture until its own arrives.
-      clearFrame: run.isRunning && !run.hasFrame,
-    );
+/// A run counts toward [AutofocusLive.focusedThisSession] only if it was not
+/// already complete on this session's first snapshot. Exposed for unit tests.
+AutofocusLive applyRunSnapshot(AutofocusLive current, AutofocusRun run) {
+  final staleFromEarlierSession = current.hydrated
+      ? current.staleRunStartedUtc != null && _runIdentity(run) == current.staleRunStartedUtc
+      : run.isComplete;
+  return current.copyWith(
+    run: run,
+    focusedThisSession: current.focusedThisSession || (run.isComplete && !staleFromEarlierSession),
+    hydrated: true,
+    staleRunStartedUtc: !current.hydrated && run.isComplete ? _runIdentity(run) : null,
+    // A new run drops the previous run's picture until its own arrives.
+    clearFrame: run.isRunning && !run.hasFrame,
+  );
+}
+
+/// A run's identity across snapshots: its start time (a run with none, which
+/// Ara does not send for a finished run, still matches itself).
+DateTime _runIdentity(AutofocusRun run) => run.startedUtc ?? run.completedUtc ?? DateTime.utc(0);
 
 /// Drives the main-telescope card. The daemon's record is the source of truth:
 /// every `autofocus.*` event is a change notification that triggers a REST
