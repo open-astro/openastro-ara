@@ -53,6 +53,40 @@ public static class AutofocusEndpoints {
             .Produces(StatusCodes.Status204NoContent)
             .WithName("RecalibrateAutofocus");
 
+        // §59.12 — the current / most recent run as one snapshot (probes for the V-curve, the sampled fit
+        // curve, the final measured focus, frame availability). `idle` until the first run since boot. The
+        // Smart Focus pane hydrates from this on open and after a WS reconnect, then follows autofocus.* events.
+        autofocus.MapGet("/state", (AutofocusRunTracker tracker) => Results.Ok(tracker.Snapshot()))
+            .Produces<AutofocusRunDto>(StatusCodes.Status200OK)
+            .WithName("GetAutofocusState");
+
+        // §59.12 — the rendered picture of the run: the latest kept probe while the sweep runs, the
+        // confirmation frame at best focus once it completes (auto-stretched, star rings, ≤1024 px). 204 until
+        // a frame exists. X-Frame-Seq lets a poller change-detect without a separate state read.
+        autofocus.MapGet("/frame", (AutofocusRunTracker tracker, HttpContext http) => {
+            var frame = tracker.GetFrame();
+            if (frame is null) {
+                return Results.NoContent();
+            }
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.Headers["X-Frame-Seq"] = frame.Value.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
+        })
+            .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
+            .Produces(StatusCodes.Status204NoContent)
+            .WithName("GetAutofocusFrame");
+
+        // §59.12 — cancel the run in progress, whoever started it (the focuser endpoint's job or a sequence
+        // instruction). The sweep restores the start position per the profile's restore_position_on_failure
+        // and reports autofocus.failed { reason: "cancelled" }. 409 when nothing is running.
+        autofocus.MapPost("/cancel", (AutofocusRunTracker tracker) =>
+            tracker.TryCancel()
+                ? Results.Accepted()
+                : Results.Problem(title: "not_running", detail: "No autofocus run is in progress.", statusCode: StatusCodes.Status409Conflict))
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("CancelAutofocus");
+
         return app;
     }
 }

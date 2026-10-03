@@ -17,6 +17,7 @@ using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Threading;
@@ -32,22 +33,10 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class AutofocusJobTest {
 
-        // The exact work body the endpoint enqueues (kept in lockstep — the endpoint lambda
-        // itself is a thin Results.Accepted wrapper smoke-tested by CI's runtime job).
-        private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus, int totalProbes = 1) =>
-            async (tick, ct) => {
-                var progress = new Progress<ApplicationStatus>(s => {
-                    if (s.MaxProgress > 0 && s.Progress > 0) {
-                        tick((int)s.Progress);
-                    }
-                });
-                var ok = await autofocus.RunAutofocusAsync(progress, ct);
-                if (!ok) {
-                    throw new InvalidOperationException(
-                        "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
-                }
-                tick(totalProbes); // the job service's tick guard (monotone + clamped) makes this final
-            };
+        // The endpoint's own work body (EquipmentEndpoints.AutofocusJobWork), not a copy.
+        private static Func<Action<int>, CancellationToken, Task> Work(
+                IAutofocusExecutor autofocus, int totalProbes = 1, AutofocusRunTracker? tracker = null) =>
+            EquipmentEndpoints.AutofocusJobWork(autofocus, tracker ?? new AutofocusRunTracker(), totalProbes);
 
         private static Mock<IAutofocusExecutor> Executor(bool result, TimeSpan? delay = null) {
             var executor = new Mock<IAutofocusExecutor>();
@@ -111,6 +100,33 @@ namespace OpenAstroAra.Test {
             var final = await WaitForTerminalAsync(jobs, job.JobId);
             Assert.That(final.State, Is.EqualTo("failed"));
             Assert.That(final.ErrorMessage, Does.Contain("Autofocus sweep failed"));
+        }
+
+        [Test]
+        public async Task Failed_sweep_carries_the_run_records_reason() {
+            var tracker = new AutofocusRunTracker();
+            using var runCts = new CancellationTokenSource();
+            tracker.Begin("classic", 10_000, 9, null, null, runCts);
+            tracker.Fail("only 2 of 9 probes had measurable stars", restoredPosition: 10_000);
+            var jobs = new InMemoryBatchJobService(null);
+            var job = jobs.Enqueue("autofocus", 1, Work(Executor(result: false).Object, tracker: tracker));
+            var final = await WaitForTerminalAsync(jobs, job.JobId);
+            Assert.That(final.State, Is.EqualTo("failed"));
+            Assert.That(final.ErrorMessage, Is.EqualTo("Autofocus failed: only 2 of 9 probes had measurable stars"));
+        }
+
+        [Test]
+        public async Task Sweep_cancelled_from_the_pane_ends_the_job_cancelled_not_failed() {
+            // POST /api/v1/autofocus/cancel stops the sweep through the run record without cancelling
+            // the job's own token; the job must still land as cancelled.
+            var tracker = new AutofocusRunTracker();
+            using var runCts = new CancellationTokenSource();
+            tracker.Begin("classic", 10_000, 9, null, null, runCts);
+            tracker.Cancel(restoredPosition: 10_000);
+            var jobs = new InMemoryBatchJobService(null);
+            var job = jobs.Enqueue("autofocus", 1, Work(Executor(result: false).Object, tracker: tracker));
+            var final = await WaitForTerminalAsync(jobs, job.JobId);
+            Assert.That(final.State, Is.EqualTo("cancelled"));
         }
 
         [Test]

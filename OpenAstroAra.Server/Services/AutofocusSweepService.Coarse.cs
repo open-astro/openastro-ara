@@ -99,6 +99,7 @@ public sealed partial class AutofocusSweepService {
         }
         var baseStep = settings.Steps * settings.StepSize;
         var measured = new Dictionary<int, double>();
+        _lastCoarseFailure = null;
 
         async Task<double> Measure(int position) {
             if (measured.TryGetValue(position, out var known)) {
@@ -111,6 +112,8 @@ public sealed partial class AutofocusSweepService {
             var hfr = _coarseMetric(frame, token);
             LogCoarseProbe(reached, hfr);
             measured[position] = hfr;
+            // The coarse metric reports no star count (∞ = too few to measure); the run record shows it as 0.
+            await RecordProbeAsync("coarse", reached, hfr, 0, double.IsFinite(hfr), CoarseMaxProbes, null).ConfigureAwait(false);
             return hfr;
         }
 
@@ -135,7 +138,8 @@ public sealed partial class AutofocusSweepService {
                 LogCoarseResult(start, h);
                 return start;
             } else {
-                LogSweepFailed($"no measurable stars at {start} or ±{baseStep} — check the sky, the exposure, or rough-focus by hand");
+                _lastCoarseFailure = $"no measurable stars at {start} or ±{baseStep} — check the sky, the exposure, or rough-focus by hand";
+                LogSweepFailed(_lastCoarseFailure);
                 return null;
             }
         }
@@ -160,7 +164,8 @@ public sealed partial class AutofocusSweepService {
             }
         }
         if (!bracketed) {
-            LogSweepFailed($"coarse search ran {measured.Count} probes without bracketing focus (best HFR {h:0.#} at {pos}) — rough-focus by hand");
+            _lastCoarseFailure = $"coarse search ran {measured.Count} probes without bracketing focus (best HFR {h:0.#} at {pos}) — rough-focus by hand";
+            LogSweepFailed(_lastCoarseFailure);
             return null;
         }
 

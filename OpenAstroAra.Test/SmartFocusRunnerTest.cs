@@ -106,7 +106,7 @@ namespace OpenAstroAra.Test {
         /// <paramref name="starCount"/> stars. Captures are counted so tests can assert the shot budget.</summary>
         private static (AutofocusSweepService Service, InMemoryProfileStore Store, List<int> Moves,
                 List<(string Type, JsonElement Payload)> Events, Func<int> CaptureCount,
-                List<NotificationDto> Notifications) Build(
+                List<NotificationDto> Notifications, AutofocusRunTracker Tracker) Build(
                 int realBest = CalibratedBest,
                 FocusCalibrationDto? calibration = null,
                 double focuserTemperature = 12.5,
@@ -147,10 +147,12 @@ namespace OpenAstroAra.Test {
                 .Returns<NotificationDto, CancellationToken>((d, _) => { posted.Add(d); return Task.CompletedTask; });
 
             int captures = 0;
+            var tracker = new AutofocusRunTracker();
             var svc = new AutofocusSweepService(
                 store, focuser.Object, frames.Object,
                 ws: ws.Object,
                 notifications: notifications.Object,
+                tracker: tracker,
                 metric: (_, _) => {
                     captures++;
                     var hfr = skyHfr is null ? VCurveHfr(position, realBest) : skyHfr(captures, position);
@@ -162,7 +164,20 @@ namespace OpenAstroAra.Test {
                         AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
                     };
                 });
-            return (svc, store, moves, events, () => captures, posted);
+            return (svc, store, moves, events, () => captures, posted, tracker);
+        }
+
+        /// <summary>A Smart success must close the §59.12 run record and announce it: a record left
+        /// `running` keeps the Smart Focus pane spinning and the OAG gate shut.</summary>
+        private static void AssertSmartRunRecorded(AutofocusRunTracker tracker,
+                List<(string Type, JsonElement Payload)> events, int finalPosition) {
+            var record = tracker.Snapshot();
+            Assert.That(record.State, Is.EqualTo("complete"));
+            Assert.That(record.FinalPosition, Is.EqualTo(finalPosition));
+            var completed = events.Where(e => e.Type == WsEventCatalog.AutofocusCompleted).ToList();
+            Assert.That(completed, Has.Count.EqualTo(1));
+            Assert.That(completed[0].Payload.GetProperty("mode").GetString(), Is.EqualTo("smart"));
+            Assert.That(completed[0].Payload.GetProperty("final_position").GetInt32(), Is.EqualTo(finalPosition));
         }
 
         private static List<string> Types(List<(string Type, JsonElement Payload)> events) =>
@@ -185,6 +200,10 @@ namespace OpenAstroAra.Test {
             Assert.That(started[0].Payload.GetProperty("mode").GetString(), Is.EqualTo("smart"));
             Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusShotComplete), Is.EqualTo(2));
             Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            AssertSmartRunRecorded(rig.Tracker, rig.Events, rig.Moves[^1]);
+            var record = rig.Tracker.Snapshot();
+            Assert.That((record.CompletedSteps, record.TotalSteps), Is.EqualTo((2, AutofocusSweepService.SmartMaxShots)),
+                "a Smart run's progress is its shots, not the Classic probe count");
         }
 
         [Test]
@@ -195,7 +214,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(9), "no calibration → the full Classic sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(9 + 1), "no calibration → the full Classic sweep, plus its confirmation frame at best focus");
             var started = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusStarted).ToList();
             Assert.That(started, Has.Count.EqualTo(1));
             Assert.That(started[0].Payload.GetProperty("mode").GetString(), Is.EqualTo("classic"));
@@ -213,7 +232,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(9), "stale calibration must not be trusted for a one-frame move");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(9 + 1), "stale calibration must not be trusted for a one-frame move (Classic sweep + confirmation frame)");
         }
 
         [Test]
@@ -235,12 +254,15 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True, "Classic tolerates 12 stars (its per-probe gate is 3)");
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9), "one Smart shot, then the full sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one Smart shot, then the full sweep and its confirmation frame");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
             Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusStarted), Is.EqualTo(1),
                 "fallback_classic IS the mode hand-off — never a second started");
+            var record = rig.Tracker.Snapshot();
+            Assert.That(record.Mode, Is.EqualTo("classic"));
+            Assert.That(record.Probes.Any(p => p.Phase == "smart"), Is.False, "the refused Smart shot is not a V-curve point");
         }
 
         [Test]
@@ -255,7 +277,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9), "one refused Smart shot, then the full sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one refused Smart shot, then the full sweep and its confirmation frame");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("outside_calibrated_range"));
@@ -271,6 +293,7 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(1));
             Assert.That(rig.Moves, Is.Empty, "already within tolerance — moving would only add backlash noise");
+            AssertSmartRunRecorded(rig.Tracker, rig.Events, StartPosition);
         }
 
         [Test]
@@ -287,6 +310,7 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.CaptureCount(), Is.EqualTo(3), "shot 1 + wrong-direction shot 2 + reversed shot 3");
             Assert.That(rig.Moves[^1], Is.GreaterThan(StartPosition), "the final position is on the REAL best's side");
             Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            AssertSmartRunRecorded(rig.Tracker, rig.Events, rig.Moves[^1]);
         }
 
         [Test]
@@ -304,7 +328,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True, "the Classic fallback completes the run");
-            Assert.That(rig.CaptureCount(), Is.EqualTo(3 + 9), "3 Smart shots, then the full sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3 + 9 + 1), "3 Smart shots, then the full sweep and its confirmation frame");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_diverged"));
@@ -359,6 +383,28 @@ namespace OpenAstroAra.Test {
             Assert.That(position2, Is.Not.Null);
             Assert.That(rig.Moves[^1], Is.EqualTo(position2), "the trim was worse — keep shot 2's position");
             Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            AssertSmartRunRecorded(rig.Tracker, rig.Events, position2!.Value);
+        }
+
+        [Test]
+        public async Task A_better_trim_shot_wins_and_closes_the_run_record_there() {
+            // Shot 2 improves but misses the target; the trim shot improves further → its position wins.
+            int? position3 = null;
+            var rig = Build(calibration: Calibration(), skyHfr: (capture, position) => {
+                switch (capture) {
+                    case 1: return 1.95;
+                    case 2: return 1.7;
+                    default: position3 = position; return 1.6;
+                }
+            });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3));
+            Assert.That(position3, Is.Not.Null);
+            AssertSmartRunRecorded(rig.Tracker, rig.Events, position3!.Value);
         }
 
         [Test]
@@ -374,7 +420,7 @@ namespace OpenAstroAra.Test {
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
-            Assert.That(rig.CaptureCount(), Is.EqualTo(2 + 9), "two Smart shots, then the full sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(2 + 9 + 1), "two Smart shots, then the full sweep and its confirmation frame");
         }
 
         [Test]
@@ -399,6 +445,7 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.CaptureCount(), Is.EqualTo(3));
             Assert.That(rig.Moves[^1], Is.EqualTo(position2), "the starless trim must not win the comparison");
             Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            AssertSmartRunRecorded(rig.Tracker, rig.Events, position2!.Value);
         }
 
         [Test]

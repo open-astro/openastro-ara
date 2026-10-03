@@ -43,6 +43,27 @@ namespace OpenAstroAra.Core.Model {
         /// <summary>True when <see cref="BestPosition"/> lies within the sampled position range; false means
         /// the minimum is an extrapolation beyond the sweep and the curve should be re-centred + re-run.</summary>
         public bool WithinSampledRange { get; init; }
+        /// <summary>The fitted model as a function of focuser position → predicted HFR, so a consumer can draw
+        /// the curve the sweep fitted (the Setup tab's V-curve) without re-deriving the coefficients. Null when the
+        /// fit produced no model (an unusable trendline split).</summary>
+        public Func<double, double>? Model { get; init; }
+
+        /// <summary>Sample <see cref="Model"/> at <paramref name="count"/> evenly spaced positions across
+        /// [<paramref name="minPosition"/>, <paramref name="maxPosition"/>]. Empty when there is no model or
+        /// the range is degenerate. Non-finite / negative predictions are clamped to 0 so a chart never sees NaN.</summary>
+        public IReadOnlyList<(double Position, double Hfr)> Sample(double minPosition, double maxPosition, int count = 64) {
+            if (Model is null || count < 2 || !(maxPosition > minPosition)) {
+                return Array.Empty<(double, double)>();
+            }
+            var points = new (double, double)[count];
+            var step = (maxPosition - minPosition) / (count - 1);
+            for (var i = 0; i < count; i++) {
+                var x = minPosition + i * step;
+                var y = Model(x);
+                points[i] = (x, double.IsFinite(y) && y > 0 ? y : 0.0);
+            }
+            return points;
+        }
     }
 
     /// <summary>
@@ -129,6 +150,7 @@ namespace OpenAstroAra.Core.Model {
                 RSquared = rSquared,
                 IsUsable = usable,
                 WithinSampledRange = usable && bestPosition >= s.MinX && bestPosition <= s.MaxX,
+                Model = x => { double d = x - s.XBar; return s.A * d * d + s.B * d + s.C; },
             };
         }
 
@@ -166,6 +188,7 @@ namespace OpenAstroAra.Core.Model {
                 RSquared = rSquared,
                 IsUsable = usable,
                 WithinSampledRange = usable && bestPosition >= s.MinX && bestPosition <= s.MaxX,
+                Model = x => { double d = x - s.XBar; return Math.Sqrt(Math.Max(0, s.A * d * d + s.B * d + s.C)); },
             };
         }
 
@@ -235,6 +258,7 @@ namespace OpenAstroAra.Core.Model {
                 RSquared = rSquared,
                 IsUsable = usable,
                 WithinSampledRange = usable && bestPosition >= minX && bestPosition <= maxX,
+                Model = usable ? x => { double d = x - x0; return d <= xStar ? mL * d + bL : mR * d + bR; } : null,
             };
         }
 

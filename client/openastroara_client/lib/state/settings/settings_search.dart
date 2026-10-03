@@ -274,7 +274,7 @@ const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
     tabIndex: kSetupTabIndex,
     label: 'Go to Setup',
     groupLabel: 'Navigate',
-    keywords: ['setup', 'tonight', 'checklist', 'polar align', 'polar alignment', 'connect equipment', 'calibration'],
+    keywords: ['setup', 'tonight', 'checklist', 'polar align', 'polar alignment', 'connect equipment', 'calibration', 'focusing', 'focus', 'autofocus', 'v-curve', 'guide camera focus'],
   ),
   SettingsSearchEntry(
     tabIndex: kRunTabIndex,

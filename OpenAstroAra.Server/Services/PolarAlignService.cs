@@ -96,6 +96,16 @@ namespace OpenAstroAra.Server.Services {
         // superseded run's late effects are no-ops (its unique work dir keeps the files apart too).
         private int _generation;
 
+        /// <summary>True while the routine runs — the guide-camera focus loop refuses to start then (one
+        /// PA-session lease, one capture stream).</summary>
+        public bool IsActive {
+            get {
+                lock (_gate) {
+                    return _active;
+                }
+            }
+        }
+
         private bool IsCurrent(int gen) {
             lock (_gate) {
                 return _generation == gen;
@@ -119,6 +129,8 @@ namespace OpenAstroAra.Server.Services {
         private Task? _runTask;
 
         private readonly IPolarAlignmentLog? _log;
+        // The guide-camera focus loop shares the daemon's PA-session lease; a Start ends it first.
+        private readonly Func<IGuideFocusService?>? _guideFocus;
 
         public PolarAlignService(
                 GuiderService guider,
@@ -128,7 +140,8 @@ namespace OpenAstroAra.Server.Services {
                 IProfileStore profileStore,
                 IWsBroadcaster? ws = null,
                 IPolarAlignmentLog? log = null,
-                IPolarAlignFrameFetcher? frameFetcher = null) {
+                IPolarAlignFrameFetcher? frameFetcher = null,
+                Func<IGuideFocusService?>? guideFocus = null) {
             _guider = guider;
             _logger = logger;
             _solver = solver;
@@ -138,6 +151,7 @@ namespace OpenAstroAra.Server.Services {
             _log = log;
             _ownsFetcher = frameFetcher is null; // the DI-provided fetcher is container-owned
             _frameFetcher = frameFetcher ?? new HttpPolarAlignFrameFetcher();
+            _guideFocus = guideFocus;
         }
 
         public Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct) {
@@ -230,6 +244,9 @@ namespace OpenAstroAra.Server.Services {
                 }
                 priorCts?.Dispose();
                 var guiderClient = _guider.RequireConnectedGuider();
+                if (_guideFocus?.Invoke() is { IsActive: true } focus) {
+                    await focus.StopAsync().ConfigureAwait(false);
+                }
                 var mountInfo = _mount.GetInfo();
                 if (mountInfo?.Connected != true) {
                     throw new InvalidOperationException("mount is not connected");

@@ -89,6 +89,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // The focuser's absolute travel [Min, Max] when the driver has reported it, else null: the sweep
     // then keeps to positions >= 0 with no upper bound (the device validates the top).
     private readonly Func<CancellationToken, Task<(int Min, int Max)?>>? _travelRange;
+    // §59.12 — the run snapshot the Setup tab's Smart Focus pane renders (probes, fit, final focus, frame) and
+    // the cancel seam. Optional: tests of the sweep maths run without it.
+    private readonly AutofocusRunTracker? _tracker;
     // One sweep at a time — the focuser is a single physical axis, and interleaved sweeps would
     // corrupt each other's curves. Waiters queue (same philosophy as the capture gate).
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -104,7 +107,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             IWsBroadcaster? ws = null,
             INotificationService? notifications = null,
             Func<AnalysisFrame, CancellationToken, double>? coarseMetric = null,
-            Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null) {
+            Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null,
+            AutofocusRunTracker? tracker = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
@@ -116,6 +120,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         _ws = ws;
         _notifications = notifications;
         _travelRange = travelRange;
+        _tracker = tracker;
     }
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
@@ -131,36 +136,65 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// <inheritdoc/>
     public async Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
         await _sweepGate.WaitAsync(token).ConfigureAwait(false);
+        // Released whatever the run does, setup included: a leaked gate would hang every later autofocus.
         try {
-            // §59.1 mode routing: Smart when the profile carries a usable calibration, Classic otherwise
-            // and as the §59.11 safety net. true = Smart succeeded; false = Smart ran and fell back
-            // (restore policy applied, `fallback_classic` published — that event IS the mode hand-off,
-            // so no second `started`); null = Smart never started (announce the run as classic).
-            var smart = await TrySmartFocusAsync(progress, token).ConfigureAwait(false);
-            if (smart == true) {
-                return true;
-            }
-            if (smart is null) {
-                await PublishAutofocusEventAsync(WsEventCatalog.AutofocusStarted, new JsonObject { ["mode"] = "classic" }).ConfigureAwait(false);
-            }
-            return await RunSweepCoreAsync(progress, token).ConfigureAwait(false);
+            return await RunGatedAsync(progress, token).ConfigureAwait(false);
         } finally {
             _sweepGate.Release();
         }
     }
 
+    private async Task<bool> RunGatedAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        // The run's own cancellation source, linked to the caller's token: the §59.12 Smart Focus pane cancels a
+        // run through the tracker (POST /api/v1/autofocus/cancel) whoever started it — the focuser endpoint's
+        // job or a sequence instruction — and that must cancel the sweep, not just the job polling it.
+        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var runToken = runCts.Token;
+        var settings = _profiles.GetAutofocusSettings();
+        var startInfo = _focuser.GetInfo();
+        var startPosition = startInfo?.Position ?? 0;
+        var started = DateTimeOffset.UtcNow;
+        var smartMode = _profiles.GetFocusCalibration() is not null;
+        _tracker?.Begin(
+            smartMode ? "smart" : "classic",
+            startPosition, smartMode ? SmartMaxShots : ProbeCount(settings), CurrentFilterName(), startInfo?.Temperature, runCts);
+        try {
+            // §59.1 mode routing: Smart when the profile carries a usable calibration, Classic otherwise
+            // and as the §59.11 safety net. true = Smart succeeded; false = Smart ran and fell back
+            // (restore policy applied, `fallback_classic` published — that event IS the mode hand-off,
+            // so no second `started`); null = Smart never started (announce the run as classic).
+            var smart = await TrySmartFocusAsync(progress, started, runToken).ConfigureAwait(false);
+            if (smart == true) {
+                return true;
+            }
+            _tracker?.FallBackToClassic(ProbeCount(settings));
+            if (smart is null) {
+                await PublishAutofocusEventAsync(WsEventCatalog.AutofocusStarted, new JsonObject { ["mode"] = "classic" }).ConfigureAwait(false);
+            }
+            return await RunSweepCoreAsync(progress, started, runToken).ConfigureAwait(false);
+        } catch (OperationCanceledException) when (runCts.IsCancellationRequested && !token.IsCancellationRequested) {
+            // Cancelled through the tracker (the user's Cancel button), not by the caller: the sweep has
+            // already restored per policy; report it as a cancelled run and return false so a sequence
+            // step fails per its own policy instead of tearing the whole sequence down. The focuser
+            // endpoint's job reads the tracker and lands as `cancelled` (see RunAutofocus).
+            await RecordCancelledAsync(settings.RestorePositionOnFailure ? startPosition : null).ConfigureAwait(false);
+            return false;
+        } catch (OperationCanceledException) {
+            await RecordCancelledAsync(settings.RestorePositionOnFailure ? startPosition : null).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sweep boundary: probe captures / focuser moves / the metric can throw device, HTTP, or math exceptions; any escape must degrade to a logged failed sweep (with the focuser restored) so the calling sequence step fails cleanly instead of faulting the worker. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> RunSweepCoreAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
+    private async Task<bool> RunSweepCoreAsync(IProgress<ApplicationStatus> progress, DateTimeOffset started, CancellationToken token) {
         var settings = _profiles.GetAutofocusSettings();
         if (settings.Steps < 1 || settings.StepSize < 1) {
-            LogSweepRejected($"invalid sweep configuration (Steps={settings.Steps}, StepSize={settings.StepSize})");
-            return false;
+            return await RejectAsync($"invalid sweep configuration (Steps={settings.Steps}, StepSize={settings.StepSize})").ConfigureAwait(false);
         }
         var info = _focuser.GetInfo();
         if (info is not { Connected: true }) {
-            LogSweepRejected("focuser is not connected");
-            return false;
+            return await RejectAsync("focuser is not connected").ConfigureAwait(false);
         }
         var startPosition = info.Position;
         var restoreOnFailure = settings.RestorePositionOnFailure;
@@ -168,11 +202,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         try {
             // Coarse search first: a start far from focus (big defocused discs) would otherwise feed the
             // ±Steps·StepSize sweep nothing but unmeasurable probes.
+            _tracker?.SetPhase("coarse");
             var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
             var coarse = await CoarseCentreAsync(settings, startPosition, travel, progress, token).ConfigureAwait(false);
             if (coarse is not int coarseCentre) {
-                await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
-                return false;
+                // CoarseCentreAsync logged the reason and left it in _lastCoarseFailure for the run record.
+                return await FailAsync(_lastCoarseFailure ?? "coarse search found no measurable focus", restoreOnFailure, startPosition, alreadyLogged: true).ConfigureAwait(false);
             }
             // Every fine probe, and the overshoot above the top one, must stay inside the travel.
             var centre = ClampSweepCentre(coarseCentre, settings, travel);
@@ -192,6 +227,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 points.Clear();
                 probeStars.Clear();
                 probeFeatures.Clear();
+                _tracker?.BeginSweepAttempt();
                 // Outermost-first, stepping DOWN through every position: one approach direction means
                 // backlash biases every sample identically instead of splitting the curve in two.
                 var top = centre + settings.Steps * settings.StepSize;
@@ -218,13 +254,18 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                     var result = _metric(frame, token);
                     var hfr = result.AverageHFR;
                     var stars = result.DetectedStars;
-                    if (stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr)) {
+                    var kept = !(stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr));
+                    if (kept) {
+                        LogProbe(reached, hfr, stars);
+                    } else {
                         // The sweep's outer probes can be too defocused to measure; drop them and let the
                         // remaining points carry the fit. Too few survivors still fails below.
                         LogProbeSkipped(reached, stars, hfr);
+                    }
+                    await RecordProbeAsync("fine", reached, hfr, stars, kept, totalProbes, kept ? frame : null).ConfigureAwait(false);
+                    if (!kept) {
                         continue;
                     }
-                    LogProbe(reached, hfr, stars);
                     points.Add(new FocusPoint(reached, hfr, stars));
                     probeStars.Add((reached, result.StarList));
                     probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
@@ -234,12 +275,14 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
                 var minTrustworthy = Math.Max(FocusCurveFit.MinPoints, (totalProbes + 1) / 2);
                 if (points.Count < minTrustworthy) {
-                    LogSweepFailed($"only {points.Count} of {totalProbes} probes had measurable stars (need {minTrustworthy}) — clouds, a slew smear, or focus far outside the sweep");
-                    await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
-                    return false;
+                    return await FailAsync($"only {points.Count} of {totalProbes} probes had measurable stars (need {minTrustworthy}) — clouds, a slew smear, or focus far outside the sweep",
+                        restoreOnFailure, startPosition).ConfigureAwait(false);
                 }
 
                 fit = FocusCurveFit.FitBest(points);
+                if (fit is not null) {
+                    await RecordFitAsync(fit, points).ConfigureAwait(false);
+                }
                 if (fit is { IsUsable: true, WithinSampledRange: true }) {
                     break;
                 }
@@ -251,14 +294,14 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                     centre = recentred;
                     continue;
                 }
-                LogSweepFailed(fit is null
+                return await FailAsync(fit is null
                     ? "curve fit produced no result"
-                    : $"curve fit unusable (usable={fit.IsUsable}, inRange={fit.WithinSampledRange}, R²={fit.RSquared:0.###}) — widen the sweep or re-centre focus manually");
-                await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
-                return false;
+                    : $"curve fit unusable (usable={fit.IsUsable}, inRange={fit.WithinSampledRange}, R²={fit.RSquared:0.###}) — widen the sweep or re-centre focus manually",
+                    restoreOnFailure, startPosition).ConfigureAwait(false);
             }
 
             var best = (int)Math.Round(fit.BestPosition);
+            _tracker?.SetPhase("moving");
             Report(progress, $"Autofocus: moving to best focus {best} (R²={fit.RSquared:0.##})");
             // Approach best from the SAME direction as the probes (from above) so backlash at the
             // final move matches the backlash baked into every sample. Unconditional: the sweep
@@ -267,9 +310,13 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
+            // §59.12 — one confirmation frame AT best focus: the measured in-focus HFR (not the fit's
+            // prediction) and the picture of the focused field the Smart Focus pane shows. Best-effort.
+            var (finalHfr, finalStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
             await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
             RecordCalibrationQuietly(probeFeatures);
+            await RecordCompletedAsync("classic", final, finalHfr ?? fit.PredictedHfr, finalStars, started, _tracker?.Snapshot().Probes.Count ?? points.Count).ConfigureAwait(false);
             return true;
         } catch (OperationCanceledException) {
             // A cancelled sweep (abort/stop/shutdown) restores best-effort and propagates — the
@@ -279,8 +326,144 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             throw;
         } catch (Exception ex) {
             LogSweepError(ex);
-            await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
-            return false;
+            return await FailAsync(ex.Message, restoreOnFailure, startPosition, alreadyLogged: true).ConfigureAwait(false);
+        }
+    }
+
+    // ─── §59.12 run record + §59.15 events ───
+
+    // The reason the coarse pass gave up, kept for the run record (CoarseCentreAsync logs it where it
+    // happens; the sweep boundary reports it). Guarded by the sweep gate — one run at a time.
+    private string? _lastCoarseFailure;
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A filter-wheel info read is cosmetic for the run record; a device fault here must not stop the sweep.")]
+    private string? CurrentFilterName() {
+        try {
+            return _filterWheel?.GetInfo()?.SelectedFilter?.Name;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    private async Task<bool> RejectAsync(string reason) {
+        LogSweepRejected(reason);
+        _tracker?.Fail(reason, null);
+        await PublishFailedAsync(reason, null).ConfigureAwait(false);
+        return false;
+    }
+
+    private async Task<bool> FailAsync(string reason, bool restore, int startPosition, bool alreadyLogged = false) {
+        if (!alreadyLogged) {
+            LogSweepFailed(reason);
+        }
+        await RestoreAsync(restore, startPosition, CancellationToken.None).ConfigureAwait(false);
+        _tracker?.Fail(reason, restore ? startPosition : null);
+        await PublishFailedAsync(reason, restore ? startPosition : null).ConfigureAwait(false);
+        return false;
+    }
+
+    private async Task RecordCancelledAsync(int? restoredPosition) {
+        _tracker?.Cancel(restoredPosition);
+        await PublishFailedAsync("cancelled", restoredPosition).ConfigureAwait(false);
+    }
+
+    private Task PublishFailedAsync(string reason, int? restoredPosition) {
+        var payload = new JsonObject { ["reason"] = reason };
+        if (restoredPosition is { } r) {
+            payload["restored_position"] = r;
+        }
+        return PublishAutofocusEventAsync(WsEventCatalog.AutofocusFailed, payload);
+    }
+
+    /// <summary>One probe into the run record + the §59.15 <c>step_complete</c> event; a kept fine probe's
+    /// frame is rendered as the run's current picture. Smart shots record but don't publish here (they
+    /// have their own <c>shot_complete</c>).</summary>
+    private async Task RecordProbeAsync(string phase, int position, double hfr, int stars, bool kept, int totalSteps, AnalysisFrame? frame) {
+        var probe = _tracker?.AddProbe(phase, position, hfr, stars, kept);
+        if (frame is not null) {
+            RenderFrameQuietly(frame, position, hfr);
+        }
+        if (phase == "smart") {
+            return;
+        }
+        var payload = new JsonObject {
+            ["step_index"] = probe?.Index ?? 0,
+            ["phase"] = phase,
+            ["position"] = position,
+            ["hfr"] = double.IsFinite(hfr) ? Math.Round(hfr, 3) : 0.0,
+            ["stars"] = stars,
+            ["kept"] = kept,
+            ["total_steps"] = totalSteps,
+        };
+        await PublishAutofocusEventAsync(WsEventCatalog.AutofocusStepComplete, payload).ConfigureAwait(false);
+    }
+
+    private async Task RecordFitAsync(FocusCurveFitResult fit, IReadOnlyList<FocusPoint> points) {
+        double min = double.PositiveInfinity, max = double.NegativeInfinity;
+        foreach (var p in points) {
+            min = Math.Min(min, p.Position);
+            max = Math.Max(max, p.Position);
+        }
+        _tracker?.SetFit(fit, min, max);
+        var payload = new JsonObject {
+            ["algorithm"] = fit.Method.ToString().ToLowerInvariant(),
+            ["r_squared"] = double.IsFinite(fit.RSquared) ? Math.Round(fit.RSquared, 4) : 0.0,
+            ["best_position"] = double.IsFinite(fit.BestPosition) ? Math.Round(fit.BestPosition, 1) : 0.0,
+            ["predicted_hfr"] = double.IsFinite(fit.PredictedHfr) ? Math.Round(fit.PredictedHfr, 3) : 0.0,
+            ["usable"] = fit.IsUsable,
+            ["within_range"] = fit.WithinSampledRange,
+        };
+        await PublishAutofocusEventAsync(WsEventCatalog.AutofocusCurveFit, payload).ConfigureAwait(false);
+    }
+
+    private async Task RecordCompletedAsync(string mode, int finalPosition, double finalHfr, int? finalStars, DateTimeOffset started, int probes) {
+        _tracker?.Complete(finalPosition, finalHfr, finalStars);
+        var payload = new JsonObject {
+            ["mode"] = mode,
+            ["final_position"] = finalPosition,
+            ["final_hfr"] = double.IsFinite(finalHfr) ? Math.Round(finalHfr, 3) : 0.0,
+            ["duration_seconds"] = Math.Round((DateTimeOffset.UtcNow - started).TotalSeconds, 1),
+            ["probes"] = probes,
+        };
+        if (finalStars is { } s) {
+            payload["final_stars"] = s;
+        }
+        await PublishAutofocusEventAsync(WsEventCatalog.AutofocusCompleted, payload).ConfigureAwait(false);
+    }
+
+    // The confirmation frame at best focus. Cancellation here is swallowed on purpose: the focuser is
+    // already at the fitted best, and a cancel that restored the START position now would undo real work.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Post-success measurement: a capture/metric fault must not turn a completed sweep into a failure; the fit's prediction stands in. Log-and-recover boundary.")]
+    private async Task<(double? Hfr, int? Stars)> ConfirmFocusQuietlyAsync(AutofocusSettingsDto settings, int position, CancellationToken token) {
+        try {
+            _tracker?.SetPhase("confirming");
+            var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
+            var result = _metric(frame, token);
+            var hfr = result.AverageHFR;
+            var measurable = result.DetectedStars >= MinStarsPerProbe && hfr > 0 && double.IsFinite(hfr);
+            RenderFrameQuietly(frame, position, measurable ? hfr : double.NaN);
+            return measurable ? (hfr, result.DetectedStars) : (null, null);
+        } catch (Exception ex) {
+            LogConfirmFailed(ex);
+            return (null, null);
+        }
+    }
+
+    // §64's renderer (auto-stretch + star rings, ≤1024 px) gives the Smart Focus pane its picture. Frames too
+    // small to carry stars (unit-test stubs) are skipped; a render fault never touches the sweep.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Cosmetic: a failed JPEG render must never fail or stall the sweep. Log-and-recover boundary.")]
+    private void RenderFrameQuietly(AnalysisFrame frame, int position, double hfr) {
+        if (_tracker is null || frame.Width < 64 || frame.Height < 64) {
+            return;
+        }
+        try {
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, bayerPattern: null, annotate: true);
+            _tracker.SetFrame(jpeg, position, hfr);
+        } catch (Exception ex) {
+            LogRenderFailed(ex);
         }
     }
 
@@ -472,6 +655,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Autofocus: failed to restore focuser to {Position}")]
     private partial void LogRestoreFailed(Exception ex, int position);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: the confirmation frame at best focus could not be measured — reporting the fit's predicted HFR instead")]
+    private partial void LogConfirmFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: could not render the probe frame for the Smart Focus pane — the sweep continues")]
+    private partial void LogRenderFailed(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: completed sweep could not be recorded into the session history — the §59.5 triggers keep their previous reference point")]
     private partial void LogHistoryRecordFailed(Exception ex);

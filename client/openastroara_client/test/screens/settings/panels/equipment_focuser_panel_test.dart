@@ -7,6 +7,7 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_focuser_panel.dart';
+import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
@@ -45,6 +46,15 @@ class _FakeAutofocusApi implements AutofocusApi {
     if (vanish) return null;
     return AutofocusJob(jobId: jobId, state: terminalState, errorMessage: errorMessage);
   }
+
+  @override
+  Future<AutofocusRun> state() async => AutofocusRun.idle;
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<AutofocusFrame?> fetchFrame() async => null;
 
   @override
   void close() {}

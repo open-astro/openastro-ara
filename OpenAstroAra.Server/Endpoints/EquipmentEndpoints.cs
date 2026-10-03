@@ -81,8 +81,19 @@ public static partial class EquipmentEndpoints {
         camera.MapGet("", async (ICameraService svc, CancellationToken ct) => {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
-        camera.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+        // The guider's camera is refused as the main camera while the guider is connected (409
+        // `guide_camera_in_use`): two clients on one sensor break guiding. `?force=true` overrides for the
+        // user who knows (the guider is about to be disconnected, or the match is a false positive).
+        camera.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key,
+                bool? force, ICameraService svc, IEquipmentSelectionStore selectionStore, IGuiderService guider, IProfileStore profiles, CancellationToken ct) => {
+            if (force != true && await GuideCameraInUseAsync(request.Device, guider, profiles, ct)) {
+                return Results.Problem(
+                    title: "guide_camera_in_use",
+                    detail: CameraConnectGuard.Detail(request.Device, profiles.GetPhd2Settings()),
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+            return await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct);
+        });
         camera.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         camera.MapPost("/exposure", async ([FromBody] ExposureRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
@@ -208,7 +219,8 @@ public static partial class EquipmentEndpoints {
         focuser.MapPost("/autofocus", (
                 OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
                 IBatchJobService jobs,
-                IProfileStore profiles) => {
+                IProfileStore profiles,
+                AutofocusRunTracker tracker) => {
             // Real progress: the job's total is the sweep's probe count (from the
             // profile's §37.11 settings), and the sweep reports structured
             // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
@@ -219,24 +231,9 @@ public static partial class EquipmentEndpoints {
             // keeps done sane either way: a bigger live sweep clamps at this
             // total, a smaller one settles to it below.
             var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
-            var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
-                var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
-                    if (s.MaxProgress > 0 && s.Progress > 0) {
-                        // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
-                        // totalProbes probes — scale whatever denominator the run declares onto the
-                        // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
-                        // service's monotone tick guard keeps a Smart→Classic fallback sane (the
-                        // fraction never goes backwards).
-                        tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));
-                    }
-                });
-                var ok = await autofocus.RunAutofocusAsync(progress, ct);
-                if (!ok) {
-                    throw new InvalidOperationException(
-                        "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
-                }
-                tick(totalProbes); // settle at total; the service's tick guard makes this final
-            });
+            // §59.12 — this run is the user's (the Smart Focus pane / focuser panel), not a sequence's.
+            tracker.StampNextTrigger("manual");
+            var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, AutofocusJobWork(autofocus, tracker, totalProbes));
             return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
         })
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
@@ -392,6 +389,48 @@ public static partial class EquipmentEndpoints {
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
 
+        // Guide-camera focus loop (Setup → Smart Focus): frames borrowed through the guider, measured here.
+        // start: 202; 400 bad exposure/binning; 409 not connected / guiding / polar aligning / already running.
+        // stop: 204 once the in-flight frame has drained. status + the latest rendered frame (204 until one).
+        guider.MapPost("/focus/start", async ([FromBody] GuideFocusStartRequestDto request, IGuideFocusService focus, CancellationToken ct) => {
+            try {
+                await focus.StartAsync(request, ct);
+                return Results.Accepted();
+            } catch (System.ArgumentException ex) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+                // The daemon refused the lease (it is guiding/calibrating, or its camera is not connected).
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        })
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("StartGuideFocus");
+        guider.MapPost("/focus/stop", async (IGuideFocusService focus) => {
+            await focus.StopAsync();
+            return Results.NoContent();
+        })
+            .Produces(StatusCodes.Status204NoContent)
+            .WithName("StopGuideFocus");
+        guider.MapGet("/focus", (IGuideFocusService focus) => Results.Ok(focus.GetStatus()))
+            .Produces<GuideFocusStatusDto>(StatusCodes.Status200OK)
+            .WithName("GetGuideFocus");
+        guider.MapGet("/focus/frame", (IGuideFocusService focus, HttpContext http) => {
+            var frame = focus.GetFrame();
+            if (frame is null) {
+                return Results.NoContent();
+            }
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.Headers["X-Frame-Seq"] = frame.Value.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
+        })
+            .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
+            .Produces(StatusCodes.Status204NoContent)
+            .WithName("GetGuideFocusFrame");
+
         // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started, then
         // §63.8 guider.dark_library.progress ticks during the build, then complete/failed) and a status read for
         // the wizard's "Build dark library" affordance.
@@ -533,6 +572,40 @@ public static partial class EquipmentEndpoints {
 
         return app;
     }
+
+    /// <summary>§59 — the work body of the <c>POST /equipment/focuser/autofocus</c> job, extracted so the
+    /// tests run the real code. A sweep cancelled from the Smart Focus pane ends the job <c>cancelled</c>;
+    /// a failed one fails it with the run record's reason.</summary>
+    internal static Func<Action<int>, CancellationToken, Task> AutofocusJobWork(
+            OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
+            AutofocusRunTracker tracker,
+            int totalProbes) =>
+        async (tick, ct) => {
+            var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
+                if (s.MaxProgress > 0 && s.Progress > 0) {
+                    // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
+                    // totalProbes probes — scale whatever denominator the run declares onto the
+                    // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
+                    // service's monotone tick guard keeps a Smart→Classic fallback sane (the
+                    // fraction never goes backwards).
+                    tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));
+                }
+            });
+            var ok = await autofocus.RunAutofocusAsync(progress, ct);
+            if (!ok) {
+                // A Cancel from the Smart Focus pane (POST /api/v1/autofocus/cancel) ends the sweep without
+                // cancelling THIS job's token — read the run record so the job lands as `cancelled`, not
+                // as a failure the user did not cause.
+                if (tracker.State == "cancelled") {
+                    throw new OperationCanceledException("Autofocus was cancelled.");
+                }
+                throw new InvalidOperationException(
+                    tracker.Snapshot().Reason is { Length: > 0 } reason
+                        ? $"Autofocus failed: {reason}"
+                        : "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
+            }
+            tick(totalProbes); // settle at total; the service's tick guard makes this final
+        };
 
     // Manual reconnect helper: dispatch a connect to the remembered device(s) for the type.
     //   404 Not Found  — nothing remembered for the type yet (connect it once via /connect first).
@@ -785,6 +858,20 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
+    }
+
+    // True when the requested main camera is the connected guider's own camera (CameraConnectGuard). A
+    // guider that is not connected holds no camera, so the same device is then free to be the main camera.
+    // Extracted for unit testing.
+    public static async Task<bool> GuideCameraInUseAsync(DiscoveredDeviceDto device, IGuiderService guider, IProfileStore profiles, CancellationToken ct) {
+        if (device is null) {
+            return false;
+        }
+        var state = await guider.GetAsync(ct);
+        if (state is null || state.State != EquipmentConnectionState.Connected) {
+            return false;
+        }
+        return CameraConnectGuard.IsGuiderCamera(device, profiles.GetPhd2Settings());
     }
 
     // Connect an Alpaca device, then remember it for auto-connect-on-boot. Alpaca is open by design

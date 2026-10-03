@@ -53,6 +53,9 @@ public sealed partial class AutofocusSweepService {
     /// is the looser <see cref="MinStarsPerProbe"/>).</summary>
     internal const int SmartMinStars = 30;
 
+    /// <summary>The Smart run's shot budget — its progress denominator on the run record.</summary>
+    internal const int SmartMaxShots = 3;
+
     /// <summary>§59.13 `target_hfr_tolerance_pct` default — done when HFR is within this percentage
     /// above the calibration's fitted in-focus HFR.</summary>
     internal const double TargetHfrTolerancePct = 5.0;
@@ -74,7 +77,7 @@ public sealed partial class AutofocusSweepService {
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Smart-run boundary, same rationale as RunSweepCoreAsync: probe captures / focuser moves / the metric can throw device, HTTP, or math exceptions; any escape must degrade to a restored position + the Classic fallback so the Smart path is never worse than the old behavior. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool?> TrySmartFocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
+    private async Task<bool?> TrySmartFocusAsync(IProgress<ApplicationStatus> progress, DateTimeOffset started, CancellationToken token) {
         var calibration = _profiles.GetFocusCalibration();
         if (calibration is null) {
             return null; // never calibrated — Classic IS the calibrator (§59.1)
@@ -124,6 +127,7 @@ public sealed partial class AutofocusSweepService {
                 // Already in focus — moving would only add backlash noise. One shot, done.
                 await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
                 LogSmartComplete(startPosition, shot1.Hfr, 1);
+                await RecordCompletedAsync("smart", startPosition, shot1.Hfr, shot1.Features.StarCount, started, 1).ConfigureAwait(false);
                 RecordAutofocusQuietly();
                 return true;
             }
@@ -171,6 +175,7 @@ public sealed partial class AutofocusSweepService {
             if (shot2.Hfr < shot1.Hfr) {
                 if (shot2.Hfr <= targetHfr) {
                     LogSmartComplete(position2, shot2.Hfr, 2);
+                await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 2).ConfigureAwait(false);
                     RecordAutofocusQuietly();
                     return true;
                 }
@@ -186,8 +191,10 @@ public sealed partial class AutofocusSweepService {
                 if (shot3.Features.StarCount < SmartMinStars || shot3.Hfr > shot2.Hfr) {
                     await _focuser.MoveFocuser(position2, token).ConfigureAwait(false);
                     LogSmartComplete(position2, shot2.Hfr, 3);
+                await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 3).ConfigureAwait(false);
                 } else {
                     LogSmartComplete(position3, shot3.Hfr, 3);
+                await RecordCompletedAsync("smart", position3, shot3.Hfr, shot3.Features.StarCount, started, 3).ConfigureAwait(false);
                 }
                 RecordAutofocusQuietly();
                 return true;
@@ -199,6 +206,7 @@ public sealed partial class AutofocusSweepService {
             // The reversed shot must be BOTH trustworthy and a real improvement to claim success.
             if (reversedShot.Features.StarCount >= SmartMinStars && reversedShot.Hfr < shot1.Hfr) {
                 LogSmartComplete(reversed, reversedShot.Hfr, 3);
+                await RecordCompletedAsync("smart", reversed, reversedShot.Hfr, reversedShot.Features.StarCount, started, 3).ConfigureAwait(false);
                 RecordAutofocusQuietly();
                 return true;
             }
@@ -258,6 +266,7 @@ public sealed partial class AutofocusSweepService {
         // outlier resistance matters more here than in the 9-probe sweep.
         var hfr = features.MedianHFR;
         LogSmartShot(shotIndex, position, hfr, features.StarCount);
+        await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: SmartMaxShots, frame).ConfigureAwait(false);
         return new SmartShot(hfr, features);
     }
 

@@ -61,6 +61,29 @@ devices are discovered on the LAN, and the daemon remembers your choices for aut
 If a device drops mid-session, the daemon attempts hot-reconnects and raises a diagnostic; the
 health pill (see §9) turns amber/red until it clears.
 
+### Smart Focus (Setup → Smart Focus)
+
+The Setup tab's checklist has a **Smart Focus** step between Connect equipment and Polar align.
+
+- **Main telescope** — **Run autofocus** starts the daemon's sweep with your autofocus settings and
+  shows it live: the coarse search, then every probe on the V-curve, the fitted curve and the best
+  position it picked, the statistics (HFR measured *at* best focus, stars, fit R², probes kept,
+  duration, focuser temperature, filter) and a picture of the focused field with star rings. **Cancel**
+  stops a run — including one a sequence started — and the focuser goes back to where it began if
+  your profile says so. The same run record is what a sequence's autofocus leaves behind, so you can
+  check last night's refocus here in the morning.
+- **Guide camera** — a live focus readout, not an autofocus: guide scopes and off-axis guiders have
+  hand-turned helical focusers. **Start** shows a live view from the guide camera with HFR, star
+  count, peak and FWHM per frame, an HFR trend and the best HFR seen so far; turn the focuser slowly
+  until the HFR stops falling, then **Stop**. The frames come *through the guider* (the same path
+  polar alignment uses), so the guider must be connected and not guiding or calibrating, and Ara never
+  opens the guide camera itself. With an **off-axis guider** the card waits until the main telescope
+  has been focused this session (an OAG shares the main scope's focus) — or tick *already in focus*.
+
+Do not connect the guide camera as the *main* camera to focus it: two programs driving one sensor
+breaks guiding, and Ara now refuses that connect while the guider is connected (add `?force=true`
+only if you know what you are doing).
+
 ## 4. Planning: the sky atlas and Tonight's Sky
 
 The **Planning** tab is a full planetarium (Stellarium engine, offline once sky data is
