@@ -233,32 +233,7 @@ public static partial class EquipmentEndpoints {
             var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
             // §59.12 — this run is the user's (the Smart Focus pane / focuser panel), not a sequence's.
             tracker.StampNextTrigger("manual");
-            var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
-                var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
-                    if (s.MaxProgress > 0 && s.Progress > 0) {
-                        // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
-                        // totalProbes probes — scale whatever denominator the run declares onto the
-                        // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
-                        // service's monotone tick guard keeps a Smart→Classic fallback sane (the
-                        // fraction never goes backwards).
-                        tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));
-                    }
-                });
-                var ok = await autofocus.RunAutofocusAsync(progress, ct);
-                if (!ok) {
-                    // A Cancel from the Smart Focus pane (POST /api/v1/autofocus/cancel) ends the sweep without
-                    // cancelling THIS job's token — read the run record so the job lands as `cancelled`, not
-                    // as a failure the user did not cause.
-                    if (tracker.State == "cancelled") {
-                        throw new OperationCanceledException("Autofocus was cancelled.");
-                    }
-                    throw new InvalidOperationException(
-                        tracker.Snapshot().Reason is { Length: > 0 } reason
-                            ? $"Autofocus failed: {reason}"
-                            : "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
-                }
-                tick(totalProbes); // settle at total; the service's tick guard makes this final
-            });
+            var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, AutofocusJobWork(autofocus, tracker, totalProbes));
             return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
         })
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
@@ -597,6 +572,40 @@ public static partial class EquipmentEndpoints {
 
         return app;
     }
+
+    /// <summary>§59 — the work body of the <c>POST /equipment/focuser/autofocus</c> job, extracted so the
+    /// tests run the real code. A sweep cancelled from the Smart Focus pane ends the job <c>cancelled</c>;
+    /// a failed one fails it with the run record's reason.</summary>
+    internal static Func<Action<int>, CancellationToken, Task> AutofocusJobWork(
+            OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
+            AutofocusRunTracker tracker,
+            int totalProbes) =>
+        async (tick, ct) => {
+            var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
+                if (s.MaxProgress > 0 && s.Progress > 0) {
+                    // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
+                    // totalProbes probes — scale whatever denominator the run declares onto the
+                    // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
+                    // service's monotone tick guard keeps a Smart→Classic fallback sane (the
+                    // fraction never goes backwards).
+                    tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));
+                }
+            });
+            var ok = await autofocus.RunAutofocusAsync(progress, ct);
+            if (!ok) {
+                // A Cancel from the Smart Focus pane (POST /api/v1/autofocus/cancel) ends the sweep without
+                // cancelling THIS job's token — read the run record so the job lands as `cancelled`, not
+                // as a failure the user did not cause.
+                if (tracker.State == "cancelled") {
+                    throw new OperationCanceledException("Autofocus was cancelled.");
+                }
+                throw new InvalidOperationException(
+                    tracker.Snapshot().Reason is { Length: > 0 } reason
+                        ? $"Autofocus failed: {reason}"
+                        : "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
+            }
+            tick(totalProbes); // settle at total; the service's tick guard makes this final
+        };
 
     // Manual reconnect helper: dispatch a connect to the remembered device(s) for the type.
     //   404 Not Found  — nothing remembered for the type yet (connect it once via /connect first).
