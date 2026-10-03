@@ -134,9 +134,11 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
                 Connected = connected, SiderealTime = 0.0, TrackingEnabled = tracking,
             });
-            mount.Setup(m => m.GetCurrentPosition())
-                .Returns(new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees));
+            // The reported pointing follows slews, so the routine reads the mount's own RA turn.
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => position = target)
                 .ReturnsAsync(true);
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
@@ -173,6 +175,11 @@ namespace OpenAstroAra.Test {
                 Fetched.Enqueue((host, rpcPort, filename));
                 await File.WriteAllTextAsync(destinationPath, "FAKE-FITS", ct).ConfigureAwait(false);
             }
+
+            public static readonly byte[] Jpeg = { 0xFF, 0xD8, 0xFF, 0xD9 };
+
+            public Task<byte[]> FetchLiveFrameJpegAsync(string host, int rpcPort, CancellationToken ct) =>
+                Fail ? Task.FromException<byte[]>(new HttpRequestException("404 for frame.jpg")) : Task.FromResult(Jpeg);
         }
 
         private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
@@ -944,6 +951,183 @@ namespace OpenAstroAra.Test {
             }
             var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("axis_fit_failed"));
+        }
+
+        [Test]
+        public async Task A_seed_slew_the_mount_accepts_but_never_turns_fails_as_slew_failed() {
+            // The mount says yes to the slew, but its reported RA does not move: there is no turn
+            // to fit, so the routine must stop rather than seed from a zero-degree rotation.
+            var mount = NewMount();
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
+        }
+
+        [Test]
+        public async Task A_mount_with_no_pointing_after_the_seed_slew_fails_as_mount_fault() {
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            var slewed = false;
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => slewed ? null! : position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => slewed = true)
+                .ReturnsAsync(true);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_fault"));
+        }
+
+        /// <summary>Runs the routine against <paramref name="mount"/> with solvable seeds and
+        /// returns the reason on its error event once it has failed.</summary>
+        private static async Task<string?> SeedFailureReasonAsync(Mock<ITelescopeMediator> mount) {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, mount, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            return ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload
+                .GetProperty("reason").GetString();
+        }
+
+        [Test]
+        public async Task A_mount_axis_well_off_the_pole_still_seeds_from_the_mounts_own_rotation() {
+            // Field seeds from 2026-10-02 (iOptron HAE29C, axis ~4.6° off the NCP): a 30° RA turn
+            // moved the near-pole guide field only 0.8° in solved RA but 1.6° on the sky. Using
+            // the solved ΔRA as the rotation failed every run with axis_fit_failed.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var seedA = new PolarAlignSolveOutcome(true, 137.8417, 85.6097);
+            var seedB = new PolarAlignSolveOutcome(true, 138.6667, 87.1822);
+            var solver = new ScriptedSolver { Fallback = seedB };
+            solver.Enqueue(seedA, seedB);
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+        }
+
+        // ── single-frame mode + frame readout ────────────────────────────────────────────────
+
+        [Test]
+        public async Task Single_frame_mode_parks_after_the_seed_and_shoots_one_frame_per_request() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { LoopMode = PolarAlignLoopModes.SingleFrame });
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws, store: store);
+            svc.CaptureRequestPoll = TimeSpan.FromMilliseconds(10);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            var parked = await PollAsync(svc, s => s.WaitingForCapture).ConfigureAwait(false);
+            await Task.Delay(150).ConfigureAwait(false);
+            var still = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(still.FramesCaptured, Is.EqualTo(parked.FramesCaptured),
+                "single-frame mode must not shoot until asked");
+            Assert.That(still.LastFrame?.FrameId, Is.EqualTo("seed-b-1"));
+
+            await svc.RequestCaptureAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var shot = await PollAsync(svc, s => s.LastFrame?.FrameId == "live-1" && s.WaitingForCapture).ConfigureAwait(false);
+            Assert.That(shot.FramesCaptured, Is.EqualTo(parked.FramesCaptured + 1), "exactly one frame per request");
+
+            // Switching back to loop mode mid-run releases the park without a request.
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { LoopMode = PolarAlignLoopModes.Loop });
+            await PollAsync(svc, s => s.FramesCaptured >= shot.FramesCaptured + 2).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Capture_request_outside_the_adjust_phase_is_refused() {
+            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var svc = NewService(guider, new ScriptedSolver());
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.RequestCaptureAsync(null, CancellationToken.None));
+        }
+
+        [Test]
+        public async Task Each_frame_reports_its_exposure_timings_and_solved_pointing() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollAsync(svc, s => s.LastFrame?.FrameId.StartsWith("live-", StringComparison.Ordinal) == true).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var frame = status.LastFrame!;
+            Assert.That(frame.Solved, Is.True);
+            Assert.That(frame.ExposureSeconds, Is.EqualTo(0.05));
+            Assert.That(frame.CaptureMs, Is.GreaterThanOrEqualTo(0));
+            Assert.That(frame.SolveMs, Is.Not.Null);
+            Assert.That(frame.RaDeg, Is.EqualTo(SolveB.RaDegJnow));
+            Assert.That(frame.DecDeg, Is.EqualTo(SolveB.DecDegJnow));
+
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignFrameStarted), Is.GreaterThanOrEqualTo(3));
+            var complete = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignFrameComplete).Payload;
+            Assert.That(complete.GetProperty("exposure_seconds").GetDouble(), Is.EqualTo(0.05));
+            Assert.That(complete.TryGetProperty("capture_ms", out _), Is.True);
+            Assert.That(complete.GetProperty("ra_deg").GetDouble(), Is.EqualTo(SolveA.RaDegJnow));
+
+            // Every frame's started and complete events carry the same frame_id, seed attempts
+            // included, so a consumer can pair them.
+            string[] Ids(string type) => ws.Events.Where(e => e.Type == type)
+                .Select(e => e.Payload.GetProperty("frame_id").GetString()!).ToArray();
+            var completedIds = Ids(WsEventCatalog.PolarAlignFrameComplete);
+            Assert.That(completedIds, Does.Contain("seed-a-1").And.Contain("seed-b-1"));
+            Assert.That(completedIds, Is.SubsetOf(Ids(WsEventCatalog.PolarAlignFrameStarted)));
+        }
+
+        [Test]
+        public async Task Live_frame_is_proxied_from_the_connected_guider_and_null_without_one() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var fetcher = new FakeFrameFetcher();
+            using var svc = NewService(guider, new ScriptedSolver(), fetcher: fetcher);
+
+            Assert.That(await svc.GetLiveFrameJpegAsync(CancellationToken.None).ConfigureAwait(false),
+                Is.EqualTo(FakeFrameFetcher.Jpeg));
+            fetcher.Fail = true;
+            Assert.That(await svc.GetLiveFrameJpegAsync(CancellationToken.None).ConfigureAwait(false), Is.Null,
+                "a failed fetch is no preview, not an error");
+
+            using var disconnected = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var noGuider = NewService(disconnected, new ScriptedSolver());
+            Assert.That(await noGuider.GetLiveFrameJpegAsync(CancellationToken.None).ConfigureAwait(false), Is.Null);
+        }
+
+        private static async Task<PolarAlignStateDto> PollAsync(PolarAlignService svc, Func<PolarAlignStateDto, bool> until) {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var status = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
+            while (!until(status)) {
+                await Task.Delay(20, cts.Token).ConfigureAwait(false);
+                status = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
+            }
+            return status;
         }
 
         [Test]

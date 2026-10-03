@@ -215,12 +215,10 @@ public static class ProfileEndpoints {
             .WithName("GetPolarAlignSettings")
             .WithSummary("Get the active profile's §45 polar-alignment settings.");
 
-        profile.MapPut("/polar-align", (PolarAlignSettingsDto body, IProfileStore store) => {
-            store.PutPolarAlignSettings(body);
-            return Results.Ok(body);
-        })
+        profile.MapPut("/polar-align", PutPolarAlignSettings)
             .Accepts<PolarAlignSettingsDto>("application/json")
             .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("PutPolarAlignSettings")
             .WithSummary("Replace the active profile's §45 polar-alignment settings.");
 
@@ -498,6 +496,22 @@ public static class ProfileEndpoints {
     /// read-side coercion) becomes the <c>guide_scope</c> default. Extracted for unit tests.</summary>
     internal static string NormalizeGuiderSetupType(string? setupType) =>
         setupType?.Trim().ToLowerInvariant() == "oag" ? "oag" : "guide_scope";
+
+    /// <summary>§45.12 — <c>PUT /profile/polar-align</c>. The live loop re-reads these settings before
+    /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
+    /// (400) rather than reaching the camera. Extracted so the 400s are unit-testable without a host.</summary>
+    internal static IResult PutPolarAlignSettings(PolarAlignSettingsDto body, IProfileStore store) {
+        if (!(double.IsFinite(body.ExposureSeconds) && body.ExposureSeconds > 0 && body.ExposureSeconds <= 60)) {
+            return Results.Problem(detail: "exposure_seconds must be greater than 0 and at most 60",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        if (body.LoopMode is not (PolarAlignLoopModes.Loop or PolarAlignLoopModes.SingleFrame)) {
+            return Results.Problem(detail: "loop_mode must be \"loop\" or \"single\"",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        store.PutPolarAlignSettings(body);
+        return Results.Ok(body);
+    }
 
     /// <summary>§76.2 — write-boundary validation of the guide exposure range. The range feeds BOTH
     /// the dark-library build and the guiding bounds, so an inverted or non-positive range would

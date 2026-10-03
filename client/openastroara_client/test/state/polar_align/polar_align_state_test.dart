@@ -80,6 +80,38 @@ void main() {
       expect(folded.phase, PolarAlignStates.adjusting);
     });
 
+    test('frame_started marks a frame in progress; frame_complete records it', () {
+      final at = DateTime.utc(2026, 10, 3, 3);
+      final started = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.adjusting),
+        _event(PolarAlignWsEvents.frameStarted, {'frame_id': 'live-3', 'exposure_seconds': 1.5}),
+        now: () => at,
+      )!;
+      expect(started.frameInProgress, isTrue);
+      expect(started.frameStartedAt, at);
+      expect(started.frameExposureSeconds, 1.5);
+
+      final done = foldPolarAlignEvent(
+        started,
+        _event(PolarAlignWsEvents.frameComplete, {
+          'frame_id': 'live-3',
+          'solved': true,
+          'consecutive_solve_failures': 0,
+          'exposure_seconds': 1.5,
+          'capture_ms': 2100,
+          'solve_ms': 480,
+          'ra_deg': 138.6667,
+          'dec_deg': 87.1822,
+        }),
+      )!;
+      expect(done.frameInProgress, isFalse);
+      expect(done.frameExposureSeconds, isNull);
+      expect(done.lastFrame!.frameId, 'live-3');
+      expect(done.lastFrame!.captureMs, 2100);
+      expect(done.lastFrame!.solveMs, 480);
+      expect(done.lastFrame!.decDeg, 87.1822);
+    });
+
     test('paused and stopped flip only the phase', () {
       const current = PolarAlignLive(
           phase: PolarAlignStates.adjusting, totalErrorArcmin: 2.0);
@@ -159,6 +191,13 @@ void main() {
   });
 
   group('PolarAlignSettings', () {
+    test('loop_mode round-trips and unknown values fall back to loop', () {
+      const single = PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
+      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, PolarAlignLoopModes.single);
+      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, PolarAlignLoopModes.loop);
+      expect(PolarAlignSettings.fromJson({}).loopMode, PolarAlignLoopModes.loop);
+    });
+
     test('round-trips through json with playbook defaults for missing keys', () {
       const defaults = PolarAlignSettings();
       expect(PolarAlignSettings.fromJson(const {}).toJson(), defaults.toJson());

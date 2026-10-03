@@ -302,4 +302,11 @@ public interface IPolarAlignService {
     /// <summary>§45 step 9 — the user marks alignment done; the achieved error is logged with
     /// outcome <c>complete</c> (§45.13).</summary>
     Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>Single-frame mode: take the next adjust frame now. A request made while a frame is
+    /// already exposing queues exactly one more frame after it (requests do not stack). Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) outside the adjust phase.</summary>
+    Task<OperationAcceptedDto> RequestCaptureAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>The guide camera's latest frame as a JPEG (the polar-align live view), or null
+    /// when no guider is connected or the daemon has no frame to serve.</summary>
+    Task<byte[]?> GetLiveFrameJpegAsync(CancellationToken ct);
 }

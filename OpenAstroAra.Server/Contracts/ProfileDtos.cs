@@ -412,6 +412,9 @@ public sealed record Phd2SettingsDto(
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
 /// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew;
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
+/// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
+/// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
+/// these settings before every frame, so exposure and mode changes apply mid-run.
 /// </summary>
 public sealed record PolarAlignSettingsDto(
     double ExposureSeconds = 1.0,
@@ -419,7 +422,14 @@ public sealed record PolarAlignSettingsDto(
     double TargetToleranceArcmin = 1.0,
     double SeedRotationDeg = 30.0,
     int LoopCadenceMs = 1000,
-    double SettleSeconds = 2.0);
+    double SettleSeconds = 2.0,
+    string LoopMode = PolarAlignLoopModes.Loop);
+
+/// <summary>§45 live-adjust capture modes (<see cref="PolarAlignSettingsDto.LoopMode"/>).</summary>
+public static class PolarAlignLoopModes {
+    public const string Loop = "loop";
+    public const string SingleFrame = "single";
+}
 
 /// <summary>
 /// §36 imaging-train optics + sensor geometry — the inputs the Planning
