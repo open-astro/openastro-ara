@@ -996,7 +996,7 @@ namespace OpenAstroAra.Test {
             var still = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(still.FramesCaptured, Is.EqualTo(parked.FramesCaptured),
                 "single-frame mode must not shoot until asked");
-            Assert.That(still.LastFrame?.FrameId, Is.EqualTo("seed-b"));
+            Assert.That(still.LastFrame?.FrameId, Is.EqualTo("seed-b-1"));
 
             await svc.RequestCaptureAsync(null, CancellationToken.None).ConfigureAwait(false);
             var shot = await PollAsync(svc, s => s.LastFrame?.FrameId == "live-1" && s.WaitingForCapture).ConfigureAwait(false);
@@ -1044,6 +1044,14 @@ namespace OpenAstroAra.Test {
             Assert.That(complete.GetProperty("exposure_seconds").GetDouble(), Is.EqualTo(0.05));
             Assert.That(complete.TryGetProperty("capture_ms", out _), Is.True);
             Assert.That(complete.GetProperty("ra_deg").GetDouble(), Is.EqualTo(SolveA.RaDegJnow));
+
+            // Every frame's started and complete events carry the same frame_id, seed attempts
+            // included, so a consumer can pair them.
+            string[] Ids(string type) => ws.Events.Where(e => e.Type == type)
+                .Select(e => e.Payload.GetProperty("frame_id").GetString()!).ToArray();
+            var completedIds = Ids(WsEventCatalog.PolarAlignFrameComplete);
+            Assert.That(completedIds, Does.Contain("seed-a-1").And.Contain("seed-b-1"));
+            Assert.That(completedIds, Is.SubsetOf(Ids(WsEventCatalog.PolarAlignFrameStarted)));
         }
 
         [Test]

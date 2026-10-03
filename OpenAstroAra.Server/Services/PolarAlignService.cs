@@ -419,7 +419,7 @@ namespace OpenAstroAra.Server.Services {
                 // knob adjustment (§45.8) — and the loop needs no further slews.
                 priorTracking = info.TrackingEnabled;
                 _mount.SetTrackingEnabled(false);
-                SetErrors(gen, altErr, azErr, "adjusting", "seed-b");
+                SetErrors(gen, altErr, azErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
                 await PublishProgressAsync(gen, 0, altErr, azErr, solved: true).ConfigureAwait(false);
                 await AdjustLoopAsync(guiderClient, workDir, site, settings, north, b, seedPointing, altErr, azErr, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
@@ -606,8 +606,10 @@ namespace OpenAstroAra.Server.Services {
             var anyFrameReachedSolver = false;
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
                 var timing = new FrameTiming();
-                var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture), hint, settings, gen, timing, ct).ConfigureAwait(false);
-                await CompleteFrameAsync(gen, frameId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
+                // One id per attempt, on frame_started and frame_complete alike.
+                var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
+                var s = await CaptureAndSolveAsync(guiderClient, workDir, attemptId, hint, settings, gen, timing, ct).ConfigureAwait(false);
+                await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
                 if (s.Success) {
                     return s;
                 }
@@ -849,7 +851,8 @@ namespace OpenAstroAra.Server.Services {
             return pos is null ? null : (pos.RADegrees, pos.Dec);
         }
 
-        private void SetErrors(int gen, double altErrArcmin, double azErrArcmin, string state, string frameId) {
+        /// <param name="frameId">The frame these errors came from; null keeps the last captured frame's id.</param>
+        private void SetErrors(int gen, double altErrArcmin, double azErrArcmin, string state, string? frameId) {
             lock (_gate) {
                 if (_generation != gen) {
                     return; // a superseded run's late write is a no-op
@@ -857,7 +860,7 @@ namespace OpenAstroAra.Server.Services {
                 _altErrorArcmin = altErrArcmin;
                 _azErrorArcmin = azErrArcmin;
                 _state = state;
-                _lastFrameId = frameId;
+                _lastFrameId = frameId ?? _lastFrameId;
             }
         }
 
