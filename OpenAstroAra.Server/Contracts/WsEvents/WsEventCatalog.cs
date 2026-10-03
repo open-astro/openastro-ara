@@ -117,7 +117,8 @@ public static class WsEventCatalog {
     // `curve_fit` once per sweep attempt: { algorithm, r_squared, best_position, predicted_hfr, usable,
     // within_range }. `completed` closes a successful run of either mode: { mode, final_position, final_hfr
     // (measured at best focus when the confirmation frame read, else the fit's prediction), final_stars?,
-    // duration_seconds, probes }. `failed` closes an unsuccessful one: { reason, restored_position? } —
+    // duration_seconds, probes } — probes = Smart shots taken, or for Classic the probes on the run record
+    // (coarse and dropped included; a re-centred sweep's earlier attempts are not). `failed` closes an unsuccessful one: { reason, restored_position? } —
     // reason "cancelled" is the user's Cancel (POST /api/v1/autofocus/cancel). The full run (every probe,
     // the sampled fit curve, the rendered frame) rehydrates from GET /api/v1/autofocus/state.
     public const string AutofocusStepComplete = "autofocus.step_complete";

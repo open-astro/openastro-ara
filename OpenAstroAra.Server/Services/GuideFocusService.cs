@@ -306,8 +306,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private async Task<(GuideFocusSampleDto Sample, byte[]? Jpeg)> SyntheticSampleAsync(GuideFocusStartRequestDto request, CancellationToken ct) {
         await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(request.ExposureSec, 0.05, 1.0)), ct).ConfigureAwait(false);
         var (pixels, width, height) = _syntheticFrames!();
-        var sample = Measure(pixels, width, height, NextSeq(), DateTimeOffset.UtcNow);
         var (jpeg, _, _) = CameraService.RenderLiveFrame(pixels, width, height, bayerPattern: null, annotate: true);
+        // The seq is taken last: a frame that fails to render never advances it past the stored picture.
+        var sample = Measure(pixels, width, height, NextSeq(), DateTimeOffset.UtcNow);
         return (sample, jpeg);
     }
 
@@ -335,11 +336,13 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             localPath = Path.Combine(workDir, filename);
             await _fetcher.FetchAsync(host, guider.ConnectedRpcPort, filename, localPath, CancellationToken.None).ConfigureAwait(false);
             var (pixels, width, height) = _decoder.Decode(localPath);
-            var sample = Measure(pixels, width, height, NextSeq(), DateTimeOffset.UtcNow);
             byte[]? jpeg = null;
             if (width >= 16 && height >= 16) {
                 (jpeg, _, _) = CameraService.RenderLiveFrame(pixels, width, height, bayerPattern: null, annotate: true);
             }
+            // The seq is taken last: a frame that fails to render never advances it past the stored picture,
+            // which would make the client refetch the same JPEG on every poll.
+            var sample = Measure(pixels, width, height, NextSeq(), DateTimeOffset.UtcNow);
             return (sample, jpeg);
         } finally {
             guider.SingleFrameComplete -= OnComplete;
