@@ -129,6 +129,24 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
+  testWidgets('a running Smart Focus run counts its shots in Progress', (t) async {
+    const running = AutofocusRun(
+      state: AutofocusRunStates.running,
+      mode: 'smart',
+      phase: 'smart',
+      totalSteps: 3,
+      completedSteps: 2,
+      probes: [
+        AutofocusProbe(index: 1, phase: 'smart', position: 10150, hfr: 1.95, stars: 42, kept: true),
+        AutofocusProbe(index: 2, phase: 'smart', position: 10000, hfr: 1.7, stars: 42, kept: true),
+      ],
+    );
+    await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: running)));
+    await t.pump();
+    expect(find.text('Smart Focus — shot 2 of 3'), findsOneWidget);
+    expect(find.text('2 / 3'), findsOneWidget);
+  });
+
   testWidgets('a failed run reads as a failure with its reason', (t) async {
     const failed = AutofocusRun(state: AutofocusRunStates.failed, reason: 'only 2 of 9 probes had measurable stars', restoredPosition: 10000);
     await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: failed)));

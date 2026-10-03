@@ -53,6 +53,9 @@ public sealed partial class AutofocusSweepService {
     /// is the looser <see cref="MinStarsPerProbe"/>).</summary>
     internal const int SmartMinStars = 30;
 
+    /// <summary>The Smart run's shot budget — its progress denominator on the run record.</summary>
+    internal const int SmartMaxShots = 3;
+
     /// <summary>§59.13 `target_hfr_tolerance_pct` default — done when HFR is within this percentage
     /// above the calibration's fitted in-focus HFR.</summary>
     internal const double TargetHfrTolerancePct = 5.0;
@@ -263,7 +266,7 @@ public sealed partial class AutofocusSweepService {
         // outlier resistance matters more here than in the 9-probe sweep.
         var hfr = features.MedianHFR;
         LogSmartShot(shotIndex, position, hfr, features.StarCount);
-        await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: 3, frame).ConfigureAwait(false);
+        await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: SmartMaxShots, frame).ConfigureAwait(false);
         return new SmartShot(hfr, features);
     }
 

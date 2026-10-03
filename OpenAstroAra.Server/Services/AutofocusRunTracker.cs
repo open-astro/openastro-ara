@@ -103,11 +103,13 @@ public sealed class AutofocusRunTracker {
         }
     }
 
-    /// <summary>The Smart→Classic hand-off: the mode flips, the phase restarts at the coarse search.</summary>
+    /// <summary>The Smart→Classic hand-off: the mode flips, the phase restarts at the coarse search, and the
+    /// Smart shots leave the record (they are not points on the Classic V-curve).</summary>
     public void FallBackToClassic(int totalSteps) {
         lock (_gate) {
             _mode = "classic";
             _phase = "coarse";
+            _probes.RemoveAll(p => p.Phase == "smart");
             _totalSteps = totalSteps;
             _completedSteps = 0;
         }
@@ -136,7 +138,8 @@ public sealed class AutofocusRunTracker {
         lock (_gate) {
             var probe = new AutofocusProbeDto(_probes.Count + 1, phase, position, Finite(hfr), stars, kept);
             _probes.Add(probe);
-            if (phase == "fine") {
+            // Progress counts the fine sweep's probes, or a Smart run's shots (out of SmartMaxShots).
+            if (phase is "fine" or "smart") {
                 _completedSteps++;
             }
             return probe;

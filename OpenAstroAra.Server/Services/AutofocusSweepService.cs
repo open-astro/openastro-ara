@@ -154,9 +154,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         var startInfo = _focuser.GetInfo();
         var startPosition = startInfo?.Position ?? 0;
         var started = DateTimeOffset.UtcNow;
+        var smartMode = _profiles.GetFocusCalibration() is not null;
         _tracker?.Begin(
-            _profiles.GetFocusCalibration() is null ? "classic" : "smart",
-            startPosition, ProbeCount(settings), CurrentFilterName(), startInfo?.Temperature, runCts);
+            smartMode ? "smart" : "classic",
+            startPosition, smartMode ? SmartMaxShots : ProbeCount(settings), CurrentFilterName(), startInfo?.Temperature, runCts);
         try {
             // §59.1 mode routing: Smart when the profile carries a usable calibration, Classic otherwise
             // and as the §59.11 safety net. true = Smart succeeded; false = Smart ran and fell back

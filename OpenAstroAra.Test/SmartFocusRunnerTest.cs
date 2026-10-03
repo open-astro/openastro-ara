@@ -201,6 +201,9 @@ namespace OpenAstroAra.Test {
             Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusShotComplete), Is.EqualTo(2));
             Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, rig.Moves[^1]);
+            var record = rig.Tracker.Snapshot();
+            Assert.That((record.CompletedSteps, record.TotalSteps), Is.EqualTo((2, AutofocusSweepService.SmartMaxShots)),
+                "a Smart run's progress is its shots, not the Classic probe count");
         }
 
         [Test]
@@ -257,6 +260,9 @@ namespace OpenAstroAra.Test {
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
             Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusStarted), Is.EqualTo(1),
                 "fallback_classic IS the mode hand-off — never a second started");
+            var record = rig.Tracker.Snapshot();
+            Assert.That(record.Mode, Is.EqualTo("classic"));
+            Assert.That(record.Probes.Any(p => p.Phase == "smart"), Is.False, "the refused Smart shot is not a V-curve point");
         }
 
         [Test]

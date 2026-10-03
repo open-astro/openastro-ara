@@ -110,6 +110,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_smart_run_counts_its_shots_and_a_fallback_starts_the_classic_count_clean() {
+            var tracker = new AutofocusRunTracker();
+            using var runCts = new CancellationTokenSource();
+            tracker.Begin("smart", StartPosition, AutofocusSweepService.SmartMaxShots, "L", 12.5, runCts);
+            tracker.AddProbe("smart", StartPosition, 1.95, 42, kept: true);
+            tracker.AddProbe("smart", StartPosition - 150, 1.7, 42, kept: true);
+            var smart = tracker.Snapshot();
+            Assert.That((smart.CompletedSteps, smart.TotalSteps), Is.EqualTo((2, 3)), "the Progress tile reads 2 / 3, not 0 / 9");
+
+            tracker.FallBackToClassic(9);
+            var classic = tracker.Snapshot();
+            Assert.That(classic.Mode, Is.EqualTo("classic"));
+            Assert.That((classic.CompletedSteps, classic.TotalSteps), Is.EqualTo((0, 9)));
+            Assert.That(classic.Probes.Any(p => p.Phase == "smart"), Is.False, "Smart shots are not V-curve points");
+        }
+
+        [Test]
         public void Tracker_starts_idle_with_nothing_to_show() {
             var snap = new AutofocusRunTracker().Snapshot();
             Assert.That(snap.State, Is.EqualTo("idle"));
