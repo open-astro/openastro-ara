@@ -143,6 +143,55 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Coarse_search_that_never_brackets_focus_fails_after_its_probe_budget_and_restores() {
+            // HFR keeps improving upward forever: the walk must stop at CoarseMaxProbes, fail, and
+            // restore, without ever starting the fine sweep.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var fineProbes = 0;
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => { fineProbes++; return Result(1.5, 42); },
+                coarseMetric: (_, _) => 1e6 - Current());
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(fineProbes, Is.Zero);
+            var coarseMoves = moves.GetRange(0, moves.Count - 1);
+            Assert.That(coarseMoves, Has.Count.EqualTo(AutofocusSweepService.CoarseMaxProbes));
+            Assert.That(coarseMoves, Is.Ordered.Ascending);
+            Assert.That(coarseMoves.Zip(coarseMoves.Skip(1), (a, b) => b - a).Max(),
+                Is.EqualTo(400 * AutofocusSweepService.CoarseMaxStepMultiplier), "the step stops growing at the cap");
+            Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
+        }
+
+        private static readonly int[] TravelStopMoves = { 500, 900, 100, 600 };
+
+        [Test]
+        public async Task Coarse_search_treats_the_travel_stop_at_zero_as_the_bracket() {
+            // Start at 500 with HFR improving toward (and past) 0: the walk reaches 100, the next
+            // doubled step would land below 0, so 0 is taken as the far side of the bracket and the
+            // fine sweep is centred on 100. No coarse probe may go below 0.
+            var position = 500;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5 + 0.2 * Math.Pow((position - 100) / 100.0, 2), 42),
+                coarseMetric: (_, _) => 1000.0 + position);
+
+            await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            // Coarse: start, +400 (worse), −400 (better, at 100); the next step (−800) would pass 0.
+            // The refinement re-uses the cached 500 and skips −300. Then the fine overshoot: 100 + 500.
+            Assert.That(moves.GetRange(0, 4), Is.EqualTo(TravelStopMoves));
+        }
+
+        [Test]
         public async Task Coarse_search_keeps_the_start_when_it_already_brackets_focus() {
             var (focuser, moves) = Focuser();
             int Current() => moves.Count == 0 ? StartPosition : moves[^1];
