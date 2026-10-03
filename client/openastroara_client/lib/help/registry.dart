@@ -1008,6 +1008,31 @@ const Map<String, Help> helpRegistry = {
   ),
 
   // §37.11 Autofocus — help on the genuinely non-obvious controls.
+  'setup.focusing.main': Help(
+    key: 'setup.focusing.main',
+    title: 'Focusing the main telescope',
+    body:
+        'Runs Ara\'s autofocus with your autofocus settings and shows the run as it happens.\n\n'
+        '* **Coarse search** first: software-binned probes walk toward smaller stars until the sweep is centred on focus (small grey dots).\n'
+        '* **V-curve**: each fine probe is a dot (hollow = too few stars to trust); the line is the curve Ara fitted; the dashed marker is the fitted best, the solid one the position it moved to.\n'
+        '* **HFR at focus (measured)** comes from one confirmation frame taken *at* best focus — the picture shown — so it is a measurement, not the fit\'s prediction.\n'
+        '* **Cancel** stops the run and puts the focuser back where it started when the profile says so. It also cancels a run a sequence started.\n\n'
+        'A sequence\'s own refocus leaves the same record here, so you can check last night\'s run in the morning.',
+    relatedSettings: ['img.autofocus.method', 'img.autofocus.steps', 'img.autofocus.step_size'],
+    keywords: ['autofocus', 'v-curve', 'hfr', 'focus', 'sweep', 'cancel'],
+  ),
+  'setup.focusing.guide': Help(
+    key: 'setup.focusing.guide',
+    title: 'Focusing the guide camera',
+    body:
+        'A live readout for the hand-turned helical focuser on a guide scope or off-axis guider — there is no motor to sweep, so this is not an autofocus.\n\n'
+        '* **Start live focus** asks the *guider* for one frame after another and measures each here: HFR, star count, peak and FWHM. Turn the focuser slowly until the HFR stops falling; the dashed line on the trend is the best HFR seen so far.\n'
+        '* The frames come **through the guider** (the same path polar alignment uses), so the guider must be connected and not guiding or calibrating. Ara never opens the guide camera itself: two programs on one sensor is how guiding breaks.\n'
+        '* **Off-axis guider**: the OAG sees the same focal plane as the main camera, so its HFR only means something once the main telescope is focused. The card waits for that, or tick *Already in focus*.\n'
+        '* **Exposure**: 1–3 s suits most guide cameras; lengthen it when few stars show.',
+    relatedSettings: ['eq.guider.setup_type'],
+    keywords: ['guide camera', 'oag', 'guide scope', 'helical', 'focus', 'hfr', 'live'],
+  ),
   'img.autofocus.method': Help(
     key: 'img.autofocus.method',
     title: 'Autofocus method',

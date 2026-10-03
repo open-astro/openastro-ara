@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/camera_status.dart';
 import '../../models/equipment_device_status.dart';
 import '../../models/mount_status.dart';
+import '../../models/autofocus_run.dart';
 import '../../models/polar_align.dart';
 import '../equipment/camera_state.dart';
 import '../equipment/mount_state.dart';
+import '../focus/autofocus_live_state.dart';
 import '../polar_align/polar_align_state.dart';
 
 /// Setup-stage readiness (§25 flow redesign). Each checklist row on the Setup
@@ -64,6 +66,19 @@ SetupStepState polarAlignStepState(PolarAlignLive live) {
   return SetupStepState.pending;
 }
 
+/// Focusing readiness from the live autofocus view. Pure — unit-tested.
+///
+/// done = a run completed this app session (or the user marked the scope as
+/// already in focus); inProgress = a run is underway; problem = the last run
+/// failed; else pending. A cancelled run is pending, not a problem — the user
+/// asked for it. THIS-SESSION by design, like polar alignment: focus drifts.
+SetupStepState focusStepState(AutofocusLive live) {
+  if (live.run.isRunning) return SetupStepState.inProgress;
+  if (live.focusedThisSession) return SetupStepState.done;
+  if (live.run.state == AutofocusRunStates.failed) return SetupStepState.problem;
+  return SetupStepState.pending;
+}
+
 /// Live connect-equipment step state for the checklist glyph.
 final setupConnectStateProvider = Provider<SetupStepState>((ref) {
   final mount = ref.watch(mountProvider).asData?.value;
@@ -75,3 +90,7 @@ final setupConnectStateProvider = Provider<SetupStepState>((ref) {
 /// Run pre-flight confirm.
 final setupPolarAlignStateProvider = Provider<SetupStepState>(
     (ref) => polarAlignStepState(ref.watch(polarAlignLiveProvider)));
+
+/// Live focusing step state for the checklist glyph.
+final setupFocusStateProvider = Provider<SetupStepState>(
+    (ref) => focusStepState(ref.watch(autofocusLiveProvider)));

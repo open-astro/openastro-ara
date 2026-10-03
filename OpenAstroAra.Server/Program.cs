@@ -381,7 +381,18 @@ public partial class Program {
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
-                sp.GetRequiredService<IPolarAlignFrameFetcher>()));
+                sp.GetRequiredService<IPolarAlignFrameFetcher>(),
+                () => sp.GetService<IGuideFocusService>()));
+        // Setup → Focusing: the guide-camera focus loop (frames through the guider, measured here).
+        builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
+        builder.Services.AddSingleton<IGuideFocusService>(sp =>
+            new GuideFocusService(
+                sp.GetRequiredService<GuiderService>(),
+                sp.GetRequiredService<IPolarAlignFrameFetcher>(),
+                sp.GetRequiredService<IGuideFrameDecoder>(),
+                () => (sp.GetService<IPolarAlignService>() as PolarAlignService)?.IsActive ?? false,
+                sp.GetRequiredService<ILogger<GuideFocusService>>(),
+                syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
@@ -601,7 +612,23 @@ public partial class Program {
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
-        builder.Services.AddSingleton<IAnalysisFrameSource>(sp => sp.GetRequiredService<CameraService>());
+        var syntheticSky = builder.Environment.IsDevelopment()
+            ? Environment.GetEnvironmentVariable(SyntheticSky.EnvVar)
+            : null;
+        if (syntheticSky is not null) {
+            // Development only — a rendered star field in place of camera frames so the focus instruments
+            // can be exercised without a sky (SyntheticSky). Logged loudly at startup below.
+            var options = SyntheticSky.Parse(syntheticSky);
+            builder.Services.AddSingleton<SyntheticSkySettings>(options);
+            builder.Services.AddSingleton<IAnalysisFrameSource>(sp =>
+                new SyntheticSkyFrameSource(
+                    sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(),
+                    options,
+                    sp.GetRequiredService<ILogger<SyntheticSkyFrameSource>>()));
+            builder.Services.AddSingleton<SyntheticGuideFrames>();
+        } else {
+            builder.Services.AddSingleton<IAnalysisFrameSource>(sp => sp.GetRequiredService<CameraService>());
+        }
         // §59.5 — session image/autofocus history: the sweep records completed runs, the
         // autofocus trigger family reads them (temperature delta + HFR trend are both measured
         // "since the last autofocus"). In-memory by design — triggers reason about the current
@@ -609,6 +636,9 @@ public partial class Program {
         builder.Services.AddSingleton<ImageHistoryService>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.Interfaces.IImageHistory>(sp =>
             sp.GetRequiredService<ImageHistoryService>());
+        // §59.12 — the run record the Setup tab's Focusing pane reads (GET /api/v1/autofocus/state) and the
+        // cancel seam (POST /api/v1/autofocus/cancel). One per daemon: one sweep runs at a time.
+        builder.Services.AddSingleton<AutofocusRunTracker>();
         // §59 — the live autofocus V-curve sweep (probe → HFR → curve fit → move-to-best).
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>(sp =>
             new AutofocusSweepService(
@@ -620,7 +650,8 @@ public partial class Program {
                 filterWheel: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
                 ws: sp.GetRequiredService<IWsBroadcaster>(),
                 notifications: sp.GetRequiredService<INotificationService>(),
-                travelRange: ct => AutofocusSweepService.FocuserTravelAsync(sp.GetRequiredService<IFocuserService>(), ct)));
+                travelRange: ct => AutofocusSweepService.FocuserTravelAsync(sp.GetRequiredService<IFocuserService>(), ct),
+                tracker: sp.GetRequiredService<AutofocusRunTracker>()));
         // §48.3 — the auto-exposure flat set (panel light → probe-to-ADU → saved FLAT frames).
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(sp =>
             new FlatCaptureService(
@@ -1158,6 +1189,9 @@ public partial class Program {
         // shows in the boot log with an install hint instead of at the first exposure's FITS write.
         // Log-and-continue: the rest of the daemon (equipment, planning, the client UI) still works.
         LogCfitsioProbe(app.Logger, OpenAstroAra.Fits.FitsLibraryProbe.Probe(), CfitsioInstallHint());
+        if (app.Services.GetService<SyntheticSkySettings>() is { } sky) {
+            LogSyntheticSky(app.Logger, SyntheticSky.EnvVar, sky.BestPosition, sky.HfrAtFocus, sky.StepsPerPixel);
+        }
 
         // #1135 — build the storage service now so its constructor sweep of the request/result
         // exchange happens at boot, not on the first /storage request (a lazily resolved singleton
@@ -1187,6 +1221,10 @@ public partial class Program {
     private static partial void LogPlateSolverMissing(ILogger logger, string path);
 
     /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes and guide-camera focus frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
+    private static partial void LogSyntheticSky(ILogger logger, string envVar, int best, double hfr, double scale);
+
     internal static void LogCfitsioProbe(ILogger logger, OpenAstroAra.Fits.FitsLibraryProbeResult result, string installHint) {
         var resolution = result.Resolution;
         var tried = resolution.Tried.Count == 0 ? "(resolver not reached)" : string.Join(", ", resolution.Tried);

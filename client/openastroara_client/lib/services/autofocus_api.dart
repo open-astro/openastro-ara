@@ -1,6 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
+import '../models/autofocus_run.dart';
 import '../models/server.dart';
+
+/// A fetched run frame: JPEG bytes + the server's `X-Frame-Seq`.
+class AutofocusFrame {
+  final Uint8List bytes;
+  final int seq;
+  const AutofocusFrame(this.bytes, this.seq);
+}
 
 /// One §65.5 background job's polled state, as served by `GET /api/v1/jobs/{id}`.
 /// `state` is `queued`/`running`/`complete`/`failed`/`cancelled` on the wire.
@@ -54,6 +64,16 @@ abstract interface class AutofocusApi {
   /// state — e.g. a restart mid-sweep — NOT that the job finished).
   Future<AutofocusJob?> job(String jobId);
 
+  /// The daemon's current / most recent run record (`GET /api/v1/autofocus/state`).
+  Future<AutofocusRun> state();
+
+  /// Cancel the run in progress, whoever started it. A 409 (nothing running) is
+  /// swallowed — the record will say so on the next [state] read.
+  Future<void> cancel();
+
+  /// The run's rendered frame, or `null` (204) when none exists yet.
+  Future<AutofocusFrame?> fetchFrame();
+
   void close();
 }
 
@@ -94,6 +114,38 @@ class DioAutofocusApi implements AutofocusApi {
       throw Exception('unexpected job response — not a JSON object');
     }
     return AutofocusJob.fromJson(data);
+  }
+
+  @override
+  Future<AutofocusRun> state() async {
+    final res = await _dio.get<dynamic>('/api/v1/autofocus/state');
+    final data = res.data;
+    return data is Map<String, dynamic> ? AutofocusRun.fromJson(data) : AutofocusRun.idle;
+  }
+
+  @override
+  Future<void> cancel() async {
+    await _dio.post<void>(
+      '/api/v1/autofocus/cancel',
+      options: Options(validateStatus: (s) => s != null && (s < 400 || s == 409)),
+    );
+  }
+
+  @override
+  Future<AutofocusFrame?> fetchFrame() async {
+    final res = await _dio.get<List<int>>(
+      '/api/v1/autofocus/frame',
+      options: Options(
+        responseType: ResponseType.bytes,
+        validateStatus: (s) => s == 200 || s == 204,
+      ),
+    );
+    if (res.statusCode == 204) return null;
+    final bytes = res.data;
+    if (bytes == null || bytes.isEmpty) return null;
+    final u8 = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+    final seq = int.tryParse(res.headers.value('x-frame-seq') ?? '') ?? 0;
+    return AutofocusFrame(u8, seq);
   }
 
   @override

@@ -88,6 +88,14 @@ curl http://localhost:5555/healthz   # → "ok"
   `~/.local/share/openastroara`. For a throwaway dev profile:
   `OPENASTROARA_PROFILE_DIR=/tmp/ara dotnet run --project OpenAstroAra.Server`.
 - No auth — the daemon assumes a trusted LAN (playbook §67).
+- **Synthetic sky (Development only).** The Alpaca camera simulator renders noise, so the
+  focus instruments (Setup → Focusing) cannot be seen working against it. With
+  `OPENASTROARA_SYNTHETIC_SKY=best=24600,hfr=1.4,scale=350` (all three keys optional) the
+  daemon renders a star field in place of camera frames: autofocus probes blur with the
+  simulator focuser's distance from `best`, and the guide-camera focus loop draws from a field
+  whose focus drifts through best and back. The real detector, fit, confirmation frame and
+  rendering run on them. Ignored outside `ASPNETCORE_ENVIRONMENT=Development`; a loud warning
+  is logged at startup. Needs the simulators' focuser connected.
 - The solution builds with `TreatWarningsAsErrors=true` + `AnalysisMode=All`. If your
   local SDK surfaces analyzer warnings that block `dotnet run`, append
   `-p:TreatWarningsAsErrors=false` — a run-time-only relaxation that touches no files.

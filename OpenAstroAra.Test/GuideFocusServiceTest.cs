@@ -1,0 +1,218 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Endpoints;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// Setup → Focusing, guide-camera card: the focus loop's guards and its frame measurement (sim-free — the
+    /// capture path through the guider daemon is exercised against the fake guider in integration), and the
+    /// main-camera connect guard that keeps the guider's camera from being opened twice.
+    /// </summary>
+    [TestFixture]
+    public class GuideFocusServiceTest {
+
+        private const ushort Background = 1000;
+
+        private static void AddStar(ushort[] frame, int width, int height, int cx, int cy, double amplitude, double sigma = 1.5) {
+            int r = (int)Math.Ceiling(sigma * 3);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    double v = amplitude * Math.Exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + v);
+                }
+            }
+        }
+
+        private static ushort[] FlatField(int width, int height) {
+            var f = new ushort[width * height];
+            Array.Fill(f, Background);
+            return f;
+        }
+
+        private static Phd2SettingsDto Phd2(string guiderCamera) => new(
+            Host: "localhost", Port: 4400, Phd2Profile: "Default", DitherEnabled: true, DitherEveryNFrames: 1,
+            DitherPixels: 5, SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60, ForceCalibrationEachSession: false,
+            GuiderCamera: guiderCamera);
+
+        private static DiscoveredDeviceDto Device(string host, string ip, int port, int number) =>
+            new("id", "ASI220MM Mini", DeviceType.Camera, host, ip, port, number, false);
+
+        private static GuiderRecoveryCoordinator NewRecovery() =>
+            new(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(), Mock.Of<IDiagnosticsService>(),
+                NullLogger<GuiderRecoveryCoordinator>.Instance);
+
+        [Test]
+        public void Validate_bounds_the_exposure_and_binning() {
+            Assert.DoesNotThrow(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(2.0)));
+            Assert.DoesNotThrow(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(GuideFocusService.MaxExposureSec, 2)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(0)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(31)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(double.NaN)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(1, 0)));
+        }
+
+        [Test]
+        public void The_daemon_owns_its_camera_while_guiding_or_calibrating() {
+            Assert.That(GuideFocusService.GuiderBusy("Guiding"), Is.True);
+            Assert.That(GuideFocusService.GuiderBusy("Calibrating"), Is.True);
+            Assert.That(GuideFocusService.GuiderBusy("LostLock"), Is.True);
+            Assert.That(GuideFocusService.GuiderBusy("Paused"), Is.True);
+            Assert.That(GuideFocusService.GuiderBusy("Looping"), Is.False, "looping is just exposing — the lease stops it");
+            Assert.That(GuideFocusService.GuiderBusy("Stopped"), Is.False);
+            Assert.That(GuideFocusService.GuiderBusy(""), Is.False);
+            Assert.That(GuideFocusService.GuiderBusy(null), Is.False);
+        }
+
+        [Test]
+        public void Measure_reads_stars_hfr_peak_and_fwhm_from_a_guide_frame() {
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 40, 40, 20_000);
+            AddStar(frame, w, h, 120, 60, 12_000);
+            AddStar(frame, w, h, 80, 150, 9_000);
+            AddStar(frame, w, h, 160, 160, 15_000, sigma: 2.0);
+            var at = new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero);
+
+            var sample = GuideFocusService.Measure(frame, w, h, 7, at);
+
+            Assert.That(sample.Seq, Is.EqualTo(7));
+            Assert.That(sample.CapturedUtc, Is.EqualTo(at));
+            Assert.That(sample.Stars, Is.EqualTo(4));
+            Assert.That(sample.Hfr, Is.GreaterThan(0.5).And.LessThan(5));
+            Assert.That(sample.PeakAdu, Is.EqualTo(Background + 20_000).Within(500), "the brightest star's peak");
+            Assert.That(sample.Fwhm, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void Measure_on_a_starless_frame_reads_zero_not_NaN() {
+            var sample = GuideFocusService.Measure(FlatField(120, 120), 120, 120, 1, DateTimeOffset.UnixEpoch);
+            Assert.That(sample.Stars, Is.EqualTo(0));
+            Assert.That(sample.Hfr, Is.EqualTo(0));
+            Assert.That(sample.PeakAdu, Is.EqualTo(0));
+            Assert.That(sample.Fwhm, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task Status_is_idle_before_a_start_and_start_refuses_a_disconnected_guider() {
+            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+
+            var status = svc.GetStatus();
+            Assert.That(status.Active, Is.False);
+            Assert.That(status.State, Is.EqualTo("idle"));
+            Assert.That(status.Recent, Is.Empty);
+            Assert.That(status.HasFrame, Is.False);
+            Assert.That(svc.GetFrame(), Is.Null);
+            Assert.That(svc.IsActive, Is.False);
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(new GuideFocusStartRequestDto(2), CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("not connected"));
+            Assert.That(svc.GetStatus().State, Is.EqualTo("idle"), "a refused start leaves no trace");
+        }
+
+        [Test]
+        public async Task Start_refuses_while_polar_alignment_holds_the_guide_camera() {
+            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), polarAlignActive: () => true);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(new GuideFocusStartRequestDto(2), CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("polar alignment"));
+        }
+
+        [Test]
+        public async Task Stop_when_nothing_runs_is_a_no_op() {
+            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>());
+            await svc.StopAsync();
+            Assert.That(svc.GetStatus().State, Is.EqualTo("idle"));
+        }
+
+        // ─── CameraConnectGuard ───
+
+        [Test]
+        public void The_guider_camera_is_recognised_by_host_ip_port_and_number() {
+            var phd2 = Phd2("Alpaca Camera [rc91.lan:6800/1]");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 6800, 1), phd2), Is.True);
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("RC91", "192.168.1.235", 6800, 1), phd2), Is.True, "unqualified vs .lan");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("other", "rc91.lan", 6800, 1), phd2), Is.True, "matched on the ip field");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 6800, 0), phd2), Is.False, "the main camera on the same bridge");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 11111, 1), phd2), Is.False, "another Alpaca server");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("asiair.lan", "192.168.1.118", 6800, 1), phd2), Is.False);
+        }
+
+        [Test]
+        public void An_ip_addressed_guider_camera_matches_the_device_ip() {
+            var phd2 = Phd2("Alpaca Camera [192.168.1.235:6800/1]");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 6800, 1), phd2), Is.True);
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.236", 6800, 1), phd2), Is.False);
+        }
+
+        [Test]
+        public void No_guider_camera_or_a_non_alpaca_one_never_matches() {
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 6800, 1), Phd2("")), Is.False);
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 6800, 1), Phd2("ZWO ASI Camera (1)")), Is.False);
+        }
+
+        [Test]
+        public void Loopback_spellings_are_one_host() {
+            Assert.That(CameraConnectGuard.HostsEqual("localhost", "127.0.0.1"), Is.True);
+            Assert.That(CameraConnectGuard.HostsEqual("::1", "LOCALHOST"), Is.True);
+            Assert.That(CameraConnectGuard.HostsEqual("rc91", "rc91.local"), Is.True);
+            Assert.That(CameraConnectGuard.HostsEqual("rc91.lan", "rc91.local"), Is.False, "two qualified names differ");
+            Assert.That(CameraConnectGuard.HostsEqual("192.168.1.2", "192.168.1.20"), Is.False, "no label match on addresses");
+            Assert.That(CameraConnectGuard.HostsEqual("", "rc91"), Is.False);
+        }
+
+        [Test]
+        public async Task The_connect_guard_only_bites_while_the_guider_is_connected() {
+            var device = Device("rc91.lan", "192.168.1.235", 6800, 1);
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetPhd2Settings()).Returns(Phd2("Alpaca Camera [rc91.lan:6800/1]"));
+
+            var disconnected = new Mock<IGuiderService>();
+            disconnected.Setup(g => g.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderDto("phd2", "PHD2", EquipmentConnectionState.Disconnected, new GuiderStateDto("stopped", null, null, null, null)));
+            Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(device, disconnected.Object, profiles.Object, CancellationToken.None), Is.False);
+
+            var none = new Mock<IGuiderService>();
+            none.Setup(g => g.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((GuiderDto?)null);
+            Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(device, none.Object, profiles.Object, CancellationToken.None), Is.False);
+
+            var connected = new Mock<IGuiderService>();
+            connected.Setup(g => g.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderDto("phd2", "PHD2", EquipmentConnectionState.Connected, new GuiderStateDto("stopped", null, null, null, null)));
+            Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(device, connected.Object, profiles.Object, CancellationToken.None), Is.True);
+            Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(Device("rc91.lan", "192.168.1.235", 6800, 0), connected.Object, profiles.Object, CancellationToken.None), Is.False);
+            Assert.That(CameraConnectGuard.Detail(device, profiles.Object.GetPhd2Settings()), Does.Contain("Setup → Focusing"));
+        }
+    }
+}

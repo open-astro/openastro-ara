@@ -82,6 +82,10 @@ paths:
           in: header
           schema:
             type: string
+        - name: force
+          in: query
+          schema:
+            type: boolean
       requestBody:
         content:
           application/json:
@@ -1179,6 +1183,62 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/guider/focus/start:
+    post:
+      tags:
+        - Equipment
+      operationId: StartGuideFocus
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuideFocusStartRequestDto'
+        required: true
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/focus/stop:
+    post:
+      tags:
+        - Equipment
+      operationId: StopGuideFocus
+      responses:
+        '204':
+          description: No Content
+  /api/v1/equipment/guider/focus:
+    get:
+      tags:
+        - Equipment
+      operationId: GetGuideFocus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuideFocusStatusDto'
+  /api/v1/equipment/guider/focus/frame:
+    get:
+      tags:
+        - Equipment
+      operationId: GetGuideFocusFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
   /api/v1/equipment/guider/darklibrary/build:
     post:
       tags:
@@ -1444,6 +1504,42 @@ paths:
       responses:
         '204':
           description: No Content
+  /api/v1/autofocus/state:
+    get:
+      tags:
+        - Autofocus
+      operationId: GetAutofocusState
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutofocusRunDto'
+  /api/v1/autofocus/frame:
+    get:
+      tags:
+        - Autofocus
+      operationId: GetAutofocusFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
+  /api/v1/autofocus/cancel:
+    post:
+      tags:
+        - Autofocus
+      operationId: CancelAutofocus
+      responses:
+        '202':
+          description: Accepted
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/sequences:
     get:
       tags:
@@ -5627,6 +5723,255 @@ components:
           type: string
         remember:
           type: boolean
+    AutofocusCurveFitDto:
+      required:
+        - algorithm
+        - r_squared
+        - best_position
+        - predicted_hfr
+        - within_sampled_range
+        - curve
+      type: object
+      properties:
+        algorithm:
+          type: string
+        r_squared:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        best_position:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        predicted_hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        within_sampled_range:
+          type: boolean
+        curve:
+          type: array
+          items:
+            $ref: '#/components/schemas/AutofocusCurvePointDto'
+    AutofocusCurvePointDto:
+      required:
+        - position
+        - hfr
+      type: object
+      properties:
+        position:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    AutofocusProbeDto:
+      required:
+        - index
+        - phase
+        - position
+        - hfr
+        - stars
+        - kept
+      type: object
+      properties:
+        index:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        phase:
+          type: string
+        position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        stars:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        kept:
+          type: boolean
+    AutofocusRunDto:
+      required:
+        - state
+        - mode
+        - phase
+        - trigger
+        - started_utc
+        - completed_utc
+        - duration_seconds
+        - start_position
+        - final_position
+        - final_hfr
+        - final_stars
+        - filter
+        - focuser_temperature_c
+        - total_steps
+        - completed_steps
+        - sweep_attempt
+        - probes
+        - fit
+        - reason
+        - restored_position
+        - has_frame
+        - frame_seq
+        - frame_position
+        - frame_hfr
+      type: object
+      properties:
+        state:
+          type: string
+        mode:
+          type:
+            - 'null'
+            - string
+        phase:
+          type:
+            - 'null'
+            - string
+        trigger:
+          type:
+            - 'null'
+            - string
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        completed_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        duration_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        start_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        final_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        final_hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        final_stars:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        filter:
+          type:
+            - 'null'
+            - string
+        focuser_temperature_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        total_steps:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        completed_steps:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        sweep_attempt:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        probes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AutofocusProbeDto'
+        fit:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AutofocusCurveFitDto'
+        reason:
+          type:
+            - 'null'
+            - string
+        restored_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        has_frame:
+          type: boolean
+        frame_seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        frame_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        frame_hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     AutofocusSettingsDto:
       required:
         - method
@@ -7985,6 +8330,137 @@ components:
             - integer
             - string
           format: int32
+    GuideFocusSampleDto:
+      required:
+        - seq
+        - captured_utc
+        - hfr
+        - stars
+        - peak_adu
+        - fwhm
+      type: object
+      properties:
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        captured_utc:
+          type: string
+          format: date-time
+        hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        stars:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        peak_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        fwhm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    GuideFocusStartRequestDto:
+      type: object
+      properties:
+        exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 2
+        binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+    GuideFocusStatusDto:
+      required:
+        - active
+        - state
+        - exposure_sec
+        - seq
+        - started_utc
+        - latest
+        - best_hfr
+        - best_seq
+        - recent
+        - error
+        - consecutive_failures
+        - has_frame
+      type: object
+      properties:
+        active:
+          type: boolean
+        state:
+          type: string
+        exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        latest:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GuideFocusSampleDto'
+        best_hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        best_seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int64
+        recent:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuideFocusSampleDto'
+        error:
+          type:
+            - 'null'
+            - string
+        consecutive_failures:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        has_frame:
+          type: boolean
     GuiderCalibrationEntryDto:
       type: object
       properties:

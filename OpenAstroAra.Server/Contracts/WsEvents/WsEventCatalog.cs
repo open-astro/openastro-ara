@@ -111,6 +111,19 @@ public static class WsEventCatalog {
     public const string AutofocusStarted = "autofocus.started";
     public const string AutofocusShotComplete = "autofocus.shot_complete";
     public const string AutofocusFallbackClassic = "autofocus.fallback_classic";
+    // §59.12/§59.15 — the Classic sweep's live stream for the Setup tab's Focusing pane. `step_complete`
+    // per probe (coarse search and fine sweep alike): { step_index, phase: "coarse"|"fine", position, hfr,
+    // stars, kept, total_steps } — `kept` false is a probe the sweep measured but dropped (too few stars).
+    // `curve_fit` once per sweep attempt: { algorithm, r_squared, best_position, predicted_hfr, usable,
+    // within_range }. `completed` closes a successful run of either mode: { mode, final_position, final_hfr
+    // (measured at best focus when the confirmation frame read, else the fit's prediction), final_stars?,
+    // duration_seconds, probes }. `failed` closes an unsuccessful one: { reason, restored_position? } —
+    // reason "cancelled" is the user's Cancel (POST /api/v1/autofocus/cancel). The full run (every probe,
+    // the sampled fit curve, the rendered frame) rehydrates from GET /api/v1/autofocus/state.
+    public const string AutofocusStepComplete = "autofocus.step_complete";
+    public const string AutofocusCurveFit = "autofocus.curve_fit";
+    public const string AutofocusCompleted = "autofocus.completed";
+    public const string AutofocusFailed = "autofocus.failed";
 
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
@@ -248,6 +261,7 @@ public static class WsEventCatalog {
         AutofocusStarted,
         AutofocusShotComplete,
         AutofocusFallbackClassic,
+        AutofocusStepComplete, AutofocusCurveFit, AutofocusCompleted, AutofocusFailed,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
         SequenceStarted, SequencePaused, SequenceResumed, SequenceResumeRecentering, SequenceAborted,

@@ -4,19 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/equipment_device_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/mount_state.dart';
+import '../../state/focus/autofocus_live_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/focus/focusing_pane.dart';
 import '../../widgets/guider/guider_setup_wizard.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
 import '../calibration/calibration_screen.dart';
 
 /// Setup tab — the dusk ritual as a two-pane surface (§25 flow redesign).
-/// Left: the Tonight checklist (Connect equipment → Polar align → Calibration
-/// frames), each row with a live readiness glyph. Right: the selected step's
+/// Left: the Tonight checklist (Connect equipment → Focusing → Polar align →
+/// Calibration frames), each row with a live readiness glyph. Right: the selected step's
 /// instrument. Gates are checkmarks, not dams — nothing here blocks; the rail
 /// order just reads as the night (Plan → Setup → Run → Live).
 class SetupTab extends StatefulWidget {
@@ -26,7 +28,7 @@ class SetupTab extends StatefulWidget {
   State<SetupTab> createState() => _SetupTabState();
 }
 
-enum _SetupStep { connect, polarAlign, calibration }
+enum _SetupStep { connect, focus, polarAlign, calibration }
 
 class _SetupTabState extends State<SetupTab> {
   _SetupStep _selected = _SetupStep.connect;
@@ -63,6 +65,12 @@ class _SetupTabState extends State<SetupTab> {
                     onTap: _select,
                   ),
                   _ChecklistRow(
+                    step: _SetupStep.focus,
+                    selected: _selected,
+                    title: 'Focusing',
+                    onTap: _select,
+                  ),
+                  _ChecklistRow(
                     step: _SetupStep.polarAlign,
                     selected: _selected,
                     title: 'Polar align',
@@ -82,6 +90,7 @@ class _SetupTabState extends State<SetupTab> {
         Expanded(
           child: switch (_selected) {
             _SetupStep.connect => const _ConnectPane(),
+            _SetupStep.focus => const FocusingPane(),
             _SetupStep.polarAlign => const _PolarAlignPane(),
             _SetupStep.calibration => const _CalibrationPane(),
           },
@@ -111,6 +120,10 @@ class _ChecklistRow extends ConsumerWidget {
       _SetupStep.connect => (
         ref.watch(setupConnectStateProvider),
         _connectSubtitle(ref),
+      ),
+      _SetupStep.focus => (
+        ref.watch(setupFocusStateProvider),
+        _focusSubtitle(ref),
       ),
       _SetupStep.polarAlign => (
         ref.watch(setupPolarAlignStateProvider),
@@ -150,6 +163,19 @@ class _ChecklistRow extends ConsumerWidget {
     if (mountOk && cameraOk) return 'Mount and camera connected';
     if (!mountOk && !cameraOk) return 'Mount and camera not connected';
     return mountOk ? 'Camera not connected' : 'Mount not connected';
+  }
+
+  String _focusSubtitle(WidgetRef ref) {
+    final live = ref.watch(autofocusLiveProvider);
+    final run = live.run;
+    return switch (ref.watch(setupFocusStateProvider)) {
+      SetupStepState.done when run.isComplete && run.finalHfr != null && run.finalHfr! > 0 =>
+        'In focus — HFR ${run.finalHfr!.toStringAsFixed(2)} at ${run.finalPosition}',
+      SetupStepState.done => 'In focus',
+      SetupStepState.inProgress => 'Autofocus running…',
+      SetupStepState.problem => 'Autofocus failed — see the panel',
+      SetupStepState.pending => 'Main scope and guide camera',
+    };
   }
 
   String _polarAlignSubtitle(WidgetRef ref) {
