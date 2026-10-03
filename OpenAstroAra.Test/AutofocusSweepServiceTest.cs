@@ -228,6 +228,29 @@ namespace OpenAstroAra.Test {
             Assert.That(travel, Is.EqualTo(min is null ? null : (min.Value, max!.Value)));
         }
 
+        [TestCase(3.76, 3.76)]
+        [TestCase(0.0, null)] // the EAF through AlpacaBridge reports 0: no µm/step to size a CFZ from
+        [TestCase(-1.0, null)]
+        public async Task FocuserStepUm_is_the_focusers_reported_step_size_or_null(double reported, double? expected) {
+            var focusers = new Mock<IFocuserService>();
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new FocuserDto(
+                "f", "Focuser", EquipmentConnectionState.Connected,
+                new FocuserCapabilitiesDto(0, 30_000, reported, false, true),
+                new FocuserStateDto("idle", 100, null, false)));
+            Assert.That(await AutofocusSweepService.FocuserStepUmAsync(focusers.Object, CancellationToken.None), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task FocuserStepUm_is_null_without_a_focuser_or_its_capabilities() {
+            var none = new Mock<IFocuserService>();
+            none.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((FocuserDto?)null);
+            Assert.That(await AutofocusSweepService.FocuserStepUmAsync(none.Object, CancellationToken.None), Is.Null);
+            var uncached = new Mock<IFocuserService>();
+            uncached.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new FocuserDto(
+                "f", "Focuser", EquipmentConnectionState.Connecting, null, new FocuserStateDto("idle", null, null, false)));
+            Assert.That(await AutofocusSweepService.FocuserStepUmAsync(uncached.Object, CancellationToken.None), Is.Null);
+        }
+
         [Test]
         public async Task FocuserTravel_is_null_with_no_focuser() {
             var focusers = new Mock<IFocuserService>();
