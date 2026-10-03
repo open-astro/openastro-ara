@@ -323,6 +323,13 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // self-contained.
                 new LoopCondition(),
                 new TimeSpanCondition(),
+                // §38.10a — every client-generated target block carries an
+                // AboveHorizonCondition, and the editor offers AltitudeCondition.
+                // Unregistered, both degraded to UnknownSequenceCondition, whose
+                // failed check skipped the whole target block. They read the
+                // site (and custom horizon) from the store-backed profile.
+                new AboveHorizonCondition(profileService),
+                new AltitudeCondition(profileService),
             },
             container: new List<ISequenceContainer> {
                 new SequenceRootContainer(),

@@ -794,9 +794,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 progressPublisher = new CoalescingAsyncPublisher(
                     () => EmitAsync("sequence.progress", sequenceId, run));
                 var progress = new Progress<ApplicationStatus>(status => {
+                    // Tree-derived status first, so the instruction's own report wins.
+                    RefreshLiveStatus(run);
                     run.SetDescription(status.Status);
-                    var leaves = run.Leaves;
-                    run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
                     progressPublisher.Poke();
                     WriteCheckpointIfOwner(run, sequenceId);
                 });
@@ -828,11 +828,19 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var sequencer = new OpenAstroAra.Sequencer.Sequencer(root);
                 using var capCts = CancellationTokenSource.CreateLinkedTokenSource(run.Cts.Token);
                 var capTask = WatchRuntimeCapAsync(sequenceId, run, capCts.Token);
+                // Instructions that never report progress (TakeExposure) still move the
+                // status: poll the running leaf until the engine returns.
+                var publisher = progressPublisher;
+                var pollTask = PollLiveStatusAsync(run, () => {
+                    publisher.Poke();
+                    WriteCheckpointIfOwner(run, sequenceId);
+                }, capCts.Token);
                 try {
                     await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
                 } finally {
                     await capCts.CancelAsync();
                     await capTask;
+                    await pollTask;
                 }
 
                 // Final snapshot — fast instructions may finish without firing a
@@ -1235,10 +1243,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
 
         /// <summary>Set the instruction total + completed count + current index as one consistent snapshot.</summary>
-        public void UpdateProgress(int total, int completed, int? runningIndex) {
+        public bool UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
                 var clamped = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
-                if (total != InstructionCount || clamped != InstructionsCompleted || runningIndex != CurrentInstructionIndex) {
+                var changed = total != InstructionCount || clamped != InstructionsCompleted || runningIndex != CurrentInstructionIndex;
+                if (changed) {
                     // #1080 — a leaf changed status (not merely reported another tick): the cached
                     // estimate is stale whatever its age.
                     Interlocked.Increment(ref _treeVersion);
@@ -1246,6 +1255,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 InstructionCount = total;
                 InstructionsCompleted = clamped;
                 CurrentInstructionIndex = runningIndex;
+                return changed;
+            }
+        }
+
+        public string? CurrentTargetName { get; private set; }
+        private string? _lastLeafDescription;
+
+        /// <summary>
+        /// Apply the running leaf's derived description + target. The description only
+        /// replaces the current one when the derived text itself changes (a new leaf or the
+        /// next loop iteration), so a richer instruction-reported status isn't clobbered on
+        /// every poll. A null target keeps the last one (setup steps between targets).
+        /// </summary>
+        public bool ApplyRunningLeaf(string description, string? targetName) {
+            lock (_gate) {
+                var changed = false;
+                if (description != _lastLeafDescription) {
+                    _lastLeafDescription = description;
+                    CurrentInstructionDescription = description;
+                    changed = true;
+                }
+                if (targetName is not null && targetName != CurrentTargetName) {
+                    CurrentTargetName = targetName;
+                    changed = true;
+                }
+                return changed;
             }
         }
 
@@ -1331,7 +1366,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     RunId: RunId,
                     State: State,
                     CurrentInstructionIndex: CurrentInstructionIndex,
-                    CurrentTargetName: null,
+                    CurrentTargetName: CurrentTargetName,
                     StartedUtc: StartedUtc,
                     CompletedUtc: CompletedUtc,
                     InstructionsCompleted: InstructionsCompleted,
