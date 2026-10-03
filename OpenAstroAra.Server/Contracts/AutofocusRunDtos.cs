@@ -68,6 +68,10 @@ public sealed record AutofocusRunDto(
     int TotalSteps,
     int CompletedSteps,
     int SweepAttempt,
+    // §59.8 — the fine sweep's step size and where it came from (`manual` | `measured` | `cfz` | `default`);
+    // null until the Classic sweep resolves it (a Smart run has no sweep).
+    int? StepSize,
+    string? StepSizeSource,
     IReadOnlyList<AutofocusProbeDto> Probes,
     AutofocusCurveFitDto? Fit,
     string? Reason,

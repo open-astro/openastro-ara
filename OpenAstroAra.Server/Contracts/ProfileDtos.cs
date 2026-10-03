@@ -326,7 +326,11 @@ public sealed record AutofocusSettingsDto(
     // in the wizard; Smart Focus picks its magnitude key + side-classifier features from it. Trailing
     // default so a pre-§59.4 profile.json deserializes; `other` = assume nothing (pre-§59.4 behavior),
     // and consumers parse via FocusFeatureProfile.Parse (unknown wire values also read as `other`).
-    string TelescopeType = "other");
+    string TelescopeType = "other",
+    // §59.8 — size the sweep automatically: from the V half-width the last sweep measured, else half the CFZ
+    // when the focuser reports µm/step, else `StepSize` as the wide first sweep. Off = `StepSize` as typed.
+    // Trailing default so a pre-existing profile.json reads as auto (the agreed default).
+    bool StepSizeAuto = true);
 
 /// <summary>
 /// §37.10 plate solving settings — engine + search/timeout knobs +

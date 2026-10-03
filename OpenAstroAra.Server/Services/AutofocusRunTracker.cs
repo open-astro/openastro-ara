@@ -54,6 +54,8 @@ public sealed class AutofocusRunTracker {
     private int _totalSteps;
     private int _completedSteps;
     private int _sweepAttempt;
+    private int? _stepSize;
+    private string? _stepSizeSource;
     private readonly List<AutofocusProbeDto> _probes = new();
     private AutofocusCurveFitDto? _fit;
     private string? _reason;
@@ -92,6 +94,8 @@ public sealed class AutofocusRunTracker {
             _totalSteps = totalSteps;
             _completedSteps = 0;
             _sweepAttempt = 0;
+            _stepSize = null;
+            _stepSizeSource = null;
             _probes.Clear();
             _fit = null;
             _reason = null;
@@ -118,6 +122,14 @@ public sealed class AutofocusRunTracker {
     public void SetPhase(string phase) {
         lock (_gate) {
             _phase = phase;
+        }
+    }
+
+    /// <summary>§59.8 — the step size the Classic sweep resolved for this run and its source.</summary>
+    public void SetStepSize(int stepSize, string source) {
+        lock (_gate) {
+            _stepSize = stepSize;
+            _stepSizeSource = source;
         }
     }
 
@@ -273,6 +285,8 @@ public sealed class AutofocusRunTracker {
                 TotalSteps: _totalSteps,
                 CompletedSteps: _completedSteps,
                 SweepAttempt: _sweepAttempt,
+                StepSize: _stepSize,
+                StepSizeSource: _stepSizeSource,
                 Probes: _probes.ToArray(),
                 Fit: _fit,
                 Reason: _reason,

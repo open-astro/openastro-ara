@@ -20,6 +20,8 @@ void main() {
       'total_steps': 9,
       'completed_steps': 9,
       'sweep_attempt': 1,
+      'step_size': 23,
+      'step_size_source': 'measured',
       'probes': [
         {'index': 1, 'phase': 'coarse', 'position': 10000, 'hfr': 6.1, 'stars': 0, 'kept': true},
         {'index': 2, 'phase': 'fine', 'position': 10200, 'hfr': 2.9, 'stars': 40, 'kept': true},
@@ -48,6 +50,8 @@ void main() {
     expect(run.finalPosition, 9850);
     expect(run.finalHfr, 1.42);
     expect(run.probes, hasLength(3));
+    expect(run.stepSize, 23);
+    expect(run.stepSizeSource, 'measured');
     expect(run.coarseProbes, hasLength(1));
     expect(run.sweepProbes, hasLength(2));
     expect(run.sweepProbes.last.kept, isFalse);
