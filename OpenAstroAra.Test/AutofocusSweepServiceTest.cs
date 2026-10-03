@@ -122,6 +122,90 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Coarse_search_finds_focus_far_from_the_start() {
+            // Focus 3000 steps above the start: every fine probe around the start is unmeasurable, so only
+            // the coarse pass (binned measurement, readable at any defocus) can find the way there.
+            const int best = StartPosition + 3000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - best) / 100.0;
+                    return Math.Abs(Current() - best) > 600 ? Result(0, 0) : Result(1.5 + 0.2 * delta * delta, 42);
+                },
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - best) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(best).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_keeps_the_start_when_it_already_brackets_focus() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, StartPosition - 150),
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - (StartPosition - 150)) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            // Three coarse probes (start, +400, −400), then the overshoot + nine fine probes around the start.
+            Assert.That(moves.GetRange(0, 3), Is.EqualTo(new[] { StartPosition, StartPosition + 400, StartPosition - 400 }));
+            Assert.That(moves[3], Is.EqualTo(StartPosition + 500));
+            Assert.That(Current(), Is.EqualTo(StartPosition - 150).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_with_no_measurable_stars_fails_and_restores() {
+            var (focuser, moves) = Focuser();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5, 42),
+                coarseMetric: (_, _) => double.PositiveInfinity);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(moves, Has.Count.EqualTo(4), "three coarse probes, then the restore");
+            Assert.That(moves[^1], Is.EqualTo(StartPosition));
+        }
+
+        [Test]
+        public async Task Edge_minimum_re_centres_and_sweeps_again() {
+            // Focus 550 above the start: the first ±400 sweep falls monotonically toward its top edge.
+            var (svc, moves, position) = Build(Settings(steps: 4, stepSize: 100), bestPosition: StartPosition + 550);
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves, Has.Member(StartPosition + 900), "the re-sweep overshoots above the new top (edge + 400 + 100)");
+            Assert.That(position(), Is.EqualTo(StartPosition + 550).Within(30));
+        }
+
+        [Test]
+        public async Task Unmeasurable_edge_probes_are_skipped_not_fatal() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - StartPosition) / 100.0;
+                    return Math.Abs(Current() - StartPosition) >= 400 ? Result(0, 0) : Result(1.5 + 0.2 * delta * delta, 42);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(StartPosition).Within(30));
+        }
+
+        [Test]
         public async Task Disconnected_focuser_fails_without_touching_anything() {
             var (svc, moves, _) = Build(Settings(), StartPosition, connected: false);
             using var __ = svc;
