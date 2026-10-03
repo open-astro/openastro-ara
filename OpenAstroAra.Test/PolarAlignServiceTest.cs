@@ -954,6 +954,52 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_seed_slew_the_mount_accepts_but_never_turns_fails_as_slew_failed() {
+            // The mount says yes to the slew, but its reported RA does not move: there is no turn
+            // to fit, so the routine must stop rather than seed from a zero-degree rotation.
+            var mount = NewMount();
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
+        }
+
+        [Test]
+        public async Task A_mount_with_no_pointing_after_the_seed_slew_fails_as_mount_fault() {
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            var slewed = false;
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => slewed ? null! : position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => slewed = true)
+                .ReturnsAsync(true);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_fault"));
+        }
+
+        /// <summary>Runs the routine against <paramref name="mount"/> with solvable seeds and
+        /// returns the reason on its error event once it has failed.</summary>
+        private static async Task<string?> SeedFailureReasonAsync(Mock<ITelescopeMediator> mount) {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, mount, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            return ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload
+                .GetProperty("reason").GetString();
+        }
+
+        [Test]
         public async Task A_mount_axis_well_off_the_pole_still_seeds_from_the_mounts_own_rotation() {
             // Field seeds from 2026-10-02 (iOptron HAE29C, axis ~4.6° off the NCP): a 30° RA turn
             // moved the near-pole guide field only 0.8° in solved RA but 1.6° on the sky. Using
