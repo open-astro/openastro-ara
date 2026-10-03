@@ -331,7 +331,8 @@ void main() {
       );
       final text = MainFocusCard.weakFitText(auto)!;
       expect(text, contains('R² 0.57'));
-      expect(text, contains('smaller step size next run'));
+      expect(text, contains('sizes the next sweep'));
+      expect(text, isNot(contains('will use a smaller step size')), reason: 'no promise: the width may not be measurable');
       expect(text, isNot(contains('A smaller step size would')));
     });
     test('a good fit says nothing', () {

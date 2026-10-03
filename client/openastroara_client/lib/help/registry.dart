@@ -1081,7 +1081,7 @@ const Map<String, Help> helpRegistry = {
         'Distance between sample positions, in focuser native steps. With **Automatic step size** on, this is the first sweep\'s (deliberately wide) step; later sweeps are sized from the measured V-curve. With it off, every sweep uses this value.\n\n'
         'Should span **3-5x the critical focus zone (CFZ)** total range — too small and the V-curve doesn\'t have enough vertical range to fit; too large and you sample outside the regime where the curve is parabolic.\n\n'
         'CFZ ≈ 2 × λ × N² where λ is wavelength (~0.55µm for green) and N is the f-ratio. f/4 → CFZ ~17µm; f/8 → CFZ ~70µm. Convert µm to focuser steps via your focuser\'s steps-per-µm.\n\n'
-        'When in doubt: start with the default (50), run a focus, look at the V-curve. Flat curve → increase step size; sharp narrow V → decrease.',
+        'When in doubt: leave **Automatic step size** on — Ara measures the V\'s width from each sweep and sizes the next one from it. With it off: start with the default (50), run a focus, look at the V-curve. Flat curve → increase step size; sharp narrow V → decrease.',
     relatedSettings: ['img.autofocus.step_size_auto', 'img.autofocus.steps'],
   ),
   'img.autofocus.trigger_temp_delta_c': Help(

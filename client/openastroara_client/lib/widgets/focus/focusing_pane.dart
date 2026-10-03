@@ -347,7 +347,7 @@ class MainFocusCard extends ConsumerWidget {
     // so the advice is "run again", not "go change a setting".
     final auto = run.stepSizeSource != null && run.stepSizeSource != 'manual';
     return auto
-        ? 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so this sweep was wider than the V. Ara measured the V\'s width from it and will use a smaller step size next run. The focus here comes from the measured frame, not the fit.'
+        ? 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.'
         : 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.';
   }
 
