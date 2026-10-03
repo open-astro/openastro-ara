@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/draft_sequence.dart';
 import '../../models/sequence/imaging_run_body.dart';
+import '../../models/sequence/rig_capabilities.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_api.dart';
 import '../../services/sequence_api.dart';
@@ -19,6 +20,7 @@ import '../settings/imaging_defaults_state.dart';
 import '../settings/phd2_settings_state.dart';
 import '../settings/settings_nav.dart';
 import 'draft_sequences_state.dart';
+import 'rig_capabilities_state.dart';
 import 'sequence_editor_state.dart';
 import 'sequence_list_state.dart';
 
@@ -156,6 +158,8 @@ Future<ImagingRunResult?> createImagingRun(
   // With a draft already open the target is APPENDED to it (below), the same
   // choreography as the connected append-to-open-sequence path.
   if (api == null) {
+    // No daemon to ask what the rig has — settings are the best we know.
+    final rig = rigCapabilitiesFromSettings(container.read(phd2SettingsProvider));
     final choice = await _choosePlan(
       ref,
       container,
@@ -163,6 +167,7 @@ Future<ImagingRunResult?> createImagingRun(
       raDeg: raDeg,
       decDeg: decDeg,
       remainingDarkHours: remainingDarkHours,
+      rig: rig,
     );
     if (choice == null) return ImagingRunResult.userCancelled;
     final defaults = container.read(imagingDefaultsProvider);
@@ -188,6 +193,7 @@ Future<ImagingRunResult?> createImagingRun(
       positionAngleDeg: positionAngleDeg,
       filterPlan: choice.filterPlan,
       startGuiding: choice.guide,
+      rig: rig,
       ditherEveryNExposures: _ditherCadence(container, choice),
       manualFilterSwap: choice.manualFilterSwap,
     );
@@ -210,6 +216,7 @@ Future<ImagingRunResult?> createImagingRun(
           positionAngleDeg: positionAngleDeg,
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
+          rig: rig,
           ditherEveryNExposures: _ditherCadence(container, choice),
           manualFilterSwap: choice.manualFilterSwap,
         ),
@@ -238,6 +245,7 @@ Future<ImagingRunResult?> createImagingRun(
             positionAngleDeg: positionAngleDeg,
             filterPlan: choice.filterPlan,
             startGuiding: choice.guide,
+            rig: rig,
             ditherEveryNExposures: _ditherCadence(container, choice),
             manualFilterSwap: choice.manualFilterSwap,
           ),
@@ -267,6 +275,9 @@ Future<ImagingRunResult?> createImagingRun(
   // them fresh here; a failure keeps whatever the notifiers already hold (the
   // same best-effort contract the panels use).
   await _hydratePlanningSettings(container);
+  // The rig cooks the run: guiding only with a guider, filter switches only
+  // with a wheel, autofocus only with a focuser (see RigCapabilities).
+  final rig = await readRigCapabilities(container);
 
   // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
   // when the filter set gives a real choice. Null = the user cancelled.
@@ -277,6 +288,7 @@ Future<ImagingRunResult?> createImagingRun(
     raDeg: raDeg,
     decDeg: decDeg,
     remainingDarkHours: remainingDarkHours,
+    rig: rig,
   );
   if (choice == null) return ImagingRunResult.userCancelled;
   final ditherEvery = _ditherCadence(container, choice);
@@ -315,6 +327,7 @@ Future<ImagingRunResult?> createImagingRun(
           positionAngleDeg: positionAngleDeg,
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
+          rig: rig,
           ditherEveryNExposures: ditherEvery,
           manualFilterSwap: choice.manualFilterSwap,
         ),
@@ -364,6 +377,7 @@ Future<ImagingRunResult?> createImagingRun(
     positionAngleDeg: positionAngleDeg,
     filterPlan: choice.filterPlan,
     startGuiding: choice.guide,
+    rig: rig,
     ditherEveryNExposures: ditherEvery,
     manualFilterSwap: choice.manualFilterSwap,
   );
@@ -384,6 +398,7 @@ Future<ImagingRunResult?> createImagingRun(
         positionAngleDeg: positionAngleDeg,
         filterPlan: choice.filterPlan,
         startGuiding: choice.guide,
+        rig: rig,
         ditherEveryNExposures: ditherEvery,
         manualFilterSwap: choice.manualFilterSwap,
       ),
@@ -458,18 +473,22 @@ Future<TargetPlanChoice?> _choosePlan(
   required double raDeg,
   required double decDeg,
   double? remainingDarkHours,
+  required RigCapabilities rig,
 }) async {
+  // The silent (no chooser) choice still guides when the rig has a guider —
+  // an OSC rig with a guider skipped guiding for exactly this reason.
   if (!planOptionsAvailable(container.read(filterSetProvider).filters)) {
-    return const TargetPlanChoice(guide: false);
+    return TargetPlanChoice(guide: rig.guider);
   }
   final context = ref.context;
-  if (!context.mounted) return const TargetPlanChoice(guide: false);
+  if (!context.mounted) return TargetPlanChoice(guide: rig.guider);
   return showTargetPlanDialog(
     context,
     targetName: targetName,
     raDeg: raDeg,
     decDeg: decDeg,
     remainingDarkHours: remainingDarkHours,
+    guiderAvailable: rig.guider,
   );
 }
 
