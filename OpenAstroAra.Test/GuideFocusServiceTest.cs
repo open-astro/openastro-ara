@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// Setup → Focusing, guide-camera card: the focus loop's guards and its frame measurement (sim-free — the
+    /// Setup → Smart Focus, guide-camera card: the focus loop's guards and its frame measurement (sim-free — the
     /// capture path through the guider daemon is exercised against the fake guider in integration), and the
     /// main-camera connect guard that keeps the guider's camera from being opened twice.
     /// </summary>
@@ -212,7 +212,7 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(new GuiderDto("phd2", "PHD2", EquipmentConnectionState.Connected, new GuiderStateDto("stopped", null, null, null, null)));
             Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(device, connected.Object, profiles.Object, CancellationToken.None), Is.True);
             Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(Device("rc91.lan", "192.168.1.235", 6800, 0), connected.Object, profiles.Object, CancellationToken.None), Is.False);
-            Assert.That(CameraConnectGuard.Detail(device, profiles.Object.GetPhd2Settings()), Does.Contain("Setup → Focusing"));
+            Assert.That(CameraConnectGuard.Detail(device, profiles.Object.GetPhd2Settings()), Does.Contain("Setup → Smart Focus"));
         }
     }
 }

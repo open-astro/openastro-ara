@@ -1220,11 +1220,11 @@ public partial class Program {
     [LoggerMessage(Level = LogLevel.Warning, Message = "Plate solver binary not found at {Path}: every plate solve (centering, polar alignment) will fail. Install astap-cli (apt install astap-cli) or fix Options → Plate solving → solver path.")]
     private static partial void LogPlateSolverMissing(ILogger logger, string path);
 
-    /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes and guide-camera focus frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
     private static partial void LogSyntheticSky(ILogger logger, string envVar, int best, double hfr, double scale);
 
+    /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
     internal static void LogCfitsioProbe(ILogger logger, OpenAstroAra.Fits.FitsLibraryProbeResult result, string installHint) {
         var resolution = result.Resolution;
         var tried = resolution.Tried.Count == 0 ? "(resolver not reached)" : string.Join(", ", resolution.Tried);

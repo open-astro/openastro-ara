@@ -34,7 +34,7 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// §59.12 — the autofocus run record (<see cref="AutofocusRunTracker"/>) and the §59.15 Classic-sweep
     /// event stream (<c>step_complete</c> / <c>curve_fit</c> / <c>completed</c> / <c>failed</c>) that the
-    /// Setup tab's Focusing pane renders, plus the tracker-driven cancel.
+    /// Setup tab's Smart Focus pane renders, plus the tracker-driven cancel.
     /// </summary>
     [TestFixture]
     public class AutofocusRunRecordTest {
