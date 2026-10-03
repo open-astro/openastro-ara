@@ -20,6 +20,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -167,6 +168,100 @@ namespace OpenAstroAra.Test {
             Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 6800, 0), phd2), Is.False, "the main camera on the same bridge");
             Assert.That(CameraConnectGuard.IsGuiderCamera(Device("rc91.lan", "192.168.1.235", 11111, 1), phd2), Is.False, "another Alpaca server");
             Assert.That(CameraConnectGuard.IsGuiderCamera(Device("asiair.lan", "192.168.1.118", 6800, 1), phd2), Is.False);
+        }
+
+        // ─── the loop itself, driven through the synthetic-frames seam (no guider daemon) ───
+
+        private static GuideFocusService NewLoopService(GuiderService guider, Func<(ushort[] Pixels, int Width, int Height)> frames) =>
+            new(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: frames);
+
+        private static GuiderService NewGuider() =>
+            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+        private static (ushort[] Pixels, int Width, int Height) StarFrame() {
+            const int w = 128, h = 128;
+            var f = FlatField(w, h);
+            foreach (var (x, y) in new[] { (30, 30), (90, 40), (60, 95), (100, 100) }) {
+                AddStar(f, w, h, x, y, 20000, sigma: 1.8);
+            }
+            return (f, w, h);
+        }
+
+        private static async Task<GuideFocusStatusDto> PollStatusAsync(GuideFocusService svc, Func<GuideFocusStatusDto, bool> done) {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var status = svc.GetStatus();
+            while (!done(status)) {
+                await Task.Delay(20, cts.Token);
+                status = svc.GetStatus();
+            }
+            return status;
+        }
+
+        private static GuideFocusSampleDto Sample(long seq, double hfr, int stars) =>
+            new(seq, DateTimeOffset.UnixEpoch, hfr, stars, 20000, hfr * 2);
+
+        [Test]
+        public void Record_keeps_the_best_two_star_frame_caps_the_window_and_updates_the_frame() {
+            using var guider = NewGuider();
+            using var svc = NewLoopService(guider, StarFrame);
+
+            svc.Record(Sample(1, 0.4, 1), jpeg: null);          // one "star" (a hot pixel) never counts as best
+            svc.Record(Sample(2, 2.0, 5), jpeg: new byte[] { 1 });
+            svc.Record(Sample(3, 1.5, 3), jpeg: null);          // better, no new picture
+            svc.Record(Sample(4, 1.8, 4), jpeg: null);          // worse — best stays at seq 3
+            var status = svc.GetStatus();
+            Assert.That(status.BestHfr, Is.EqualTo(1.5));
+            Assert.That(status.BestSeq, Is.EqualTo(3));
+            Assert.That(status.Latest!.Seq, Is.EqualTo(4));
+            Assert.That(svc.GetFrame()!.Value.Seq, Is.EqualTo(2), "the frame is the last one that came with a picture");
+
+            for (var seq = 5; seq < 5 + GuideFocusService.RecentWindow; seq++) {
+                svc.Record(Sample(seq, 2.5, 4), jpeg: null);
+            }
+            status = svc.GetStatus();
+            Assert.That(status.Recent, Has.Count.EqualTo(GuideFocusService.RecentWindow));
+            Assert.That(status.Recent[^1].Seq, Is.EqualTo(4 + GuideFocusService.RecentWindow));
+        }
+
+        [Test]
+        public async Task The_loop_measures_frames_and_a_stop_ends_it() {
+            using var guider = NewGuider();
+            using var svc = NewLoopService(guider, StarFrame);
+
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            Assert.That(svc.IsActive, Is.True);
+            var running = await PollStatusAsync(svc, s => s.Seq >= 2);
+            Assert.That(running.State, Is.EqualTo("running"));
+            Assert.That(running.Latest!.Stars, Is.GreaterThanOrEqualTo(2));
+            Assert.That(running.BestHfr, Is.GreaterThan(0));
+            Assert.That(running.HasFrame, Is.True);
+
+            await svc.StopAsync();
+            var stopped = svc.GetStatus();
+            Assert.That(stopped.State, Is.EqualTo("stopped"));
+            Assert.That(stopped.Active, Is.False);
+            Assert.That(svc.IsActive, Is.False);
+        }
+
+        [Test]
+        public async Task Repeated_frame_failures_end_the_loop_in_error_and_a_start_restarts_it() {
+            using var guider = NewGuider();
+            var fail = true;
+            using var svc = NewLoopService(guider, () => fail ? throw new InvalidOperationException("camera dropped") : StarFrame());
+
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var failed = await PollStatusAsync(svc, s => s.State != "running");
+            Assert.That(failed.State, Is.EqualTo("error"));
+            Assert.That(failed.Active, Is.False);
+            Assert.That(failed.ConsecutiveFailures, Is.EqualTo(GuideFocusService.MaxConsecutiveFailures));
+            Assert.That(failed.Error, Does.Contain("camera dropped"));
+
+            fail = false;
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var restarted = await PollStatusAsync(svc, s => s.Latest is not null);
+            Assert.That(restarted.State, Is.EqualTo("running"));
+            Assert.That(restarted.Error, Is.Null);
+            await svc.StopAsync();
         }
 
         [Test]

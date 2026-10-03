@@ -373,7 +373,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         }
     }
 
-    private void Record(GuideFocusSampleDto sample, byte[]? jpeg) {
+    internal void Record(GuideFocusSampleDto sample, byte[]? jpeg) {
         lock (_gate) {
             _latest = sample;
             _consecutiveFailures = 0;
