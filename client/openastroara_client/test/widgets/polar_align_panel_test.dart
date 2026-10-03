@@ -37,8 +37,10 @@ class _FakePolarAlignClient implements PolarAlignClient {
   @override
   Future<PolarAlignSettings> putSettings(PolarAlignSettings s) async {
     calls.add('put');
+    if (putError != null) throw putError!;
     return settings = s;
   }
+  Object? putError;
   @override
   void close() {}
 }
@@ -301,6 +303,23 @@ void main() {
       expect(api.calls, ['put']);
       expect(api.settings.loopMode, PolarAlignLoopModes.single);
       expect(find.byKey(const Key('polar-align-take-frame')), findsOneWidget);
+    });
+
+    testWidgets('a failed save rolls the mode back to what the server has', (tester) async {
+      final api = _FakePolarAlignClient()..putError = Exception('network down');
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Single'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Single'));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['put']);
+      expect(api.settings.loopMode, PolarAlignLoopModes.loop);
+      expect(find.byKey(const Key('polar-align-take-frame')), findsNothing,
+          reason: 'the server still loops, so the panel must not offer Take Frame');
     });
 
     testWidgets('a new exposure is saved; an invalid one is refused', (tester) async {

@@ -149,6 +149,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   // Live view: the guide camera's latest frame, refetched after every frame.
   Uint8List? _frameJpeg;
   bool _frameLoading = false;
+  // A newer frame finished while a fetch was in flight: fetch again after it,
+  // or single-frame mode would keep showing the older image.
+  bool _frameReloadPending = false;
 
   // Night mode (red filter) as of the last build: blue accents nearly vanish
   // under it, so the in-routine Abort switches to full-brightness text.
@@ -224,13 +227,26 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   /// Persist [next] to the profile — the running routine re-reads it before
   /// every frame, so exposure and mode changes apply to the next frame.
+  /// A failed save rolls the panel back to [previous], so it never shows an
+  /// exposure or mode the server is not using.
   void _saveSettings(PolarAlignSettings next) {
+    final previous = _settings;
     setState(() => _settings = next);
     _run('save the polar-align settings', () async {
       final api = ref.read(polarAlignApiProvider);
       if (api == null) return;
-      final saved = await api.putSettings(next);
-      if (mounted) setState(() => _settings = saved);
+      try {
+        final saved = await api.putSettings(next);
+        if (mounted) setState(() => _settings = saved);
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _settings = previous;
+            _exposureCtrl.text = _exposureText(previous.exposureSeconds);
+          });
+        }
+        rethrow;
+      }
     });
   }
 
@@ -250,7 +266,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// Best-effort: a missing or failed frame keeps the previous image.
   Future<void> _loadFrame() async {
     final api = ref.read(polarAlignApiProvider);
-    if (api == null || _frameLoading) return;
+    if (api == null) return;
+    if (_frameLoading) {
+      _frameReloadPending = true;
+      return;
+    }
     _frameLoading = true;
     try {
       final jpeg = await api.getLiveFrame();
@@ -259,6 +279,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       // Keep showing the last frame.
     } finally {
       _frameLoading = false;
+    }
+    if (_frameReloadPending && mounted) {
+      _frameReloadPending = false;
+      unawaited(_loadFrame());
     }
   }
 
