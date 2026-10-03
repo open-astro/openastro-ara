@@ -184,10 +184,11 @@ namespace OpenAstroAra.Test {
 
         private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
                 Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null,
-                IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null) {
+                IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
+                IGuideFocusService? guideFocus = null) {
             var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver,
                 (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
-                fetcher ?? new FakeFrameFetcher()) {
+                fetcher ?? new FakeFrameFetcher(), guideFocus: guideFocus is null ? null : () => guideFocus) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
             };
             return svc;
@@ -253,6 +254,31 @@ namespace OpenAstroAra.Test {
             Assert.That(status.State, Is.EqualTo("seeding"), "an active routine begins in the seeding state");
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.EqualTo(1));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Start_stops_a_running_guide_camera_focus_loop_first() {
+            // Both borrow frames through the guider: the focus loop must give the camera up before the
+            // routine takes its lease. An idle loop is left alone.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var focus = new Mock<IGuideFocusService>();
+            focus.SetupGet(f => f.IsActive).Returns(true);
+            focus.Setup(f => f.StopAsync()).Returns(Task.CompletedTask);
+            using var svc = NewService(guider, new ScriptedSolver(), guideFocus: focus.Object);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            focus.Verify(f => f.StopAsync(), Times.Once);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var idle = new Mock<IGuideFocusService>();
+            idle.SetupGet(f => f.IsActive).Returns(false);
+            using var svc2 = NewService(guider, new ScriptedSolver(), guideFocus: idle.Object);
+            await svc2.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            idle.Verify(f => f.StopAsync(), Times.Never);
+            await svc2.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
         [Test]
