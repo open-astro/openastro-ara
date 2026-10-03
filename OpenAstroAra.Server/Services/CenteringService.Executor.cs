@@ -18,6 +18,8 @@ using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using System;
 using System.Threading;
@@ -32,7 +34,7 @@ namespace OpenAstroAra.Server.Services;
 /// loop the REST surface and the §58.4 meridian-flip recenter use — including its internal
 /// serialization (concurrent centre requests queue rather than fight over the mount).
 /// </summary>
-public sealed partial class CenteringService : ICenteringExecutor {
+public sealed partial class CenteringService : ICenteringExecutor, IPositionAngleSolver {
 
     // Rotation-convergence bound, deliberately independent of PlateSolveSettings.NumberOfAttempts:
     // that setting is the SOLVE-retry-on-failure count (CaptureSolverParameter.Attempts, consumed
@@ -68,11 +70,25 @@ public sealed partial class CenteringService : ICenteringExecutor {
         }
     }
 
-    // Solve → sync the rotator to the solved sky angle → move by the folded delta, until the
-    // solved position angle is within the profile's RotationTolerance (NINA parity, including
-    // the once-more-than-attempts loop shape: attempt N's move gets verified by solve N+1).
-    private async Task<bool> RotateToPositionAngleAsync(OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator rotator,
-            double positionAngleDeg, CancellationToken token) {
+    /// <summary>
+    /// The by-hand rotation readout's one reading (<see cref="IPositionAngleSolver"/>): capture and solve
+    /// the main camera once with the profile's plate-solve settings and report the sky position angle, or
+    /// null when the solve fails. Takes the centring gate so it never captures over a running centre.
+    /// </summary>
+    public async Task<double?> SolvePositionAngleAsync(CancellationToken ct) {
+        await _centeringGate.WaitAsync(ct);
+        try {
+            var (captureSolver, sequence, parameter, _) = BuildRotationSolve();
+            var solve = await captureSolver.Solve(sequence, parameter, solveProgress: null, progress: null, ct);
+            return solve.Success ? solve.PositionAngle : null;
+        } finally {
+            _centeringGate.Release();
+        }
+    }
+
+    // The capture-and-solve the rotation paths share: the profile's plate-solve settings, the mount's
+    // current position as the hint. Throws PlateSolverConfigurationException when the profile can't solve.
+    private (ICaptureSolver CaptureSolver, CaptureSequence Sequence, CaptureSolverParameter Parameter, IPlateSolveSettings Settings) BuildRotationSolve() {
         var profile = profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException("Cannot rotate: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
@@ -102,6 +118,15 @@ public sealed partial class CenteringService : ICenteringExecutor {
             ReattemptDelay = TimeSpan.FromMinutes(settings.ReattemptDelay),
             Coordinates = telescopeMediator.GetCurrentPosition(),
         };
+        return (captureSolver, sequence, parameter, settings);
+    }
+
+    // Solve → sync the rotator to the solved sky angle → move by the folded delta, until the
+    // solved position angle is within the profile's RotationTolerance (NINA parity, including
+    // the once-more-than-attempts loop shape: attempt N's move gets verified by solve N+1).
+    private async Task<bool> RotateToPositionAngleAsync(OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator rotator,
+            double positionAngleDeg, CancellationToken token) {
+        var (captureSolver, sequence, parameter, settings) = BuildRotationSolve();
         for (var attempt = 0; attempt <= MaxRotationMoves; attempt++) {
             token.ThrowIfCancellationRequested();
             var solve = await captureSolver.Solve(sequence, parameter, solveProgress: null, progress: null, token);

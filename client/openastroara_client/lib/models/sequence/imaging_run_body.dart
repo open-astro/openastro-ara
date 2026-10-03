@@ -285,6 +285,12 @@ Map<String, dynamic> buildTargetBlock({
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg));
 
   final children = <Map<String, dynamic>>[
+    // A framing angle on a rig WITHOUT a rotator: the daemon becomes the
+    // protractor — Rotate camera by hand plate-solves in a loop while the run
+    // waits for the user to turn the camera, then Center and Rotate centres.
+    if (positionAngleDeg != null && !rig.rotator)
+      _item(rotateCameraByHandType)
+        ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360,
     goToTarget,
     // Autofocus runs through the plan's FIRST filter (or the single chosen
     // one) — focusing through a random previously-loaded filter would hand

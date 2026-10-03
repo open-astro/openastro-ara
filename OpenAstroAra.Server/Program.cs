@@ -393,6 +393,13 @@ public partial class Program {
                 () => (sp.GetService<IPolarAlignService>() as PolarAlignService)?.IsActive ?? false,
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
                 syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null));
+        // The by-hand rotation readout (a run's Rotate camera by hand step on a rig without a rotator):
+        // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done".
+        builder.Services.AddSingleton<IRotationAssistService>(sp =>
+            new RotationAssistService(
+                (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>(),
+                () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
@@ -946,7 +953,9 @@ public partial class Program {
                 // §59.9 — autofocus defers while §51 diagnostics carries an open sky-condition issue.
                 autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>(),
                 // §48.3 — the auto-exposure flat set, so FlatPanelFlats executes for real.
-                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>()));
+                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(),
+                // Rotate camera by hand — the plate-solve readout for rigs without a rotator.
+                rotationAssist: sp.GetRequiredService<IRotationAssistService>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
@@ -986,6 +995,7 @@ public partial class Program {
 
         // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
         app.MapAutofocusEndpoints();
+        app.MapRotationAssistEndpoints();
 
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();

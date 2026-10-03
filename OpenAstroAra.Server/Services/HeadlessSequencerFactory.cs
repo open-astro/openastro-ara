@@ -152,7 +152,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IAutofocusExecutor? autofocusExecutor = null,
             IImageHistory? imageHistory = null,
             IAutofocusConditionGate? autofocusConditionGate = null,
-            IFlatCaptureExecutor? flatCaptureExecutor = null) {
+            IFlatCaptureExecutor? flatCaptureExecutor = null,
+            IRotationAssistExecutor? rotationAssist = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -280,6 +281,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // JSON-resolvable and its Execute fails loudly rather than skipping focus/centering.
                 new RunAutofocus(autofocusExecutor),
                 new CenterAndRotate(centeringExecutor, rotatorMediator),
+                // The by-hand rotation step for rigs without a rotator: starts the daemon's plate-solve
+                // readout and parks the run awaiting the user; a no-op when a rotator is connected.
+                new RotateCameraByHand(rotationAssist, rotatorMediator),
                 // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
                 // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
                 // JSON-resolvable and its Execute fails loudly rather than skipping flats.

@@ -1540,6 +1540,55 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/rotation-assist/start:
+    post:
+      tags:
+        - Rotation assist
+      summary: Start the by-hand rotation readout toward a position angle.
+      operationId: StartRotationAssist
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotationAssistStartRequestDto'
+        required: true
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/rotation-assist/stop:
+    post:
+      tags:
+        - Rotation assist
+      summary: Stop the by-hand rotation readout.
+      operationId: StopRotationAssist
+      responses:
+        '204':
+          description: No Content
+  /api/v1/rotation-assist/state:
+    get:
+      tags:
+        - Rotation assist
+      summary: 'The by-hand rotation readout: target, latest solved angle, delta, history.'
+      operationId: GetRotationAssist
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotationAssistStatusDto'
   /api/v1/sequences:
     get:
       tags:
@@ -9970,6 +10019,108 @@ components:
           type: string
         origin:
           type: string
+    RotationAssistSampleDto:
+      required:
+        - seq
+        - solved_utc
+        - solved_position_angle_deg
+        - delta_deg
+      type: object
+      properties:
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        solved_utc:
+          type: string
+          format: date-time
+        solved_position_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        delta_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    RotationAssistStartRequestDto:
+      required:
+        - position_angle_deg
+      type: object
+      properties:
+        position_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    RotationAssistStatusDto:
+      required:
+        - active
+        - state
+        - target_position_angle_deg
+        - tolerance_deg
+        - seq
+        - started_utc
+        - latest
+        - recent
+        - within_tolerance
+        - error
+        - consecutive_failures
+      type: object
+      properties:
+        active:
+          type: boolean
+        state:
+          type: string
+        target_position_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        tolerance_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        latest:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/RotationAssistSampleDto'
+        recent:
+          type: array
+          items:
+            $ref: '#/components/schemas/RotationAssistSampleDto'
+        within_tolerance:
+          type: boolean
+        error:
+          type:
+            - 'null'
+            - string
+        consecutive_failures:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     RotatorMoveRequestDto:
       required:
         - target_angle_deg
@@ -11721,6 +11872,7 @@ tags:
   - name: Health
   - name: Equipment
   - name: Autofocus
+  - name: Rotation assist
   - name: Sequences
   - name: Calibration
   - name: Mosaics

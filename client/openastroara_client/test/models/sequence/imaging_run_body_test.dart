@@ -388,6 +388,28 @@ void main() {
       expect(triggersOf(loop).map((x) => x[r'$type']), [ditherAfterExposuresType]);
     });
 
+    test('a framing angle without a rotator adds Rotate camera by hand before the centre', () {
+      final b = buildTargetBlock(
+        raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10,
+        positionAngleDeg: -61,
+        rig: const RigCapabilities(focuser: true),
+      );
+      final t = types(b);
+      expect(t.indexOf(rotateCameraByHandType), 0);
+      expect(t.indexOf(centerAndRotateType), 1);
+      expect(childrenOf(b)[0]['PositionAngle'], 299.0);
+      // With a rotator the step is not needed; without an angle neither is.
+      expect(types(block(RigCapabilities.everything)), isNot(contains(rotateCameraByHandType)));
+      final noAngle = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, rig: RigCapabilities.nothing);
+      expect(types(noAngle), isNot(contains(rotateCameraByHandType)));
+      final withRotator = buildTargetBlock(
+        raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, positionAngleDeg: 10,
+        rig: const RigCapabilities(rotator: true),
+      );
+      expect(types(withRotator), isNot(contains(rotateCameraByHandType)));
+      expect(types(withRotator), contains(centerAndRotateType));
+    });
+
     test('a multi-filter plan on a rig without a wheel swaps by hand', () {
       const plan = [
         FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 2),
