@@ -325,7 +325,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 gain: null, subframe: null, path: null, save: true, ct).ConfigureAwait(false);
             // Not cancellable mid-exposure on purpose (see StopAsync): the daemon owes exactly one event.
             var completed = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(request.ExposureSec + 30), CancellationToken.None).ConfigureAwait(false);
-            var filename = completed.Filename ?? (completed.Path is { Length: > 0 } p ? Path.GetFileName(p) : null);
+            // Only the bare name: an absolute or ../ value from the guider must not place the download (or the
+            // delete in the finally) outside workDir.
+            var filename = Path.GetFileName(completed.Filename ?? completed.Path ?? "");
             if (!completed.Success || string.IsNullOrEmpty(filename)) {
                 throw new InvalidOperationException(completed.Error ?? "the guider saved no frame");
             }
