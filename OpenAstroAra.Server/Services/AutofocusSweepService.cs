@@ -40,9 +40,12 @@ namespace OpenAstroAra.Server.Services;
 /// Semantics (fail-loud, §37.11-policy-aware):
 ///  * The sweep probes in ONE direction (outermost position first, then stepping down through
 ///    every point) so mechanical backlash biases every sample identically.
-///  * Any failed probe, a probe with fewer than <see cref="MinStarsPerProbe"/> stars, an
-///    unusable fit, or a best-position extrapolated beyond the sampled range FAILS the sweep —
-///    a fabricated focus position quietly ruins every subsequent frame.
+///  * A coarse search (software-binned probes, AutofocusSweepService.Coarse.cs) first centres the
+///    sweep on focus, so a start far out of focus no longer feeds the sweep unmeasurable probes.
+///  * A probe with fewer than <see cref="MinStarsPerProbe"/> stars is dropped; fewer than half the
+///    probes surviving, a failed capture, or an unusable fit FAILS the sweep — a fabricated focus
+///    position quietly ruins every subsequent frame. A curve still falling at one edge re-centres
+///    there and sweeps again (up to <c>MaxSweepRecentres</c>) instead of extrapolating.
 ///  * On failure, the starting position is restored when the profile's
 ///    <c>RestorePositionOnFailure</c> is set (best-effort; restore errors are logged, the sweep
 ///    still reports failure).
@@ -57,7 +60,7 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposable {
 
     /// <summary>A probe with fewer detected stars than this is untrustworthy (clouds, slew smear,
-    /// hot-pixel-only detections) and fails the sweep rather than feeding a junk HFR to the fit.</summary>
+    /// heavy defocus, hot-pixel-only detections) and is dropped rather than feeding a junk HFR to the fit.</summary>
     internal const int MinStarsPerProbe = 3;
 
     /// <summary>
@@ -73,6 +76,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     private readonly IFocuserMediator _focuser;
     private readonly IAnalysisFrameSource _frames;
     private readonly Func<AnalysisFrame, CancellationToken, StarDetectionResult> _metric;
+    // Null disables the coarse pass (tests that inject only the fine metric exercise the sweep alone).
+    private readonly Func<AnalysisFrame, CancellationToken, double>? _coarseMetric;
     private readonly ILogger<AutofocusSweepService> _logger;
     private readonly ImageHistoryService? _history;
     private readonly IFilterWheelMediator? _filterWheel;
@@ -81,6 +86,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // Slight/Significant bands. Absent in tests that don't exercise surfacing.
     private readonly IWsBroadcaster? _ws;
     private readonly INotificationService? _notifications;
+    // The focuser's absolute travel [Min, Max] when the driver has reported it, else null: the sweep
+    // then keeps to positions >= 0 with no upper bound (the device validates the top).
+    private readonly Func<CancellationToken, Task<(int Min, int Max)?>>? _travelRange;
     // One sweep at a time — the focuser is a single physical axis, and interleaved sweeps would
     // corrupt each other's curves. Waiters queue (same philosophy as the capture gate).
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -94,16 +102,20 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             ImageHistoryService? history = null,
             IFilterWheelMediator? filterWheel = null,
             IWsBroadcaster? ws = null,
-            INotificationService? notifications = null) {
+            INotificationService? notifications = null,
+            Func<AnalysisFrame, CancellationToken, double>? coarseMetric = null,
+            Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
         _logger = logger ?? NullLogger<AutofocusSweepService>.Instance;
         _metric = metric ?? DefaultMetric;
+        _coarseMetric = coarseMetric ?? (metric is null ? DefaultCoarseMetric : null);
         _history = history;
         _filterWheel = filterWheel;
         _ws = ws;
         _notifications = notifications;
+        _travelRange = travelRange;
     }
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
@@ -154,6 +166,16 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         var restoreOnFailure = settings.RestorePositionOnFailure;
 
         try {
+            // Coarse search first: a start far from focus (big defocused discs) would otherwise feed the
+            // ±Steps·StepSize sweep nothing but unmeasurable probes.
+            var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
+            var coarse = await CoarseCentreAsync(settings, startPosition, travel, progress, token).ConfigureAwait(false);
+            if (coarse is not int coarseCentre) {
+                await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
+                return false;
+            }
+            // Every fine probe, and the overshoot above the top one, must stay inside the travel.
+            var centre = ClampSweepCentre(coarseCentre, settings, travel);
             var points = new List<FocusPoint>(ProbeCount(settings));
             // §59.10 — retain each probe's (position, detected stars) for the end-of-sweep collimation read.
             // At completion we feed the evaluator the single MOST-DEFOCUSED probe's stars (widest, best-resolved
@@ -164,48 +186,71 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // free: the sweep IS the Smart Focus calibration pass (§59.15 "calibration piggybacks on Classic").
             var probeFeatures = new List<(int Position, FocusFeatureVector Features)>(ProbeCount(settings));
             int frameWidth = 0, frameHeight = 0;
-            // Outermost-first, stepping DOWN through every position: one approach direction means
-            // backlash biases every sample identically instead of splitting the curve in two.
-            var top = startPosition + settings.Steps * settings.StepSize;
             var totalProbes = ProbeCount(settings);
-            // The FIRST probe needs the same treatment: `top` is reached by an UPWARD move from
-            // the start position, so without this overshoot its sample would carry up-approach
-            // backlash while every other sample is approached downward — and the topmost point is
-            // one of the two boundary points that most influence the fit. Overshoot above, then
-            // enter the sweep moving down.
-            await _focuser.MoveFocuser(top + settings.StepSize, token).ConfigureAwait(false);
-            for (var i = 0; i <= settings.Steps * 2; i++) {
-                token.ThrowIfCancellationRequested();
-                var position = top - i * settings.StepSize;
-                // Structured per-probe progress (Progress/MaxProgress), so consumers
-                // (the §65.5 job endpoint) can tick real numbers instead of parsing
-                // the status string.
-                progress.Report(new ApplicationStatus {
-                    Status = $"Autofocus: probing position {position} ({i + 1}/{totalProbes})",
-                    Progress = i + 1,
-                    MaxProgress = totalProbes,
-                    ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
-                });
-                var reached = await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
-                var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
-                var result = _metric(frame, token);
-                var hfr = result.AverageHFR;
-                var stars = result.DetectedStars;
-                if (stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr)) {
-                    LogSweepFailed($"probe at {reached} was untrustworthy ({stars} stars, HFR {hfr:0.###}) — clouds or a slew smear can cause this");
+            FocusCurveFitResult? fit = null;
+            for (var attempt = 0; ; attempt++) {
+                points.Clear();
+                probeStars.Clear();
+                probeFeatures.Clear();
+                // Outermost-first, stepping DOWN through every position: one approach direction means
+                // backlash biases every sample identically instead of splitting the curve in two.
+                var top = centre + settings.Steps * settings.StepSize;
+                // The FIRST probe needs the same treatment: `top` is reached by an UPWARD move from
+                // the start position, so without this overshoot its sample would carry up-approach
+                // backlash while every other sample is approached downward — and the topmost point is
+                // one of the two boundary points that most influence the fit. Overshoot above, then
+                // enter the sweep moving down.
+                await _focuser.MoveFocuser(top + settings.StepSize, token).ConfigureAwait(false);
+                for (var i = 0; i <= settings.Steps * 2; i++) {
+                    token.ThrowIfCancellationRequested();
+                    var position = top - i * settings.StepSize;
+                    // Structured per-probe progress (Progress/MaxProgress), so consumers
+                    // (the §65.5 job endpoint) can tick real numbers instead of parsing
+                    // the status string.
+                    progress.Report(new ApplicationStatus {
+                        Status = $"Autofocus: probing position {position} ({i + 1}/{totalProbes})",
+                        Progress = i + 1,
+                        MaxProgress = totalProbes,
+                        ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
+                    });
+                    var reached = await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
+                    var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
+                    var result = _metric(frame, token);
+                    var hfr = result.AverageHFR;
+                    var stars = result.DetectedStars;
+                    if (stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr)) {
+                        // The sweep's outer probes can be too defocused to measure; drop them and let the
+                        // remaining points carry the fit. Too few survivors still fails below.
+                        LogProbeSkipped(reached, stars, hfr);
+                        continue;
+                    }
+                    LogProbe(reached, hfr, stars);
+                    points.Add(new FocusPoint(reached, hfr, stars));
+                    probeStars.Add((reached, result.StarList));
+                    probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
+                    frameWidth = frame.Width;
+                    frameHeight = frame.Height;
+                }
+
+                var minTrustworthy = Math.Max(FocusCurveFit.MinPoints, (totalProbes + 1) / 2);
+                if (points.Count < minTrustworthy) {
+                    LogSweepFailed($"only {points.Count} of {totalProbes} probes had measurable stars (need {minTrustworthy}) — clouds, a slew smear, or focus far outside the sweep");
                     await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
                     return false;
                 }
-                LogProbe(reached, hfr, stars);
-                points.Add(new FocusPoint(reached, hfr, stars));
-                probeStars.Add((reached, result.StarList));
-                probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
-                frameWidth = frame.Width;
-                frameHeight = frame.Height;
-            }
 
-            var fit = FocusCurveFit.FitBest(points);
-            if (fit is not { IsUsable: true, WithinSampledRange: true }) {
+                fit = FocusCurveFit.FitBest(points);
+                if (fit is { IsUsable: true, WithinSampledRange: true }) {
+                    break;
+                }
+                // The curve still falls toward one edge: focus lies just beyond the sampled range.
+                // Re-centre on that edge and sweep again rather than give up.
+                if (attempt < MaxSweepRecentres && EdgeMinimum(points) is int edge
+                        && ClampSweepCentre(edge, settings, travel) is var recentred && recentred != centre) {
+                    LogSweepRecentred(recentred, attempt + 1);
+                    centre = recentred;
+                    continue;
+                }
                 LogSweepFailed(fit is null
                     ? "curve fit produced no result"
                     : $"curve fit unusable (usable={fit.IsUsable}, inRange={fit.WithinSampledRange}, R²={fit.RSquared:0.###}) — widen the sweep or re-centre focus manually");

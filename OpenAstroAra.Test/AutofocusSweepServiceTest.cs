@@ -122,6 +122,200 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Coarse_search_finds_focus_far_from_the_start() {
+            // Focus 3000 steps above the start: every fine probe around the start is unmeasurable, so only
+            // the coarse pass (binned measurement, readable at any defocus) can find the way there.
+            const int best = StartPosition + 3000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - best) / 100.0;
+                    return Math.Abs(Current() - best) > 600 ? Result(0, 0) : Result(1.5 + 0.2 * delta * delta, 42);
+                },
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - best) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(best).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_that_never_brackets_focus_fails_after_its_probe_budget_and_restores() {
+            // HFR keeps improving upward forever: the walk must stop at CoarseMaxProbes, fail, and
+            // restore, without ever starting the fine sweep.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var fineProbes = 0;
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => { fineProbes++; return Result(1.5, 42); },
+                coarseMetric: (_, _) => 1e6 - Current());
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(fineProbes, Is.Zero);
+            var coarseMoves = moves.GetRange(0, moves.Count - 1);
+            Assert.That(coarseMoves, Has.Count.EqualTo(AutofocusSweepService.CoarseMaxProbes));
+            Assert.That(coarseMoves, Is.Ordered.Ascending);
+            Assert.That(coarseMoves.Zip(coarseMoves.Skip(1), (a, b) => b - a).Max(),
+                Is.EqualTo(400 * AutofocusSweepService.CoarseMaxStepMultiplier), "the step stops growing at the cap");
+            Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
+        }
+
+        private static readonly int[] TravelStopMoves = { 500, 900, 100, 900 };
+
+        [Test]
+        public async Task Coarse_search_treats_the_travel_stop_at_zero_as_the_bracket() {
+            // Start at 500 with HFR improving toward 0: the walk reaches 100 and the next doubled step
+            // would pass 0, so 0 is the far side of the bracket. The fine sweep around 100 would probe
+            // down to -300, so its centre is lifted to 400 (lowest probe 0) and no move goes below 0.
+            var position = 500;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5 + 0.2 * Math.Pow((position - 100) / 100.0, 2), 42),
+                coarseMetric: (_, _) => 1000.0 + position);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            // Coarse: start, +400 (worse), -400 (better, at 100); refinement re-uses 500 and skips -300.
+            // Then the fine overshoot above the clamped centre: 400 + 500.
+            Assert.That(moves.GetRange(0, 4), Is.EqualTo(TravelStopMoves));
+            Assert.That(moves.Min(), Is.GreaterThanOrEqualTo(0));
+            Assert.That(position, Is.EqualTo(100).Within(30));
+        }
+
+        [Test]
+        public async Task Sweep_stays_inside_the_focusers_reported_travel() {
+            // Travel 0..12000, focus at 11700 with HFR improving upward from the start: the coarse walk
+            // stops at the top of travel and the fine sweep (and its overshoot) must not pass 12000.
+            const int maxPosition = 12_000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, 11_700),
+                coarseMetric: (_, _) => 1e6 - Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, maxPosition)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.Max(), Is.LessThanOrEqualTo(maxPosition));
+            Assert.That(Current(), Is.EqualTo(11_700).Within(30));
+        }
+
+        [TestCase(true, 30_000, 0, 30_000)]
+        [TestCase(false, 30_000, int.MinValue, int.MaxValue)] // relative focuser: no travel stop
+        [TestCase(true, 0, null, null)]       // range not reported yet
+        public async Task FocuserTravel_is_the_absolute_focusers_reported_range(bool absolute, int maxPosition, int? min, int? max) {
+            var focusers = new Mock<IFocuserService>();
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new FocuserDto(
+                "f", "Focuser", EquipmentConnectionState.Connected,
+                new FocuserCapabilitiesDto(absolute ? 0 : -maxPosition, maxPosition, 3.76, false, absolute),
+                new FocuserStateDto("idle", 100, null, false)));
+            var travel = await AutofocusSweepService.FocuserTravelAsync(focusers.Object, CancellationToken.None);
+            Assert.That(travel, Is.EqualTo(min is null ? null : (min.Value, max!.Value)));
+        }
+
+        [Test]
+        public async Task FocuserTravel_is_null_with_no_focuser() {
+            var focusers = new Mock<IFocuserService>();
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((FocuserDto?)null);
+            Assert.That(await AutofocusSweepService.FocuserTravelAsync(focusers.Object, CancellationToken.None), Is.Null);
+        }
+
+        [TestCase(100, 400)]       // lowest probe would be below 0
+        [TestCase(5_000, 5_000)]   // already inside
+        [TestCase(11_900, 11_500)] // overshoot above the top probe would pass 12000
+        public void ClampSweepCentre_keeps_every_probe_inside_the_travel(int centre, int expected) =>
+            Assert.That(AutofocusSweepService.ClampSweepCentre(centre, Settings(steps: 4, stepSize: 100), (0, 12_000)),
+                Is.EqualTo(expected));
+
+        [TestCase(100, 400)]   // travel shorter than one sweep: only the bottom probe is kept at 0
+        [TestCase(700, 700)]
+        public void ClampSweepCentre_on_a_travel_shorter_than_the_sweep_keeps_the_bottom_probe_in(int centre, int expected) =>
+            Assert.That(AutofocusSweepService.ClampSweepCentre(centre, Settings(steps: 4, stepSize: 100), (0, 600)),
+                Is.EqualTo(expected));
+
+        [Test]
+        public void ClampSweepCentre_leaves_an_unbounded_travel_alone() =>
+            Assert.That(AutofocusSweepService.ClampSweepCentre(-250, Settings(steps: 4, stepSize: 100), (int.MinValue, int.MaxValue)),
+                Is.EqualTo(-250));
+
+        [Test]
+        public async Task Coarse_search_keeps_the_start_when_it_already_brackets_focus() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, StartPosition - 150),
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - (StartPosition - 150)) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            // Three coarse probes (start, +400, −400), then the overshoot + nine fine probes around the start.
+            Assert.That(moves.GetRange(0, 3), Is.EqualTo(new[] { StartPosition, StartPosition + 400, StartPosition - 400 }));
+            Assert.That(moves[3], Is.EqualTo(StartPosition + 500));
+            Assert.That(Current(), Is.EqualTo(StartPosition - 150).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_with_no_measurable_stars_fails_and_restores() {
+            var (focuser, moves) = Focuser();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5, 42),
+                coarseMetric: (_, _) => double.PositiveInfinity);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(moves, Has.Count.EqualTo(4), "three coarse probes, then the restore");
+            Assert.That(moves[^1], Is.EqualTo(StartPosition));
+        }
+
+        [Test]
+        public async Task Edge_minimum_re_centres_and_sweeps_again() {
+            // Focus 550 above the start: the first ±400 sweep falls monotonically toward its top edge.
+            var (svc, moves, position) = Build(Settings(steps: 4, stepSize: 100), bestPosition: StartPosition + 550);
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves, Has.Member(StartPosition + 900), "the re-sweep overshoots above the new top (edge + 400 + 100)");
+            Assert.That(position(), Is.EqualTo(StartPosition + 550).Within(30));
+        }
+
+        [Test]
+        public async Task Unmeasurable_edge_probes_are_skipped_not_fatal() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - StartPosition) / 100.0;
+                    return Math.Abs(Current() - StartPosition) >= 400 ? Result(0, 0) : Result(1.5 + 0.2 * delta * delta, 42);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(StartPosition).Within(30));
+        }
+
+        [Test]
         public async Task Disconnected_focuser_fails_without_touching_anything() {
             var (svc, moves, _) = Build(Settings(), StartPosition, connected: false);
             using var __ = svc;
@@ -139,7 +333,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Starless_probe_fails_the_sweep_and_restores_start() {
+        public async Task Too_few_measurable_probes_fails_the_sweep_and_restores_start() {
             var (focuser, moves) = Focuser();
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
@@ -147,6 +341,27 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
+        }
+
+        // 9 probes need ceil(9/2) = 5 measurable: one short of that fails, exactly that many fits.
+        [TestCase(-100, 200, false)] // 4 of 9 probes see stars
+        [TestCase(-200, 200, true)]  // 5 of 9
+        public async Task Sweep_needs_half_its_probes_measurable(int lowOffset, int highOffset, bool expected) {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var offset = Current() - StartPosition;
+                    return offset >= lowOffset && offset <= highOffset
+                        ? Result(1.5 + 0.2 * (offset / 100.0) * (offset / 100.0), 42)
+                        : Result(1.5, 0);
+                });
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+            Assert.That(ok, Is.EqualTo(expected));
+            if (!expected) {
+                Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
+            }
         }
 
         [Test]
@@ -199,6 +414,78 @@ namespace OpenAstroAra.Test {
             await Assert.ThrowsAsync<OperationCanceledException>(
                 () => svc.RunAutofocusAsync(NoProgress, cts.Token));
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "a cancelled sweep must not strand focus at a probe position");
+        }
+
+        // ─── coarse search: the production metric ───
+
+        [Test]
+        public void SoftwareBin_averages_each_tile_and_drops_partial_edges() {
+            var pixels = Enumerable.Repeat((ushort)1000, 17 * 9).ToArray();
+            pixels[0] = 64000; // one hot pixel in the first 8x8 tile
+            var (binned, width, height) = AutofocusSweepService.SoftwareBin(pixels, 17, 9, 8);
+            Assert.That((width, height), Is.EqualTo((2, 1)), "the partial 9th column / row tiles are dropped");
+            Assert.That(binned[0], Is.EqualTo((63 * 1000 + 64000) / 64));
+            Assert.That(binned[1], Is.EqualTo(1000));
+        }
+
+        [Test]
+        public void SoftwareBin_factor_one_is_a_copy() {
+            var pixels = new ushort[] { 1, 2, 3, 4 };
+            var (binned, width, height) = AutofocusSweepService.SoftwareBin(pixels, 2, 2, 1);
+            Assert.That((width, height), Is.EqualTo((2, 2)));
+            Assert.That(binned, Is.EqualTo(pixels));
+        }
+
+        /// <summary>Gaussian stars of the given sigma on a flat 1000-ADU sky.</summary>
+        private static AnalysisFrame StarFrame(int size, double sigma, int spacing) {
+            var pixels = new ushort[size * size];
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    var v = 1000.0;
+                    var cx = (x / spacing) * spacing + spacing / 2;
+                    var cy = (y / spacing) * spacing + spacing / 2;
+                    var r2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                    v += 30000.0 * Math.Exp(-r2 / (2 * sigma * sigma));
+                    pixels[y * size + x] = (ushort)Math.Min(65535, v);
+                }
+            }
+            return new AnalysisFrame(pixels, size, size, DateTimeOffset.UnixEpoch);
+        }
+
+        [Test]
+        public void DefaultCoarseMetric_reports_native_pixel_hfr_from_the_binned_frame() {
+            // 1024 px wide: binned 8x to 128 px. A sigma-12 star has a native HFR near 14 px; the
+            // binned HFR (~1.8 px) must be scaled back up by the bin factor.
+            var hfr = AutofocusSweepService.DefaultCoarseMetric(StarFrame(1024, 12.0, 128), CancellationToken.None);
+            Assert.That(hfr, Is.InRange(8.0, 24.0));
+        }
+
+        [Test]
+        public void DefaultCoarseMetric_measures_small_frames_unbinned() {
+            // Under 32 binned px a side the frame is measured at full resolution (factor 1), so a
+            // sigma-2 star reads ~2.4 px (binning it anyway reads 4).
+            var hfr = AutofocusSweepService.DefaultCoarseMetric(StarFrame(200, 2.0, 40), CancellationToken.None);
+            Assert.That(hfr, Is.InRange(1.5, 3.5));
+        }
+
+        [Test]
+        public void DefaultCoarseMetric_is_infinite_without_stars() {
+            var blank = new AnalysisFrame(Enumerable.Repeat((ushort)1000, 512 * 512).ToArray(), 512, 512, DateTimeOffset.UnixEpoch);
+            Assert.That(AutofocusSweepService.DefaultCoarseMetric(blank, CancellationToken.None), Is.EqualTo(double.PositiveInfinity));
+        }
+
+        [Test]
+        public async Task Default_construction_runs_the_coarse_search_first() {
+            // No metric injected = production wiring: the coarse pass probes start, start + Steps*StepSize
+            // and start - Steps*StepSize before any fine-sweep overshoot. The 4x4 blank probe frame has
+            // no stars, so the coarse pass gives up and the run restores.
+            var (focuser, moves) = Focuser();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object);
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+            Assert.That(ok, Is.False);
+            Assert.That(moves.Take(3), Is.EqualTo(new[] { StartPosition, StartPosition + 400, StartPosition - 400 }));
+            Assert.That(moves[^1], Is.EqualTo(StartPosition));
         }
 
         // ─── §59.10 collimation read on a completed sweep ───
