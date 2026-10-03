@@ -34,7 +34,7 @@ namespace OpenAstroAra.Server.Services;
 ///     <see cref="HalfWidthSweepFactor"/> × that offset (HFR ≈ 2.8× the minimum on a hyperbola — well up
 ///     the slope, short of the plateau).
 ///  2. <b>cfz</b> — no sweep yet, but the focuser reports µm/step and the optics are declared: one step ≈
-///     half the critical focus zone (CFZ ≈ 2.2 µm × f²), the same seed the setup wizard applies.
+///     half the critical focus zone (CFZ ≈ 2.2 µm × f²), the seed the setup wizard applies too (the wizard's version ignores a reducer and rounds half away from zero, so the two can differ by a step).
 ///  3. <b>default</b> — the profile's stored step size: the deliberately wide first sweep that measures the V.
 /// Off, the stored step size is used as typed (<b>manual</b>).
 /// </summary>
@@ -44,7 +44,7 @@ public sealed partial class AutofocusSweepService {
     /// the minimum HFR on a hyperbolic V: on the slope, before the wings flatten out.</summary>
     internal const double HalfWidthSweepFactor = 1.5;
 
-    /// <summary>Bounds for every automatic step size (the wizard's seed uses the same): a degenerate width or
+    /// <summary>Bounds for every automatic step size (the wizard's seed shares them): a degenerate width or
     /// train can't produce a useless 1-step sweep or a hardware-grinding multi-thousand-step one.</summary>
     internal const int MinAutoStepSize = 5;
     internal const int MaxAutoStepSize = 500;

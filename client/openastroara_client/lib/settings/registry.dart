@@ -1291,7 +1291,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.autofocus.step_size',
     label: 'Step size (focuser steps)',
-    description: 'Distance between sample positions, in focuser native steps. The first sweep\'s step when Automatic step size is on; every sweep\'s when it is off.',
+    description: 'Distance between sample positions, in focuser native steps. The first sweep\'s step when Automatic step size is on (unless the focuser reports its step size, when the critical focus zone seeds it); every sweep\'s when it is off.',
     keywords: ['step size', 'distance', 'increment', 'focuser', 'cfz'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 1000),
