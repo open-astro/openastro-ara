@@ -10,6 +10,8 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 
 **Pre-release** — **v0.0.1 is feature-complete and pending its first tagged release (`v0.0.1-ara.1`)**; v0.1.0 feature work is already underway. Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the product spec; open work is tracked as GitHub issues labelled `P1`–`P5`.
 
+> **Contributions are paused.** The repository isn't accepting outside pull requests, issues or comments for now. This is temporary; this notice will be removed when contributions reopen.
+
 ## Lineage
 
 OpenAstro Ara is a hard fork of NINA `master` (3.2 line). All inherited code retains the original `Stefan Berg and the N.I.N.A. Contributors` copyright headers per the MPL-2.0 license. See `LICENSE.txt`, `COPYING`, and `AUTHORS` for the inherited attribution, and `NOTICE.md` for the full lineage attribution and the per-directory license split (MPL-2.0 server / AGPL-3.0 client).
