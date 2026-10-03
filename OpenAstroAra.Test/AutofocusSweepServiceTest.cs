@@ -306,6 +306,78 @@ namespace OpenAstroAra.Test {
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "a cancelled sweep must not strand focus at a probe position");
         }
 
+        // ─── coarse search: the production metric ───
+
+        [Test]
+        public void SoftwareBin_averages_each_tile_and_drops_partial_edges() {
+            var pixels = Enumerable.Repeat((ushort)1000, 17 * 9).ToArray();
+            pixels[0] = 64000; // one hot pixel in the first 8x8 tile
+            var (binned, width, height) = AutofocusSweepService.SoftwareBin(pixels, 17, 9, 8);
+            Assert.That((width, height), Is.EqualTo((2, 1)), "the partial 9th column / row tiles are dropped");
+            Assert.That(binned[0], Is.EqualTo((63 * 1000 + 64000) / 64));
+            Assert.That(binned[1], Is.EqualTo(1000));
+        }
+
+        [Test]
+        public void SoftwareBin_factor_one_is_a_copy() {
+            var pixels = new ushort[] { 1, 2, 3, 4 };
+            var (binned, width, height) = AutofocusSweepService.SoftwareBin(pixels, 2, 2, 1);
+            Assert.That((width, height), Is.EqualTo((2, 2)));
+            Assert.That(binned, Is.EqualTo(pixels));
+        }
+
+        /// <summary>Gaussian stars of the given sigma on a flat 1000-ADU sky.</summary>
+        private static AnalysisFrame StarFrame(int size, double sigma, int spacing) {
+            var pixels = new ushort[size * size];
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    var v = 1000.0;
+                    var cx = (x / spacing) * spacing + spacing / 2;
+                    var cy = (y / spacing) * spacing + spacing / 2;
+                    var r2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                    v += 30000.0 * Math.Exp(-r2 / (2 * sigma * sigma));
+                    pixels[y * size + x] = (ushort)Math.Min(65535, v);
+                }
+            }
+            return new AnalysisFrame(pixels, size, size, DateTimeOffset.UnixEpoch);
+        }
+
+        [Test]
+        public void DefaultCoarseMetric_reports_native_pixel_hfr_from_the_binned_frame() {
+            // 1024 px wide: binned 8x to 128 px. A sigma-12 star has a native HFR near 14 px; the
+            // binned HFR (~1.8 px) must be scaled back up by the bin factor.
+            var hfr = AutofocusSweepService.DefaultCoarseMetric(StarFrame(1024, 12.0, 128), CancellationToken.None);
+            Assert.That(hfr, Is.InRange(8.0, 24.0));
+        }
+
+        [Test]
+        public void DefaultCoarseMetric_measures_small_frames_unbinned() {
+            // Under 32 binned px a side the frame is measured at full resolution (factor 1), so a
+            // sigma-2 star reads ~2.4 px (binning it anyway reads 4).
+            var hfr = AutofocusSweepService.DefaultCoarseMetric(StarFrame(200, 2.0, 40), CancellationToken.None);
+            Assert.That(hfr, Is.InRange(1.5, 3.5));
+        }
+
+        [Test]
+        public void DefaultCoarseMetric_is_infinite_without_stars() {
+            var blank = new AnalysisFrame(Enumerable.Repeat((ushort)1000, 512 * 512).ToArray(), 512, 512, DateTimeOffset.UnixEpoch);
+            Assert.That(AutofocusSweepService.DefaultCoarseMetric(blank, CancellationToken.None), Is.EqualTo(double.PositiveInfinity));
+        }
+
+        [Test]
+        public async Task Default_construction_runs_the_coarse_search_first() {
+            // No metric injected = production wiring: the coarse pass probes start, start + Steps*StepSize
+            // and start - Steps*StepSize before any fine-sweep overshoot. The 4x4 blank probe frame has
+            // no stars, so the coarse pass gives up and the run restores.
+            var (focuser, moves) = Focuser();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object);
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+            Assert.That(ok, Is.False);
+            Assert.That(moves.Take(3), Is.EqualTo(new[] { StartPosition, StartPosition + 400, StartPosition - 400 }));
+            Assert.That(moves[^1], Is.EqualTo(StartPosition));
+        }
+
         // ─── §59.10 collimation read on a completed sweep ───
 
         private static Mock<IAnalysisFrameSource> FramesSized(int w, int h) {
