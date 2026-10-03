@@ -1063,9 +1063,12 @@ function loadOptics() {
 
 // Remember the target to frame (J2000). Called on every search / selection so
 // the box snaps to whatever you're looking at; while framing, panning then
-// nudges it from there (see followFrame).
+// nudges it from there (see followFrame). The name moves WITH the position:
+// a goto that brings none (raw coordinates) clears it, so Create Run falls
+// back to "Target" instead of naming the run after whatever was selected
+// before — "Moon" at NGC 7000's coordinates, night of 2026-10-02.
 function setFrameTarget(raDeg, decDeg, name) {
-  frameRaDeg = raDeg; frameDecDeg = decDeg; if (name) frameTargetName = name;
+  frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = name || '';
   if (frameOn) updateFrame();
 }
 

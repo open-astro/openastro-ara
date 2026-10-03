@@ -350,15 +350,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // regions alone still resolve.
     // The FULL bundled set (no magnitude cull) — a 15th-magnitude WR star or
     // a faint Arp galaxy is exactly what someone types into a search box.
+    // A hit's goto carries the object's NAME (planetariumSearchCommand):
+    // the page's framing target keeps whatever name it had when a goto
+    // brings none, so Create Run after "select the Moon, type NGC 7000"
+    // used to build a run called "Moon" at NGC 7000.
     final catalog = ref.read(bundledCatalogProvider).value ??
         ref.read(dsoCatalogProvider).value ??
         const <PlanningDso>[];
-    final hit = findCatalogObject(applyImagingRegions(catalog), q);
-    if (hit != null) {
-      _pushCmd({'type': 'goto', 'ra': hit.raDeg, 'dec': hit.decDeg});
-      return;
-    }
-    _pushCmd({'type': 'search', 'q': q});
+    _pushCmd(planetariumSearchCommand(applyImagingRegions(catalog), q));
   }
 
   // Show/hide the docked Tonight's Sky panel by flipping the shared mode. We do

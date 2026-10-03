@@ -159,6 +159,28 @@ class DsoCatalogService {
 /// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
 /// Exact normalized id/name match wins; otherwise the first object whose
 /// common name contains the query. Null when nothing matches.
+/// The planetarium command a typed search becomes. A planning-catalog hit is a
+/// `goto` by J2000 coordinates that ALWAYS carries the object's name: the page
+/// keeps one framing target (position + name), and a goto without a name used
+/// to leave the previously selected object's name on the box — select the
+/// Moon, type "NGC 7000", Create Run, and the run was called "Moon" at NGC
+/// 7000's coordinates (night of 2026-10-02). No hit → the page's own engine
+/// search, which selects the object and sets both. Pure — unit-tested.
+Map<String, Object?> planetariumSearchCommand(
+    List<PlanningDso> catalog, String query) {
+  final q = query.trim();
+  final hit = findCatalogObject(catalog, q);
+  if (hit != null) {
+    return {
+      'type': 'goto',
+      'ra': hit.raDeg,
+      'dec': hit.decDeg,
+      'name': hit.name.trim().isEmpty ? hit.id : hit.name,
+    };
+  }
+  return {'type': 'search', 'q': q};
+}
+
 PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
   // Two normalisations: a dash-PRESERVING one first, because designations
   // with a suffix collide with plain numbers once dashes go — "WR 2-1" and

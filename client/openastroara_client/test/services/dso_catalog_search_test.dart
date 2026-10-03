@@ -37,6 +37,25 @@ void main() {
     expect(findCatalogObject(catalog, ''), isNull);
   });
 
+  group('planetariumSearchCommand', () {
+    test('a catalog hit is a goto that carries the object name', () {
+      // Night of 2026-10-02: a nameless goto left "Moon" on the framing box
+      // and the run was created as "Moon" at NGC 7000.
+      final cmd = planetariumSearchCommand(catalog, ' ngc 0224 ');
+      expect(cmd['type'], 'goto');
+      expect(cmd['ra'], 100);
+      expect(cmd['dec'], 10);
+      expect(cmd['name'], 'Andromeda Galaxy');
+    });
+    test('an object without a common name is named by its designation', () {
+      expect(planetariumSearchCommand(catalog, 'sh2-129')['name'], 'Sh2-129');
+    });
+    test('no hit hands the trimmed query to the engine search', () {
+      expect(planetariumSearchCommand(catalog, ' Moon '),
+          {'type': 'search', 'q': 'Moon'});
+    });
+  });
+
   test('a suffixed WR designation never answers for the plain number', () {
     // "WR 2-1" and "WR 21" both strip to wr21 once dashes go (review #1107):
     // the dash-preserving pass has to win before the loose one.
