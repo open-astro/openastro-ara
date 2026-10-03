@@ -223,7 +223,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Starless_probe_fails_the_sweep_and_restores_start() {
+        public async Task Too_few_measurable_probes_fails_the_sweep_and_restores_start() {
             var (focuser, moves) = Focuser();
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
@@ -231,6 +231,27 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
+        }
+
+        // 9 probes need ceil(9/2) = 5 measurable: one short of that fails, exactly that many fits.
+        [TestCase(-100, 200, false)] // 4 of 9 probes see stars
+        [TestCase(-200, 200, true)]  // 5 of 9
+        public async Task Sweep_needs_half_its_probes_measurable(int lowOffset, int highOffset, bool expected) {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var offset = Current() - StartPosition;
+                    return offset >= lowOffset && offset <= highOffset
+                        ? Result(1.5 + 0.2 * (offset / 100.0) * (offset / 100.0), 42)
+                        : Result(1.5, 0);
+                });
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+            Assert.That(ok, Is.EqualTo(expected));
+            if (!expected) {
+                Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
+            }
         }
 
         [Test]
