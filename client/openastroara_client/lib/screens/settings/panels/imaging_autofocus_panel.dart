@@ -6,6 +6,7 @@ import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
+import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -113,27 +114,16 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
             if (v != null) n.setTelescopeType(v);
           },
         ),
-        EditableNumberRow(
-          label: 'Number of steps (3..31)',
-          helpKey: 'img.autofocus.steps',
-          currentValue: s.steps.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).steps.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setSteps(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Step size (focuser steps)',
-          helpKey: 'img.autofocus.step_size',
-          currentValue: s.stepSize.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).stepSize.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setStepSize(v);
-          },
+        // §59.8 — the sweep sizes itself from the V-curve it measured; the
+        // raw knobs (how many probes, how far apart) live behind Advanced.
+        SettingsSwitchRow(
+          label: 'Automatic step size',
+          helpKey: 'img.autofocus.step_size_auto',
+          value: s.stepSizeAuto,
+          onChanged: n.setStepSizeAuto,
+          hint: s.stepSizeAuto
+              ? 'First sweep wide, then sized from the measured V-curve'
+              : 'Every sweep uses the step size under Advanced',
         ),
         EditableNumberRow(
           label: 'Exposure time (s)',
@@ -163,6 +153,43 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           currentValue: s.afFilter,
           getCanonical: () => ref.read(autofocusSettingsProvider).afFilter,
           parse: n.setAfFilter,
+        ),
+        ExpansionTile(
+          title: Text(
+            'Advanced',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AraColors.textSecondary),
+          ),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 8),
+          children: [
+            EditableNumberRow(
+              label: 'Number of steps (3..31)',
+              helpKey: 'img.autofocus.steps',
+              currentValue: s.steps.toString(),
+              getCanonical: () =>
+                  ref.read(autofocusSettingsProvider).steps.toString(),
+              parse: (str) {
+                final v = int.tryParse(str);
+                if (v != null) n.setSteps(v);
+              },
+            ),
+            EditableNumberRow(
+              label: s.stepSizeAuto
+                  ? 'First-sweep step size (focuser steps)'
+                  : 'Step size (focuser steps)',
+              helpKey: 'img.autofocus.step_size',
+              currentValue: s.stepSize.toString(),
+              getCanonical: () =>
+                  ref.read(autofocusSettingsProvider).stepSize.toString(),
+              parse: (str) {
+                final v = int.tryParse(str);
+                if (v != null) n.setStepSize(v);
+              },
+            ),
+          ],
         ),
         const SettingsSectionHeader('Triggers'),
         SettingsSwitchRow(

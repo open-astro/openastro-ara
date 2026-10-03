@@ -38,6 +38,12 @@ class AutofocusSettings {
   final AutofocusMethod method;
   final int steps;
   final int stepSize;
+
+  /// §59.8 — size the sweep automatically: from the V half-width the last
+  /// sweep measured, else half the CFZ when the focuser reports µm/step, else
+  /// [stepSize] as the deliberately wide first sweep. Off, [stepSize] is used
+  /// as typed.
+  final bool stepSizeAuto;
   final int exposureSeconds;
   final int binning;
   final String afFilter;
@@ -53,6 +59,7 @@ class AutofocusSettings {
     this.method = AutofocusMethod.hfrVCurve,
     this.steps = 7,
     this.stepSize = 50,
+    this.stepSizeAuto = true,
     this.exposureSeconds = 5,
     this.binning = 1,
     this.afFilter = 'L',
@@ -69,6 +76,7 @@ class AutofocusSettings {
     AutofocusMethod? method,
     int? steps,
     int? stepSize,
+    bool? stepSizeAuto,
     int? exposureSeconds,
     int? binning,
     String? afFilter,
@@ -84,6 +92,7 @@ class AutofocusSettings {
         method: method ?? this.method,
         steps: steps ?? this.steps,
         stepSize: stepSize ?? this.stepSize,
+        stepSizeAuto: stepSizeAuto ?? this.stepSizeAuto,
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
         binning: binning ?? this.binning,
         afFilter: afFilter ?? this.afFilter,
@@ -118,6 +127,8 @@ class AutofocusSettingsNotifier extends Notifier<AutofocusSettings>
     if (v <= 0) return;
     state = state.copyWith(stepSize: v);
   }
+
+  void setStepSizeAuto(bool v) => state = state.copyWith(stepSizeAuto: v);
 
   void setExposureSeconds(int v) {
     if (v <= 0) return;

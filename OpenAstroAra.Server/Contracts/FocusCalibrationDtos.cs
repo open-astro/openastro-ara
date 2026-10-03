@@ -82,8 +82,12 @@ public sealed record FocusCalibrationSampleDto(
 /// feeds the §59.13 <c>calibration_temp_delta_c</c> staleness gate (no reading → the gate can't fire).</param>
 /// <param name="Filter">The filter the calibration ran on (recorded for diagnostics; §59.6 handles per-filter
 /// differences via learned offsets, not per-filter calibration tables).</param>
+/// <param name="CurveHalfWidthSteps">§59.8 — the focuser offset from best focus at which the calibrating
+/// sweep's fitted HFR doubled (the V's half-width, in focuser steps); the next sweep's automatic step size is
+/// sized from it. Null on a calibration recorded before this field existed or when the curve never doubled.</param>
 public sealed record FocusCalibrationDto(
     IReadOnlyList<FocusCalibrationSampleDto> Samples,
     DateTimeOffset CalibratedUtc,
     double? FocuserTemperatureC,
-    string? Filter);
+    string? Filter,
+    double? CurveHalfWidthSteps = null);

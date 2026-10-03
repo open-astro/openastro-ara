@@ -340,9 +340,30 @@ class MainFocusCard extends ConsumerWidget {
     final edge = (sorted.first.hfr + sorted.last.hfr) / 2;
     final plateau = edge > minHfr * 2 && (sorted.first.hfr - sorted.last.hfr).abs() < edge * 0.3;
     final r2 = fit.rSquared.toStringAsFixed(2);
-    return plateau
-        ? 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.'
-        : 'The curve fit was weak (R² $r2) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.';
+    if (!plateau) {
+      return 'The curve fit was weak (R² $r2) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.';
+    }
+    // §59.8 — an automatic step size learns the V's width from this very run,
+    // so the advice is "run again", not "go change a setting".
+    final auto = run.stepSizeSource != null && run.stepSizeSource != 'manual';
+    return auto
+        ? 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.'
+        : 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.';
+  }
+
+  /// §59.8 — the step size row: the number, then where it came from, in words.
+  /// Pure — unit-tested.
+  static String stepSizeText(AutofocusRun run) {
+    final size = run.stepSize;
+    if (size == null) return '—';
+    final source = switch (run.stepSizeSource) {
+      'measured' => 'auto, from the last V-curve',
+      'cfz' => 'auto, from the focuser step size and optics',
+      'default' => 'auto, first sweep at the profile value',
+      'manual' => 'manual',
+      _ => null,
+    };
+    return source == null ? '$size' : '$size · $source';
   }
 
   /// The failure banner text: the daemon's reason as a sentence, then where the
@@ -443,6 +464,7 @@ class MainFocusCard extends ConsumerWidget {
     String n(double? v, [int d = 2]) => v == null || !v.isFinite ? '—' : v.toStringAsFixed(d);
     return [
       ('Probes kept', sweep.isEmpty ? '—' : '$kept of ${sweep.length}${run.coarseProbes.isNotEmpty ? ' (+${run.coarseProbes.length} coarse)' : ''}'),
+      if (run.stepSize != null) ('Step size', stepSizeText(run)),
       ('Fit', fit == null ? '—' : '${fit.algorithm}${fit.withinSampledRange ? '' : ' · outside the sweep'}'),
       ('Predicted HFR', n(fit?.predictedHfr)),
       ('Start → final', run.startPosition == null

@@ -282,6 +282,23 @@ void main() {
     });
   });
 
+  group('stepSizeText + Details', () {
+    test('names the source in words', () {
+      expect(MainFocusCard.stepSizeText(const AutofocusRun(stepSize: 23, stepSizeSource: 'measured')), '23 · auto, from the last V-curve');
+      expect(MainFocusCard.stepSizeText(const AutofocusRun(stepSize: 23, stepSizeSource: 'cfz')), contains('focuser step size'));
+      expect(MainFocusCard.stepSizeText(const AutofocusRun(stepSize: 50, stepSizeSource: 'default')), contains('first sweep'));
+      expect(MainFocusCard.stepSizeText(const AutofocusRun(stepSize: 50, stepSizeSource: 'manual')), '50 · manual');
+      expect(MainFocusCard.stepSizeText(const AutofocusRun(stepSize: 50)), '50');
+      expect(MainFocusCard.stepSizeText(const AutofocusRun()), '—');
+    });
+    test('Details carries the step size only once a sweep resolved one', () {
+      expect(MainFocusCard.detailsFor(_completed).map((r) => r.$1), isNot(contains('Step size')));
+      final sized = AutofocusRun(state: 'complete', stepSize: 23, stepSizeSource: 'measured', probes: _completed.probes);
+      final row = MainFocusCard.detailsFor(sized).firstWhere((r) => r.$1 == 'Step size');
+      expect(row.$2, '23 · auto, from the last V-curve');
+    });
+  });
+
   group('weakFitText', () {
     AutofocusProbe fine(int i, int pos, double hfr) =>
         AutofocusProbe(index: i, phase: 'fine', position: pos, hfr: hfr, stars: 30, kept: true);
@@ -297,10 +314,26 @@ void main() {
         fine(11, 29160, 3.08), fine(12, 29110, 3.66), fine(13, 29060, 4.02), fine(14, 29010, 3.97), fine(15, 28960, 3.75),
       ],
     );
-    test('a plateau-wing sweep suggests a smaller step size', () {
+    test('a plateau-wing sweep with a manual step size suggests a smaller one', () {
       final text = MainFocusCard.weakFitText(rig)!;
       expect(text, contains('R² 0.57'));
-      expect(text, contains('smaller step size'));
+      expect(text, contains('A smaller step size would'));
+    });
+    test('a plateau-wing sweep with an automatic step size says the next run shrinks it', () {
+      final auto = AutofocusRun(
+        state: 'complete',
+        finalPosition: rig.finalPosition,
+        finalHfr: rig.finalHfr,
+        fit: rig.fit,
+        probes: rig.probes,
+        stepSize: 50,
+        stepSizeSource: 'default',
+      );
+      final text = MainFocusCard.weakFitText(auto)!;
+      expect(text, contains('R² 0.57'));
+      expect(text, contains('sizes the next sweep'));
+      expect(text, isNot(contains('will use a smaller step size')), reason: 'no promise: the width may not be measurable');
+      expect(text, isNot(contains('A smaller step size would')));
     });
     test('a good fit says nothing', () {
       expect(MainFocusCard.weakFitText(_completed), isNull, reason: 'R² 0.98');

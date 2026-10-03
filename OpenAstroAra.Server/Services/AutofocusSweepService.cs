@@ -89,6 +89,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // The focuser's absolute travel [Min, Max] when the driver has reported it, else null: the sweep
     // then keeps to positions >= 0 with no upper bound (the device validates the top).
     private readonly Func<CancellationToken, Task<(int Min, int Max)?>>? _travelRange;
+    // §59.8 — the focuser's reported µm/step when it has one, for the CFZ seed of an automatic step size.
+    private readonly Func<CancellationToken, Task<double?>>? _focuserStepUm;
     // §59.12 — the run snapshot the Setup tab's Smart Focus pane renders (probes, fit, final focus, frame) and
     // the cancel seam. Optional: tests of the sweep maths run without it.
     private readonly AutofocusRunTracker? _tracker;
@@ -108,7 +110,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             INotificationService? notifications = null,
             Func<AnalysisFrame, CancellationToken, double>? coarseMetric = null,
             Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null,
-            AutofocusRunTracker? tracker = null) {
+            AutofocusRunTracker? tracker = null,
+            Func<CancellationToken, Task<double?>>? focuserStepUm = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
@@ -121,6 +124,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         _notifications = notifications;
         _travelRange = travelRange;
         _tracker = tracker;
+        _focuserStepUm = focuserStepUm;
     }
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
@@ -198,6 +202,13 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         }
         var startPosition = info.Position;
         var restoreOnFailure = settings.RestorePositionOnFailure;
+        // §59.8 — the step size this run sweeps with (auto: measured V width → CFZ seed → the stored value as the
+        // wide first sweep; manual: the stored value). Everything below — coarse half-width, probe spacing, the
+        // travel clamp, re-centring — reads it from `settings`.
+        var (stepSize, stepSource) = await ResolveStepSizeQuietlyAsync(settings, token).ConfigureAwait(false);
+        settings = settings with { StepSize = stepSize };
+        _tracker?.SetStepSize(stepSize, stepSource);
+        LogStepSize(stepSize, stepSource, settings.Steps);
 
         try {
             // Coarse search first: a start far from focus (big defocused discs) would otherwise feed the
@@ -315,7 +326,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             var (finalHfr, finalStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
             await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
-            RecordCalibrationQuietly(probeFeatures);
+            RecordCalibrationQuietly(probeFeatures, fit, points);
             await RecordCompletedAsync("classic", final, finalHfr ?? fit.PredictedHfr, finalStars, started, _tracker?.Snapshot().Probes.Count ?? points.Count).ConfigureAwait(false);
             return true;
         } catch (OperationCanceledException) {
@@ -494,7 +505,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // a completed autofocus into a reported failure.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Post-success bookkeeping boundary: the calibration write touches device info + the profile store; the sweep already succeeded and must be reported as such. CA1031's log-and-recover boundary applies.")]
-    private void RecordCalibrationQuietly(List<(int Position, FocusFeatureVector Features)> probeFeatures) {
+    private void RecordCalibrationQuietly(List<(int Position, FocusFeatureVector Features)> probeFeatures,
+            FocusCurveFitResult fit, IReadOnlyList<FocusPoint> points) {
         try {
             // Gate on the ROUND-TRIPPED wire shape — Build validates exactly what a later session will
             // reload, so a DTO-bridge regression can never store samples the load path can't use.
@@ -516,11 +528,23 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 temperature = null;
             }
 
+            // §59.8 — the V's half-width rides along: the next automatic sweep is sized from it.
+            double min = double.PositiveInfinity, max = double.NegativeInfinity;
+            foreach (var p in points) {
+                min = Math.Min(min, p.Position);
+                max = Math.Max(max, p.Position);
+            }
+            var halfWidth = CurveHalfWidth(fit, min, max);
+            if (halfWidth is { } hw) {
+                LogCurveHalfWidth(hw);
+            }
+
             _profiles.PutFocusCalibration(new FocusCalibrationDto(
                 Samples: dtos,
                 CalibratedUtc: DateTimeOffset.UtcNow,
                 FocuserTemperatureC: temperature,
-                Filter: _filterWheel?.GetInfo()?.SelectedFilter?.Name));
+                Filter: _filterWheel?.GetInfo()?.SelectedFilter?.Name,
+                CurveHalfWidthSteps: halfWidth is { } w ? Math.Round(w, 1) : null));
             LogCalibrationRecorded(dtos.Count);
         } catch (Exception ex) {
             LogCalibrationRecordFailed(ex);
