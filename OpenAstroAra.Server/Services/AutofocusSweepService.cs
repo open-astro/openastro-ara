@@ -136,6 +136,15 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// <inheritdoc/>
     public async Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
         await _sweepGate.WaitAsync(token).ConfigureAwait(false);
+        // Released whatever the run does, setup included: a leaked gate would hang every later autofocus.
+        try {
+            return await RunGatedAsync(progress, token).ConfigureAwait(false);
+        } finally {
+            _sweepGate.Release();
+        }
+    }
+
+    private async Task<bool> RunGatedAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
         // The run's own cancellation source, linked to the caller's token: the §59.12 Smart Focus pane cancels a
         // run through the tracker (POST /api/v1/autofocus/cancel) whoever started it — the focuser endpoint's
         // job or a sequence instruction — and that must cancel the sweep, not just the job polling it.
@@ -172,8 +181,6 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         } catch (OperationCanceledException) {
             await RecordCancelledAsync(settings.RestorePositionOnFailure ? startPosition : null).ConfigureAwait(false);
             throw;
-        } finally {
-            _sweepGate.Release();
         }
     }
 

@@ -365,6 +365,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_throw_during_run_setup_still_releases_the_sweep_gate() {
+            // The setup between the gate and the sweep (settings, focuser info, the run record) must
+            // not leak the gate: the next run would wait on it forever.
+            var (focuser, _) = Focuser();
+            var profiles = new Mock<IProfileStore>();
+            profiles.SetupSequence(p => p.GetAutofocusSettings())
+                .Throws(new InvalidOperationException("profile store unavailable"))
+                .Returns(Settings());
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object, metric: (_, _) => Result(2.0, 42));
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.RunAutofocusAsync(NoProgress, CancellationToken.None));
+            var second = svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+            Assert.That(await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(second),
+                "the second run must not hang on a leaked gate");
+        }
+
+        [Test]
         public async Task Restore_policy_off_leaves_the_focuser_where_it_failed() {
             var (focuser, moves) = Focuser();
             using var svc = new AutofocusSweepService(

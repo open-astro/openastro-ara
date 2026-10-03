@@ -174,6 +174,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 _consecutiveFailures = 0;
                 _frame = null;
             }
+            // A loop that gave up in `error` left its source behind; this Start replaces it.
+            _loopCts?.Dispose();
             _loopCts = new CancellationTokenSource();
             var token = _loopCts.Token;
             _loop = Task.Run(() => RunLoopAsync(guider, request, token), CancellationToken.None);
@@ -248,9 +250,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         Justification = "Loop boundary: a capture, download, decode or detector fault is one failed frame (counted; the loop ends in `error` after MaxConsecutiveFailures), never a faulted background task.")]
     private async Task RunLoopAsync(PHD2Guider? guider, GuideFocusStartRequestDto request, CancellationToken ct) {
         var workDir = Path.Combine(Path.GetTempPath(), "ara-guide-focus", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(workDir);
         var lastRenew = DateTimeOffset.UtcNow;
         try {
+            Directory.CreateDirectory(workDir);
             while (!ct.IsCancellationRequested) {
                 if (guider is not null && DateTimeOffset.UtcNow - lastRenew > LeaseRenewInterval) {
                     try {
@@ -286,6 +288,15 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             }
         } catch (OperationCanceledException) {
             // Stop — the status flips to stopped under StopAsync.
+        } catch (Exception ex) {
+            // Anything outside the per-frame boundary (the work directory, a lease renew that threw past
+            // its own catch) ends the loop in `error` with the lease released, never stuck at `running`.
+            lock (_gate) {
+                _state = "error";
+                _error = ex.Message;
+            }
+            LogLoopFaulted(ex);
+            await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
         } finally {
             try { Directory.Delete(workDir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
@@ -428,6 +439,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Guide-camera focus loop gave up after {Failures} consecutive failed frames: {Reason}")]
     private partial void LogGaveUp(int failures, string reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Guide-camera focus loop stopped on an unexpected fault")]
+    private partial void LogLoopFaulted(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Guide-camera focus loop: lease renew failed (captures will fail if it expires).")]
     private partial void LogLeaseRenewFailed(Exception ex);
