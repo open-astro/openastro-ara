@@ -1,5 +1,9 @@
 # Contributing to OpenAstro Ara
 
+> **Contributions are paused.** Outside pull requests, issues and comments are temporarily disabled.
+>
+> The guidance below applies once contributions reopen.
+
 Thank you for considering a contribution to OpenAstro Ara ("Ara"). Ara is a hard fork of
 [N.I.N.A.](https://nighttime-imaging.eu/) rebuilt as a headless Linux daemon plus a cross-platform
 Flutter client; see `README.md` for the lineage and the per-directory license split (MPL-2.0 daemon /
