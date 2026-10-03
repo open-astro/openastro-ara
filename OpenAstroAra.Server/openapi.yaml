@@ -5833,6 +5833,8 @@ components:
         - total_steps
         - completed_steps
         - sweep_attempt
+        - step_size
+        - step_size_source
         - probes
         - fit
         - reason
@@ -5931,6 +5933,17 @@ components:
             - integer
             - string
           format: int32
+        step_size:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        step_size_source:
+          type:
+            - 'null'
+            - string
         probes:
           type: array
           items:
@@ -6043,6 +6056,9 @@ components:
         telescope_type:
           type: string
           default: other
+        step_size_auto:
+          type: boolean
+          default: true
     BackupStreamAckRequestDto:
       required:
         - frame_id
@@ -7718,6 +7734,13 @@ components:
           type:
             - 'null'
             - string
+        curve_half_width_steps:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     FocusCalibrationSampleDto:
       required:
         - focuser_position

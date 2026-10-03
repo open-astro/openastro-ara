@@ -13,6 +13,7 @@ void main() {
       expect(s.method, AutofocusMethod.hfrVCurve);
       expect(s.steps, 7);
       expect(s.stepSize, 50);
+      expect(s.stepSizeAuto, isTrue, reason: '§59.8 — auto is the default');
       expect(s.exposureSeconds, 5);
       expect(s.binning, 1);
       expect(s.afFilter, 'L');
@@ -22,6 +23,16 @@ void main() {
       expect(s.everyNHours, 2);
       expect(s.abortSequenceOnAfFailure, isTrue);
       expect(s.restorePositionOnFailure, isTrue);
+    });
+
+    test('setStepSizeAuto assigns directly and leaves the typed step size', () {
+      final n = container.read(autofocusSettingsProvider.notifier);
+      n.setStepSize(80);
+      n.setStepSizeAuto(false);
+      expect(container.read(autofocusSettingsProvider).stepSizeAuto, isFalse);
+      expect(container.read(autofocusSettingsProvider).stepSize, 80);
+      n.setStepSizeAuto(true);
+      expect(container.read(autofocusSettingsProvider).stepSizeAuto, isTrue);
     });
 
     test('setSteps clamps to [3, 31]', () {

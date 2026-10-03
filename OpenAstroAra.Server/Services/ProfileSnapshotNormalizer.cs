@@ -140,7 +140,7 @@ public static class ProfileSnapshotNormalizer {
             Binning: 1, AfFilter: "L", RunAfterFilterChange: true,
             TriggerTempDeltaC: 2.0, TriggerHfrDriftPct: 15.0, EveryNHours: 2,
             AbortSequenceOnAfFailure: true, RestorePositionOnFailure: true,
-            TelescopeType: "other"),
+            TelescopeType: "other", StepSizeAuto: true),
         PlateSolve: new(
             Engine: "astap", PathOrEndpoint: "/usr/bin/astap_cli", // Debian's astap-cli package (a .deb Depends since #1094)
             IndexDownloadPath: "/var/lib/astap", SearchRadiusDeg: 30.0,

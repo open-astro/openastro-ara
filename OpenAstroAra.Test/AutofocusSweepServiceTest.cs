@@ -43,10 +43,11 @@ namespace OpenAstroAra.Test {
         private const int StartPosition = 10_000;
         private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
 
-        private static AutofocusSettingsDto Settings(int steps = 4, int stepSize = 100, bool restore = true) => new(
+        private static AutofocusSettingsDto Settings(int steps = 4, int stepSize = 100, bool restore = true, bool stepSizeAuto = true) => new(
             Method: "hfr_v_curve", Steps: steps, StepSize: stepSize, ExposureSeconds: 2, Binning: 1,
             AfFilter: "L", RunAfterFilterChange: false, TriggerTempDeltaC: 1.0, TriggerHfrDriftPct: 10,
-            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: restore);
+            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: restore,
+            StepSizeAuto: stepSizeAuto);
 
         private static Mock<IProfileStore> Profiles(AutofocusSettingsDto settings) {
             var profiles = new Mock<IProfileStore>();
@@ -705,7 +706,14 @@ namespace OpenAstroAra.Test {
         private static (AutofocusSweepService Service, InMemoryProfileStore Store) CalibrationRig(
                 double bestPosition, double focuserTemperature = 12.5, string? filter = "Ha",
                 IReadOnlyList<DetectedStar>? fixedStarList = null) {
-            var settings = Settings(steps: 4, stepSize: 100);
+            var (svc, store, _) = CalibrationRigWithMoves(bestPosition, focuserTemperature, filter, fixedStarList);
+            return (svc, store);
+        }
+
+        private static (AutofocusSweepService Service, InMemoryProfileStore Store, List<int> Moves) CalibrationRigWithMoves(
+                double bestPosition, double focuserTemperature = 12.5, string? filter = "Ha",
+                IReadOnlyList<DetectedStar>? fixedStarList = null, AutofocusSettingsDto? settings = null) {
+            settings ??= Settings(steps: 4, stepSize: 100);
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(settings);
 
@@ -726,7 +734,175 @@ namespace OpenAstroAra.Test {
                     var hfr = 1.5 + 0.2 * delta * delta;
                     return Result(hfr, 42, fixedStarList ?? FeatureStars(12, hfr));
                 });
-            return (svc, store);
+            return (svc, store, moves);
+        }
+
+        // ─── §59.8 automatic step size ───
+
+        // The test V: HFR = 1.5 + 0.2·(Δ/100)² doubles (3.0) at Δ = 100·√7.5 ≈ 273.9 steps.
+        private const double TestCurveHalfWidth = 273.86;
+
+        [Test]
+        public async Task A_completed_sweep_stores_the_curve_half_width_with_the_calibration() {
+            var (svc, store) = CalibrationRig(bestPosition: StartPosition - 150);
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(store.GetFocusCalibration()!.CurveHalfWidthSteps, Is.EqualTo(TestCurveHalfWidth).Within(1.0),
+                "the offset at which the fitted HFR doubles, read from the model, not the probes");
+        }
+
+        [Test]
+        public async Task An_automatic_sweep_is_sized_from_the_stored_half_width() {
+            // A stored width of 120 with 4 steps a side → outer probes at 1.5 × 120 = 180 → step 45 (not the
+            // profile's 100). One junk sample so the inverse map can't build and Smart Focus stands aside.
+            var (svc, store, moves) = CalibrationRigWithMoves(bestPosition: StartPosition - 20);
+            using var _ = svc;
+            store.PutFocusCalibration(new FocusCalibrationDto(
+                Samples: new[] { new FocusCalibrationSampleDto(9_000, 30, 2.0, 4.0, 0.9, 8.0, 0, 0, 0, 0) },
+                CalibratedUtc: DateTimeOffset.UtcNow, FocuserTemperatureC: null, Filter: null,
+                CurveHalfWidthSteps: 120));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves[0], Is.EqualTo(StartPosition + 180 + 45), "overshoot one (auto) step above the top probe");
+            var probes = moves.GetRange(1, 9);
+            Assert.That(probes[0], Is.EqualTo(StartPosition + 180));
+            Assert.That(probes.Zip(probes.Skip(1), (a, b) => a - b), Has.All.EqualTo(45));
+        }
+
+        [Test]
+        public async Task A_manual_step_size_ignores_the_stored_half_width() {
+            var (svc, store, moves) = CalibrationRigWithMoves(bestPosition: StartPosition - 20,
+                settings: Settings(steps: 4, stepSize: 100, stepSizeAuto: false));
+            using var _ = svc;
+            store.PutFocusCalibration(new FocusCalibrationDto(
+                Samples: new[] { new FocusCalibrationSampleDto(9_000, 30, 2.0, 4.0, 0.9, 8.0, 0, 0, 0, 0) },
+                CalibratedUtc: DateTimeOffset.UtcNow, FocuserTemperatureC: null, Filter: null,
+                CurveHalfWidthSteps: 120));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves[0], Is.EqualTo(StartPosition + 500));
+            Assert.That(moves.GetRange(1, 9).Zip(moves.GetRange(2, 8), (a, b) => a - b), Has.All.EqualTo(100));
+        }
+
+        [Test]
+        public async Task Without_a_width_or_a_focuser_step_size_the_stored_step_size_is_the_wide_first_sweep() {
+            // Moq profiles: no calibration, no optics; the EAF reports no µm/step → "default" = the stored 100.
+            var settings = Settings(steps: 4, stepSize: 100);
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                Profiles(settings).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, StartPosition - 150), tracker: tracker,
+                focuserStepUm: _ => Task.FromResult<double?>(null));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves[0], Is.EqualTo(StartPosition + 500));
+            var snap = tracker.Snapshot();
+            Assert.That(snap.StepSize, Is.EqualTo(100));
+            Assert.That(snap.StepSizeSource, Is.EqualTo("default"));
+        }
+
+        [Test]
+        public async Task A_reported_focuser_step_size_seeds_the_first_sweep_from_the_CFZ() {
+            // f/5 optics (530/106) + 1.2 µm/step → CFZ 55 µm → half = 27.5 µm → 23 steps (the wizard's own seed).
+            var settings = Settings(steps: 4, stepSize: 100);
+            var profiles = Profiles(settings);
+            profiles.Setup(p => p.GetOpticsSettings()).Returns(new OpticsSettingsDto(
+                FocalLengthMm: 530, ReducerFactor: 1.0, SensorWidthPx: 4000, SensorHeightPx: 3000, PixelSizeUm: 3.76, ApertureMm: 106));
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, StartPosition - 20), tracker: tracker,
+                focuserStepUm: _ => Task.FromResult<double?>(1.2));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves[0], Is.EqualTo(StartPosition + 4 * 23 + 23));
+            Assert.That(tracker.Snapshot().StepSize, Is.EqualTo(23));
+            Assert.That(tracker.Snapshot().StepSizeSource, Is.EqualTo("cfz"));
+        }
+
+        [Test]
+        public void ResolveStepSize_prefers_measured_then_cfz_then_the_stored_value() {
+            var settings = Settings(steps: 7, stepSize: 50);
+            var optics = new OpticsSettingsDto(FocalLengthMm: 250, ReducerFactor: 1.0, SensorWidthPx: 1, SensorHeightPx: 1, PixelSizeUm: 3.76, ApertureMm: 51);
+            var measured = new FocusCalibrationDto(Array.Empty<FocusCalibrationSampleDto>(), DateTimeOffset.UtcNow, null, null, CurveHalfWidthSteps: 100);
+
+            // The RedCat night: HFR doubles 100 steps out, 7 steps a side → 1.5 × 100 / 7 ≈ 21 instead of 50.
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, measured, 1.0, optics), Is.EqualTo((21, "measured")));
+            // f/4.9, 1 µm/step → CFZ 52.8 µm → 26 steps.
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, null, 1.0, optics), Is.EqualTo((26, "cfz")));
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, null, 0.0, optics), Is.EqualTo((50, "default")), "a 0 µm/step report is no report");
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, null, 1.0, null), Is.EqualTo((50, "default")));
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings with { StepSizeAuto = false }, measured, 1.0, optics), Is.EqualTo((50, "manual")));
+            // A pre-§59.8 calibration (no width) falls through to the CFZ seed.
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, measured with { CurveHalfWidthSteps = null }, 1.0, optics), Is.EqualTo((26, "cfz")));
+        }
+
+        [Test]
+        public void ResolveStepSize_clamps_degenerate_widths_and_trains() {
+            var settings = Settings(steps: 4, stepSize: 50);
+            var tiny = new FocusCalibrationDto(Array.Empty<FocusCalibrationSampleDto>(), DateTimeOffset.UtcNow, null, null, CurveHalfWidthSteps: 2);
+            var huge = new FocusCalibrationDto(Array.Empty<FocusCalibrationSampleDto>(), DateTimeOffset.UtcNow, null, null, CurveHalfWidthSteps: 1e6);
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, tiny, null, null).StepSize, Is.EqualTo(AutofocusSweepService.MinAutoStepSize));
+            Assert.That(AutofocusSweepService.ResolveStepSize(settings, huge, null, null).StepSize, Is.EqualTo(AutofocusSweepService.MaxAutoStepSize));
+            // f/15 on a coarse 0.1 µm/step focuser → thousands of steps → clamped.
+            var slow = new OpticsSettingsDto(FocalLengthMm: 3000, ReducerFactor: 1.0, SensorWidthPx: 1, SensorHeightPx: 1, PixelSizeUm: 3.76, ApertureMm: 200);
+            Assert.That(AutofocusSweepService.CfzStepSize(0.1, slow), Is.EqualTo(AutofocusSweepService.MaxAutoStepSize));
+            // The reducer scales the focal length like it does for the pixel scale: f/5 × 0.8 → f/4.
+            var reduced = new OpticsSettingsDto(FocalLengthMm: 530, ReducerFactor: 0.8, SensorWidthPx: 1, SensorHeightPx: 1, PixelSizeUm: 3.76, ApertureMm: 106);
+            Assert.That(AutofocusSweepService.CfzStepSize(1.0, reduced), Is.EqualTo(18), "CFZ 35.2 µm → 17.6 → 18");
+        }
+
+        [Test]
+        public void CurveHalfWidth_reads_the_doubling_offset_from_the_fitted_model() {
+            var points = new List<FocusPoint>();
+            for (var x = -400; x <= 400; x += 100) {
+                var d = x / 100.0;
+                points.Add(new FocusPoint(10_000 + x, 1.5 + 0.2 * d * d, 42));
+            }
+            var fit = FocusCurveFit.FitParabolic(points)!;
+            Assert.That(AutofocusSweepService.CurveHalfWidth(fit, 9_600, 10_400), Is.EqualTo(TestCurveHalfWidth).Within(0.5));
+
+            // The hyperbola √(a² + b²x²) with a = 1.2, b = 0.012: doubles at x = a√3 / b = 173.2.
+            var hyper = new List<FocusPoint>();
+            for (var x = -400; x <= 400; x += 100) {
+                hyper.Add(new FocusPoint(10_000 + x, Math.Sqrt(1.2 * 1.2 + 0.012 * 0.012 * x * x), 42));
+            }
+            var hfit = FocusCurveFit.FitHyperbolic(hyper)!;
+            Assert.That(AutofocusSweepService.CurveHalfWidth(hfit, 9_600, 10_400), Is.EqualTo(173.2).Within(0.5));
+        }
+
+        [Test]
+        public void CurveHalfWidth_is_null_for_a_flat_curve_or_an_unusable_fit() {
+            var flat = new List<FocusPoint>();
+            for (var x = -400; x <= 400; x += 100) {
+                flat.Add(new FocusPoint(10_000 + x, 2.0 + 1e-9 * x * x, 42));
+            }
+            var fit = FocusCurveFit.FitParabolic(flat)!;
+            Assert.That(fit.IsUsable, Is.True);
+            Assert.That(AutofocusSweepService.CurveHalfWidth(fit, 9_600, 10_400), Is.Null, "never doubles within 4× the half-span");
+
+            var downward = new List<FocusPoint>();
+            for (var x = -400; x <= 400; x += 100) {
+                downward.Add(new FocusPoint(10_000 + x, 4.0 - 1e-5 * x * x, 42));
+            }
+            var bad = FocusCurveFit.FitParabolic(downward)!;
+            Assert.That(bad.IsUsable, Is.False);
+            Assert.That(AutofocusSweepService.CurveHalfWidth(bad, 9_600, 10_400), Is.Null);
         }
 
         [Test]

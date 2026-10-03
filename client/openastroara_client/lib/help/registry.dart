@@ -1018,7 +1018,7 @@ const Map<String, Help> helpRegistry = {
         '* **HFR at focus (measured)** comes from one confirmation frame taken *at* best focus — the picture shown — so it is a measurement, not the fit\'s prediction.\n'
         '* **Cancel** stops the run and puts the focuser back where it started when the profile says so. It also cancels a run a sequence started.\n\n'
         'A sequence\'s own refocus leaves the same record here, so you can check last night\'s run in the morning.',
-    relatedSettings: ['img.autofocus.method', 'img.autofocus.steps', 'img.autofocus.step_size'],
+    relatedSettings: ['img.autofocus.method', 'img.autofocus.step_size_auto', 'img.autofocus.steps', 'img.autofocus.step_size'],
     keywords: ['autofocus', 'v-curve', 'hfr', 'focus', 'sweep', 'cancel'],
   ),
   'setup.focusing.guide': Help(
@@ -1065,14 +1065,24 @@ const Map<String, Help> helpRegistry = {
       'img.autofocus.exposure_seconds',
     ],
   ),
+  'img.autofocus.step_size_auto': Help(
+    key: 'img.autofocus.step_size_auto',
+    title: 'Automatic step size',
+    body:
+        'On (the default), Ara sizes each sweep itself. The first sweep is deliberately wide — it uses the step size under Advanced — and measures how far from focus the star size doubles. Later sweeps put their outer probes at 1.5× that distance, so every probe sits on the slope of the V instead of on the flat wings, and the curve fit is worth trusting.\n\n'
+        'If your focuser reports its step size in µm (many do not — the ZWO EAF reports 0), the first sweep is seeded from the critical focus zone of your optics instead.\n\n'
+        'Turn it off to use the step size under Advanced as typed, every run. The Smart Focus step\'s Details show which step size a run used and why.',
+    relatedSettings: ['img.autofocus.step_size', 'img.autofocus.steps'],
+  ),
   'img.autofocus.step_size': Help(
     key: 'img.autofocus.step_size',
     title: 'AF step size',
     body:
-        'Distance between sample positions, in focuser native steps. Should span **3-5x the critical focus zone (CFZ)** total range — too small and the V-curve doesn\'t have enough vertical range to fit; too large and you sample outside the regime where the curve is parabolic.\n\n'
+        'Distance between sample positions, in focuser native steps. With **Automatic step size** on, this is the first sweep\'s (deliberately wide) step; later sweeps are sized from the measured V-curve. With it off, every sweep uses this value.\n\n'
+        'Should span **3-5x the critical focus zone (CFZ)** total range — too small and the V-curve doesn\'t have enough vertical range to fit; too large and you sample outside the regime where the curve is parabolic.\n\n'
         'CFZ ≈ 2 × λ × N² where λ is wavelength (~0.55µm for green) and N is the f-ratio. f/4 → CFZ ~17µm; f/8 → CFZ ~70µm. Convert µm to focuser steps via your focuser\'s steps-per-µm.\n\n'
         'When in doubt: start with the default (50), run a focus, look at the V-curve. Flat curve → increase step size; sharp narrow V → decrease.',
-    relatedSettings: ['img.autofocus.steps'],
+    relatedSettings: ['img.autofocus.step_size_auto', 'img.autofocus.steps'],
   ),
   'img.autofocus.trigger_temp_delta_c': Help(
     key: 'img.autofocus.trigger_temp_delta_c',

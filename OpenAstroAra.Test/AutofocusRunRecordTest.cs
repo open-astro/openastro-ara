@@ -160,6 +160,9 @@ namespace OpenAstroAra.Test {
             Assert.That(snap.CompletedSteps, Is.EqualTo(9));
             Assert.That(snap.TotalSteps, Is.EqualTo(9));
             Assert.That(snap.SweepAttempt, Is.EqualTo(1));
+            // §59.8 — the step size the sweep resolved, and why (no width or µm/step in this bench → the stored value).
+            Assert.That(snap.StepSize, Is.EqualTo(100));
+            Assert.That(snap.StepSizeSource, Is.EqualTo("default"));
             // The fit, with a sampled curve the client can draw.
             Assert.That(snap.Fit, Is.Not.Null);
             Assert.That(snap.Fit!.Algorithm, Is.EqualTo("parabolic"));

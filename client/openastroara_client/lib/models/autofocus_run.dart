@@ -128,6 +128,11 @@ class AutofocusRun {
   final int totalSteps;
   final int completedSteps;
   final int sweepAttempt;
+
+  /// §59.8 — the fine sweep's step size and where it came from (`manual`,
+  /// `measured`, `cfz` or `default`); null until a Classic sweep resolves it.
+  final int? stepSize;
+  final String? stepSizeSource;
   final List<AutofocusProbe> probes;
   final AutofocusFit? fit;
   final String? reason;
@@ -154,6 +159,8 @@ class AutofocusRun {
     this.totalSteps = 0,
     this.completedSteps = 0,
     this.sweepAttempt = 0,
+    this.stepSize,
+    this.stepSizeSource,
     this.probes = const [],
     this.fit,
     this.reason,
@@ -208,6 +215,8 @@ class AutofocusRun {
       totalSteps: _int(json, 'total_steps') ?? 0,
       completedSteps: _int(json, 'completed_steps') ?? 0,
       sweepAttempt: _int(json, 'sweep_attempt') ?? 0,
+      stepSize: _int(json, 'step_size'),
+      stepSizeSource: _str(json, 'step_size_source'),
       probes: probes,
       fit: fitJson is Map<String, dynamic> ? AutofocusFit.fromJson(fitJson) : null,
       reason: _str(json, 'reason'),
