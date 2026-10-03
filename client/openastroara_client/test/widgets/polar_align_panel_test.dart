@@ -116,6 +116,9 @@ void main() {
       expect(formatPoleOffset(-9.9), ('594″', 'arcseconds from the pole'));
       expect(formatPoleOffset(24.4), ('24′', 'arcminutes from the pole'));
       expect(formatPoleOffset(90), ('1.5°', 'degrees from the pole'));
+      // Unit boundaries follow the rounded figure: never "600″" or "60′".
+      expect(formatPoleOffset(9.995), ('10′', 'arcminutes from the pole'));
+      expect(formatPoleOffset(59.7), ('1.0°', 'degrees from the pole'));
     });
 
     test('worst-case drift is ~0.26″ per minute per arcminute of error', () {

@@ -55,8 +55,11 @@ String formatArcmin(double? v) {
 /// the unit spelled out. Pure — unit-tested.
 (String, String) formatPoleOffset(double arcmin) {
   final a = arcmin.abs();
-  if (a < 10) return ('${(a * 60).round()}″', 'arcseconds from the pole');
-  if (a < 60) return ('${a.round()}′', 'arcminutes from the pole');
+  // Compare the ROUNDED figure, so 59.7′ reads 1.0° rather than "60′".
+  final arcsec = (a * 60).round();
+  if (arcsec < 600) return ('$arcsec″', 'arcseconds from the pole');
+  final arcminutes = a.round();
+  if (arcminutes < 60) return ('$arcminutes′', 'arcminutes from the pole');
   return ('${(a / 60).toStringAsFixed(1)}°', 'degrees from the pole');
 }
 
