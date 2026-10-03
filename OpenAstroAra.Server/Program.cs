@@ -619,7 +619,8 @@ public partial class Program {
                 history: sp.GetRequiredService<ImageHistoryService>(),
                 filterWheel: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
                 ws: sp.GetRequiredService<IWsBroadcaster>(),
-                notifications: sp.GetRequiredService<INotificationService>()));
+                notifications: sp.GetRequiredService<INotificationService>(),
+                travelRange: ct => AutofocusSweepService.FocuserTravelAsync(sp.GetRequiredService<IFocuserService>(), ct)));
         // §48.3 — the auto-exposure flat set (panel light → probe-to-ADU → saved FLAT frames).
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(sp =>
             new FlatCaptureService(

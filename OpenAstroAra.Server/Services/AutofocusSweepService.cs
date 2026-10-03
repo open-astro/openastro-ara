@@ -86,6 +86,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // Slight/Significant bands. Absent in tests that don't exercise surfacing.
     private readonly IWsBroadcaster? _ws;
     private readonly INotificationService? _notifications;
+    // The focuser's absolute travel [Min, Max] when the driver has reported it, else null: the sweep
+    // then keeps to positions >= 0 with no upper bound (the device validates the top).
+    private readonly Func<CancellationToken, Task<(int Min, int Max)?>>? _travelRange;
     // One sweep at a time — the focuser is a single physical axis, and interleaved sweeps would
     // corrupt each other's curves. Waiters queue (same philosophy as the capture gate).
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -100,7 +103,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             IFilterWheelMediator? filterWheel = null,
             IWsBroadcaster? ws = null,
             INotificationService? notifications = null,
-            Func<AnalysisFrame, CancellationToken, double>? coarseMetric = null) {
+            Func<AnalysisFrame, CancellationToken, double>? coarseMetric = null,
+            Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
@@ -111,6 +115,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         _filterWheel = filterWheel;
         _ws = ws;
         _notifications = notifications;
+        _travelRange = travelRange;
     }
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
@@ -163,11 +168,14 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         try {
             // Coarse search first: a start far from focus (big defocused discs) would otherwise feed the
             // ±Steps·StepSize sweep nothing but unmeasurable probes.
-            var coarse = await CoarseCentreAsync(settings, startPosition, progress, token).ConfigureAwait(false);
-            if (coarse is not int centre) {
+            var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
+            var coarse = await CoarseCentreAsync(settings, startPosition, travel, progress, token).ConfigureAwait(false);
+            if (coarse is not int coarseCentre) {
                 await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
                 return false;
             }
+            // Every fine probe, and the overshoot above the top one, must stay inside the travel.
+            var centre = ClampSweepCentre(coarseCentre, settings, travel);
             var points = new List<FocusPoint>(ProbeCount(settings));
             // §59.10 — retain each probe's (position, detected stars) for the end-of-sweep collimation read.
             // At completion we feed the evaluator the single MOST-DEFOCUSED probe's stars (widest, best-resolved
@@ -237,9 +245,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 }
                 // The curve still falls toward one edge: focus lies just beyond the sampled range.
                 // Re-centre on that edge and sweep again rather than give up.
-                if (attempt < MaxSweepRecentres && EdgeMinimum(points) is int edge) {
-                    LogSweepRecentred(edge, attempt + 1);
-                    centre = edge;
+                if (attempt < MaxSweepRecentres && EdgeMinimum(points) is int edge
+                        && ClampSweepCentre(edge, settings, travel) is var recentred && recentred != centre) {
+                    LogSweepRecentred(recentred, attempt + 1);
+                    centre = recentred;
                     continue;
                 }
                 LogSweepFailed(fit is null

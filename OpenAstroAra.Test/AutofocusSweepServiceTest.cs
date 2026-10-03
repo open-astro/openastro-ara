@@ -166,13 +166,13 @@ namespace OpenAstroAra.Test {
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
         }
 
-        private static readonly int[] TravelStopMoves = { 500, 900, 100, 600 };
+        private static readonly int[] TravelStopMoves = { 500, 900, 100, 900 };
 
         [Test]
         public async Task Coarse_search_treats_the_travel_stop_at_zero_as_the_bracket() {
-            // Start at 500 with HFR improving toward (and past) 0: the walk reaches 100, the next
-            // doubled step would land below 0, so 0 is taken as the far side of the bracket and the
-            // fine sweep is centred on 100. No coarse probe may go below 0.
+            // Start at 500 with HFR improving toward 0: the walk reaches 100 and the next doubled step
+            // would pass 0, so 0 is the far side of the bracket. The fine sweep around 100 would probe
+            // down to -300, so its centre is lifted to 400 (lowest probe 0) and no move goes below 0.
             var position = 500;
             var moves = new List<int>();
             var focuser = new Mock<IFocuserMediator>();
@@ -184,12 +184,62 @@ namespace OpenAstroAra.Test {
                 metric: (_, _) => Result(1.5 + 0.2 * Math.Pow((position - 100) / 100.0, 2), 42),
                 coarseMetric: (_, _) => 1000.0 + position);
 
-            await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
-            // Coarse: start, +400 (worse), −400 (better, at 100); the next step (−800) would pass 0.
-            // The refinement re-uses the cached 500 and skips −300. Then the fine overshoot: 100 + 500.
+            Assert.That(ok, Is.True);
+            // Coarse: start, +400 (worse), -400 (better, at 100); refinement re-uses 500 and skips -300.
+            // Then the fine overshoot above the clamped centre: 400 + 500.
             Assert.That(moves.GetRange(0, 4), Is.EqualTo(TravelStopMoves));
+            Assert.That(moves.Min(), Is.GreaterThanOrEqualTo(0));
+            Assert.That(position, Is.EqualTo(100).Within(30));
         }
+
+        [Test]
+        public async Task Sweep_stays_inside_the_focusers_reported_travel() {
+            // Travel 0..12000, focus at 11700 with HFR improving upward from the start: the coarse walk
+            // stops at the top of travel and the fine sweep (and its overshoot) must not pass 12000.
+            const int maxPosition = 12_000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, 11_700),
+                coarseMetric: (_, _) => 1e6 - Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, maxPosition)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.Max(), Is.LessThanOrEqualTo(maxPosition));
+            Assert.That(Current(), Is.EqualTo(11_700).Within(30));
+        }
+
+        [TestCase(true, 30_000, 0, 30_000)]
+        [TestCase(false, 30_000, null, null)] // relative focuser: positions are not absolute travel
+        [TestCase(true, 0, null, null)]       // range not reported yet
+        public async Task FocuserTravel_is_the_absolute_focusers_reported_range(bool absolute, int maxPosition, int? min, int? max) {
+            var focusers = new Mock<IFocuserService>();
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new FocuserDto(
+                "f", "Focuser", EquipmentConnectionState.Connected,
+                new FocuserCapabilitiesDto(absolute ? 0 : -maxPosition, maxPosition, 3.76, false, absolute),
+                new FocuserStateDto("idle", 100, null, false)));
+            var travel = await AutofocusSweepService.FocuserTravelAsync(focusers.Object, CancellationToken.None);
+            Assert.That(travel, Is.EqualTo(min is null ? null : (min.Value, max!.Value)));
+        }
+
+        [Test]
+        public async Task FocuserTravel_is_null_with_no_focuser() {
+            var focusers = new Mock<IFocuserService>();
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((FocuserDto?)null);
+            Assert.That(await AutofocusSweepService.FocuserTravelAsync(focusers.Object, CancellationToken.None), Is.Null);
+        }
+
+        [TestCase(100, 400)]       // lowest probe would be below 0
+        [TestCase(5_000, 5_000)]   // already inside
+        [TestCase(11_900, 11_500)] // overshoot above the top probe would pass 12000
+        public void ClampSweepCentre_keeps_every_probe_inside_the_travel(int centre, int expected) =>
+            Assert.That(AutofocusSweepService.ClampSweepCentre(centre, Settings(steps: 4, stepSize: 100), (0, 12_000)),
+                Is.EqualTo(expected));
 
         [Test]
         public async Task Coarse_search_keeps_the_start_when_it_already_brackets_focus() {

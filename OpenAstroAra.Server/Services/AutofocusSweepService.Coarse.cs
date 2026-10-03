@@ -93,7 +93,7 @@ public sealed partial class AutofocusSweepService {
     /// elsewhere, or null (logged) when no position yields measurable stars or the probe budget runs
     /// out before the minimum is bracketed.
     /// </summary>
-    private async Task<int?> CoarseCentreAsync(AutofocusSettingsDto settings, int start, IProgress<ApplicationStatus> progress, CancellationToken token) {
+    private async Task<int?> CoarseCentreAsync(AutofocusSettingsDto settings, int start, (int Min, int Max) travel, IProgress<ApplicationStatus> progress, CancellationToken token) {
         if (_coarseMetric is null) {
             return start;
         }
@@ -117,15 +117,16 @@ public sealed partial class AutofocusSweepService {
         var pos = start;
         var h = await Measure(pos).ConfigureAwait(false);
         int dir;
+        bool InTravel(int position) => position >= travel.Min && position <= travel.Max;
         var up = start + baseStep;
-        var hUp = await Measure(up).ConfigureAwait(false);
+        var hUp = InTravel(up) ? await Measure(up).ConfigureAwait(false) : double.PositiveInfinity;
         if (hUp < h) {
             dir = 1;
             pos = up;
             h = hUp;
         } else {
             var down = start - baseStep;
-            var hDown = down >= 0 ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
+            var hDown = InTravel(down) ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
             if (hDown < h) {
                 dir = -1;
                 pos = down;
@@ -145,7 +146,7 @@ public sealed partial class AutofocusSweepService {
         while (measured.Count < CoarseMaxProbes) {
             step = Math.Min(step * 2, baseStep * CoarseMaxStepMultiplier);
             var next = pos + dir * step;
-            if (next < 0) {
+            if (!InTravel(next)) {
                 bracketed = true; // the travel stop is the far side of the bracket
                 break;
             }
@@ -167,7 +168,7 @@ public sealed partial class AutofocusSweepService {
         while (step > baseStep) {
             step = Math.Max(baseStep, step / 2);
             foreach (var candidate in new[] { pos + step, pos - step }) {
-                if (candidate < 0) {
+                if (!InTravel(candidate)) {
                     continue;
                 }
                 var hc = await Measure(candidate).ConfigureAwait(false);
@@ -179,6 +180,23 @@ public sealed partial class AutofocusSweepService {
         }
         LogCoarseResult(pos, h);
         return pos;
+    }
+
+    /// <summary>Production travel source: an absolute focuser's cached [Min, Max] once its driver has
+    /// reported a real range; null for a relative focuser, an unreported range, or no focuser.</summary>
+    internal static async Task<(int Min, int Max)?> FocuserTravelAsync(IFocuserService focusers, CancellationToken ct) =>
+        (await focusers.GetAsync(ct).ConfigureAwait(false))?.Capabilities is { AbsoluteFocuser: true, MaxPosition: > 0 } caps
+            ? (caps.MinPosition, caps.MaxPosition)
+            : null;
+
+    /// <summary>Clamp a fine-sweep centre so every probe, from <c>centre − Steps·StepSize</c> up to the
+    /// overshoot at <c>centre + Steps·StepSize + StepSize</c>, lies inside <paramref name="travel"/>.
+    /// A travel too short for the whole sweep only keeps the bottom probe at or above the minimum.</summary>
+    internal static int ClampSweepCentre(int centre, AutofocusSettingsDto settings, (int Min, int Max) travel) {
+        var halfWidth = settings.Steps * settings.StepSize;
+        var lowest = travel.Min + halfWidth;
+        var highest = travel.Max == int.MaxValue ? int.MaxValue : travel.Max - halfWidth - settings.StepSize;
+        return highest >= lowest ? Math.Clamp(centre, lowest, highest) : Math.Max(centre, lowest);
     }
 
     /// <summary>The edge position when the sampled minimum sits strictly at an end of the sweep.</summary>
