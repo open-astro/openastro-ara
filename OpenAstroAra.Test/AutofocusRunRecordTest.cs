@@ -84,13 +84,19 @@ namespace OpenAstroAra.Test {
 
         /// <summary>A sweep whose V-curve bottoms at <paramref name="best"/>, wired to a tracker + event capture.</summary>
         private static (AutofocusSweepService Svc, AutofocusRunTracker Tracker, List<(string Type, JsonElement Payload)> Events, List<int> Moves) Build(
-                double best, Func<int, StarDetectionResult>? metricOverride = null, bool restore = true) {
+                double best, Func<int, StarDetectionResult>? metricOverride = null, bool restore = true,
+                Func<AutofocusRunTracker, CancellationToken, AnalysisFrame>? capture = null) {
             var (focuser, moves) = Focuser();
             int Current() => moves.Count == 0 ? StartPosition : moves[^1];
             var tracker = new AutofocusRunTracker();
             var (ws, events) = CapturingWs();
+            var frames = Frames();
+            if (capture is not null) {
+                frames.Setup(f => f.CaptureForAnalysisAsync(It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                    .Returns<double, int, CancellationToken>((_, _, ct) => Task.FromResult(capture(tracker, ct)));
+            }
             var svc = new AutofocusSweepService(
-                Profiles(Settings(restore: restore)).Object, focuser.Object, Frames().Object,
+                Profiles(Settings(restore: restore)).Object, focuser.Object, frames.Object,
                 metric: (_, _) => {
                     if (metricOverride is not null) {
                         return metricOverride(Current());
@@ -218,6 +224,55 @@ namespace OpenAstroAra.Test {
             Assert.That(snap.State, Is.EqualTo("failed"));
             Assert.That(snap.Reason, Does.Contain("not connected"));
             Assert.That(snap.RestoredPosition, Is.Null);
+        }
+
+        private static readonly AnalysisFrame Blank = new(new ushort[16], 4, 4, DateTimeOffset.UnixEpoch);
+
+        /// <summary>A completed sweep whose confirmation frame produced nothing: the run still ends complete
+        /// AT the fitted best (never restored), with the fit's prediction standing in for the measured HFR.</summary>
+        private static void AssertCompletedOnThePrediction(AutofocusRunTracker tracker, List<int> moves, bool ok) {
+            Assert.That(ok, Is.True);
+            var snap = tracker.Snapshot();
+            Assert.That(snap.State, Is.EqualTo("complete"));
+            Assert.That(snap.Fit, Is.Not.Null);
+            Assert.That(snap.FinalPosition, Is.EqualTo((int)Math.Round(snap.Fit!.BestPosition)).Within(1));
+            Assert.That(moves[^1], Is.Not.EqualTo(StartPosition), "a cancel at confirming must not restore the start");
+            Assert.That(snap.FinalHfr, Is.EqualTo(snap.Fit.PredictedHfr).Within(0.01));
+            Assert.That(snap.FinalStars, Is.Null);
+        }
+
+        [Test]
+        public async Task A_cancel_during_the_confirmation_frame_is_ignored_and_the_run_completes() {
+            var (svc, tracker, _, moves) = Build(best: StartPosition - 150, capture: (t, ct) => {
+                if (t.Snapshot().Phase == "confirming") {
+                    t.TryCancel();                      // the user hits Cancel while the confirmation frame exposes
+                    ct.ThrowIfCancellationRequested();  // the capture observes the run's token
+                }
+                return Blank;
+            });
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            AssertCompletedOnThePrediction(tracker, moves, ok);
+        }
+
+        [Test]
+        public async Task An_unmeasurable_confirmation_frame_falls_back_to_the_fit_prediction() {
+            AutofocusRunTracker? trackerRef = null;
+            var (svc, tracker, _, moves) = Build(best: StartPosition - 150, metricOverride: position => {
+                if (trackerRef!.Snapshot().Phase == "confirming") {
+                    return Result(0, 0); // clouds over the confirmation frame
+                }
+                var delta = (position - (StartPosition - 150)) / 100.0;
+                return Result(1.5 + 0.2 * delta * delta, 42);
+            });
+            trackerRef = tracker;
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            AssertCompletedOnThePrediction(tracker, moves, ok);
         }
 
         [Test]
