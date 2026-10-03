@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/polar_align.dart';
+import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
@@ -49,16 +50,55 @@ String formatArcmin(double? v) {
   return '$sign${v.abs().toStringAsFixed(1)}′';
 }
 
-// Sized to read from a laptop or tablet beside the mount while turning knobs.
-const double _textFont = 20;
-const double _smallFont = 16;
-const double _readoutFont = 44;
-const double _hintFont = 30;
-const _bigButton = ButtonStyle(
-  textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-  padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
-  iconSize: WidgetStatePropertyAll(26),
-);
+/// Total polar error in the unit people read most easily: arcseconds under
+/// 10′ (`48″`), arcminutes under 1° (`24′`), degrees above (`1.5°`), with
+/// the unit spelled out. Pure — unit-tested.
+(String, String) formatPoleOffset(double arcmin) {
+  final a = arcmin.abs();
+  if (a < 10) return ('${(a * 60).round()}″', 'arcseconds from the pole');
+  if (a < 60) return ('${a.round()}′', 'arcminutes from the pole');
+  return ('${(a / 60).toStringAsFixed(1)}°', 'degrees from the pole');
+}
+
+/// Worst-case declination drift, in arcseconds, that a polar error of
+/// [arcmin] causes over [seconds]: error × Earth's rotation rate
+/// (7.292e-5 rad/s), i.e. ~0.26″ per minute per arcminute of error.
+/// Pure — unit-tested.
+double maxDriftArcsec(double arcmin, double seconds) => arcmin.abs() * 60 * 7.2921e-5 * seconds;
+
+/// Plain-English verdict for a total error (label, what it means).
+/// Pure — unit-tested.
+(String, String) polarErrorRating(double arcmin) {
+  final a = arcmin.abs();
+  if (a <= 1) return ('Excellent', "Polar alignment won't limit your exposures.");
+  if (a <= 3) return ('Very good', 'Plenty for guided imaging.');
+  if (a <= 10) return ('Good', 'Fine with guiding; keep unguided exposures short.');
+  if (a <= 30) return ('Rough', 'Keep adjusting — stars will drift in longer exposures.');
+  return ('Far off', 'Keep turning the knobs toward the arrows.');
+}
+
+/// [arcmin] as a share of the Moon's ~31′ width: `1/39 of the Moon's width`
+/// or `1.5× the Moon's width`. Pure — unit-tested.
+String moonWidthComparison(double arcmin) {
+  const moon = 31.0;
+  final a = arcmin.abs();
+  if (a <= 0) return "0 × the Moon's width";
+  if (a >= moon) return "${(a / moon).toStringAsFixed(1)}× the Moon's width";
+  return "1/${(moon / a).round()} of the Moon's width";
+}
+
+// Type scale: body text matches the other Setup panes; the alignment
+// readout is sized to read at arm's length or more from the mount.
+const double _textFont = 14;
+const double _smallFont = 12;
+const double _heroFont = 88;
+const double _axisFont = 60;
+const double _hintFont = 28;
+// The "Alignment quality" headline figure; the axis readout above is larger.
+const double _qualityFont = 56;
+const _tabular = [FontFeature.tabularFigures()];
+// Side-by-side cards from here; stacked below (tablet portrait, phone).
+const double _wideBreakpoint = 760;
 
 /// RA in degrees as `09h14m40s`. Pure — unit-tested.
 String formatRaHms(double raDeg) {
@@ -109,6 +149,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   // Live view: the guide camera's latest frame, refetched after every frame.
   Uint8List? _frameJpeg;
   bool _frameLoading = false;
+
+  // Night mode (red filter) as of the last build: blue accents nearly vanish
+  // under it, so the in-routine Abort switches to full-brightness text.
+  bool _night = false;
 
   static String _exposureText(double seconds) =>
       seconds == seconds.roundToDouble() ? seconds.toStringAsFixed(1) : '$seconds';
@@ -242,47 +286,40 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         _loadFrame();
       }
     });
-    final color = zoneColor(live.totalErrorArcmin);
-    final active = live.phase == PolarAlignStates.seeding ||
-        live.phase == PolarAlignStates.adjusting ||
-        live.phase == PolarAlignStates.paused;
+    final night = switch (ref.watch(nightModeProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    };
+    // Night mode's red filter keeps only luminance, so the zone hues (and
+    // their tints) would be the dimmest things on screen. Draw them at full
+    // brightness instead; the words (Excellent, Raise, …) carry the meaning.
+    final color = night ? AraColors.textPrimary : zoneColor(live.totalErrorArcmin);
+    _night = night;
 
     // Always-on panel: the live bullseye + Az/Alt/Total readout stay visible
     // on the page (like the equipment chips) instead of hiding behind a
     // collapse — polar alignment is a hands-on, eyes-on process.
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: Row(
-              children: [
-                Icon(Icons.adjust, size: 30, color: active ? color : AraColors.textSecondary),
-                const SizedBox(width: 8),
-                const Text('Polar Align', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w600)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _headerSummary(live),
-                    key: const Key('polar-align-header-summary'),
-                    textAlign: TextAlign.right,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: active ? color : AraColors.textSecondary, fontSize: _textFont),
-                  ),
-                ),
-              ],
-            ),
+          Row(
+            children: [
+              const SizedBox.square(dimension: 22, child: CustomPaint(painter: PolarScopeIconPainter())),
+              const SizedBox(width: 10),
+              Text('Polar Align', style: Theme.of(context).textTheme.titleLarge),
+              const Spacer(),
+              _statusPill(live),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: _body(live, api == null, color),
-          ),
+          const SizedBox(height: 12),
+          _body(live, api == null, color),
         ],
       ),
     );
@@ -291,16 +328,50 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   String _headerSummary(PolarAlignLive live) {
     switch (live.phase) {
       case PolarAlignStates.seeding:
-        return 'measuring axis…';
-      case PolarAlignStates.adjusting:
-        return 'Total ${formatArcmin(live.totalErrorArcmin)}';
+        return 'Measuring axis';
+      // Adjusting: no pill — the alignment card already shows the total.
       case PolarAlignStates.paused:
-        return 'paused — no solve';
+        return 'Paused — no solve';
       case PolarAlignStates.failed:
-        return 'failed';
+        return 'Failed';
       default:
         return '';
     }
+  }
+
+  /// Capsule in the header: a status dot + the routine's phase.
+  Widget _statusPill(PolarAlignLive live) {
+    final text = _headerSummary(live);
+    if (text.isEmpty) return const SizedBox.shrink();
+    final tint = switch (live.phase) {
+      PolarAlignStates.failed => AraColors.accentError,
+      PolarAlignStates.paused => AraColors.accentBusy,
+      _ => AraColors.accentInfo,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            key: const Key('polar-align-header-summary'),
+            style: TextStyle(
+                fontSize: _smallFont, fontWeight: FontWeight.w600, color: tint, fontFeatures: _tabular),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _body(PolarAlignLive live, bool noServer, Color color) {
@@ -327,220 +398,476 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           'and mount are connected, then start. The routine takes two solved '
           'frames around a small RA slew, then guides your alt/az knob '
           'adjustments live.',
-          style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary),
+          style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
         ),
         if (live.phase == PolarAlignStates.failed && live.errorReason != null) ...[
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: 12),
+          _callout(
             'Failed (${live.errorReason}): ${live.errorMessage ?? 'see the server log'}',
+            AraColors.accentError,
+            Icons.error_outline,
             key: const Key('polar-align-error-banner'),
-            style: const TextStyle(fontSize: _textFont, color: AraColors.accentError),
           ),
         ],
         if (live.phase == PolarAlignStates.stopped && live.totalErrorArcmin != null) ...[
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: 12),
+          _callout(
             'Last run ended at ${formatArcmin(live.totalErrorArcmin)} total error.',
-            style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary),
+            AraColors.textSecondary,
+            Icons.history,
           ),
         ],
         if (_status != null) ...[
-          const SizedBox(height: 8),
-          Text(_status!, style: const TextStyle(fontSize: _textFont, color: AraColors.accentError)),
+          const SizedBox(height: 12),
+          _callout(_status!, AraColors.accentError, Icons.error_outline),
         ],
-        const SizedBox(height: 8),
-        _captureSettings(),
-        const SizedBox(height: 8),
-        FilledButton.icon(
-          key: const Key('polar-align-start'),
-          style: _bigButton,
-          onPressed: _busy
-              ? null
-              : () => _run('start polar alignment', () async {
-                    final api = ref.read(polarAlignApiProvider);
-                    if (api != null) await api.start();
-                  }),
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Start Polar Alignment'),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _captureSettings(),
+            FilledButton.icon(
+              key: const Key('polar-align-start'),
+              onPressed: _busy
+                  ? null
+                  : () => _run('start polar alignment', () async {
+                        final api = ref.read(polarAlignApiProvider);
+                        if (api != null) await api.start();
+                      }),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Start Polar Alignment'),
+            ),
+          ],
         ),
       ],
     );
   }
 
   Widget _seedingBody(PolarAlignLive live) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _seedingRow(),
-        _liveView(live),
-        _frameStatus(live),
-      ],
-    );
-  }
-
-  Widget _seedingRow() {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 14,
-          height: 14,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Text(
-            'Measuring the RA axis — two solved frames around a small RA slew…',
-            style: TextStyle(fontSize: _textFont),
+    final measuring = _card(
+      child: Column(
+        children: [
+          Align(alignment: Alignment.centerLeft, child: _sectionLabel('RA axis')),
+          const SizedBox(height: 28),
+          const SizedBox.square(dimension: 28, child: CircularProgressIndicator(strokeWidth: 2.5)),
+          const SizedBox(height: 20),
+          const Text(
+            'Measuring the RA axis',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
-        ),
-        TextButton(
-          key: const Key('polar-align-abort-seeding'),
-          style: _bigButton,
-          onPressed: _busy ? null : _abort,
-          child: const Text('Abort'),
-        ),
-      ],
+          const SizedBox(height: 6),
+          const Text(
+            'Two solved frames around a small RA slew. Leave the mount alone '
+            'until the bullseye appears.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          TextButton(
+            key: const Key('polar-align-abort-seeding'),
+            onPressed: _busy ? null : _abort,
+            child: const Text('Abort'),
+          ),
+        ],
+      ),
+    );
+    return _split(
+      (wide) => _cameraCard(live, imageHeight: wide ? 360 : 240),
+      measuring,
     );
   }
 
   Widget _adjustBody(PolarAlignLive live, Color color) {
-    final range = bullseyeRangeArcmin(live.totalErrorArcmin);
     final inTolerance = live.totalErrorArcmin != null && live.totalErrorArcmin! <= _toleranceArcmin;
     final single = _settings.loopMode == PolarAlignLoopModes.single;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (live.phase == PolarAlignStates.paused)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text(
-              'No solve — check sky and focus. Retrying…',
-              key: Key('polar-align-paused-banner'),
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: AraColors.accentBusy),
-            ),
-          )
-        else if (live.consecutiveSolveFailures > 0)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              'No solve (${live.consecutiveSolveFailures}) — check sky and focus.',
-              key: const Key('polar-align-retry-banner'),
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: AraColors.accentBusy),
-            ),
+        if (live.phase == PolarAlignStates.paused) ...[
+          _callout(
+            'No solve — check sky and focus. Retrying…',
+            AraColors.accentBusy,
+            Icons.cloud_outlined,
+            key: const Key('polar-align-paused-banner'),
           ),
-        // Wide window: camera image left, bullseye + readout right, so both
-        // stay on screen together. Narrow (tablet portrait): stacked.
+          const SizedBox(height: 12),
+        ] else if (live.consecutiveSolveFailures > 0) ...[
+          _callout(
+            'No solve (${live.consecutiveSolveFailures}) — check sky and focus.',
+            AraColors.accentBusy,
+            Icons.cloud_outlined,
+            key: const Key('polar-align-retry-banner'),
+          ),
+          const SizedBox(height: 12),
+        ],
         LayoutBuilder(builder: (context, constraints) {
-          final aim = Column(
-            children: [
-              SizedBox(
-                width: 320,
-                height: 320,
-                child: CustomPaint(
-                  painter: BullseyePainter(
-                    dotFraction: bullseyeDotFraction(
-                        live.azErrorArcmin, live.altErrorArcmin, range),
-                    zoneColor: color,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text('ring: ${range >= 60 ? '${(range / 60).toStringAsFixed(0)}°' : '${range.toStringAsFixed(0)}′'}',
-                  style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary)),
-              const SizedBox(height: 8),
-              Wrap(
-                key: const Key('polar-align-readout'),
-                alignment: WrapAlignment.center,
-                spacing: 24,
-                runSpacing: 4,
+          if (constraints.maxWidth >= _wideBreakpoint) {
+            // Both columns share one height so the card edges line up: the
+            // meaning card and the bullseye absorb whatever is left over.
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final value in [
-                    'Alt: ${formatArcmin(live.altErrorArcmin)}',
-                    'Az: ${formatArcmin(live.azErrorArcmin)}',
-                    'Total: ${formatArcmin(live.totalErrorArcmin)}',
-                  ])
-                    Text(value,
-                        style: TextStyle(fontSize: _readoutFont, fontWeight: FontWeight.w700, color: color)),
+                  Expanded(
+                    flex: 11,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _cameraCard(live, imageHeight: 360),
+                        const SizedBox(height: 12),
+                        Expanded(child: _meaningCard(live, color)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 9, child: _alignmentCard(live, color, single, fill: true)),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                _knobHint(live),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: _hintFont, fontWeight: FontWeight.w600),
-              ),
-              if (single)
-                const Text(
-                  'Single frame: turn a knob, then Take Frame.',
-                  style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary),
-                ),
-            ],
-          );
-          if (_frameJpeg != null && constraints.maxWidth >= 680) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _liveView(live, maxHeight: 520)),
-                const SizedBox(width: 16),
-                SizedBox(width: 360, child: aim),
-              ],
             );
           }
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _liveView(live),
-              const SizedBox(height: 8),
-              aim,
+              _cameraCard(live, imageHeight: 240),
+              const SizedBox(height: 12),
+              _alignmentCard(live, color, single),
+              const SizedBox(height: 12),
+              _meaningCard(live, color),
             ],
           );
         }),
-        const SizedBox(height: 8),
-        _captureSettings(),
-        _frameStatus(live),
         if (_status != null) ...[
-          const SizedBox(height: 8),
-          Text(_status!, style: const TextStyle(fontSize: _textFont, color: AraColors.accentError)),
+          const SizedBox(height: 12),
+          _callout(_status!, AraColors.accentError, Icons.error_outline),
         ],
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
-          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 12,
           children: [
-            if (single)
-              FilledButton.tonalIcon(
-                key: const Key('polar-align-take-frame'),
-                style: _bigButton,
-                onPressed: _busy || live.frameInProgress
-                    ? null
-                    : () => _run('take a frame', () async {
-                          final api = ref.read(polarAlignApiProvider);
-                          if (api != null) await api.requestCapture();
-                        }),
-                icon: const Icon(Icons.camera),
-                label: const Text('Take Frame'),
-              ),
-            FilledButton.icon(
-              key: const Key('polar-align-done'),
-              style: _bigButton,
-              onPressed: _busy || !inTolerance
-                  ? null
-                  : () => _run('complete polar alignment', () async {
-                        final api = ref.read(polarAlignApiProvider);
-                        if (api != null) await api.complete();
-                      }),
-              icon: const Icon(Icons.check),
-              label: Text('Done${inTolerance ? '' : ' (< ${_toleranceArcmin.toStringAsFixed(1)}′)'}'),
-            ),
-            OutlinedButton(
-              key: const Key('polar-align-abort'),
-              style: _bigButton,
-              onPressed: _busy ? null : _abort,
-              child: const Text('Abort'),
+            _captureSettings(),
+            Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                TextButton(
+                  key: const Key('polar-align-abort'),
+                  style: _night ? TextButton.styleFrom(foregroundColor: AraColors.textPrimary) : null,
+                  onPressed: _busy ? null : _abort,
+                  child: const Text('Abort'),
+                ),
+                if (single)
+                  FilledButton.tonalIcon(
+                    key: const Key('polar-align-take-frame'),
+                    onPressed: _busy || live.frameInProgress
+                        ? null
+                        : () => _run('take a frame', () async {
+                              final api = ref.read(polarAlignApiProvider);
+                              if (api != null) await api.requestCapture();
+                            }),
+                    icon: const Icon(Icons.camera),
+                    label: const Text('Take Frame'),
+                  ),
+                Tooltip(
+                  message: inTolerance
+                      ? ''
+                      : 'Available once the total error is under ${_toleranceArcmin.toStringAsFixed(1)}′',
+                  child: FilledButton.icon(
+                    key: const Key('polar-align-done'),
+                    onPressed: _busy || !inTolerance
+                        ? null
+                        : () => _run('complete polar alignment', () async {
+                              final api = ref.read(polarAlignApiProvider);
+                              if (api != null) await api.complete();
+                            }),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Done'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ],
     );
+  }
+
+  /// Camera card left, [right] beside it with ~45% of the width on a wide
+  /// pane; stacked on a narrow one (tablet portrait).
+  Widget _split(Widget Function(bool wide) left, Widget right) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= _wideBreakpoint;
+      if (wide) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 11, child: left(true)),
+            const SizedBox(width: 12),
+            Expanded(flex: 9, child: right),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [left(false), const SizedBox(height: 12), right],
+      );
+    });
+  }
+
+  /// Bullseye, the total error as the one large figure, then Altitude and
+  /// Azimuth side by side, each with the knob direction that closes it.
+  /// [fill]: the card is stretched to its row's height and the bullseye
+  /// centers in the spare room (needs a bounded height).
+  Widget _alignmentCard(PolarAlignLive live, Color color, bool single, {bool fill = false}) {
+    final range = bullseyeRangeArcmin(live.totalErrorArcmin);
+    final ring = range >= 60 ? '${(range / 60).toStringAsFixed(0)}°' : '${range.toStringAsFixed(0)}′';
+    // AspectRatio rather than a LayoutBuilder: the wide row sizes itself
+    // with IntrinsicHeight, which LayoutBuilder cannot answer.
+    final bullseye = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 400, maxHeight: 400),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: CustomPaint(
+          painter: BullseyePainter(
+            dotFraction: bullseyeDotFraction(live.azErrorArcmin, live.altErrorArcmin, range),
+            zoneColor: color,
+          ),
+        ),
+      ),
+    );
+    return _card(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _sectionLabel('Alignment'),
+              const Spacer(),
+              Text('Ring $ring',
+                  style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary, fontFeatures: _tabular)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (fill) Expanded(child: Center(child: bullseye)) else bullseye,
+          const SizedBox(height: 16),
+          Column(
+            key: const Key('polar-align-readout'),
+            children: [
+              _sectionLabel('Total error'),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  formatArcmin(live.totalErrorArcmin),
+                  style: TextStyle(
+                    fontSize: _heroFont,
+                    fontWeight: FontWeight.w300,
+                    height: 1.05,
+                    color: color,
+                    fontFeatures: _tabular,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1, color: Color(0x1FFFFFFF)),
+              const SizedBox(height: 18),
+              IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
+                    const VerticalDivider(width: 1, color: Color(0x1FFFFFFF)),
+                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, _azHint(live.azErrorArcmin), color)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (single) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'Turn a knob, then Take Frame.',
+              style: TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The total error translated for people who don't think in arcminutes:
+  /// arcseconds, a plain-English verdict, worst-case star drift over a
+  /// 5-minute exposure, and a Moon-width comparison.
+  Widget _meaningCard(PolarAlignLive live, Color color) {
+    final total = live.totalErrorArcmin;
+    final offset = total == null ? null : formatPoleOffset(total);
+    final rating = total == null ? null : polarErrorRating(total);
+    final drift = total == null ? null : maxDriftArcsec(total, 300);
+    return _card(
+      key: const Key('polar-align-meaning'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel('Alignment quality'),
+          const SizedBox(height: 12),
+          // Distance from the pole on the left, the verdict on the right.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        offset?.$1 ?? '—',
+                        style: const TextStyle(
+                            fontSize: _qualityFont, fontWeight: FontWeight.w600, height: 1.1, fontFeatures: _tabular),
+                      ),
+                    ),
+                    Text(
+                      offset?.$2 ?? 'waiting for a solve',
+                      style: const TextStyle(fontSize: 16, color: AraColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              if (rating != null) ...[
+                const SizedBox(width: 16),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_ratingIcon(total!), size: 34, color: color),
+                          const SizedBox(width: 10),
+                          Text(rating.$1,
+                              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: color)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (rating != null) ...[
+            const SizedBox(height: 14),
+            Text(rating.$2, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
+          ],
+          const SizedBox(height: 18),
+          const Divider(height: 1, color: Color(0x1FFFFFFF)),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _fact(
+                  'Star drift in a 5-min exposure',
+                  drift == null
+                      ? '—'
+                      : 'up to ${drift < 10 ? drift.toStringAsFixed(1) : drift.round().toString()}″',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _fact('Compared with the Moon', total == null ? '—' : moonWidthComparison(total)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            '1° = 60′ (arcminutes)  ·  1′ = 60″ (arcseconds)  ·  the Moon is about 30′ across',
+            style: TextStyle(fontSize: 13, color: AraColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static IconData _ratingIcon(double arcmin) {
+    final a = arcmin.abs();
+    if (a <= 1) return Icons.verified_outlined;
+    if (a <= 3) return Icons.thumb_up_outlined;
+    if (a <= 10) return Icons.check_circle_outline;
+    if (a <= 30) return Icons.warning_amber_rounded;
+    return Icons.error_outline;
+  }
+
+  Widget _fact(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
+        const SizedBox(height: 4),
+        Text(value,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, fontFeatures: _tabular)),
+      ],
+    );
+  }
+
+  Widget _axisStat(String label, double? value, (IconData, String) hint, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 16, color: AraColors.textSecondary)),
+        const SizedBox(height: 2),
+        // Scale down rather than overflow in a narrow (phone/tablet) column.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            formatArcmin(value),
+            style: const TextStyle(
+                fontSize: _axisFont, fontWeight: FontWeight.w600, height: 1.1, fontFeatures: _tabular),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // The knob direction as a bold tinted capsule — the thing to act on,
+        // readable from the mount with less-than-perfect eyesight.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(hint.$1, size: _hintFont + 4, color: color),
+                const SizedBox(width: 8),
+                Text(hint.$2, style: TextStyle(fontSize: _hintFont, fontWeight: FontWeight.w700, color: color)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Decoupled knob directions (§45 design: chasing one coupled 2-D error is
+  /// what makes people feel lost). Positive alt = axis above the pole → lower;
+  /// positive az = axis east of the pole → move west.
+  static (IconData, String) _altHint(double? alt) {
+    if (alt == null) return (Icons.remove, '—');
+    if (alt.abs() <= 0.05) return (Icons.check, 'On target');
+    return alt > 0 ? (Icons.arrow_downward, 'Lower') : (Icons.arrow_upward, 'Raise');
+  }
+
+  static (IconData, String) _azHint(double? az) {
+    if (az == null) return (Icons.remove, '—');
+    if (az.abs() <= 0.05) return (Icons.check, 'On target');
+    return az > 0 ? (Icons.arrow_back, 'Move west') : (Icons.arrow_forward, 'Move east');
   }
 
   /// Exposure box + Loop/Single switch. Saved to the profile; a running
@@ -556,14 +883,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           children: [
             const Text('Exposure',
                 style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             SizedBox(
-              width: 120,
+              width: 96,
               child: TextField(
                 key: const Key('polar-align-exposure'),
                 controller: _exposureCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(fontSize: 22),
                 decoration: const InputDecoration(
                   isDense: true,
                   suffixText: 's',
@@ -581,10 +907,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         SegmentedButton<String>(
           key: const Key('polar-align-mode'),
           showSelectedIcon: false,
-          style: const ButtonStyle(
-            textStyle: WidgetStatePropertyAll(TextStyle(fontSize: _textFont)),
-            iconSize: WidgetStatePropertyAll(24),
-          ),
           segments: const [
             ButtonSegment(
               value: PolarAlignLoopModes.loop,
@@ -605,34 +927,59 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  /// The guide camera's latest frame. Tap to open it full size with zoom
-  /// (check focus and star shapes).
-  Widget _liveView(PolarAlignLive live, {double maxHeight = 300}) {
+  /// The guide camera's latest frame in a card, with the frame status under
+  /// it. Tap the image to open it full size with zoom (focus, star shapes).
+  Widget _cameraCard(PolarAlignLive live, {required double imageHeight}) {
     final jpeg = _frameJpeg;
-    if (jpeg == null) return const SizedBox.shrink();
-    final last = live.lastFrame;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
+    return _card(
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GestureDetector(
-            key: const Key('polar-align-live-view'),
-            onTap: () => _showFullFrame(jpeg),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxHeight),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Image.memory(jpeg, gaplessPlayback: true, fit: BoxFit.contain),
-              ),
-            ),
+          Row(
+            children: [
+              _sectionLabel('Guide camera'),
+              const Spacer(),
+              if (jpeg != null)
+                const Text('Tap to enlarge',
+                    style: TextStyle(fontSize: _smallFont, color: AraColors.textSecondary)),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            'Guide camera${last == null ? '' : ' · ${last.frameId}'} — tap to enlarge',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: imageHeight,
+            child: jpeg == null
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.photo_camera_outlined, size: 28, color: AraColors.textDisabled),
+                          SizedBox(height: 8),
+                          Text('Waiting for the first frame…',
+                              style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  )
+                // Rounded on the image itself, so a frame narrower than the
+                // card is not boxed in black bars.
+                : Center(
+                    child: GestureDetector(
+                      key: const Key('polar-align-live-view'),
+                      onTap: () => _showFullFrame(jpeg),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(jpeg, gaplessPlayback: true, fit: BoxFit.contain),
+                      ),
+                    ),
+                  ),
           ),
+          _frameStatus(live),
         ],
       ),
     );
@@ -641,13 +988,21 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// The frame in progress (exposing → downloading/solving, with elapsed
   /// time) and the last finished frame's timings + solved pointing.
   Widget _frameStatus(PolarAlignLive live) {
-    const style = TextStyle(fontSize: _textFont, color: AraColors.textSecondary);
+    const style = TextStyle(fontSize: _smallFont, color: AraColors.textSecondary, fontFeatures: _tabular);
     final children = <Widget>[];
     final started = live.frameStartedAt;
     if (started != null) {
       final elapsed = DateTime.now().difference(started).inMilliseconds / 1000.0;
       final exposure = live.frameExposureSeconds ?? 0;
       final exposing = elapsed < exposure;
+      children.add(ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: LinearProgressIndicator(
+          value: exposing && exposure > 0 ? elapsed / exposure : null,
+          minHeight: 2,
+        ),
+      ));
+      children.add(const SizedBox(height: 6));
       children.add(Text(
         exposing
             ? 'Exposing ${elapsed.toStringAsFixed(1)} / ${exposure.toStringAsFixed(1)} s…'
@@ -655,17 +1010,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         key: const Key('polar-align-frame-progress'),
         style: style,
       ));
-      children.add(Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: LinearProgressIndicator(
-          value: exposing && exposure > 0 ? elapsed / exposure : null,
-          minHeight: 3,
-        ),
-      ));
     }
     final last = live.lastFrame;
     if (last != null) {
-      if (children.isNotEmpty) children.add(const SizedBox(height: 6));
       children.add(Text(
         'Last frame: ${last.exposureSeconds.toStringAsFixed(1)} s exposure · '
         'capture ${_secondsLabel(last.captureMs)} · '
@@ -678,18 +1025,59 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ? 'Solved: RA ${formatRaHms(last.raDeg!)}  Dec ${formatDecDms(last.decDeg!)}'
             : 'Did not solve',
         key: const Key('polar-align-last-solve'),
-        style: TextStyle(
-          fontSize: _textFont,
-          color: last.solved ? AraColors.textSecondary : AraColors.accentBusy,
-        ),
+        style: last.solved ? style : style.copyWith(color: AraColors.accentBusy),
       ));
     }
     if (children.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: children,
+      ),
+    );
+  }
+
+  Widget _card({Key? key, required Widget child, EdgeInsets padding = const EdgeInsets.all(16)}) {
+    return Container(
+      key: key,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AraColors.bgPanelAlt,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
+        color: AraColors.textSecondary,
+      ),
+    );
+  }
+
+  /// Tinted inline notice: icon + message on a soft background.
+  Widget _callout(String text, Color tint, IconData icon, {Key? key}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: tint),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, key: key, style: TextStyle(fontSize: _textFont, color: tint)),
+          ),
+        ],
       ),
     );
   }
@@ -698,22 +1086,31 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         final api = ref.read(polarAlignApiProvider);
         if (api != null) await api.stop();
       });
+}
 
-  /// Decoupled knob directions (§45 design: chasing one coupled 2-D error is
-  /// what makes people feel lost). Positive alt = axis above the pole → lower;
-  /// positive az = axis east of the pole → move west.
-  String _knobHint(PolarAlignLive live) {
-    final parts = <String>[];
-    final alt = live.altErrorArcmin;
-    final az = live.azErrorArcmin;
-    if (alt != null && alt.abs() > 0.05) {
-      parts.add('Alt: ${alt > 0 ? 'lower ▼' : 'raise ▲'}');
+/// Header icon: a polar-scope reticle (three rings + crosshair) with a green
+/// dot on the pole.
+class PolarScopeIconPainter extends CustomPainter {
+  const PolarScopeIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 0.5;
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = AraColors.textSecondary;
+    for (final f in const [1.0, 2 / 3, 1 / 3]) {
+      canvas.drawCircle(center, radius * f, line);
     }
-    if (az != null && az.abs() > 0.05) {
-      parts.add('Az: ${az > 0 ? 'move west ◀' : 'move east ▶'}');
-    }
-    return parts.isEmpty ? 'On the pole — nice.' : parts.join('    ');
+    canvas.drawLine(center - Offset(radius, 0), center + Offset(radius, 0), line);
+    canvas.drawLine(center - Offset(0, radius), center + Offset(0, radius), line);
+    canvas.drawCircle(center, radius * 0.16, Paint()..color = AraColors.accentConnected);
   }
+
+  @override
+  bool shouldRepaint(PolarScopeIconPainter oldDelegate) => false;
 }
 
 /// The zooming bullseye: three concentric rings, cross-hairs, and the RA-axis
@@ -740,10 +1137,10 @@ class BullseyePainter extends CustomPainter {
 
     final dot = Paint()..color = zoneColor;
     final pos = center + Offset(dotFraction.dx * radius, dotFraction.dy * radius);
-    canvas.drawCircle(pos, 10, dot);
+    canvas.drawCircle(pos, math.max(10.0, radius * 0.06), dot);
     // A subtle line from the dot back to the pole — the direction to drive it.
     final tether = Paint()
-      ..strokeWidth = 2.5
+      ..strokeWidth = math.max(2.5, radius * 0.015)
       ..color = zoneColor.withValues(alpha: 0.4);
     canvas.drawLine(pos, center, tether);
   }
