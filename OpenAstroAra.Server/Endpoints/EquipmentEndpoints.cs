@@ -483,8 +483,12 @@ public static partial class EquipmentEndpoints {
         // its disconnect → reconnect window when a selection/setup message is queued) so a settings edit
         // takes effect without a full guider reconnect. Quick (a handful of RPCs): the push completes before
         // the 202 returns; guider.profile_pushed then carries the attempted method names.
-        guider.MapPost("/profile/push", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
-            await PushGuiderProfileAsync(key, svc, ct));
+        // ?scope=tuning sends only the runtime-safe subset (aggressiveness, minimum move, dec guide mode,
+        // guide exposure) with the equipment left connected — what Tune Guiding uses, so guiding continues.
+        guider.MapPost("/profile/push", async (string? scope, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            string.Equals(scope, "tuning", System.StringComparison.OrdinalIgnoreCase)
+                ? await PushGuiderTuningAsync(key, svc, ct)
+                : await PushGuiderProfileAsync(key, svc, ct));
         // §63.17 manual restart — fire-and-forget systemctl restart of the guider unit (202 immediately;
         // §63.3 recovery + guider.state WS events report the outcome). Deliberately not gated on a
         // connected guider: it's most useful when the daemon is hung.
@@ -842,6 +846,15 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             // Push landed per-message best-effort, but the post-push equipment reconnect failed — actionable.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    /// <summary>Tuning-only push (same 202 / typed-409 mapping; there is no reconnect step, so no 422).</summary>
+    public static async Task<IResult> PushGuiderTuningAsync(string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.PushGuiderTuningAsync(idempotencyKey, ct));
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
 

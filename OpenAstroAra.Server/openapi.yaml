@@ -1355,6 +1355,18 @@ paths:
       tags:
         - Equipment
       parameters:
+        - name: scope
+          in: query
+          description: >-
+            Omitted or "full": the §63.5 engine config AND the §63.17 equipment selections, which
+            disconnects and reconnects the guider's equipment (guiding stops). "tuning": only the
+            runtime-safe messages (aggressiveness, minimum move, dec guide mode, guide exposure) — guiding
+            continues.
+          schema:
+            type: string
+            enum:
+              - full
+              - tuning
         - name: Idempotency-Key
           in: header
           schema:
@@ -9493,6 +9505,13 @@ components:
             - string
           format: int32
           default: 6000
+        guide_exposure_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     PlanningFilterDto:
       required:
         - name

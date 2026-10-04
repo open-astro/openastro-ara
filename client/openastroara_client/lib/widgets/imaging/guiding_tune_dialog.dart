@@ -21,9 +21,13 @@ Future<void> showGuidingTuneDialog(BuildContext context) => showDialog<void>(
     );
 
 /// The RUNTIME-SAFE §63.5 tuning params only (aggressiveness, minimum move,
-/// dec guide mode, dither pixels) — they map to OpenAstro Guider `set_algo_param` /
-/// `set_dec_guide_mode`, which apply while guiding continues. Equipment and
-/// optics changes (which force a disconnect window) stay in Settings → Guider.
+/// dec guide mode, dither pixels, guide exposure) — they map to OpenAstro
+/// Guider `set_algo_param` / `set_dec_guide_mode` / `set_exposure`, which apply
+/// while guiding continues. Apply asks the daemon for the TUNING-ONLY push
+/// (`?scope=tuning`): the full push also re-sends the equipment selections,
+/// which the guider only accepts with its equipment disconnected, so it
+/// stopped guiding mid-run. Equipment and optics changes stay in Settings →
+/// Guider.
 class GuidingTuneDialog extends ConsumerStatefulWidget {
   const GuidingTuneDialog({super.key});
 
@@ -105,8 +109,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     }
   }
 
-  /// Persist the edited §63 settings, then ask the daemon to re-push the
-  /// profile to the guider (set_algo_param / set_dec_guide_mode — runtime-safe,
+  /// Persist the edited §63 settings, then ask the daemon for the tuning-only
+  /// re-push (set_algo_param / set_dec_guide_mode / set_exposure — runtime-safe,
   /// guiding is not interrupted).
   Future<void> _apply() async {
     final api = ref.read(profileApiProvider);
@@ -122,7 +126,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       _status = null;
     });
     try {
-      // PUT the daemon's own copy + ONLY the five runtime-safe tuning fields
+      // PUT the daemon's own copy + ONLY the six runtime-safe tuning fields
       // from the draft — never the shared provider's object, which may hold
       // Settings → Guider edits the user hasn't confirmed with Save.
       final toSave = serverCopy.copyWith(
@@ -131,18 +135,24 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
         minimumMove: draft.minimumMove,
         decGuideMode: draft.decGuideMode,
         ditherPixels: draft.ditherPixels,
+        guideExposureMs: draft.guideExposureMs,
       );
       final echoed = await api.putPhd2Settings(toSave);
       _serverCopy = echoed;
       // Reflect the now-persisted tuning values in the shared provider (the
-      // setters touch only these five fields — staged Settings edits survive).
+      // setters touch only these six fields — staged Settings edits survive).
       final n = ref.read(phd2SettingsProvider.notifier);
       n.setRaAggressiveness(draft.raAggressiveness);
       n.setDecAggressiveness(draft.decAggressiveness);
       n.setMinimumMove(draft.minimumMove);
       n.setDecGuideMode(draft.decGuideMode);
       n.setDitherPixels(draft.ditherPixels);
-      await ref.read(guiderEquipmentProvider.notifier).pushProfile();
+      n.setGuideExposureMs(draft.guideExposureMs);
+      // Tuning-only: the full push re-sends the equipment selections inside a
+      // stop_capture / disconnect window and ends the guide session.
+      await ref
+          .read(guiderEquipmentProvider.notifier)
+          .pushProfile(tuningOnly: true);
       if (!mounted) return;
       setState(() => _status = 'Applied — guiding continues uninterrupted.');
     } catch (e) {
@@ -244,6 +254,46 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                           }
                         },
                       ),
+                      // "Unset" = the guider keeps its own duration (nothing
+                      // is pushed); any other choice is sent with set_exposure
+                      // and takes effect on the next guide frame.
+                      SettingsDropdownRow<int>(
+                        label: 'Guide exposure',
+                        // A saved value the guider does not offer (hand-edited
+                        // profile) is still shown, so the row never renders
+                        // with a value missing from its items.
+                        value: phd2.guideExposureMs,
+                        items: {
+                          0: formatGuideExposure(0),
+                          for (final ms in guideExposureChoicesMs)
+                            ms: formatGuideExposure(ms),
+                          if (phd2.guideExposureMs > 0 &&
+                              !guideExposureChoicesMs
+                                  .contains(phd2.guideExposureMs))
+                            phd2.guideExposureMs:
+                                formatGuideExposure(phd2.guideExposureMs),
+                        },
+                        onChanged: (v) {
+                          if (v != null) _edit((d) => d.copyWith(guideExposureMs: v));
+                        },
+                      ),
+                      if (phd2.guideExposureMs > 0 &&
+                          (phd2.guideExposureMs < phd2.guideExposureMinMs ||
+                              phd2.guideExposureMs > phd2.guideExposureMaxMs))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'Outside your dark-library range '
+                            '(${formatGuideExposure(phd2.guideExposureMinMs)}–'
+                            '${formatGuideExposure(phd2.guideExposureMaxMs)}): '
+                            'guide frames at this exposure get no dark. Rebuild '
+                            'the dark library from Settings → Guider to cover it.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(color: AraColors.textDisabled),
+                          ),
+                        ),
                       SettingsDropdownRow<String>(
                         label: 'Dec guide mode',
                         value: phd2.decGuideMode,

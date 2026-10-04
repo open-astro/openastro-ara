@@ -163,8 +163,11 @@ framing/focus loop when you need to point or focus by eye.
   not the guiding; PHD2's own graph counts them): RMS RA / Dec / Total, peak per axis, and the RA oscillation index. The axis is in
   arcseconds once the guider has reported its pixel scale (or you have set the guide focal length
   and pixel size under **Settings → Guider**), and in guide-camera pixels until then. Tap the
-  header to collapse the graph to a one-line status; **Tune** opens the live aggressiveness /
-  minimum-move / dither controls.
+  header to collapse the graph to a one-line status. **Tune** opens **Tune Guiding**: RA/Dec
+  aggressiveness, minimum move, Dec guide mode, dither pixels and the **guide exposure** (0.5 s is a
+  good start on a harmonic mount). Apply sends only these runtime-safe values to the guider, so
+  guiding keeps running; equipment and optics changes live in **Settings → Guider** and do
+  reconnect the guider.
 
 ## 7. Unattended safety (the 3 a.m. story)
 

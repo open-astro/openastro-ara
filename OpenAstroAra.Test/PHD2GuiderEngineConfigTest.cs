@@ -29,7 +29,7 @@ namespace OpenAstroAra.Test {
     public class PHD2GuiderEngineConfigTest {
 
         private static IGuiderSettings Settings(int focal = 250, double pixel = 2.9, double ra = 0.7,
-                double dec = 0.65, double minMove = 0.15, string mode = "north") {
+                double dec = 0.65, double minMove = 0.15, string mode = "north", int exposureMs = 0) {
             var s = new Mock<IGuiderSettings>();
             s.SetupGet(x => x.GuideFocalLength).Returns(focal);
             s.SetupGet(x => x.GuidePixelSize).Returns(pixel);
@@ -37,7 +37,57 @@ namespace OpenAstroAra.Test {
             s.SetupGet(x => x.DecAggressiveness).Returns(dec);
             s.SetupGet(x => x.MinimumMove).Returns(minMove);
             s.SetupGet(x => x.DecGuideMode).Returns(mode);
+            s.SetupGet(x => x.GuideExposureMs).Returns(exposureMs);
             return s.Object;
+        }
+
+        // ── guide exposure (set_exposure, runtime-safe) + the tuning-only subset ──
+
+        private static readonly int[] ExpectedExposureParams = { 500 };
+        private static readonly string[] ExpectedTuningMethods = {
+            "set_algo_param", "set_algo_param", "set_algo_param", "set_algo_param", "set_dec_guide_mode", "set_exposure",
+        };
+
+        [Test]
+        public void Build_pushes_set_exposure_only_when_a_guide_exposure_is_set() {
+            // 0 = unset → never sent (the guider keeps its own duration).
+            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(Settings()).OfType<Phd2SetExposure>(), Is.Empty);
+
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(exposureMs: 500));
+            var exposure = msgs.OfType<Phd2SetExposure>().Single();
+            // Positional params, as PHD2's set_exposure expects: [500].
+            Assert.That(exposure.Parameters, Is.EqualTo(ExpectedExposureParams));
+            // It applies on the next frame — it must never open the disconnect window.
+            Assert.That(PHD2Guider.RequiresDisconnectedEquipment(exposure), Is.False);
+        }
+
+        [Test]
+        public void Tuning_messages_keep_runtime_safe_setters_and_drop_setup_and_selections() {
+            // A configured profile always carries selections + set_profile_setup, which the full push sends
+            // inside a stop_capture / set_connected(false) window — that is what stopped guiding when the
+            // Tune Guiding dialog applied an aggressiveness change. The tuning subset must contain only what
+            // applies while guiding continues.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [localhost:6800/1]");
+            s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount [localhost:6800/0]");
+            s.SetupGet(x => x.GuideFocalLength).Returns(120);
+            s.SetupGet(x => x.GuidePixelSize).Returns(3.75);
+            s.SetupGet(x => x.RAAggressiveness).Returns(0.5);
+            s.SetupGet(x => x.DecAggressiveness).Returns(0.85);
+            s.SetupGet(x => x.MinimumMove).Returns(0.15);
+            s.SetupGet(x => x.DecGuideMode).Returns("north");
+            s.SetupGet(x => x.GuideExposureMs).Returns(500);
+
+            var full = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object);
+            Assert.That(full.Any(PHD2Guider.RequiresDisconnectedEquipment), Is.True, "precondition: the full push would disconnect");
+
+            var tuning = PHD2Guider.BuildGuiderTuningMessages(s.Object);
+            Assert.That(tuning, Is.Not.Empty);
+            Assert.That(tuning.Any(PHD2Guider.RequiresDisconnectedEquipment), Is.False);
+            Assert.That(tuning.OfType<Phd2SetAlgoParam>().Count(), Is.EqualTo(4));
+            Assert.That(tuning.OfType<Phd2SetDecGuideMode>().Count(), Is.EqualTo(1));
+            Assert.That(tuning.OfType<Phd2SetExposure>().Count(), Is.EqualTo(1));
+            Assert.That(tuning.Select(m => m.Method), Is.EquivalentTo(ExpectedTuningMethods));
         }
 
         // §63.17 — a settings mock with equipment selections set (the plain Settings() mock leaves them at

@@ -767,6 +767,7 @@ class ProfileApi {
     // §76.2 guide exposure range (defaults match the server's optional fields).
     guideExposureMinMs: (j['guide_exposure_min_ms'] as num?)?.toInt() ?? 1000,
     guideExposureMaxMs: (j['guide_exposure_max_ms'] as num?)?.toInt() ?? 6000,
+    guideExposureMs: (j['guide_exposure_ms'] as num?)?.toInt() ?? 0,
   );
 
   static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
@@ -796,6 +797,7 @@ class ProfileApi {
     'guider_alpaca_port': v.guiderAlpacaPort,
     'guide_exposure_min_ms': v.guideExposureMinMs,
     'guide_exposure_max_ms': v.guideExposureMaxMs,
+    'guide_exposure_ms': v.guideExposureMs,
   };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────

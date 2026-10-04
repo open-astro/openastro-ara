@@ -9,6 +9,23 @@ import '../../services/profile_api.dart';
 /// re-cal-guider policy lives in `safetyPoliciesProvider` (crosses the
 /// §35/§63 boundary, belongs with the rest of meridian behavior).
 
+/// The guide exposures the guider offers (its `get_exposure_durations`,
+/// PHD2's standard list), ms. The Tune Guiding picker is built from this so a
+/// chosen value is always one the guider accepts; 0 = "leave the guider's own".
+const List<int> guideExposureChoicesMs = [
+  10, 20, 50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500,
+  5000, 6000, 7000, 8000, 9000, 10000, 15000, 30000,
+];
+
+/// Human label for a guide exposure in ms ("0.5 s", "2 s", "10 s"); 0 is
+/// "Unset" (the guider keeps its own duration). Kept short: the picker column
+/// in the Tune Guiding dialog is narrow.
+String formatGuideExposure(int ms) {
+  if (ms <= 0) return 'Unset';
+  final s = ms / 1000;
+  return s == s.roundToDouble() ? '${s.round()} s' : '$s s';
+}
+
 class Phd2Settings {
   // Connection.
   final String host;
@@ -57,6 +74,12 @@ class Phd2Settings {
   final int guideExposureMinMs;
   final int guideExposureMaxMs;
 
+  // The guide exposure itself (ms), sent with the guider's runtime-safe
+  // `set_exposure` — it takes effect on the next guide frame while guiding
+  // continues. 0 = unset (the guider keeps its own duration). Edited from
+  // Imaging → Guiding → Tune Guiding.
+  final int guideExposureMs;
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -84,6 +107,7 @@ class Phd2Settings {
     this.guiderAlpacaPort = 0,
     this.guideExposureMinMs = 1000,
     this.guideExposureMaxMs = 6000,
+    this.guideExposureMs = 0,
   });
 
   Phd2Settings copyWith({
@@ -113,6 +137,7 @@ class Phd2Settings {
     int? guiderAlpacaPort,
     int? guideExposureMinMs,
     int? guideExposureMaxMs,
+    int? guideExposureMs,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -142,6 +167,7 @@ class Phd2Settings {
         guiderAlpacaPort: guiderAlpacaPort ?? this.guiderAlpacaPort,
         guideExposureMinMs: guideExposureMinMs ?? this.guideExposureMinMs,
         guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
+        guideExposureMs: guideExposureMs ?? this.guideExposureMs,
       );
 }
 
@@ -246,6 +272,13 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     final m = v.trim().toLowerCase();
     if (!decGuideModes.contains(m)) return;
     state = state.copyWith(decGuideMode: m);
+  }
+
+  /// Guide exposure in ms; 0 = unset (leave the guider's own). Negative is
+  /// rejected, mirroring the server's floor.
+  void setGuideExposureMs(int v) {
+    if (v < 0) return;
+    state = state.copyWith(guideExposureMs: v);
   }
 
   // §63.17 — guider equipment selection. "" / 0 mean unset (the daemon keeps

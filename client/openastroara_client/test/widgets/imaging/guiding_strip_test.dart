@@ -448,6 +448,9 @@ void main() {
     expect(find.text('Minimum move (px)'), findsOneWidget);
     expect(find.text('Dec guide mode'), findsOneWidget);
     expect(find.text('Dither pixels'), findsOneWidget);
+    // Guide exposure (set_exposure, runtime-safe) — unset by default.
+    expect(find.text('Guide exposure'), findsOneWidget);
+    expect(find.text('Unset'), findsOneWidget);
     expect(find.text('Guide camera'), findsNothing);
     expect(find.text('Applies live — guiding is not interrupted.'),
         findsOneWidget);

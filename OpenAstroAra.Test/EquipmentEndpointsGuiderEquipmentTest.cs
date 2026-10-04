@@ -118,6 +118,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task TuningPush_returns_202_accepted_and_never_runs_the_full_push() {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, "idem-t");
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict);
+            svc.Setup(s => s.PushGuiderTuningAsync("idem-t", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderTuningAsync("idem-t", svc.Object, CancellationToken.None);
+
+            var typed = result as Accepted<OperationAcceptedDto>;
+            Assert.That(typed, Is.Not.Null);
+            Assert.That(typed!.Value, Is.SameAs(accepted));
+            // Strict mock: a call to PushGuiderProfileAsync (the disconnecting push) would have thrown.
+            svc.Verify(s => s.PushGuiderTuningAsync("idem-t", It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task TuningPush_maps_not_connected_InvalidOperation_to_typed_409() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderTuningAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider is not connected"));
+
+            var result = await EquipmentEndpoints.PushGuiderTuningAsync(null, svc.Object, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
+            });
+        }
+
+        [Test]
         public async Task ProfilePush_maps_reconnect_failure_GuiderRpcException_to_422() {
             var svc = new Mock<IGuiderService>();
             svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))

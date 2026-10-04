@@ -82,12 +82,12 @@ class GuiderEquipmentNotifier
   /// On-demand §63.17 profile push (202-Accepted; the daemon reports the
   /// attempted methods on the `guider.profile_pushed` WS event). Throws
   /// (Dio 409/422) for the caller's feedback.
-  Future<void> pushProfile() async {
+  Future<void> pushProfile({bool tuningOnly = false}) async {
     final api = ref.read(guiderEquipmentApiProvider);
     if (api == null) {
       throw StateError('Not connected — connect to your rig to save this.');
     }
-    await api.pushProfile();
+    await api.pushProfile(tuningOnly: tuningOnly);
   }
 }
 
