@@ -336,6 +336,15 @@ and completes in three shots only when both sides read ≥ 1.3× the centre. A s
 no clear rise, or a bracket shot with too few stars falls back to the classic sweep with the new
 `fallback_classic` reason `bracket_failed`. The run record carries the three `smart` probes.
 
+The bracket runs backlash-consistently: the − side first (moving down, the direction every calibration
+sample was approached from), then the + side, then the centre re-entered from above through the sweep's
+one-step overshoot, so the focuser rests on the same side of its backlash as the calibration's best. A
+confirmation frame is then taken at the centre (`final_hfr` / `final_stars` / the picture are measured
+there, as for the sweep), and the run record's `fit` carries the calibration's own curve through the
+three shots — `algorithm: "calibration"`, `r_squared: 1`, `best_position` = the centre, `curve` =
+h₀·√(1 + 3(d/w)²) over ±1.3 half-widths — so the pane draws the V the bracket was judged against. The
+client shows no R² for that algorithm.
+
 **Why:** one shot against a stored number is a claim, not a check — a calibration from a lumpy sweep,
 or a lucky frame, says "in focus" just as readily (2026-10-03: four one-shot runs at 0.957–0.985 while
 the sweep's own curve was far from a clean V).

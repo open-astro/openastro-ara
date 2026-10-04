@@ -10,6 +10,7 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
+import 'package:openastroara/widgets/focus/focus_section.dart';
 
 class _StubAutofocus extends AutofocusLiveNotifier {
   final AutofocusLive initial;
@@ -209,6 +210,17 @@ void main() {
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'confirming')), 'Confirming focus…');
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'complete', finalPosition: 1, finalHfr: 1.5, durationSeconds: 120)), 'In focus at 1 — HFR 1.50 in 2m 00s');
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
+  });
+
+  testWidgets('a bracket-confirmed Smart run shows the calibration curve without an R²', (t) async {
+    const run = AutofocusRun(
+      state: 'complete', mode: 'smart', finalPosition: 29463, finalHfr: 0.98, finalStars: 285,
+      fit: AutofocusFit(algorithm: 'calibration', rSquared: 1, bestPosition: 29463, predictedHfr: 0.96, withinSampledRange: true, curve: []),
+    );
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: StatRow(tiles: MainFocusCard.tilesFor(run)))));
+    final r2 = find.ancestor(of: find.text('Fit R²'), matching: find.byType(StatTile));
+    expect(find.descendant(of: r2, matching: find.text('—')), findsOneWidget);
+    expect(MainFocusCard.weakFitText(run), isNull);
   });
 
   test('headlineFor says the state in words', () {

@@ -313,11 +313,18 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(3), "the in-focus shot and one bracket shot each side");
-            // No half-width in this calibration → half the classic span: 100 × 4 / 2.
-            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition + 200, StartPosition - 200, StartPosition }));
+            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "the in-focus shot, one bracket shot each side, one confirmation at the centre");
+            // No half-width in this calibration → half the classic span: 100 × 4 / 2. The − side first
+            // (moving down like every calibration sample), the + side, then the centre from above
+            // through the sweep's overshoot (one step size) so backlash matches the calibration.
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 200, StartPosition + 100, StartPosition }));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, StartPosition);
-            Assert.That(rig.Tracker.Snapshot().Probes.Count(p => p.Phase == "smart"), Is.EqualTo(3));
+            var record = rig.Tracker.Snapshot();
+            Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(3));
+            Assert.That(record.Fit, Is.Not.Null, "the calibration's curve is drawn through the three shots");
+            Assert.That(record.Fit!.Algorithm, Is.EqualTo("calibration"));
+            Assert.That(record.Fit.BestPosition, Is.EqualTo(StartPosition));
+            Assert.That(record.Fit.Curve.Min(c => c.Hfr), Is.EqualTo(record.Fit.PredictedHfr).Within(0.01), "the curve bottoms at the centre");
         }
 
         [Test]
@@ -327,8 +334,8 @@ namespace OpenAstroAra.Test {
             var rig = Build(realBest: StartPosition + 200, calibration: Calibration(bestPosition: StartPosition),
                 skyHfr: (capture, position) => capture switch {
                     1 => 1.5,   // ≤ target at the start position
-                    2 => 1.2,   // + bracket: better than the centre
-                    3 => 2.6,   // − bracket
+                    2 => 2.6,   // − bracket (taken first)
+                    3 => 1.2,   // + bracket: better than the centre
                     _ => VCurveHfr(position, StartPosition + 200),
                 });
             using var _ = rig.Service;

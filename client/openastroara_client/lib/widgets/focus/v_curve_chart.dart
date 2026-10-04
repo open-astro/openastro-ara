@@ -122,7 +122,9 @@ class VCurveChart extends StatelessWidget {
           show: true,
           alignment: Alignment.topRight,
           style: const TextStyle(fontSize: 10, color: AraColors.accentInfo),
-          labelResolver: (_) => 'fit ${fit.bestPosition.round()}',
+          labelResolver: (_) => fit.algorithm == 'calibration'
+              ? 'calibrated ${fit.bestPosition.round()}'
+              : 'fit ${fit.bestPosition.round()}',
         ),
       ));
     }

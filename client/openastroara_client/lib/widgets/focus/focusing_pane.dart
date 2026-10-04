@@ -454,7 +454,8 @@ class MainFocusCard extends ConsumerWidget {
         caption: 'Stars',
         value: run.finalStars?.toString() ?? (latest?.stars.toString() ?? '—'),
       ),
-      StatTile(caption: 'Fit R²', value: fit == null ? '—' : n(fit.rSquared, 3)),
+      // A Smart run confirmed by a bracket carries the calibration's curve, not a fit: no R² to show.
+      StatTile(caption: 'Fit R²', value: fit == null || fit.algorithm == 'calibration' ? '—' : n(fit.rSquared, 3)),
     ];
   }
 

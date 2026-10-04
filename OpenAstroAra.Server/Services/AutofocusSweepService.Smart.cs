@@ -136,19 +136,30 @@ public sealed partial class AutofocusSweepService {
                 // shots. A side that reads BETTER → the centre is not the minimum → the classic sweep.
                 await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
                 var bracket = BracketOffset(calibration.CurveHalfWidthSteps, settings);
-                var plusPosition = await _focuser.MoveFocuser(startPosition + bracket, token).ConfigureAwait(false);
-                var plus = await TakeSmartShotAsync(2, plusPosition, settings, progress, token).ConfigureAwait(false);
+                // Backlash discipline, same as the sweep: the − side is reached moving DOWN (the direction
+                // every calibration sample was approached from), the + side moving up, and the centre is
+                // re-entered from above through the sweep's overshoot so the focuser rests on the same
+                // side of its backlash as the calibration's own best. A straight return would land the
+                // optics a backlash short of 29463 while the counter said 29463 (2026-10-03).
                 var minusPosition = await _focuser.MoveFocuser(startPosition - bracket, token).ConfigureAwait(false);
-                var minus = await TakeSmartShotAsync(3, minusPosition, settings, progress, token).ConfigureAwait(false);
-                await _focuser.MoveFocuser(startPosition, token).ConfigureAwait(false);
+                var minus = await TakeSmartShotAsync(2, minusPosition, settings, progress, token).ConfigureAwait(false);
+                var plusPosition = await _focuser.MoveFocuser(startPosition + bracket, token).ConfigureAwait(false);
+                var plus = await TakeSmartShotAsync(3, plusPosition, settings, progress, token).ConfigureAwait(false);
+                await _focuser.MoveFocuser(startPosition + settings.StepSize, token).ConfigureAwait(false);
+                var centre = await _focuser.MoveFocuser(startPosition, token).ConfigureAwait(false);
                 var verdict = BracketVerdict(shot1.Hfr, plus, minus);
                 LogSmartBracket(bracket, shot1.Hfr, plus.Hfr, minus.Hfr, verdict ?? "confirmed");
                 if (verdict is not null) {
                     return await FallBackAsync($"the ±{bracket}-step bracket did not confirm focus: {verdict}",
-                        "bracket_failed", startPosition, restore: false).ConfigureAwait(false);
+                        "bracket_failed", centre, restore: false).ConfigureAwait(false);
                 }
-                LogSmartComplete(startPosition, shot1.Hfr, 3);
-                await RecordCompletedAsync("smart", startPosition, shot1.Hfr, shot1.Features.StarCount, started, 3).ConfigureAwait(false);
+                // The calibration's own curve through the three points, so the pane shows the V the
+                // bracket was judged against; then one confirmation frame AT the centre — the measured
+                // in-focus HFR and the picture of the focused field, as the sweep does.
+                _tracker?.SetModelCurve(centre, map.InFocusHfr, bracket, centre - 1.3 * bracket, centre + 1.3 * bracket);
+                var (confirmedHfr, confirmedStars) = await ConfirmFocusQuietlyAsync(settings, centre, token).ConfigureAwait(false);
+                LogSmartComplete(centre, confirmedHfr ?? shot1.Hfr, 3);
+                await RecordCompletedAsync("smart", centre, confirmedHfr ?? shot1.Hfr, confirmedStars ?? shot1.Features.StarCount, started, 3).ConfigureAwait(false);
                 RecordAutofocusQuietly();
                 return true;
             }
