@@ -91,7 +91,15 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Rotator {
                 return;
             }
 
-            await assist.StartAsync(PositionAngle, token);
+            try {
+                await assist.StartAsync(PositionAngle, token);
+            } catch (RotationAssistNotReadyException ex) {
+                // No solver / no optics: nothing to measure with. Say so and carry on — Center and
+                // Rotate still centres; the framing angle is simply not enforced on this rig.
+                Logger.Warning($"Rotate camera by hand: skipped — {ex.Message}");
+                progress?.Report(new ApplicationStatus() { Status = $"Rotate camera by hand skipped: {ex.Message}" });
+                return;
+            }
             try {
                 Logger.Info($"Rotate camera by hand: readout running toward {PositionAngle:0.#}° — pausing the run awaiting the user");
                 progress?.Report(new ApplicationStatus() {

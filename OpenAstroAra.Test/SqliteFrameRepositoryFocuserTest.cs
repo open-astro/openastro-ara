@@ -122,5 +122,20 @@ namespace OpenAstroAra.Test {
             cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
+
+        [Test]
+        public async Task Inserting_frames_bumps_the_sessions_frame_count_and_the_live_count_follows() {
+            // sessions.frame_count stayed 0 for every session while frames landed (night of 2026-10-02).
+            await _repo.InsertAsync(Frame(Guid.NewGuid(), focuserPosition: 1), CancellationToken.None);
+            await _repo.InsertAsync(Frame(Guid.NewGuid(), focuserPosition: 2), CancellationToken.None);
+
+            Assert.That(await _repo.CountSessionFramesAsync(Session, CancellationToken.None), Is.EqualTo(2));
+            Assert.That(await _repo.CountSessionFramesAsync(Guid.NewGuid(), CancellationToken.None), Is.EqualTo(0));
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT frame_count FROM sessions WHERE id = $id;";
+            cmd.Parameters.AddWithValue("$id", Session.ToString());
+            Assert.That(Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture), Is.EqualTo(2));
+        }
     }
 }

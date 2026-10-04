@@ -125,6 +125,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rig_that_cannot_solve_skips_the_step_instead_of_parking_the_run() {
+            // No plate solver / no optics: the readout refuses at start; the step warns and moves on so
+            // Center and Rotate still centres and the run never waits on a readout that can only fail.
+            var assist = new Mock<IRotationAssistExecutor>();
+            assist.Setup(a => a.StartAsync(It.IsAny<double>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new RotationAssistNotReadyException("the plate solver binary is missing at /usr/bin/astap_cli"));
+            var (item, _, gate) = Rig(assist.Object);
+            string? status = null;
+            var progress = new Progress<ApplicationStatus>(s => status = s.Status);
+
+            await item.Execute(progress, CancellationToken.None);
+
+            Assert.That(gate.IsPauseRequested, Is.False);
+            assist.Verify(a => a.StopAsync(), Times.Never);
+            await Task.Delay(10);
+            Assert.That(status, Does.Contain("skipped"));
+        }
+
+        [Test]
         public void Position_angle_normalises_and_clones() {
             var item = new RotateCameraByHand(null, null) { PositionAngle = -61 };
             Assert.That(item.PositionAngle, Is.EqualTo(299));

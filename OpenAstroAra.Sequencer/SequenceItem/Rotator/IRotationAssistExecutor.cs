@@ -12,10 +12,20 @@
 
 #endregion "copyright"
 
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Rotator {
+
+    /// <summary>The readout cannot run on this rig as configured — no plate solver, no optics in the
+    /// profile. The step SKIPS (with a warning) rather than parking the run on a readout that can only
+    /// fail; the REST start reports it as a conflict.</summary>
+    public class RotationAssistNotReadyException : InvalidOperationException {
+        public RotationAssistNotReadyException() { }
+        public RotationAssistNotReadyException(string message) : base(message) { }
+        public RotationAssistNotReadyException(string message, Exception inner) : base(message, inner) { }
+    }
 
     /// <summary>
     /// The by-hand rotation readout a <see cref="RotateCameraByHand"/> instruction drives on a rig

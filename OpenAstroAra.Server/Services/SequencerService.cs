@@ -810,6 +810,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Catalog trouble must never block imaging: creation failure
                 // logs and the run proceeds session-less (manual fallback).
                 captureSession = await TryOpenRunSessionAsync(run.Cts.Token);
+                run.CaptureSessionId = captureSession;
                 if (captureSession is Guid sid) {
                     CaptureSessionScope.Enter(sid);
                     _runSessions?.Enter(sid);
@@ -1262,6 +1263,20 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public string? CurrentTargetName { get; private set; }
         private string? _lastLeafDescription;
 
+        /// <summary>The §40 run session this run files frames under (null when the catalog is unavailable).</summary>
+        public Guid? CaptureSessionId { get; set; }
+
+        /// <summary>Frames filed under <see cref="CaptureSessionId"/> so far; polled by the live status.</summary>
+        public int FramesCaptured { get; private set; }
+
+        public bool SetFramesCaptured(int count) {
+            lock (_gate) {
+                if (count == FramesCaptured) return false;
+                FramesCaptured = count;
+                return true;
+            }
+        }
+
         /// <summary>
         /// Apply the running leaf's derived description + target. The description only
         /// replaces the current one when the derived text itself changes (a new leaf or the
@@ -1367,6 +1382,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     State: State,
                     CurrentInstructionIndex: CurrentInstructionIndex,
                     CurrentTargetName: CurrentTargetName,
+                    FramesCaptured: FramesCaptured,
                     StartedUtc: StartedUtc,
                     CompletedUtc: CompletedUtc,
                     InstructionsCompleted: InstructionsCompleted,

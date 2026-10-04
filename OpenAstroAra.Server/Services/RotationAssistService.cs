@@ -97,6 +97,11 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     public async Task StartAsync(double targetPositionAngleDeg, CancellationToken token) {
         var target = NormaliseTarget(targetPositionAngleDeg);
+        try {
+            _solver.EnsureReady();
+        } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
+            throw new RotationAssistNotReadyException(ex.Message, ex);
+        }
         await _opLock.WaitAsync(token).ConfigureAwait(false);
         try {
             ObjectDisposedException.ThrowIf(_disposed, this);

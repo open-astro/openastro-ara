@@ -141,6 +141,20 @@ namespace OpenAstroAra.Test {
             Assert.That(frame.Value.Seq, Is.EqualTo(svc.GetStatus().FrameSeq));
         }
 
+        private sealed class NotReadySolver : IPositionAngleSolver {
+            public void EnsureReady() => throw new OpenAstroAra.PlateSolving.PlateSolverConfigurationException("no solver");
+            public Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) => Task.FromResult<RotationSolve?>(null);
+        }
+
+        [Test]
+        public async Task A_solver_that_cannot_run_refuses_the_start_and_leaves_the_readout_idle() {
+            using var svc = new RotationAssistService(new NotReadySolver(), () => 1.0);
+            var ex = await Assert.ThrowsAsync<OpenAstroAra.Sequencer.SequenceItem.Rotator.RotationAssistNotReadyException>(
+                () => svc.StartAsync(10, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("no solver"));
+            Assert.That(svc.GetStatus().State, Is.EqualTo("idle"));
+        }
+
         [Test]
         public async Task An_unreadable_tolerance_falls_back_to_one_degree() {
             using var svc = new RotationAssistService(new ScriptedSolver(10), () => throw new InvalidOperationException("no profile"));

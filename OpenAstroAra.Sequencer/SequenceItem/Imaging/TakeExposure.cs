@@ -19,6 +19,7 @@ using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
@@ -144,7 +145,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
             };
             // The capture pipeline persists the frame server-side; the in-memory exposure data is
             // deliberately discarded (see class doc).
-            _ = await imagingMediator.CaptureImage(sequence, token, progress, Parent?.Name ?? string.Empty);
+            // The TARGET's name, not the imaging loop's ("Imaging"): frames file under the target folder
+            // and the catalog's target_name (the night of 2026-10-02 they all landed under "Imaging").
+            _ = await imagingMediator.CaptureImage(sequence, token, progress,
+                ItemUtility.ResolveTargetName(this) ?? Parent?.Name ?? string.Empty);
             // Atomic: a ParallelContainer can drive concurrent executions, and a lost update would
             // persist a wrong count through the [JsonProperty] backing field.
             Interlocked.Increment(ref exposureCount);

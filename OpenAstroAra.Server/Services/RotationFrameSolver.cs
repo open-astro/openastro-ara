@@ -38,6 +38,11 @@ public sealed record RotationSolve(
 /// implements it over the profile's plate-solver stack; tests and the synthetic sky inject their own.</summary>
 public interface IPositionAngleSolver {
     Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct);
+
+    /// <summary>Throw <see cref="PlateSolverConfigurationException"/> when a solve cannot possibly succeed on
+    /// this rig as configured (checked once at start, so a run skips the step instead of failing five
+    /// solves). Default: nothing to check.</summary>
+    void EnsureReady() { }
 }
 
 /// <summary>
@@ -62,6 +67,20 @@ public sealed class RotationFrameSolver : IPositionAngleSolver {
         _solverFactory = solverFactory ?? throw new ArgumentNullException(nameof(solverFactory));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
         _telescope = telescope ?? throw new ArgumentNullException(nameof(telescope));
+    }
+
+    public void EnsureReady() {
+        LegacyProfileBridge.SyncPlateSolve(_profileService, _store);
+        var profile = _profileService.ActiveProfile
+            ?? throw new PlateSolverConfigurationException("no active profile is loaded");
+        if (!(profile.TelescopeSettings.FocalLength > 0) || !(profile.CameraSettings.PixelSize > 0)) {
+            throw new PlateSolverConfigurationException(
+                "the telescope focal length and camera pixel size must both be set in the profile (Options → Imaging → Optics)");
+        }
+        if (SolverPathMigration.MissingSolverBinary(_store.GetPlateSolveSettings(), System.IO.File.Exists) is string missing) {
+            throw new PlateSolverConfigurationException(
+                $"the plate solver binary is missing at {missing} (install astap-cli or fix Options → Plate solving)");
+        }
     }
 
     public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {

@@ -10653,6 +10653,13 @@ components:
             - number
             - string
           format: double
+        frames_captured:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     SequenceShareDto:
       required:
         - sequence_id

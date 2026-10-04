@@ -17,6 +17,7 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Utility;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -47,11 +48,25 @@ public sealed partial class SequencerService {
         return changed;
     }
 
-    private static async Task PollLiveStatusAsync(RunState run, Action onChanged, CancellationToken ct) {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The frame count is cosmetic: a catalog read fault must never stop the live-status poll or the run. Log-and-recover boundary.")]
+    private async Task PollLiveStatusAsync(RunState run, Action onChanged, CancellationToken ct) {
         try {
             while (!ct.IsCancellationRequested) {
                 await Task.Delay(LiveStatusPollInterval, ct);
-                if (RefreshLiveStatus(run)) {
+                var changed = RefreshLiveStatus(run);
+                // Frames this run has filed so far — the number the user watches (it was always 0 the
+                // night of 2026-10-02 while 55 frames landed on disk).
+                if (run.CaptureSessionId is Guid sid && _frames is not null) {
+                    try {
+                        changed |= run.SetFramesCaptured(await _frames.CountSessionFramesAsync(sid, ct));
+                    } catch (OperationCanceledException) {
+                        throw;
+                    } catch (Exception) {
+                        // next tick
+                    }
+                }
+                if (changed) {
                     onChanged();
                 }
             }
@@ -80,21 +95,7 @@ public sealed partial class SequencerService {
     /// container carrying an altitude/horizon condition (how client-generated target blocks
     /// are marked). Null outside any target.
     /// </summary>
-    internal static string? TargetNameOf(ISequenceItem leaf) {
-        for (var c = leaf.Parent; c is not null; c = c.Parent) {
-            if (c is IDeepSkyObjectContainer dso && !string.IsNullOrWhiteSpace(dso.Target?.TargetName)) {
-                return dso.Target.TargetName;
-            }
-            if (c is IConditionable conditionable && !string.IsNullOrWhiteSpace(c.Name)) {
-                foreach (var condition in conditionable.GetConditionsSnapshot()) {
-                    if (condition is LoopForAltitudeBase) {
-                        return c.Name;
-                    }
-                }
-            }
-        }
-        return null;
-    }
+    internal static string? TargetNameOf(ISequenceItem leaf) => ItemUtility.ResolveTargetName(leaf);
 
     private static LoopCondition? NearestLoop(ISequenceItem leaf) {
         for (var c = leaf.Parent; c is not null; c = c.Parent) {

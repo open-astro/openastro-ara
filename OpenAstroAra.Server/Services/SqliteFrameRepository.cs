@@ -399,6 +399,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             JsonSerializer.Serialize(f.Tags, AraJsonSerializerContext.Default.IReadOnlyListString));
         cmd.Parameters.AddWithValue("$focuser_position", DbValue(f.FocuserPosition));
         await cmd.ExecuteNonQueryAsync(ct);
+        // The session's running count (it stayed 0 for every session until now).
+        await using var bump = conn.CreateCommand();
+        bump.CommandText = "UPDATE sessions SET frame_count = frame_count + 1 WHERE id = $session_id;";
+        bump.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
+        await bump.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountSessionFramesAsync(Guid sessionId, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM frames WHERE session_id = $session_id;";
+        cmd.Parameters.AddWithValue("$session_id", sessionId.ToString());
+        var n = await cmd.ExecuteScalarAsync(ct);
+        return n is long l ? (int)l : 0;
     }
 
     public async Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct) {
