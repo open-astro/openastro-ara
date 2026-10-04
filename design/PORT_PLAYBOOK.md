@@ -8681,14 +8681,22 @@ Total calibration cost: **~5 minutes, one-time per profile.**
 ```
 1. Take one exposure at current focuser position (5 s default)
 2. Extract feature vector from the frame (same metrics as calibration)
+   2a. Shot 1 already within target tolerance → bracket it instead of
+       trusting one frame: shots 2-3 at ± the calibration's half-width
+       (− side first, centre re-entered from above). Both sides ≥ 1.3×
+       the centre → shot 4 at the parabola's vertex when it sits off
+       the centre (kept only when < 0.97× the centre shot), then shot 5,
+       a confirmation frame at the final position — up to FIVE shots.
+       A side under 0.97×, no clear rise, a thin bracket shot, or a
+       vertex outside the bracket → Classic AF (`bracket_failed`)
 3. Predict offset + direction by looking up the feature vector in the
    calibration table — gives both magnitude AND sign
 4. Move focuser by predicted offset, applying backlash compensation
    (§59.7 — auto-discovered, no user input)
 5. Take second exposure, measure HFR
 6. Done in TWO shots IF:
-     - HFR within target tolerance (default 5% above session-best
-       HFR for this filter)
+     - HFR within target tolerance (default 10% above the
+       calibration's measured in-focus HFR)
      - HFR improved vs shot 1
 7. Done in THREE shots IF: HFR improved but missed target →
    small correction (±20% of step 3's magnitude), final exposure
@@ -8924,7 +8932,7 @@ Implemented via existing WebSocket event stream — server emits `autofocus.shot
       "post_meridian_flip": "if_temp_drifted",
       "first_use_of_filter": true
     },
-    "target_hfr_tolerance_pct": 5,
+    "target_hfr_tolerance_pct": 10,
     "diagnostic_skip_when_unstable": true,
     "classic_fallback_enabled": true,
     "backlash": {
