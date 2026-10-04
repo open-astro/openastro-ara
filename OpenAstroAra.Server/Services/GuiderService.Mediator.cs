@@ -108,7 +108,7 @@ public sealed partial class GuiderService : IGuiderMediator {
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Released the guider's polar-align session before guiding (nothing in this daemon was using it)")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Released the guider's polar-align session before guiding (guiding takes the guide camera from whoever held it)")]
     partial void LogPaSessionCleared();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not release the guider's polar-align session before guiding — trying to guide anyway")]

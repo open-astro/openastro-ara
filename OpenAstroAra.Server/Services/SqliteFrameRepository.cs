@@ -946,9 +946,20 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 idParam.Value = frameId.ToString();
                 await cmd.ExecuteNonQueryAsync(ct);
             }
+            await RecountSessionFramesAsync(conn, tx, ct);
             await tx.CommitAsync(ct);
         }
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
+    }
+
+    /// <summary>A move or delete changes which sessions own which frames; the running
+    /// <c>sessions.frame_count</c> that <see cref="InsertFrameAsync"/> bumps is recomputed from the
+    /// rows so it cannot drift (the same <c>COUNT(*)</c> the capture rescan writes).</summary>
+    private static async Task RecountSessionFramesAsync(SqliteConnection conn, SqliteTransaction tx, CancellationToken ct) {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE sessions SET frame_count = (SELECT COUNT(*) FROM frames WHERE frames.session_id = sessions.id);";
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
@@ -1032,6 +1043,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     idParam.Value = frameId.ToString();
                     await cmd.ExecuteNonQueryAsync(ct);
                 }
+                await RecountSessionFramesAsync(conn, tx, ct);
                 await tx.CommitAsync(ct);
             }
 

@@ -155,10 +155,6 @@ class DsoCatalogService {
   }
 }
 
-/// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
-/// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
-/// Exact normalized id/name match wins; otherwise the first object whose
-/// common name contains the query. Null when nothing matches.
 /// The planetarium command a typed search becomes. A planning-catalog hit is a
 /// `goto` by J2000 coordinates that ALWAYS carries the object's name: the page
 /// keeps one framing target (position + name), and a goto without a name used
@@ -181,6 +177,10 @@ Map<String, Object?> planetariumSearchCommand(
   return {'type': 'search', 'q': q};
 }
 
+/// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
+/// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
+/// Exact normalized id/name match wins; otherwise the first object whose
+/// common name contains the query. Null when nothing matches.
 PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
   // Two normalisations: a dash-PRESERVING one first, because designations
   // with a suffix collide with plain numbers once dashes go — "WR 2-1" and

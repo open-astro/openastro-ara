@@ -125,6 +125,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_readout_already_running_by_hand_is_taken_over_not_a_failed_step() {
+            // The panel's Start (REST) left a loop running; the service refuses a second Start with
+            // "already running". The step restarts it toward its own angle and parks as usual.
+            var assist = new Mock<IRotationAssistExecutor>();
+            var starts = 0;
+            assist.Setup(a => a.StartAsync(It.IsAny<double>(), It.IsAny<CancellationToken>()))
+                .Returns(() => ++starts == 1
+                    ? Task.FromException(new InvalidOperationException("the rotation readout is already running"))
+                    : Task.CompletedTask);
+            assist.Setup(a => a.StopAsync()).Returns(Task.CompletedTask);
+            var (item, _, gate) = Rig(assist.Object);
+
+            var execute = item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+            for (var i = 0; i < 100 && !gate.IsPauseRequested; i++) {
+                await Task.Delay(10);
+            }
+            Assert.That(gate.IsPauseRequested, Is.True);
+
+            Assert.That(starts, Is.EqualTo(2), "stopped and restarted toward this step's angle");
+            assist.Verify(a => a.StopAsync(), Times.Once);
+            gate.Resume();
+            await execute.WaitAsync(TimeSpan.FromSeconds(5));
+            assist.Verify(a => a.StopAsync(), Times.Exactly(2));
+        }
+
+        [Test]
         public async Task A_rig_that_cannot_solve_skips_the_step_instead_of_parking_the_run() {
             // No plate solver / no optics: the readout refuses at start; the step warns and moves on so
             // Center and Rotate still centres and the run never waits on a readout that can only fail.

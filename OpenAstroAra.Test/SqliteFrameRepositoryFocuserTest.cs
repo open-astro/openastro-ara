@@ -137,7 +137,30 @@ namespace OpenAstroAra.Test {
             cmd.Parameters.AddWithValue("$id", Session.ToString());
             Assert.That(Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture), Is.EqualTo(2));
         }
-    
+
+        [Test]
+        public async Task Moving_or_deleting_frames_keeps_both_sessions_frame_counts_true() {
+            var other = Guid.Parse("39393939-3939-3939-3939-393939393939");
+            await InsertSessionAsync(other);
+            var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+            foreach (var id in ids) {
+                await _repo.InsertAsync(Frame(id, focuserPosition: null), CancellationToken.None);
+            }
+
+            await _repo.BulkMoveAsync(new BulkMoveRequestDto(new[] { ids[0] }, other), null, CancellationToken.None);
+            await _repo.BulkDeleteAsync(new BulkDeleteRequestDto(new[] { ids[1] }, DeleteFromDisk: false), null, CancellationToken.None);
+
+            Assert.That(await StoredFrameCountAsync(Session), Is.EqualTo(1), "one moved out, one deleted");
+            Assert.That(await StoredFrameCountAsync(other), Is.EqualTo(1), "the moved frame counts where it landed");
+        }
+
+        private async Task<int> StoredFrameCountAsync(Guid session) {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT frame_count FROM sessions WHERE id = $id;";
+            cmd.Parameters.AddWithValue("$id", session.ToString());
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+        }
 
         [Test]
         public async Task Seeding_the_sample_session_counts_its_three_frames_once() {

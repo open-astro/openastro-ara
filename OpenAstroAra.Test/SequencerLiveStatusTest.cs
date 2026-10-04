@@ -12,7 +12,12 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -20,7 +25,10 @@ using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Server.Services;
+using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
@@ -32,9 +40,9 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class SequencerLiveStatusTest {
 
-        private static (SequenceRootContainer Root, TakeExposure Exposure, LoopCondition Loop) ClientBuiltTree() {
+        private static (SequenceRootContainer Root, TakeExposure Exposure, LoopCondition Loop) ClientBuiltTree(TakeExposure? withExposure = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
-            var exposure = (TakeExposure)factory.Items.OfType<TakeExposure>().First().Clone();
+            var exposure = withExposure ?? (TakeExposure)factory.Items.OfType<TakeExposure>().First().Clone();
             exposure.ExposureTime = 300;
             exposure.ImageType = "LIGHT";
 
@@ -57,6 +65,20 @@ namespace OpenAstroAra.Test {
             var (_, exposure, _) = ClientBuiltTree();
             Assert.That(ItemUtility.ResolveTargetName(exposure), Is.EqualTo("NGC 7000"));
             Assert.That(SequencerService.TargetNameOf(exposure), Is.EqualTo("NGC 7000"));
+        }
+
+        [Test]
+        public async Task The_exposure_hands_the_target_name_to_the_capture() {
+            var camera = new Mock<ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new CameraInfo { Connected = true }); // Validate() runs on attach
+            var imaging = new Mock<IImagingMediator>();
+            var (_, exposure, _) = ClientBuiltTree(new TakeExposure(camera.Object, imaging.Object));
+
+            await exposure.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            imaging.Verify(m => m.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(),
+                It.IsAny<IProgress<ApplicationStatus>?>(), "NGC 7000"), Times.Once,
+                "frames file under the target, not the imaging loop's \"Imaging\"");
         }
 
         [Test]
