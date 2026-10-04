@@ -390,6 +390,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_in_focus_target_is_the_measured_hfr_not_the_refitted_minimum() {
+            // The sample V bottoms at 1.5, but the sweep MEASURED 1.0 at best focus. A 1.3 px first shot
+            // is within 10 % of 1.5 and would have passed as in focus; against the measured 1.0 it is
+            // not, so Smart Focus goes on to predict a move (and, with nothing between 1.0 and the
+            // 1.5 vertex sample to interpolate on, falls back to the classic sweep).
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition) with { InFocusHfr = 1.0 },
+                skyHfr: (capture, position) => capture == 1 ? 1.3 : VCurveHfr(position, StartPosition));
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            var bracketConfirmed = rig.Tracker.Snapshot().Probes.Count(p => p.Phase == "smart") == 3
+                && rig.Events.All(e => e.Type != WsEventCatalog.AutofocusFallbackClassic);
+            Assert.That(bracketConfirmed, Is.False, "1.3 px must not read as in focus when the sweep measured 1.0");
+        }
+
+        [Test]
         public void ParabolaVertexOffset_is_pure() {
             Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 2.6, 1.5, 2.0), Is.EqualTo(37.5).Within(0.1));
             Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 2.0, 1.0, 2.0), Is.EqualTo(0));

@@ -65,7 +65,7 @@ public sealed partial class AutofocusSweepService {
 
     /// <summary>§59.13 `target_hfr_tolerance_pct` default — done when HFR is within this percentage
     /// above the calibration's fitted in-focus HFR.</summary>
-    internal const double TargetHfrTolerancePct = 5.0;
+    internal const double TargetHfrTolerancePct = 10.0;
 
     /// <summary>§59.13 `calibration_temp_delta_c` default — a calibration measured more than this many
     /// °C away from the current focuser temperature is stale (focus scale shifts thermally); recalibrate
@@ -111,7 +111,7 @@ public sealed partial class AutofocusSweepService {
         foreach (var s in calibration.Samples) {
             samples.Add(s.ToSample());
         }
-        var map = FocusInverseMap.Build(samples, telescopeType);
+        var map = FocusInverseMap.Build(samples, telescopeType, calibration.InFocusHfr);
         if (map is null) {
             LogSmartSkipped("stored calibration samples no longer rebuild a usable inverse map");
             return null;

@@ -325,6 +325,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-03 — Smart Focus judges "in focus" against the HFR the sweep measured
+
+**Where:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`.
+
+**Change:** `in_focus_hfr` (nullable) — the HFR the calibrating sweep measured on its confirmation
+frame at best focus (the fit's predicted minimum when no confirmation frame was usable). The inverse
+map's in-focus HFR and its fold-table anchor use it when present; Smart Focus's "already in focus"
+target is that value × 1.10 (was the re-fitted minimum × 1.05). A calibration written before the field
+existed carries null and behaves as before.
+
+**Why:** the map re-fitted its minimum from the stored samples. A lumpy 15-point sweep re-fitted to
+1.62 px while the same sweep's confirmation frame measured 0.96, so every Smart shot under 1.70 px
+"was in focus" (2026-10-03) and the drawn calibration curve bottomed well above the measured points.
+
 ### 2026-10-03 — Smart Focus: a reads-as-focused shot is bracketed before it counts
 
 **Where:** the `autofocus.*` WebSocket events (`fallback_classic` reasons) and the run record's `probes`.

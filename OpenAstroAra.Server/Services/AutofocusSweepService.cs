@@ -340,7 +340,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             var (finalHfr, finalStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
             await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
-            RecordCalibrationQuietly(probeFeatures, fit, points);
+            RecordCalibrationQuietly(probeFeatures, fit, points, finalHfr);
             await RecordCompletedAsync("classic", final, finalHfr ?? fit.PredictedHfr, finalStars, started, _tracker?.Snapshot().Probes.Count ?? points.Count).ConfigureAwait(false);
             return true;
         } catch (OperationCanceledException) {
@@ -523,7 +523,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Post-success bookkeeping boundary: the calibration write touches device info + the profile store; the sweep already succeeded and must be reported as such. CA1031's log-and-recover boundary applies.")]
     private void RecordCalibrationQuietly(List<(int Position, FocusFeatureVector Features)> probeFeatures,
-            FocusCurveFitResult fit, IReadOnlyList<FocusPoint> points) {
+            FocusCurveFitResult fit, IReadOnlyList<FocusPoint> points, double? measuredInFocusHfr = null) {
         try {
             // Gate on the ROUND-TRIPPED wire shape — Build validates exactly what a later session will
             // reload, so a DTO-bridge regression can never store samples the load path can't use.
@@ -561,7 +561,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 CalibratedUtc: DateTimeOffset.UtcNow,
                 FocuserTemperatureC: temperature,
                 Filter: _filterWheel?.GetInfo()?.SelectedFilter?.Name,
-                CurveHalfWidthSteps: halfWidth is { } w ? Math.Round(w, 1) : null));
+                CurveHalfWidthSteps: halfWidth is { } w ? Math.Round(w, 1) : null,
+                // The MEASURED in-focus HFR (the confirmation frame), not the fit's minimum: Smart Focus
+                // judges "already in focus" against it.
+                InFocusHfr: measuredInFocusHfr is { } measured && double.IsFinite(measured) && measured > 0
+                    ? Math.Round(measured, 4)
+                    : Math.Round(fit.PredictedHfr, 4)));
             LogCalibrationRecorded(dtos.Count);
         } catch (Exception ex) {
             LogCalibrationRecordFailed(ex);
