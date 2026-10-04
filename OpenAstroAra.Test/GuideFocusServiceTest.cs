@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
@@ -336,6 +337,51 @@ namespace OpenAstroAra.Test {
             } finally {
                 Directory.Delete(dir, recursive: true);
             }
+        }
+    
+
+        [Test]
+        public void ExpectedInFocusHfr_follows_the_guide_optics_and_never_drops_below_the_detector_floor() {
+            // A 120 mm guide scope with 3.75 µm pixels: 6.45"/px, seeing-limited stars are sub-pixel,
+            // so the floor is the answer (0.76 measured on the rig, 2026-10-03).
+            var guideScope = GuideFocusService.ExpectedInFocusHfr(120, 3.75, 0);
+            Assert.That(guideScope, Is.Not.Null);
+            Assert.That(guideScope!.Value.PlateScaleArcsec, Is.EqualTo(6.45).Within(0.01));
+            Assert.That(guideScope.Value.ExpectedHfrPx, Is.EqualTo(GuideFocusService.DetectorHfrFloorPx));
+
+            // An OAG on a long focal length samples finely: the seeing disc spans pixels.
+            var oag = GuideFocusService.ExpectedInFocusHfr(2000, 3.75, 200);
+            Assert.That(oag!.Value.PlateScaleArcsec, Is.EqualTo(0.39).Within(0.01));
+            Assert.That(oag.Value.ExpectedHfrPx, Is.GreaterThan(3.5).And.LessThan(4.5), "≈ 3.0\" seeing ⊕ 0.57\" Airy, halved, over 0.39\"/px");
+
+            Assert.That(GuideFocusService.ExpectedInFocusHfr(0, 3.75, 0), Is.Null);
+            Assert.That(GuideFocusService.ExpectedInFocusHfr(120, 0, 0), Is.Null);
+            Assert.That(GuideFocusService.ExpectedInFocusHfr(double.NaN, 3.75, 0), Is.Null);
+        }
+
+        [Test]
+        public void Status_carries_the_expected_hfr_from_the_optics_and_null_without_them() {
+            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var withOptics = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
+                decoder: Mock.Of<IGuideFrameDecoder>(), optics: () => (120, 3.75, 0));
+            Assert.That(withOptics.GetStatus().ExpectedHfr, Is.EqualTo(GuideFocusService.DetectorHfrFloorPx));
+            Assert.That(withOptics.GetStatus().PlateScaleArcsec, Is.EqualTo(6.45).Within(0.01));
+
+            using var without = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+            Assert.That(without.GetStatus().ExpectedHfr, Is.Null);
+        }
+
+        [Test]
+        public void MedianHfrOfBrightest_ignores_faint_flickering_stars() {
+            static DetectedStar Star(double hfr, double peak) => new() { HFR = hfr, MaxBrightness = peak };
+            var brightestFirst = new List<DetectedStar> {
+                Star(1.0, 50000), Star(1.1, 40000), Star(0.9, 30000), Star(1.0, 20000), Star(1.2, 10000),
+                Star(3.0, 400), Star(0.2, 300), Star(5.0, 250), // noise-level blobs beyond the bright set
+            };
+            Assert.That(GuideFocusService.MedianHfrOfBrightest(brightestFirst, 5), Is.EqualTo(1.0));
+            Assert.That(GuideFocusService.MedianHfrOfBrightest(brightestFirst, 4), Is.EqualTo(1.0));
+            Assert.That(GuideFocusService.MedianHfrOfBrightest(new List<DetectedStar>(), 12), Is.EqualTo(0.0));
         }
     }
 }

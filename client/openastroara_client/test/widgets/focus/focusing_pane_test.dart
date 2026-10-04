@@ -280,6 +280,36 @@ void main() {
     test('too few frames asks for a first turn', () {
       expect(guideFocusHint(status([2.0, 2.2], best: 1.5)).advice, TurnAdvice.hold);
     });
+    test('at or under the expected in-focus HFR is "In focus", whatever the trend', () {
+      // A guide scope at 6.4"/px sits at the detector floor (0.70): 0.76 with ±0.05 jitter
+      // used to flip between Keep going and Go back while the focuser never moved.
+      final s = GuideFocusStatus(
+        active: true,
+        state: 'running',
+        latest: sample(6, 0.81),
+        bestHfr: 0.75,
+        expectedHfr: 0.7,
+        recent: [for (final (i, h) in [0.76, 0.75, 0.8, 0.74, 0.79, 0.81].indexed) sample(i + 1, h)],
+      );
+      final h = guideFocusHint(s);
+      expect(h.advice, TurnAdvice.atBest);
+      expect(h.title, 'In focus');
+      expect(h.detail, contains('0.70 px'));
+    });
+    test('well above the expected HFR still reads the trend', () {
+      final s = GuideFocusStatus(
+        active: true,
+        state: 'running',
+        latest: sample(6, 2.4),
+        bestHfr: 1.5,
+        expectedHfr: 0.7,
+        recent: [for (final (i, h) in [4.0, 3.6, 3.2, 2.9, 2.6, 2.4].indexed) sample(i + 1, h)],
+      );
+      expect(guideFocusHint(s).advice, TurnAdvice.keepGoing);
+    });
+    test('single-frame jitter on a flat run does not become advice', () {
+      expect(guideFocusHint(status([2.0, 2.08, 1.96, 2.02, 2.1, 1.95, 2.07], best: 1.9)).advice, TurnAdvice.hold);
+    });
   });
 
   group('stepSizeText + Details', () {

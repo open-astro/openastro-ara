@@ -85,6 +85,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private readonly ILogger<GuideFocusService> _logger;
     // Development only (SyntheticSky): frames rendered locally instead of borrowed through the guider.
     private readonly Func<(ushort[] Pixels, int Width, int Height)>? _syntheticFrames;
+    // The guide optics (focal length mm, pixel µm, aperture mm) read from the profile at status time.
+    private readonly Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? _optics;
     private readonly SemaphoreSlim _opLock = new(1, 1);
     private readonly object _gate = new();
 
@@ -110,13 +112,49 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             IGuideFrameDecoder? decoder = null,
             Func<bool>? polarAlignActive = null,
             ILogger<GuideFocusService>? logger = null,
-            Func<(ushort[] Pixels, int Width, int Height)>? syntheticFrames = null) {
+            Func<(ushort[] Pixels, int Width, int Height)>? syntheticFrames = null,
+            Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? optics = null) {
         _guider = guider ?? throw new ArgumentNullException(nameof(guider));
         _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
         _decoder = decoder ?? new CfitsioGuideFrameDecoder();
         _polarAlignActive = polarAlignActive;
         _logger = logger ?? NullLogger<GuideFocusService>.Instance;
         _syntheticFrames = syntheticFrames;
+        _optics = optics;
+    }
+
+    /// <summary>Seeing FWHM assumed for the expected-HFR target; a typical backyard night.</summary>
+    internal const double AssumedSeeingArcsec = 3.0;
+    /// <summary>What the §59 detector reads for a star smaller than a pixel: the HFR floor on an
+    /// undersampled guide camera (0.76 px measured on a 6.4"/px guide scope, 2026-10-03).</summary>
+    internal const double DetectorHfrFloorPx = 0.7;
+    /// <summary>Stars used for the per-frame HFR: the brightest few persist frame to frame, so the
+    /// readout no longer jumps when faint stars flicker across the detection threshold.</summary>
+    internal const int HfrStarCount = 12;
+
+    /// <summary>
+    /// The HFR an in-focus star should read: seeing and the aperture's diffraction added in quadrature,
+    /// scaled to pixels (HFR ≈ FWHM / 2 for a Gaussian), never below the detector's floor. Null without
+    /// a focal length and pixel size. Pure.
+    /// </summary>
+    internal static (double ExpectedHfrPx, double PlateScaleArcsec)? ExpectedInFocusHfr(double focalLengthMm, double pixelSizeUm, double apertureMm) {
+        if (!(focalLengthMm > 0) || !(pixelSizeUm > 0) || !double.IsFinite(focalLengthMm) || !double.IsFinite(pixelSizeUm)) {
+            return null;
+        }
+        var scale = 206.265 * pixelSizeUm / focalLengthMm;
+        // Airy FWHM ≈ 1.02 λ/D at 550 nm, in arcseconds.
+        var airy = apertureMm > 0 ? 1.02 * 550e-9 / (apertureMm / 1000.0) * 206265.0 : 0.0;
+        var fwhm = Math.Sqrt(AssumedSeeingArcsec * AssumedSeeingArcsec + airy * airy);
+        var hfr = Math.Max(DetectorHfrFloorPx, 0.5 * fwhm / scale);
+        return (Math.Round(hfr, 2), Math.Round(scale, 2));
+    }
+
+    private (double ExpectedHfrPx, double PlateScaleArcsec)? ExpectedQuietly() {
+        try {
+            return _optics?.Invoke() is { } o ? ExpectedInFocusHfr(o.FocalLengthMm, o.PixelSizeUm, o.ApertureMm) : null;
+        } catch (Exception ex) when (ex is InvalidOperationException or IOException) {
+            return null;
+        }
     }
 
     public bool IsActive {
@@ -225,6 +263,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     }
 
     public GuideFocusStatusDto GetStatus() {
+        var expected = ExpectedQuietly();
         lock (_gate) {
             return new GuideFocusStatusDto(
                 Active: _state == "running",
@@ -238,7 +277,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 Recent: _recent.ToArray(),
                 Error: _error,
                 ConsecutiveFailures: _consecutiveFailures,
-                HasFrame: _frame is not null);
+                HasFrame: _frame is not null,
+                ExpectedHfr: expected?.ExpectedHfrPx,
+                PlateScaleArcsec: expected?.PlateScaleArcsec);
         }
     }
 
@@ -359,7 +400,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     }
 
     /// <summary>Measure one guide frame with the §59 star detector. Pure — unit-tested on synthetic stars.
-    /// HFR is the detector's average over every star it found; a starless frame reads HFR 0, Stars 0.</summary>
+    /// HFR is the median over the <see cref="HfrStarCount"/> brightest stars (the detector sorts
+    /// brightest-first); a starless frame reads HFR 0, Stars 0.</summary>
     internal static GuideFocusSampleDto Measure(ushort[] pixels, int width, int height, long seq, DateTimeOffset at) {
         var result = StarDetector.Detect(
             pixels, width, height,
@@ -371,9 +413,25 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             fwhmSum += star.FWHM;
         }
         var stars = result.DetectedStars;
-        var hfr = stars > 0 && double.IsFinite(result.AverageHFR) && result.AverageHFR > 0 ? result.AverageHFR : 0.0;
+        var hfr = stars > 0 ? MedianHfrOfBrightest(result.StarList, HfrStarCount) : 0.0;
+        if (!double.IsFinite(hfr) || hfr < 0) {
+            hfr = 0.0;
+        }
         var fwhm = result.StarList.Count > 0 ? fwhmSum / result.StarList.Count : 0.0;
         return new GuideFocusSampleDto(seq, at, Math.Round(hfr, 3), stars, Math.Round(peak, 0), Math.Round(double.IsFinite(fwhm) ? fwhm : 0.0, 3));
+    }
+
+    internal static double MedianHfrOfBrightest(IReadOnlyList<DetectedStar> brightestFirst, int count) {
+        var n = Math.Min(count, brightestFirst.Count);
+        if (n == 0) {
+            return 0.0;
+        }
+        var hfrs = new double[n];
+        for (int i = 0; i < n; i++) {
+            hfrs[i] = brightestFirst[i].HFR;
+        }
+        Array.Sort(hfrs);
+        return n % 2 == 1 ? hfrs[n / 2] : 0.5 * (hfrs[n / 2 - 1] + hfrs[n / 2]);
     }
 
     private long NextSeq() {

@@ -59,6 +59,10 @@ class GuideFocusStatus {
   final String? error;
   final int consecutiveFailures;
   final bool hasFrame;
+  /// What an in-focus star should read on this guide camera (px), from the
+  /// profile's guide optics; null when the profile has no guide focal length.
+  final double? expectedHfr;
+  final double? plateScaleArcsec;
 
   const GuideFocusStatus({
     this.active = false,
@@ -73,6 +77,8 @@ class GuideFocusStatus {
     this.error,
     this.consecutiveFailures = 0,
     this.hasFrame = false,
+    this.expectedHfr,
+    this.plateScaleArcsec,
   });
 
   static const idle = GuideFocusStatus();
@@ -101,6 +107,8 @@ class GuideFocusStatus {
       error: json['error'] is String ? json['error'] as String : null,
       consecutiveFailures: _i(json, 'consecutive_failures'),
       hasFrame: json['has_frame'] as bool? ?? false,
+      expectedHfr: (json['expected_hfr'] as num?)?.toDouble(),
+      plateScaleArcsec: (json['plate_scale_arcsec'] as num?)?.toDouble(),
     );
   }
 }

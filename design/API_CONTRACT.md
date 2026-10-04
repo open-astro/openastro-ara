@@ -325,6 +325,25 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-03 — Guide-camera live focus: the expected in-focus HFR
+
+**Where:** `GET /api/v1/equipment/guider/focus` (`GuideFocusStatusDto`).
+
+**Change:** two optional fields, `expected_hfr` and `plate_scale_arcsec` (both nullable, absent-as-null
+for an older daemon). `expected_hfr` is the HFR in pixels an in-focus star should read on the guide
+camera, from the profile's guide optics: a guide scope uses the §63.19 guide focal length and guide pixel
+size; an off-axis guider uses the main telescope's focal length and aperture with the guide pixel size.
+Seeing (3" assumed) and the aperture's Airy FWHM add in quadrature, HFR ≈ FWHM/2 at the plate scale,
+floored at 0.7 px (what the §59 detector reads for a sub-pixel star). Null when the profile has no guide
+focal length or pixel size.
+
+**Why:** the live-focus advice compared one frame with the frame four earlier at 3 %. On a guide scope
+at 6.4"/px the HFR sits at the detector floor (0.76 px) and jitters ±0.05 px, so a focuser nobody was
+touching was told "Keep going" and "Go back" in turn (2026-10-03). The client now says *In focus* at or
+under `expected_hfr` × 1.3 before it reads any trend, and the trend compares 3-frame medians. The sample
+HFR itself is now the median over the 12 brightest stars rather than the mean over every blob, so faint
+stars flickering across the threshold no longer move the number.
+
 ### 2026-10-03 — Setup → Smart Focus: the autofocus run record and the guide-camera focus loop
 
 **Endpoint(s) or area:** `GET /api/v1/autofocus/state`, `GET /api/v1/autofocus/frame`, `POST /api/v1/autofocus/cancel`; `POST /api/v1/equipment/guider/focus/start`, `POST …/focus/stop`, `GET …/focus`, `GET …/focus/frame`; `POST /api/v1/equipment/camera/connect` gains a 409; WebSocket `autofocus.step_complete`, `autofocus.curve_fit`, `autofocus.completed`, `autofocus.failed`.

@@ -51,4 +51,10 @@ public sealed record GuideFocusStatusDto(
     IReadOnlyList<GuideFocusSampleDto> Recent,
     string? Error,
     int ConsecutiveFailures,
-    bool HasFrame);
+    bool HasFrame,
+    // The HFR (px) an in-focus star should read on this guide camera, from the guide optics in the
+    // profile (seeing + diffraction at the plate scale, floored at what the detector reads for an
+    // undersampled star); null when the profile has no guide focal length / pixel size. The client's
+    // "in focus" verdict compares against it so a static focuser is not told to turn by frame noise.
+    double? ExpectedHfr = null,
+    double? PlateScaleArcsec = null);

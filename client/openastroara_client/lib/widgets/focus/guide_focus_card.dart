@@ -227,13 +227,21 @@ class _Hero extends StatelessWidget {
     final hint = guideFocusHint(status);
     final color = atBest ? AraColors.accentConnected : AraColors.textPrimary;
     String f(double v, [int d = 2]) => v > 0 ? v.toStringAsFixed(d) : '—';
+    final target = status.expectedHfr;
+    final bestLine = best == null ? 'px · best so far —' : 'px · best so far ${f(best)}';
+    // Centred when it fits, scrolls when the frame beside it is shorter than the
+    // facts need (the stats row overflowed the panel by 18 px on a laptop window).
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       decoration: BoxDecoration(
         color: AraColors.bgPanelAlt,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0),
+            child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -255,7 +263,7 @@ class _Hero extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            best == null ? 'px · best so far —' : 'px · best so far ${f(best)}',
+            target == null ? bestLine : '$bestLine · in focus ≤ ${f(target)}',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 16, color: AraColors.textSecondary, fontFeatures: _tabular),
           ),
@@ -275,6 +283,9 @@ class _Hero extends StatelessWidget {
             ],
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -317,8 +328,14 @@ class GuideFocusHint {
   const GuideFocusHint(this.advice, this.title, this.detail);
 }
 
-/// Pure — unit-tested. Compares the latest measurable HFR with the one
-/// [lookback] frames earlier (a short window rides out single-frame noise).
+/// How far above the expected in-focus HFR still counts as in focus: seeing
+/// wanders and the target assumes a typical night.
+const double kGuideFocusTargetTolerance = 1.3;
+
+/// Pure — unit-tested. First an absolute verdict: at or under the profile's
+/// expected in-focus HFR (× [kGuideFocusTargetTolerance]) is "In focus", whatever
+/// the trend says. Otherwise compares a 3-frame median with the median [lookback]
+/// frames earlier, so a static focuser is not told to turn by frame-to-frame noise.
 GuideFocusHint guideFocusHint(GuideFocusStatus status, {int lookback = 4}) {
   final latest = status.latest;
   if (latest == null) {
@@ -331,17 +348,23 @@ GuideFocusHint guideFocusHint(GuideFocusStatus status, {int lookback = 4}) {
   final best = status.bestHfr;
   final hfr = latest.hfr;
   final measured = status.recent.where((s) => s.hfr > 0).toList(growable: false);
+  final target = status.expectedHfr;
   final far = best != null && hfr > best * 1.5;
   final size = far ? 'big moves' : 'small moves';
+  if (target != null && target > 0 && hfr <= target * kGuideFocusTargetTolerance) {
+    return GuideFocusHint(TurnAdvice.atBest, 'In focus',
+        'Stars are as tight as this camera resolves (in focus ≤ ${target.toStringAsFixed(2)} px). Lock the focuser.');
+  }
   if (best != null && hfr <= best * 1.04) {
     return const GuideFocusHint(TurnAdvice.atBest, 'Sharpest so far', 'Hold here, or nudge a touch either way to confirm.');
   }
   if (measured.length <= lookback) {
     return GuideFocusHint(TurnAdvice.hold, 'Make a move', 'In or out, $size — then watch which way the number goes.');
   }
-  final earlier = measured[measured.length - 1 - lookback].hfr;
-  final delta = hfr - earlier;
-  final tolerance = (earlier * 0.03).clamp(0.03, 0.3);
+  final now = _medianEndingAt(measured, measured.length - 1);
+  final earlier = _medianEndingAt(measured, measured.length - 1 - lookback);
+  final delta = now - earlier;
+  final tolerance = (earlier * 0.05).clamp(0.05, 0.3);
   if (delta < -tolerance) {
     return GuideFocusHint(TurnAdvice.keepGoing, 'Keep going', 'Same way you just moved — $size.');
   }
@@ -350,6 +373,14 @@ GuideFocusHint guideFocusHint(GuideFocusStatus status, {int lookback = 4}) {
   }
   return GuideFocusHint(TurnAdvice.hold, 'Holding',
       far ? 'Still well off focus — make a bigger move and watch the number.' : 'Try a small move either way.');
+}
+
+/// Median of the up-to-3 measurable HFRs ending at [end] (fewer at the start).
+double _medianEndingAt(List<GuideFocusSample> measured, int end) {
+  final start = end - 2 < 0 ? 0 : end - 2;
+  final window = [for (var i = start; i <= end; i++) measured[i].hfr]..sort();
+  final n = window.length;
+  return n.isOdd ? window[n ~/ 2] : (window[n ~/ 2 - 1] + window[n ~/ 2]) / 2;
 }
 
 /// The advice as a bold tinted capsule (the polar-align knob hint), with the

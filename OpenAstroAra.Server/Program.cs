@@ -392,7 +392,8 @@ public partial class Program {
                 sp.GetRequiredService<IGuideFrameDecoder>(),
                 () => (sp.GetService<IPolarAlignService>() as PolarAlignService)?.IsActive ?? false,
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
-                syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null));
+                syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null,
+                optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>())));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
@@ -1242,6 +1243,18 @@ public partial class Program {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes and guide-camera focus frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
     private static partial void LogSyntheticSky(ILogger logger, string envVar, int best, double hfr, double scale);
+
+    /// <summary>The guide camera's optics for the live-focus target: an off-axis guider sees the main
+    /// telescope's focal length and aperture with the guide camera's pixels; a guide scope uses the
+    /// §63.19 guide focal length (its aperture is not in the profile, so diffraction is left out).</summary>
+    internal static (double FocalLengthMm, double PixelSizeUm, double ApertureMm)? GuideOpticsFor(IProfileStore store) {
+        var phd2 = store.GetPhd2Settings();
+        if (string.Equals(phd2.GuiderSetupType, "oag", StringComparison.OrdinalIgnoreCase)) {
+            var optics = store.GetOpticsSettings();
+            return (optics.FocalLengthMm, phd2.GuidePixelSize, optics.ApertureMm);
+        }
+        return (phd2.GuideFocalLength, phd2.GuidePixelSize, 0);
+    }
 
     /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
     internal static void LogCfitsioProbe(ILogger logger, OpenAstroAra.Fits.FitsLibraryProbeResult result, string installHint) {
