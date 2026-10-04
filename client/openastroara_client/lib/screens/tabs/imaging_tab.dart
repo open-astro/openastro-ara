@@ -32,9 +32,9 @@ import '../../theme/ara_colors.dart';
 /// Layout: the frame viewer and its right rail fill the window, with the
 /// §63.18 guiding strip running the full width along the bottom — the PHD2 /
 /// web-guider arrangement, so the guide graph is read at a glance under the
-/// image instead of buried in the rail. The exposure timer floats over the
-/// top of the viewer whenever the daemon's camera is exposing, whoever asked
-/// for the frame (a sequence, Smart Focus, a plate solve, Take One).
+/// image instead of buried in the rail. The exposure timer sits in the rail
+/// under Take One whenever the daemon's camera is exposing for anyone else
+/// (a sequence, Smart Focus, a plate solve); Take One keeps its own card.
 class ImagingTab extends ConsumerWidget {
   const ImagingTab({super.key});
 
@@ -70,20 +70,7 @@ class ImagingTab extends ConsumerWidget {
           child: Column(
             children: [
               _ImagingHeader(),
-              Expanded(
-                child: Stack(
-                  children: [
-                    FrameViewer(),
-                    // The exposure timer sits over the top edge of the image;
-                    // it is a SizedBox.shrink while nothing is exposing.
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: SizedBox(width: 360, child: ExposureTimerBanner()),
-                    ),
-                  ],
-                ),
-              ),
+              Expanded(child: FrameViewer()),
             ],
           ),
         ),
@@ -115,6 +102,16 @@ class ImagingTab extends ConsumerWidget {
                   onRetry: () => _takeOne(context, ref),
                   onCancel: () => _cancelCapture(context, ref),
                 ),
+                // The timer for every OTHER exposure the daemon runs — a
+                // sequence sub, a Smart Focus probe, a plate-solve capture —
+                // in the same slot, so "how long is left" is always read here.
+                // A Take One already has its card above with the countdown,
+                // so the banner steps aside while one is capturing.
+                if (!exposing)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: ExposureTimerBanner(),
+                  ),
                 // Solve sits directly under Take One with the panel's top
                 // border as the separator — plate-solve the frame you just
                 // took without scrolling.
