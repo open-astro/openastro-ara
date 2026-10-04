@@ -24,6 +24,28 @@ void main() {
       expect(s.rmsRa, 0.31);
       expect(s.rmsDec, 0.28);
       expect(s.currentProfile, 'ara-c14-cem120-a3f8');
+      // No arcsec figures on this payload → null, never a guessed conversion.
+      expect(s.rmsTotalArcsec, isNull);
+    });
+
+    test('parses the daemon arcsec RMS alongside the pixel figures', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'name': 'PHD2',
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'guiding',
+          'rms_total': 0.42,
+          'rms_ra': 0.31,
+          'rms_dec': 0.28,
+          'rms_total_arcsec': 0.84,
+          'rms_ra_arcsec': 0.62,
+          'rms_dec_arcsec': 0.56,
+        },
+      });
+      expect(s.rmsTotal, 0.42);
+      expect(s.rmsTotalArcsec, 0.84);
+      expect(s.rmsRaArcsec, 0.62);
+      expect(s.rmsDecArcsec, 0.56);
     });
 
     test('star_lost runtime token maps to the camelCase enum', () {

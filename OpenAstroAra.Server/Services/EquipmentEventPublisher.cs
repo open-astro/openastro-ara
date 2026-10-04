@@ -148,6 +148,68 @@ public sealed partial class EquipmentEventPublisher {
         }
     }
 
+    /// <summary>The shutter just opened (<c>camera.exposure_started</c>). One emit per device
+    /// round-trip, whatever asked for the frame — Take One, a sequence, the autofocus probe, a
+    /// plate-solve capture — so a client can show "an exposure is running" from a single signal.
+    /// <paramref name="kind"/> is the lower-cased image type or the probe label.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into the capture path. CA1031's log-and-recover boundary applies.")]
+    public void ExposureStarted(Guid frameId, double exposureSec, DateTimeOffset startedUtc, string kind, string? filterName) {
+        try {
+            var payload = new JsonObject {
+                ["frame_id"] = frameId.ToString(),
+                ["exposure_sec"] = exposureSec,
+                ["started_utc"] = startedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                ["kind"] = kind,
+                ["filter_name"] = filterName,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            Publish(WsEventCatalog.CameraExposureStarted, doc.RootElement.Clone());
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.CameraExposureStarted);
+        }
+    }
+
+    /// <summary>The pixels are in hand (<c>camera.exposure_complete</c>): the exposure AND the
+    /// download are over, so the camera's USB/IO is free again. <paramref name="elapsedMs"/> is
+    /// shutter-open → pixels-downloaded on the daemon clock.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into the capture path. CA1031's log-and-recover boundary applies.")]
+    public void ExposureComplete(Guid frameId, double exposureSec, DateTimeOffset startedUtc, string kind, long elapsedMs) {
+        try {
+            var payload = new JsonObject {
+                ["frame_id"] = frameId.ToString(),
+                ["exposure_sec"] = exposureSec,
+                ["started_utc"] = startedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                ["kind"] = kind,
+                ["elapsed_ms"] = elapsedMs,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            Publish(WsEventCatalog.CameraExposureComplete, doc.RootElement.Clone());
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.CameraExposureComplete);
+        }
+    }
+
+    /// <summary>The exposure did not produce pixels (<c>camera.exposure_failed</c>): device
+    /// timeout, disconnect/supersede, caller cancellation or a thrown device fault. Always paired
+    /// with a preceding started for the same frame id, so a client can close its timer.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into the capture path. CA1031's log-and-recover boundary applies.")]
+    public void ExposureFailed(Guid frameId, string kind, string reason) {
+        try {
+            var payload = new JsonObject {
+                ["frame_id"] = frameId.ToString(),
+                ["kind"] = kind,
+                ["reason"] = reason,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            Publish(WsEventCatalog.CameraExposureFailed, doc.RootElement.Clone());
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.CameraExposureFailed);
+        }
+    }
+
     private void Publish(string eventType, JsonElement payload) {
         var task = _broadcaster.PublishAsync(eventType, payload, CancellationToken.None);
         if (!task.IsCompletedSuccessfully) {

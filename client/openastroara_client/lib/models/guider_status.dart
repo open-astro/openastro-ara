@@ -64,9 +64,16 @@ class GuiderStatus {
   final String name;
   final GuiderConnectionState connectionState;
   final GuiderRuntimeState runtimeState;
+  /// Windowed RMS in guide-camera PIXELS (`rms_total` / `rms_ra` / `rms_dec`).
   final double? rmsTotal;
   final double? rmsRa;
   final double? rmsDec;
+  /// The same window in arcsec (`rms_*_arcsec`), present once the guider has
+  /// reported a pixel scale. Display sites prefer these and fall back to the
+  /// pixel figures scaled by the §63.5 guide-train settings.
+  final double? rmsTotalArcsec;
+  final double? rmsRaArcsec;
+  final double? rmsDecArcsec;
   final String? currentProfile;
 
   const GuiderStatus({
@@ -77,6 +84,9 @@ class GuiderStatus {
     this.rmsTotal,
     this.rmsRa,
     this.rmsDec,
+    this.rmsTotalArcsec,
+    this.rmsRaArcsec,
+    this.rmsDecArcsec,
     this.currentProfile,
   });
 
@@ -100,6 +110,9 @@ class GuiderStatus {
       rmsTotal: _asDouble(runtimeMap['rms_total']),
       rmsRa: _asDouble(runtimeMap['rms_ra']),
       rmsDec: _asDouble(runtimeMap['rms_dec']),
+      rmsTotalArcsec: _asDouble(runtimeMap['rms_total_arcsec']),
+      rmsRaArcsec: _asDouble(runtimeMap['rms_ra_arcsec']),
+      rmsDecArcsec: _asDouble(runtimeMap['rms_dec_arcsec']),
       currentProfile: _str(runtimeMap['current_profile']),
     );
   }
@@ -140,9 +153,13 @@ class GuiderStatus {
       other.rmsTotal == rmsTotal &&
       other.rmsRa == rmsRa &&
       other.rmsDec == rmsDec &&
+      other.rmsTotalArcsec == rmsTotalArcsec &&
+      other.rmsRaArcsec == rmsRaArcsec &&
+      other.rmsDecArcsec == rmsDecArcsec &&
       other.currentProfile == currentProfile;
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
-      rmsTotal, rmsRa, rmsDec, currentProfile);
+      rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec,
+      currentProfile);
 }

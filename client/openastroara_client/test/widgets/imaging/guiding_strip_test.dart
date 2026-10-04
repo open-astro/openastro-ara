@@ -12,7 +12,10 @@ import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
-import 'package:openastroara/widgets/imaging/guiding_panel.dart';
+import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/state/guider/guide_step_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -73,12 +76,16 @@ class _FakeProfileApi extends ProfileApi {
 Future<ProviderContainer> _pump(WidgetTester tester,
     {GuiderStatus? status,
     bool withServer = true,
-    ProfileApi? profileApi}) async {
+    ProfileApi? profileApi,
+    Stream<WsEvent>? ws}) async {
   final api = _FakeGuiderApi()..status = status;
   final container = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(
         _FakeSavedServerService(withServer ? const [_server] : const [])),
     guiderApiFactoryProvider.overrideWithValue((_) => api),
+    // The strip's guide-step buffer listens to the WS stream; a real stream
+    // would try to dial the fake server.
+    wsEventsProvider.overrideWith((ref) => ws ?? const Stream<WsEvent>.empty()),
     // A deterministic hydrate by default — the real ProfileApi would hit the
     // test env's blocked HttpClient and leave the Apply gate in flux.
     profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
@@ -87,7 +94,7 @@ Future<ProviderContainer> _pump(WidgetTester tester,
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: const MaterialApp(
-      home: Scaffold(body: GuidingPanel()),
+      home: Scaffold(body: GuidingStrip()),
     ),
   ));
   // Let saved servers load + the initial status read land.
@@ -106,9 +113,10 @@ Future<void> _teardownPanel(WidgetTester tester, ProviderContainer c) async {
 }
 
 void main() {
-  testWidgets('collapsed header shows the guider state and em-dash RMS '
-      'when not guiding', (tester) async {
-    await _pump(tester,
+  testWidgets('open by default: header shows the guider state and em-dash '
+      'RMS when not guiding; the graph says so; the header tap collapses it',
+      (tester) async {
+    final container = await _pump(tester,
         status: const GuiderStatus(
           name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
@@ -117,12 +125,32 @@ void main() {
     expect(find.text('Guiding'), findsOneWidget);
     expect(find.text('stopped'), findsOneWidget);
     expect(find.text('RMS —'), findsOneWidget);
-    // Collapsed: no controls visible.
+    expect(find.text('Not guiding'), findsOneWidget);
+    // Telemetry only — no tuning controls inline.
     expect(find.text('RA aggressiveness'), findsNothing);
+
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+    expect(find.text('Not guiding'), findsNothing);
+    expect(container.read(guidingStripExpandedProvider), isFalse);
+    // Re-open so the next test's default is untouched (root provider, but a
+    // fresh container per test — this is belt and braces).
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+    await _teardownPanel(tester, container);
   });
 
-  testWidgets('guiding: header shows live RMS; expanding shows arcsec + px '
-      'cells', (tester) async {
+  testWidgets('a disconnected guider reads as such in header and graph',
+      (tester) async {
+    final container = await _pump(tester, status: null);
+    expect(find.text('disconnected'), findsOneWidget);
+    expect(find.text('Guider not connected'), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('guiding: pixel-only RMS shows as px until a scale is known, '
+      'then converts; the daemon arcsec figure wins when present',
+      (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
           name: 'OpenAstro Guider',
@@ -133,30 +161,122 @@ void main() {
           rmsDec: 0.4,
         ));
     expect(find.text('guiding'), findsOneWidget);
-    expect(find.text('RMS 0.50″'), findsOneWidget);
-
-    await tester.tap(find.text('Guiding'));
-    await tester.pump();
-
-    expect(find.text('0.50″'), findsOneWidget);
-    expect(find.text('0.30″'), findsOneWidget);
-    expect(find.text('0.40″'), findsOneWidget);
-    // No guide focal length / pixel size configured → px unavailable.
-    expect(find.text('— px'), findsNothing);
+    expect(find.text('Waiting for guide frames…'), findsOneWidget);
+    // The daemon's rms_* are guide-camera pixels; with no scale from the
+    // guider or the §63.5 guide train there is no honest arcsec figure.
+    expect(find.text('RMS 0.50 px'), findsOneWidget);
+    expect(find.text('0.50 px'), findsOneWidget);
+    expect(find.text('0.30 px'), findsOneWidget);
+    expect(find.text('0.40 px'), findsOneWidget);
     expect(find.text('—'), findsNWidgets(3));
+    expect(find.text('Scale unknown · graph in px'), findsOneWidget);
 
-    // With the §63.5 guide train set, px derives from the image scale:
-    // 206.265 * 3.75 / 200 ≈ 3.867 ″/px → 0.5″ ≈ 0.13 px.
+    // With the §63.5 guide train set the pixels convert:
+    // 206.265 * 3.75 / 200 ≈ 3.867 ″/px → 0.5 px ≈ 1.93″.
     final phd2N = container.read(phd2SettingsProvider.notifier);
     phd2N.setGuideFocalLength(200);
     phd2N.setGuidePixelSize(3.75);
     await tester.pump();
-    expect(find.text('0.13 px'), findsOneWidget);
+    expect(find.text('RMS 1.93″'), findsOneWidget);
+    expect(find.text('1.93″'), findsOneWidget);
+    expect(find.text('1.16″'), findsOneWidget);
+    expect(find.text('1.55″'), findsOneWidget);
+    expect(find.text('0.50 px'), findsOneWidget);
+    expect(find.textContaining('Scale 3.87″/px'), findsOneWidget);
 
     // The tuning controls no longer live inline — they open in the dialog.
     expect(find.text('RA aggressiveness'), findsNothing);
 
     await _teardownPanel(tester, container);
+  });
+
+  testWidgets('the daemon arcsec RMS is preferred over a client conversion',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+          rmsRa: 0.3,
+          rmsDec: 0.4,
+          rmsTotalArcsec: 0.95,
+          rmsRaArcsec: 0.57,
+          rmsDecArcsec: 0.76,
+        ));
+    expect(find.text('RMS 0.95″'), findsOneWidget);
+    expect(find.text('0.57″'), findsOneWidget);
+    expect(find.text('0.76″'), findsOneWidget);
+    expect(find.text('0.50 px'), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('guider.step events fill the graph and the step count',
+      (tester) async {
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(ws.close);
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ),
+        ws: ws.stream);
+    expect(find.text('Waiting for guide frames…'), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      ws.add(WsEvent(
+        type: 'guider.step',
+        ts: DateTime.utc(2026, 10, 4, 21, 0, i),
+        seq: i + 1,
+        payload: <String, dynamic>{
+          'frame': i,
+          'ra_raw_px': 0.2 * i,
+          'dec_raw_px': -0.1 * i,
+          'ra_arcsec': 0.4 * i,
+          'dec_arcsec': -0.2 * i,
+          'ra_duration_ms': 50,
+          'dec_duration_ms': -20,
+          'pixel_scale_arcsec': 2.0,
+        },
+      ));
+    }
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(guideStepsProvider).length, 3);
+    expect(find.text('Waiting for guide frames…'), findsNothing);
+    final paint = tester.widget<CustomPaint>(find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is GuideGraphPainter));
+    expect(paint.painter, isA<GuideGraphPainter>());
+    // The guider's own scale is reported on the steps and drives both the
+    // RMS conversion (0.5 px × 2 = 1.00″) and the footer.
+    expect(find.text('RMS 1.00″'), findsOneWidget);
+    expect(find.text('Scale 2.00″/px · 3 steps'), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
+
+  test('GuideGraphPainter picks arcsec when any point has a scale and snaps '
+      'the half-range to the PHD2 rung ladder', () {
+    final t = DateTime.utc(2026);
+    final arcsec = GuideGraphPainter([
+      GuideStep(at: t, raPx: 0.5, decPx: 0.1, raArcsec: 1.3, decArcsec: 0.2),
+      GuideStep(at: t, raPx: 0.1, decPx: -0.9, raArcsec: 0.2, decArcsec: -1.8),
+    ]);
+    expect(arcsec.scaleFor(arcsec.steps), ('″', 2.0));
+    final px = GuideGraphPainter([
+      GuideStep(at: t, raPx: 0.3, decPx: -0.2),
+    ]);
+    expect(px.scaleFor(px.steps), ('px', 0.5));
+    // A client-side scale converts pixel-only steps to arcsec.
+    final converted = GuideGraphPainter([
+      GuideStep(at: t, raPx: 1.0, decPx: 0.0),
+    ], fallbackScale: 3.0);
+    expect(converted.scaleFor(converted.steps), ('″', 4.0));
+    // Beyond the ladder the top rung holds (clipped, not unbounded).
+    final wild = GuideGraphPainter([
+      GuideStep(at: t, raPx: 0, decPx: 0, raArcsec: 40, decArcsec: 0),
+    ]);
+    expect(wild.scaleFor(wild.steps), ('″', 16.0));
   });
 
   testWidgets('the Tune dialog shows the runtime-safe controls only',
@@ -235,12 +355,13 @@ void main() {
       savedServerServiceProvider
           .overrideWithValue(_FakeSavedServerService(const [_server])),
       guiderApiFactoryProvider.overrideWithValue((_) => api),
+      wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
       profileApiProvider.overrideWith((ref) => ref.watch(_apiSwitchProvider)),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: Scaffold(body: GuidingPanel())),
+      child: const MaterialApp(home: Scaffold(body: GuidingStrip())),
     ));
     await tester.pump();
     await tester.pump();

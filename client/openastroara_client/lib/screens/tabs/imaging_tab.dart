@@ -17,7 +17,8 @@ import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/fault_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
-import '../../widgets/imaging/guiding_panel.dart';
+import '../../widgets/imaging/exposure_timer_banner.dart';
+import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart';
 import '../../widgets/imaging/solve_panel.dart';
 import '../../widgets/status_indicator.dart';
@@ -27,6 +28,13 @@ import '../../theme/ara_colors.dart';
 /// into `liveViewControllerProvider` (observable cross-component), §51
 /// Health Indicator + Diagnostic Panel sourced from the diagnostics
 /// provider (currently a stub; real WS event wiring lands in 12c.3).
+///
+/// Layout: the frame viewer and its right rail fill the window, with the
+/// §63.18 guiding strip running the full width along the bottom — the PHD2 /
+/// web-guider arrangement, so the guide graph is read at a glance under the
+/// image instead of buried in the rail. The exposure timer floats over the
+/// top of the viewer whenever the daemon's camera is exposing, whoever asked
+/// for the frame (a sequence, Smart Focus, a plate solve, Take One).
 class ImagingTab extends ConsumerWidget {
   const ImagingTab({super.key});
 
@@ -38,6 +46,17 @@ class ImagingTab extends ConsumerWidget {
     // it disabled — Retry covers the failed card, and the user may want to
     // tweak settings and re-shoot immediately after a result.
     final exposing = ref.watch(captureProgressProvider).isCapturing;
+    return Column(
+      children: [
+        Expanded(child: _viewerAndRail(context, ref, liveViewOn, exposing)),
+        // §63.18 — the guide graph strip, full width under viewer + rail.
+        const GuidingStrip(),
+      ],
+    );
+  }
+
+  Widget _viewerAndRail(
+      BuildContext context, WidgetRef ref, bool liveViewOn, bool exposing) {
     return Row(
       // Stretch, not the default center: the rail Container shrink-wraps its
       // content and would otherwise float vertically centered in the row.
@@ -51,7 +70,20 @@ class ImagingTab extends ConsumerWidget {
           child: Column(
             children: [
               _ImagingHeader(),
-              Expanded(child: FrameViewer()),
+              Expanded(
+                child: Stack(
+                  children: [
+                    FrameViewer(),
+                    // The exposure timer sits over the top edge of the image;
+                    // it is a SizedBox.shrink while nothing is exposing.
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: SizedBox(width: 360, child: ExposureTimerBanner()),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -98,8 +130,6 @@ class ImagingTab extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: CoolerControls(compact: true),
                 ),
-                const _RailGap(),
-                const GuidingPanel(),
                 const _RailGap(),
                 const HistogramStrip(),
                 const _RailGap(),

@@ -498,4 +498,43 @@ Sequence-run event ORDERING contract (§60.9):
   * instructions_completed / instructions_total count SEQUENCE INSTRUCTIONS
     (tree leaves), not camera exposures (renamed from frames_* while the wire
     had no external consumers, §60.9).
+
+Camera exposure lifecycle (CameraService.ExposeAndDownloadAsync — the one
+device round-trip every capture takes: Take One, sequence lights/flats/darks,
+the §59 autofocus probe, the §28 plate-solve capture; NOT the §64 Live View
+loop, whose sub-second frames would flood the stream):
+  camera.exposure_started  { frame_id, exposure_sec, started_utc, kind,
+                             filter_name? }
+      kind = lower-cased image type ("light" | "flat" | "dark" | "bias" |
+      "snapshot" | "darkflat") for a frame that will be catalogued, or
+      "analysis" (autofocus probe) / "plate-solve" for one that is not.
+      Published AFTER the driver accepted StartExposure, so a rejected
+      exposure never announces.
+  camera.exposure_complete { frame_id, exposure_sec, started_utc, kind,
+                             elapsed_ms }
+      The pixels are downloaded — the camera's USB/IO is free. elapsed_ms is
+      shutter-open → pixels-in-hand on the daemon clock (the download is
+      INSIDE it). For a catalogued frame, frame.complete follows once the
+      FITS is written and registered.
+  camera.exposure_failed   { frame_id, kind, reason }
+      Device timeout (no ImageReady within the wait bound), disconnect or
+      supersede mid-exposure, caller cancellation ("cancelled") or a thrown
+      device fault. Every started is followed by exactly one complete OR
+      failed for the same frame_id; a client timer should still age out on
+      its own (exposure + ~2 min) in case the WS link dropped in between.
+      Clients should stamp the exposure start on their OWN clock at receipt:
+      started_utc is informational (the two clocks can disagree, §31).
+
+Guider step stream (GuiderService, one event per guide frame while the guider
+is connected, straight from its GuideStep events):
+  guider.step { frame, time_sec, ra_raw_px, dec_raw_px, ra_arcsec?,
+                dec_arcsec?, ra_duration_ms, dec_duration_ms,
+                pixel_scale_arcsec?, star_mass?, snr? }
+      Distances are the star's offset in guide-camera pixels (NINA's sign
+      convention, RA negated from PHD2's raw value); the arcsec pair and
+      pixel_scale_arcsec are present once the guider has reported its pixel
+      scale. Pulse durations are signed: negative = East (RA) / South (Dec),
+      PHD2's own graph convention. A non-finite reading (lost star) is null,
+      never NaN. The windowed RMS stays on GET /equipment/guider
+      (rms_total/ra/dec in px, rms_*_arcsec when the scale is known).
 ```

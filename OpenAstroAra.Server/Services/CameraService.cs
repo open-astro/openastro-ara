@@ -598,16 +598,31 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
+    /// <summary>
+    /// <paramref name="kind"/> labels the exposure for the <c>camera.exposure_*</c> WS events
+    /// (lower-cased image type for a persisted frame, "analysis" / "plate-solve" for the probes) —
+    /// this is the ONE place every capture passes through, so it is where a client learns an
+    /// exposure is running, whoever asked for it.
+    /// </summary>
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
-            AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+            AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, CancellationToken ct) {
         // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
+        var announced = false;
         try {
-            return await ExposeAndDownloadCoreAsync(client, frameId, request, ct).ConfigureAwait(false);
+            return await ExposeAndDownloadCoreAsync(client, frameId, request, kind, () => announced = true, ct).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            throw; // genuine caller cancellation — not a device fault
+            // genuine caller cancellation — not a device fault, but a client holding a timer for
+            // the announced exposure still needs to hear it ended.
+            if (announced) {
+                _events?.ExposureFailed(frameId, kind, "cancelled");
+            }
+            throw;
         } catch (Exception ex) {
+            if (announced) {
+                _events?.ExposureFailed(frameId, kind, ex.Message);
+            }
             PublishOpFault(client, EquipmentFaultKind.OpError,
                 $"capture of frame {frameId} failed: {ex.Message}");
             throw;
@@ -615,7 +630,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     }
 
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
-            AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+            AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, Action markAnnounced, CancellationToken ct) {
         var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
         var settingsMs = timing.ElapsedMilliseconds;
@@ -628,6 +643,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // (CancellationToken.None).
         ct.ThrowIfCancellationRequested();
         client.StartExposure(request.ExposureSec, true);
+        // Announce AFTER StartExposure returned: a driver that rejects the exposure throws here and
+        // the caller's catch must not have to retract a start that never happened.
+        markAnnounced();
+        _events?.ExposureStarted(frameId, request.ExposureSec, capturedAt, kind, request.FilterName);
         RefreshCacheOnce();
 
         bool? ready;
@@ -639,10 +658,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         if (ready is null) {
             LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
+            _events?.ExposureFailed(frameId, kind, "camera disconnected or superseded during the exposure");
             return null;
         }
         if (ready == false) {
             LogCaptureFailedNotReady(frameId, request.ExposureSec);
+            _events?.ExposureFailed(frameId, kind, "camera never signaled ImageReady within the wait bound");
             PublishOpFault(client, EquipmentFaultKind.StallTimeout,
                 $"camera never signaled ImageReady for a {request.ExposureSec:0.###}s exposure within the wait bound");
             return null;
@@ -698,6 +719,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         var downloadMs = timing.ElapsedMilliseconds - settingsMs - exposeMs;
         LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs);
+        _events?.ExposureComplete(frameId, request.ExposureSec, capturedAt, kind, exposeMs + downloadMs);
         RefreshCacheOnce();
         return (pixels, width, height, capturedAt);
     }
@@ -743,7 +765,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogPreCaptureStoreEjected(frameId, ejectedDir);
             return false;
         }
-        var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
+        var exposed = await ExposeAndDownloadAsync(client, frameId, request, imageType.ToLowerInvariant(), ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged
         }
