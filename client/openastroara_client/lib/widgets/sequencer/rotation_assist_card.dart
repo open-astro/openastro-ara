@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/rotation_assist.dart';
+import '../../state/app_shell_state.dart';
 import '../../state/rotation/rotation_assist_state.dart';
+import '../../state/settings/settings_nav.dart';
+import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'rotation_overlay.dart';
@@ -172,11 +175,41 @@ class RotationAssistCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: AraSpace.s16),
-              FilledButton.icon(
-                key: const Key('rotation-assist-resume'),
-                onPressed: () => promptAndResumeSequence(context, ref),
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                label: const Text('Done — resume'),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FilledButton.icon(
+                    key: const Key('rotation-assist-resume'),
+                    onPressed: () => promptAndResumeSequence(context, ref),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text('Done — resume'),
+                  ),
+                  if (latest != null) ...[
+                    const SizedBox(height: AraSpace.s8),
+                    OutlinedButton.icon(
+                      key: const Key('rotation-assist-show-on-sky'),
+                      onPressed: () {
+                        // The planned (light-blue) box at the planned angle where
+                        // the scope points, the amber scope box from the latest
+                        // solve beside it: turn until they coincide.
+                        ref.read(planetariumCommandProvider.notifier).send({
+                          'type': 'goto',
+                          'ra': latest.raDeg,
+                          'dec': latest.decDeg,
+                          'frame': true,
+                          'rot': status.targetPositionAngleDeg,
+                          'dss': true,
+                        });
+                        ref
+                            .read(selectedTabIndexProvider.notifier)
+                            .select(kPlanningTabIndex);
+                      },
+                      icon: const Icon(Icons.public, size: 18),
+                      label: const Text('Show on sky'),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

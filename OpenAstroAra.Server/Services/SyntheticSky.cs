@@ -195,6 +195,8 @@ public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
         const int width = 1024, height = 683;
         var pixels = SyntheticSky.Render(width, height, hfr: 1.6, seed: 11, stars: 140, frameSeed: ++_frameSeed);
         var frame = new AnalysisFrame(pixels, width, height, DateTimeOffset.UtcNow);
-        return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 2.3, Flipped: false, frame);
+        // A pixel scale that gives the rendered 1024 px frame a RedCat-sized field (≈2.6° × 1.7°), so the
+        // scope box on the planetarium is the size a real frame's would be.
+        return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 9.0, Flipped: false, frame);
     }
 }

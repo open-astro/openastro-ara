@@ -130,4 +130,57 @@ void main() {
       );
     });
   });
+
+  group('scopeBoxCommandFor', () {
+    test('a running readout with a solved frame becomes the scope box', () {
+      const latest = RotationAssistSample(
+        seq: 2,
+        solvedPositionAngleDeg: 276,
+        deltaDeg: 23,
+        raDeg: 314.82,
+        decDeg: 44.53,
+        pixelScaleArcsec: 2.3,
+        frameWidth: 3600,
+        frameHeight: 1800,
+      );
+      final cmd = scopeBoxCommandFor(
+        const RotationAssistStatus(
+          active: true,
+          state: 'running',
+          targetPositionAngleDeg: 299,
+          seq: 2,
+          latest: latest,
+          recent: [latest],
+        ),
+      );
+      expect(cmd['type'], 'scopeBox');
+      expect(cmd['ra'], 314.82);
+      expect(cmd['paDeg'], 276);
+      expect(cmd['fovWDeg'], closeTo(2.3, 1e-9)); // 3600 px × 2.3″ = 2.3°
+      expect(cmd['fovHDeg'], closeTo(1.15, 1e-9));
+      expect(cmd.containsKey('clear'), isFalse);
+    });
+    test('no readout, or no geometry yet, clears the box', () {
+      expect(scopeBoxCommandFor(RotationAssistStatus.idle), {
+        'type': 'scopeBox',
+        'clear': true,
+      });
+      const noGeometry = RotationAssistSample(
+        seq: 1,
+        solvedPositionAngleDeg: 10,
+        deltaDeg: 5,
+      );
+      expect(
+        scopeBoxCommandFor(
+          const RotationAssistStatus(
+            active: true,
+            state: 'running',
+            seq: 1,
+            latest: noGeometry,
+          ),
+        )['clear'],
+        isTrue,
+      );
+    });
+  });
 }

@@ -155,6 +155,30 @@ final rotationAssistProvider =
       RotationAssistNotifier.new,
     );
 
+/// The planetarium `scopeBox` command for the readout's latest solve — where
+/// the camera actually points and how it is turned, as a field the page draws
+/// beside the planned framing box — or the `clear` command when no readout is
+/// running / nothing has solved. Field size = frame pixels × solved pixel
+/// scale. Pure — unit-tested.
+Map<String, Object?> scopeBoxCommandFor(RotationAssistStatus status) {
+  final latest = status.latest;
+  if (!status.active ||
+      latest == null ||
+      latest.frameWidth <= 0 ||
+      latest.frameHeight <= 0 ||
+      latest.pixelScaleArcsec <= 0) {
+    return const {'type': 'scopeBox', 'clear': true};
+  }
+  return {
+    'type': 'scopeBox',
+    'ra': latest.raDeg,
+    'dec': latest.decDeg,
+    'paDeg': latest.solvedPositionAngleDeg,
+    'fovWDeg': latest.frameWidth * latest.pixelScaleArcsec / 3600,
+    'fovHDeg': latest.frameHeight * latest.pixelScaleArcsec / 3600,
+  };
+}
+
 /// What to do with the camera next, read from the delta trend. The app cannot
 /// know which way "clockwise" turns the sky on this optical train (mirror
 /// flips), so — like the guide-camera focus card — the advice is relative to

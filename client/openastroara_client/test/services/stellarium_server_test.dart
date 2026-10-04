@@ -538,6 +538,20 @@ void main() {
     });
   });
 
+  group('planetarium page scope box', () {
+    test('draws the daemon\'s latest solve as a second box and clears on request', () {
+      // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}
+      // per solve; the page draws it beside the planned framing box.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      expect(page, contains("c.type === 'scopeBox'"));
+      expect(page, contains('function scopeBoxData()'));
+      expect(page, contains('function updateScopeBox()'));
+      expect(page, contains("scopeBox = c.clear ? null :"));
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart').readAsStringSync();
+      expect(dart, contains('scopeBoxCommandFor('));
+    });
+  });
+
   group('planetarium page DSS data source', () {
     test('points at the loopback cache WITHOUT a trailing slash', () {
       // hips.c get_url_for() emits `<url>/<path>`; './dss/' would request

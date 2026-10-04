@@ -16,6 +16,15 @@ class _Stub extends RotationAssistNotifier {
   Future<void> refresh() async {}
 }
 
+Future<void> _pumpCard(WidgetTester tester, RotationAssistLive live) async {
+  // A desktop-sized window: the card is a full-width band under the run band.
+  tester.view.physicalSize = const Size(1400, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(_harness(live));
+}
+
 Widget _harness(RotationAssistLive live) => ProviderScope(
   overrides: [rotationAssistProvider.overrideWith(() => _Stub(live))],
   child: const MaterialApp(
@@ -30,7 +39,7 @@ final _pngBytes = base64Decode(
 
 void main() {
   testWidgets('hidden while no readout runs', (tester) async {
-    await tester.pumpWidget(_harness(RotationAssistLive.idle));
+    await _pumpCard(tester, RotationAssistLive.idle);
     expect(find.byKey(const Key('rotation-assist-card')), findsNothing);
   });
 
@@ -54,12 +63,16 @@ void main() {
         latest,
       ],
     );
-    await tester.pumpWidget(_harness(const RotationAssistLive(status: status)));
+    await _pumpCard(tester, const RotationAssistLive(status: status));
     expect(find.byKey(const Key('rotation-assist-card')), findsOneWidget);
     expect(find.text('+11.5°'), findsOneWidget);
     expect(find.text('Keep going'), findsOneWidget);
     expect(find.textContaining('target 299.0°'), findsOneWidget);
     expect(find.byKey(const Key('rotation-assist-resume')), findsOneWidget);
+    expect(
+      find.byKey(const Key('rotation-assist-show-on-sky')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -108,7 +121,7 @@ void main() {
       latest: latest,
       recent: [latest],
     );
-    await tester.pumpWidget(_harness(const RotationAssistLive(status: status)));
+    await _pumpCard(tester, const RotationAssistLive(status: status));
     expect(find.byKey(const Key('rotation-assist-frame')), findsNothing);
   });
 }

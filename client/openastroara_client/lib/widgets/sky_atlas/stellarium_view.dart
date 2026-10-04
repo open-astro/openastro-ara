@@ -11,6 +11,7 @@ import 'package:webview_all/webview_all.dart' as wva;
 
 import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
+import '../../state/rotation/rotation_assist_state.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../services/planetarium_overlay.dart';
 import '../../services/planetarium_prefs_service.dart';
@@ -450,6 +451,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       final optics = planetariumOpticsFor(next);
       if (optics == null) return;
       _pushCmd({'type': 'optics', ...optics});
+    });
+    // The by-hand rotation readout: every solve becomes the amber scope box on
+    // the sky beside the planned framing (ASIAIR's blue-on-red idea); the box
+    // clears when the readout stops. Only pushed when something changed.
+    ref.listen(rotationAssistProvider, (prev, next) {
+      final was = prev?.status;
+      final now = next.status;
+      if (was != null &&
+          was.active == now.active &&
+          was.latest?.seq == now.latest?.seq) {
+        return;
+      }
+      _pushCmd(scopeBoxCommandFor(now));
     });
 
     // Night mode for the sky map: a Flutter overlay can't paint over the native

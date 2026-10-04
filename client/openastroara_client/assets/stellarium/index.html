@@ -1027,6 +1027,12 @@ var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or nul
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
 var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
 var _savedTimeSpeed = null; // engine time_speed saved while framing freezes the sky
+// The SCOPE box: where the camera actually points and how it is turned, from the
+// daemon's latest plate solve (the by-hand rotation readout pushes one per solve).
+// Drawn in amber beside the planned (light-blue) framing box — ASIAIR's blue-on-red
+// idea: turn the camera until the two boxes coincide. { ra, dec, paDeg, fovWDeg, fovHDeg }.
+var scopeBox = null;
+var _scopeGeo = null, _scopeLayer = null;
 
 // Apply a freshly-fetched optics payload and, if the field of view actually
 // changed, redraw — so editing optics in Options updates the box live.
@@ -1179,6 +1185,38 @@ function mosaicData() {
       fill: '#4fc3f7', 'fill-opacity': 0,
     },
   }] };
+}
+
+// One rectangle of the solved field, same tangent-plane rotation as the planned box so
+// the two compare directly; a short tick on its top edge marks "up" on the sensor.
+function scopeBoxData() {
+  var th = scopeBox.paDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
+  var hw = scopeBox.fovWDeg / 2, hh = scopeBox.fovHDeg / 2;
+  function pt(lx, ly) {
+    var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
+    return tanToRaDec(dx, dy, scopeBox.ra, scopeBox.dec);
+  }
+  var ring = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]].map(function (c) { return pt(c[0], c[1]); });
+  var tickW = Math.max(hw * 0.02, 0.002), tickH = hh * 0.18;
+  var tick = [[-tickW, -hh], [tickW, -hh], [tickW, -hh + tickH], [-tickW, -hh + tickH], [-tickW, -hh]].map(function (c) { return pt(c[0], c[1]); });
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [[ring], [tick]] },
+    properties: {
+      stroke: '#ffb74d', 'stroke-width': 1.8, 'stroke-opacity': 0.95,
+      fill: '#ffb74d', 'fill-opacity': 0,
+    },
+  }] };
+}
+
+function updateScopeBox() {
+  if (!stel) return;
+  if (!_scopeGeo) {
+    _scopeLayer = stel.createLayer({ z: 81, visible: true });
+    _scopeGeo = stel.createObj('geojson');
+    _scopeLayer.add(_scopeGeo);
+  }
+  var show = scopeBox && isFinite(scopeBox.ra) && isFinite(scopeBox.dec) && scopeBox.fovWDeg > 0 && scopeBox.fovHDeg > 0;
+  _scopeGeo.data = show ? scopeBoxData() : { type: 'FeatureCollection', features: [] };
 }
 
 function updateFrame() {
@@ -1474,6 +1512,11 @@ function pollCmd() {
         }
       }
       else if (c.type === 'optics') { pushedOptics = c; applyOptics(c); }
+      // The daemon's latest solve → the amber scope box ({clear:true} removes it).
+      else if (c.type === 'scopeBox') {
+        scopeBox = c.clear ? null : { ra: +c.ra, dec: +c.dec, paDeg: +c.paDeg || 0, fovWDeg: +c.fovWDeg, fovHDeg: +c.fovHDeg };
+        updateScopeBox();
+      }
       else if (c.type === 'goto' && c.ra != null) {
         stel.core.selection = 0;
         // A framing goto (Tonight's Sky row tap) opens the framing overlay so
