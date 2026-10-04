@@ -656,24 +656,31 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         _events?.ExposureStarted(frameId, request.ExposureSec, capturedAt, kind, request.FilterName);
         RefreshCacheOnce();
 
-        bool? ready;
+        ImageWait ready;
         try {
             ready = await WaitForImageReadyAsync(client, request.ExposureSec, ct).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             TryAbortQuietly(client); // sequencer cancel mid-exposure: stop the camera, then propagate
             throw;
         }
-        if (ready is null) {
-            LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
-            _events?.ExposureFailed(frameId, kind, "camera disconnected or superseded during the exposure");
-            return null;
-        }
-        if (ready == false) {
-            LogCaptureFailedNotReady(frameId, request.ExposureSec);
-            _events?.ExposureFailed(frameId, kind, "exposure aborted or the camera never signaled ImageReady within the wait bound");
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout,
-                $"camera never signaled ImageReady for a {request.ExposureSec:0.###}s exposure within the wait bound");
-            return null;
+        switch (ready) {
+            case ImageWait.Lost:
+                LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
+                _events?.ExposureFailed(frameId, kind, "camera disconnected or superseded during the exposure");
+                return null;
+            case ImageWait.Aborted:
+                // A user's abort is not a device fault: no equipment.fault, no stall ladder.
+                LogCaptureAborted(frameId, request.ExposureSec);
+                _events?.ExposureFailed(frameId, kind, "aborted");
+                return null;
+            case ImageWait.Timeout:
+                LogCaptureFailedNotReady(frameId, request.ExposureSec);
+                _events?.ExposureFailed(frameId, kind, "camera never signaled ImageReady within the wait bound");
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout,
+                    $"camera never signaled ImageReady for a {request.ExposureSec:0.###}s exposure within the wait bound");
+                return null;
+            case ImageWait.Ready:
+                break;
         }
 
         // The exposure is complete (ImageReady), but the download below is a synchronous 10-30s
@@ -987,7 +994,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // Polls ImageReady until set, bounded by the exposure duration + readout margin. Distinguishes
     // the two non-ready outcomes so the capture log names the real cause: false = device timeout,
     // null = the connection was dropped/superseded mid-capture.
-    private async Task<bool?> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec, CancellationToken ct) {
+    private enum ImageWait { Ready, Timeout, Aborted, Lost }
+
+    private async Task<ImageWait> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
         // A stale abort flag from an abort that landed with no capture running must not kill the
         // NEXT capture on its first poll.
@@ -995,7 +1004,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         while (DateTimeOffset.UtcNow < deadline) {
             await Task.Delay(ImageReadyPollInterval, ct).ConfigureAwait(false);
             if (Interlocked.Exchange(ref _abortRequested, 0) == 1) {
-                return false; // the user aborted — report now, not at the nominal end of the sub
+                return ImageWait.Aborted; // the user aborted — report now, not at the nominal end
             }
             bool stillOurClient;
             lock (_gate) {
@@ -1003,14 +1012,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                     && ReferenceEquals(_client, client);
             }
             if (!stillOurClient) {
-                return null; // disconnected / superseded — the capture can't complete
+                return ImageWait.Lost; // disconnected / superseded — the capture can't complete
             }
             if (ReadImageReadySafe(client) == true) {
-                return true;
+                return ImageWait.Ready;
             }
             RefreshCacheOnce();
         }
-        return false;
+        return ImageWait.Timeout;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -2176,6 +2185,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Capture {FrameId} never reported ImageReady within the {ExposureSec}s exposure + margin")]
     private partial void LogCaptureFailedNotReady(Guid frameId, double exposureSec);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Capture {FrameId} aborted by request {ElapsedHint} into a {ExposureSec}s exposure.")]
+    private partial void LogCaptureAbortedCore(Guid frameId, string elapsedHint, double exposureSec);
+
+    private void LogCaptureAborted(Guid frameId, double exposureSec) => LogCaptureAbortedCore(frameId, "part-way", exposureSec);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Capture {FrameId} abandoned: the camera was disconnected or superseded mid-capture")]
     private partial void LogCaptureAbandonedDisconnect(Guid frameId);

@@ -341,7 +341,7 @@ public sealed partial class CameraService {
         token.ThrowIfCancellationRequested();
         client.StartExposure(request.ExposureSec, true);
 
-        bool? ready;
+        ImageWait ready;
         try {
             ready = await WaitForImageReadyAsync(client, request.ExposureSec, token).ConfigureAwait(false);
         } catch (OperationCanceledException) when (token.IsCancellationRequested) {
@@ -350,8 +350,9 @@ public sealed partial class CameraService {
             TryAbortQuietly(client);
             throw;
         }
-        if (ready != true) {
-            // false = device didn't reach ImageReady in time; null = dropped/superseded. Either way
+        if (ready != ImageWait.Ready) {
+            // Timeout = device didn't reach ImageReady in time; Lost = dropped/superseded; Aborted =
+            // a REST abort landed on this live frame. Either way
             // WaitForImageReadyAsync does NOT abort, so the exposure may still be running — abort it
             // before the loop's next StartExposure (most ASCOM drivers reject a re-StartExposure
             // while one is still in flight). Quiet: a throw here (disconnected client) is ignored.
