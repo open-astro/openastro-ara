@@ -604,10 +604,10 @@ class GuideGraphPainter extends CustomPainter {
       ..color = AraColors.accentWarning
       ..strokeWidth = 1;
     final settle = Paint()
-      ..color = AraColors.accentWarning.withValues(alpha: 0.12);
+      ..color = AraColors.accentWarning.withValues(alpha: 0.08);
     final lost = Paint()
       ..color = AraColors.accentError
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 2;
     double? settleStart;
     for (final m in model.markers) {
       final x = _markerX(m, visible, xOf, slot);
@@ -631,8 +631,8 @@ class GuideGraphPainter extends CustomPainter {
         case GuideMarkerKind.starLost:
           if (x != null) {
             final y = plot.center.dy;
-            canvas.drawLine(Offset(x - 4, y - 4), Offset(x + 4, y + 4), lost);
-            canvas.drawLine(Offset(x - 4, y + 4), Offset(x + 4, y - 4), lost);
+            canvas.drawLine(Offset(x - 5, y - 5), Offset(x + 5, y + 5), lost);
+            canvas.drawLine(Offset(x - 5, y + 5), Offset(x + 5, y - 5), lost);
           }
         case GuideMarkerKind.guidingStarted:
         case GuideMarkerKind.resumed:
