@@ -182,7 +182,14 @@ class GuideMarkerNotifier extends Notifier<List<GuideMarker>> {
       final event = next.asData?.value;
       if (event == null || event.type != 'guider.event') return;
       final marker = GuideMarker.fromPayload(event.payload, now());
-      if (marker != null) add(marker);
+      if (marker == null) return;
+      add(marker);
+      // PHD2 sends StarLost instead of a GuideStep for a lost frame, so the
+      // live trace would join straight across the gap; a step with no offset
+      // breaks it at the ×, as a replayed log's lost-star row does.
+      if (marker.kind == GuideMarkerKind.starLost) {
+        ref.read(guideStepsProvider.notifier).add(GuideStep(at: marker.at));
+      }
     });
     return const [];
   }

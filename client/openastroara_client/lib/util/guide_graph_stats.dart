@@ -6,7 +6,10 @@ import '../state/guider/guide_step_state.dart';
 /// frames IN VIEW (PHD2 does the same): RMS per axis and total, the peak
 /// excursion per axis, and the RA oscillation index — the fraction of
 /// consecutive RA samples that changed sign (PHD2 flags > ~0.5 as
-/// over-aggressive, < ~0.3 as under-corrected).
+/// over-aggressive, < ~0.3 as under-corrected). The RMS here is about ZERO
+/// (the error the mount actually carried); PHD2 displays the standard
+/// deviation about the window mean, so the two agree when the mean error is
+/// near zero and diverge under a steady offset (uncompensated Dec drift).
 class GuideGraphStats {
   final double? rmsRa;
   final double? rmsDec;

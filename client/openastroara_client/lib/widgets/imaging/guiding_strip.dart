@@ -37,8 +37,9 @@ final guidingStripExpandedProvider =
 /// line, shaded settle window, star-lost marks), its window controls (frames
 /// in view, y range, arcsec / px, corrections on/off) and its stats block
 /// (RMS RA / Dec / Total, peak per axis, RA oscillation index) — all computed
-/// over the frames in view with PHD2's definitions, less the settle frames
-/// after a dither (Ara's choice: PHD2 counts them). The header stays as a
+/// over the frames in view (RMS about zero, see [GuideGraphStats]), less the
+/// settle frames after a dither (Ara's choice: PHD2 counts them). The header
+/// stays as a
 /// one-line status when the graph is collapsed. Quick-adjust tuning lives in
 /// [GuidingTuneDialog] (the Tune button).
 ///

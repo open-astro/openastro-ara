@@ -116,6 +116,13 @@ void main() {
       ws.add(WsEvent(type: 'guider.step', ts: t, seq: 2, payload: const {'ra_raw_px': 0.1}));
       await Future<void>.delayed(Duration.zero);
       expect(container.read(guideMarkersProvider).single.kind, GuideMarkerKind.dithered);
+      // A lost star breaks the live trace: the marker also drops a step with
+      // no offset into the step history, as a replayed log's lost row does.
+      ws.add(WsEvent(type: 'guider.event', ts: t, seq: 3, payload: const {'kind': 'star_lost'}));
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(guideMarkersProvider).last.kind, GuideMarkerKind.starLost);
+      final lost = container.read(guideStepsProvider).last;
+      expect((lost.raPx, lost.decPx), (null, null), reason: 'the trace breaks at the ×');
       final n = container.read(guideMarkersProvider.notifier);
       for (var i = 0; i < kGuideMarkerHistory + 5; i++) {
         n.add(GuideMarker(at: t, kind: GuideMarkerKind.starLost));
