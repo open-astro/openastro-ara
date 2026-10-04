@@ -494,6 +494,36 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  testWidgets('a guide exposure outside the dark-library range shows the '
+      'hint; one inside does not', (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        ),
+        profileApi: _FakeProfileApi(() async => const Phd2Settings(
+            guideExposureMinMs: 1000, guideExposureMaxMs: 6000)));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+    final hint = find.textContaining('Outside your dark-library range');
+    expect(hint, findsNothing, reason: 'Unset: nothing to compare against');
+
+    await tester.tap(find.text('Unset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('0.5 s').last);
+    await tester.pumpAndSettle();
+    expect(hint, findsOneWidget, reason: '0.5 s is under the 1 s dark minimum');
+    expect(find.textContaining('(1 s–6 s)'), findsOneWidget);
+
+    await tester.tap(find.text('0.5 s'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 s').last);
+    await tester.pumpAndSettle();
+    expect(hint, findsNothing, reason: '2 s is inside the range');
+    await _teardownPanel(tester, container);
+  });
+
   FilledButton applyButton(WidgetTester tester) =>
       tester.widget<FilledButton>(find
           .ancestor(
