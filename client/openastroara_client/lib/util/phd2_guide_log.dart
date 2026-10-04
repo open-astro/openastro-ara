@@ -101,7 +101,8 @@ class Phd2GuideLog {
         } else if (line.contains('Settling failed')) {
           markers.add(GuideMarker(
               at: at, kind: GuideMarkerKind.settleDone, status: 1, error: 'settle failed'));
-        } else if (line.toLowerCase().contains('star lost')) {
+        } else if (line.toLowerCase().contains('star lost') &&
+            (markers.isEmpty || markers.last.kind != GuideMarkerKind.starLost)) {
           markers.add(GuideMarker(at: at, kind: GuideMarkerKind.starLost));
         }
         continue;
@@ -110,6 +111,13 @@ class Phd2GuideLog {
       final step = _row(line, began!, scale);
       if (step == null) continue;
       lastT = step.$2;
+      // The first lost-star row of a run marks it, as a live star_lost
+      // event would; most logs carry no "star lost" INFO line for it.
+      if (step.$1.raPx == null &&
+          (steps.isEmpty || steps.last.raPx != null) &&
+          (markers.isEmpty || markers.last.kind != GuideMarkerKind.starLost)) {
+        markers.add(GuideMarker(at: step.$1.at, kind: GuideMarkerKind.starLost));
+      }
       steps.add(step.$1);
     }
     close();

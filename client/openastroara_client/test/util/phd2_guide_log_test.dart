@@ -68,9 +68,13 @@ void main() {
       GuideMarkerKind.settleDone,
       GuideMarkerKind.dithered,
       GuideMarkerKind.settling,
+      // Row 6's error code: a lost star the replay marks like a live one,
+      // though this log has no "star lost" INFO line.
+      GuideMarkerKind.starLost,
       GuideMarkerKind.settleDone,
       GuideMarkerKind.guidingStopped,
     ]);
+    expect(s.markers[5].at, s.steps[5].at);
     final dither = s.markers[3];
     expect(dither.dxPx, 3.402);
     expect(dither.dyPx, -1.056);
