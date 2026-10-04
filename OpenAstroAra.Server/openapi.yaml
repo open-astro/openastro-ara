@@ -1365,8 +1365,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/guider/restart:
     post:
       tags:

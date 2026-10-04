@@ -491,7 +491,8 @@ public static partial class EquipmentEndpoints {
                     + "disconnects and reconnects the guider's equipment (guiding stops). \"tuning\": only the "
                     + "runtime-safe messages (aggressiveness, minimum move, dec guide mode, guide exposure) — guiding "
                     + "continues. Any other value is a 400.")] string? scope, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
-            await PushGuiderAsync(scope, key, svc, ct));
+            await PushGuiderAsync(scope, key, svc, ct))
+            .ProducesProblem(StatusCodes.Status400BadRequest); // unknown ?scope
         // §63.17 manual restart — fire-and-forget systemctl restart of the guider unit (202 immediately;
         // §63.3 recovery + guider.state WS events report the outcome). Deliberately not gated on a
         // connected guider: it's most useful when the daemon is hung.
