@@ -1540,6 +1540,66 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/rotation-assist/start:
+    post:
+      tags:
+        - Rotation assist
+      summary: Start the by-hand rotation readout toward a position angle.
+      operationId: StartRotationAssist
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotationAssistStartRequestDto'
+        required: true
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/rotation-assist/stop:
+    post:
+      tags:
+        - Rotation assist
+      summary: Stop the by-hand rotation readout.
+      operationId: StopRotationAssist
+      responses:
+        '204':
+          description: No Content
+  /api/v1/rotation-assist/state:
+    get:
+      tags:
+        - Rotation assist
+      summary: 'The by-hand rotation readout: target, latest solved angle, delta, history.'
+      operationId: GetRotationAssist
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotationAssistStatusDto'
+  /api/v1/rotation-assist/frame:
+    get:
+      tags:
+        - Rotation assist
+      summary: 'The latest solved frame of the by-hand rotation readout, rendered (204 until one).'
+      operationId: GetRotationAssistFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
   /api/v1/sequences:
     get:
       tags:
@@ -7741,6 +7801,13 @@ components:
             - number
             - string
           format: double
+        in_focus_hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     FocusCalibrationSampleDto:
       required:
         - focuser_position
@@ -8484,6 +8551,24 @@ components:
           format: int32
         has_frame:
           type: boolean
+        expected_hfr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        plate_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        stop_reason:
+          type:
+            - 'null'
+            - string
     GuiderCalibrationEntryDto:
       type: object
       properties:
@@ -9970,6 +10055,156 @@ components:
           type: string
         origin:
           type: string
+    RotationAssistSampleDto:
+      required:
+        - seq
+        - solved_utc
+        - solved_position_angle_deg
+        - delta_deg
+      type: object
+      properties:
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        solved_utc:
+          type: string
+          format: date-time
+        solved_position_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        delta_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        pixel_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        flipped:
+          type: boolean
+          default: false
+        frame_width:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        frame_height:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+    RotationAssistStartRequestDto:
+      required:
+        - position_angle_deg
+      type: object
+      properties:
+        position_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    RotationAssistStatusDto:
+      required:
+        - active
+        - state
+        - target_position_angle_deg
+        - tolerance_deg
+        - seq
+        - started_utc
+        - latest
+        - recent
+        - within_tolerance
+        - error
+        - consecutive_failures
+      type: object
+      properties:
+        active:
+          type: boolean
+        state:
+          type: string
+        target_position_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        tolerance_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        latest:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/RotationAssistSampleDto'
+        recent:
+          type: array
+          items:
+            $ref: '#/components/schemas/RotationAssistSampleDto'
+        within_tolerance:
+          type: boolean
+        error:
+          type:
+            - 'null'
+            - string
+        consecutive_failures:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        has_frame:
+          type: boolean
+          default: false
+        frame_seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+          default: 0
     RotatorMoveRequestDto:
       required:
         - target_angle_deg
@@ -10443,6 +10678,13 @@ components:
             - number
             - string
           format: double
+        frames_captured:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     SequenceShareDto:
       required:
         - sequence_id
@@ -11721,6 +11963,7 @@ tags:
   - name: Health
   - name: Equipment
   - name: Autofocus
+  - name: Rotation assist
   - name: Sequences
   - name: Calibration
   - name: Mosaics

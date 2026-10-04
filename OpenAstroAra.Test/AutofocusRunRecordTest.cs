@@ -117,7 +117,7 @@ namespace OpenAstroAra.Test {
             tracker.AddProbe("smart", StartPosition, 1.95, 42, kept: true);
             tracker.AddProbe("smart", StartPosition - 150, 1.7, 42, kept: true);
             var smart = tracker.Snapshot();
-            Assert.That((smart.CompletedSteps, smart.TotalSteps), Is.EqualTo((2, 3)), "the Progress tile reads 2 / 3, not 0 / 9");
+            Assert.That((smart.CompletedSteps, smart.TotalSteps), Is.EqualTo((2, AutofocusSweepService.SmartMaxShots)), "the Progress tile reads 2 / 5, not 0 / 9");
 
             tracker.FallBackToClassic(9);
             var classic = tracker.Snapshot();

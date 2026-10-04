@@ -330,8 +330,8 @@ public partial class Program {
         builder.Services.AddSingleton<GuiderRecoveryCoordinator>();
         // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's
         // IGuiderMediator (§8.1; the mediator alias is registered below, replacing HeadlessGuiderMediator).
-        builder.Services.AddSingleton<GuiderService>(sp =>
-            new GuiderService(
+        builder.Services.AddSingleton<GuiderService>(sp => {
+            var guider = new GuiderService(
                 sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
                 sp.GetRequiredService<GuiderRecoveryCoordinator>(),
                 sp.GetRequiredService<ILogger<GuiderService>>(),
@@ -358,7 +358,20 @@ public partial class Program {
                     }
                     var name = repo.List().Profiles.FirstOrDefault(p => p.Id == id.Value)?.Name;
                     return (id.Value, name);
-                }));
+                });
+            // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
+            // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
+            // and the guider refuses to guide under it. Resolved lazily: the focus service needs
+            // this very guider to construct.
+            guider.ReleaseGuideCameraAsync = async () => {
+                if (sp.GetService<IGuideFocusService>() is { IsActive: true } focus) {
+                    await focus.StopAsync().ConfigureAwait(false);
+                }
+            };
+            // ...but never the lease a running polar alignment holds (resolved lazily for the same reason).
+            guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
+            return guider;
+        });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
         // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +
@@ -392,7 +405,8 @@ public partial class Program {
                 sp.GetRequiredService<IGuideFrameDecoder>(),
                 () => (sp.GetService<IPolarAlignService>() as PolarAlignService)?.IsActive ?? false,
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
-                syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null));
+                syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null,
+                optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>())));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
@@ -946,7 +960,24 @@ public partial class Program {
                 // §59.9 — autofocus defers while §51 diagnostics carries an open sky-condition issue.
                 autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>(),
                 // §48.3 — the auto-exposure flat set, so FlatPanelFlats executes for real.
-                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>()));
+                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(),
+                // Rotate camera by hand — the plate-solve readout for rigs without a rotator.
+                rotationAssist: sp.GetRequiredService<IRotationAssistService>()));
+        // The by-hand rotation readout (a run's Rotate camera by hand step on a rig without a rotator):
+        // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done".
+        builder.Services.AddSingleton<IRotationAssistService>(sp =>
+            new RotationAssistService(
+                // Development only (SyntheticSky): the angle comes from a file instead of a plate solve.
+                sp.GetService<SyntheticSkySettings>() is not null
+                    ? new SyntheticPositionAngleSolver(profileDir)
+                    : new RotationFrameSolver(
+                        sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                        sp.GetRequiredService<IProfileStore>(),
+                        sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>(),
+                        sp.GetRequiredService<IAnalysisFrameSource>(),
+                        sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()),
+                () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
@@ -986,6 +1017,7 @@ public partial class Program {
 
         // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
         app.MapAutofocusEndpoints();
+        app.MapRotationAssistEndpoints();
 
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();
@@ -1224,6 +1256,18 @@ public partial class Program {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes and guide-camera focus frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
     private static partial void LogSyntheticSky(ILogger logger, string envVar, int best, double hfr, double scale);
+
+    /// <summary>The guide camera's optics for the live-focus target: an off-axis guider sees the main
+    /// telescope's focal length and aperture with the guide camera's pixels; a guide scope uses the
+    /// §63.19 guide focal length (its aperture is not in the profile, so diffraction is left out).</summary>
+    internal static (double FocalLengthMm, double PixelSizeUm, double ApertureMm)? GuideOpticsFor(IProfileStore store) {
+        var phd2 = store.GetPhd2Settings();
+        if (string.Equals(phd2.GuiderSetupType, "oag", StringComparison.OrdinalIgnoreCase)) {
+            var optics = store.GetOpticsSettings();
+            return (optics.FocalLengthMm, phd2.GuidePixelSize, optics.ApertureMm);
+        }
+        return (phd2.GuideFocalLength, phd2.GuidePixelSize, 0);
+    }
 
     /// <summary>Logs the boot-time CFITSIO probe (#1120). Never throws.</summary>
     internal static void LogCfitsioProbe(ILogger logger, OpenAstroAra.Fits.FitsLibraryProbeResult result, string installHint) {

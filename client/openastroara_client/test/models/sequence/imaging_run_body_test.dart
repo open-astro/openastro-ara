@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/rig_capabilities.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/slew_target_body.dart';
 
@@ -333,6 +334,95 @@ void main() {
       expect(defaultFrameCount(120), 60);
       expect(defaultFrameCount(120, remainingDarkHours: 0), 60);
       expect(defaultFrameCount(0, remainingDarkHours: 4), 60);
+    });
+  });
+
+  group('buildTargetBlock is cooked from the rig', () {
+    // The night of 2026-10-02: a rig with a guider got a run without guiding.
+    // Every device-bound step is gated on the rig, whatever the caller asks.
+    List<String?> types(Map<String, dynamic> node) =>
+        childrenOf(node).map((c) => c[r'$type'] as String?).toList();
+    Map<String, dynamic> block(RigCapabilities rig,
+            {List<FilterPlanStep>? plan, String? filter}) =>
+        buildTargetBlock(
+          raDeg: 1,
+          decDeg: 2,
+          targetName: 'Veil',
+          exposureSeconds: 60,
+          frameCount: 10,
+          filterName: filter,
+          filterPlan: plan,
+          startGuiding: true,
+          ditherEveryNExposures: 2,
+          autofocusEveryNExposures: 30,
+          rig: rig,
+        );
+
+    test('a bare rig gets slew + loop only: no AF, no guiding, no filter', () {
+      final b = block(RigCapabilities.nothing, filter: 'Ha');
+      final t = types(b);
+      expect(t, isNot(contains(runAutofocusType)));
+      expect(t, isNot(contains(startGuidingType)));
+      expect(t, isNot(contains(switchFilterType)));
+      expect(t, isNot(contains(waitForUserType)));
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(triggersOf(loop), isEmpty, reason: 'no focuser → no AF trigger; no guider → no dither');
+    });
+
+    test('the full rig gets everything the caller asked for', () {
+      final b = block(RigCapabilities.everything, filter: 'Ha');
+      final t = types(b);
+      expect(t, contains(runAutofocusType));
+      expect(t, contains(startGuidingType));
+      expect(t, contains(switchFilterType));
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(triggersOf(loop).map((x) => x[r'$type']),
+          containsAll([autofocusAfterExposuresType, ditherAfterExposuresType]));
+    });
+
+    test('a guider alone adds guiding + dither and nothing else', () {
+      final b = block(const RigCapabilities(guider: true));
+      expect(types(b), contains(startGuidingType));
+      expect(types(b), isNot(contains(runAutofocusType)));
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(triggersOf(loop).map((x) => x[r'$type']), [ditherAfterExposuresType]);
+    });
+
+    test('a framing angle without a rotator adds Rotate camera by hand before the centre', () {
+      final b = buildTargetBlock(
+        raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10,
+        positionAngleDeg: -61,
+        rig: const RigCapabilities(focuser: true),
+      );
+      final t = types(b);
+      // Slew to the target first (the readout needs the target's field), turn
+      // by hand there, then Center and Rotate re-centres.
+      expect(t.indexOf(slewScopeToRaDecType), 0);
+      expect(t.indexOf(rotateCameraByHandType), 1);
+      expect(t.indexOf(centerAndRotateType), 2);
+      expect(childrenOf(b)[1]['PositionAngle'], 299.0);
+      expect(childrenOf(b)[0]['Coordinates'], childrenOf(b)[2]['Coordinates']);
+      // With a rotator the step is not needed; without an angle neither is.
+      expect(types(block(RigCapabilities.everything)), isNot(contains(rotateCameraByHandType)));
+      final noAngle = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, rig: RigCapabilities.nothing);
+      expect(types(noAngle), isNot(contains(rotateCameraByHandType)));
+      final withRotator = buildTargetBlock(
+        raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, positionAngleDeg: 10,
+        rig: const RigCapabilities(rotator: true),
+      );
+      expect(types(withRotator), isNot(contains(rotateCameraByHandType)));
+      expect(types(withRotator), isNot(contains(slewScopeToRaDecType)));
+      expect(types(withRotator), contains(centerAndRotateType));
+    });
+
+    test('a multi-filter plan on a rig without a wheel swaps by hand', () {
+      const plan = [
+        FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 2),
+        FilterPlanStep(filterName: 'OIII', exposureSeconds: 300, frameCount: 2),
+      ];
+      final b = block(const RigCapabilities(focuser: true), plan: plan);
+      expect(types(b).where((t) => t == waitForUserType), hasLength(2));
+      expect(types(b), isNot(contains(switchFilterType)));
     });
   });
 

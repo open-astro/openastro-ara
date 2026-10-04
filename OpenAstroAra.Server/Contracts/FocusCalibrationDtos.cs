@@ -85,9 +85,15 @@ public sealed record FocusCalibrationSampleDto(
 /// <param name="CurveHalfWidthSteps">§59.8 — the focuser offset from best focus at which the calibrating
 /// sweep's fitted HFR doubled (the V's half-width, in focuser steps); the next sweep's automatic step size is
 /// sized from it. Null on a calibration recorded before this field existed or when the curve never doubled.</param>
+/// <param name="InFocusHfr">The HFR the calibrating sweep MEASURED on its confirmation frame at best focus
+/// (the fit's predicted minimum when no confirmation frame was usable). Smart Focus judges "already in focus"
+/// against this, not against a minimum re-fitted from the samples: on 2026-10-03 a lumpy 15-point curve
+/// re-fitted to 1.62 px while the sweep had measured 0.96, so every shot under 1.70 passed as focused.
+/// Null on a calibration recorded before this field existed.</param>
 public sealed record FocusCalibrationDto(
     IReadOnlyList<FocusCalibrationSampleDto> Samples,
     DateTimeOffset CalibratedUtc,
     double? FocuserTemperatureC,
     string? Filter,
-    double? CurveHalfWidthSteps = null);
+    double? CurveHalfWidthSteps = null,
+    double? InFocusHfr = null);

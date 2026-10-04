@@ -112,6 +112,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async System.Threading.Tasks.Task Mediator_StartGuiding_hands_the_guide_camera_back_first_and_tolerates_a_failing_release() {
+            // The live-focus loop holds the guider's polar-align lease; a guide request under it is
+            // refused ("polar-alignment session in progress", 2026-10-03). The release hook runs
+            // before guiding and a fault in it never blocks the attempt.
+            using var svc = NewService();
+            var released = 0;
+            svc.ReleaseGuideCameraAsync = () => { released++; return System.Threading.Tasks.Task.CompletedTask; };
+            await svc.ReleaseGuideCameraQuietlyAsync();
+            Assert.That(released, Is.EqualTo(1));
+
+            svc.ReleaseGuideCameraAsync = () => throw new InvalidOperationException("loop stuck");
+            await Assert.DoesNotThrowAsync(() => svc.ReleaseGuideCameraQuietlyAsync());
+
+            // Not connected: no guider to drive, so nothing is released either.
+            released = 0;
+            svc.ReleaseGuideCameraAsync = () => { released++; return System.Threading.Tasks.Task.CompletedTask; };
+            Assert.That(await svc.StartGuiding(false, null!, CancellationToken.None), Is.False);
+            Assert.That(released, Is.Zero);
+        }
+
+        [Test]
+        public void Start_guiding_releases_a_stale_pa_lease_but_never_a_running_polar_alignments() {
+            using var svc = NewService();
+            Assert.That(svc.ShouldReleasePaLease(true), Is.True, "nothing wired: a lease the guider reports is stale");
+            Assert.That(svc.ShouldReleasePaLease(false), Is.False);
+            Assert.That(svc.ShouldReleasePaLease(null), Is.False);
+
+            var aligning = true;
+            svc.PolarAlignActive = () => aligning;
+            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease");
+            aligning = false;
+            Assert.That(svc.ShouldReleasePaLease(true), Is.True);
+        }
+
+        [Test]
         public async System.Threading.Tasks.Task Mediator_guide_ops_are_noop_false_when_not_connected() {
             using var svc = NewService();
             // Unlike the REST StartGuidingAsync (which throws), the mediator path returns false so the

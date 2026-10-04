@@ -256,5 +256,33 @@ namespace OpenAstroAra.Test {
         public void EffectiveBayerPattern_normalizes_offsets_modulo_two(int ox, int oy, string expected) {
             Assert.That(CameraService.EffectiveBayerPattern(ox, oy), Is.EqualTo(expected));
         }
+    
+
+        private static CameraCapabilitiesDto Caps(int minGain, int maxGain, int minOffset, int maxOffset) =>
+            new(100, 100, 3.76, false, true, false, minGain, maxGain, minOffset, maxOffset, 1, 1, 1, 1, 0.001, 3600);
+
+        private static ImagingDefaultsDto Defaults(int gain, int offset) =>
+            new(ExposureSeconds: 5, Gain: gain, Offset: offset, Bin: 1, FrameKind: "light",
+                CoolerTargetC: -10, CoolerRampCPerMin: 2, WarmupAtSessionEnd: true);
+
+        [Test]
+        public void AnalysisGainOffset_applies_the_profile_imaging_gain_and_offset() {
+            // The 2026-10-03 night: the profile said gain 100 / offset 50, the camera sat at its
+            // power-on 0 / 3, and the autofocus probes were shot there.
+            Assert.That(CameraService.AnalysisGainOffset(Defaults(100, 50), Caps(0, 600, 0, 255)), Is.EqualTo(((int?)100, (int?)50)));
+            Assert.That(CameraService.AnalysisGainOffset(Defaults(0, 0), Caps(0, 600, 0, 255)), Is.EqualTo(((int?)0, (int?)0)),
+                "zero is a real gain, not 'unset'");
+        }
+
+        [Test]
+        public void AnalysisGainOffset_leaves_the_camera_alone_without_a_profile_or_outside_its_range() {
+            Assert.That(CameraService.AnalysisGainOffset(null, Caps(0, 600, 0, 255)), Is.EqualTo(((int?)null, (int?)null)));
+            Assert.That(CameraService.AnalysisGainOffset(Defaults(900, 50), Caps(0, 600, 0, 255)), Is.EqualTo(((int?)null, (int?)50)),
+                "a gain written for another camera is dropped, the offset still applies");
+            Assert.That(CameraService.AnalysisGainOffset(Defaults(100, 300), Caps(0, 600, 0, 255)), Is.EqualTo(((int?)100, (int?)null)));
+            Assert.That(CameraService.AnalysisGainOffset(Defaults(100, 50), Caps(0, 0, 0, 0)), Is.EqualTo(((int?)100, (int?)50)),
+                "a zero range means the bounds read failed: the value goes through, as StartExposureAsync treats it");
+            Assert.That(CameraService.AnalysisGainOffset(Defaults(100, 50), null), Is.EqualTo(((int?)100, (int?)50)));
+        }
     }
 }

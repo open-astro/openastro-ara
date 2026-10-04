@@ -78,6 +78,10 @@ public interface IFrameRepository {
     /// </summary>
     Task EndSessionAsync(Guid sessionId, CancellationToken ct);
 
+    /// <summary>Frames filed under <paramref name="sessionId"/> so far — the live run status's frame counter.
+    /// Default 0 so fakes that don't track frames keep compiling.</summary>
+    Task<int> CountSessionFramesAsync(Guid sessionId, CancellationToken ct) => Task.FromResult(0);
+
     Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct);
     Task<FrameDto?> GetAsync(Guid id, CancellationToken ct);
     /// <summary>

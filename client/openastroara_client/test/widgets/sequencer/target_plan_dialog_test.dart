@@ -36,6 +36,7 @@ void main() {
       WidgetTester tester, {
       required List<PlanningFilter> filters,
       required Future<void> Function(WidgetTester) interact,
+      bool guider = true,
     }) async {
       TargetPlanChoice? result;
       final container = ProviderContainer();
@@ -56,6 +57,7 @@ void main() {
                     raDeg: 311.0,
                     decDeg: 31.7,
                     remainingDarkHours: 6,
+                    guiderAvailable: guider,
                   );
                 },
                 child: const Text('go'),
@@ -90,6 +92,17 @@ void main() {
       });
     });
 
+    testWidgets('no guider on the rig: no toggle, no guiding', (tester) async {
+      final choice = await open(tester, filters: shoSet, guider: false,
+          interact: (t) async {
+        expect(find.text('Guide with OpenAstro Guider'), findsNothing);
+        expect(find.textContaining('No guider on this rig'), findsOneWidget);
+        await t.tap(find.text('Create run'));
+      });
+      expect(choice, isNotNull);
+      expect(choice!.guide, isFalse);
+    });
+
     testWidgets('SHO pick returns a 3-step plan with guiding', (tester) async {
       final choice = await open(tester, filters: shoSet, interact: (t) async {
         await t.tap(find.text('Narrowband · SHO'));
@@ -97,7 +110,7 @@ void main() {
         await t.tap(find.text('Create run'));
       });
       expect(choice, isNotNull);
-      expect(choice!.guide, isTrue); // OpenAstro Guider dither default is on
+      expect(choice!.guide, isTrue); // the rig has a guider → guide by default
       expect(choice.filterPlan!.map((s) => s.filterName), ['Ha', 'OIII', 'SII']);
       for (final step in choice.filterPlan!) {
         expect(step.exposureSeconds, greaterThan(0));

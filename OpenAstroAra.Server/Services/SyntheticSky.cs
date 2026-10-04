@@ -161,3 +161,42 @@ public sealed class SyntheticGuideFrames {
         return (SyntheticSky.Render(Width, Height, hfr, seed: 11, stars: 25, frameSeed: Interlocked.Increment(ref _frame)), Width, Height);
     }
 }
+
+/// <summary>
+/// Development only (SyntheticSky): the by-hand rotation readout's solver without a sky. The "camera
+/// angle" is read from <c>synthetic-position-angle</c> in the profile directory on every solve (one
+/// number, degrees); editing the file stands in for turning the camera. Missing or unreadable → the
+/// solve "fails", which exercises the readout's failure path too.
+/// </summary>
+public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
+    public const string FileName = "synthetic-position-angle";
+    private readonly string _path;
+
+    public SyntheticPositionAngleSolver(string profileDir) {
+        _path = System.IO.Path.Combine(profileDir, FileName);
+    }
+
+    private int _frameSeed;
+
+    public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {
+        await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(false); // a capture + solve takes a moment
+        string text;
+        try {
+            text = (await System.IO.File.ReadAllTextAsync(_path, ct).ConfigureAwait(false)).Trim();
+        } catch (System.IO.IOException) {
+            return null;
+        } catch (UnauthorizedAccessException) {
+            return null;
+        }
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pa)) {
+            return null;
+        }
+        // A rendered star field stands in for the capture (new noise each solve so the picture visibly updates).
+        const int width = 1024, height = 683;
+        var pixels = SyntheticSky.Render(width, height, hfr: 1.6, seed: 11, stars: 140, frameSeed: ++_frameSeed);
+        var frame = new AnalysisFrame(pixels, width, height, DateTimeOffset.UtcNow);
+        // A pixel scale that gives the rendered 1024 px frame a RedCat-sized field (≈2.6° × 1.7°), so the
+        // scope box on the planetarium is the size a real frame's would be.
+        return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 9.0, Flipped: false, frame);
+    }
+}

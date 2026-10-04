@@ -583,9 +583,9 @@ public static partial class EquipmentEndpoints {
         async (tick, ct) => {
             var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
                 if (s.MaxProgress > 0 && s.Progress > 0) {
-                    // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
-                    // totalProbes probes — scale whatever denominator the run declares onto the
-                    // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
+                    // §59.2 mode-aware progress: a Smart run reports up to SmartMaxShots (5) shots,
+                    // Classic reports totalProbes probes — scale whatever denominator the run declares
+                    // onto the job's fixed total so a Smart shot reads as a fraction of 5, not of 9. The job
                     // service's monotone tick guard keeps a Smart→Classic fallback sane (the
                     // fraction never goes backwards).
                     tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));

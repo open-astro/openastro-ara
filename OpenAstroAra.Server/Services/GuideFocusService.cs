@@ -15,28 +15,33 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
-using OpenAstroAra.Image.FileFormat.FITS;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>Decodes a fetched guide frame (FITS on disk) into 16-bit pixels. A seam so the loop's
-/// measurement path is unit-testable without CFITSIO; the production decoder reads through
-/// <see cref="CFitsioFITSReader"/>.</summary>
+/// measurement path is unit-testable without CFITSIO; the production decoder reads through the
+/// daemon's own <see cref="OpenAstroAra.Fits.FitsImage"/> binding (the one polar alignment uses for
+/// the same guider frames), never the NINA-era reader whose <c>cfitsionative.dll</c> is not shipped
+/// on the Pi — every live-focus frame failed to decode there (2026-10-03).</summary>
 public interface IGuideFrameDecoder {
     (ushort[] Pixels, int Width, int Height) Decode(string path);
 }
 
 public sealed class CfitsioGuideFrameDecoder : IGuideFrameDecoder {
     public (ushort[] Pixels, int Width, int Height) Decode(string path) {
-        using var reader = new CFitsioFITSReader(path);
-        return (reader.ReadAllPixelsAsUshort(), reader.Width, reader.Height);
+        // The guider writes 16-bit unsigned FITS; ReadImageData16 asks CFITSIO for TUSHORT, so a
+        // float or signed frame still comes back scaled into the ushort plane.
+        using var fits = OpenAstroAra.Fits.FitsImage.Open(path);
+        var (width, height) = fits.GetDimensions();
+        return (fits.ReadImageData16(), width, height);
     }
 }
 
@@ -81,6 +86,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private readonly ILogger<GuideFocusService> _logger;
     // Development only (SyntheticSky): frames rendered locally instead of borrowed through the guider.
     private readonly Func<(ushort[] Pixels, int Width, int Height)>? _syntheticFrames;
+    // The guide optics (focal length mm, pixel µm, aperture mm) read from the profile at status time.
+    private readonly Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? _optics;
     private readonly SemaphoreSlim _opLock = new(1, 1);
     private readonly object _gate = new();
 
@@ -93,6 +100,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private long? _bestSeq;
     private readonly Queue<GuideFocusSampleDto> _recent = new();
     private string? _error;
+    private string? _stopReason;
+    private bool _inFocusHeld;
     private int _consecutiveFailures;
     private byte[]? _frame;
     private long _frameSeq;
@@ -106,13 +115,57 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             IGuideFrameDecoder? decoder = null,
             Func<bool>? polarAlignActive = null,
             ILogger<GuideFocusService>? logger = null,
-            Func<(ushort[] Pixels, int Width, int Height)>? syntheticFrames = null) {
+            Func<(ushort[] Pixels, int Width, int Height)>? syntheticFrames = null,
+            Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? optics = null) {
         _guider = guider ?? throw new ArgumentNullException(nameof(guider));
         _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
         _decoder = decoder ?? new CfitsioGuideFrameDecoder();
         _polarAlignActive = polarAlignActive;
         _logger = logger ?? NullLogger<GuideFocusService>.Instance;
         _syntheticFrames = syntheticFrames;
+        _optics = optics;
+    }
+
+    /// <summary>Seeing FWHM assumed for the expected-HFR target; a typical backyard night.</summary>
+    internal const double AssumedSeeingArcsec = 3.0;
+    /// <summary>What the §59 detector reads for a star smaller than a pixel: the HFR floor on an
+    /// undersampled guide camera (0.76 px measured on a 6.4"/px guide scope, 2026-10-03).</summary>
+    internal const double DetectorHfrFloorPx = 0.7;
+    /// <summary>Stars used for the per-frame HFR: the brightest few persist frame to frame, so the
+    /// readout no longer jumps when faint stars flicker across the detection threshold.</summary>
+    internal const int HfrStarCount = 12;
+    /// <summary>How far above the expected HFR still counts as in focus (the client uses the same).</summary>
+    internal const double TargetTolerance = 1.3;
+    /// <summary>The loop stops itself once the MEDIAN HFR over this many frames is at or under the target:
+    /// a median, not a streak, because seeing throws single frames well above it (an OAG at 3000 mm
+    /// would never hold ten clean frames in a row).</summary>
+    internal const int InFocusHoldFrames = 10;
+    /// <summary>The stop reason a self-ended loop reports.</summary>
+    internal const string StopReasonInFocus = "in_focus";
+
+    /// <summary>
+    /// The HFR an in-focus star should read: seeing and the aperture's diffraction added in quadrature,
+    /// scaled to pixels (HFR ≈ FWHM / 2 for a Gaussian), never below the detector's floor. Null without
+    /// a focal length and pixel size. Pure.
+    /// </summary>
+    internal static (double ExpectedHfrPx, double PlateScaleArcsec)? ExpectedInFocusHfr(double focalLengthMm, double pixelSizeUm, double apertureMm) {
+        if (!(focalLengthMm > 0) || !(pixelSizeUm > 0) || !double.IsFinite(focalLengthMm) || !double.IsFinite(pixelSizeUm)) {
+            return null;
+        }
+        var scale = 206.265 * pixelSizeUm / focalLengthMm;
+        // Airy FWHM ≈ 1.02 λ/D at 550 nm, in arcseconds.
+        var airy = apertureMm > 0 ? 1.02 * 550e-9 / (apertureMm / 1000.0) * 206265.0 : 0.0;
+        var fwhm = Math.Sqrt(AssumedSeeingArcsec * AssumedSeeingArcsec + airy * airy);
+        var hfr = Math.Max(DetectorHfrFloorPx, 0.5 * fwhm / scale);
+        return (Math.Round(hfr, 2), Math.Round(scale, 2));
+    }
+
+    private (double ExpectedHfrPx, double PlateScaleArcsec)? ExpectedQuietly() {
+        try {
+            return _optics?.Invoke() is { } o ? ExpectedInFocusHfr(o.FocalLengthMm, o.PixelSizeUm, o.ApertureMm) : null;
+        } catch (Exception ex) when (ex is InvalidOperationException or IOException) {
+            return null;
+        }
     }
 
     public bool IsActive {
@@ -169,6 +222,13 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 _latest = null;
                 _bestHfr = null;
                 _bestSeq = null;
+                // A fresh run: the frame counter, the trend and the picture all start over, so the
+                // frames from before a refocus cannot sit in the chart or hold the "best".
+                _seq = 0;
+                _frame = null;
+                _frameSeq = 0;
+                _stopReason = null;
+                _inFocusHeld = false;
                 _recent.Clear();
                 _error = null;
                 _consecutiveFailures = 0;
@@ -221,6 +281,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     }
 
     public GuideFocusStatusDto GetStatus() {
+        var expected = ExpectedQuietly();
         lock (_gate) {
             return new GuideFocusStatusDto(
                 Active: _state == "running",
@@ -234,7 +295,10 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 Recent: _recent.ToArray(),
                 Error: _error,
                 ConsecutiveFailures: _consecutiveFailures,
-                HasFrame: _frame is not null);
+                HasFrame: _frame is not null,
+                ExpectedHfr: expected?.ExpectedHfrPx,
+                PlateScaleArcsec: expected?.PlateScaleArcsec,
+                StopReason: _stopReason);
         }
     }
 
@@ -269,6 +333,17 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                         ? await SyntheticSampleAsync(request, ct).ConfigureAwait(false)
                         : await CaptureAndMeasureAsync(guider, request, workDir, ct).ConfigureAwait(false);
                     Record(sample.Sample, sample.Jpeg);
+                    if (InFocusHeld(ExpectedQuietly()?.ExpectedHfrPx)) {
+                        double median;
+                        lock (_gate) {
+                            _state = "stopped";
+                            _stopReason = StopReasonInFocus;
+                            median = MedianRecentHfr(InFocusHoldFrames);
+                        }
+                        LogInFocusStopped(InFocusHoldFrames, median);
+                        await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+                        return;
+                    }
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
@@ -355,7 +430,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     }
 
     /// <summary>Measure one guide frame with the §59 star detector. Pure — unit-tested on synthetic stars.
-    /// HFR is the detector's average over every star it found; a starless frame reads HFR 0, Stars 0.</summary>
+    /// HFR is the median over the <see cref="HfrStarCount"/> brightest stars (the detector sorts
+    /// brightest-first); a starless frame reads HFR 0, Stars 0.</summary>
     internal static GuideFocusSampleDto Measure(ushort[] pixels, int width, int height, long seq, DateTimeOffset at) {
         var result = StarDetector.Detect(
             pixels, width, height,
@@ -367,15 +443,70 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             fwhmSum += star.FWHM;
         }
         var stars = result.DetectedStars;
-        var hfr = stars > 0 && double.IsFinite(result.AverageHFR) && result.AverageHFR > 0 ? result.AverageHFR : 0.0;
+        var hfr = stars > 0 ? MedianHfrOfBrightest(result.StarList, HfrStarCount) : 0.0;
+        if (!double.IsFinite(hfr) || hfr < 0) {
+            hfr = 0.0;
+        }
         var fwhm = result.StarList.Count > 0 ? fwhmSum / result.StarList.Count : 0.0;
         return new GuideFocusSampleDto(seq, at, Math.Round(hfr, 3), stars, Math.Round(peak, 0), Math.Round(double.IsFinite(fwhm) ? fwhm : 0.0, 3));
+    }
+
+    internal static double MedianHfrOfBrightest(IReadOnlyList<DetectedStar> brightestFirst, int count) {
+        var n = Math.Min(count, brightestFirst.Count);
+        if (n == 0) {
+            return 0.0;
+        }
+        var hfrs = new double[n];
+        for (int i = 0; i < n; i++) {
+            hfrs[i] = brightestFirst[i].HFR;
+        }
+        Array.Sort(hfrs);
+        return n % 2 == 1 ? hfrs[n / 2] : 0.5 * (hfrs[n / 2 - 1] + hfrs[n / 2]);
     }
 
     private long NextSeq() {
         lock (_gate) {
             return ++_seq;
         }
+    }
+
+    /// <summary>True once the median HFR of the last <see cref="InFocusHoldFrames"/> measurable frames
+    /// (≥ 2 stars) is at or under <paramref name="expectedHfr"/> × <see cref="TargetTolerance"/>.
+    /// Sticky for the run so the loop stops exactly once.</summary>
+    internal bool InFocusHeld(double? expectedHfr) {
+        if (expectedHfr is not > 0) {
+            return false;
+        }
+        lock (_gate) {
+            if (_inFocusHeld) {
+                return true;
+            }
+            if (_recent.Count < InFocusHoldFrames) {
+                return false;
+            }
+            var median = MedianRecentHfr(InFocusHoldFrames);
+            _inFocusHeld = median > 0 && median <= expectedHfr.Value * TargetTolerance;
+            return _inFocusHeld;
+        }
+    }
+
+    // Caller holds _gate. Median over the last `count` samples with ≥ 2 stars; 0 when fewer than
+    // `count` of them are measurable (a starless stretch must not read as focus).
+    private double MedianRecentHfr(int count) {
+        var hfrs = new List<double>(count);
+        foreach (var s in _recent.Reverse()) {
+            if (s.Stars >= 2 && s.Hfr > 0) {
+                hfrs.Add(s.Hfr);
+                if (hfrs.Count == count) {
+                    break;
+                }
+            }
+        }
+        if (hfrs.Count < count) {
+            return 0;
+        }
+        hfrs.Sort();
+        return count % 2 == 1 ? hfrs[count / 2] : 0.5 * (hfrs[count / 2 - 1] + hfrs[count / 2]);
     }
 
     internal void Record(GuideFocusSampleDto sample, byte[]? jpeg) {
@@ -435,6 +566,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Guide-camera focus loop stopped.")]
     private partial void LogStopped();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Guide focus: in focus — the median HFR over the last {Frames} frames is {Median:0.00} px, at or under the target; loop stopped")]
+    private partial void LogInFocusStopped(int frames, double median);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Guide-camera focus loop: the in-flight capture did not finish within the stop grace — a late SingleFrameComplete may still arrive.")]
     private partial void LogStopTimedOut();

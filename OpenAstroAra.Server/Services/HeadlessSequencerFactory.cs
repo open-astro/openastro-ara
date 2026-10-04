@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
@@ -119,6 +120,43 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     public T GetTrigger<T>() where T : ISequenceTrigger =>
         (T)(Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
 
+        /// <summary>
+        /// §38k-7 / §38.10a — the condition prototypes. LoopCondition and TimeSpanCondition are
+        /// parameterless; every client-generated target block carries an AboveHorizonCondition and
+        /// the editor offers AltitudeCondition (unregistered, both degraded to
+        /// UnknownSequenceCondition, whose failed check skipped the whole target block). They read
+        /// the site (and custom horizon) from the store-backed profile.
+        /// </summary>
+        internal static List<ISequenceCondition> DefaultConditions(IProfileService profileService) {
+            var conditions = new List<ISequenceCondition> {
+                new LoopCondition(),
+                new TimeSpanCondition(),
+            };
+            // AboveHorizonCondition's constructor seeds its offset, which runs a NOVAS transform
+            // (WaitLoopData.Offset → SetTargetAltitudeWithHorizon). On a daemon without the
+            // astrometry natives that throws, and the prototype is built at DI time — so the
+            // whole daemon failed to start (CI's runtime smoke, Docker). Skip the prototype
+            // instead: Program.cs already warns at boot that altitude conditions will fail until
+            // the natives are installed, and a sequence carrying one degrades to
+            // UnknownSequenceCondition as it did before §38.10a.
+            TryAddCondition(conditions, () => new AboveHorizonCondition(profileService));
+            TryAddCondition(conditions, () => new AltitudeCondition(profileService));
+            return conditions;
+        }
+
+        /// <summary>Adds the prototype unless constructing it faults on a missing or mismatched native
+        /// library (absent, wrong architecture, or missing an entry point).</summary>
+        internal static bool TryAddCondition(List<ISequenceCondition> conditions, Func<ISequenceCondition> make) {
+            try {
+                conditions.Add(make());
+                return true;
+            } catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException
+                    or EntryPointNotFoundException or BadImageFormatException) {
+                return false;
+            }
+        }
+
+
     /// <summary>
     /// Build a factory pre-populated with the equipment-independent
     /// container prototypes — <see cref="SequenceRootContainer"/>,
@@ -152,7 +190,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IAutofocusExecutor? autofocusExecutor = null,
             IImageHistory? imageHistory = null,
             IAutofocusConditionGate? autofocusConditionGate = null,
-            IFlatCaptureExecutor? flatCaptureExecutor = null) {
+            IFlatCaptureExecutor? flatCaptureExecutor = null,
+            IRotationAssistExecutor? rotationAssist = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -280,6 +319,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // JSON-resolvable and its Execute fails loudly rather than skipping focus/centering.
                 new RunAutofocus(autofocusExecutor),
                 new CenterAndRotate(centeringExecutor, rotatorMediator),
+                // The by-hand rotation step for rigs without a rotator: starts the daemon's plate-solve
+                // readout and parks the run awaiting the user; a no-op when a rotator is connected.
+                new RotateCameraByHand(rotationAssist, rotatorMediator),
                 // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
                 // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
                 // JSON-resolvable and its Execute fails loudly rather than skipping flats.
@@ -316,14 +358,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                     rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
                     flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             },
-            conditions: new List<ISequenceCondition> {
-                // §38k-7 — no-equipment conditions. LoopCondition bounds a
-                // container by iteration count; TimeSpanCondition bounds it
-                // by elapsed wall-clock time. Both are parameterless +
-                // self-contained.
-                new LoopCondition(),
-                new TimeSpanCondition(),
-            },
+            conditions: DefaultConditions(profileService),
             container: new List<ISequenceContainer> {
                 new SequenceRootContainer(),
                 new SequentialContainer(),

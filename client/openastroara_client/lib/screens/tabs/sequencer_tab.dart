@@ -15,6 +15,7 @@ import '../../widgets/sequencer/sequence_editor_tree.dart';
 import '../../widgets/sequencer/sequence_field_editor.dart';
 import '../../widgets/sequencer/sequencer_palette.dart';
 import '../../widgets/sequencer/run_completion_sheet.dart';
+import '../../widgets/sequencer/rotation_assist_card.dart';
 import '../../widgets/sequencer/run_dashboard_band.dart';
 import '../../widgets/sequencer/sequence_load_dialog.dart';
 import '../../widgets/sequencer/sequence_new_dialog.dart';
@@ -213,6 +214,9 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
         // is active (SizedBox.shrink otherwise), so compose-mood layout and
         // its tests are untouched.
         const RunDashboardBand(),
+        // The by-hand rotation readout, while a run's Rotate camera by hand
+        // step holds the run for the user (SizedBox.shrink otherwise).
+        const RotationAssistCard(),
         Expanded(
           // §Run-redesign S6 — with nothing loaded, the tab invites instead of
           // presenting three empty grey panes.
