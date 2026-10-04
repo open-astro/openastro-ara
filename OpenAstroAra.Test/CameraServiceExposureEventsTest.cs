@@ -207,6 +207,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_disconnect_mid_exposure_ends_it_as_failed_once_with_no_fault() {
+            // The client clears its timer on WS link loss, not on camera loss: without this event
+            // the rail timer would count on for exposure + 2 min.
+            await using var box = Camera(() => false);
+            var ws = new RecordingBroadcaster();
+            var (hub, faults) = Hub();
+            using var svc = await ConnectedAsync(box, ws, hub);
+
+            var capture = svc.CaptureForAnalysisAsync(2, 1, CancellationToken.None);
+            await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the exposure was never announced");
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            try {
+                await capture.WaitAsync(TimeSpan.FromSeconds(10));
+            } catch (InvalidOperationException) {
+                // an abandoned analysis capture has no frame to return
+            }
+
+            var events = ws.Exposure();
+            Assert.That(events.Select(e => e.Type),
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+            Assert.That(events[1].Payload.GetProperty("frame_id").GetString(),
+                Is.EqualTo(events[0].Payload.GetProperty("frame_id").GetString()));
+            lock (faults) {
+                Assert.That(faults, Is.Empty, "a disconnect is the probe's business, not a capture fault");
+            }
+        }
+
+        [Test]
         public async Task An_abort_with_no_capture_running_does_not_kill_the_next_capture() {
             await using var box = Camera(() => true);
             var ws = new RecordingBroadcaster();
