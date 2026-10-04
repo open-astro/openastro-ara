@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// remember/read round-trip, per-type upsert, empty-when-absent, and corrupt-file tolerance.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class EquipmentSelectionStoreTest {
 
         private string _dir = null!;

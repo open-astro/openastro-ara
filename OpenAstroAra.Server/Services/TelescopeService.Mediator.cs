@@ -62,7 +62,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // can legitimately take 5–10 minutes, and a settled-too-early ceiling reports a SUCCESSFUL slew
     // as false to the instruction. ~600s covers a worst-case meridian-to-horizon goto on slow gear
     // without meaningfully widening the hung-driver window (cancellation still cuts it short).
-    private const int SlewSettleMaxPolls = 6000; // ~600s at the poll interval
+    // ~600s at the poll interval. Instance-settable (#1265) so a bench fixture can prove the
+    // settle-exhaustion fault in a few polls instead of ten minutes; the daemon never sets it.
+    internal int SlewSettleMaxPolls { get; set; } = 6000;
     private static readonly TimeSpan MountOpPollInterval = TimeSpan.FromMilliseconds(100);
     // Wall-clock ceiling for a single blocking mount call (Park/Unpark/FindHome/the slew kickoff): a
     // silent device must not park a sequence thread until the OS TCP timeout. The terminal-condition

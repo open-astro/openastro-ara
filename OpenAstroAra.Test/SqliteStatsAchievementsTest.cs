@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// aggregated over the light-frame catalog (dark/flat frames are excluded).
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteStatsAchievementsTest {
 
         private string _dir = null!;

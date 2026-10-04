@@ -26,6 +26,7 @@ namespace OpenAstroAra.Test {
     /// telescope-owned focal length + reducer, and ignore a camera that reports no geometry.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CameraServiceOpticsAutoPopulateTest {
 
         private static CameraCapabilitiesDto Caps(int w, int h, double px) =>

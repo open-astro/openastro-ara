@@ -25,6 +25,7 @@ namespace OpenAstroAra.Test {
     /// <summary>§50 stats maintenance: ResetAndRescanAsync wipes frames +
     /// sessions and re-ingests from the mounted store in one locked op.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CatalogResetTest {
 
         private string _dir = string.Empty;

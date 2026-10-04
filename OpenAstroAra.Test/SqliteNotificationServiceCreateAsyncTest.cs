@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// "previous sequence ended unexpectedly" inbox entry.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteNotificationServiceCreateAsyncTest {
 
         private string _profileDir = string.Empty;

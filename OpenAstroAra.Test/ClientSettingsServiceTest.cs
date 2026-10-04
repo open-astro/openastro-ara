@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>§55.1 WILMA settings sync: the file-backed opaque-blob store round-trips, validates, and degrades.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ClientSettingsServiceTest {
 
         private string _dir = null!;

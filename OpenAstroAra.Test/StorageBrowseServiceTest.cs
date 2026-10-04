@@ -23,6 +23,7 @@ namespace OpenAstroAra.Test;
 /// <summary>§37.4/§29 — the save-directory picker's server-side walk: one level
 /// per call, directories only, hidden + virtual filesystems excluded, curated
 /// roots when no path is given.</summary>
+[Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
 public class StorageBrowseServiceTest {
     private static readonly string[] ExpectedChildren = ["Archive", "captures"];
     private string _dir = null!;

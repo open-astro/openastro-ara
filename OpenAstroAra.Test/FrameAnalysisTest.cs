@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// trigger reads.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FrameAnalysisTest {
 
         private static readonly Guid Session = Guid.Parse("59595959-5959-5959-5959-595959595959");

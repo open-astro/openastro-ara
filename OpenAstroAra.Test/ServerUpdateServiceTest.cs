@@ -32,6 +32,7 @@ namespace OpenAstroAra.Test {
     /// dpkg tools (faked at the process seam), the request file + <c>systemctl start --no-block</c>
     /// hand-off with the <c>server.restart_imminent</c> event, and the result-file parse.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "Every service Service() creates is tracked and disposed in TearDown.")]
     public class ServerUpdateServiceTest {

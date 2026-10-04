@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// bridge from stored sample DTOs back to a usable <see cref="FocusInverseMap"/>.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FocusCalibrationStoreTest {
 
         private static string TempDir() {

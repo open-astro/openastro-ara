@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// for the solver.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CLISolverOutputTest {
 
         private string dir = string.Empty;

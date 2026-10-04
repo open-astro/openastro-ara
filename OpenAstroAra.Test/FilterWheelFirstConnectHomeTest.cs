@@ -37,7 +37,16 @@ namespace OpenAstroAra.Test {
     /// reads a known position — off slot 0 homes, at 0 counts as homed — within a bounded window,
     /// an explicit change retires it, and a reconnect never homes.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FilterWheelFirstConnectHomeTest {
+
+        // #1265 — the service refreshes every 100 ms here instead of the production 2 s, and the
+        // mediator's slot-list budget is ten ticks instead of 6 s, so every "no write arrives"
+        // wait is tick-counted rather than seconds of wall clock.
+        // 150 ms, not 100: the moving-wheel step below has to land inside seed + MaxPendingHomeTicks
+        // ticks, and a loaded 4-core runner needs the extra slack.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(150);
+        private static TimeSpan Ticks(int n) => Tick * n;
 
         /// <summary>A loopback Alpaca FilterWheel: answers <c>position</c>/<c>names</c>/
         /// <c>focusoffsets</c>/<c>connected</c> with real values and records position writes.</summary>
@@ -179,7 +188,7 @@ namespace OpenAstroAra.Test {
         [Category("bench")] // loopback-only, runs in the default job too
         public async Task First_connect_off_slot_0_homes_and_a_reconnect_never_does() {
             await using var stub = StubWheel.Start(position: 3);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
 
             await ConnectAsync(svc, stub);
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "first connect must home the wheel");
@@ -191,7 +200,7 @@ namespace OpenAstroAra.Test {
             await DisconnectAsync(svc);
             stub.Position = 2;
             await ConnectAsync(svc, stub);
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "a reconnect never re-homes");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "a reconnect never re-homes");
             await DisconnectAsync(svc);
         }
 
@@ -199,15 +208,15 @@ namespace OpenAstroAra.Test {
         [Category("bench")]
         public async Task Already_at_slot_0_counts_as_homed_and_a_moving_wheel_is_homed_once_its_position_is_known() {
             await using var stub = StubWheel.Start(position: FilterWheelService.DefaultSlot);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
 
             // Already at 0: no move, but the session's home decision is settled…
             await ConnectAsync(svc, stub);
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "already at 0 — nothing to move");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "already at 0 — nothing to move");
             await DisconnectAsync(svc);
             stub.Position = 3;
             await ConnectAsync(svc, stub);
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "…so a later reconnect never re-homes");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "…so a later reconnect never re-homes");
             await DisconnectAsync(svc);
 
             // A DIFFERENT wheel that reports "moving" (-1) at connect (a driver repositioning to
@@ -215,7 +224,8 @@ namespace OpenAstroAra.Test {
             // known position on a later refresh tick of the SAME connection…
             stub.Position = -1;
             await ConnectAsync(svc, stub, uniqueId: "second-wheel");
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "position unknown — nothing to decide yet");
+            // One tick: well inside the pending window (seed + MaxPendingHomeTicks), so the claim is still open below.
+            Assert.That(await WaitForWriteAsync(stub, Ticks(1)), Is.False, "position unknown — nothing to decide yet");
             stub.Position = 3;
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "the home fires once the position becomes known");
             Assert.That(stub.PositionWrites.TryDequeue(out var target) && target == FilterWheelService.DefaultSlot, Is.True);
@@ -224,7 +234,7 @@ namespace OpenAstroAra.Test {
             // …and because it was claimed at connect, a reconnect mid-sequence (parked on Ha) is left alone.
             stub.Position = 2;
             await ConnectAsync(svc, stub, uniqueId: "second-wheel");
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "claimed at first connect — a reconnect never homes");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "claimed at first connect — a reconnect never homes");
             await DisconnectAsync(svc);
         }
 
@@ -234,7 +244,7 @@ namespace OpenAstroAra.Test {
             // Review of #1073: a wheel mid-rotation at connect, then a change to slot 2 before the
             // position was ever read — the change's own follow-up refresh must NOT fire the home.
             await using var stub = StubWheel.Start(position: -1);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
             // Slots are seeded even while the position is unknown; wait for them so the change validates.
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
@@ -245,7 +255,7 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "the requested change is written");
             Assert.That(stub.PositionWrites.TryDequeue(out var first) && first == 2, Is.True);
             // The stub now reports 2 (a known position) — the retired home must not follow.
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
             Assert.That(stub.PositionWrites, Is.Empty, "the explicit slot is never overridden by the first-connect home");
             await DisconnectAsync(svc);
         }
@@ -264,13 +274,13 @@ namespace OpenAstroAra.Test {
             // home exactly like the REST path — delete RetirePendingHome() in the mediator and the
             // wheel is pulled to 0 behind the sequence.
             await using var stub = StubWheel.Start(position: -1);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
             await WaitForSlotsAsync(svc);
             var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
             Assert.That(result.Position, Is.EqualTo(2), "the sequence's change is confirmed on the requested slot");
             Assert.That(stub.PositionWrites.TryDequeue(out var first) && first == 2, Is.True);
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
             Assert.That(stub.PositionWrites, Is.Empty, "the first-connect home never lands on top of a sequence's filter");
             await DisconnectAsync(svc);
         }
@@ -282,12 +292,12 @@ namespace OpenAstroAra.Test {
             // that reports -1 past it is not "just connected" any more — once it finally reports a
             // known position off 0, no home fires.
             await using var stub = StubWheel.Start(position: -1);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
-            // Refresh cadence is 2 s; sit well past seed + 4 ticks.
-            await Task.Delay(TimeSpan.FromSeconds(13));
+            // Sit well past seed + MaxPendingHomeTicks refresh ticks.
+            await Task.Delay(Ticks(15));
             stub.Position = 3;
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the home window expired — the wheel is left where it is");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "the home window expired — the wheel is left where it is");
             await DisconnectAsync(svc);
         }
 
@@ -300,12 +310,12 @@ namespace OpenAstroAra.Test {
             // home (which needs no slot list and may already have been written) must never land
             // AFTER it, so the wheel ends where the sequence asked.
             await using var stub = StubWheel.Start(position: 3);
-            stub.NamesAvailableAt = DateTime.UtcNow.AddSeconds(3);
-            using var svc = new FilterWheelService();
+            stub.NamesAvailableAt = DateTime.UtcNow + Ticks(4);
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
             var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
             Assert.That(result.Position, Is.EqualTo(2), "the change waited for the slot list and was honoured");
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
             var writes = stub.PositionWrites.ToArray();
             Assert.That(writes, Does.Contain(2));
             Assert.That(writes[^1], Is.EqualTo(2), "nothing — not the first-connect home — lands behind the sequence's change");
@@ -323,16 +333,16 @@ namespace OpenAstroAra.Test {
             // old post-validation retire and the wheel is pulled to 0 behind the sequence.
             await using var stub = StubWheel.Start(position: -1);
             stub.NamesAvailableAt = DateTime.UtcNow.AddMinutes(5);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
             var started = DateTime.UtcNow;
             var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
             Assert.That(result.Position, Is.EqualTo(2), "a skipped change hands back the requested filter");
-            Assert.That(DateTime.UtcNow - started, Is.GreaterThan(TimeSpan.FromSeconds(4)).And.LessThan(TimeSpan.FromSeconds(20)), "the slot wait is bounded");
+            Assert.That(DateTime.UtcNow - started, Is.GreaterThan(Ticks(8)).And.LessThan(Ticks(30)), "the slot wait is bounded by SlotsWaitBudget (the 6 s default would miss the ceiling)");
             Assert.That(stub.PositionWrites, Is.Empty, "no slot list → nothing is written to the wheel");
             // The wheel now reports a known, off-0 position: a still-pending home would fire here.
             stub.Position = 3;
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(6)), Is.False, "the sequence's SwitchFilter retired the home even though its own change was skipped");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "the sequence's SwitchFilter retired the home even though its own change was skipped");
             await DisconnectAsync(svc);
         }
 
@@ -344,7 +354,7 @@ namespace OpenAstroAra.Test {
             // change then bumps the generation; invoking the home task with the STALE token must
             // issue no Position write.
             await using var stub = StubWheel.Start(position: 3);
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
             // The real first-connect home lands first (position known at seed); let it settle.
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True);
@@ -375,14 +385,14 @@ namespace OpenAstroAra.Test {
             await using var stub = StubWheel.Start(position: 3);
             var store = new InMemoryProfileStore();
             store.PutFilterWheelPolicy(new FilterWheelPolicyDto(HomeOnFirstConnect: false));
-            using var svc = new FilterWheelService(profileStore: store);
+            using var svc = new FilterWheelService(profileStore: store) { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(5)), Is.False, "policy off → no home write");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "policy off → no home write");
             // Turning it on afterwards never homes this session's already-claimed wheel.
             store.PutFilterWheelPolicy(FilterWheelPolicyDto.Default);
             await DisconnectAsync(svc);
             await ConnectAsync(svc, stub);
-            Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(3)), Is.False, "the claim was consumed on the first connect");
+            Assert.That(await WaitForWriteAsync(stub, Ticks(10)), Is.False, "the claim was consumed on the first connect");
             await DisconnectAsync(svc);
         }
     }

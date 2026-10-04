@@ -150,7 +150,8 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     /// <summary>#1079 — the first slot read lands on the seed refresh or the next 2 s tick; wait up
     /// to <see cref="SlotsWaitBudget"/> for it (polling the cache, no device I/O of our own) so a
     /// SwitchFilter issued right after connect is honoured instead of skipped.</summary>
-    private static readonly TimeSpan SlotsWaitBudget = TimeSpan.FromSeconds(6);
+    // #1265 — instance knob (6 s in production): bench fixtures shrink it with the refresh cadence.
+    internal TimeSpan SlotsWaitBudget { get; set; } = TimeSpan.FromSeconds(6);
 
     private async Task<IReadOnlyList<FilterSlotDto>?> WaitForSlotsAsync(AlpacaFilterWheel client, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + SlotsWaitBudget;

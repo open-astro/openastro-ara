@@ -32,7 +32,13 @@ namespace OpenAstroAra.Test {
     /// and trips the mount to Error with a Disconnected fault, which is the §42.3 ladder's cue to
     /// do exactly that reconnect (bounded, logged, notified, on the card).</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class TelescopeLatchedBridgeFaultTest {
+
+        // #1265 — the service refreshes every 100 ms here instead of the production 2 s, so a
+        // "several ticks" wait is a few hundred milliseconds. Scale every tick-counted wait by it.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
+        private static TimeSpan Ticks(int n) => Tick * n;
 
         private const string Latched = "Mount communications compromised";
 
@@ -95,7 +101,7 @@ namespace OpenAstroAra.Test {
             var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
             var faults = new List<EquipmentFaultEvent>();
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
-            using var svc = new TelescopeService(faults: hub);
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
 
@@ -115,7 +121,7 @@ namespace OpenAstroAra.Test {
             // again within the same episode — one fault, not one per 2 s tick.
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
-            await Task.Delay(TimeSpan.FromSeconds(5)); // two or more refresh ticks on the still-latched bridge
+            await Task.Delay(Ticks(10)); // two or more refresh ticks on the still-latched bridge
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "still latched after the reconnect is the same episode");
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "no second trip while the episode is open");
@@ -141,13 +147,17 @@ namespace OpenAstroAra.Test {
             var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
             var faults = new List<EquipmentFaultEvent>();
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
-            using var svc = new TelescopeService(faults: hub);
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
 
+            // Start the goto, let a tick land so every later refresh reads Slewing = true, THEN latch
+            // the position reads: flipping both at once let a tick straddle the two writes (Slewing
+            // still false, position already latched) and trip the mount it was told not to (#1265).
             Volatile.Write(ref slewing, "true");
+            await Task.Delay(Ticks(3));
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
-            await Task.Delay(TimeSpan.FromSeconds(5)); // several ticks: latched reads, but a goto in flight
+            await Task.Delay(Ticks(10)); // several ticks: latched reads, but a goto in flight
             string published;
             lock (faults) { published = string.Join("; ", faults.Select(f => f.Details)); }
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected),

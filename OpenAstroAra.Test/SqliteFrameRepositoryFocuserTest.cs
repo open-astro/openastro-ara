@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// additive column add is idempotent across re-init.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteFrameRepositoryFocuserTest {
 
         private string _dir = null!;

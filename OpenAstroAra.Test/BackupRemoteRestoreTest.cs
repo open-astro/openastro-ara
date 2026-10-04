@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// (in-memory bytes, no network) and an injected <see cref="IBackupRestorer"/> fake.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BackupRemoteRestoreTest {
 
         private static readonly Uri RemoteUrl = new("http://other-daemon:5555/api/v1/backup/snapshot/"

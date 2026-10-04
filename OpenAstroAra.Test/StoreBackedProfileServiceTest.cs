@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// mapping against fabricated store DTOs.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class StoreBackedProfileServiceTest {
 
         private static SiteSettingsDto Site(double lat = 47.5, double lon = -122.3, double elev = 120.0) => new(

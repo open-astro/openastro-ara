@@ -28,6 +28,7 @@ namespace OpenAstroAra.Test {
     /// (<c>OptimalSubOverrides.Build</c> derefs <c>GetCameraElectronics()</c>) 500s with an NRE.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ProfileStoreNullSectionTest {
 
         private static string TempDir() {

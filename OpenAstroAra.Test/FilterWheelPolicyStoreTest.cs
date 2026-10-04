@@ -23,6 +23,7 @@ namespace OpenAstroAra.Test {
     // #1075 — the filter-wheel policy section round-trips through the file store and an older
     // profile.json without it back-fills the default (home on).
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FilterWheelPolicyStoreTest {
 
         [Test]

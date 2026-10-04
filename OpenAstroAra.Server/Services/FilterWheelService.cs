@@ -55,6 +55,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     private readonly DeviceConnectionProbe _probe = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
+    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
+    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
     // The Sequencer-facing profile (null in REST-only unit tests): the §14e mediator partial imports
     // the connected wheel's slot list into ActiveProfile.FilterWheelSettings.FilterWheelFilters
     // (NINA's import-on-connect semantics) so SwitchFilter can resolve its filter by name/position.

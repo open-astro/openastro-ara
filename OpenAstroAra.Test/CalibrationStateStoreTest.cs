@@ -28,6 +28,7 @@ namespace OpenAstroAra.Test {
     /// <see cref="GuiderServiceDarkLibraryProgressTest"/> bench.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CalibrationStateStoreTest {
 
         private static string TempDir() {

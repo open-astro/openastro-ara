@@ -28,7 +28,13 @@ namespace OpenAstroAra.Test {
     /// carries the duration, and a §57.4 abort publishes its own event while suppressing the
     /// episode's complete.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SlewEventWatchTest {
+
+        // #1265 — the service refreshes every 100 ms here instead of the production 2 s, so a
+        // "several ticks" wait is a few hundred milliseconds. Scale every tick-counted wait by it.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
+        private static TimeSpan Ticks(int n) => Tick * n;
 
         // ── SlewEventWatch (pure) ──
 
@@ -215,7 +221,7 @@ namespace OpenAstroAra.Test {
                 : null);
             var ws = new PayloadRecordingBroadcaster();
 
-            using var svc = new TelescopeService(ws: ws);
+            using var svc = new TelescopeService(ws: ws) { RefreshPeriod = Tick };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
                 HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
@@ -238,7 +244,7 @@ namespace OpenAstroAra.Test {
                 TimeSpan.FromSeconds(10), "slew_aborted never published");
 
             // …and the episode's would-be complete is suppressed (give the poll a few ticks).
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
             var events = ws.Snapshot();
             Assert.That(Array.Exists(events, e => e.Type == "telescope.slew_complete"), Is.False,
                 "an aborted episode must not also read as completed");
@@ -263,7 +269,7 @@ namespace OpenAstroAra.Test {
                 : null);
             var ws = new PayloadRecordingBroadcaster();
 
-            using var svc = new TelescopeService(ws: ws);
+            using var svc = new TelescopeService(ws: ws) { RefreshPeriod = Tick };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
                 HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
@@ -284,7 +290,7 @@ namespace OpenAstroAra.Test {
                     e => e.Type == "telescope.slew_aborted")),
                 TimeSpan.FromSeconds(10), "slew_aborted never published for the watchdog stop");
 
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
             var events = ws.Snapshot();
             Assert.That(Array.Exists(events, e => e.Type == "telescope.slew_complete"), Is.False,
                 "a watchdog-aborted episode must not also read as completed");

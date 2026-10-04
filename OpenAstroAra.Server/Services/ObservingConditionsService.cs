@@ -77,6 +77,10 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
+    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
+    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
     private AlpacaObservingConditions? _client;
     private readonly IEquipmentFaultSink? _faults;
     // §42.3 — consecutive-failure disconnect detection (the per-sensor reads

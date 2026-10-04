@@ -32,7 +32,13 @@ namespace OpenAstroAra.Test {
     /// <summary>§42.4 — the switch read-back watch: only written ports are checked, settle
     /// window, tolerance-of-range math, once-per-command-episode firing.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SwitchReadbackWatchTest {
+
+        // #1265 — the loopback service refreshes every 100 ms (production: 2 s) with a settle
+        // window of five ticks (production: 5 s), so the fault lands in about two seconds.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
+        private static TimeSpan Ticks(int n) => Tick * n;
 
         private static readonly DateTimeOffset T0 = new(2026, 7, 10, 5, 0, 0, TimeSpan.Zero);
         private static readonly TimeSpan PastSettle = SwitchReadbackWatch.DefaultSettleWindow + TimeSpan.FromSeconds(1);
@@ -201,7 +207,7 @@ namespace OpenAstroAra.Test {
             var faults = new List<EquipmentFaultEvent>();
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
 
-            using var svc = new SwitchService(faults: hub, ws: ws.Object);
+            using var svc = new SwitchService(faults: hub, ws: ws.Object) { RefreshPeriod = Tick, ReadbackSettleWindow = Ticks(5) };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "switch-under-test", Name: "Bench Power Box", Type: DeviceType.Switch,
                 HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
@@ -213,11 +219,11 @@ namespace OpenAstroAra.Test {
             // Command the heater ON; the device accepts the PUT and keeps reading 0.
             await svc.SetValueAsync("switch-under-test", new SwitchValueRequestDto(PortId: 0, Value: 1.0), CancellationToken.None);
 
-            // Settle (5 s) + 3 bad ticks (~6 s) → the §42.2 re-command (which the stuck device
-            // also ignores) → re-armed settle (5 s) + 3 bad ticks (~6 s) → the fault.
+            // Settle (5 ticks) + 3 bad ticks → the §42.2 re-command (which the stuck device
+            // also ignores) → re-armed settle (5 ticks) + 3 bad ticks → the fault.
             await WaitForAsync(() => { lock (faults) { return Task.FromResult(faults.Count > 0); } },
-                TimeSpan.FromSeconds(60), "the value-mismatch fault never published");
-            await Task.Delay(TimeSpan.FromSeconds(5)); // several more mismatched ticks — no re-fire
+                TimeSpan.FromSeconds(30), "the value-mismatch fault never published");
+            await Task.Delay(Ticks(10)); // several more mismatched ticks — no re-fire
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "exactly one fault per command episode");
                 Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.ValueMismatch));
@@ -253,7 +259,7 @@ namespace OpenAstroAra.Test {
             var faults = new List<EquipmentFaultEvent>();
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
 
-            using var svc = new SwitchService(faults: hub);
+            using var svc = new SwitchService(faults: hub) { RefreshPeriod = Tick, ReadbackSettleWindow = Ticks(5) };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "switch-under-test", Name: "Bench Power Box", Type: DeviceType.Switch,
                 HostName: proxy.BaseUri.Host, IpAddress: proxy.BaseUri.Host, IpPort: proxy.BaseUri.Port,

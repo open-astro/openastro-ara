@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     // (the client writes it straight to a .araseq.json file), mirroring the
     // profile-share contract; an unknown id is a 404 (null), not a placeholder.
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FileSequenceServiceShareExportTest {
 
         private string _profileDir = string.Empty;

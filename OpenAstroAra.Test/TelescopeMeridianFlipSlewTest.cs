@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// with the cache refreshed afterwards so §58.5's verification reads the post-flip side. Also
     /// pins the SideOfPier not-implemented latch from the #1239 review.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")] // loopback-only, runs in the default job too
     public class TelescopeMeridianFlipSlewTest {
 
