@@ -257,6 +257,42 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  testWidgets('the collapsed header keeps settle frames out of its RMS, as '
+      'the open graph does', (tester) async {
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(ws.close);
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        ),
+        ws: ws.stream);
+    for (var i = 0; i < 3; i++) {
+      ws.add(step(i, raArcsec: 0.4 * i, decArcsec: -0.2 * i, scale: 2.0));
+    }
+    // A dither at 21:00:02.5 with no settle_done yet: frames 3 and 4 are the
+    // dither's own excursion, drawn but kept out of the stats.
+    ws.add(WsEvent(
+        type: 'guider.event',
+        ts: DateTime.utc(2026, 10, 4, 21, 0, 2, 500),
+        seq: 9,
+        payload: const <String, dynamic>{'kind': 'dithered', 'dx_px': 2, 'dy_px': -1}));
+    for (var i = 3; i < 5; i++) {
+      ws.add(step(i, raArcsec: 5.0, decArcsec: -4.0, scale: 2.0));
+    }
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('RMS 0.58″'), findsOneWidget);
+
+    container.read(guidingStripExpandedProvider.notifier).toggle();
+    await tester.pump();
+    expect(container.read(guidingStripExpandedProvider), isFalse);
+    expect(find.text('RMS 0.58″'), findsOneWidget,
+        reason: 'collapsing must not fold the dither into the one-line status');
+    await _teardownPanel(tester, container);
+  });
+
   test('GuideGraphModel: unit choice, visible window and auto y-range follow '
       'PHD2', () {
     final t = DateTime.utc(2026);
