@@ -396,6 +396,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // polling until exposure + margin after the camera had already been told to stop, so a
     // cancelled 10-minute sub reported camera.exposure_failed eleven minutes later and the
     // client's timer counted down a sub that no longer existed.
+    // One flag for the whole camera, shared by captures and Live View: safe only because the
+    // single in-flight gate never lets the two expose at once. A path that could run beside
+    // another would consume the other's abort — give it its own flag.
     private int _abortRequested;
 
     public async Task AbortExposureAsync(CancellationToken ct) {
