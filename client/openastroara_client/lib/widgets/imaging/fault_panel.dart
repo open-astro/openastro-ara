@@ -52,8 +52,14 @@ class _FaultPanelState extends ConsumerState<FaultPanel> {
                   Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 18, color: AraColors.textSecondary),
                   const SizedBox(width: 4),
-                  StatusIndicator(level: level, label: label),
-                  const Spacer(),
+                  // Expanded, not a Spacer: the label ellipsizes in the
+                  // 320 px rail instead of overflowing (as DiagnosticPanel).
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: StatusIndicator(level: level, label: label),
+                    ),
+                  ),
                   if (_expanded)
                     IconButton(
                       icon: const Icon(Icons.refresh, size: 16),
