@@ -79,17 +79,42 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             throw new InvalidOperationException("camera is not connected");
         }
 
-        // Full-sensor frame at the requested binning; gain/offset stay at the camera's current
-        // values (an AF probe measures relative HFR across positions — consistency between probes
-        // matters, absolute calibration does not).
+        // Full-sensor frame at the requested binning, at the profile's imaging gain and offset. These
+        // used to stay at "whatever the camera is at": the first thing run on a fresh connection was
+        // then an autofocus at the driver's power-on gain (0 on a Uranus-C, 11 e⁻/ADU), the stars
+        // vanished into the 12-bit quantisation and the sweep fitted noise (2026-10-03). Imaging
+        // exposures push the profile's gain to the camera; analysis captures now do the same, so the
+        // first autofocus of the night sees the same sky as the tenth.
+        var (gain, offset) = AnalysisGainOffset(_profileStore?.GetImagingDefaults(), caps);
         var request = new ExposureRequestDto(
             ExposureSec: exposureSec,
-            Gain: null,
+            Gain: gain,
             BinX: bin,
             BinY: bin,
             FilterName: null,
-            CameraOffset: null);
+            CameraOffset: offset);
         return await CaptureUnpersistedAsync(request, "analysis", ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The gain/offset an analysis capture applies: the profile's imaging defaults, each dropped
+    /// (null = leave the camera as it is) when the camera's reported range rules it out, so a profile
+    /// written for another camera cannot make every autofocus throw. A zero range means the bounds
+    /// read failed and the value goes through, as <c>StartExposureAsync</c> treats it.
+    /// </summary>
+    internal static (int? Gain, int? Offset) AnalysisGainOffset(ImagingDefaultsDto? defaults, CameraCapabilitiesDto? caps) {
+        if (defaults is null) {
+            return (null, null);
+        }
+        int? gain = defaults.Gain;
+        if (gain < 0 || (caps is not null && caps.MaxGain > 0 && (gain < caps.MinGain || gain > caps.MaxGain))) {
+            gain = null;
+        }
+        int? offset = defaults.Offset;
+        if (offset < 0 || (caps is not null && caps.MaxOffset > 0 && (offset < caps.MinOffset || offset > caps.MaxOffset))) {
+            offset = null;
+        }
+        return (gain, offset);
     }
 
     /// <summary>

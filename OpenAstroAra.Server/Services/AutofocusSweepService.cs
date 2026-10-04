@@ -131,11 +131,23 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // are relative measurements, so the fixed sensitivity matters less than it being IDENTICAL
     // for every probe of the sweep. Returns the whole result (not just HFR + count) so the sweep can
     // also read each probe's per-star donut metrics for the §59.10 end-of-sweep collimation check.
-    private static StarDetectionResult DefaultMetric(AnalysisFrame frame, CancellationToken ct) =>
-        StarDetector.Detect(
+    internal static StarDetectionResult DefaultMetric(AnalysisFrame frame, CancellationToken ct) {
+        var result = StarDetector.Detect(
             frame.Pixels.Span, frame.Width, frame.Height,
             new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = true },
             ct);
+        // More blobs than one per NoiseFloodDivisor native pixels is not a star field, it is noise that
+        // crossed the threshold: a camera left at its power-on gain read one real star and 21,000
+        // speckle blobs at HFR 2 px (2026-10-03), and that flat HFR fitted as "in focus" everywhere.
+        // Native frames only — the 8x-binned coarse probe packs real stars far denser than this.
+        result.NoiseFlooded = result.DetectedStars > frame.Width * frame.Height / NoiseFloodDivisor;
+        return result;
+    }
+
+    /// <summary>One blob per this many native pixels is the densest field the fine probe believes
+    /// (21,000 on an 8.4 MP frame); more is noise. Deliberately loose: a false "noise" verdict refuses
+    /// a focus run, a missed one only adds a bad point the fit may still survive.</summary>
+    internal const int NoiseFloodDivisor = 400;
 
     /// <inheritdoc/>
     public async Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
@@ -265,9 +277,11 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                     var result = _metric(frame, token);
                     var hfr = result.AverageHFR;
                     var stars = result.DetectedStars;
-                    var kept = !(stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr));
+                    var kept = !(stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr) || result.NoiseFlooded);
                     if (kept) {
                         LogProbe(reached, hfr, stars);
+                    } else if (result.NoiseFlooded) {
+                        LogProbeNoiseFlooded(reached, stars, frame.Width, frame.Height);
                     } else {
                         // The sweep's outer probes can be too defocused to measure; drop them and let the
                         // remaining points carry the fit. Too few survivors still fails below.
@@ -453,7 +467,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
             var result = _metric(frame, token);
             var hfr = result.AverageHFR;
-            var measurable = result.DetectedStars >= MinStarsPerProbe && hfr > 0 && double.IsFinite(hfr);
+            var measurable = result.DetectedStars >= MinStarsPerProbe && hfr > 0 && double.IsFinite(hfr) && !result.NoiseFlooded;
+            if (result.NoiseFlooded) {
+                LogProbeNoiseFlooded(position, result.DetectedStars, frame.Width, frame.Height);
+            }
             RenderFrameQuietly(frame, position, measurable ? hfr : double.NaN);
             return measurable ? (hfr, result.DetectedStars) : (null, null);
         } catch (Exception ex) {
@@ -670,6 +687,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus probe: position {Position} HFR {Hfr} ({Stars} stars)")]
     private partial void LogProbe(int position, double hfr, int stars);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus probe at {Position} is noise, not stars: {Blobs} blobs on a {Width}x{Height} frame — check the camera's gain and offset; the probe is dropped")]
+    private partial void LogProbeNoiseFlooded(int position, int blobs, int width, int height);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus complete: position {Position}, predicted HFR {PredictedHfr}, R²={RSquared} ({Method})")]
     private partial void LogSweepComplete(int position, double predictedHfr, double rSquared, AFCurveFitting method);

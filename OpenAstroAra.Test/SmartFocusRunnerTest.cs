@@ -115,7 +115,8 @@ namespace OpenAstroAra.Test {
                 bool restoreOnFailure = true,
                 Func<int, int>? skyStars = null,
                 string telescopeType = "other",
-                Func<int, double>? skySkew = null) {
+                Func<int, double>? skySkew = null,
+                Func<int, bool>? noiseFlooded = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -162,6 +163,7 @@ namespace OpenAstroAra.Test {
                     var skew = skySkew?.Invoke(position) ?? 0.0;
                     return new StarDetectionResult {
                         AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
+                        NoiseFlooded = noiseFlooded?.Invoke(captures) ?? false,
                     };
                 });
             return (svc, store, moves, events, () => captures, posted, tracker);
@@ -244,6 +246,24 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(2), "no calibration temperature → the staleness gate can't fire (§59.13)");
+        }
+
+        [Test]
+        public async Task A_noise_flooded_smart_shot_falls_back_to_classic_despite_its_blob_count() {
+            // 21,000 "stars" at HFR 2 on a frame with one real star (camera at power-on gain,
+            // 2026-10-03): the count passes the 30-star gate, the flag must not.
+            var rig = Build(calibration: Calibration(), starCount: 21000, realBest: StartPosition - 150,
+                noiseFlooded: capture => capture == 1);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "the sky cleared for the classic sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one refused Smart shot, then the sweep and its confirmation");
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
+            Assert.That(rig.Tracker.Snapshot().Probes.Any(p => p.Phase == "smart"), Is.False);
         }
 
         [Test]

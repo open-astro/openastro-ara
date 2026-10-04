@@ -118,9 +118,9 @@ public sealed partial class AutofocusSweepService {
             // Shot 1 — read the rig's current defocus where it stands. Published AFTER the prediction so
             // the §59.15 shot_complete event can carry predicted_offset + direction_source.
             var shot1 = await CaptureSmartShotAsync(1, startPosition, settings, progress, token).ConfigureAwait(false);
-            if (shot1.Features.StarCount < SmartMinStars) {
+            if (!shot1.Trustworthy) {
                 await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
-                return await FallBackAsync($"only {shot1.Features.StarCount} stars on the Smart shot (need {SmartMinStars})",
+                return await FallBackAsync(UntrustworthyReason(shot1, "the Smart shot"),
                     "too_few_stars", startPosition, restore: false).ConfigureAwait(false);
             }
             if (shot1.Hfr <= targetHfr) {
@@ -165,10 +165,10 @@ public sealed partial class AutofocusSweepService {
             // Shot 2 — at predicted focus.
             var position2 = await _focuser.MoveFocuser(startPosition + move, token).ConfigureAwait(false);
             var shot2 = await TakeSmartShotAsync(2, position2, settings, progress, token).ConfigureAwait(false);
-            if (shot2.Features.StarCount < SmartMinStars) {
+            if (!shot2.Trustworthy) {
                 // A starless/thin shot 2 (clouds, a bad move) has MedianHFR 0 and would "win" every raw
                 // HFR comparison — never trust it as an improvement (review round-2 finding).
-                return await FallBackAsync($"only {shot2.Features.StarCount} stars on shot 2 (need {SmartMinStars})",
+                return await FallBackAsync(UntrustworthyReason(shot2, "shot 2"),
                     "too_few_stars", startPosition, restore: settings.RestorePositionOnFailure).ConfigureAwait(false);
             }
 
@@ -188,7 +188,7 @@ public sealed partial class AutofocusSweepService {
                 var shot3 = await TakeSmartShotAsync(3, position3, settings, progress, token).ConfigureAwait(false);
                 // An untrustworthy (thin-star) trim shot counts as "worse": shot 2's position is a
                 // VERIFIED improvement, so keep that known-good result rather than falling back.
-                if (shot3.Features.StarCount < SmartMinStars || shot3.Hfr > shot2.Hfr) {
+                if (!shot3.Trustworthy || shot3.Hfr > shot2.Hfr) {
                     await _focuser.MoveFocuser(position2, token).ConfigureAwait(false);
                     LogSmartComplete(position2, shot2.Hfr, 3);
                 await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 3).ConfigureAwait(false);
@@ -204,7 +204,7 @@ public sealed partial class AutofocusSweepService {
             var reversed = await _focuser.MoveFocuser(startPosition - Math.Sign(move) * Math.Max(1, Math.Abs(move) / 2), token).ConfigureAwait(false);
             var reversedShot = await TakeSmartShotAsync(3, reversed, settings, progress, token).ConfigureAwait(false);
             // The reversed shot must be BOTH trustworthy and a real improvement to claim success.
-            if (reversedShot.Features.StarCount >= SmartMinStars && reversedShot.Hfr < shot1.Hfr) {
+            if (reversedShot.Trustworthy && reversedShot.Hfr < shot1.Hfr) {
                 LogSmartComplete(reversed, reversedShot.Hfr, 3);
                 await RecordCompletedAsync("smart", reversed, reversedShot.Hfr, reversedShot.Features.StarCount, started, 3).ConfigureAwait(false);
                 RecordAutofocusQuietly();
@@ -237,7 +237,11 @@ public sealed partial class AutofocusSweepService {
         }
     }
 
-    private readonly record struct SmartShot(double Hfr, FocusFeatureVector Features);
+    private readonly record struct SmartShot(double Hfr, FocusFeatureVector Features, bool NoiseFlooded = false) {
+        /// <summary>Enough real stars to trust the shot's HFR: a noise-flooded frame fails this even
+        /// though its blob count is huge.</summary>
+        public bool Trustworthy => !NoiseFlooded && Features.StarCount >= SmartMinStars;
+    }
 
     // Capture + publish, for shots 2/3 (no prediction fields). Shot 1 captures and publishes separately
     // so its event can carry predicted_offset + direction_source (computed between the two).
@@ -267,8 +271,12 @@ public sealed partial class AutofocusSweepService {
         var hfr = features.MedianHFR;
         LogSmartShot(shotIndex, position, hfr, features.StarCount);
         await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: SmartMaxShots, frame).ConfigureAwait(false);
-        return new SmartShot(hfr, features);
+        return new SmartShot(hfr, features, result.NoiseFlooded);
     }
+
+    private static string UntrustworthyReason(SmartShot shot, string which) => shot.NoiseFlooded
+        ? $"{which} is noise, not stars ({shot.Features.StarCount} blobs) — check the camera's gain and offset"
+        : $"only {shot.Features.StarCount} stars on {which} (need {SmartMinStars})";
 
     // §59.15 — the shot_complete event; shot 1 additionally carries the SIGNED predicted move and where
     // its direction came from ("classifier" | "heuristic") once a prediction exists.

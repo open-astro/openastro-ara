@@ -1012,5 +1012,78 @@ namespace OpenAstroAra.Test {
                 TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
                 Messages.Add(formatter(state, exception));
         }
+    
+
+        [Test]
+        public async Task Noise_flooded_probes_are_dropped_and_an_all_noise_sweep_fails() {
+            // A frame the detector flags as noise (thousands of speckle blobs, HFR ~2) must never
+            // become a V-curve point — its flat HFR would fit as "in focus" wherever the focuser is.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var r = Result(2.0, 21000);
+                    r.NoiseFlooded = true;
+                    return r;
+                },
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - StartPosition) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(Current(), Is.EqualTo(StartPosition), "restored after the failed sweep");
+        }
+
+        [Test]
+        public async Task Noise_flooded_edge_probes_are_skipped_like_unmeasurable_ones() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - StartPosition) / 100.0;
+                    if (Math.Abs(Current() - StartPosition) >= 400) {
+                        var noise = Result(2.0, 21000);
+                        noise.NoiseFlooded = true;
+                        return noise;
+                    }
+                    return Result(1.5 + 0.2 * delta * delta, 42);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(StartPosition).Within(30));
+        }
+    
+
+        [Test]
+        public void DefaultMetric_flags_a_frame_whose_blobs_are_noise_not_stars() {
+            // The 2026-10-03 failure: a camera at its power-on gain read one real star and ~21,000
+            // speckle blobs. 5-pixel crosses every 6 px give ~1,100 blobs on 40,000 px — far past the
+            // one-per-400-px plausibility line — while the median/MAD background still sits at 1000.
+            int w = 200, h = 200;
+            var pixels = Enumerable.Repeat((ushort)1000, w * h).ToArray();
+            for (int cy = 3; cy < h - 3; cy += 6) {
+                for (int cx = 3; cx < w - 3; cx += 6) {
+                    foreach (var (dx, dy) in new[] { (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1) }) {
+                        pixels[(cy + dy) * w + cx + dx] = 1400;
+                    }
+                }
+            }
+
+            var result = AutofocusSweepService.DefaultMetric(new AnalysisFrame(pixels, w, h, DateTimeOffset.UnixEpoch), CancellationToken.None);
+
+            Assert.That(result.DetectedStars, Is.GreaterThan(w * h / AutofocusSweepService.NoiseFloodDivisor));
+            Assert.That(result.NoiseFlooded, Is.True);
+        }
+
+        [Test]
+        public void DefaultMetric_does_not_flag_a_real_star_field() {
+            var result = AutofocusSweepService.DefaultMetric(StarFrame(200, 2.0, 40), CancellationToken.None);
+            Assert.That(result.DetectedStars, Is.GreaterThan(0));
+            Assert.That(result.NoiseFlooded, Is.False);
+        }
     }
 }
