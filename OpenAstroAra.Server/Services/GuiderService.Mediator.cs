@@ -74,6 +74,15 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// </summary>
     public Func<Task>? ReleaseGuideCameraAsync { get; set; }
 
+    /// <summary>True while this daemon's polar alignment runs — its lease is real and is never pulled
+    /// from under it. Program.cs wires it to <see cref="PolarAlignService.IsActive"/>; null means none.</summary>
+    public Func<bool>? PolarAlignActive { get; set; }
+
+    /// <summary>The guider reports a lease and no polar alignment in this daemon holds it: a stale lease
+    /// (or one the live-focus loop left behind) that would make the guider refuse to guide.</summary>
+    internal bool ShouldReleasePaLease(bool? guiderReportsActive) =>
+        guiderReportsActive == true && PolarAlignActive?.Invoke() != true;
+
     // ── Guider ops drive the live device ───────────────────────────────────────────────────────────
     public async Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token) {
         var guider = MediatorGuider();
@@ -89,14 +98,18 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// The guider's polar-align lease outlives whoever took it: a live-focus loop that died with a daemon
     /// restart left "polar-alignment session in progress" standing with nothing holding it, and every
     /// guide request after that was refused (2026-10-03, twice). Guiding is about to own the guide
-    /// camera anyway, so the lease is released outright; a refusal here is logged, not fatal.
+    /// camera anyway, so the lease is released — unless this daemon's polar alignment is running and
+    /// holds it (<see cref="ShouldReleasePaLease"/>); a refusal here is logged, not fatal.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort lease release before guiding: the guide attempt reports its own outcome.")]
     private async Task ClearPaSessionQuietlyAsync(PHD2Guider guider, CancellationToken token) {
         try {
             var status = await guider.GetPaSessionAsync(token).ConfigureAwait(false);
-            if (status.Active != true) {
+            if (!ShouldReleasePaLease(status.Active)) {
+                if (status.Active == true) {
+                    LogPaSessionKept();
+                }
                 return;
             }
             await guider.SetPaSessionAsync(active: false, timeoutS: null, token).ConfigureAwait(false);
@@ -110,6 +123,9 @@ public sealed partial class GuiderService : IGuiderMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Released the guider's polar-align session before guiding (guiding takes the guide camera from whoever held it)")]
     partial void LogPaSessionCleared();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Polar alignment is running — its guider session is kept, and the guider will refuse to guide until it ends")]
+    partial void LogPaSessionKept();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not release the guider's polar-align session before guiding — trying to guide anyway")]
     partial void LogPaSessionClearFailed(Exception ex);

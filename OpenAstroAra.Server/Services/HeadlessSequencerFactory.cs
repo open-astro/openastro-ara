@@ -144,12 +144,14 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             return conditions;
         }
 
-        /// <summary>Adds the prototype unless constructing it faults on a missing native library.</summary>
+        /// <summary>Adds the prototype unless constructing it faults on a missing or mismatched native
+        /// library (absent, wrong architecture, or missing an entry point).</summary>
         internal static bool TryAddCondition(List<ISequenceCondition> conditions, Func<ISequenceCondition> make) {
             try {
                 conditions.Add(make());
                 return true;
-            } catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException) {
+            } catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException
+                    or EntryPointNotFoundException or BadImageFormatException) {
                 return false;
             }
         }

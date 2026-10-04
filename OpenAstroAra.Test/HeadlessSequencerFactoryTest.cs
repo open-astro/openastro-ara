@@ -259,6 +259,11 @@ namespace OpenAstroAra.Test {
                 () => throw new System.TypeInitializationException("NOVAS", new System.DllNotFoundException("libnovas31.so"))), Is.False);
             Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
                 () => throw new System.DllNotFoundException("libnovas31.so")), Is.False);
+            // A mismatched library: wrong architecture, or an older build missing an export.
+            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
+                () => throw new System.BadImageFormatException("libnovas31.so")), Is.False);
+            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
+                () => throw new System.EntryPointNotFoundException("novas_transform")), Is.False);
             Assert.That(conditions, Is.Empty);
             Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions, () => new LoopCondition()), Is.True);
             Assert.That(conditions, Has.Count.EqualTo(1));

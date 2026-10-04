@@ -133,6 +133,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Start_guiding_releases_a_stale_pa_lease_but_never_a_running_polar_alignments() {
+            using var svc = NewService();
+            Assert.That(svc.ShouldReleasePaLease(true), Is.True, "nothing wired: a lease the guider reports is stale");
+            Assert.That(svc.ShouldReleasePaLease(false), Is.False);
+            Assert.That(svc.ShouldReleasePaLease(null), Is.False);
+
+            var aligning = true;
+            svc.PolarAlignActive = () => aligning;
+            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease");
+            aligning = false;
+            Assert.That(svc.ShouldReleasePaLease(true), Is.True);
+        }
+
+        [Test]
         public async System.Threading.Tasks.Task Mediator_guide_ops_are_noop_false_when_not_connected() {
             using var svc = NewService();
             // Unlike the REST StartGuidingAsync (which throws), the mediator path returns false so the

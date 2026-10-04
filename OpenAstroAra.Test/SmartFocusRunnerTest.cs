@@ -419,6 +419,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ParabolaVertexOffset_fits_the_offsets_reached_when_a_side_is_clamped() {
+            // y = 1 + (x − 30)² / 10000, the − side clamped at a travel limit 100 steps out instead of 200.
+            static double Y(double x) => 1 + (x - 30) * (x - 30) / 10000;
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(-100, Y(-100), Y(0), 200, Y(200)), Is.EqualTo(30).Within(1e-9));
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, Y(-100), Y(0), Y(200)), Is.LessThan(0),
+                "treating the clamped side as −200 puts the vertex on the wrong side");
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(0, Y(0), Y(0), 200, Y(200)), Is.Null, "no − side reached");
+        }
+
+        [Test]
         public void BracketVerdict_and_BracketOffset_are_pure() {
             Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, true, 2.1, true), Is.Null, "both sides clearly worse");
             Assert.That(AutofocusSweepService.BracketVerdict(1.0, 0.9, true, 2.1, true), Does.Contain("+ side"));

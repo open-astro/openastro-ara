@@ -156,8 +156,10 @@ public sealed partial class AutofocusSweepService {
                 // Shot 4 — the V through the three shots has a vertex; when it sits off the centre, go
                 // there and let the frame decide: the new position is kept only when it is clearly
                 // sharper than the centre shot. A vertex outside the bracket is not a V at all.
-                var vertexOffset = verdict is null ? ParabolaVertexOffset(bracket, minus.Hfr, shot1.Hfr, plus.Hfr) : null;
-                if (verdict is null && (vertexOffset is null || Math.Abs(vertexOffset.Value) > bracket)) {
+                var minusOffset = minusPosition - startPosition;
+                var plusOffset = plusPosition - startPosition;
+                var vertexOffset = verdict is null ? ParabolaVertexOffset(minusOffset, minus.Hfr, shot1.Hfr, plusOffset, plus.Hfr) : null;
+                if (verdict is null && (vertexOffset is null || vertexOffset.Value < minusOffset || vertexOffset.Value > plusOffset)) {
                     verdict = $"no minimum inside the bracket (vertex {vertexOffset?.ToString("0") ?? "undefined"})";
                 }
                 if (verdict is not null) {
@@ -372,17 +374,27 @@ public sealed partial class AutofocusSweepService {
 
     /// <summary>The vertex of the parabola through (−bracket, minusHfr), (0, centreHfr), (+bracket, plusHfr),
     /// as a signed step offset from the centre; null when the three points do not curve upward.</summary>
-    internal static double? ParabolaVertexOffset(int bracket, double minusHfr, double centreHfr, double plusHfr) {
-        if (bracket <= 0 || !double.IsFinite(minusHfr) || !double.IsFinite(centreHfr) || !double.IsFinite(plusHfr)) {
+    internal static double? ParabolaVertexOffset(int bracket, double minusHfr, double centreHfr, double plusHfr) =>
+        ParabolaVertexOffset(-bracket, minusHfr, centreHfr, bracket, plusHfr);
+
+    /// <summary>The same vertex through the offsets the focuser actually reached: a side clamped at a
+    /// travel limit is nearer the centre than the bracket asked for, and treating it as ±bracket would
+    /// skew the vertex. Null unless <paramref name="minusOffset"/> &lt; 0 &lt; <paramref name="plusOffset"/>
+    /// and the points curve upward.</summary>
+    internal static double? ParabolaVertexOffset(double minusOffset, double minusHfr, double centreHfr, double plusOffset, double plusHfr) {
+        if (!(minusOffset < 0 && plusOffset > 0)
+            || !double.IsFinite(minusHfr) || !double.IsFinite(centreHfr) || !double.IsFinite(plusHfr)) {
             return null;
         }
-        // y = a·x² + b·x + c with x in units of the bracket: c = centre, a + b = plus − c, a − b = minus − c.
-        var a = (plusHfr + minusHfr - 2 * centreHfr) / 2;
-        var b = (plusHfr - minusHfr) / 2;
+        // y = a·x² + b·x + c through (m, ym), (0, c), (p, yp): two equations in a and b.
+        double m = minusOffset, p = plusOffset, dm = minusHfr - centreHfr, dp = plusHfr - centreHfr;
+        var det = m * p * (m - p);
+        var a = (dm * p - dp * m) / det;
+        var b = (m * m * dp - p * p * dm) / det;
         if (a <= 0) {
             return null;
         }
-        return -b / (2 * a) * bracket;
+        return -b / (2 * a);
     }
 
     private static string? BracketVerdict(double centreHfr, SmartShot plus, SmartShot minus) =>

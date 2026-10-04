@@ -368,6 +368,8 @@ public partial class Program {
                     await focus.StopAsync().ConfigureAwait(false);
                 }
             };
+            // ...but never the lease a running polar alignment holds (resolved lazily for the same reason).
+            guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
             return guider;
         });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
