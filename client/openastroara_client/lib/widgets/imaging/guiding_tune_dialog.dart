@@ -59,7 +59,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   // The daemon's copy as fetched at open. The dialog's hydrate deliberately
   // does NOT go through the shared notifier: Settings → Guider stages its own
   // unsaved edits in the shared provider (pre-Save), and a provider hydrate
-  // here would silently revert them. Apply PUTs _serverCopy + the five tuning
+  // here would silently revert them. Apply PUTs _serverCopy + the six tuning
   // fields, so nothing unconfirmed is persisted and nothing staged is lost.
   Phd2Settings? _serverCopy;
 

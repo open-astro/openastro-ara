@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_equipment_choices.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_api.dart';
+import 'package:openastroara/services/guider_equipment_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/guider/guider_equipment_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -80,16 +83,45 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<Phd2Settings> getPhd2Settings() =>
       _load != null ? _load() : Future.value(const Phd2Settings());
+  /// Every PUT body, in order — Apply's persisted object is asserted on it.
+  final List<Phd2Settings> puts = [];
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async => value;
+  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+    puts.add(value);
+    return value;
+  }
+}
+
+/// Records each profile push's `tuningOnly` flag. Apply must ask for the
+/// tuning-only push: the full push re-sends equipment and stops guiding.
+class _RecordingEquipmentClient implements GuiderEquipmentClient {
+  final List<bool> pushes = [];
+  @override
+  Future<GuiderEquipmentChoicesResponse> getChoices() async =>
+      const GuiderEquipmentChoicesResponse(connected: true);
+  @override
+  Future<List<String>> discoverAlpaca(
+          {int? numQueries, int? timeoutSeconds}) async =>
+      const [];
+  @override
+  Future<double?> getAlpacaCameraPixelSize(
+          {String? host, int? port, int? device}) async =>
+      null;
+  @override
+  Future<void> pushProfile({bool tuningOnly = false}) async =>
+      pushes.add(tuningOnly);
+  @override
+  void close() {}
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester,
     {GuiderStatus? status,
     bool withServer = true,
     ProfileApi? profileApi,
-    Stream<WsEvent>? ws}) async {
+    Stream<WsEvent>? ws,
+    GuiderEquipmentClient? equipment}) async {
   final api = _FakeGuiderApi()..status = status;
+  final equipmentClient = equipment ?? _RecordingEquipmentClient();
   final container = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(
         _FakeSavedServerService(withServer ? const [_server] : const [])),
@@ -100,6 +132,8 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     // A deterministic hydrate by default — the real ProfileApi would hit the
     // test env's blocked HttpClient and leave the Apply gate in flux.
     profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
+    // Apply's push goes to a pure fake, never the real Dio client.
+    guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipmentClient),
   ]);
   addTearDown(container.dispose);
   // Steps and markers are stamped on arrival. On Windows (~15 ms clock) three
@@ -584,7 +618,7 @@ void main() {
     expect(container.read(phd2SettingsProvider).host, 'edited.local',
         reason: 'the dialog hydrates its own draft, never the shared provider');
 
-    // Apply persists daemon-copy + tuning fields and touches only the five
+    // Apply persists daemon-copy + tuning fields and touches only the six
     // tuning fields in the provider — the staged host edit survives.
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
@@ -622,21 +656,41 @@ void main() {
   });
 
   testWidgets('Apply commits the draft to the provider', (tester) async {
+    final profileApi = _FakeProfileApi();
+    final equipment = _RecordingEquipmentClient();
     final container = await _pump(tester,
         status: const GuiderStatus(
           name: 'OpenAstro Guider',
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
-        ));
+        ),
+        profileApi: profileApi,
+        equipment: equipment);
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
+    // Choose a guide exposure (default Unset) from the dropdown.
+    await tester.tap(find.text('Unset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 s').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
         reason: 'Apply commits the draft, then persists');
+    expect(container.read(phd2SettingsProvider).guideExposureMs, 2000);
+    // The PUT carries the chosen guide exposure…
+    expect(profileApi.puts, hasLength(1));
+    expect(profileApi.puts.single.guideExposureMs, 2000);
+    expect(profileApi.puts.single.raAggressiveness, 1.0);
+    // …and the re-push is the tuning-only one: the full push re-sends the
+    // equipment selections and stops guiding mid-run.
+    expect(equipment.pushes, [true],
+        reason: 'Apply must request pushProfile(tuningOnly: true)');
+    expect(find.text('Applied — guiding continues uninterrupted.'),
+        findsOneWidget);
 
     await _teardownPanel(tester, container);
   });
