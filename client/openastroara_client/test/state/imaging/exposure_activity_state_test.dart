@@ -94,6 +94,16 @@ void main() {
     expect(rig.state!.exposure, const Duration(seconds: 20));
   });
 
+  test('endLocally drops the activity and its watchdog', () async {
+    final rig = _Rig();
+    addTearDown(rig.dispose);
+    rig.ws.add(_ev('camera.exposure_started', _started('f8', 600)));
+    await Future<void>.delayed(Duration.zero);
+    expect(rig.state, isNotNull);
+    rig.container.read(exposureActivityProvider.notifier).endLocally();
+    expect(rig.state, isNull);
+  });
+
   test('malformed started payloads are ignored', () async {
     final rig = _Rig();
     addTearDown(rig.dispose);

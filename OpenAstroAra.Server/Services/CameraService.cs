@@ -388,8 +388,15 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             CapturedAt: capturedAt.ToString("O")));
     }
 
+    // Set by a REST abort, consumed by the ImageReady wait: without it the capture loop kept
+    // polling until exposure + margin after the camera had already been told to stop, so a
+    // cancelled 10-minute sub reported camera.exposure_failed eleven minutes later and the
+    // client's timer counted down a sub that no longer existed.
+    private int _abortRequested;
+
     public async Task AbortExposureAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
+        Interlocked.Exchange(ref _abortRequested, 1);
         // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
         // already cancelled, which would silently skip the abort — same hazard as the mount's
         // AbortSlew panic stop.
@@ -663,7 +670,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         if (ready == false) {
             LogCaptureFailedNotReady(frameId, request.ExposureSec);
-            _events?.ExposureFailed(frameId, kind, "camera never signaled ImageReady within the wait bound");
+            _events?.ExposureFailed(frameId, kind, "exposure aborted or the camera never signaled ImageReady within the wait bound");
             PublishOpFault(client, EquipmentFaultKind.StallTimeout,
                 $"camera never signaled ImageReady for a {request.ExposureSec:0.###}s exposure within the wait bound");
             return null;
@@ -982,8 +989,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // null = the connection was dropped/superseded mid-capture.
     private async Task<bool?> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
+        // A stale abort flag from an abort that landed with no capture running must not kill the
+        // NEXT capture on its first poll.
+        Interlocked.Exchange(ref _abortRequested, 0);
         while (DateTimeOffset.UtcNow < deadline) {
             await Task.Delay(ImageReadyPollInterval, ct).ConfigureAwait(false);
+            if (Interlocked.Exchange(ref _abortRequested, 0) == 1) {
+                return false; // the user aborted — report now, not at the nominal end of the sub
+            }
             bool stillOurClient;
             lock (_gate) {
                 stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected

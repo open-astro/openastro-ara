@@ -145,6 +145,10 @@ class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
     });
   }
 
+  /// The user cancelled from this client (the abort POST was accepted): drop
+  /// the timer now rather than wait for the daemon's failed event.
+  void endLocally() => _end();
+
   void _end() {
     _watchdog?.cancel();
     _watchdog = null;

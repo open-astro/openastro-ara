@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/camera_exposure_api.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/capture_progress_state.dart';
+import '../../state/imaging/exposure_activity_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
@@ -278,9 +279,14 @@ class ImagingTab extends ConsumerWidget {
       progress.reset();
       return;
     }
+    // Captured before the await, like the other notifier handles.
+    final activity = ref.read(exposureActivityProvider.notifier);
     try {
       await CameraExposureApi(server).abort();
       progress.reset();
+      // The rail banner would otherwise take over from the card and keep
+      // counting the sub we just cancelled until the daemon's failed event.
+      activity.endLocally();
     } catch (e) {
       // The abort POST failed. A lost response is NOT a successful abort —
       // the exposure may still be running and its frame will land, so do NOT
