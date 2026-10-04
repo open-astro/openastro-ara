@@ -587,6 +587,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Tuning_push_sends_only_runtime_safe_rpcs_and_reports_scope_tuning() {
+            // The 07:09 incident: Tune Guiding's Apply ran the FULL push, whose stop_capture +
+            // set_connected(false) window stopped guiding mid-run. The tuning push must never open it.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var events = new System.Collections.Concurrent.ConcurrentQueue<(string Type, System.Text.Json.JsonElement Payload)>();
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
+                .Returns(Task.CompletedTask);
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Cam A";
+            profiles.ActiveProfile.GuiderSettings.RAAggressiveness = 0.8;
+            profiles.ActiveProfile.GuiderSettings.GuideExposureMs = 500;
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+            var before = fake.ReceivedMethods.Count; // the connect handshake's own RPCs are not under test
+            events.Clear();
+
+            await svc.PushGuiderTuningAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var sent = fake.ReceivedMethods.Skip(before).ToList();
+            Assert.That(sent, Does.Contain("set_exposure"));
+            Assert.That(sent, Does.Contain("set_algo_param"));
+            Assert.That(sent.Where(m => m is "set_connected" or "stop_capture" or "set_profile_setup" or "set_profile"
+                    || m.StartsWith("set_selected", StringComparison.Ordinal)),
+                Is.Empty, "a tuning push must never open the equipment disconnect window");
+            var pushed = events.Where(e => e.Type == "guider.profile_pushed").ToList();
+            Assert.That(pushed, Has.Count.EqualTo(1));
+            Assert.That(pushed[0].Payload.GetProperty("scope").GetString(), Is.EqualTo("tuning"));
+        }
+
+        [Test]
         public async Task Delete_calibration_files_round_trips_through_the_fake() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
