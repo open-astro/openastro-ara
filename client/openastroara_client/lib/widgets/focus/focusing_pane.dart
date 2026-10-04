@@ -386,7 +386,7 @@ class MainFocusCard extends ConsumerWidget {
     switch (run.state) {
       case AutofocusRunStates.running:
         return switch (run.phase) {
-          'smart' => 'Smart Focus — shot ${run.sweepProbes.length} of 3',
+          'smart' => 'Smart Focus — shot ${run.sweepProbes.length} of ${run.totalSteps > 0 ? run.totalSteps : 5}',
           'coarse' => 'Finding rough focus…',
           'sweep' => 'Sweeping — probe ${run.completedSteps} of ${run.totalSteps}'
               '${run.sweepAttempt > 1 ? ' (pass ${run.sweepAttempt})' : ''}',
