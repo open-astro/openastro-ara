@@ -8,6 +8,7 @@ import '../../state/settings/settings_nav.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../help_icon.dart';
 import 'rotation_overlay.dart';
 import 'sequencer_toolbar.dart';
 
@@ -82,13 +83,23 @@ class RotationAssistCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'ROTATE THE CAMERA BY HAND',
-                      style: TextStyle(
-                        fontSize: 11,
-                        letterSpacing: 1.1,
-                        color: AraColors.textSecondary,
-                      ),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'ROTATE THE CAMERA BY HAND',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1.1,
+                              color: AraColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        HelpIcon(helpKey: 'session.rotate_by_hand'),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

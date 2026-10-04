@@ -1033,6 +1033,20 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['eq.guider.setup_type'],
     keywords: ['guide camera', 'oag', 'guide scope', 'helical', 'focus', 'hfr', 'live'],
   ),
+  'session.rotate_by_hand': Help(
+    key: 'session.rotate_by_hand',
+    title: 'Rotating the camera by hand',
+    body:
+        'A rig without a motorised rotator still gets the framing you planned: when a sequence reaches *Rotate Camera by Hand* '
+        'the mount has already slewed to the target, the run pauses and this readout appears.\n\n'
+        '* Ara takes a short exposure, plate-solves it and shows how far the camera angle is from the planned one. Loosen the camera, turn it by about that much, then watch the next solve. **Keep going** means the same way, **Go back** means you turned past it.\n'
+        '* Within a couple of degrees reads **On target**. Tighten the camera and press **Done — resume**; the *Center and Rotate* step that follows checks the angle again and tunes the pointing.\n'
+        '* The picture is the solved frame with north marked and the planned framing drawn over it. **Show on sky** draws both the planned frame and where the camera points right now on the planetarium, so you can judge the framing against the stars.\n'
+        '* A 180° turn gives the same framing, so the readout always shows the shorter way round.\n\n'
+        'Rigs with a rotator skip this step; rigs that cannot plate-solve (no solver installed or no optics in the profile) skip it too and the sequence carries on.',
+    relatedSettings: ['img.platesolve.engine', 'img.platesolve.solver_path'],
+    keywords: ['rotation', 'rotate', 'position angle', 'framing', 'rotator', 'by hand', 'plate solve'],
+  ),
   'img.autofocus.method': Help(
     key: 'img.autofocus.method',
     title: 'Autofocus method',

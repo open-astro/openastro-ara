@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/help/registry.dart';
 import 'package:openastroara/models/rotation_assist.dart';
 import 'package:openastroara/state/rotation/rotation_assist_state.dart';
+import 'package:openastroara/widgets/help_icon.dart';
 import 'package:openastroara/widgets/sequencer/rotation_assist_card.dart';
 
 class _Stub extends RotationAssistNotifier {
@@ -106,6 +108,25 @@ void main() {
       expect(find.textContaining('the arrow is north'), findsOneWidget);
     },
   );
+
+  testWidgets('the title carries a help icon for the readout', (tester) async {
+    const status = RotationAssistStatus(
+      active: true,
+      state: 'running',
+      targetPositionAngleDeg: 299,
+      toleranceDeg: 1,
+      seq: 1,
+      latest: RotationAssistSample(
+        seq: 1,
+        solvedPositionAngleDeg: 287,
+        deltaDeg: 12,
+      ),
+    );
+    await _pumpCard(tester, const RotationAssistLive(status: status));
+    final icon = tester.widget<HelpIcon>(find.byType(HelpIcon));
+    expect(icon.helpKey, 'session.rotate_by_hand');
+    expect(helpRegistry.containsKey(icon.helpKey), isTrue);
+  });
 
   testWidgets('no frame yet: the card has no picture pane', (tester) async {
     const latest = RotationAssistSample(
