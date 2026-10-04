@@ -400,11 +400,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     public async Task AbortExposureAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
-        Interlocked.Exchange(ref _abortRequested, 1);
         // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
         // already cancelled, which would silently skip the abort — same hazard as the mount's
         // AbortSlew panic stop.
         await Task.Run(() => client.AbortExposure(), CancellationToken.None).ConfigureAwait(false);
+        // Flag the wait only once the camera accepted the abort: a driver that refuses it
+        // (CanAbortExposure false, an HTTP error) keeps exposing, and its frame must still land
+        // rather than be discarded as "aborted" while the sensor is busy.
+        Interlocked.Exchange(ref _abortRequested, 1);
         RefreshCacheOnce();
     }
 

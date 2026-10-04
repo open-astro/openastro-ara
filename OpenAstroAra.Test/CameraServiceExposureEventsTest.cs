@@ -60,10 +60,11 @@ namespace OpenAstroAra.Test {
 
         /// <summary>A scripted camera whose ImageReady is whatever the test says; ImageArray is a
         /// 2×2 frame (the extra Type/Rank fields ride in the scripted Value slot).</summary>
-        private static ScriptedAlpacaDevice Camera(Func<bool> imageReady) => ScriptedAlpacaDevice.Start(path =>
+        private static ScriptedAlpacaDevice Camera(Func<bool> imageReady, string? imageArray = null,
+                Func<string, string?>? putResponder = null) => ScriptedAlpacaDevice.Start(path =>
             path.EndsWith("/imageready", StringComparison.Ordinal) ? (imageReady() ? "true" : "false")
-            : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
-            : null);
+            : path.EndsWith("/imagearray", StringComparison.Ordinal) ? imageArray ?? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+            : null, putResponder);
 
         private static DiscoveredDeviceDto Device(ScriptedAlpacaDevice box) => new(
             UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
@@ -143,6 +144,65 @@ namespace OpenAstroAra.Test {
             lock (faults) {
                 Assert.That(faults.Where(f => f.Kind == EquipmentFaultKind.StallTimeout), Is.Empty,
                     "a user's abort is not a device fault");
+            }
+        }
+
+        [Test]
+        public async Task An_abort_the_camera_refuses_leaves_the_exposure_running_and_its_frame_lands() {
+            // A camera without AbortExposure (or an HTTP error) keeps exposing: the frame must land,
+            // not be discarded as "aborted" while the sensor is still busy.
+            var ready = false;
+            await using var box = Camera(() => ready,
+                putResponder: path => path.EndsWith("/abortexposure", StringComparison.Ordinal)
+                    ? ScriptedAlpacaDevice.Error("AbortExposure is not supported")
+                    : null);
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAsync(box, ws);
+
+            var capture = svc.CaptureForAnalysisAsync(30, 1, CancellationToken.None);
+            await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the exposure was never announced");
+            await Assert.CatchAsync<Exception>(() => svc.AbortExposureAsync(CancellationToken.None));
+            await Task.Delay(600); // a couple of ImageReady polls with the refused abort behind them
+            ready = true;
+            await capture.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.That(ws.Exposure().Select(e => e.Type),
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureComplete }));
+        }
+
+        [Test]
+        public async Task A_caller_cancel_after_the_start_ends_it_as_cancelled() {
+            await using var box = Camera(() => false);
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAsync(box, ws);
+            using var cts = new CancellationTokenSource();
+
+            var capture = svc.CaptureForAnalysisAsync(30, 1, cts.Token);
+            await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the exposure was never announced");
+            await cts.CancelAsync();
+
+            await Assert.CatchAsync<OperationCanceledException>(() => capture.WaitAsync(TimeSpan.FromSeconds(10)));
+            var events = ws.Exposure();
+            Assert.That(events.Select(e => e.Type),
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+            Assert.That(events[1].Payload.GetProperty("reason").GetString(), Is.EqualTo("cancelled"));
+        }
+
+        [Test]
+        public async Task A_device_fault_after_the_start_ends_it_as_failed_with_the_fault() {
+            // The image is ready but the download fails at the device.
+            await using var box = Camera(() => true, imageArray: ScriptedAlpacaDevice.Error("sensor readout failed"));
+            var ws = new RecordingBroadcaster();
+            var (hub, faults) = Hub();
+            using var svc = await ConnectedAsync(box, ws, hub);
+
+            await Assert.CatchAsync<Exception>(() => svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None));
+            var events = ws.Exposure();
+            Assert.That(events.Select(e => e.Type),
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+            Assert.That(events[1].Payload.GetProperty("reason").GetString(), Is.Not.EqualTo("cancelled").And.Not.EqualTo("aborted"));
+            lock (faults) {
+                Assert.That(faults.Select(f => f.Kind), Does.Contain(EquipmentFaultKind.OpError));
             }
         }
 
