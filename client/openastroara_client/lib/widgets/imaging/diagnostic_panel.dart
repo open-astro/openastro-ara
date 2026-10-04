@@ -42,12 +42,19 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                   Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 18, color: AraColors.textSecondary),
                   const SizedBox(width: 4),
-                  StatusIndicator(level: diag.level, label: diag.label),
+                  // Flexible, not fixed: "1 issue — critical" plus the event
+                  // count overflowed the 320 px rail by ~47 px (seen on the
+                  // Pi rig when a daemon reinstall raised an issue).
+                  Flexible(
+                    child: StatusIndicator(level: diag.level, label: diag.label),
+                  ),
                   const Spacer(),
                   Text(
                     diag.events.isEmpty
                         ? 'No recent events'
                         : '${diag.events.length} event${diag.events.length == 1 ? '' : 's'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AraColors.textSecondary,
                         ),

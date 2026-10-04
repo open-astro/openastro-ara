@@ -289,10 +289,11 @@ class _RmsColumn extends StatelessWidget {
           _cell(context, 'Total', rms?.totalArcsec, rms?.totalPx),
           _cell(context, 'RA', rms?.raArcsec, rms?.raPx),
           _cell(context, 'Dec', rms?.decArcsec, rms?.decPx),
+          // Short on purpose: the column is 180 px wide.
           Text(
             scale == null
-                ? 'Scale unknown · graph in px'
-                : 'Scale ${scale!.toStringAsFixed(2)}″/px · ${steps.length} steps',
+                ? 'No scale · graph in px'
+                : '${scale!.toStringAsFixed(2)}″/px · ${steps.length} steps',
             style: small,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

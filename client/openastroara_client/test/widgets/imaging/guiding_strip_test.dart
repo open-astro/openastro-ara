@@ -169,7 +169,7 @@ void main() {
     expect(find.text('0.30 px'), findsOneWidget);
     expect(find.text('0.40 px'), findsOneWidget);
     expect(find.text('—'), findsNWidgets(3));
-    expect(find.text('Scale unknown · graph in px'), findsOneWidget);
+    expect(find.text('No scale · graph in px'), findsOneWidget);
 
     // With the §63.5 guide train set the pixels convert:
     // 206.265 * 3.75 / 200 ≈ 3.867 ″/px → 0.5 px ≈ 1.93″.
@@ -182,7 +182,7 @@ void main() {
     expect(find.text('1.16″'), findsOneWidget);
     expect(find.text('1.55″'), findsOneWidget);
     expect(find.text('0.50 px'), findsOneWidget);
-    expect(find.textContaining('Scale 3.87″/px'), findsOneWidget);
+    expect(find.textContaining('3.87″/px'), findsOneWidget);
 
     // The tuning controls no longer live inline — they open in the dialog.
     expect(find.text('RA aggressiveness'), findsNothing);
@@ -251,7 +251,7 @@ void main() {
     // The guider's own scale is reported on the steps and drives both the
     // RMS conversion (0.5 px × 2 = 1.00″) and the footer.
     expect(find.text('RMS 1.00″'), findsOneWidget);
-    expect(find.text('Scale 2.00″/px · 3 steps'), findsOneWidget);
+    expect(find.text('2.00″/px · 3 steps'), findsOneWidget);
     await _teardownPanel(tester, container);
   });
 

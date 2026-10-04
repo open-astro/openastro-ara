@@ -39,7 +39,14 @@ class StatusIndicator extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
+              // Flexible so a long label ("1 issue — critical") shrinks with
+              // ellipsis in a tight row instead of overflowing it.
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
             ],
           ),
         ),
