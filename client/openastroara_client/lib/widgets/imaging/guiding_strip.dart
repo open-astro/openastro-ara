@@ -439,7 +439,7 @@ class _StatsColumn extends StatelessWidget {
     final value = theme.bodySmall;
     Widget row(String name, String v) => Row(
           children: [
-            SizedBox(width: 52, child: Text(name, maxLines: 1, style: label)),
+            SizedBox(width: 66, child: Text(name, maxLines: 1, style: label)),
             Expanded(
               child: Text(v, maxLines: 1, style: value, textAlign: TextAlign.right),
             ),

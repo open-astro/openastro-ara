@@ -53,16 +53,18 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                     child: StatusIndicator(level: diag.level, label: diag.label),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    diag.events.isEmpty
-                        ? 'No recent events'
-                        : '${diag.events.length} event${diag.events.length == 1 ? '' : 's'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
-                  ),
+                  // Only a count when there is one: "No recent events" beside
+                  // "nominal" said nothing and crowded the label out of the
+                  // 320 px rail.
+                  if (diag.events.isNotEmpty)
+                    Text(
+                      '${diag.events.length} event${diag.events.length == 1 ? '' : 's'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                    ),
                 ],
               ),
             ),
