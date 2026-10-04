@@ -383,5 +383,58 @@ namespace OpenAstroAra.Test {
             Assert.That(GuideFocusService.MedianHfrOfBrightest(brightestFirst, 4), Is.EqualTo(1.0));
             Assert.That(GuideFocusService.MedianHfrOfBrightest(new List<DetectedStar>(), 12), Is.EqualTo(0.0));
         }
+    
+
+        [Test]
+        public async Task The_loop_stops_itself_once_the_median_hfr_has_held_under_the_target() {
+            // An OAG at 2000 mm with a 200 mm aperture: the target is ~3.9 px × 1.3, and the synthetic
+            // σ=1.8 stars read ~2 px, so the tenth measurable frame ends the run as "in_focus".
+            using var guider = NewGuider();
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
+                decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: StarFrame, optics: () => (2000, 3.75, 200));
+
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var stopped = await PollStatusAsync(svc, s => s.State == "stopped");
+
+            Assert.That(stopped.StopReason, Is.EqualTo(GuideFocusService.StopReasonInFocus));
+            Assert.That(stopped.Seq, Is.EqualTo(GuideFocusService.InFocusHoldFrames));
+            Assert.That(svc.IsActive, Is.False);
+
+            // A new run starts over: frame counter, trend and stop reason.
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var fresh = svc.GetStatus();
+            Assert.That(fresh.Seq, Is.LessThan(GuideFocusService.InFocusHoldFrames));
+            Assert.That(fresh.StopReason, Is.Null);
+            Assert.That(fresh.Recent.Count, Is.LessThan(GuideFocusService.InFocusHoldFrames));
+            await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task The_loop_keeps_running_while_the_median_sits_above_the_target_or_without_a_target() {
+            using var guider = NewGuider();
+            // Guide scope at 120 mm: target 0.7 × 1.3 = 0.91 px, the σ=1.8 stars read ~2 px → never in focus.
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
+                decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: StarFrame, optics: () => (120, 3.75, 0));
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var running = await PollStatusAsync(svc, s => s.Seq >= GuideFocusService.InFocusHoldFrames + 2);
+            Assert.That(running.State, Is.EqualTo("running"));
+            Assert.That(running.StopReason, Is.Null);
+            await svc.StopAsync();
+            Assert.That(svc.GetStatus().StopReason, Is.Null, "a user stop carries no reason");
+
+            Assert.That(svc.InFocusHeld(null), Is.False);
+        }
+
+        [Test]
+        public void InFocusHeld_uses_the_median_so_single_bad_frames_do_not_reset_it() {
+            using var guider = NewGuider();
+            using var svc = NewLoopService(guider, StarFrame);
+            // 10 frames at 0.8 with three seeing spikes at 1.6: median 0.8 ≤ 0.91.
+            var hfrs = new[] { 0.8, 1.6, 0.8, 0.8, 1.6, 0.8, 0.8, 0.8, 1.6, 0.8 };
+            for (int i = 0; i < hfrs.Length; i++) {
+                svc.Record(Sample(i + 1, hfrs[i], 10), null);
+                Assert.That(svc.InFocusHeld(0.7), Is.EqualTo(i == hfrs.Length - 1), $"after frame {i + 1}");
+            }
+        }
     }
 }

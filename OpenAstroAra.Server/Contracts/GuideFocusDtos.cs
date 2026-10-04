@@ -57,4 +57,7 @@ public sealed record GuideFocusStatusDto(
     // undersampled star); null when the profile has no guide focal length / pixel size. The client's
     // "in focus" verdict compares against it so a static focuser is not told to turn by frame noise.
     double? ExpectedHfr = null,
-    double? PlateScaleArcsec = null);
+    double? PlateScaleArcsec = null,
+    // Why a `stopped` loop stopped: "in_focus" when the daemon ended it itself because the median HFR
+    // of the last InFocusHoldFrames frames sat at or under expected_hfr × 1.3; null for a user stop.
+    string? StopReason = null);

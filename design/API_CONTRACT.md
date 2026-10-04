@@ -344,6 +344,13 @@ under `expected_hfr` × 1.3 before it reads any trend, and the trend compares 3-
 HFR itself is now the median over the 12 brightest stars rather than the mean over every blob, so faint
 stars flickering across the threshold no longer move the number.
 
+**Self-stop (same day):** `stop_reason` (nullable string) on the same DTO. The daemon ends the loop
+itself with `"in_focus"` once the median HFR over the last 10 measurable frames (≥ 2 stars) is at or
+under `expected_hfr` × 1.3 — a median rather than a streak, since seeing throws single frames well above
+the line (an OAG at 3000 mm would never hold ten clean frames in a row). A user stop leaves it null. A
+start now resets the frame counter (`seq`), the trend (`recent`), the picture and the stop reason, so a
+refocus run never carries frames from before it; the client clears its chart from the same payload.
+
 ### 2026-10-03 — Setup → Smart Focus: the autofocus run record and the guide-camera focus loop
 
 **Endpoint(s) or area:** `GET /api/v1/autofocus/state`, `GET /api/v1/autofocus/frame`, `POST /api/v1/autofocus/cancel`; `POST /api/v1/equipment/guider/focus/start`, `POST …/focus/stop`, `GET …/focus`, `GET …/focus/frame`; `POST /api/v1/equipment/camera/connect` gains a 409; WebSocket `autofocus.step_complete`, `autofocus.curve_fit`, `autofocus.completed`, `autofocus.failed`.

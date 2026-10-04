@@ -54,5 +54,7 @@ void main() {
     expect(s.expectedHfr, 0.7);
     expect(s.plateScaleArcsec, 6.45);
     expect(GuideFocusStatus.fromJson({'active': false, 'state': 'idle'}).expectedHfr, isNull);
+    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'stopped', 'stop_reason': 'in_focus'}).stopReason, 'in_focus');
+    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'stopped'}).stopReason, isNull);
   });
 }

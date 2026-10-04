@@ -20,6 +20,7 @@ using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -99,6 +100,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private long? _bestSeq;
     private readonly Queue<GuideFocusSampleDto> _recent = new();
     private string? _error;
+    private string? _stopReason;
+    private bool _inFocusHeld;
     private int _consecutiveFailures;
     private byte[]? _frame;
     private long _frameSeq;
@@ -131,6 +134,14 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     /// <summary>Stars used for the per-frame HFR: the brightest few persist frame to frame, so the
     /// readout no longer jumps when faint stars flicker across the detection threshold.</summary>
     internal const int HfrStarCount = 12;
+    /// <summary>How far above the expected HFR still counts as in focus (the client uses the same).</summary>
+    internal const double TargetTolerance = 1.3;
+    /// <summary>The loop stops itself once the MEDIAN HFR over this many frames is at or under the target:
+    /// a median, not a streak, because seeing throws single frames well above it (an OAG at 3000 mm
+    /// would never hold ten clean frames in a row).</summary>
+    internal const int InFocusHoldFrames = 10;
+    /// <summary>The stop reason a self-ended loop reports.</summary>
+    internal const string StopReasonInFocus = "in_focus";
 
     /// <summary>
     /// The HFR an in-focus star should read: seeing and the aperture's diffraction added in quadrature,
@@ -211,6 +222,13 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 _latest = null;
                 _bestHfr = null;
                 _bestSeq = null;
+                // A fresh run: the frame counter, the trend and the picture all start over, so the
+                // frames from before a refocus cannot sit in the chart or hold the "best".
+                _seq = 0;
+                _frame = null;
+                _frameSeq = 0;
+                _stopReason = null;
+                _inFocusHeld = false;
                 _recent.Clear();
                 _error = null;
                 _consecutiveFailures = 0;
@@ -279,7 +297,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 ConsecutiveFailures: _consecutiveFailures,
                 HasFrame: _frame is not null,
                 ExpectedHfr: expected?.ExpectedHfrPx,
-                PlateScaleArcsec: expected?.PlateScaleArcsec);
+                PlateScaleArcsec: expected?.PlateScaleArcsec,
+                StopReason: _stopReason);
         }
     }
 
@@ -314,6 +333,17 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                         ? await SyntheticSampleAsync(request, ct).ConfigureAwait(false)
                         : await CaptureAndMeasureAsync(guider, request, workDir, ct).ConfigureAwait(false);
                     Record(sample.Sample, sample.Jpeg);
+                    if (InFocusHeld(ExpectedQuietly()?.ExpectedHfrPx)) {
+                        double median;
+                        lock (_gate) {
+                            _state = "stopped";
+                            _stopReason = StopReasonInFocus;
+                            median = MedianRecentHfr(InFocusHoldFrames);
+                        }
+                        LogInFocusStopped(InFocusHoldFrames, median);
+                        await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+                        return;
+                    }
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
@@ -440,6 +470,45 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         }
     }
 
+    /// <summary>True once the median HFR of the last <see cref="InFocusHoldFrames"/> measurable frames
+    /// (≥ 2 stars) is at or under <paramref name="expectedHfr"/> × <see cref="TargetTolerance"/>.
+    /// Sticky for the run so the loop stops exactly once.</summary>
+    internal bool InFocusHeld(double? expectedHfr) {
+        if (expectedHfr is not > 0) {
+            return false;
+        }
+        lock (_gate) {
+            if (_inFocusHeld) {
+                return true;
+            }
+            if (_recent.Count < InFocusHoldFrames) {
+                return false;
+            }
+            var median = MedianRecentHfr(InFocusHoldFrames);
+            _inFocusHeld = median > 0 && median <= expectedHfr.Value * TargetTolerance;
+            return _inFocusHeld;
+        }
+    }
+
+    // Caller holds _gate. Median over the last `count` samples with ≥ 2 stars; 0 when fewer than
+    // `count` of them are measurable (a starless stretch must not read as focus).
+    private double MedianRecentHfr(int count) {
+        var hfrs = new List<double>(count);
+        foreach (var s in _recent.Reverse()) {
+            if (s.Stars >= 2 && s.Hfr > 0) {
+                hfrs.Add(s.Hfr);
+                if (hfrs.Count == count) {
+                    break;
+                }
+            }
+        }
+        if (hfrs.Count < count) {
+            return 0;
+        }
+        hfrs.Sort();
+        return count % 2 == 1 ? hfrs[count / 2] : 0.5 * (hfrs[count / 2 - 1] + hfrs[count / 2]);
+    }
+
     internal void Record(GuideFocusSampleDto sample, byte[]? jpeg) {
         lock (_gate) {
             _latest = sample;
@@ -497,6 +566,9 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Guide-camera focus loop stopped.")]
     private partial void LogStopped();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Guide focus: in focus — the median HFR over the last {Frames} frames is {Median:0.00} px, at or under the target; loop stopped")]
+    private partial void LogInFocusStopped(int frames, double median);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Guide-camera focus loop: the in-flight capture did not finish within the stop grace — a late SingleFrameComplete may still arrive.")]
     private partial void LogStopTimedOut();

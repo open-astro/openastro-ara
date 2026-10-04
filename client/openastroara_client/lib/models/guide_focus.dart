@@ -7,6 +7,8 @@ abstract final class GuideFocusStates {
   static const idle = 'idle';
   static const running = 'running';
   static const stopped = 'stopped';
+  /// The daemon's own stop once the median HFR held under the target.
+  static const stopReasonInFocus = 'in_focus';
   static const error = 'error';
 }
 
@@ -67,6 +69,9 @@ class GuideFocusStatus {
   /// profile's guide optics; null when the profile has no guide focal length.
   final double? expectedHfr;
   final double? plateScaleArcsec;
+  /// Why a stopped loop stopped: [GuideFocusStates.stopReasonInFocus] when
+  /// the daemon ended it itself, null for a user stop.
+  final String? stopReason;
 
   const GuideFocusStatus({
     this.active = false,
@@ -83,6 +88,7 @@ class GuideFocusStatus {
     this.hasFrame = false,
     this.expectedHfr,
     this.plateScaleArcsec,
+    this.stopReason,
   });
 
   static const idle = GuideFocusStatus();
@@ -113,6 +119,7 @@ class GuideFocusStatus {
       hasFrame: json['has_frame'] as bool? ?? false,
       expectedHfr: (json['expected_hfr'] as num?)?.toDouble(),
       plateScaleArcsec: (json['plate_scale_arcsec'] as num?)?.toDouble(),
+      stopReason: json['stop_reason'] is String ? json['stop_reason'] as String : null,
     );
   }
 }
@@ -124,6 +131,8 @@ extension GuideFocusVerdict on GuideFocusStatus {
   /// [hfr] is at or under the target (× [kGuideFocusTargetTolerance]).
   bool hfrInFocus(double hfr) => hasTarget && hfr > 0 && hfr <= expectedHfr! * kGuideFocusTargetTolerance;
 
-  /// The best HFR this session reached the target: the guide-camera step is done.
-  bool get focusedThisSession => bestHfr != null && hfrInFocus(bestHfr!);
+  /// The best HFR this session reached the target, or the daemon stopped the
+  /// loop itself on a held in-focus reading: the guide-camera step is done.
+  bool get focusedThisSession =>
+      stopReason == GuideFocusStates.stopReasonInFocus || (bestHfr != null && hfrInFocus(bestHfr!));
 }

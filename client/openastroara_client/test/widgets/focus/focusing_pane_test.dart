@@ -231,6 +231,11 @@ void main() {
     expect(stoppedLine.$1, 'In focus · best HFR 0.68');
     expect(stoppedLine.$2, AraColors.accentConnected);
     expect(stopped.focusedThisSession, isTrue);
+    const selfStopped = GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68, latest: sample, stopReason: 'in_focus');
+    final selfLine = GuideFocusCard.headlineFor(selfStopped, gated: false, blocked: false);
+    expect(selfLine.$1, 'In focus — held, stopped · best HFR 0.68');
+    expect(selfLine.$2, AraColors.accentConnected);
+    expect(selfStopped.focusedThisSession, isTrue, reason: 'the daemon\'s own stop is the verdict even without a target');
     expect(const GuideFocusStatus(active: false, state: 'stopped', bestHfr: 1.2, expectedHfr: 0.7).focusedThisSession, isFalse);
     expect(const GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68).focusedThisSession, isFalse, reason: 'no target, no verdict');
   });

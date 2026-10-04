@@ -40,6 +40,9 @@ class GuideFocusCard extends ConsumerStatefulWidget {
     if (status.state == GuideFocusStates.error) return ('Stopped on an error', AraColors.accentError);
     if (latest != null) {
       final best = status.bestHfr;
+      if (status.stopReason == GuideFocusStates.stopReasonInFocus) {
+        return ('In focus — held, stopped${best != null ? ' · best HFR ${best.toStringAsFixed(2)}' : ''}', AraColors.accentConnected);
+      }
       if (status.focusedThisSession) {
         return ('In focus · best HFR ${best!.toStringAsFixed(2)}', AraColors.accentConnected);
       }

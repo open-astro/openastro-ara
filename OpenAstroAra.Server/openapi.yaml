@@ -8558,6 +8558,10 @@ components:
             - number
             - string
           format: double
+        stop_reason:
+          type:
+            - 'null'
+            - string
     GuiderCalibrationEntryDto:
       type: object
       properties:
