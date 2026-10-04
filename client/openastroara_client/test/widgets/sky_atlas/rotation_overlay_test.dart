@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/widgets/sequencer/rotation_overlay.dart';
+import 'package:openastroara/widgets/sky_atlas/rotation_overlay.dart';
 
 void main() {
   group('rotation overlay geometry', () {

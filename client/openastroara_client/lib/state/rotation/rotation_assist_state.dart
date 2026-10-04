@@ -61,8 +61,8 @@ final rotationAssistApiProvider = Provider<RotationAssistClient?>((ref) {
 });
 
 /// Follows the daemon's by-hand rotation readout: polled on a short timer
-/// while a readout runs (a run's Rotate camera by hand step starts it), slowly
-/// otherwise so a readout started by the daemon shows up within seconds.
+/// while a readout runs (the Plan screen's Rotate camera panel starts it),
+/// slowly otherwise so a readout started elsewhere shows up within seconds.
 class RotationAssistNotifier extends Notifier<RotationAssistLive> {
   Timer? _timer;
   int _generation = 0;
@@ -119,12 +119,23 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
-  Future<void> start({required double positionAngleDeg}) async {
+  /// Start (or, in single mode, take one more frame of) the readout toward
+  /// [positionAngleDeg]. The frame is kept: toward the same target the daemon
+  /// keeps the history too, so the picture only changes when a new solve lands.
+  Future<void> start({
+    required double positionAngleDeg,
+    double? exposureSeconds,
+    String mode = RotationAssistModes.loop,
+  }) async {
     final api = ref.read(rotationAssistApiProvider);
     if (api == null || state.busy) return;
-    state = state.copyWith(busy: true, clearError: true, clearFrame: true);
+    state = state.copyWith(busy: true, clearError: true);
     try {
-      await api.start(positionAngleDeg: positionAngleDeg);
+      await api.start(
+        positionAngleDeg: positionAngleDeg,
+        exposureSeconds: exposureSeconds,
+        mode: mode,
+      );
       if (!ref.mounted) return;
       state = state.copyWith(busy: false);
       await refresh();
@@ -202,7 +213,7 @@ RotationHint rotationHint(RotationAssistStatus status) {
     return const RotationHint(
       RotateAdvice.noSolve,
       'No solve',
-      'The field would not solve. Check the sky and the exposure, then start again.',
+      'The field would not solve. Check the sky and the exposure, then try again.',
     );
   }
   if (latest == null) {
@@ -217,7 +228,7 @@ RotationHint rotationHint(RotationAssistStatus status) {
     return const RotationHint(
       RotateAdvice.onTarget,
       'On target',
-      'Hold the camera here and press Resume.',
+      'Tighten the camera here — the framing matches the plan.',
     );
   }
   // The user's last move: the newest earlier sample whose delta differs by

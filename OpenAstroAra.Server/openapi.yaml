@@ -10149,6 +10149,17 @@ components:
             - number
             - string
           format: double
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mode:
+          type:
+            - 'null'
+            - string
     RotationAssistStatusDto:
       required:
         - active
@@ -10220,6 +10231,23 @@ components:
             - integer
             - string
           format: int64
+          default: 0
+        mode:
+          type: string
+          default: loop
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        default_exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
           default: 0
     RotatorMoveRequestDto:
       required:

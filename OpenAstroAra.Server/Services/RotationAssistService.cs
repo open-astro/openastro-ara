@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Sequencer.SequenceItem.Rotator;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
@@ -25,10 +24,20 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>The readout's control surface: the sequencer seam plus what the REST endpoints need.</summary>
-public interface IRotationAssistService : IRotationAssistExecutor {
+/// <summary>The readout cannot run on this rig as configured — no plate solver, no optics in the
+/// profile. The REST start reports it as a conflict.</summary>
+public class RotationAssistNotReadyException : InvalidOperationException {
+    public RotationAssistNotReadyException() { }
+    public RotationAssistNotReadyException(string message) : base(message) { }
+    public RotationAssistNotReadyException(string message, Exception inner) : base(message, inner) { }
+}
+
+/// <summary>The readout's control surface: what the REST endpoints need.</summary>
+public interface IRotationAssistService {
     bool IsActive { get; }
     Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct);
+    /// <summary>Stop the readout (idempotent; waits for the in-flight solve to drain).</summary>
+    Task StopAsync();
     RotationAssistStatusDto GetStatus();
     /// <summary>The latest solved frame rendered as JPEG (auto-stretched, stars ringed) with its sequence
     /// number, or null before the first successful solve.</summary>
@@ -36,26 +45,35 @@ public interface IRotationAssistService : IRotationAssistExecutor {
 }
 
 /// <summary>
-/// The by-hand rotation readout (the daemon as a protractor). A rig without a rotator cannot act on a
-/// framing angle, so a run's <c>Rotate camera by hand</c> step starts this loop and parks the run awaiting the
-/// user: capture → plate-solve → the solved position angle and the signed, folded delta to the target, again
-/// and again, until the user presses Resume. The client shows the delta and advises relative to the user's
-/// last move (the daemon cannot know which way "clockwise" turns the sky on this optical train). One loop at
-/// a time; repeated solve failures end it in <c>error</c> rather than spinning against a cloud.
+/// The by-hand rotation readout (the daemon as a protractor), driven from the Plan screen's framing. A rig
+/// without a rotator cannot act on a framing angle, so the user turns the camera while the daemon measures:
+/// capture → plate-solve → the solved position angle and the signed, folded delta to the target. In
+/// <c>loop</c> mode the readout repeats until stopped; in <c>single</c> mode it takes one frame, solves it
+/// and ends in <c>stopped</c> with the result kept, so the user can turn, shoot again, and compare. The
+/// exposure is the request's or, by default, the profile's plate-solve exposure. The client turns the delta
+/// history into advice relative to the user's last move (the daemon cannot know which way "clockwise" turns
+/// the sky on this optical train); that history survives a restart toward the SAME target, so single shots
+/// still get "keep going / go back". One readout at a time; repeated solve failures end it in <c>error</c>
+/// rather than spinning against a cloud.
 /// </summary>
 public sealed partial class RotationAssistService : IRotationAssistService, IDisposable {
 
     internal const int MaxConsecutiveFailures = 5;
     internal const int RecentWindow = 120;
+    internal const double MinExposureSeconds = 0.01;
+    internal const double MaxExposureSeconds = 60;
 
     private readonly IPositionAngleSolver _solver;
     private readonly Func<double> _toleranceDeg;
+    private readonly Func<double> _defaultExposureSeconds;
     private readonly ILogger<RotationAssistService> _logger;
     private readonly SemaphoreSlim _opLock = new(1, 1);
     private readonly object _gate = new();
 
     private string _state = "idle";
-    private double _target;
+    private string _mode = RotationAssistModes.Loop;
+    private double _exposureSeconds;
+    private double? _target;
     private long _seq;
     private DateTimeOffset? _started;
     private RotationAssistSampleDto? _latest;
@@ -68,9 +86,11 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     private Task? _loop;
     private bool _disposed;
 
-    public RotationAssistService(IPositionAngleSolver solver, Func<double> toleranceDeg, ILogger<RotationAssistService>? logger = null) {
+    public RotationAssistService(IPositionAngleSolver solver, Func<double> toleranceDeg,
+            Func<double>? defaultExposureSeconds = null, ILogger<RotationAssistService>? logger = null) {
         _solver = solver ?? throw new ArgumentNullException(nameof(solver));
         _toleranceDeg = toleranceDeg ?? throw new ArgumentNullException(nameof(toleranceDeg));
+        _defaultExposureSeconds = defaultExposureSeconds ?? (() => 2.0);
         _logger = logger ?? NullLogger<RotationAssistService>.Instance;
     }
 
@@ -90,39 +110,64 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         return AstroUtil.EuclidianModulus(positionAngleDeg, 360);
     }
 
-    public Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct) {
-        ArgumentNullException.ThrowIfNull(request);
-        return StartAsync(request.PositionAngleDeg, ct);
+    /// <summary>The request's exposure (finite, 0.01–60 s) or <paramref name="fallback"/> when absent. Pure — unit-tested.</summary>
+    internal static double ResolveExposure(double? requested, double fallback) {
+        if (requested is not { } s) {
+            return double.IsFinite(fallback) && fallback > 0 ? Math.Clamp(fallback, MinExposureSeconds, MaxExposureSeconds) : 2.0;
+        }
+        if (!double.IsFinite(s) || s < MinExposureSeconds || s > MaxExposureSeconds) {
+            throw new ArgumentOutOfRangeException(nameof(requested), s, $"exposure must be between {MinExposureSeconds} and {MaxExposureSeconds} seconds.");
+        }
+        return s;
     }
 
-    public async Task StartAsync(double targetPositionAngleDeg, CancellationToken token) {
-        var target = NormaliseTarget(targetPositionAngleDeg);
+    /// <summary><c>loop</c> (default) or <c>single</c>; anything else is a bad request. Pure — unit-tested.</summary>
+    internal static string ResolveMode(string? requested) => requested?.Trim().ToLowerInvariant() switch {
+        null or "" => RotationAssistModes.Loop,
+        RotationAssistModes.Loop => RotationAssistModes.Loop,
+        RotationAssistModes.SingleShot => RotationAssistModes.SingleShot,
+        var other => throw new ArgumentException($"mode must be '{RotationAssistModes.Loop}' or '{RotationAssistModes.SingleShot}', not '{other}'.", nameof(requested)),
+    };
+
+    public async Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        var target = NormaliseTarget(request.PositionAngleDeg);
+        var exposure = ResolveExposure(request.ExposureSeconds, DefaultExposureQuietly());
+        var mode = ResolveMode(request.Mode);
         try {
             _solver.EnsureReady();
         } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
             throw new RotationAssistNotReadyException(ex.Message, ex);
         }
-        await _opLock.WaitAsync(token).ConfigureAwait(false);
+        await _opLock.WaitAsync(ct).ConfigureAwait(false);
         try {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (IsActive) {
                 throw new InvalidOperationException("the rotation readout is already running");
             }
             lock (_gate) {
+                // A new target is a new job: the history (and the advice built on it) starts over. The same
+                // target — a single shot after a turn, a loop restarted after a cloud — keeps it.
+                if (_target != target) {
+                    _latest = null;
+                    _recent.Clear();
+                    _frame = null;
+                    _frameSeq = 0;
+                }
                 _state = "running";
+                _mode = mode;
+                _exposureSeconds = exposure;
                 _target = target;
                 _started = DateTimeOffset.UtcNow;
-                _latest = null;
-                _recent.Clear();
                 _error = null;
                 _consecutiveFailures = 0;
-                _frame = null;
             }
             _loopCts?.Dispose();
             _loopCts = new CancellationTokenSource();
-            var ct = _loopCts.Token;
-            _loop = Task.Run(() => RunLoopAsync(target, ct), CancellationToken.None);
-            LogStarted(target);
+            var loopCt = _loopCts.Token;
+            var single = mode == RotationAssistModes.SingleShot;
+            _loop = Task.Run(() => RunLoopAsync(target, exposure, single, loopCt), CancellationToken.None);
+            LogStarted(target, mode, exposure);
         } finally {
             _opLock.Release();
         }
@@ -163,11 +208,12 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     public RotationAssistStatusDto GetStatus() {
         var tolerance = ToleranceQuietly();
+        var defaultExposure = DefaultExposureQuietly();
         lock (_gate) {
             return new RotationAssistStatusDto(
                 Active: _state == "running",
                 State: _state,
-                TargetPositionAngleDeg: _target,
+                TargetPositionAngleDeg: _target ?? 0,
                 ToleranceDeg: tolerance,
                 Seq: _seq,
                 StartedUtc: _started,
@@ -177,7 +223,10 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 Error: _error,
                 ConsecutiveFailures: _consecutiveFailures,
                 HasFrame: _frame is not null,
-                FrameSeq: _frameSeq);
+                FrameSeq: _frameSeq,
+                Mode: _mode,
+                ExposureSeconds: _exposureSeconds > 0 ? _exposureSeconds : defaultExposure,
+                DefaultExposureSeconds: defaultExposure);
         }
     }
 
@@ -201,13 +250,23 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Loop boundary: a capture or solver fault is one failed sample (counted; the loop ends in `error` after MaxConsecutiveFailures), never a faulted background task.")]
-    private async Task RunLoopAsync(double target, CancellationToken ct) {
+        Justification = "The default exposure comes from the profile; a read fault must not take the status endpoint down — fall back to a sane default.")]
+    private double DefaultExposureQuietly() {
+        try {
+            return ResolveExposure(null, _defaultExposureSeconds());
+        } catch (Exception) {
+            return 2.0;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Loop boundary: a capture or solver fault is one failed sample (counted; the loop ends in `error` after MaxConsecutiveFailures, or at once in single mode), never a faulted background task.")]
+    private async Task RunLoopAsync(double target, double exposureSeconds, bool single, CancellationToken ct) {
         try {
             while (!ct.IsCancellationRequested) {
                 RotationSolve? solved = null;
                 try {
-                    solved = await _solver.SolvePositionAngleAsync(ct).ConfigureAwait(false);
+                    solved = await _solver.SolvePositionAngleAsync(exposureSeconds, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                     return;
                 } catch (Exception ex) {
@@ -232,19 +291,30 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                             _frame = jpeg;
                             _frameSeq = _seq;
                         }
+                        if (single) {
+                            _state = "stopped";
+                        }
                     }
                     LogSample(pa, delta);
+                    if (single) {
+                        LogSingleDone();
+                        return;
+                    }
                     continue;
                 }
                 int failures;
+                bool gaveUp;
                 lock (_gate) {
                     failures = ++_consecutiveFailures;
-                    if (failures >= MaxConsecutiveFailures) {
+                    gaveUp = single || failures >= MaxConsecutiveFailures;
+                    if (gaveUp) {
                         _state = "error";
-                        _error = $"{failures} solves in a row failed — check the sky, the exposure and the plate-solver settings, then start again";
+                        _error = single
+                            ? "the frame would not solve — check the sky and the exposure, then take another"
+                            : $"{failures} solves in a row failed — check the sky, the exposure and the plate-solver settings, then start again";
                     }
                 }
-                if (failures >= MaxConsecutiveFailures) {
+                if (gaveUp) {
                     LogGaveUp(failures);
                     return;
                 }
@@ -278,11 +348,14 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         _opLock.Dispose();
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout started toward position angle {Target:0.#}°")]
-    private partial void LogStarted(double target);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout started toward position angle {Target:0.#}° ({Mode}, {Exposure:0.##} s)")]
+    private partial void LogStarted(double target, string mode, double exposure);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout stopped")]
     private partial void LogStopped();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout: single frame solved — done")]
+    private partial void LogSingleDone();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: the in-flight solve did not drain in time — stopping anyway")]
     private partial void LogStopTimedOut();

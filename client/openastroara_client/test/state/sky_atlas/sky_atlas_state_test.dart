@@ -27,6 +27,18 @@ void main() {
       n.toggle();
       expect(container.read(skyAtlasModeProvider), SkyAtlasMode.catalogView);
     });
+
+    test('one dock at a time: rotate camera and tonight replace each other', () {
+      final n = container.read(skyAtlasModeProvider.notifier);
+      n.toggleRotateCamera();
+      expect(container.read(skyAtlasModeProvider), SkyAtlasMode.rotateCamera);
+      n.toggle();
+      expect(container.read(skyAtlasModeProvider), SkyAtlasMode.tonightsSky);
+      n.toggleRotateCamera();
+      expect(container.read(skyAtlasModeProvider), SkyAtlasMode.rotateCamera);
+      n.toggleRotateCamera();
+      expect(container.read(skyAtlasModeProvider), SkyAtlasMode.catalogView);
+    });
   });
 
   group('PlanetariumCommandNotifier', () {

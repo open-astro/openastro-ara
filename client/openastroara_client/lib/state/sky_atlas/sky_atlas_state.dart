@@ -5,20 +5,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// one-shot command bus `StellariumView` forwards to the self-driven
 /// planetarium page.
 
-enum SkyAtlasMode { catalogView, tonightsSky }
+/// The planetarium alone, or with one docked panel beside it: Tonight's Sky,
+/// or the by-hand Rotate camera readout against the framing on the sky.
+enum SkyAtlasMode { catalogView, tonightsSky, rotateCamera }
 
 class SkyAtlasModeNotifier extends Notifier<SkyAtlasMode> {
   @override
   SkyAtlasMode build() => SkyAtlasMode.catalogView;
   void set(SkyAtlasMode m) => state = m;
 
-  /// Flip between the full-bleed planetarium and the docked Tonight's Sky panel.
-  /// A switch expression (not a ternary) so a future `SkyAtlasMode` value is a
-  /// compile error here rather than silently folding into `tonightsSky`.
-  void toggle() => state = switch (state) {
-        SkyAtlasMode.tonightsSky => SkyAtlasMode.catalogView,
-        SkyAtlasMode.catalogView => SkyAtlasMode.tonightsSky,
-      };
+  /// Flip between the full-bleed planetarium and the docked Tonight's Sky panel
+  /// (from the rotate panel, Tonight's Sky takes its place — one dock at a time).
+  void toggle() => _toggle(SkyAtlasMode.tonightsSky);
+
+  /// Flip the docked Rotate camera panel the same way.
+  void toggleRotateCamera() => _toggle(SkyAtlasMode.rotateCamera);
+
+  void _toggle(SkyAtlasMode panel) =>
+      state = state == panel ? SkyAtlasMode.catalogView : panel;
 }
 
 final skyAtlasModeProvider =

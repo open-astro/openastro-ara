@@ -309,6 +309,20 @@ The result lives on tmpfs, so after a **reboot** `GET /{id}` is 404: clients tre
 
 ---
 
+### 2026-10-04 — Rotate camera by hand moves to the Plan screen: exposure, single shot or loop; no sequencer step
+
+**Endpoint(s) or area:** `POST /api/v1/rotation-assist/start` (request gains `exposure_seconds`, `mode`), `GET …/state` (gains `mode`, `exposure_seconds`, `default_exposure_seconds`); the sequencer instruction `OpenAstroAra.Sequencer.SequenceItem.Rotator.RotateCameraByHand` is REMOVED (a saved sequence that still carries it deserialises as an unknown item and is skipped); the run builder no longer emits it.
+
+**Decision:** the by-hand turn is a planning job, not a run step. The readout is driven from the Plan screen's docked **Rotate camera** panel against the framing dial's angle (the planetarium page posts `framing` events — on/off, centre, dialed angle, name — and a `rotateCamera` event from the Framing card's own button, over the loopback channel). `POST …/start {position_angle_deg, exposure_seconds?, mode?}`: `exposure_seconds` 0.01–60 (400 outside; default the profile's plate-solve exposure, reported as `default_exposure_seconds`), `mode` `loop` (default; solve after solve until `stop`) or `single` (one capture + solve, then `state: stopped` with the result kept; a failed solve ends in `error` at once). A start toward the SAME target angle keeps `latest`, `recent` and the frame (the client's keep-going / go-back advice needs the previous sample across single shots); a new target starts the history over. Everything else — the status shape, the frame endpoint, the scope box on the sky — is unchanged.
+
+**Reasoning:** parking a run inside a pause to turn the camera put the readout on the Run screen, with Resume as its only exit and no say over the exposure; in the field the turn happens while framing, before any run exists, and a single shot (turn, shoot, compare) is the natural rhythm when loosening a camera. The run keeps `Center and Rotate` for the centring.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1rotation-assist~1start`; `Contracts/RotationAssistDtos.cs` (`RotationAssistModes`), `Services/RotationAssistService.cs`, `Services/RotationFrameSolver.cs` (`IPositionAngleSolver.SolvePositionAngleAsync(exposureSeconds, ct)`); client `widgets/sky_atlas/rotation_assist_panel.dart`, `state/sky_atlas/plan_framing_state.dart`, `assets/stellarium/index.html` (`postFraming`, `openRotateCamera`).
+
+**Related:** the 2026-10-03 entry below (superseded for the sequencer step); tests `RotationAssistServiceTest`, client `rotation_assist_panel_test`, `plan_framing_state_test`.
+
+---
+
 ### 2026-10-03 — Rotate camera by hand: the rotation readout, the run's target name and frame counter
 
 **Endpoint(s) or area:** `POST /api/v1/rotation-assist/start`, `POST …/stop`, `GET …/state`, `GET …/frame`; the sequencer instruction `OpenAstroAra.Sequencer.SequenceItem.Rotator.RotateCameraByHand` (`PositionAngle`); `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `frames_captured`, and `current_target_name` is now populated; frames' `target_name` for client-built runs.

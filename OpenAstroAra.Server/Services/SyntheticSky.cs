@@ -178,8 +178,9 @@ public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
 
     private int _frameSeed;
 
-    public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {
-        await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(false); // a capture + solve takes a moment
+    public async Task<RotationSolve?> SolvePositionAngleAsync(double exposureSeconds, CancellationToken ct) {
+        // The "exposure" plus a moment for the solve, so the panel's cadence feels like the real thing.
+        await Task.Delay(TimeSpan.FromSeconds(Math.Min(exposureSeconds, 10) + 1.0), ct).ConfigureAwait(false);
         string text;
         try {
             text = (await System.IO.File.ReadAllTextAsync(_path, ct).ConfigureAwait(false)).Trim();

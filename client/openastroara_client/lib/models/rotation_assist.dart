@@ -8,6 +8,13 @@ abstract final class RotationAssistStates {
   static const error = 'error';
 }
 
+/// The readout's capture modes: `loop` solves frame after frame until stopped;
+/// `single` takes one frame, solves it and stops with the result kept.
+abstract final class RotationAssistModes {
+  static const loop = 'loop';
+  static const single = 'single';
+}
+
 class RotationAssistSample {
   final int seq;
   final DateTime? solvedUtc;
@@ -74,6 +81,13 @@ class RotationAssistStatus {
   final bool hasFrame;
   final int frameSeq;
 
+  /// The capture settings of the current (or last) readout — `loop` or
+  /// `single` — and the profile's plate-solve exposure the panel pre-fills
+  /// its exposure field with.
+  final String mode;
+  final double exposureSeconds;
+  final double defaultExposureSeconds;
+
   const RotationAssistStatus({
     this.active = false,
     this.state = RotationAssistStates.idle,
@@ -88,6 +102,9 @@ class RotationAssistStatus {
     this.consecutiveFailures = 0,
     this.hasFrame = false,
     this.frameSeq = 0,
+    this.mode = RotationAssistModes.loop,
+    this.exposureSeconds = 0,
+    this.defaultExposureSeconds = 0,
   });
 
   static const idle = RotationAssistStatus();
@@ -120,6 +137,10 @@ class RotationAssistStatus {
       consecutiveFailures: (json['consecutive_failures'] as num?)?.toInt() ?? 0,
       hasFrame: json['has_frame'] as bool? ?? false,
       frameSeq: (json['frame_seq'] as num?)?.toInt() ?? 0,
+      mode: json['mode'] as String? ?? RotationAssistModes.loop,
+      exposureSeconds: (json['exposure_seconds'] as num?)?.toDouble() ?? 0,
+      defaultExposureSeconds:
+          (json['default_exposure_seconds'] as num?)?.toDouble() ?? 0,
     );
   }
 }

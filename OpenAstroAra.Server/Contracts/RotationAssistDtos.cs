@@ -17,8 +17,17 @@ using System.Collections.Generic;
 
 namespace OpenAstroAra.Server.Contracts;
 
-/// <summary>Start the by-hand rotation readout toward a sky position angle (degrees east of north).</summary>
-public sealed record RotationAssistStartRequestDto(double PositionAngleDeg);
+/// <summary>The readout's capture modes: <c>loop</c> solves frame after frame until stopped; <c>single</c>
+/// takes one frame, solves it and ends in <c>stopped</c> with the result kept.</summary>
+public static class RotationAssistModes {
+    public const string Loop = "loop";
+    public const string SingleShot = "single";
+}
+
+/// <summary>Start the by-hand rotation readout toward a sky position angle (degrees east of north).
+/// <c>ExposureSeconds</c> (0.01–60; default: the profile's plate-solve exposure) is the main camera's
+/// exposure per frame; <c>Mode</c> is <c>loop</c> (default) or <c>single</c>.</summary>
+public sealed record RotationAssistStartRequestDto(double PositionAngleDeg, double? ExposureSeconds = null, string? Mode = null);
 
 /// <summary>One solved frame of the readout: the sky position angle the solver measured and the signed
 /// shortest rotation still needed to reach the target, folded into (−90°, +90°] because a frame rotated
@@ -39,7 +48,7 @@ public sealed record RotationAssistSampleDto(
     int FrameHeight = 0);
 
 /// <summary>
-/// The by-hand rotation readout (a run's Rotate camera by hand step, or a manual start). <c>State</c>:
+/// The by-hand rotation readout, started from the Plan screen's framing. <c>State</c>:
 /// <c>idle</c> | <c>running</c> | <c>stopped</c> | <c>error</c>. <c>WithinTolerance</c> is true once the latest
 /// solve sits within the profile's rotation tolerance of the target. The client turns the delta history into
 /// advice relative to the user's last move; the daemon only measures.
@@ -59,4 +68,9 @@ public sealed record RotationAssistStatusDto(
     // The latest solved frame, rendered, is at GET /api/v1/rotation-assist/frame once HasFrame; FrameSeq
     // matches the sample it belongs to.
     bool HasFrame = false,
-    long FrameSeq = 0);
+    long FrameSeq = 0,
+    // The capture settings of the current (or last) readout, and the profile's plate-solve exposure the
+    // client pre-fills its exposure field with.
+    string Mode = RotationAssistModes.Loop,
+    double ExposureSeconds = 0,
+    double DefaultExposureSeconds = 0);
