@@ -296,6 +296,13 @@ void main() {
     expect(find.text('+20.0°'), findsOneWidget);
     expect(find.text('Keep going'), findsOneWidget);
     expect(find.byKey(const Key('rotation-assist-frame')), findsOneWidget);
+    // Done is available mid-loop: the daemon stops the loop for the check.
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('rotation-assist-done')))
+          .onPressed,
+      isNotNull,
+    );
     await tester.tap(find.byKey(const Key('rotation-assist-stop')));
     await tester.pump();
     expect(stub.stops, 1);

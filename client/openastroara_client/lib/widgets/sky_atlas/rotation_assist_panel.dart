@@ -109,9 +109,10 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     final exposureOk = _exposureSeconds != null || _exposureCtrl.text.isEmpty;
     final canStart = hasTarget && !live.busy && !status.busy && exposureOk;
     final single = _mode == RotationAssistModes.single;
-    // Done: something has solved toward this target and the camera is free.
+    // Done: something has solved toward this target. A running loop is fine —
+    // the daemon stops it itself before the 1×1 check.
     final canConfirm =
-        status.latest != null && !live.busy && !status.busy && hasTarget;
+        status.latest != null && !live.busy && !status.confirming && hasTarget;
 
     return Material(
       color: AraColors.bgPanel,
