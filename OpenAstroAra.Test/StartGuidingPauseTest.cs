@@ -16,6 +16,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.Utility;
@@ -33,6 +34,13 @@ namespace OpenAstroAra.Test {
     public class StartGuidingPauseTest {
         private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
 
+        private static Mock<IGuiderMediator> Guider() {
+            var guider = new Mock<IGuiderMediator>();
+            // Validate() (run on attach) reads the guider's info; a connected guider validates clean.
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true, CanClearCalibration = true });
+            return guider;
+        }
+
         private static (StartGuiding Item, PauseGate Gate) Rig(IGuiderMediator guider) {
             var gate = new PauseGate();
             var root = new SequenceRootContainer { PauseGate = gate };
@@ -43,7 +51,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Guiding_that_starts_first_time_does_not_pause() {
-            var guider = new Mock<IGuiderMediator>();
+            var guider = Guider();
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
             var (item, gate) = Rig(guider.Object);
 
@@ -55,7 +63,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_refused_start_parks_the_run_and_resume_tries_again() {
-            var guider = new Mock<IGuiderMediator>();
+            var guider = Guider();
             var calls = 0;
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => ++calls >= 2);
@@ -81,7 +89,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_guider_exception_is_a_pause_too_with_its_message() {
-            var guider = new Mock<IGuiderMediator>();
+            var guider = Guider();
             var calls = 0;
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Returns(() => ++calls == 1 ? throw new InvalidOperationException("polar-alignment session in progress") : Task.FromResult(true));
@@ -102,7 +110,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task An_abort_during_the_pause_propagates() {
-            var guider = new Mock<IGuiderMediator>();
+            var guider = Guider();
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
             var (item, gate) = Rig(guider.Object);
             using var cts = new CancellationTokenSource();
@@ -116,12 +124,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Without_a_pause_gate_a_refused_start_fails_the_instruction() {
-            var guider = new Mock<IGuiderMediator>();
+        public async Task Without_a_pause_gate_a_refused_start_fails_the_instruction() {
+            var guider = Guider();
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
             var item = new StartGuiding(guider.Object);
 
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => item.Execute(NoProgress, CancellationToken.None));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => item.Execute(NoProgress, CancellationToken.None));
         }
     }
 }
