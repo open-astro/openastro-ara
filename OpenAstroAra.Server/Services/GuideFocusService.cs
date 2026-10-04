@@ -15,7 +15,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
-using OpenAstroAra.Image.FileFormat.FITS;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -27,16 +26,21 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>Decodes a fetched guide frame (FITS on disk) into 16-bit pixels. A seam so the loop's
-/// measurement path is unit-testable without CFITSIO; the production decoder reads through
-/// <see cref="CFitsioFITSReader"/>.</summary>
+/// measurement path is unit-testable without CFITSIO; the production decoder reads through the
+/// daemon's own <see cref="OpenAstroAra.Fits.FitsImage"/> binding (the one polar alignment uses for
+/// the same guider frames), never the NINA-era reader whose <c>cfitsionative.dll</c> is not shipped
+/// on the Pi — every live-focus frame failed to decode there (2026-10-03).</summary>
 public interface IGuideFrameDecoder {
     (ushort[] Pixels, int Width, int Height) Decode(string path);
 }
 
 public sealed class CfitsioGuideFrameDecoder : IGuideFrameDecoder {
     public (ushort[] Pixels, int Width, int Height) Decode(string path) {
-        using var reader = new CFitsioFITSReader(path);
-        return (reader.ReadAllPixelsAsUshort(), reader.Width, reader.Height);
+        // The guider writes 16-bit unsigned FITS; ReadImageData16 asks CFITSIO for TUSHORT, so a
+        // float or signed frame still comes back scaled into the ushort plane.
+        using var fits = OpenAstroAra.Fits.FitsImage.Open(path);
+        var (width, height) = fits.GetDimensions();
+        return (fits.ReadImageData16(), width, height);
     }
 }
 

@@ -309,5 +309,33 @@ namespace OpenAstroAra.Test {
             Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(Device("rc91.lan", "192.168.1.235", 6800, 0), connected.Object, profiles.Object, CancellationToken.None), Is.False);
             Assert.That(CameraConnectGuard.Detail(device, profiles.Object.GetPhd2Settings()), Does.Contain("Setup → Smart Focus"));
         }
+    
+
+        [Test]
+        public void Production_decoder_reads_a_guider_fits_through_the_daemons_own_cfitsio() {
+            // The NINA-era reader wanted cfitsionative.dll, which the Pi package does not ship:
+            // "gave up after 5 failed frames" on every live-focus frame (2026-10-03). The decoder now
+            // goes through OpenAstroAra.Fits like polar alignment does for the same guider frames.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-guide-decode-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try {
+                var path = Path.Combine(dir, "guide.fits");
+                const int w = 64, h = 48;
+                var pixels = new ushort[w * h];
+                for (int i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(1000 + i % 251);
+                pixels[20 * w + 30] = 60000;
+                using (var fits = OpenAstroAra.Fits.FitsImage.Create(path, w, h, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort)) {
+                    fits.WriteImageData(pixels);
+                    fits.Complete();
+                }
+
+                var (decoded, width, height) = new CfitsioGuideFrameDecoder().Decode(path);
+
+                Assert.That((width, height), Is.EqualTo((w, h)));
+                Assert.That(decoded, Is.EqualTo(pixels));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
     }
 }
