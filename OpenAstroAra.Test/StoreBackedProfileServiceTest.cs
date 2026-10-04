@@ -83,7 +83,8 @@ namespace OpenAstroAra.Test {
                 SettlePixels: 1.25, SettleTimeSec: 9, SettleTimeoutSec: 77,
                 ForceCalibrationEachSession: false,
                 GuideFocalLength: 250, GuidePixelSize: 2.9, RaAggressiveness: 0.8,
-                DecAggressiveness: 0.65, MinimumMove: 0.2, DecGuideMode: "north"));
+                DecAggressiveness: 0.65, MinimumMove: 0.2, DecGuideMode: "north",
+                GuideExposureMs: 500));
 
             var guider = svc.ActiveProfile.GuiderSettings;
             Assert.That(guider.PHD2ServerHost, Is.EqualTo("astro-pi.local"));
@@ -98,6 +99,7 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.RAAggressiveness, Is.EqualTo(0.8));
             Assert.That(guider.DecAggressiveness, Is.EqualTo(0.65));
             Assert.That(guider.MinimumMove, Is.EqualTo(0.2));
+            Assert.That(guider.GuideExposureMs, Is.EqualTo(500));
             Assert.That(guider.DecGuideMode, Is.EqualTo("north"));
         }
 
@@ -114,7 +116,8 @@ namespace OpenAstroAra.Test {
                 GuideFocalLength: -250, GuidePixelSize: -2.9,    // negative
                 RaAggressiveness: 1.5, DecAggressiveness: -0.2,  // out of [0,1]
                 MinimumMove: -1.0,                               // negative
-                DecGuideMode: "SIDEWAYS"));                       // not in the known set
+                DecGuideMode: "SIDEWAYS",                         // not in the known set
+                GuideExposureMs: -500));                          // negative
 
             var guider = svc.ActiveProfile.GuiderSettings;
             Assert.That(guider.GuideFocalLength, Is.EqualTo(0));     // floored at 0
@@ -123,6 +126,7 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.DecAggressiveness, Is.EqualTo(0.0));  // clamped low
             Assert.That(guider.MinimumMove, Is.EqualTo(0.0));        // floored at 0
             Assert.That(guider.DecGuideMode, Is.EqualTo("auto"));    // unknown → auto
+            Assert.That(guider.GuideExposureMs, Is.EqualTo(0));      // floored at 0 (= unset)
         }
 
         [Test]

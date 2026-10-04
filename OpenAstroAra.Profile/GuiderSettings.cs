@@ -89,6 +89,7 @@ namespace OpenAstroAra.Profile {
             decAggressiveness = 0.7;
             minimumMove = 0.15;
             decGuideMode = "auto";
+            guideExposureMs = 0;
         }
 
         private string lastDeviceName = string.Empty;
@@ -674,6 +675,18 @@ namespace OpenAstroAra.Profile {
             set {
                 if (decGuideMode != value) {
                     decGuideMode = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private int guideExposureMs;
+        [DataMember]
+        public int GuideExposureMs {
+            get => guideExposureMs;
+            set {
+                if (guideExposureMs != value) {
+                    guideExposureMs = value;
                     RaisePropertyChanged();
                 }
             }

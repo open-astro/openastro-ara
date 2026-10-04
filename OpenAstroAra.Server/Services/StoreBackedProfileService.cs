@@ -187,6 +187,7 @@ internal static class ProfileStoreMapper {
         guider.DecAggressiveness = Math.Clamp(phd2.DecAggressiveness, 0.0, 1.0);
         guider.MinimumMove = Math.Max(0.0, phd2.MinimumMove);
         guider.DecGuideMode = NormalizeDecGuideMode(phd2.DecGuideMode);
+        guider.GuideExposureMs = Math.Max(0, phd2.GuideExposureMs);
         // §63.17 equipment selections — trimmed (choice strings are matched verbatim by the daemon; stray
         // whitespace from a hand-edited profile.json would silently select nothing) and the port clamped to
         // the valid range with 0 = unset.

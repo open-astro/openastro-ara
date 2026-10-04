@@ -39,6 +39,25 @@ public sealed partial class GuiderService {
         return PushAsync(guider, idempotencyKey, ct);
     }
 
+    /// <summary>Tuning-only push — the runtime-safe subset, equipment left connected (guiding continues).
+    /// No dark-library invalidation check: the camera selection is never part of this push.</summary>
+    public Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct) {
+        var guider = RequireConnectedGuider();
+        return PushTuningAsync(guider, idempotencyKey, ct);
+    }
+
+    private async Task<OperationAcceptedDto> PushTuningAsync(
+            OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider guider, string? idempotencyKey, CancellationToken ct) {
+        var methods = await guider.RepushGuiderTuningAsync(ct).ConfigureAwait(false);
+        var payload = new JsonObject {
+            ["methods"] = new JsonArray(methods.Select(m => (JsonNode)JsonValue.Create(m)).ToArray()),
+            ["scope"] = "tuning",
+            ["ara_profile_id"] = _activeProfileIdResolver?.Invoke()?.ToString(),
+        };
+        await EmitCalibrationEventAsync(WsEventCatalog.GuiderProfilePushed, payload).ConfigureAwait(false);
+        return Accepted("guider.profile.push", idempotencyKey);
+    }
+
     private async Task<OperationAcceptedDto> PushAsync(
             OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider guider, string? idempotencyKey, CancellationToken ct) {
         // Capture the selection BEFORE the push so the §63.17 invalidation compare is against what this push

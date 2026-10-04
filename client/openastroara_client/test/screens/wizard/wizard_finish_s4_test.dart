@@ -90,7 +90,7 @@ class _FakeGuiderEquipment implements GuiderEquipmentClient {
   int pushes = 0;
   bool pushThrows = false;
   @override
-  Future<void> pushProfile() async {
+  Future<void> pushProfile({bool tuningOnly = false}) async {
     pushes++;
     if (pushThrows) throw Exception('guider unreachable');
   }

@@ -55,9 +55,12 @@ class _FakeEquipmentClient implements GuiderEquipmentClient {
           {String? host, int? port, int? device}) async =>
       null;
 
+  bool? lastTuningOnly;
+
   @override
-  Future<void> pushProfile() async {
+  Future<void> pushProfile({bool tuningOnly = false}) async {
     pushes++;
+    lastTuningOnly = tuningOnly;
     if (throwOnPush) throw StateError('push failed');
   }
 
@@ -154,6 +157,24 @@ void main() {
       await c.read(guiderEquipmentProvider.notifier).pushProfile();
 
       expect(api.pushes, 1);
+      expect(api.lastTuningOnly, isFalse);
+    });
+
+    test('pushProfile(tuningOnly: true) asks for the runtime-safe push', () async {
+      // Tune Guiding's Apply must never trigger the full push: that one
+      // re-sends the equipment selections inside a disconnect window and
+      // stops guiding.
+      final api = _FakeEquipmentClient(_resp());
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderEquipmentProvider.future);
+
+      await c
+          .read(guiderEquipmentProvider.notifier)
+          .pushProfile(tuningOnly: true);
+
+      expect(api.pushes, 1);
+      expect(api.lastTuningOnly, isTrue);
     });
 
     test('pushProfile surfaces the client error to the caller', () async {

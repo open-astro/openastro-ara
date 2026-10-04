@@ -100,7 +100,8 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
     return const ['bridge.local:11111'];
   }
   @override
-  Future<void> pushProfile() async => calls.add('push');
+  Future<void> pushProfile({bool tuningOnly = false}) async =>
+      calls.add(tuningOnly ? 'push-tuning' : 'push');
   @override
   Future<double?> getAlpacaCameraPixelSize(
       {String? host, int? port, int? device}) async {

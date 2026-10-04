@@ -78,6 +78,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
             }
 
+            var setup = disconnectedForSetup ? " (equipment disconnected for set_profile_setup)" : string.Empty;
+            await SendEngineConfigMessagesAsync(messages, setup, ct);
+        }
+
+        /// <summary>Best-effort send of a built §63.5 message list: a rejected or failed RPC is logged and
+        /// skipped, then one summary line reports applied-vs-attempted (the per-message lines only appear on
+        /// failure, so without it a successful push is silent). Shared by the connect-time push and the
+        /// tuning-only repush.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the caller.")]
+        private async Task SendEngineConfigMessagesAsync(IReadOnlyList<Phd2Method> messages, string summarySuffix, CancellationToken ct) {
             var applied = 0;
             foreach (var msg in messages) {
                 ct.ThrowIfCancellationRequested();
@@ -97,16 +108,35 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
             }
 
-            // Summary so the connect log shows what guider-engine config reached the daemon at a glance — the
-            // per-message lines above only appear on failure, so without this a successful push is silent.
             // Report applied-vs-attempted (not just the count) so a partial failure is visible at Info level
             // without scanning for the Warning lines, and escalate to Warning when any message didn't land.
-            var setup = disconnectedForSetup ? " (equipment disconnected for set_profile_setup)" : string.Empty;
             if (applied == messages.Count) {
-                Logger.Info($"PHD2 §63.5 push - applied all {messages.Count} guider-engine setting message(s){setup}.");
+                Logger.Info($"PHD2 §63.5 push - applied all {messages.Count} guider-engine setting message(s){summarySuffix}.");
             } else {
-                Logger.Warning($"PHD2 §63.5 push - applied {applied} of {messages.Count} guider-engine setting message(s); {messages.Count - applied} did not land (see warnings above){setup}.");
+                Logger.Warning($"PHD2 §63.5 push - applied {applied} of {messages.Count} guider-engine setting message(s); {messages.Count - applied} did not land (see warnings above){summarySuffix}.");
             }
+        }
+
+        /// <summary>
+        /// Tuning-only repush (POST /guider/profile/push?scope=tuning): sends just the runtime-safe messages
+        /// (<see cref="BuildGuiderTuningMessages"/>) to whatever profile the daemon is guiding with — no
+        /// profile switch, no equipment disconnect, so a running guide session (and its calibration) is left
+        /// alone. The full repush opens the disconnect window because the §63.17 selections are always part
+        /// of a configured profile; using it for an aggressiveness change stopped guiding mid-run
+        /// (2026-10-04 07:09 BST: stop_capture + set_connected(false) right after Tune Guiding → Apply).
+        /// Returns the RPC method names attempted. Requires a connected guider.
+        /// </summary>
+        public async Task<IReadOnlyList<string>> RepushGuiderTuningAsync(CancellationToken ct) {
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings);
+            if (messages.Count == 0) {
+                Logger.Debug("PHD2 §63.5 tuning push - no runtime-safe guider config set; nothing sent.");
+                return System.Array.Empty<string>();
+            }
+            await SendEngineConfigMessagesAsync(messages, " (tuning only, equipment left connected)", ct);
+            return messages.Select(m => m.Method).Distinct().ToList();
         }
 
         /// <summary>§63.20 — the <c>[host:port/N]</c> endpoint a daemon Alpaca choice string embeds
@@ -215,6 +245,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
             }
 
+            // Guide exposure — set_exposure is runtime-safe (PHD2 applies it on the next frame, guiding
+            // continues). 0 = unset: never push it, the guider keeps its own duration.
+            if (guider.GuideExposureMs > 0) {
+                messages.Add(new Phd2SetExposure { Parameters = new int[] { guider.GuideExposureMs } });
+            }
+
             // dec-guide-mode: "Auto" is both ARA's default and PHD2's own default, so treat it as the unset
             // sentinel (like the numeric 0s) and don't push it — otherwise a fresh ARA profile would overwrite
             // a user's deliberate PHD2 North/South (e.g. a backlash-sensitive mount) on every connect. Only an
@@ -237,6 +273,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             or Phd2SetSelectedMount
             or Phd2SetSelectedAuxMount
             or Phd2SetSelectedRotator;
+
+        /// <summary>The tuning subset of the §63.5 push: every message that applies while the guider's
+        /// equipment stays connected (set_algo_param, set_dec_guide_mode, set_exposure). This is what
+        /// Imaging → Guiding → Tune Guiding sends, so an aggressiveness or exposure change never stops a
+        /// running guide session. Pure — unit-tested.</summary>
+        public static IReadOnlyList<Phd2Method> BuildGuiderTuningMessages(IGuiderSettings guider) =>
+            BuildGuiderEngineConfigMessages(guider).Where(m => !RequiresDisconnectedEquipment(m)).ToList();
 
         /// <summary>
         /// §63.17 — on-demand re-push of the §63.5 engine config + equipment selections (the connect path

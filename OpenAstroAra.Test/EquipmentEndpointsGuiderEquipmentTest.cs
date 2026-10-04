@@ -118,6 +118,72 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task TuningPush_returns_202_accepted_and_never_runs_the_full_push() {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, "idem-t");
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict);
+            svc.Setup(s => s.PushGuiderTuningAsync("idem-t", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderTuningAsync("idem-t", svc.Object, CancellationToken.None);
+
+            var typed = result as Accepted<OperationAcceptedDto>;
+            Assert.That(typed, Is.Not.Null);
+            Assert.That(typed!.Value, Is.SameAs(accepted));
+            // Strict mock: a call to PushGuiderProfileAsync (the disconnecting push) would have thrown.
+            svc.Verify(s => s.PushGuiderTuningAsync("idem-t", It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestCase("tuning")]
+        [TestCase("TUNING")]
+        public async Task Push_scope_tuning_dispatches_to_the_tuning_push_only(string scope) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict); // the full push would throw
+            svc.Setup(s => s.PushGuiderTuningAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderAsync(scope, null, svc.Object, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+            svc.Verify(s => s.PushGuiderTuningAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("full")]
+        public async Task Push_without_a_tuning_scope_runs_the_full_push(string? scope) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict);
+            svc.Setup(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderAsync(scope, null, svc.Object, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+            svc.Verify(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Push_with_an_unknown_scope_is_a_400_and_pushes_nothing() {
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict); // any push would throw
+
+            var result = await EquipmentEndpoints.PushGuiderAsync("tunning", null, svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
+        }
+
+        [Test]
+        public async Task TuningPush_maps_not_connected_InvalidOperation_to_typed_409() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderTuningAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider is not connected"));
+
+            var result = await EquipmentEndpoints.PushGuiderTuningAsync(null, svc.Object, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
+            });
+        }
+
+        [Test]
         public async Task ProfilePush_maps_reconnect_failure_GuiderRpcException_to_422() {
             var svc = new Mock<IGuiderService>();
             svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))

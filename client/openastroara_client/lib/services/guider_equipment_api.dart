@@ -9,7 +9,12 @@ import '../models/server.dart';
 abstract interface class GuiderEquipmentClient {
   Future<GuiderEquipmentChoicesResponse> getChoices();
   Future<List<String>> discoverAlpaca({int? numQueries, int? timeoutSeconds});
-  Future<void> pushProfile();
+  /// Re-push the profile to the guider. [tuningOnly] sends just the
+  /// runtime-safe subset (`?scope=tuning`: aggressiveness, minimum move, dec
+  /// guide mode, guide exposure) with the equipment left connected, so guiding
+  /// continues; the full push disconnects and reconnects the guider's
+  /// equipment, which stops guiding.
+  Future<void> pushProfile({bool tuningOnly = false});
 
   /// §63.20 — the camera's sensor pixel size (µm) read from its Alpaca driver
   /// via the daemon, or null when it couldn't be read (disconnected guider,
@@ -77,8 +82,11 @@ class GuiderEquipmentApi implements GuiderEquipmentClient {
   }
 
   @override
-  Future<void> pushProfile() async {
-    await _dio.post<void>('/api/v1/equipment/guider/profile/push');
+  Future<void> pushProfile({bool tuningOnly = false}) async {
+    await _dio.post<void>(
+      '/api/v1/equipment/guider/profile/push',
+      queryParameters: tuningOnly ? const {'scope': 'tuning'} : null,
+    );
   }
 
   @override

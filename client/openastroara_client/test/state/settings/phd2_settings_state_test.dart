@@ -30,6 +30,32 @@ void main() {
       expect(s.guiderRotator, '');
       expect(s.guiderAlpacaHost, '');
       expect(s.guiderAlpacaPort, 0);
+      // Guide exposure — 0 = unset, the guider keeps its own duration.
+      expect(s.guideExposureMs, 0);
+    });
+
+    test('setGuideExposureMs accepts 0 (= unset) and rejects negative', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuideExposureMs(500);
+      expect(container.read(phd2SettingsProvider).guideExposureMs, 500);
+      n.setGuideExposureMs(-1);
+      expect(container.read(phd2SettingsProvider).guideExposureMs, 500);
+      n.setGuideExposureMs(0);
+      expect(container.read(phd2SettingsProvider).guideExposureMs, 0);
+    });
+
+    test('guide exposure choices are the guider\'s list, labelled in seconds', () {
+      // The picker is built from the durations the guider offers
+      // (get_exposure_durations), so a chosen value is always accepted.
+      expect(guideExposureChoicesMs, contains(500));
+      expect(guideExposureChoicesMs, contains(1000));
+      expect(guideExposureChoicesMs, contains(30000));
+      expect(formatGuideExposure(0), 'Unset');
+      expect(formatGuideExposure(50), '0.05 s');
+      expect(formatGuideExposure(500), '0.5 s');
+      expect(formatGuideExposure(1000), '1 s');
+      expect(formatGuideExposure(1500), '1.5 s');
+      expect(formatGuideExposure(10000), '10 s');
     });
 
     test('§63.19 setGuiderSetupType accepts known tokens, normalizes case', () {

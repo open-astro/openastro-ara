@@ -73,6 +73,9 @@ namespace OpenAstroAra.Profile.Interfaces {
         double MinimumMove { get; set; }
         /// <summary>Dec guide mode: "auto" | "north" | "south" | "off".</summary>
         string DecGuideMode { get; set; }
+        /// <summary>Guide exposure, ms, sent with PHD2's <c>set_exposure</c> (runtime-safe: it applies on
+        /// the next guide frame, guiding continues). 0 = unset, leave the guider's own value.</summary>
+        int GuideExposureMs { get; set; }
 
         // §63.17 guider equipment selection — pushed to the daemon inside the §63.5 disconnected window
         // (the set_selected_* RPCs are blocked while equipment is connected). Values are the daemon's own

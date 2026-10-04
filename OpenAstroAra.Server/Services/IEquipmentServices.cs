@@ -286,6 +286,12 @@ public interface IGuiderService {
     /// InvalidOperationException when disconnected (→ 409, typed).</summary>
     Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct);
 
+    /// <summary>Tuning-only push (<c>POST /guider/profile/push?scope=tuning</c>): just the runtime-safe
+    /// messages (aggressiveness, minimum move, dec guide mode, guide exposure) — no equipment disconnect, so
+    /// guiding continues. Emits <c>guider.profile_pushed</c> with <c>scope: "tuning"</c>. Throws
+    /// InvalidOperationException when disconnected (→ 409, typed).</summary>
+    Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct);
+
     /// <summary>§63.4 delete hook — best-effort removal of the PHD2 profile mapped to a just-deleted ARA
     /// profile (its <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin, dark files included). Never throws: returns
     /// true when the daemon accepted the delete, false when no guider is connected, the profile wasn't

@@ -408,7 +408,10 @@ public sealed record Phd2SettingsDto(
     // here (not just passed to a build) so a later rebuild covers the same range. Defaults match the
     // guider daemon's own (1.0–6.0 s); optional ctor params keep a pre-§76 profile.json deserializing.
     int GuideExposureMinMs = 1000,
-    int GuideExposureMaxMs = 6000);
+    int GuideExposureMaxMs = 6000,
+    // The guide exposure itself (ms), pushed with PHD2's runtime-safe set_exposure; 0 = unset (the
+    // guider keeps its own). Set from Imaging → Guiding → Tune Guiding; optional so older profiles load.
+    int GuideExposureMs = 0);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default

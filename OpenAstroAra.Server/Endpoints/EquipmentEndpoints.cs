@@ -483,8 +483,16 @@ public static partial class EquipmentEndpoints {
         // its disconnect → reconnect window when a selection/setup message is queued) so a settings edit
         // takes effect without a full guider reconnect. Quick (a handful of RPCs): the push completes before
         // the 202 returns; guider.profile_pushed then carries the attempted method names.
-        guider.MapPost("/profile/push", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
-            await PushGuiderProfileAsync(key, svc, ct));
+        // ?scope=tuning sends only the runtime-safe subset (aggressiveness, minimum move, dec guide mode,
+        // guide exposure) with the equipment left connected — what Tune Guiding uses, so guiding continues.
+        guider.MapPost("/profile/push", async (
+                [FromQuery, System.ComponentModel.Description(
+                    "Omitted or \"full\": the §63.5 engine config AND the §63.17 equipment selections, which "
+                    + "disconnects and reconnects the guider's equipment (guiding stops). \"tuning\": only the "
+                    + "runtime-safe messages (aggressiveness, minimum move, dec guide mode, guide exposure) — guiding "
+                    + "continues. Any other value is a 400.")] string? scope, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            await PushGuiderAsync(scope, key, svc, ct))
+            .ProducesProblem(StatusCodes.Status400BadRequest); // unknown ?scope
         // §63.17 manual restart — fire-and-forget systemctl restart of the guider unit (202 immediately;
         // §63.3 recovery + guider.state WS events report the outcome). Deliberately not gated on a
         // connected guider: it's most useful when the daemon is hung.
@@ -842,6 +850,29 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             // Push landed per-message best-effort, but the post-push equipment reconnect failed — actionable.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    /// <summary>The <c>?scope=</c> dispatch (extracted so tests pin it): absent or <c>full</c> runs the
+    /// full push, <c>tuning</c> the tuning-only one; anything else is a 400 — a typo such as
+    /// <c>tunning</c> must not silently run the push that disconnects the guider's equipment.</summary>
+    public static Task<IResult> PushGuiderAsync(string? scope, string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
+        if (string.IsNullOrEmpty(scope) || string.Equals(scope, "full", System.StringComparison.OrdinalIgnoreCase)) {
+            return PushGuiderProfileAsync(idempotencyKey, svc, ct);
+        }
+        if (string.Equals(scope, "tuning", System.StringComparison.OrdinalIgnoreCase)) {
+            return PushGuiderTuningAsync(idempotencyKey, svc, ct);
+        }
+        return Task.FromResult(Results.Problem($"unknown scope '{scope}': expected 'full' or 'tuning'",
+            statusCode: StatusCodes.Status400BadRequest));
+    }
+
+    /// <summary>Tuning-only push (same 202 / typed-409 mapping; there is no reconnect step, so no 422).</summary>
+    public static async Task<IResult> PushGuiderTuningAsync(string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.PushGuiderTuningAsync(idempotencyKey, ct));
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
 

@@ -521,5 +521,7 @@ public static class ProfileEndpoints {
         body.GuideExposureMinMs <= 0 || body.GuideExposureMaxMs <= 0 ||
         body.GuideExposureMinMs > body.GuideExposureMaxMs
             ? "guide_exposure_min_ms/guide_exposure_max_ms must be > 0 with min <= max."
-            : null;
+            : body.GuideExposureMs < 0
+                ? "guide_exposure_ms must be >= 0 (0 = leave the guider's own exposure)."
+                : null;
 }
