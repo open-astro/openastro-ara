@@ -92,6 +92,14 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
   ]);
   addTearDown(container.dispose);
+  // Steps and markers are stamped on arrival. On Windows (~15 ms clock) three
+  // steps and a dither can share one DateTime.now(), which puts the steps
+  // inside the dither's settle window and out of the RMS. One shared clock
+  // that moves on every stamp keeps the arrival order the test wrote.
+  var clock = DateTime.utc(2026, 10, 4, 21);
+  DateTime tick() => clock = clock.add(const Duration(milliseconds: 100));
+  container.read(guideStepsProvider.notifier).now = tick;
+  container.read(guideMarkersProvider.notifier).now = tick;
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: const MaterialApp(
