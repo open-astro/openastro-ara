@@ -79,8 +79,8 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     internal TimeSpan? ReadbackSettleWindow { get; set; }
     // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
     // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Set once, right after construction; never used by the daemon itself.
-    internal TimeSpan RefreshPeriod { set => _refreshTimer.Change(value, value); }
+    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
     // Connected (and recently-disconnected) switches keyed by the device's Alpaca UniqueId (globally
     // unique — the AlpacaDeviceNumber is only unique per host). Mutated only under _gate. A single
     // shared refresh timer reads every entry's ports — keep the one-lock discipline of the original

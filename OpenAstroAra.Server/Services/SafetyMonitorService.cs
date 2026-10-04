@@ -70,8 +70,8 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetai
     private readonly Timer _refreshTimer;
     // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
     // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Set once, right after construction; never used by the daemon itself.
-    internal TimeSpan RefreshPeriod { set => _refreshTimer.Change(value, value); }
+    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
     private AlpacaSafetyMonitor? _client;
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
