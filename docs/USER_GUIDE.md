@@ -160,7 +160,7 @@ framing/focus loop when you need to point or focus by eye.
   line. Under the plot are PHD2's controls — frames in view (50/100/200/400), y range (auto or
   fixed), arc-sec / pixels, corrections on/off, and **Clear**. Beside it, PHD2's numbers over the
   frames in view, leaving out the frames taken while settling after a dither (they are the dither,
-  not the guiding): RMS RA / Dec / Total, peak per axis, and the RA oscillation index. The axis is in
+  not the guiding; PHD2's own graph counts them): RMS RA / Dec / Total, peak per axis, and the RA oscillation index. The axis is in
   arcseconds once the guider has reported its pixel scale (or you have set the guide focal length
   and pixel size under **Settings → Guider**), and in guide-camera pixels until then. Tap the
   header to collapse the graph to a one-line status; **Tune** opens the live aggressiveness /

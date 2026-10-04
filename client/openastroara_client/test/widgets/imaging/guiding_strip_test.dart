@@ -16,8 +16,18 @@ import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/state/guider/guide_graph_settings.dart';
 import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
+
+/// Records the painter's rectangles; every other canvas call is a no-op.
+class _RectCanvas implements Canvas {
+  final rects = <(Rect, Color)>[];
+  @override
+  void drawRect(Rect rect, Paint paint) => rects.add((rect, paint.color));
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(List<AraServer> stored)
@@ -321,6 +331,32 @@ void main() {
     expect(model.isSettling(t.add(const Duration(seconds: 2))), isTrue);
     expect(model.isSettling(t.add(const Duration(seconds: 3))), isFalse);
     expect(model.stats.samples, 4, reason: 'frames 0, 3, 4, 5 count; 1-2 were settling');
+
+    // The graph agrees with the stats: the shading stops at the restart
+    // instead of running on to the right edge as a still-open settle does.
+    final settleColor = AraColors.accentWarning.withValues(alpha: 0.08);
+    List<Rect> shading(GuideGraphModel m) {
+      final canvas = _RectCanvas();
+      GuideGraphPainter(m).paint(canvas, const Size(600, 160));
+      return canvas.rects
+          .where((r) => r.$2.toARGB32() == settleColor.toARGB32())
+          .map((r) => r.$1)
+          .toList();
+    }
+
+    final stillOpen = GuideGraphModel(
+      steps: steps,
+      markers: [model.markers.first],
+      settings: const GuideGraphSettings(),
+      fallbackScale: null,
+    );
+    final closed = shading(model);
+    final open = shading(stillOpen);
+    expect(closed, hasLength(1));
+    expect(open, hasLength(1));
+    final slot = (open.single.right - open.single.left) / 5.5; // dither at frame 0.5 → right edge
+    expect(closed.single.right, lessThan(open.single.right - 2 * slot),
+        reason: 'frames 3-5 are guiding again: no shading over them');
   });
 
   test('GuideGraphModel: unit choice, visible window and auto y-range follow '
@@ -369,8 +405,8 @@ void main() {
     // Beyond the ladder the top rung holds (clipped, not unbounded).
     expect(model([GuideStep(at: t, raPx: 0, decPx: 0, raArcsec: 40, decArcsec: 0, pixelScaleArcsec: 2)]).yHalfRange, 16.0);
 
-    // Frames inside a dither's settle window are drawn but, as in PHD2,
-    // kept out of the stats and the auto y range.
+    // Frames inside a dither's settle window are drawn but kept out of the
+    // stats and the auto y range (Ara's choice; PHD2's graph counts them).
     final dithered = GuideGraphModel(
       steps: [
         for (var i = 0; i < 10; i++)

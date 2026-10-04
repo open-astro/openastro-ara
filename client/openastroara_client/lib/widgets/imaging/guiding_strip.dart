@@ -37,7 +37,8 @@ final guidingStripExpandedProvider =
 /// line, shaded settle window, star-lost marks), its window controls (frames
 /// in view, y range, arcsec / px, corrections on/off) and its stats block
 /// (RMS RA / Dec / Total, peak per axis, RA oscillation index) — all computed
-/// over the frames in view, exactly as PHD2 does. The header stays as a
+/// over the frames in view with PHD2's definitions, less the settle frames
+/// after a dither (Ara's choice: PHD2 counts them). The header stays as a
 /// one-line status when the graph is collapsed. Quick-adjust tuning lives in
 /// [GuidingTuneDialog] (the Tune button).
 ///
@@ -237,10 +238,10 @@ class GuideGraphModel {
       GuideGraphUnit.auto => scale != null,
     };
     settleWindows = _settleWindows(markers);
-    // PHD2 keeps frames taken while settling after a dither OUT of its RMS /
-    // peak figures (they are drawn, but they are the dither, not the
-    // guiding) — otherwise one dither reads as 5″ RMS and pins the auto
-    // y range at ±16″ for the next 100 frames.
+    // Frames taken while settling after a dither stay OUT of the RMS / peak
+    // figures (they are drawn, but they are the dither, not the guiding) —
+    // otherwise one dither reads as 5″ RMS and pins the auto y range at ±16″
+    // for the next 100 frames. Ara's choice: PHD2's own graph counts them.
     stats = GuideGraphStats.compute(
         visible.where((s) => !isSettling(s.at)).toList(growable: false), pick);
     yHalfRange = settings.yHalfRange ?? _autoHalfRange();
@@ -717,10 +718,14 @@ class GuideGraphPainter extends CustomPainter {
   /// null when it predates the window (the caller still tracks its state —
   /// a settle that began before the first visible frame is still a settle).
   double? _markerX(GuideMarker m, List<GuideStep> visible,
+          double Function(int) xOf, double slot) =>
+      _timeX(m.at, visible, xOf, slot);
+
+  double? _timeX(DateTime at, List<GuideStep> visible,
       double Function(int) xOf, double slot) {
-    if (visible.isEmpty || m.at.isBefore(visible.first.at)) return null;
+    if (visible.isEmpty || at.isBefore(visible.first.at)) return null;
     var i = visible.length - 1;
-    while (i > 0 && visible[i].at.isAfter(m.at)) {
+    while (i > 0 && visible[i].at.isAfter(at)) {
       i--;
     }
     return xOf(i) + slot / 2;
@@ -736,39 +741,33 @@ class GuideGraphPainter extends CustomPainter {
     final lost = Paint()
       ..color = AraColors.accentError
       ..strokeWidth = 2;
-    // Settle window state, carried across markers in time order. `settling`
-    // is true between a dither/settling and its settle done; `settleStart`
-    // is where the shading begins on THIS plot — the marker's x, or the left
-    // edge when the window opened before the first visible frame. A settle
-    // that both began and ended before the window draws nothing (the first
-    // replay of a real log shaded the whole plot that way).
-    var settling = false;
-    double? settleStart;
+    // The settle shading is drawn from the model's own windows, so the graph
+    // and the stats agree on what is settling (a lost settle_done ends at
+    // the next guiding start/stop in both). A window opened before the first
+    // visible frame starts at the left edge; one that also ended before it
+    // draws nothing (the first replay of a real log shaded the whole plot
+    // that way); one still open runs to the right edge.
+    if (visible.isNotEmpty) {
+      for (final (start, end) in model.settleWindows) {
+        if (end != null && end.isBefore(visible.first.at)) continue;
+        final x0 = _timeX(start, visible, xOf, slot) ?? plot.left;
+        final x1 = end == null ? plot.right : (_timeX(end, visible, xOf, slot) ?? plot.left);
+        if (x1 > x0) {
+          canvas.drawRect(Rect.fromLTRB(x0, plot.top, x1, plot.bottom), settle);
+        }
+      }
+    }
     for (final m in model.markers) {
       final x = _markerX(m, visible, xOf, slot);
       switch (m.kind) {
         case GuideMarkerKind.dithered:
-        case GuideMarkerKind.settling:
-          // The settle window opens at the dither (or at a settling without a
-          // dither, e.g. after a star re-acquire) and runs to settle done.
-          if (!settling) {
-            settling = true;
-            settleStart = x ?? plot.left;
-          }
-          if (m.kind == GuideMarkerKind.dithered && x != null) {
+          if (x != null) {
             _dashedVertical(canvas, x, plot, dither);
             _label(canvas, 'Dither', Offset(x + 2, plot.top), color: AraColors.accentWarning);
           }
+        case GuideMarkerKind.settling:
         case GuideMarkerKind.settleDone:
-          if (settling) {
-            settling = false;
-            // Ended before the window: nothing of it is on this plot.
-            if (x != null && settleStart != null) {
-              canvas.drawRect(
-                  Rect.fromLTRB(settleStart, plot.top, x, plot.bottom), settle);
-            }
-            settleStart = null;
-          }
+          break; // drawn above, from model.settleWindows
         case GuideMarkerKind.starLost:
           if (x != null) {
             final y = plot.center.dy;
@@ -789,11 +788,6 @@ class GuideGraphPainter extends CustomPainter {
         case GuideMarkerKind.lockPositionLost:
           break;
       }
-    }
-    // A settle still in progress shades to the right edge.
-    if (settling && settleStart != null) {
-      canvas.drawRect(
-          Rect.fromLTRB(settleStart, plot.top, plot.right, plot.bottom), settle);
     }
   }
 
