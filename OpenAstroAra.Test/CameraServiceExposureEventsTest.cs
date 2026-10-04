@@ -64,6 +64,7 @@ namespace OpenAstroAra.Test {
                 Func<string, string?>? putResponder = null) => ScriptedAlpacaDevice.Start(path =>
             path.EndsWith("/imageready", StringComparison.Ordinal) ? (imageReady() ? "true" : "false")
             : path.EndsWith("/imagearray", StringComparison.Ordinal) ? imageArray ?? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+            : path.EndsWith("/sensortype", StringComparison.Ordinal) ? "0" // monochrome (Live View refuses Color)
             : null, putResponder);
 
         private static DiscoveredDeviceDto Device(ScriptedAlpacaDevice box) => new(
@@ -232,6 +233,45 @@ namespace OpenAstroAra.Test {
             lock (faults) {
                 Assert.That(faults, Is.Empty, "a disconnect is the probe's business, not a capture fault");
             }
+        }
+
+        private static int PutCount(ScriptedAlpacaDevice box, string verb) =>
+            box.Puts.Count(p => p.Path.EndsWith("/" + verb, StringComparison.Ordinal));
+
+        [Test]
+        public async Task A_rest_abort_during_a_live_frame_skips_it_at_once() {
+            // ImageReady never comes: without the abort check the live wait runs 10 s + 60 s margin
+            // before the loop starts its next exposure.
+            await using var box = Camera(() => false);
+            using var svc = await ConnectedAsync(box, new RecordingBroadcaster());
+            await svc.StartLiveViewAsync(new LiveViewStartRequestDto(10), CancellationToken.None);
+            try {
+                await WaitForAsync(() => Task.FromResult(PutCount(box, "startexposure") >= 1), "Live View never started an exposure");
+                await svc.AbortExposureAsync(CancellationToken.None);
+
+                await WaitForAsync(() => Task.FromResult(PutCount(box, "startexposure") >= 2),
+                    "the aborted live frame was not skipped: no next exposure within the wait");
+            } finally {
+                await svc.StopLiveViewAsync();
+            }
+        }
+
+        [Test]
+        public async Task An_abort_with_nothing_running_does_not_skip_the_first_live_frame() {
+            await using var box = Camera(() => true);
+            using var svc = await ConnectedAsync(box, new RecordingBroadcaster());
+            await svc.AbortExposureAsync(CancellationToken.None);
+            Assert.That(PutCount(box, "abortexposure"), Is.EqualTo(1));
+
+            await svc.StartLiveViewAsync(new LiveViewStartRequestDto(0.1, BinX: 1, BinY: 1), CancellationToken.None);
+            try {
+                await WaitForAsync(() => Task.FromResult(svc.GetLiveViewStatus().FrameSeq >= 2), "Live View delivered no frames");
+            } finally {
+                await svc.StopLiveViewAsync();
+            }
+            // A stale flag would have made the first live frame "aborted": the loop then aborts the
+            // camera itself before retrying, a second abortexposure PUT.
+            Assert.That(PutCount(box, "abortexposure"), Is.EqualTo(1), "the first live frame was not skipped");
         }
 
         [Test]
