@@ -248,5 +248,27 @@ namespace OpenAstroAra.Test {
             Assert.That(container, Is.Not.Null);
             Assert.That(container!.GetType().Name, Is.EqualTo("UnknownSequenceContainer"));
         }
+
+        [Test]
+        public void TryAddCondition_skips_a_prototype_whose_native_library_is_missing() {
+            // A daemon without the astrometry natives must still boot: the AboveHorizonCondition
+            // prototype runs a NOVAS transform in its constructor, which surfaces as a
+            // TypeInitializationException the first time and a DllNotFoundException underneath.
+            var conditions = new System.Collections.Generic.List<ISequenceCondition>();
+            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
+                () => throw new System.TypeInitializationException("NOVAS", new System.DllNotFoundException("libnovas31.so"))), Is.False);
+            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
+                () => throw new System.DllNotFoundException("libnovas31.so")), Is.False);
+            Assert.That(conditions, Is.Empty);
+            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions, () => new LoopCondition()), Is.True);
+            Assert.That(conditions, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void TryAddCondition_lets_other_constructor_faults_through() {
+            var conditions = new System.Collections.Generic.List<ISequenceCondition>();
+            Assert.Throws<System.InvalidOperationException>(() =>
+                HeadlessSequencerFactory.TryAddCondition(conditions, () => throw new System.InvalidOperationException("bug")));
+        }
     }
 }

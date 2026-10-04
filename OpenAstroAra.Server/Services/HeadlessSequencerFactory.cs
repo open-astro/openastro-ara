@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
@@ -118,6 +119,41 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
 
     public T GetTrigger<T>() where T : ISequenceTrigger =>
         (T)(Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+
+        /// <summary>
+        /// §38k-7 / §38.10a — the condition prototypes. LoopCondition and TimeSpanCondition are
+        /// parameterless; every client-generated target block carries an AboveHorizonCondition and
+        /// the editor offers AltitudeCondition (unregistered, both degraded to
+        /// UnknownSequenceCondition, whose failed check skipped the whole target block). They read
+        /// the site (and custom horizon) from the store-backed profile.
+        /// </summary>
+        internal static List<ISequenceCondition> DefaultConditions(IProfileService profileService) {
+            var conditions = new List<ISequenceCondition> {
+                new LoopCondition(),
+                new TimeSpanCondition(),
+            };
+            // AboveHorizonCondition's constructor seeds its offset, which runs a NOVAS transform
+            // (WaitLoopData.Offset → SetTargetAltitudeWithHorizon). On a daemon without the
+            // astrometry natives that throws, and the prototype is built at DI time — so the
+            // whole daemon failed to start (CI's runtime smoke, Docker). Skip the prototype
+            // instead: Program.cs already warns at boot that altitude conditions will fail until
+            // the natives are installed, and a sequence carrying one degrades to
+            // UnknownSequenceCondition as it did before §38.10a.
+            TryAddCondition(conditions, () => new AboveHorizonCondition(profileService));
+            TryAddCondition(conditions, () => new AltitudeCondition(profileService));
+            return conditions;
+        }
+
+        /// <summary>Adds the prototype unless constructing it faults on a missing native library.</summary>
+        internal static bool TryAddCondition(List<ISequenceCondition> conditions, Func<ISequenceCondition> make) {
+            try {
+                conditions.Add(make());
+                return true;
+            } catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException) {
+                return false;
+            }
+        }
+
 
     /// <summary>
     /// Build a factory pre-populated with the equipment-independent
@@ -320,21 +356,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                     rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
                     flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             },
-            conditions: new List<ISequenceCondition> {
-                // §38k-7 — no-equipment conditions. LoopCondition bounds a
-                // container by iteration count; TimeSpanCondition bounds it
-                // by elapsed wall-clock time. Both are parameterless +
-                // self-contained.
-                new LoopCondition(),
-                new TimeSpanCondition(),
-                // §38.10a — every client-generated target block carries an
-                // AboveHorizonCondition, and the editor offers AltitudeCondition.
-                // Unregistered, both degraded to UnknownSequenceCondition, whose
-                // failed check skipped the whole target block. They read the
-                // site (and custom horizon) from the store-backed profile.
-                new AboveHorizonCondition(profileService),
-                new AltitudeCondition(profileService),
-            },
+            conditions: DefaultConditions(profileService),
             container: new List<ISequenceContainer> {
                 new SequenceRootContainer(),
                 new SequentialContainer(),
