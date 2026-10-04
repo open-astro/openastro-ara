@@ -133,6 +133,42 @@ namespace OpenAstroAra.Test {
             svc.Verify(s => s.PushGuiderTuningAsync("idem-t", It.IsAny<CancellationToken>()), Times.Once);
         }
 
+        [TestCase("tuning")]
+        [TestCase("TUNING")]
+        public async Task Push_scope_tuning_dispatches_to_the_tuning_push_only(string scope) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict); // the full push would throw
+            svc.Setup(s => s.PushGuiderTuningAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderAsync(scope, null, svc.Object, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+            svc.Verify(s => s.PushGuiderTuningAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("full")]
+        public async Task Push_without_a_tuning_scope_runs_the_full_push(string? scope) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict);
+            svc.Setup(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderAsync(scope, null, svc.Object, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+            svc.Verify(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Push_with_an_unknown_scope_is_a_400_and_pushes_nothing() {
+            var svc = new Mock<IGuiderService>(MockBehavior.Strict); // any push would throw
+
+            var result = await EquipmentEndpoints.PushGuiderAsync("tunning", null, svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
+        }
+
         [Test]
         public async Task TuningPush_maps_not_connected_InvalidOperation_to_typed_409() {
             var svc = new Mock<IGuiderService>();

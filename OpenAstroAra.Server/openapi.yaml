@@ -1357,16 +1357,9 @@ paths:
       parameters:
         - name: scope
           in: query
-          description: >-
-            Omitted or "full": the §63.5 engine config AND the §63.17 equipment selections, which
-            disconnects and reconnects the guider's equipment (guiding stops). "tuning": only the
-            runtime-safe messages (aggressiveness, minimum move, dec guide mode, guide exposure) — guiding
-            continues.
+          description: 'Omitted or "full": the §63.5 engine config AND the §63.17 equipment selections, which disconnects and reconnects the guider''s equipment (guiding stops). "tuning": only the runtime-safe messages (aggressiveness, minimum move, dec guide mode, guide exposure) — guiding continues. Any other value is a 400.'
           schema:
             type: string
-            enum:
-              - full
-              - tuning
         - name: Idempotency-Key
           in: header
           schema:
