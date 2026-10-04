@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/autofocus_run.dart';
 import '../../models/equipment_device_status.dart';
+import '../../models/guide_focus.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/guide_focus_state.dart';
@@ -50,6 +51,7 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
         autofocusLiveProvider.select((s) => s.focusedThisSession));
     final running = ref.watch(autofocusLiveProvider.select((s) => s.run.isRunning));
     final guideLive = ref.watch(guideFocusProvider.select((s) => s.status.active));
+    final guideFocused = ref.watch(guideFocusProvider.select((s) => s.status.focusedThisSession));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -77,7 +79,7 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
                         done: focused,
                         busy: running,
                       ),
-                      _StepTab(label: 'Guide camera', busy: guideLive),
+                      _StepTab(label: 'Guide camera', busy: guideLive, done: guideFocused),
                     ],
                   ),
                 ],

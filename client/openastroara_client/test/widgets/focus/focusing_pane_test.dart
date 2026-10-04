@@ -6,6 +6,7 @@ import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
@@ -217,6 +218,21 @@ void main() {
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'failed')).$1, 'Autofocus failed');
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'cancelled')).$1, 'Cancelled');
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'running', phase: 'moving')).$1, 'Moving to best focus…');
+  });
+
+  test('guide headlineFor turns green against the expected HFR, live and after a stop', () {
+    const sample = GuideFocusSample(seq: 9, hfr: 0.8, stars: 10, peakAdu: 60000, fwhm: 1.5);
+    const live = GuideFocusStatus(active: true, state: 'running', bestHfr: 0.68, expectedHfr: 0.7, latest: sample);
+    final liveLine = GuideFocusCard.headlineFor(live, gated: false, blocked: false);
+    expect(liveLine.$1, 'Live · HFR 0.80 — in focus');
+    expect(liveLine.$2, AraColors.accentConnected);
+    const stopped = GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68, expectedHfr: 0.7, latest: sample);
+    final stoppedLine = GuideFocusCard.headlineFor(stopped, gated: false, blocked: false);
+    expect(stoppedLine.$1, 'In focus · best HFR 0.68');
+    expect(stoppedLine.$2, AraColors.accentConnected);
+    expect(stopped.focusedThisSession, isTrue);
+    expect(const GuideFocusStatus(active: false, state: 'stopped', bestHfr: 1.2, expectedHfr: 0.7).focusedThisSession, isFalse);
+    expect(const GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68).focusedThisSession, isFalse, reason: 'no target, no verdict');
   });
 
   test('guide headlineFor covers idle, gated, blocked, live and stopped', () {

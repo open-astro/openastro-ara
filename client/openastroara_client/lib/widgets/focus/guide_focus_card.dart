@@ -31,14 +31,18 @@ class GuideFocusCard extends ConsumerStatefulWidget {
       if (latest.stars == 0) return ('Live · no stars measured', AraColors.accentBusy);
       final best = status.bestHfr;
       final atBest = best != null && latest.hfr > 0 && latest.hfr <= best + 1e-9;
+      final inFocus = status.hfrInFocus(latest.hfr);
       return (
-        'Live · HFR ${latest.hfr.toStringAsFixed(2)}${atBest ? ' — best so far' : ''}',
-        atBest ? AraColors.accentConnected : AraColors.accentBusy,
+        'Live · HFR ${latest.hfr.toStringAsFixed(2)}${inFocus ? ' — in focus' : atBest ? ' — best so far' : ''}',
+        inFocus || atBest ? AraColors.accentConnected : AraColors.accentBusy,
       );
     }
     if (status.state == GuideFocusStates.error) return ('Stopped on an error', AraColors.accentError);
     if (latest != null) {
       final best = status.bestHfr;
+      if (status.focusedThisSession) {
+        return ('In focus · best HFR ${best!.toStringAsFixed(2)}', AraColors.accentConnected);
+      }
       return ('Stopped${best != null ? ' · best HFR ${best.toStringAsFixed(2)}' : ''}', null);
     }
     if (gated) return ('Waiting for the main telescope', null);
@@ -225,7 +229,7 @@ class _Hero extends StatelessWidget {
     final hfr = latest?.hfr ?? 0.0;
     final atBest = best != null && hfr > 0 && hfr <= best + 1e-9;
     final hint = guideFocusHint(status);
-    final color = atBest ? AraColors.accentConnected : AraColors.textPrimary;
+    final color = atBest || status.hfrInFocus(hfr) ? AraColors.accentConnected : AraColors.textPrimary;
     String f(double v, [int d = 2]) => v > 0 ? v.toStringAsFixed(d) : '—';
     final target = status.expectedHfr;
     final bestLine = best == null ? 'px · best so far —' : 'px · best so far ${f(best)}';
@@ -328,10 +332,6 @@ class GuideFocusHint {
   const GuideFocusHint(this.advice, this.title, this.detail);
 }
 
-/// How far above the expected in-focus HFR still counts as in focus: seeing
-/// wanders and the target assumes a typical night.
-const double kGuideFocusTargetTolerance = 1.3;
-
 /// Pure — unit-tested. First an absolute verdict: at or under the profile's
 /// expected in-focus HFR (× [kGuideFocusTargetTolerance]) is "In focus", whatever
 /// the trend says. Otherwise compares a 3-frame median with the median [lookback]
@@ -351,7 +351,7 @@ GuideFocusHint guideFocusHint(GuideFocusStatus status, {int lookback = 4}) {
   final target = status.expectedHfr;
   final far = best != null && hfr > best * 1.5;
   final size = far ? 'big moves' : 'small moves';
-  if (target != null && target > 0 && hfr <= target * kGuideFocusTargetTolerance) {
+  if (target != null && status.hfrInFocus(hfr)) {
     return GuideFocusHint(TurnAdvice.atBest, 'In focus',
         'Stars are as tight as this camera resolves (in focus ≤ ${target.toStringAsFixed(2)} px). Lock the focuser.');
   }

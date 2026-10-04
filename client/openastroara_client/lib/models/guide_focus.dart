@@ -45,6 +45,10 @@ class GuideFocusSample {
       );
 }
 
+/// How far above the expected in-focus HFR still counts as in focus: seeing
+/// wanders and the target assumes a typical night.
+const double kGuideFocusTargetTolerance = 1.3;
+
 /// The loop's snapshot.
 class GuideFocusStatus {
   final bool active;
@@ -111,4 +115,15 @@ class GuideFocusStatus {
       plateScaleArcsec: (json['plate_scale_arcsec'] as num?)?.toDouble(),
     );
   }
+}
+
+/// The in-focus verdict against the daemon's expected HFR (null target = no verdict).
+extension GuideFocusVerdict on GuideFocusStatus {
+  bool get hasTarget => expectedHfr != null && expectedHfr! > 0;
+
+  /// [hfr] is at or under the target (× [kGuideFocusTargetTolerance]).
+  bool hfrInFocus(double hfr) => hasTarget && hfr > 0 && hfr <= expectedHfr! * kGuideFocusTargetTolerance;
+
+  /// The best HFR this session reached the target: the guide-camera step is done.
+  bool get focusedThisSession => bestHfr != null && hfrInFocus(bestHfr!);
 }
