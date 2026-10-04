@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../models/rotation_assist.dart';
@@ -5,10 +7,18 @@ import '../models/server.dart';
 
 /// The by-hand rotation readout's client surface. An interface so the
 /// notifier can be unit-tested with a fake.
+/// A fetched frame: JPEG bytes + the server's `X-Frame-Seq`.
+class RotationAssistFrame {
+  final Uint8List bytes;
+  final int seq;
+  const RotationAssistFrame(this.bytes, this.seq);
+}
+
 abstract interface class RotationAssistClient {
   Future<void> start({required double positionAngleDeg});
   Future<void> stop();
   Future<RotationAssistStatus> status();
+  Future<RotationAssistFrame?> fetchFrame();
   void close();
 }
 
@@ -46,6 +56,23 @@ class RotationAssistApi implements RotationAssistClient {
     return data is Map<String, dynamic>
         ? RotationAssistStatus.fromJson(data)
         : RotationAssistStatus.idle;
+  }
+
+  @override
+  Future<RotationAssistFrame?> fetchFrame() async {
+    final res = await _dio.get<List<int>>(
+      '/api/v1/rotation-assist/frame',
+      options: Options(
+        responseType: ResponseType.bytes,
+        validateStatus: (s) => s == 200 || s == 204,
+      ),
+    );
+    if (res.statusCode == 204) return null;
+    final bytes = res.data;
+    if (bytes == null || bytes.isEmpty) return null;
+    final u8 = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+    final seq = int.tryParse(res.headers.value('x-frame-seq') ?? '') ?? 0;
+    return RotationAssistFrame(u8, seq);
   }
 
   @override

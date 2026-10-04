@@ -176,17 +176,25 @@ public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
         _path = System.IO.Path.Combine(profileDir, FileName);
     }
 
-    public async Task<double?> SolvePositionAngleAsync(CancellationToken ct) {
+    private int _frameSeed;
+
+    public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {
         await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(false); // a capture + solve takes a moment
+        string text;
         try {
-            var text = (await System.IO.File.ReadAllTextAsync(_path, ct).ConfigureAwait(false)).Trim();
-            return double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pa)
-                ? pa
-                : null;
+            text = (await System.IO.File.ReadAllTextAsync(_path, ct).ConfigureAwait(false)).Trim();
         } catch (System.IO.IOException) {
             return null;
         } catch (UnauthorizedAccessException) {
             return null;
         }
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pa)) {
+            return null;
+        }
+        // A rendered star field stands in for the capture (new noise each solve so the picture visibly updates).
+        const int width = 1024, height = 683;
+        var pixels = SyntheticSky.Render(width, height, hfr: 1.6, seed: 11, stars: 140, frameSeed: ++_frameSeed);
+        var frame = new AnalysisFrame(pixels, width, height, DateTimeOffset.UtcNow);
+        return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 2.3, Flipped: false, frame);
     }
 }

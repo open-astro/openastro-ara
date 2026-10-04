@@ -25,18 +25,14 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>One capture-and-solve of the main camera, reporting the sky position angle (null = the solve
-/// failed). <see cref="CenteringService"/> implements it over the profile's plate-solver stack; tests inject
-/// a scripted one.</summary>
-public interface IPositionAngleSolver {
-    Task<double?> SolvePositionAngleAsync(CancellationToken ct);
-}
-
 /// <summary>The readout's control surface: the sequencer seam plus what the REST endpoints need.</summary>
 public interface IRotationAssistService : IRotationAssistExecutor {
     bool IsActive { get; }
     Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct);
     RotationAssistStatusDto GetStatus();
+    /// <summary>The latest solved frame rendered as JPEG (auto-stretched, stars ringed) with its sequence
+    /// number, or null before the first successful solve.</summary>
+    (ReadOnlyMemory<byte> Jpeg, long Seq)? GetFrame();
 }
 
 /// <summary>
@@ -66,6 +62,8 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     private readonly Queue<RotationAssistSampleDto> _recent = new();
     private string? _error;
     private int _consecutiveFailures;
+    private byte[]? _frame;
+    private long _frameSeq;
     private CancellationTokenSource? _loopCts;
     private Task? _loop;
     private bool _disposed;
@@ -113,6 +111,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 _recent.Clear();
                 _error = null;
                 _consecutiveFailures = 0;
+                _frame = null;
             }
             _loopCts?.Dispose();
             _loopCts = new CancellationTokenSource();
@@ -171,7 +170,17 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 Recent: _recent.ToArray(),
                 WithinTolerance: _latest is { } l && Math.Abs(l.DeltaDeg) <= tolerance,
                 Error: _error,
-                ConsecutiveFailures: _consecutiveFailures);
+                ConsecutiveFailures: _consecutiveFailures,
+                HasFrame: _frame is not null,
+                FrameSeq: _frameSeq);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1024:Use properties where appropriate",
+        Justification = "Snapshot of a mutable multi-KB buffer taken under the lock; mirrors GuideFocusService.GetFrame.")]
+    public (ReadOnlyMemory<byte> Jpeg, long Seq)? GetFrame() {
+        lock (_gate) {
+            return _frame is null ? null : (_frame, _frameSeq);
         }
     }
 
@@ -191,7 +200,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     private async Task RunLoopAsync(double target, CancellationToken ct) {
         try {
             while (!ct.IsCancellationRequested) {
-                double? solved = null;
+                RotationSolve? solved = null;
                 try {
                     solved = await _solver.SolvePositionAngleAsync(ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
@@ -199,15 +208,24 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 } catch (Exception ex) {
                     LogSolveFaulted(ex);
                 }
-                if (solved is { } pa && double.IsFinite(pa)) {
+                if (solved is { } s && double.IsFinite(s.PositionAngleDeg)) {
+                    var pa = s.PositionAngleDeg;
                     var delta = CenteringService.FoldRotationDelta(target, pa);
+                    var jpeg = RenderQuietly(s.Frame);
                     lock (_gate) {
                         _seq++;
                         _consecutiveFailures = 0;
-                        _latest = new RotationAssistSampleDto(_seq, DateTimeOffset.UtcNow, Math.Round(AstroUtil.EuclidianModulus(pa, 360), 2), Math.Round(delta, 2));
+                        _latest = new RotationAssistSampleDto(
+                            _seq, DateTimeOffset.UtcNow, Math.Round(AstroUtil.EuclidianModulus(pa, 360), 2), Math.Round(delta, 2),
+                            Math.Round(s.RaDeg, 4), Math.Round(s.DecDeg, 4), Math.Round(s.PixelScaleArcsec, 3), s.Flipped,
+                            s.Frame.Width, s.Frame.Height);
                         _recent.Enqueue(_latest);
                         while (_recent.Count > RecentWindow) {
                             _recent.Dequeue();
+                        }
+                        if (jpeg is not null) {
+                            _frame = jpeg;
+                            _frameSeq = _seq;
                         }
                     }
                     LogSample(pa, delta);
@@ -228,6 +246,23 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
             }
         } catch (OperationCanceledException) {
             // stopped
+        }
+    }
+
+    // §64's renderer (auto-stretch + star rings, ≤1024 px) gives the readout its picture. Frames too small
+    // to carry stars (unit-test stubs) are skipped; a render fault never touches the readout.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Cosmetic: a failed JPEG render must never fail the readout. Log-and-recover boundary.")]
+    private byte[]? RenderQuietly(AnalysisFrame frame) {
+        if (frame.Width < 64 || frame.Height < 64) {
+            return null;
+        }
+        try {
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, bayerPattern: null, annotate: true);
+            return jpeg;
+        } catch (Exception ex) {
+            LogRenderFailed(ex);
+            return null;
         }
     }
 
@@ -255,4 +290,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout gave up after {Failures} consecutive failed solves")]
     private partial void LogGaveUp(int failures);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: could not render the solved frame — the readout continues without a picture")]
+    private partial void LogRenderFailed(Exception ex);
 }

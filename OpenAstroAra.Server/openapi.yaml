@@ -1589,6 +1589,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RotationAssistStatusDto'
+  /api/v1/rotation-assist/frame:
+    get:
+      tags:
+        - Rotation assist
+      summary: 'The latest solved frame of the by-hand rotation readout, rendered (204 until one).'
+      operationId: GetRotationAssistFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
   /api/v1/sequences:
     get:
       tags:
@@ -10048,6 +10059,44 @@ components:
             - number
             - string
           format: double
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        pixel_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        flipped:
+          type: boolean
+          default: false
+        frame_width:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        frame_height:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     RotationAssistStartRequestDto:
       required:
         - position_angle_deg
@@ -10121,6 +10170,16 @@ components:
             - integer
             - string
           format: int32
+        has_frame:
+          type: boolean
+          default: false
+        frame_seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+          default: 0
     RotatorMoveRequestDto:
       required:
         - target_angle_deg

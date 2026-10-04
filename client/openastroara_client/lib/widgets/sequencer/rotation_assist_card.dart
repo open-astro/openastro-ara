@@ -5,6 +5,7 @@ import '../../models/rotation_assist.dart';
 import '../../state/rotation/rotation_assist_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import 'rotation_overlay.dart';
 import 'sequencer_toolbar.dart';
 
 /// The by-hand rotation readout under the run band: shown while the daemon's
@@ -66,114 +67,141 @@ class RotationAssistCard extends ConsumerWidget {
         color: AraColors.bgPanel,
         border: Border(bottom: BorderSide(color: AraColors.border)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: 260,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'ROTATE THE CAMERA BY HAND',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1.1,
-                    color: AraColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  delta == null
-                      ? '—'
-                      : '${delta >= 0 ? '+' : '−'}${deg(delta.abs())}',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w300,
-                    height: 1.05,
-                    color: onTarget
-                        ? AraColors.accentConnected
-                        : AraColors.textPrimary,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                Text(
-                  'to go · target ${deg(status.targetPositionAngleDeg)} · solved ${deg(latest?.solvedPositionAngleDeg)} · ±${deg(status.toleranceDeg)}',
-                  maxLines: 2,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AraColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AraSpace.s16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 260,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                    const Text(
+                      'ROTATE THE CAMERA BY HAND',
+                      style: TextStyle(
+                        fontSize: 11,
+                        letterSpacing: 1.1,
+                        color: AraColors.textSecondary,
                       ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(12),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      delta == null
+                          ? '—'
+                          : '${delta >= 0 ? '+' : '−'}${deg(delta.abs())}',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w300,
+                        height: 1.05,
+                        color: onTarget
+                            ? AraColors.accentConnected
+                            : AraColors.textPrimary,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(icon, size: 18, color: color),
-                          const SizedBox(width: 6),
-                          Text(
-                            hint.title,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: color,
-                            ),
-                          ),
-                        ],
+                    ),
+                    Text(
+                      'to go · target ${deg(status.targetPositionAngleDeg)} · solved ${deg(latest?.solvedPositionAngleDeg)} · ±${deg(status.toleranceDeg)}',
+                      maxLines: 2,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AraColors.textSecondary,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  hint.detail,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AraColors.textSecondary,
-                    height: 1.3,
-                  ),
-                ),
-                if (live.error != null || status.error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      live.error ?? status.error!,
+              ),
+              const SizedBox(width: AraSpace.s16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 18, color: color),
+                              const SizedBox(width: 6),
+                              Text(
+                                hint.title,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      hint.detail,
                       style: const TextStyle(
-                        fontSize: 12,
-                        color: AraColors.accentError,
+                        fontSize: 13,
+                        color: AraColors.textSecondary,
+                        height: 1.3,
                       ),
                     ),
-                  ),
-              ],
+                    if (live.error != null || status.error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          live.error ?? status.error!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AraColors.accentError,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AraSpace.s16),
+              FilledButton.icon(
+                key: const Key('rotation-assist-resume'),
+                onPressed: () => promptAndResumeSequence(context, ref),
+                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                label: const Text('Done — resume'),
+              ),
+            ],
+          ),
+          if (live.frame != null && latest != null) ...[
+            const SizedBox(height: AraSpace.s12),
+            RotationFrameView(
+              key: const Key('rotation-assist-frame'),
+              frame: live.frame!,
+              frameWidth: latest.frameWidth,
+              frameHeight: latest.frameHeight,
+              solvedPositionAngleDeg: latest.solvedPositionAngleDeg,
+              targetPositionAngleDeg: status.targetPositionAngleDeg,
+              deltaDeg: latest.deltaDeg,
+              flipped: latest.flipped,
+              onTarget: onTarget,
             ),
-          ),
-          const SizedBox(width: AraSpace.s16),
-          FilledButton.icon(
-            key: const Key('rotation-assist-resume'),
-            onPressed: () => promptAndResumeSequence(context, ref),
-            icon: const Icon(Icons.play_arrow_rounded, size: 18),
-            label: const Text('Done — resume'),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              'Frame ${live.frameSeq} · the arrow is north in this picture; turn the camera until the picture\'s edges line up with the ${onTarget ? 'green' : 'amber'} rectangle.',
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: AraColors.textSecondary,
+              ),
+            ),
+          ],
         ],
       ),
     );

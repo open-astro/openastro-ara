@@ -61,6 +61,20 @@ public static class RotationAssistEndpoints {
             .WithName("GetRotationAssist")
             .WithSummary("The by-hand rotation readout: target, latest solved angle, delta, history.");
 
+        assist.MapGet("/frame", (IRotationAssistService svc, HttpContext http) => {
+            var frame = svc.GetFrame();
+            if (frame is null) {
+                return Results.NoContent();
+            }
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.Headers["X-Frame-Seq"] = frame.Value.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
+        })
+            .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
+            .Produces(StatusCodes.Status204NoContent)
+            .WithName("GetRotationAssistFrame")
+            .WithSummary("The latest solved frame of the by-hand rotation readout, rendered (204 until one).");
+
         return app;
     }
 }

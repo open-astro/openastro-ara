@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,11 +13,15 @@ import '../saved_server_state.dart';
 /// flight and the last request error.
 class RotationAssistLive {
   final RotationAssistStatus status;
+  final Uint8List? frame;
+  final int frameSeq;
   final bool busy;
   final String? error;
 
   const RotationAssistLive({
     this.status = RotationAssistStatus.idle,
+    this.frame,
+    this.frameSeq = 0,
     this.busy = false,
     this.error,
   });
@@ -25,11 +30,16 @@ class RotationAssistLive {
 
   RotationAssistLive copyWith({
     RotationAssistStatus? status,
+    Uint8List? frame,
+    int? frameSeq,
     bool? busy,
     String? error,
     bool clearError = false,
+    bool clearFrame = false,
   }) => RotationAssistLive(
     status: status ?? this.status,
+    frame: clearFrame ? null : (frame ?? this.frame),
+    frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
     busy: busy ?? this.busy,
     error: clearError ? null : (error ?? this.error),
   );
@@ -81,6 +91,13 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
       if (!ref.mounted || gen != _generation) return;
       _consecutiveErrors = 0;
       state = state.copyWith(status: status, clearError: true);
+      if (status.hasFrame && status.frameSeq != state.frameSeq) {
+        final frame = await api.fetchFrame();
+        if (!ref.mounted || gen != _generation) return;
+        if (frame != null) {
+          state = state.copyWith(frame: frame.bytes, frameSeq: frame.seq);
+        }
+      }
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
       _consecutiveErrors++;
@@ -105,7 +122,7 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
   Future<void> start({required double positionAngleDeg}) async {
     final api = ref.read(rotationAssistApiProvider);
     if (api == null || state.busy) return;
-    state = state.copyWith(busy: true, clearError: true);
+    state = state.copyWith(busy: true, clearError: true, clearFrame: true);
     try {
       await api.start(positionAngleDeg: positionAngleDeg);
       if (!ref.mounted) return;

@@ -956,7 +956,12 @@ public partial class Program {
                 // Development only (SyntheticSky): the angle comes from a file instead of a plate solve.
                 sp.GetService<SyntheticSkySettings>() is not null
                     ? new SyntheticPositionAngleSolver(profileDir)
-                    : (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>(),
+                    : new RotationFrameSolver(
+                        sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                        sp.GetRequiredService<IProfileStore>(),
+                        sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>(),
+                        sp.GetRequiredService<IAnalysisFrameSource>(),
+                        sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()),
                 () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();

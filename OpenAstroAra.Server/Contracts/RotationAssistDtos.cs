@@ -27,7 +27,16 @@ public sealed record RotationAssistSampleDto(
     long Seq,
     DateTimeOffset SolvedUtc,
     double SolvedPositionAngleDeg,
-    double DeltaDeg);
+    double DeltaDeg,
+    // The solve's geometry, so the client can draw north and the planned framing over the frame: where the
+    // frame centre points (J2000 degrees), the pixel scale, whether the train mirrors the sky (a flip reverses
+    // the on-screen sense of a turn), and the frame's size in pixels.
+    double RaDeg = 0,
+    double DecDeg = 0,
+    double PixelScaleArcsec = 0,
+    bool Flipped = false,
+    int FrameWidth = 0,
+    int FrameHeight = 0);
 
 /// <summary>
 /// The by-hand rotation readout (a run's Rotate camera by hand step, or a manual start). <c>State</c>:
@@ -46,4 +55,8 @@ public sealed record RotationAssistStatusDto(
     IReadOnlyList<RotationAssistSampleDto> Recent,
     bool WithinTolerance,
     string? Error,
-    int ConsecutiveFailures);
+    int ConsecutiveFailures,
+    // The latest solved frame, rendered, is at GET /api/v1/rotation-assist/frame once HasFrame; FrameSeq
+    // matches the sample it belongs to.
+    bool HasFrame = false,
+    long FrameSeq = 0);

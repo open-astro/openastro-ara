@@ -38,6 +38,12 @@ void main() {
         'solved_utc': '2026-10-03T04:00:30+00:00',
         'solved_position_angle_deg': 287.5,
         'delta_deg': 11.5,
+        'ra_deg': 314.82,
+        'dec_deg': 44.53,
+        'pixel_scale_arcsec': 2.3,
+        'flipped': true,
+        'frame_width': 1024,
+        'frame_height': 683,
       },
       'recent': [
         {'seq': 2, 'solved_position_angle_deg': 270.0, 'delta_deg': 29.0},
@@ -46,12 +52,19 @@ void main() {
       'within_tolerance': false,
       'error': null,
       'consecutive_failures': 0,
+      'has_frame': true,
+      'frame_seq': 3,
     });
     expect(s.active, isTrue);
     expect(s.targetPositionAngleDeg, 299);
     expect(s.latest!.deltaDeg, 11.5);
     expect(s.recent, hasLength(2));
     expect(s.withinTolerance, isFalse);
+    expect(s.latest!.flipped, isTrue);
+    expect(s.latest!.pixelScaleArcsec, 2.3);
+    expect(s.latest!.frameWidth, 1024);
+    expect(s.hasFrame, isTrue);
+    expect(s.frameSeq, 3);
     expect(RotationAssistStatus.fromJson(const {}).state, 'idle');
   });
 

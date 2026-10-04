@@ -17,11 +17,27 @@ class RotationAssistSample {
   /// frame rotated by 180° is the same framing.
   final double deltaDeg;
 
+  /// The solve's geometry for the overlay: where the frame centre points
+  /// (J2000 degrees), the pixel scale, whether the train mirrors the sky (a
+  /// flip reverses the on-screen sense of a turn), and the frame size.
+  final double raDeg;
+  final double decDeg;
+  final double pixelScaleArcsec;
+  final bool flipped;
+  final int frameWidth;
+  final int frameHeight;
+
   const RotationAssistSample({
     required this.seq,
     this.solvedUtc,
     required this.solvedPositionAngleDeg,
     required this.deltaDeg,
+    this.raDeg = 0,
+    this.decDeg = 0,
+    this.pixelScaleArcsec = 0,
+    this.flipped = false,
+    this.frameWidth = 0,
+    this.frameHeight = 0,
   });
 
   factory RotationAssistSample.fromJson(Map<String, dynamic> json) =>
@@ -31,6 +47,12 @@ class RotationAssistSample {
         solvedPositionAngleDeg:
             (json['solved_position_angle_deg'] as num?)?.toDouble() ?? 0,
         deltaDeg: (json['delta_deg'] as num?)?.toDouble() ?? 0,
+        raDeg: (json['ra_deg'] as num?)?.toDouble() ?? 0,
+        decDeg: (json['dec_deg'] as num?)?.toDouble() ?? 0,
+        pixelScaleArcsec: (json['pixel_scale_arcsec'] as num?)?.toDouble() ?? 0,
+        flipped: json['flipped'] as bool? ?? false,
+        frameWidth: (json['frame_width'] as num?)?.toInt() ?? 0,
+        frameHeight: (json['frame_height'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -47,6 +69,11 @@ class RotationAssistStatus {
   final String? error;
   final int consecutiveFailures;
 
+  /// The latest solved frame, rendered, is fetchable once [hasFrame];
+  /// [frameSeq] is the sample it belongs to.
+  final bool hasFrame;
+  final int frameSeq;
+
   const RotationAssistStatus({
     this.active = false,
     this.state = RotationAssistStates.idle,
@@ -59,6 +86,8 @@ class RotationAssistStatus {
     this.withinTolerance = false,
     this.error,
     this.consecutiveFailures = 0,
+    this.hasFrame = false,
+    this.frameSeq = 0,
   });
 
   static const idle = RotationAssistStatus();
@@ -89,6 +118,8 @@ class RotationAssistStatus {
       withinTolerance: json['within_tolerance'] as bool? ?? false,
       error: json['error'] as String?,
       consecutiveFailures: (json['consecutive_failures'] as num?)?.toInt() ?? 0,
+      hasFrame: json['has_frame'] as bool? ?? false,
+      frameSeq: (json['frame_seq'] as num?)?.toInt() ?? 0,
     );
   }
 }

@@ -34,12 +34,15 @@ namespace OpenAstroAra.Test {
             private readonly Queue<double?> _script;
             private double? _last;
             public int Solves;
+            public int FrameSize = 4; // 4×4 stub: too small to render, so HasFrame stays false unless a test asks for a real-sized one
             public ScriptedSolver(params double?[] script) { _script = new Queue<double?>(script); }
-            public async Task<double?> SolvePositionAngleAsync(CancellationToken ct) {
+            public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {
                 await Task.Delay(5, ct);
                 Solves++;
                 if (_script.Count > 0) { _last = _script.Dequeue(); }
-                return _last;
+                if (_last is not { } pa) return null;
+                var frame = new AnalysisFrame(new ushort[FrameSize * FrameSize], FrameSize, FrameSize, DateTimeOffset.UtcNow);
+                return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 2.3, Flipped: true, frame);
             }
         }
 
@@ -79,6 +82,12 @@ namespace OpenAstroAra.Test {
             Assert.That(deltas, Is.EqualTo(ExpectedDeltas).Within(0.01).AsCollection);
             Assert.That(s.Latest!.SolvedPositionAngleDeg, Is.EqualTo(300));
             Assert.That(s.WithinTolerance, Is.True);
+            // The solve's geometry rides along for the client's overlay; a stub frame too small to render leaves no picture.
+            Assert.That(s.Latest.Flipped, Is.True);
+            Assert.That(s.Latest.PixelScaleArcsec, Is.EqualTo(2.3));
+            Assert.That(s.Latest.FrameWidth, Is.EqualTo(4));
+            Assert.That(s.HasFrame, Is.False);
+            Assert.That(svc.GetFrame(), Is.Null);
 
             await svc.StopAsync();
             Assert.That(svc.GetStatus().State, Is.EqualTo("stopped"));
@@ -114,6 +123,22 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync();
             await svc.StopAsync();
             Assert.That(svc.GetStatus().State, Is.EqualTo("stopped"));
+        }
+
+        [Test]
+        public async Task A_real_sized_frame_is_rendered_and_tagged_with_its_sample() {
+            var solver = new ScriptedSolver(10) { FrameSize = 96 };
+            using var svc = new RotationAssistService(solver, () => 1.0);
+            await svc.StartAsync(10, CancellationToken.None);
+            var s = await WaitForSeq(svc, 1);
+            await svc.StopAsync();
+
+            Assert.That(s.HasFrame, Is.True);
+            Assert.That(s.FrameSeq, Is.GreaterThanOrEqualTo(1));
+            var frame = svc.GetFrame();
+            Assert.That(frame, Is.Not.Null);
+            Assert.That(frame!.Value.Jpeg.Length, Is.GreaterThan(100), "a JPEG, not an empty buffer");
+            Assert.That(frame.Value.Seq, Is.EqualTo(svc.GetStatus().FrameSeq));
         }
 
         [Test]
