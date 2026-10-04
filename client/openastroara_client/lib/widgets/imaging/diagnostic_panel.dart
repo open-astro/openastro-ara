@@ -38,6 +38,10 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
+                // spaceBetween with NO Spacer: a Spacer would split the slack
+                // 50/50 with the flexible chip and squeeze a short label
+                // ("Diagn…") even when there is room for it.
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 18, color: AraColors.textSecondary),
@@ -48,7 +52,7 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                   Flexible(
                     child: StatusIndicator(level: diag.level, label: diag.label),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text(
                     diag.events.isEmpty
                         ? 'No recent events'
