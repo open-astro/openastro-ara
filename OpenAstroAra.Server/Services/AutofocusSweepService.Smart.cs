@@ -30,19 +30,23 @@ namespace OpenAstroAra.Server.Services;
 /// §59.2 Smart Focus — the one-frame runner (the payoff of the calibration slices #780/#781): when the
 /// profile carries a usable calibration, an AF trigger reads the rig's defocus from ONE exposure via
 /// <see cref="FocusInverseMap.PredictOffsetMagnitude"/> and moves straight to predicted focus — 2-3 shots
-/// (30-90 s) instead of the 9-probe Classic V-curve (3-5 min). Classic remains the calibrator and the
-/// §59.11 safety net; every Smart failure degrades to it, so the worst case is exactly today's behavior
-/// plus up to three cheap shots.
+/// on the predict path, up to <see cref="SmartMaxShots"/> when shot 1 already reads in focus — instead of
+/// the 9-probe Classic V-curve (3-5 min). Classic remains the calibrator and the §59.11 safety net; every
+/// Smart failure degrades to it, so the worst case is exactly today's behavior plus a few cheap shots.
 ///
 /// The §59.11 fallback ladder implemented here:
 ///  * Not calibrated / calibration temp drift &gt; <see cref="CalibrationTempDeltaC"/> (§59.13) /
 ///    samples no longer rebuild a map → Classic, silently (mode is visible in `autofocus.started`).
 ///  * Shot 1 has &lt; <see cref="SmartMinStars"/> stars, or its features predict no magnitude
 ///    (starless / more defocused than anything calibrated) → `autofocus.fallback_classic` + Classic.
+///  * Shot 1 reads in focus: bracket it, shots 2-3 at ± the calibration's half-width. Either side not
+///    clearly worse, or the parabola's vertex outside the bracket → `bracket_failed` + Classic. Otherwise
+///    shot 4 at the vertex when it sits off the centre (kept only when clearly sharper than the centre),
+///    then shot 5, a confirmation frame at the final position.
 ///  * Shot 2 worse than shot 1 (direction guess wrong — magnitude-only map, §59.2): reverse with HALF
 ///    the magnitude, shot 3. Still worse → restore the start position, `fallback_classic`, Classic.
 ///  * Shot 2 improved but missed the target: continue by ±20% of the move, shot 3, keep the better of
-///    the two positions — three shots is the Smart budget (§59.3), never a fourth.
+///    the two positions — three shots is the predict path's budget (§59.3), never a fourth.
 /// Direction guess: toward the calibrated best-focus position (the rig usually drifts around it).
 /// Target: within <see cref="TargetHfrTolerancePct"/> percent of the calibration's in-focus HFR.
 /// </summary>
@@ -64,7 +68,7 @@ public sealed partial class AutofocusSweepService {
     internal const double BracketDropFactor = 0.97;
 
     /// <summary>§59.13 `target_hfr_tolerance_pct` default — done when HFR is within this percentage
-    /// above the calibration's fitted in-focus HFR.</summary>
+    /// above the calibration's in-focus HFR (the measured confirmation-frame value when stored).</summary>
     internal const double TargetHfrTolerancePct = 10.0;
 
     /// <summary>§59.13 `calibration_temp_delta_c` default — a calibration measured more than this many
@@ -406,7 +410,7 @@ public sealed partial class AutofocusSweepService {
         progress.Report(new ApplicationStatus {
             Status = $"Smart Focus: shot {shotIndex} at position {position}",
             Progress = shotIndex,
-            MaxProgress = 3,
+            MaxProgress = SmartMaxShots,
             ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
         });
         var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
