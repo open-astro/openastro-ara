@@ -137,5 +137,21 @@ namespace OpenAstroAra.Test {
             cmd.Parameters.AddWithValue("$id", Session.ToString());
             Assert.That(Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture), Is.EqualTo(2));
         }
+    
+
+        [Test]
+        public async Task Seeding_the_sample_session_counts_its_three_frames_once() {
+            // The seed used to write frame_count = 3 and InsertFrameAsync bumped it to 6.
+            await _repo.EnsureSeededAsync(CancellationToken.None);
+            await _repo.EnsureSeededAsync(CancellationToken.None); // idempotent
+
+            var sample = Guid.Parse("11111111-1111-1111-1111-111111111111");
+            Assert.That(await _repo.CountSessionFramesAsync(sample, CancellationToken.None), Is.EqualTo(3));
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT frame_count FROM sessions WHERE id = $id;";
+            cmd.Parameters.AddWithValue("$id", sample.ToString());
+            Assert.That(Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture), Is.EqualTo(3));
+        }
     }
 }

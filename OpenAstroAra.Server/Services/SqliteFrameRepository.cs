@@ -88,7 +88,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                      recovery_needed, last_completed_instruction_id,
                      current_target_id, frame_count)
                 VALUES
-                    ($id, NULL, NULL, $started, $ended, 0, NULL, NULL, 3);
+                    ($id, NULL, NULL, $started, $ended, 0, NULL, NULL, 0); -- InsertFrameAsync bumps it to 3
                 """;
             sessionCmd.Parameters.AddWithValue("$id", SampleSessionId.ToString());
             sessionCmd.Parameters.AddWithValue("$started",
