@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// so a rename of those classes won't break compilation here; update these literals if you rename them.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class PlateSolverFactoryTest {
 
         // Concrete (internal) solver class names asserted below — pinned here so a rename is a single-point

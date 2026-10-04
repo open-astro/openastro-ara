@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     /// instead of surfacing a null section.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FilterWheelLabelsStoreTest {
 
         // CA1861: the expected reference-8 default, shared by the two assertions.

@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// service runs.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteFramesLightIndexTest {
 
         private string _dir = null!;

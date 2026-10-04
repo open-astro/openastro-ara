@@ -28,6 +28,7 @@ namespace OpenAstroAra.Test {
     /// delete frees the package directory, and a caller-supplied id can't escape the root.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class DataManagerServiceTest {
 
         private string _root = null!;

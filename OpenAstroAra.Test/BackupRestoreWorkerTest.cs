@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// <see cref="IBackupRestorer"/> fake to drive the worker deterministically (block / throw) without a real swap.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BackupRestoreWorkerTest {
 
         private string _profileDir = null!;

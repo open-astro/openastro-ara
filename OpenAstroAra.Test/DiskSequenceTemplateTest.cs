@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// the hardcoded built-ins, with disk-name collisions overriding built-ins.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class DiskSequenceTemplateTest {
 
         private static readonly string[] ExpectedBuiltinTemplateNames = { "single-target-lrgb", "single-target-narrowband", "all-night-dso-roster" };

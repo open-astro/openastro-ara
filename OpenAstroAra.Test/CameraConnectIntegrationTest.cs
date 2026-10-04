@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// the <c>alpaca-sim-integration</c> CI job.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("Integration")]
     public class CameraConnectIntegrationTest {
 

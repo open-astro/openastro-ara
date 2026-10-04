@@ -26,6 +26,7 @@ namespace OpenAstroAra.Test {
     /// optional size / surface-brightness columns and a clean display name.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SkyCatalogServiceTest {
 
         private string _root = null!;

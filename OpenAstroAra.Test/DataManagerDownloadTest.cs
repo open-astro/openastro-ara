@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// progress/complete/failed WS events, reflects in-flight state, and cancels.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class DataManagerDownloadTest {
 
         private string _root = null!;

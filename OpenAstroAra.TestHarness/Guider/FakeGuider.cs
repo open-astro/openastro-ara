@@ -243,9 +243,14 @@ public sealed class FakeGuider : IAsyncDisposable {
         }
 
         // PHD2 returns integer 0 from most successful calls; getters are overridden via OnRpc.
+        // get_app_state defaults to "Stopped" — the state the on-connect AppState event announces —
+        // so the client's StopCapture/WaitForAppState(STOPPED) returns at once instead of polling a
+        // "0" answer until its 10 s deadline (#1265: every profile push paid that twice).
         JsonObject response;
         try {
-            JsonNode? result = factory is null ? 0 : factory(request);
+            JsonNode? result = factory is not null ? factory(request)
+                : method == "get_app_state" ? "Stopped"
+                : 0;
             response = new JsonObject {
                 ["jsonrpc"] = "2.0",
                 ["result"] = result,

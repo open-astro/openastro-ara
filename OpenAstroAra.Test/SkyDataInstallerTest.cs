@@ -32,6 +32,7 @@ namespace OpenAstroAra.Test {
     /// leaves neither a target nor a leaked staging dir.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SkyDataInstallerTest {
 
         private string _root = null!;

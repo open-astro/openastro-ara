@@ -48,7 +48,10 @@ Quick version:
 
 ```bash
 dotnet build                                   # full solution, warnings are errors in CI
-dotnet test OpenAstroAra.Test                  # server tests
+dotnet test OpenAstroAra.Test                  # server tests (fixtures run in parallel)
+dotnet test OpenAstroAra.Test --filter "TestCategory!=IO&TestCategory!=Integration"
+                                               # quick unit run: skips fixtures that hit disk,
+                                               # loopback HTTP or a simulator (seconds after build)
 cd client/openastroara_client
 flutter analyze && flutter test                # client gate
 ```

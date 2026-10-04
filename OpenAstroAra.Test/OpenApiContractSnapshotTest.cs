@@ -34,6 +34,7 @@ namespace OpenAstroAra.Test {
     /// <code>OPENASTROARA_UPDATE_OPENAPI=1 dotnet test OpenAstroAra.Test --filter OpenApiContractSnapshotTest</code>
     /// then commit the result.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     // Same isolation as CompositionRootSmokeTest: BuildApp sets process-wide state (profile-dir
     // env var, the global Serilog logger), so fixtures that build the daemon cannot overlap.
     [NonParallelizable]

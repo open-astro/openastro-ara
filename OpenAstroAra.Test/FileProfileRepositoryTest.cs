@@ -22,6 +22,8 @@ using OpenAstroAra.Server.Services;
 namespace OpenAstroAra.Test;
 
 [TestFixture]
+
+[Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
 public class FileProfileRepositoryTest {
     private string _dir = null!;
     private FileProfileStore _store = null!;

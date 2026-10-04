@@ -26,6 +26,8 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     [TestFixture]
+
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FileSequenceServiceRunStateTest {
 
         private string _profileDir = string.Empty;

@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     /// §18.I header-hint reader can parse what the capture path wrote.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CameraServicePointingHeaderTest {
 
         [Test]

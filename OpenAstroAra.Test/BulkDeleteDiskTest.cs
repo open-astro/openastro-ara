@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// it only the catalog row goes. Unrelated neighbors always survive.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BulkDeleteDiskTest {
 
         private string _dir = string.Empty;

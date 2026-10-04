@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// what keeps restarts from minting duplicate "target — night" rows).
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CaptureScanRecoverySessionTest {
 
         // One fixed instant for the DB frame and the orphan's DATE-OBS: the

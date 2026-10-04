@@ -25,6 +25,7 @@ namespace OpenAstroAra.Test {
     /// the solver relied on ASTAP's own lookup, which finds nothing on a packaged Pi.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ASTAPSolverDatabaseLocationTest {
 
         private static string Args(ASTAPSolver solver) {

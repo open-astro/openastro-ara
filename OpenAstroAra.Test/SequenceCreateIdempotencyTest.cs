@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     /// carrying the same Idempotency-Key must return the FIRST sequence, not
     /// mint a second one — the endpoint always declared the header, but the
     /// key was silently ignored until now.</summary>
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SequenceCreateIdempotencyTest {
         private string _tempDir = null!;
         private FileSequenceService _svc = null!;

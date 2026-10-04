@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// resolution (body hint → frame OBJCTRA/OBJCTDEC headers → blind) and the endpoint's load/404 + hint glue.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class PlateSolveEndpointsTest {
 
         [Test]

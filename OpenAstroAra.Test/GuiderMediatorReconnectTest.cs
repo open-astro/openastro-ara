@@ -36,6 +36,7 @@ namespace OpenAstroAra.Test {
     /// fail cleanly when nothing reconnects in time. Driven against the bench <see cref="FakeGuider"/>.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")]
     public class GuiderMediatorReconnectTest {
 

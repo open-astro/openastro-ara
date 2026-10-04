@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// throws mid-iteration, past the try/catch that guarded only its creation.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CaptureScanInaccessibleDirTest {
 
         private string _root = string.Empty;

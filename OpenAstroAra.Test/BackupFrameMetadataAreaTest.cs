@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// WAL/SHM sidecars moved aside (a replayed old WAL would corrupt the restored file).
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BackupFrameMetadataAreaTest {
 
         private string _profileDir = null!;

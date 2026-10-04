@@ -32,7 +32,9 @@ namespace OpenAstroAra.TestHarness.Alpaca;
 /// <c>"false"</c>, <c>"3.5"</c>), or null for the default <c>true</c>. A value of the form
 /// <c>"!error:&lt;message&gt;"</c> answers an Alpaca DRIVER error envelope instead (ErrorNumber
 /// 0x500, the message verbatim), which the client raises as a DriverException — how a bridge
-/// reports a latched mount fault (#1193). Every PUT answers success.
+/// reports a latched mount fault (#1193). Every PUT answers success unless a <c>putResponder</c>
+/// scripts that path (same contract: a JSON literal for <c>Value</c>, or the error forms above),
+/// which is how a test makes a command — not just a read — fail at the device.
 /// Swap the responder at runtime (<see cref="Respond"/>) to script a state change mid-test —
 /// e.g. a mount silently dropping <c>Tracking</c>. Type-mismatched reads (a bool where the
 /// client expects an int) throw client-side and fall back to that field's default, exactly like
@@ -59,23 +61,25 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
     private volatile Func<string, string?>? _responder;
+    private readonly Func<string, string?>? _putResponder;
 
     /// <summary>Every PUT the device received, as (lower-cased path, form body) — for tests that
     /// assert a write reached the device (the scripted GETs never reflect a write).</summary>
     public ConcurrentQueue<(string Path, string Body)> Puts { get; } = new();
 
-    private ScriptedAlpacaDevice(HttpListener listener, int port, Func<string, string?>? responder) {
+    private ScriptedAlpacaDevice(HttpListener listener, int port, Func<string, string?>? responder, Func<string, string?>? putResponder) {
         BaseUri = new Uri($"http://127.0.0.1:{port}/");
         _listener = listener;
         _responder = responder;
+        _putResponder = putResponder;
         _loop = Task.Run(LoopAsync);
     }
 
     public Uri BaseUri { get; }
 
-    public static ScriptedAlpacaDevice Start(Func<string, string?>? responder = null) {
+    public static ScriptedAlpacaDevice Start(Func<string, string?>? responder = null, Func<string, string?>? putResponder = null) {
         var (listener, port) = LoopbackListener.Bind();
-        return new ScriptedAlpacaDevice(listener, port, responder);
+        return new ScriptedAlpacaDevice(listener, port, responder, putResponder);
     }
 
     /// <summary>Replace the responder (thread-safe) — subsequent GETs answer with the new script.</summary>
@@ -103,9 +107,14 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                     value = scripted;
                 }
             } else if (ctx.Request.HttpMethod == "PUT") {
+                var putPath = ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "";
+                var scripted = _putResponder?.Invoke(putPath);
+                if (scripted is not null) {
+                    value = scripted;
+                }
                 try {
                     using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
-                    Puts.Enqueue((ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "", await reader.ReadToEndAsync().ConfigureAwait(false)));
+                    Puts.Enqueue((putPath, await reader.ReadToEndAsync().ConfigureAwait(false)));
                 } catch (Exception) {
                     // client aborted mid-PUT (HttpListenerException, an IOException from a half-read
                     // body, ObjectDisposedException) — irrelevant to the test; the loop must keep

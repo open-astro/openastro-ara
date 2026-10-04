@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// fixtures go, and real rows (random v4 ids) are untouchable.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SampleDataScrubTest {
 
         private string _profileDir = string.Empty;

@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     /// must not re-arm the announce. Covered on both store implementations.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FirstFlipConfirmationResetTest {
 
         private static void AssertResetSemantics(IProfileStore store) {
