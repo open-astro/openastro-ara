@@ -55,6 +55,11 @@ public sealed partial class AutofocusSweepService {
 
     /// <summary>The Smart run's shot budget — its progress denominator on the run record.</summary>
     internal const int SmartMaxShots = 3;
+    /// <summary>A bracket shot must read at least this × the centre HFR to count as "clearly worse" —
+    /// the bracket sits where the calibration says HFR has doubled, so 1.3 leaves room for seeing.</summary>
+    internal const double BracketRiseFactor = 1.3;
+    /// <summary>A bracket shot under this × the centre HFR means the centre is NOT the minimum.</summary>
+    internal const double BracketDropFactor = 0.97;
 
     /// <summary>§59.13 `target_hfr_tolerance_pct` default — done when HFR is within this percentage
     /// above the calibration's fitted in-focus HFR.</summary>
@@ -124,10 +129,26 @@ public sealed partial class AutofocusSweepService {
                     "too_few_stars", startPosition, restore: false).ConfigureAwait(false);
             }
             if (shot1.Hfr <= targetHfr) {
-                // Already in focus — moving would only add backlash noise. One shot, done.
+                // Reads as in focus — but one shot against a stored number is a claim, not a check (a
+                // calibration from a lumpy sweep, or a lucky frame, says "in focus" just as readily).
+                // Bracket it: one shot either side at the calibration's half-width, where the HFR should
+                // have roughly doubled. Both clearly worse → the centre is the minimum, done in three
+                // shots. A side that reads BETTER → the centre is not the minimum → the classic sweep.
                 await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
-                LogSmartComplete(startPosition, shot1.Hfr, 1);
-                await RecordCompletedAsync("smart", startPosition, shot1.Hfr, shot1.Features.StarCount, started, 1).ConfigureAwait(false);
+                var bracket = BracketOffset(calibration.CurveHalfWidthSteps, settings);
+                var plusPosition = await _focuser.MoveFocuser(startPosition + bracket, token).ConfigureAwait(false);
+                var plus = await TakeSmartShotAsync(2, plusPosition, settings, progress, token).ConfigureAwait(false);
+                var minusPosition = await _focuser.MoveFocuser(startPosition - bracket, token).ConfigureAwait(false);
+                var minus = await TakeSmartShotAsync(3, minusPosition, settings, progress, token).ConfigureAwait(false);
+                await _focuser.MoveFocuser(startPosition, token).ConfigureAwait(false);
+                var verdict = BracketVerdict(shot1.Hfr, plus, minus);
+                LogSmartBracket(bracket, shot1.Hfr, plus.Hfr, minus.Hfr, verdict ?? "confirmed");
+                if (verdict is not null) {
+                    return await FallBackAsync($"the ±{bracket}-step bracket did not confirm focus: {verdict}",
+                        "bracket_failed", startPosition, restore: false).ConfigureAwait(false);
+                }
+                LogSmartComplete(startPosition, shot1.Hfr, 3);
+                await RecordCompletedAsync("smart", startPosition, shot1.Hfr, shot1.Features.StarCount, started, 3).ConfigureAwait(false);
                 RecordAutofocusQuietly();
                 return true;
             }
@@ -236,6 +257,36 @@ public sealed partial class AutofocusSweepService {
             return false;
         }
     }
+
+    /// <summary>How far either side of a reads-as-focused position the bracket shots go: the
+    /// calibration's half-width (where HFR doubles) when the last sweep measured one, else half the
+    /// classic sweep's span. Never under one step.</summary>
+    internal static int BracketOffset(double? curveHalfWidthSteps, AutofocusSettingsDto settings) {
+        if (curveHalfWidthSteps is { } w && double.IsFinite(w) && w >= 1) {
+            return (int)Math.Round(w);
+        }
+        return Math.Max(1, settings.StepSize * Math.Max(1, settings.Steps) / 2);
+    }
+
+    /// <summary>Null when both bracket shots confirm the centre is the minimum; otherwise why not.</summary>
+    internal static string? BracketVerdict(double centreHfr, double plusHfr, bool plusTrustworthy, double minusHfr, bool minusTrustworthy) {
+        if (!plusTrustworthy || !minusTrustworthy) {
+            return "a bracket shot had too few stars";
+        }
+        if (plusHfr < centreHfr * BracketDropFactor) {
+            return $"HFR is lower on the + side ({plusHfr:0.##} vs {centreHfr:0.##})";
+        }
+        if (minusHfr < centreHfr * BracketDropFactor) {
+            return $"HFR is lower on the − side ({minusHfr:0.##} vs {centreHfr:0.##})";
+        }
+        if (plusHfr < centreHfr * BracketRiseFactor || minusHfr < centreHfr * BracketRiseFactor) {
+            return $"no clear rise either side ({minusHfr:0.##} / {centreHfr:0.##} / {plusHfr:0.##})";
+        }
+        return null;
+    }
+
+    private static string? BracketVerdict(double centreHfr, SmartShot plus, SmartShot minus) =>
+        BracketVerdict(centreHfr, plus.Hfr, plus.Trustworthy, minus.Hfr, minus.Trustworthy);
 
     private readonly record struct SmartShot(double Hfr, FocusFeatureVector Features, bool NoiseFlooded = false) {
         /// <summary>Enough real stars to trust the shot's HFR: a noise-flooded frame fails this even
@@ -369,6 +420,9 @@ public sealed partial class AutofocusSweepService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus complete: position {Position}, HFR {Hfr:0.###}, {Shots} shot(s)")]
     private partial void LogSmartComplete(int position, double hfr, int shots);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus bracket ±{Bracket} steps: centre HFR {Centre:0.###}, + side {Plus:0.###}, − side {Minus:0.###} — {Verdict}")]
+    private partial void LogSmartBracket(int bracket, double centre, double plus, double minus, string verdict);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Smart Focus fell back to the Classic sweep: {Reason}")]
     private partial void LogSmartFellBack(string reason);

@@ -304,16 +304,56 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task An_already_focused_rig_finishes_in_one_shot_without_moving() {
+        public async Task An_already_focused_rig_is_confirmed_by_a_bracket_and_finishes_in_three_shots() {
+            // One shot against the stored in-focus HFR is a claim, not a check (2026-10-03: "it only took
+            // one shot and was 0.97"). The bracket shots either side must both read clearly worse.
             var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition));
             using var _ = rig.Service;
 
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1));
-            Assert.That(rig.Moves, Is.Empty, "already within tolerance — moving would only add backlash noise");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3), "the in-focus shot and one bracket shot each side");
+            // No half-width in this calibration → half the classic span: 100 × 4 / 2.
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition + 200, StartPosition - 200, StartPosition }));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, StartPosition);
+            Assert.That(rig.Tracker.Snapshot().Probes.Count(p => p.Phase == "smart"), Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task A_bracket_shot_that_reads_better_than_the_centre_falls_back_to_the_classic_sweep() {
+            // Shot 1 passes the stored target, but the + side reads sharper: the stored number lied, so
+            // the sweep runs and finds the real focus 200 steps up.
+            var rig = Build(realBest: StartPosition + 200, calibration: Calibration(bestPosition: StartPosition),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.5,   // ≤ target at the start position
+                    2 => 1.2,   // + bracket: better than the centre
+                    3 => 2.6,   // − bracket
+                    _ => VCurveHfr(position, StartPosition + 200),
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("bracket_failed"));
+            Assert.That(rig.CaptureCount(), Is.GreaterThan(3), "the classic sweep ran after the bracket");
+            Assert.That(rig.Moves[^1], Is.EqualTo(StartPosition + 200).Within(30), "the sweep found the real focus");
+        }
+
+        [Test]
+        public void BracketVerdict_and_BracketOffset_are_pure() {
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, true, 2.1, true), Is.Null, "both sides clearly worse");
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 0.9, true, 2.1, true), Does.Contain("+ side"));
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, true, 0.95, true), Does.Contain("− side"));
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 1.1, true, 1.15, true), Does.Contain("no clear rise"));
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, false, 2.1, true), Does.Contain("too few stars"));
+
+            Assert.That(AutofocusSweepService.BracketOffset(277.1, Settings()), Is.EqualTo(277));
+            Assert.That(AutofocusSweepService.BracketOffset(null, Settings()), Is.EqualTo(200), "100 × 4 / 2");
+            Assert.That(AutofocusSweepService.BracketOffset(0.2, Settings()), Is.EqualTo(200), "a degenerate half-width falls back");
         }
 
         [Test]

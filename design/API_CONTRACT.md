@@ -325,6 +325,21 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-03 — Smart Focus: a reads-as-focused shot is bracketed before it counts
+
+**Where:** the `autofocus.*` WebSocket events (`fallback_classic` reasons) and the run record's `probes`.
+
+**Change:** when Smart Focus's first shot reads at or under the calibrated in-focus HFR it no longer
+completes on that one shot. It takes one shot either side at the calibration's half-width (where the
+HFR should have doubled; half the classic span when no half-width is stored), returns to the centre,
+and completes in three shots only when both sides read ≥ 1.3× the centre. A side under 0.97× the centre,
+no clear rise, or a bracket shot with too few stars falls back to the classic sweep with the new
+`fallback_classic` reason `bracket_failed`. The run record carries the three `smart` probes.
+
+**Why:** one shot against a stored number is a claim, not a check — a calibration from a lumpy sweep,
+or a lucky frame, says "in focus" just as readily (2026-10-03: four one-shot runs at 0.957–0.985 while
+the sweep's own curve was far from a clean V).
+
 ### 2026-10-03 — Guide-camera live focus: the expected in-focus HFR
 
 **Where:** `GET /api/v1/equipment/guider/focus` (`GuideFocusStatusDto`).
