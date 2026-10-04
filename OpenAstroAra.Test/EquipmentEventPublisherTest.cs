@@ -144,5 +144,65 @@ namespace OpenAstroAra.Test {
             Assert.That(WsEventCatalog.All, Does.Contain(WsEventCatalog.EquipmentDisconnected));
             Assert.That(WsEventCatalog.All, Does.Contain(WsEventCatalog.EquipmentConnectionFailed));
         }
+
+        [Test]
+        public void ExposureStarted_publishes_frame_exposure_start_kind_and_filter() {
+            var (publisher, broadcaster) = NewPublisher();
+            var id = Guid.NewGuid();
+            var started = new DateTimeOffset(2026, 10, 4, 21, 30, 15, 250, TimeSpan.Zero);
+            publisher.ExposureStarted(id, 120.5, started, "light", "Ha");
+            Assert.That(broadcaster.Events, Has.Count.EqualTo(1));
+            var (type, payload) = broadcaster.Events[0];
+            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureStarted));
+            Assert.That(payload.GetProperty("frame_id").GetString(), Is.EqualTo(id.ToString()));
+            Assert.That(payload.GetProperty("exposure_sec").GetDouble(), Is.EqualTo(120.5));
+            Assert.That(payload.GetProperty("started_utc").GetString(), Does.StartWith("2026-10-04T21:30:15.25"));
+            Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("light"));
+            Assert.That(payload.GetProperty("filter_name").GetString(), Is.EqualTo("Ha"));
+        }
+
+        [Test]
+        public void ExposureStarted_without_a_filter_carries_a_null_filter_name() {
+            var (publisher, broadcaster) = NewPublisher();
+            publisher.ExposureStarted(Guid.NewGuid(), 2, DateTimeOffset.UtcNow, "analysis", null);
+            var (_, payload) = broadcaster.Events[0];
+            Assert.That(payload.GetProperty("filter_name").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("analysis"));
+        }
+
+        [Test]
+        public void ExposureComplete_publishes_the_elapsed_window() {
+            var (publisher, broadcaster) = NewPublisher();
+            var id = Guid.NewGuid();
+            publisher.ExposureComplete(id, 30, DateTimeOffset.UtcNow, "flat", 31250);
+            var (type, payload) = broadcaster.Events[0];
+            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureComplete));
+            Assert.That(payload.GetProperty("frame_id").GetString(), Is.EqualTo(id.ToString()));
+            Assert.That(payload.GetProperty("exposure_sec").GetDouble(), Is.EqualTo(30));
+            Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("flat"));
+            Assert.That(payload.GetProperty("elapsed_ms").GetInt64(), Is.EqualTo(31250));
+        }
+
+        [Test]
+        public void ExposureFailed_publishes_the_reason() {
+            var (publisher, broadcaster) = NewPublisher();
+            var id = Guid.NewGuid();
+            publisher.ExposureFailed(id, "light", "cancelled");
+            var (type, payload) = broadcaster.Events[0];
+            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureFailed));
+            Assert.That(payload.GetProperty("frame_id").GetString(), Is.EqualTo(id.ToString()));
+            Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("light"));
+            Assert.That(payload.GetProperty("reason").GetString(), Is.EqualTo("cancelled"));
+        }
+
+        [Test]
+        public void Exposure_events_swallow_a_sync_broadcaster_fault() {
+            var (publisher, broadcaster) = NewPublisher();
+            broadcaster.ThrowSync = true;
+            Assert.DoesNotThrow(() => publisher.ExposureStarted(Guid.NewGuid(), 1, DateTimeOffset.UtcNow, "light", null));
+            Assert.DoesNotThrow(() => publisher.ExposureComplete(Guid.NewGuid(), 1, DateTimeOffset.UtcNow, "light", 1000));
+            Assert.DoesNotThrow(() => publisher.ExposureFailed(Guid.NewGuid(), "light", "x"));
+        }
+
     }
 }

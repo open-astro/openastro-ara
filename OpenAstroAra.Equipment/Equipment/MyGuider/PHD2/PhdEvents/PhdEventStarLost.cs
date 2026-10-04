@@ -22,7 +22,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         public int Frame { get; set; }
 
         [JsonProperty]
-        public int Time { get; set; }
+        public double Time { get; set; }
 
         [JsonProperty]
         public double StarMass { get; set; }

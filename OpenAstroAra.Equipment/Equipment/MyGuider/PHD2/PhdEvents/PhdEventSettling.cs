@@ -22,7 +22,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         public double Distance { get; set; }
 
         [JsonProperty]
-        public int Time { get; set; }
+        public double Time { get; set; }
 
         [JsonProperty]
         public double SettleTime { get; set; }

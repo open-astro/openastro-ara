@@ -144,9 +144,27 @@ plans carry these triggers over natively.
 
 ## 6. Imaging and monitoring
 
-The **Imaging** tab shows the live story: current frame with stretch control, exposure progress,
-HFR/star metrics, guiding RMS (in arcseconds), and **Take One** for a quick snapshot. **Live
-View** runs a fast framing/focus loop when you need to point or focus by eye.
+The **Live** tab shows the live story: current frame with stretch control, exposure progress,
+HFR/star metrics, guiding, and **Take One** for a quick snapshot. **Live View** runs a fast
+framing/focus loop when you need to point or focus by eye.
+
+- **Exposure timer.** Whenever the daemon is exposing — a sequence light, a Smart Focus probe or a
+  plate-solve capture — a timer appears in the right-hand panel under **Take One** with the frame
+  type and filter, the elapsed / total clock and a progress bar. It switches to **Downloading** ("Reading out the
+  sensor…") once the shutter should have closed and disappears when the frame has landed. Your own Take One
+  shows its progress on the Take One card instead, and Live View frames have no timer.
+- **Guiding strip.** The guide graph runs along the bottom of the Live tab and behaves like PHD2's
+  graph window (the guider *is* PHD2): RA error in blue, Dec in red, correction pulses as faint
+  bars from the zero line, newest frame at the right. Dithers are marked with a dashed line and the
+  settle window is shaded until PHD2 reports settled; a lost star shows as a red × on the zero
+  line. Under the plot are PHD2's controls — frames in view (50/100/200/400), y range (auto or
+  fixed), arc-sec / pixels, corrections on/off, and **Clear**. Beside it, PHD2's numbers over the
+  frames in view, leaving out the frames taken while settling after a dither (they are the dither,
+  not the guiding; PHD2's own graph counts them): RMS RA / Dec / Total, peak per axis, and the RA oscillation index. The axis is in
+  arcseconds once the guider has reported its pixel scale (or you have set the guide focal length
+  and pixel size under **Settings → Guider**), and in guide-camera pixels until then. Tap the
+  header to collapse the graph to a one-line status; **Tune** opens the live aggressiveness /
+  minimum-move / dither controls.
 
 ## 7. Unattended safety (the 3 a.m. story)
 

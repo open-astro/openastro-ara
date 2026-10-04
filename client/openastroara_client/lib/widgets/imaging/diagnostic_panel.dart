@@ -42,16 +42,29 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                   Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 18, color: AraColors.textSecondary),
                   const SizedBox(width: 4),
-                  StatusIndicator(level: diag.level, label: diag.label),
-                  const Spacer(),
-                  Text(
-                    diag.events.isEmpty
-                        ? 'No recent events'
-                        : '${diag.events.length} event${diag.events.length == 1 ? '' : 's'}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
+                  // Expanded (left-aligned), not a Spacer: the chip owns all
+                  // the slack so its label is never squeezed while there is
+                  // room, yet "1 issue — critical" + a count still ellipsizes
+                  // instead of overflowing the 320 px rail (seen on the Pi).
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: StatusIndicator(level: diag.level, label: diag.label),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  // Only a count when there is one: "No recent events" beside
+                  // "nominal" said nothing and crowded the label out of the
+                  // 320 px rail.
+                  if (diag.events.isNotEmpty)
+                    Text(
+                      '${diag.events.length} event${diag.events.length == 1 ? '' : 's'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                    ),
                 ],
               ),
             ),

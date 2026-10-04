@@ -21,6 +21,7 @@ using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,6 +92,59 @@ namespace OpenAstroAra.Test {
             Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerHost, Is.EqualTo("sbc.local"),
                 "null request host must not clobber the profile's remote host");
             Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerPort, Is.EqualTo(8080));
+        }
+
+        /// <summary>Records what the service publishes; the publish is fire-and-forget, so tests poll.</summary>
+        private sealed class RecordingBroadcaster : IWsBroadcaster {
+            private readonly List<(string Type, System.Text.Json.JsonElement Payload)> _events = new();
+            public long CurrentSequence => Of(null).Count;
+            public Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+                lock (_events) {
+                    _events.Add((eventType, payload.Clone()));
+                }
+                return Task.CompletedTask;
+            }
+            public List<System.Text.Json.JsonElement> Of(string? type) {
+                lock (_events) {
+                    return _events.Where(e => type is null || e.Type == type).Select(e => e.Payload).ToList();
+                }
+            }
+        }
+
+        [Test]
+        public async Task A_connected_guider_relays_guide_steps_and_markers_to_the_ws_stream() {
+            // §63.18 — the Live tab's guide graph is drawn from these two events only.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            // The connect handshake reads the pixel scale only after the profile step succeeds.
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            fake.OnRpc("get_connected", JsonValue.Create(true)); // the fake's default (0) is not a bool
+            var ws = new RecordingBroadcaster();
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().PixelScale > 0).ConfigureAwait(false), Is.True,
+                "precondition: the guider's pixel scale was read on connect");
+
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.4, -0.2)).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.GuidingDithered(2.0, -1.0)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.step").Count == 1 && ws.Of("guider.event").Count == 1)
+                .ConfigureAwait(false), Is.True, "one guider.step and one guider.event were relayed");
+
+            var step = ws.Of("guider.step").Single();
+            // RA is negated on the wire (PhdEventGuideStep's NINA convention; the client's log replay does the same).
+            Assert.That(step.GetProperty("ra_raw_px").GetDouble(), Is.EqualTo(-0.4));
+            Assert.That(step.GetProperty("dec_raw_px").GetDouble(), Is.EqualTo(-0.2));
+            Assert.That(step.GetProperty("ra_arcsec").GetDouble(), Is.EqualTo(-0.4 * 1.5).Within(1e-9),
+                "arcsec from the guider's own pixel scale");
+            Assert.That(step.GetProperty("pixel_scale_arcsec").GetDouble(), Is.EqualTo(1.5));
+            var marker = ws.Of("guider.event").Single();
+            Assert.That(marker.GetProperty("kind").GetString(), Is.EqualTo("dithered"));
+            Assert.That(marker.GetProperty("dx_px").GetDouble(), Is.EqualTo(2.0));
         }
 
         [Test]

@@ -57,6 +57,17 @@ public static class WsEventCatalog {
     // port_name, commanded, read_back, tolerance_pct }. Fires alongside the equipment.fault
     // broadcast (kind value_mismatch) with the structured per-port detail WILMA needs.
     public const string SwitchValueMismatch = "switch.value_mismatch";
+    // Exposure lifecycle, published from the ONE device round-trip every capture takes
+    // (CameraService.ExposeAndDownloadAsync): Take One, sequence lights/flats/darks, the §59
+    // autofocus probe and the §28 plate-solve capture alike. started payload { frame_id,
+    // exposure_sec, started_utc, kind } where kind is the lower-cased image type ("light",
+    // "flat", …) or "analysis" / "plate-solve" for the unpersisted probes, plus filter_name when
+    // the request named one. complete payload adds { elapsed_ms } (shutter open → pixels in
+    // hand, so the download is INSIDE the window — the §44.4 backup stream treats the camera as
+    // busy until then). failed payload { frame_id, kind, reason } for a device timeout,
+    // disconnect/supersede, caller cancellation ("cancelled"), a REST abort ("aborted") or a
+    // thrown device fault. A persisted frame's
+    // frame.complete still follows the exposure_complete once the FITS is catalogued.
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
@@ -72,6 +83,20 @@ public static class WsEventCatalog {
     public const string TelescopeSlewAborted = "telescope.slew_aborted";
     public const string TelescopeParkChanged = "telescope.park_changed";
     public const string GuiderState = "guider.state";
+    // §63.18 — one event per guide frame while the guider is connected, straight from the
+    // daemon's GuideStep stream: payload { frame, time_sec, ra_raw_px, dec_raw_px,
+    // ra_arcsec?, dec_arcsec? (null until the guider reports a pixel scale), ra_duration_ms,
+    // dec_duration_ms (signed: negative = East / South, PHD2's own graph convention),
+    // pixel_scale_arcsec?, star_mass?, snr? }. The client's Live-tab guide graph is built from
+    // these; the RMS on GET /equipment/guider stays the daemon's windowed figure.
+    public const string GuiderStep = "guider.step";
+    // §63.18 — PHD2's non-step session events, one per PHD2 message, so the client can draw the
+    // markers PHD2's own graph draws: payload { kind, ... } with kind = dithered {dx_px, dy_px} |
+    // settling {distance_px, time_sec, settle_time_sec} | settle_done {status, error?} |
+    // star_lost {frame?, star_mass?, snr?, distance_px?, status?, error?} | calibration_started |
+    // calibration_complete | calibration_failed {error?} | guiding_started | guiding_stopped |
+    // paused | resumed | lock_position_lost. Detail fields are omitted when PHD2 sent none.
+    public const string GuiderEvent = "guider.event";
     public const string GuiderDitherComplete = "guider.dither_complete";
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
@@ -257,7 +282,7 @@ public static class WsEventCatalog {
         SwitchValueMismatch,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
-        GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
+        GuiderState, GuiderStep, GuiderEvent, GuiderDitherComplete, GuiderFaultActionTaken,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/camera_exposure_api.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/capture_progress_state.dart';
+import '../../state/imaging/exposure_activity_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
@@ -17,7 +18,8 @@ import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/fault_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
-import '../../widgets/imaging/guiding_panel.dart';
+import '../../widgets/imaging/exposure_timer_banner.dart';
+import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart';
 import '../../widgets/imaging/solve_panel.dart';
 import '../../widgets/status_indicator.dart';
@@ -27,6 +29,13 @@ import '../../theme/ara_colors.dart';
 /// into `liveViewControllerProvider` (observable cross-component), §51
 /// Health Indicator + Diagnostic Panel sourced from the diagnostics
 /// provider (currently a stub; real WS event wiring lands in 12c.3).
+///
+/// Layout: the frame viewer and its right rail fill the window, with the
+/// §63.18 guiding strip running the full width along the bottom — the PHD2 /
+/// web-guider arrangement, so the guide graph is read at a glance under the
+/// image instead of buried in the rail. The exposure timer sits in the rail
+/// under Take One whenever the daemon's camera is exposing for anyone else
+/// (a sequence, Smart Focus, a plate solve); Take One keeps its own card.
 class ImagingTab extends ConsumerWidget {
   const ImagingTab({super.key});
 
@@ -38,6 +47,17 @@ class ImagingTab extends ConsumerWidget {
     // it disabled — Retry covers the failed card, and the user may want to
     // tweak settings and re-shoot immediately after a result.
     final exposing = ref.watch(captureProgressProvider).isCapturing;
+    return Column(
+      children: [
+        Expanded(child: _viewerAndRail(context, ref, liveViewOn, exposing)),
+        // §63.18 — the guide graph strip, full width under viewer + rail.
+        const GuidingStrip(),
+      ],
+    );
+  }
+
+  Widget _viewerAndRail(
+      BuildContext context, WidgetRef ref, bool liveViewOn, bool exposing) {
     return Row(
       // Stretch, not the default center: the rail Container shrink-wraps its
       // content and would otherwise float vertically centered in the row.
@@ -83,6 +103,16 @@ class ImagingTab extends ConsumerWidget {
                   onRetry: () => _takeOne(context, ref),
                   onCancel: () => _cancelCapture(context, ref),
                 ),
+                // The timer for every OTHER exposure the daemon runs — a
+                // sequence sub, a Smart Focus probe, a plate-solve capture —
+                // in the same slot, so "how long is left" is always read here.
+                // A Take One already has its card above with the countdown,
+                // so the banner steps aside while one is capturing.
+                if (!exposing)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: ExposureTimerBanner(),
+                  ),
                 // Solve sits directly under Take One with the panel's top
                 // border as the separator — plate-solve the frame you just
                 // took without scrolling.
@@ -98,8 +128,6 @@ class ImagingTab extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: CoolerControls(compact: true),
                 ),
-                const _RailGap(),
-                const GuidingPanel(),
                 const _RailGap(),
                 const HistogramStrip(),
                 const _RailGap(),
@@ -251,9 +279,14 @@ class ImagingTab extends ConsumerWidget {
       progress.reset();
       return;
     }
+    // Captured before the await, like the other notifier handles.
+    final activity = ref.read(exposureActivityProvider.notifier);
     try {
       await CameraExposureApi(server).abort();
       progress.reset();
+      // The rail banner would otherwise take over from the card and keep
+      // counting the sub we just cancelled until the daemon's failed event.
+      activity.endLocally();
     } catch (e) {
       // The abort POST failed. A lost response is NOT a successful abort —
       // the exposure may still be running and its frame will land, so do NOT
