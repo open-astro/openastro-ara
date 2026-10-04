@@ -69,8 +69,8 @@ class GuiderStatus {
   final double? rmsRa;
   final double? rmsDec;
   /// The same window in arcsec (`rms_*_arcsec`), present once the guider has
-  /// reported a pixel scale. Display sites prefer these and fall back to the
-  /// pixel figures scaled by the §63.5 guide-train settings.
+  /// reported a pixel scale. Parsed for completeness: the Live tab's guiding
+  /// strip computes its own figures from `guider.step`, not from these.
   final double? rmsTotalArcsec;
   final double? rmsRaArcsec;
   final double? rmsDecArcsec;

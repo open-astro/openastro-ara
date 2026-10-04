@@ -339,6 +339,8 @@ public sealed partial class CameraService {
         // ApplyExposureSettings is up to 7 Alpaca round-trips with no ct hook; honor a stop that
         // arrived during it before kicking off an exposure we'd only abort on the first poll.
         token.ThrowIfCancellationRequested();
+        // Same as the capture path: an abort that landed with nothing running must not skip this frame.
+        Interlocked.Exchange(ref _abortRequested, 0);
         client.StartExposure(request.ExposureSec, true);
 
         ImageWait ready;

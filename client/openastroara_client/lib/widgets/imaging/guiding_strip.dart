@@ -266,6 +266,10 @@ class GuideGraphModel {
         case GuideMarkerKind.settling:
           open ??= m.at;
         case GuideMarkerKind.settleDone:
+        // A lost settle_done (WS reconnect mid-settle) must not hold the
+        // window open forever: guiding starting or stopping ends any settle.
+        case GuideMarkerKind.guidingStarted:
+        case GuideMarkerKind.guidingStopped:
           if (open != null) {
             out.add((open, m.at));
             open = null;

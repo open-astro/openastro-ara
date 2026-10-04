@@ -166,8 +166,10 @@ class GuideMarker {
 }
 
 /// Markers kept alongside the step history. Bounded like the steps; a marker
-/// older than the oldest step is off the graph anyway.
-const int kGuideMarkerHistory = 200;
+/// older than the oldest step is off the graph anyway. Larger than the step
+/// history: PHD2 sends a Settling event on every settle frame, so at frequent
+/// dithers markers outnumber steps.
+const int kGuideMarkerHistory = 1000;
 
 /// PHD2 session markers for the active server, newest last. Root-scoped for
 /// the same reason as [guideStepsProvider].

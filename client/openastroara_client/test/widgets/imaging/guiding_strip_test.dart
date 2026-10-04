@@ -301,6 +301,28 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  test('GuideGraphModel: a settle whose settle_done was lost ends when guiding '
+      'restarts', () {
+    final t = DateTime.utc(2026);
+    final steps = [
+      for (var i = 0; i < 6; i++)
+        GuideStep(at: t.add(Duration(seconds: i)), raPx: 0.1, decPx: 0.1, raArcsec: 0.2, decArcsec: 0.2, pixelScaleArcsec: 2),
+    ];
+    final model = GuideGraphModel(
+      steps: steps,
+      markers: [
+        GuideMarker(at: t.add(const Duration(milliseconds: 500)), kind: GuideMarkerKind.dithered),
+        // no settle_done: the link dropped mid-settle
+        GuideMarker(at: t.add(const Duration(milliseconds: 2500)), kind: GuideMarkerKind.guidingStarted),
+      ],
+      settings: const GuideGraphSettings(),
+      fallbackScale: null,
+    );
+    expect(model.isSettling(t.add(const Duration(seconds: 2))), isTrue);
+    expect(model.isSettling(t.add(const Duration(seconds: 3))), isFalse);
+    expect(model.stats.samples, 4, reason: 'frames 0, 3, 4, 5 count; 1-2 were settling');
+  });
+
   test('GuideGraphModel: unit choice, visible window and auto y-range follow '
       'PHD2', () {
     final t = DateTime.utc(2026);
