@@ -313,7 +313,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "the in-focus shot, one bracket shot each side, one confirmation at the centre");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "the in-focus shot, one bracket shot each side (a symmetric V puts the vertex at the centre, so no vertex shot), one confirmation at the centre");
             // No half-width in this calibration → half the classic span: 100 × 4 / 2. The − side first
             // (moving down like every calibration sample), the + side, then the centre from above
             // through the sweep's overshoot (one step size) so backlash matches the calibration.
@@ -348,6 +348,54 @@ namespace OpenAstroAra.Test {
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("bracket_failed"));
             Assert.That(rig.CaptureCount(), Is.GreaterThan(3), "the classic sweep ran after the bracket");
             Assert.That(rig.Moves[^1], Is.EqualTo(StartPosition + 200).Within(30), "the sweep found the real focus");
+        }
+
+        [Test]
+        public async Task A_lopsided_bracket_takes_a_vertex_shot_and_keeps_it_when_sharper() {
+            // − side 2.6, centre 1.5, + side 2.0 at ±200: the parabola's vertex is +38 steps. Shot 4 there
+            // reads 1.3 (< 1.5 × 0.97) so the run ends at 10,188 after a confirmation frame — five shots.
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.5, 2 => 2.6, 3 => 2.0, 4 => 1.3, _ => 1.3,
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(5));
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 200, StartPosition + 38 + 100, StartPosition + 38 }),
+                "the vertex is landed from above like every other position");
+            var record = rig.Tracker.Snapshot();
+            Assert.That(record.FinalPosition, Is.EqualTo(StartPosition + 38));
+            Assert.That(record.FinalHfr, Is.EqualTo(1.3).Within(0.01), "the confirmation frame's reading");
+            Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(4));
+            Assert.That(record.Fit!.BestPosition, Is.EqualTo(StartPosition + 38), "the drawn V bottoms where the run ended");
+        }
+
+        [Test]
+        public async Task A_vertex_shot_that_is_not_sharper_returns_to_the_centre() {
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.5, 2 => 2.6, 3 => 2.0, 4 => 1.49, _ => 1.5,
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(5));
+            Assert.That(rig.Moves[^2..], Is.EqualTo(new[] { StartPosition + 100, StartPosition }), "back to the centre from above");
+            Assert.That(rig.Tracker.Snapshot().FinalPosition, Is.EqualTo(StartPosition));
+        }
+
+        [Test]
+        public void ParabolaVertexOffset_is_pure() {
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 2.6, 1.5, 2.0), Is.EqualTo(37.5).Within(0.1));
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 2.0, 1.0, 2.0), Is.EqualTo(0));
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(277, 2.602, 1.218, 1.76), Is.EqualTo(60).Within(2), "the 2026-10-03 04:14 run");
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 1.0, 1.5, 1.0), Is.Null, "curves downward: no minimum");
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(0, 2.0, 1.0, 2.0), Is.Null);
         }
 
         [Test]

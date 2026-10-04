@@ -341,9 +341,17 @@ sample was approached from), then the + side, then the centre re-entered from ab
 one-step overshoot, so the focuser rests on the same side of its backlash as the calibration's best. A
 confirmation frame is then taken at the centre (`final_hfr` / `final_stars` / the picture are measured
 there, as for the sweep), and the run record's `fit` carries the calibration's own curve through the
-three shots — `algorithm: "calibration"`, `r_squared: 1`, `best_position` = the centre, `curve` =
+three shots — `algorithm: "calibration"`, `r_squared: 1`, `best_position` = where the run ended, `curve` =
 h₀·√(1 + 3(d/w)²) over ±1.3 half-widths — so the pane draws the V the bracket was judged against. The
 client shows no R² for that algorithm.
+
+**Five shots (same day):** after the bracket, the parabola through the three shots gives a vertex. When
+it sits off the centre (and inside the bracket; outside is "no V" → `bracket_failed`) shot 4 is taken
+there, landed from above, and the position is kept only when that frame reads < 0.97× the centre shot;
+otherwise the focuser returns to the centre from above. Shot 5 is the confirmation frame at the final
+position. `total_steps` for a Smart run is now 5 (`SmartMaxShots`); the predict path still completes
+in 2–3. The run record's `smart` probes carry up to four points and `fit.best_position` is the final
+position.
 
 **Why:** one shot against a stored number is a claim, not a check — a calibration from a lumpy sweep,
 or a lucky frame, says "in focus" just as readily (2026-10-03: four one-shot runs at 0.957–0.985 while

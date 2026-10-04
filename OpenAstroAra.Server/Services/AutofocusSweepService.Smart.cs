@@ -54,7 +54,9 @@ public sealed partial class AutofocusSweepService {
     internal const int SmartMinStars = 30;
 
     /// <summary>The Smart run's shot budget — its progress denominator on the run record.</summary>
-    internal const int SmartMaxShots = 3;
+    internal const int SmartMaxShots = 5;
+    /// <summary>The vertex shot must beat the centre shot by this much to move focus there.</summary>
+    internal const double VertexImprovementFactor = 0.97;
     /// <summary>A bracket shot must read at least this × the centre HFR to count as "clearly worse" —
     /// the bracket sits where the calibration says HFR has doubled, so 1.3 leaves room for seeing.</summary>
     internal const double BracketRiseFactor = 1.3;
@@ -145,21 +147,40 @@ public sealed partial class AutofocusSweepService {
                 var minus = await TakeSmartShotAsync(2, minusPosition, settings, progress, token).ConfigureAwait(false);
                 var plusPosition = await _focuser.MoveFocuser(startPosition + bracket, token).ConfigureAwait(false);
                 var plus = await TakeSmartShotAsync(3, plusPosition, settings, progress, token).ConfigureAwait(false);
-                await _focuser.MoveFocuser(startPosition + settings.StepSize, token).ConfigureAwait(false);
-                var centre = await _focuser.MoveFocuser(startPosition, token).ConfigureAwait(false);
                 var verdict = BracketVerdict(shot1.Hfr, plus, minus);
                 LogSmartBracket(bracket, shot1.Hfr, plus.Hfr, minus.Hfr, verdict ?? "confirmed");
-                if (verdict is not null) {
-                    return await FallBackAsync($"the ±{bracket}-step bracket did not confirm focus: {verdict}",
-                        "bracket_failed", centre, restore: false).ConfigureAwait(false);
+                // Shot 4 — the V through the three shots has a vertex; when it sits off the centre, go
+                // there and let the frame decide: the new position is kept only when it is clearly
+                // sharper than the centre shot. A vertex outside the bracket is not a V at all.
+                var vertexOffset = verdict is null ? ParabolaVertexOffset(bracket, minus.Hfr, shot1.Hfr, plus.Hfr) : null;
+                if (verdict is null && (vertexOffset is null || Math.Abs(vertexOffset.Value) > bracket)) {
+                    verdict = $"no minimum inside the bracket (vertex {vertexOffset?.ToString("0") ?? "undefined"})";
                 }
-                // The calibration's own curve through the three points, so the pane shows the V the
-                // bracket was judged against; then one confirmation frame AT the centre — the measured
-                // in-focus HFR and the picture of the focused field, as the sweep does.
-                _tracker?.SetModelCurve(centre, map.InFocusHfr, bracket, centre - 1.3 * bracket, centre + 1.3 * bracket);
-                var (confirmedHfr, confirmedStars) = await ConfirmFocusQuietlyAsync(settings, centre, token).ConfigureAwait(false);
-                LogSmartComplete(centre, confirmedHfr ?? shot1.Hfr, 3);
-                await RecordCompletedAsync("smart", centre, confirmedHfr ?? shot1.Hfr, confirmedStars ?? shot1.Features.StarCount, started, 3).ConfigureAwait(false);
+                if (verdict is not null) {
+                    var back = await LandFromAboveAsync(startPosition, settings, token).ConfigureAwait(false);
+                    return await FallBackAsync($"the ±{bracket}-step bracket did not confirm focus: {verdict}",
+                        "bracket_failed", back, restore: false).ConfigureAwait(false);
+                }
+                var vertexSteps = (int)Math.Round(vertexOffset!.Value);
+                var finalShots = 3;
+                int final;
+                if (vertexSteps == 0) {
+                    final = await LandFromAboveAsync(startPosition, settings, token).ConfigureAwait(false);
+                } else {
+                    var vertexPosition = await LandFromAboveAsync(startPosition + vertexSteps, settings, token).ConfigureAwait(false);
+                    var vertexShot = await TakeSmartShotAsync(4, vertexPosition, settings, progress, token).ConfigureAwait(false);
+                    finalShots = 4;
+                    var accepted = vertexShot.Trustworthy && vertexShot.Hfr < shot1.Hfr * VertexImprovementFactor;
+                    LogSmartVertex(vertexSteps, vertexShot.Hfr, shot1.Hfr, accepted ? "kept" : "centre kept");
+                    final = accepted ? vertexPosition : await LandFromAboveAsync(startPosition, settings, token).ConfigureAwait(false);
+                }
+                // The calibration's own curve, bottomed at where the run ends, so the pane shows the V the
+                // shots were judged against; then shot 5, one confirmation frame AT the final position —
+                // the measured in-focus HFR and the picture of the focused field, as the sweep does.
+                _tracker?.SetModelCurve(final, map.InFocusHfr, bracket, final - 1.3 * bracket, final + 1.3 * bracket);
+                var (confirmedHfr, confirmedStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
+                LogSmartComplete(final, confirmedHfr ?? shot1.Hfr, finalShots + 1);
+                await RecordCompletedAsync("smart", final, confirmedHfr ?? shot1.Hfr, confirmedStars ?? shot1.Features.StarCount, started, finalShots + 1).ConfigureAwait(false);
                 RecordAutofocusQuietly();
                 return true;
             }
@@ -294,6 +315,29 @@ public sealed partial class AutofocusSweepService {
             return $"no clear rise either side ({minusHfr:0.##} / {centreHfr:0.##} / {plusHfr:0.##})";
         }
         return null;
+    }
+
+    /// <summary>Every landing in the bracket is made from above — the direction the calibration's
+    /// samples were approached from — through the sweep's one-step overshoot, so the focuser rests on
+    /// the same side of its backlash as the calibration's best.</summary>
+    private async Task<int> LandFromAboveAsync(int position, AutofocusSettingsDto settings, CancellationToken token) {
+        await _focuser.MoveFocuser(position + settings.StepSize, token).ConfigureAwait(false);
+        return await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
+    }
+
+    /// <summary>The vertex of the parabola through (−bracket, minusHfr), (0, centreHfr), (+bracket, plusHfr),
+    /// as a signed step offset from the centre; null when the three points do not curve upward.</summary>
+    internal static double? ParabolaVertexOffset(int bracket, double minusHfr, double centreHfr, double plusHfr) {
+        if (bracket <= 0 || !double.IsFinite(minusHfr) || !double.IsFinite(centreHfr) || !double.IsFinite(plusHfr)) {
+            return null;
+        }
+        // y = a·x² + b·x + c with x in units of the bracket: c = centre, a + b = plus − c, a − b = minus − c.
+        var a = (plusHfr + minusHfr - 2 * centreHfr) / 2;
+        var b = (plusHfr - minusHfr) / 2;
+        if (a <= 0) {
+            return null;
+        }
+        return -b / (2 * a) * bracket;
     }
 
     private static string? BracketVerdict(double centreHfr, SmartShot plus, SmartShot minus) =>
@@ -434,6 +478,9 @@ public sealed partial class AutofocusSweepService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus bracket ±{Bracket} steps: centre HFR {Centre:0.###}, + side {Plus:0.###}, − side {Minus:0.###} — {Verdict}")]
     private partial void LogSmartBracket(int bracket, double centre, double plus, double minus, string verdict);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus vertex shot {Offset:+0;-0} steps from the centre: HFR {Hfr:0.###} vs centre {Centre:0.###} — {Outcome}")]
+    private partial void LogSmartVertex(int offset, double hfr, double centre, string outcome);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Smart Focus fell back to the Classic sweep: {Reason}")]
     private partial void LogSmartFellBack(string reason);
