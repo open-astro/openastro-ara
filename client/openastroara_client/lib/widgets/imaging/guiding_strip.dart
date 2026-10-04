@@ -1,16 +1,22 @@
 import 'dart:math' as math;
 
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../state/guider/guide_graph_settings.dart';
+import '../../state/guider/guide_replay_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/guider/live_guiding_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/guide_graph_stats.dart';
+import '../../util/phd2_guide_log.dart';
 import 'guiding_tune_dialog.dart';
 
 /// Whether the Live tab's guiding strip shows its graph. Root-scoped so a
@@ -55,6 +61,7 @@ class GuidingStrip extends ConsumerWidget {
     // is open — collapsing the strip stops the 2 s polling.
     if (expanded) ref.watch(liveGuidingRmsProvider);
     final settings = ref.watch(guideGraphSettingsProvider);
+    final replay = ref.watch(guideReplayProvider);
     final steps = ref.watch(guideStepsProvider);
     final markers =
         expanded ? ref.watch(guideMarkersProvider) : const <GuideMarker>[];
@@ -110,6 +117,10 @@ class GuidingStrip extends ConsumerWidget {
                         ),
                   ),
                   const Spacer(),
+                  if (replay != null) ...[
+                    _ReplayChip(replay: replay),
+                    const SizedBox(width: 12),
+                  ],
                   if (expanded) ...[
                     const _LegendDot(color: AraColors.accentInfo, label: 'RA'),
                     const SizedBox(width: 10),
@@ -412,14 +423,79 @@ class _ControlsRow extends ConsumerWidget {
           const SizedBox(width: 12),
           InkWell(
             onTap: () {
+              // Also ends a log replay — Clear means "empty graph".
+              ref.read(guideReplayProvider.notifier).stop();
               ref.read(guideStepsProvider.notifier).clear();
               ref.read(guideMarkersProvider.notifier).clear();
             },
             child: Text('Clear', style: small?.copyWith(color: AraColors.accentInfo)),
           ),
+          // PHD2's log viewer, in miniature: play a saved guide log through
+          // this graph to check it against a real night. Desktop only — a
+          // phone has no PHD2 log to open.
+          if (!kIsWeb && (Platform.isMacOS || Platform.isLinux || Platform.isWindows)) ...[
+            const SizedBox(width: 12),
+            InkWell(
+              onTap: () => _loadLog(context, ref),
+              child: Text('Load log…', style: small?.copyWith(color: AraColors.accentInfo)),
+            ),
+          ],
         ],
         ),
       ),
+    );
+  }
+}
+
+Future<void> _loadLog(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final picked = await FilePicker.pickFiles(
+    dialogTitle: 'Open a PHD2 guide log',
+    type: FileType.custom,
+    allowedExtensions: const ['txt'],
+  );
+  // file_picker 13: a list of PlatformFile, empty when the panel is cancelled.
+  final path = picked.isEmpty ? null : picked.first.path;
+  if (path == null) return;
+  final String text;
+  try {
+    text = await File(path).readAsString();
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text("Couldn't read that log: $e")));
+    return;
+  }
+  final log = Phd2GuideLog.parse(text);
+  final name = path.split(Platform.pathSeparator).last;
+  if (!ref.read(guideReplayProvider.notifier).start(name, log)) {
+    messenger.showSnackBar(
+        const SnackBar(content: Text('No guiding session in that log.')));
+  }
+}
+
+/// "Replaying PHD2_GuideLog_… 123 / 661" in the header while a log plays.
+class _ReplayChip extends StatelessWidget {
+  const _ReplayChip({required this.replay});
+  final GuideReplay replay;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context)
+        .textTheme
+        .labelSmall
+        ?.copyWith(color: AraColors.accentWarning);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(replay.playing ? Icons.play_arrow : Icons.stop,
+            size: 14, color: AraColors.accentWarning),
+        const SizedBox(width: 4),
+        Text(
+          '${replay.playing ? 'Replaying' : 'Replayed'} ${replay.fileName} · ${replay.played} / ${replay.total}',
+          style: style,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 }
