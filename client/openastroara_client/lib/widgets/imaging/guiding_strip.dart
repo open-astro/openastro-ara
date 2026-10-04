@@ -224,8 +224,46 @@ class GuideGraphModel {
       GuideGraphUnit.px => false,
       GuideGraphUnit.auto => scale != null,
     };
-    stats = GuideGraphStats.compute(visible, pick);
+    settleWindows = _settleWindows(markers);
+    // PHD2 keeps frames taken while settling after a dither OUT of its RMS /
+    // peak figures (they are drawn, but they are the dither, not the
+    // guiding) — otherwise one dither reads as 5″ RMS and pins the auto
+    // y range at ±16″ for the next 100 frames.
+    stats = GuideGraphStats.compute(
+        visible.where((s) => !isSettling(s.at)).toList(growable: false), pick);
     yHalfRange = settings.yHalfRange ?? _autoHalfRange();
+  }
+
+  /// Closed-open settle windows [start, end) from the marker stream; an
+  /// unfinished one runs to the end of time.
+  late final List<(DateTime, DateTime?)> settleWindows;
+
+  bool isSettling(DateTime at) {
+    for (final (start, end) in settleWindows) {
+      if (!at.isBefore(start) && (end == null || at.isBefore(end))) return true;
+    }
+    return false;
+  }
+
+  static List<(DateTime, DateTime?)> _settleWindows(List<GuideMarker> markers) {
+    final out = <(DateTime, DateTime?)>[];
+    DateTime? open;
+    for (final m in markers) {
+      switch (m.kind) {
+        case GuideMarkerKind.dithered:
+        case GuideMarkerKind.settling:
+          open ??= m.at;
+        case GuideMarkerKind.settleDone:
+          if (open != null) {
+            out.add((open, m.at));
+            open = null;
+          }
+        default:
+          break;
+      }
+    }
+    if (open != null) out.add((open, null));
+    return out;
   }
 
   final List<GuideStep> steps;
@@ -501,7 +539,13 @@ class _GraphArea extends StatelessWidget {
               )
             : CustomPaint(
                 size: Size.infinite,
-                painter: GuideGraphPainter(model),
+                painter: GuideGraphPainter(
+                  model,
+                  // The theme's font, so the axis labels match the UI
+                  // instead of the engine default.
+                  labelStyle: Theme.of(context).textTheme.labelSmall ??
+                      const TextStyle(fontSize: 9),
+                ),
               ),
       ),
     );
@@ -515,9 +559,11 @@ class _GraphArea extends StatelessWidget {
 /// line at each dither, the settle window shaded until settle done, a red ×
 /// on the zero line where the star was lost.
 class GuideGraphPainter extends CustomPainter {
-  GuideGraphPainter(this.model);
+  GuideGraphPainter(this.model, {TextStyle? labelStyle})
+      : labelStyle = labelStyle ?? const TextStyle(fontSize: 9);
 
   final GuideGraphModel model;
+  final TextStyle labelStyle;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -587,7 +633,8 @@ class GuideGraphPainter extends CustomPainter {
   }
 
   /// x of a marker: between the last frame at or before it and the next one;
-  /// null when it predates the window.
+  /// null when it predates the window (the caller still tracks its state —
+  /// a settle that began before the first visible frame is still a settle).
   double? _markerX(GuideMarker m, List<GuideStep> visible,
       double Function(int) xOf, double slot) {
     if (visible.isEmpty || m.at.isBefore(visible.first.at)) return null;
@@ -608,6 +655,13 @@ class GuideGraphPainter extends CustomPainter {
     final lost = Paint()
       ..color = AraColors.accentError
       ..strokeWidth = 2;
+    // Settle window state, carried across markers in time order. `settling`
+    // is true between a dither/settling and its settle done; `settleStart`
+    // is where the shading begins on THIS plot — the marker's x, or the left
+    // edge when the window opened before the first visible frame. A settle
+    // that both began and ended before the window draws nothing (the first
+    // replay of a real log shaded the whole plot that way).
+    var settling = false;
     double? settleStart;
     for (final m in model.markers) {
       final x = _markerX(m, visible, xOf, slot);
@@ -616,16 +670,22 @@ class GuideGraphPainter extends CustomPainter {
         case GuideMarkerKind.settling:
           // The settle window opens at the dither (or at a settling without a
           // dither, e.g. after a star re-acquire) and runs to settle done.
-          settleStart ??= x ?? plot.left;
+          if (!settling) {
+            settling = true;
+            settleStart = x ?? plot.left;
+          }
           if (m.kind == GuideMarkerKind.dithered && x != null) {
             _dashedVertical(canvas, x, plot, dither);
             _label(canvas, 'Dither', Offset(x + 2, plot.top), color: AraColors.accentWarning);
           }
         case GuideMarkerKind.settleDone:
-          if (settleStart != null) {
-            final end = x ?? plot.right;
-            canvas.drawRect(
-                Rect.fromLTRB(settleStart, plot.top, end, plot.bottom), settle);
+          if (settling) {
+            settling = false;
+            // Ended before the window: nothing of it is on this plot.
+            if (x != null && settleStart != null) {
+              canvas.drawRect(
+                  Rect.fromLTRB(settleStart, plot.top, x, plot.bottom), settle);
+            }
             settleStart = null;
           }
         case GuideMarkerKind.starLost:
@@ -650,7 +710,7 @@ class GuideGraphPainter extends CustomPainter {
       }
     }
     // A settle still in progress shades to the right edge.
-    if (settleStart != null) {
+    if (settling && settleStart != null) {
       canvas.drawRect(
           Rect.fromLTRB(settleStart, plot.top, plot.right, plot.bottom), settle);
     }
@@ -694,7 +754,8 @@ class GuideGraphPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(fontSize: 9, color: color ?? AraColors.textSecondary),
+        style: labelStyle.copyWith(
+            fontSize: 9, color: color ?? AraColors.textSecondary),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: 40);
@@ -706,5 +767,6 @@ class GuideGraphPainter extends CustomPainter {
       old.model.steps != model.steps ||
       old.model.markers != model.markers ||
       old.model.settings != model.settings ||
-      old.model.fallbackScale != model.fallbackScale;
+      old.model.fallbackScale != model.fallbackScale ||
+      old.labelStyle != labelStyle;
 }

@@ -302,6 +302,30 @@ void main() {
 
     // Beyond the ladder the top rung holds (clipped, not unbounded).
     expect(model([GuideStep(at: t, raPx: 0, decPx: 0, raArcsec: 40, decArcsec: 0, pixelScaleArcsec: 2)]).yHalfRange, 16.0);
+
+    // Frames inside a dither's settle window are drawn but, as in PHD2,
+    // kept out of the stats and the auto y range.
+    final dithered = GuideGraphModel(
+      steps: [
+        for (var i = 0; i < 10; i++)
+          GuideStep(at: t.add(Duration(seconds: i)), raPx: 0.1, decPx: 0.1, raArcsec: 0.2, decArcsec: 0.2, pixelScaleArcsec: 2),
+        for (var i = 10; i < 14; i++)
+          GuideStep(at: t.add(Duration(seconds: i)), raPx: 5, decPx: 5, raArcsec: 10, decArcsec: 10, pixelScaleArcsec: 2),
+        for (var i = 14; i < 20; i++)
+          GuideStep(at: t.add(Duration(seconds: i)), raPx: 0.1, decPx: 0.1, raArcsec: 0.2, decArcsec: 0.2, pixelScaleArcsec: 2),
+      ],
+      markers: [
+        GuideMarker(at: t.add(const Duration(seconds: 10, milliseconds: -500)), kind: GuideMarkerKind.dithered),
+        GuideMarker(at: t.add(const Duration(seconds: 14, milliseconds: -500)), kind: GuideMarkerKind.settleDone, status: 0),
+      ],
+      settings: const GuideGraphSettings(),
+      fallbackScale: null,
+    );
+    expect(dithered.isSettling(t.add(const Duration(seconds: 11))), isTrue);
+    expect(dithered.isSettling(t.add(const Duration(seconds: 15))), isFalse);
+    expect(dithered.stats.samples, 16);
+    expect(dithered.stats.peakRa, 0.2);
+    expect(dithered.yHalfRange, 0.5);
   });
 
   testWidgets('the Tune dialog shows the runtime-safe controls only',
