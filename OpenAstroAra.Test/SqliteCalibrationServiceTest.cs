@@ -42,6 +42,7 @@ namespace OpenAstroAra.Test {
     /// and the generated matching-flats plan.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteCalibrationServiceTest {
 
         private string _dir = string.Empty;

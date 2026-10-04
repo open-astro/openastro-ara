@@ -36,6 +36,7 @@ namespace OpenAstroAra.Test {
     /// probe seam and compressed intervals.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")]
     public class GuiderActivePollTest {
 

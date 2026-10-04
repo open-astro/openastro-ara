@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// (night, filter, sub-length, gain, cooling), one row each with the sub count.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteStatsAstrobinExportTest {
 
         private string _dir = null!;

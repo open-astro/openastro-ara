@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// <see cref="CameraService.CoolingDelay"/> seam, so the minutes-long ramps run instantly and
     /// every wait they asked for is recorded.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")]
     public class CameraServiceCoolingTest {
 

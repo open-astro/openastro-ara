@@ -32,6 +32,7 @@ namespace OpenAstroAra.Test {
     /// WS events narrate the worker. (The packaging CONTENT is covered by <see cref="BackupServiceTest"/>.)
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BackupCreateWorkerTest {
 
         private string _profileDir = null!;

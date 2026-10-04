@@ -24,6 +24,7 @@ namespace OpenAstroAra.Test {
     /// <summary>§40/§50 — per-run capture sessions: the AsyncLocal scope semantics
     /// and the sessions-table rows behind them.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class RunCaptureSessionTest {
 
         // ── CaptureSessionScope semantics ───────────────────────────────────

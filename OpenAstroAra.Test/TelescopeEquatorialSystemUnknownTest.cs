@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// the mount), and the capture path records no pointing rather than a mislabelled one. Each bench
     /// drives a real <see cref="TelescopeService"/> against a scripted loopback mount.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")] // loopback-only, runs in the default job too
     public class TelescopeEquatorialSystemUnknownTest {
 

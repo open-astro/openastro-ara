@@ -32,6 +32,7 @@ namespace OpenAstroAra.Test {
     /// reported size, download round-trip, and unknown/foreign id rejection.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BugReportServiceTest {
 
         private string _profileDir = null!;

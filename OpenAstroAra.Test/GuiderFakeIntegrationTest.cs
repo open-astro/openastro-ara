@@ -41,6 +41,7 @@ namespace OpenAstroAra.Test {
     /// timeout) are exercised end-to-end here.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")] // §42.2 virtual-observatory bench — selected by bench/ (TestCategory=bench)
     public class GuiderFakeIntegrationTest {
 

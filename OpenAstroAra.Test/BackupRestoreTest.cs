@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// successful restore leaves no scratch dirs behind.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BackupRestoreTest {
 
         private string _profileDir = null!;

@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// fan-off while the camera cools (or cannot be read) and lets it through when the cooler is
     /// off; the camera cooler path drives the fan through the actuator seam.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")]
     public class CoolingFanInterlockBenchTest {
 

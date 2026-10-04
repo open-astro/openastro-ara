@@ -36,7 +36,13 @@ namespace OpenAstroAra.Test {
     /// notices a dead Alpaca device, trips Connected → Error, and publishes the §42.2 fault.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class EquipmentFaultDetectionTest {
+
+        // #1265 — the service refreshes every 100 ms here instead of the production 2 s, so a
+        // "several ticks" wait is a few hundred milliseconds. Scale every tick-counted wait by it.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
+        private static TimeSpan Ticks(int n) => Tick * n;
 
         // ── DeviceConnectionProbe (pure) ──
 
@@ -203,7 +209,7 @@ namespace OpenAstroAra.Test {
             var faults = new List<EquipmentFaultEvent>();
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
 
-            using var svc = new FocuserService(faults: hub);
+            using var svc = new FocuserService(faults: hub) { RefreshPeriod = Tick };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "focuser-under-test", Name: "Bench Focuser", Type: DeviceType.Focuser,
                 HostName: proxy.BaseUri.Host, IpAddress: proxy.BaseUri.Host, IpPort: proxy.BaseUri.Port,
@@ -226,7 +232,7 @@ namespace OpenAstroAra.Test {
             // Then let a couple of §42.3 refresh ticks pass: "exactly one per
             // episode" is a claim about later ticks NOT re-firing, so it only
             // means something once some have gone by.
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
 
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "exactly one fault per episode — no re-fire on later ticks");
@@ -262,7 +268,7 @@ namespace OpenAstroAra.Test {
             var faults = new List<EquipmentFaultEvent>();
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
 
-            using var svc = new FocuserService(faults: hub);
+            using var svc = new FocuserService(faults: hub) { RefreshPeriod = Tick };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "focuser-under-test", Name: "Bench Focuser", Type: DeviceType.Focuser,
                 HostName: proxy.BaseUri.Host, IpAddress: proxy.BaseUri.Host, IpPort: proxy.BaseUri.Port,
@@ -286,7 +292,7 @@ namespace OpenAstroAra.Test {
             // Hold through several §42.3 refresh ticks while healthy: a spurious
             // trip on the reconnected session would show up here as a second
             // fault against a device that is fine.
-            await Task.Delay(TimeSpan.FromSeconds(6));
+            await Task.Delay(Ticks(10));
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1),
                     "reconnecting must not publish a fault");
@@ -298,7 +304,7 @@ namespace OpenAstroAra.Test {
             await WaitForFaultCountAsync(faults, 2, TimeSpan.FromSeconds(10));
 
             // Let later ticks run: still exactly one fault for this episode.
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
 
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(2), "one fault per episode, two episodes");

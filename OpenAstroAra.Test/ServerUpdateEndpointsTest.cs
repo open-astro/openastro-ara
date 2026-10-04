@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// declared length must be refused with the <c>too_large</c> token before any body is read.
     /// The service is a fake that just counts the bytes it was handed.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ServerUpdateEndpointsTest {
 
         private sealed class CountingService : IServerUpdateService {

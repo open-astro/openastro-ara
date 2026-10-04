@@ -74,6 +74,13 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     private readonly IWsBroadcaster? _ws;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
+    // #1265 — bench-test knob: the §42.4 read-back settle window every new connection's watch is
+    // built with (null = SwitchReadbackWatch.DefaultSettleWindow), shrunk alongside RefreshPeriod.
+    internal TimeSpan? ReadbackSettleWindow { get; set; }
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
+    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
+    // Set once, right after construction; never used by the daemon itself.
+    internal TimeSpan RefreshPeriod { set => _refreshTimer.Change(value, value); }
     // Connected (and recently-disconnected) switches keyed by the device's Alpaca UniqueId (globally
     // unique — the AlpacaDeviceNumber is only unique per host). Mutated only under _gate. A single
     // shared refresh timer reads every entry's ports — keep the one-lock discipline of the original
@@ -109,7 +116,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         // fall. Reset with the probe.
         public int UnreadableTicksSinceConnect { get; set; }
         // §42.4 — per-connection commanded-value read-back watch (only ports the daemon wrote).
-        public SwitchReadbackWatch Readback { get; } = new();
+        public SwitchReadbackWatch Readback { get; init; } = new();
     }
 
     public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
@@ -225,7 +232,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
                 DisposeClientLocked(existing);
                 _connections.Remove(existing.Key); // may differ from device.UniqueId on an id rename
             }
-            conn = new SwitchConnection { Device = device };
+            conn = new SwitchConnection { Device = device, Readback = new SwitchReadbackWatch(ReadbackSettleWindow) };
             _connections[device.UniqueId] = conn;
             generation = ++conn.Generation;
             SetState(conn, EquipmentConnectionState.Connecting);

@@ -32,6 +32,7 @@ namespace OpenAstroAra.Test {
     /// ever built the Program.cs graph; this one fails the moment an alias points anywhere but the
     /// live service singleton. The two headless-on-purpose mediators are pinned as such.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     // Sets the process-wide profile-dir environment variable and replaces the global Serilog
     // logger (BuildApp installs the §29.9 file sink, as Main does); any future fixture that also
     // calls BuildApp needs the same isolation. Building is network-free today — Kestrel binds in

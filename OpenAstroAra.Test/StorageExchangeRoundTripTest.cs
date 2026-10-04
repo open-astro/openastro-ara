@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// stale exchange directory. The wrapper benches are Linux-only (<c>mv -T</c>, the tmpfs
     /// layout); the sweep runs everywhere.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class StorageExchangeRoundTripTest {
 
         private static readonly string RepoRoot = FindRepoRoot();

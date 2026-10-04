@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// and asserts both pages arrive with no overlap.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqlitePaginationHasMoreTest {
 
         private string _profileDir = string.Empty;

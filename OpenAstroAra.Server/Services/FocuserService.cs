@@ -58,6 +58,10 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
     private readonly DeviceConnectionProbe _probe = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
+    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
+    // Set once, right after construction; never used by the daemon itself.
+    internal TimeSpan RefreshPeriod { set => _refreshTimer.Change(value, value); }
     private AlpacaFocuser? _client;
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;

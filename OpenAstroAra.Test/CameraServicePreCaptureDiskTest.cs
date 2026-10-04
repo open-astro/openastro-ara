@@ -25,6 +25,7 @@ namespace OpenAstroAra.Test {
     /// the save dir reads as critical on any machine — no fake drives needed.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CameraServicePreCaptureDiskTest {
 
         private static InMemoryProfileStore StoreWith(int warnGb, int criticalGb, string policy,

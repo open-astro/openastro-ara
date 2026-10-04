@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
     /// stamping (with the action-lands-first upsert race), session attribution,
     /// and the newest-first filtered read API.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteFaultLogServiceTest {
 
         private string profileDir = null!;

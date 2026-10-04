@@ -45,6 +45,7 @@ namespace OpenAstroAra.Test {
     /// error event, and hand-back (tracking restored, lease released) on Stop and on failure.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")]
     public class PolarAlignServiceTest {
 

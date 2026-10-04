@@ -37,6 +37,7 @@ namespace OpenAstroAra.Test {
     /// original frame counts) otherwise, or the caller's override echoed back.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ResumeTargetTest {
 
         private string _dir = string.Empty;

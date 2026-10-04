@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
     /// live. A no-op clear publishes nothing.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SqliteDiagnosticsServiceWsEventTest {
 
         private sealed class FakeWsBroadcaster : IWsBroadcaster {

@@ -33,6 +33,7 @@ namespace OpenAstroAra.Test {
     /// at an unknown position. Each bench drives a real service against a scripted loopback device
     /// that dispatches the op fine but reports "still moving" forever, then disconnects mid-wait.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("bench")] // §42.4 virtual-observatory bench — loopback-only, runs in the default job too
     public class MediatorDisconnectMidWaitTest {
 

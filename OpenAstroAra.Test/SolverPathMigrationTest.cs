@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     /// when that is the binary actually on disk, and boot warns when the configured binary is missing.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class SolverPathMigrationTest {
 
         private static Func<string, bool> Present(params string[] paths) => p => paths.Contains(p);

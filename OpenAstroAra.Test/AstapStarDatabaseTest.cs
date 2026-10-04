@@ -24,6 +24,7 @@ namespace OpenAstroAra.Test {
     /// names with <c>-D</c> when there is more than one (so ASTAP does not pick on its own).
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class AstapStarDatabaseTest {
 
         private static readonly string[] D80AndW08 = { "d80", "w08" };

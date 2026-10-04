@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// areas claimed), torn/corrupt manifests being skipped, and download-path resolution.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class BackupServiceTest {
 
         private static readonly string[] ProfileAndSequences = { "profiles", "sequences" };

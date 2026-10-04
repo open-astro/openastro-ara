@@ -33,7 +33,13 @@ namespace OpenAstroAra.Test {
     /// tracking and a camera cooler failing to hold set-point. Pure-class coverage for every
     /// decision, plus one end-to-end proof through a real TelescopeService.</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class StateChannelFaultWatchTest {
+
+        // #1265 — the service refreshes every 100 ms here instead of the production 2 s, so a
+        // "several ticks" wait is a few hundred milliseconds. Scale every tick-counted wait by it.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
+        private static TimeSpan Ticks(int n) => Tick * n;
 
         // ── MountTrackingWatch (pure) ──
 
@@ -275,7 +281,7 @@ namespace OpenAstroAra.Test {
                 : null);
             var (hub, faults) = Hub();
 
-            using var svc = new TelescopeService(faults: hub);
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
                 HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
@@ -293,7 +299,7 @@ namespace OpenAstroAra.Test {
                 TimeSpan.FromSeconds(20), "the tracking-lost fault to be published");
 
             // Several more ticks with tracking still off: the episode must not re-fire.
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(Ticks(10));
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "exactly one fault per episode");
                 Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.TrackingLost));
@@ -305,16 +311,20 @@ namespace OpenAstroAra.Test {
         [Test]
         [Category("bench")] // §42.2 op-failure enforcement — loopback-only, runs in the default job too
         public async Task A_failed_slew_publishes_a_fault_AND_fails_the_instruction() {
-            // The scripted mount answers the state reads but not the slew write, so the
-            // mediator op's blocking call throws — before the §42.2 enforcement this read
-            // as a completed slew to the instruction.
+            // The scripted mount answers the state reads but rejects the slew write with a
+            // driver error, so the mediator op's blocking call throws — before the §42.2
+            // enforcement this read as a completed slew to the instruction. (#1265: the device
+            // used to accept the write and never move, which only failed after the settle bound's
+            // ten minutes; the rejection exercises the same op boundary in milliseconds.)
             await using var mount = ScriptedAlpacaDevice.Start(path =>
                 path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
                 : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" // Topocentric: a JNOW mount (#1124 refuses an unknown one)
-                : null);
+                : null,
+                putResponder: path => path.EndsWith("/slewtocoordinatesasync", StringComparison.Ordinal)
+                    ? ScriptedAlpacaDevice.Error("simulated: the mount refused the goto") : null);
             var (hub, faults) = Hub();
 
             using var svc = new TelescopeService(faults: hub);

@@ -38,6 +38,7 @@ namespace OpenAstroAra.Test {
     /// the profile site, the flip time through the shared astrometry rule, and the pier side from
     /// the mount, with NaN for every "cannot say" (the trigger's own guard).</summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class TelescopeMeridianBookkeepingTest {
 
         // Greenwich, so LST == GMST and the expectation below needs no longitude arithmetic.

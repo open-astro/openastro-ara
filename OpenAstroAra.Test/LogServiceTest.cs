@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// and the rotate acknowledgement.
     /// </summary>
     [TestFixture]
+    [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class LogServiceTest {
 
         private static readonly string[] WarningThenError = { "an error", "a warning" };
