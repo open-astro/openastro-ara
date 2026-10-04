@@ -38,19 +38,19 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
-                // spaceBetween with NO Spacer: a Spacer would split the slack
-                // 50/50 with the flexible chip and squeeze a short label
-                // ("Diagn…") even when there is room for it.
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 18, color: AraColors.textSecondary),
                   const SizedBox(width: 4),
-                  // Flexible, not fixed: "1 issue — critical" plus the event
-                  // count overflowed the 320 px rail by ~47 px (seen on the
-                  // Pi rig when a daemon reinstall raised an issue).
-                  Flexible(
-                    child: StatusIndicator(level: diag.level, label: diag.label),
+                  // Expanded (left-aligned), not a Spacer: the chip owns all
+                  // the slack so its label is never squeezed while there is
+                  // room, yet "1 issue — critical" + a count still ellipsizes
+                  // instead of overflowing the 320 px rail (seen on the Pi).
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: StatusIndicator(level: diag.level, label: diag.label),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   // Only a count when there is one: "No recent events" beside
