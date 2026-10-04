@@ -330,8 +330,8 @@ public partial class Program {
         builder.Services.AddSingleton<GuiderRecoveryCoordinator>();
         // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's
         // IGuiderMediator (§8.1; the mediator alias is registered below, replacing HeadlessGuiderMediator).
-        builder.Services.AddSingleton<GuiderService>(sp =>
-            new GuiderService(
+        builder.Services.AddSingleton<GuiderService>(sp => {
+            var guider = new GuiderService(
                 sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
                 sp.GetRequiredService<GuiderRecoveryCoordinator>(),
                 sp.GetRequiredService<ILogger<GuiderService>>(),
@@ -358,7 +358,18 @@ public partial class Program {
                     }
                     var name = repo.List().Profiles.FirstOrDefault(p => p.Id == id.Value)?.Name;
                     return (id.Value, name);
-                }));
+                });
+            // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
+            // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
+            // and the guider refuses to guide under it. Resolved lazily: the focus service needs
+            // this very guider to construct.
+            guider.ReleaseGuideCameraAsync = async () => {
+                if (sp.GetService<IGuideFocusService>() is { IsActive: true } focus) {
+                    await focus.StopAsync().ConfigureAwait(false);
+                }
+            };
+            return guider;
+        });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
         // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +

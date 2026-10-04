@@ -65,9 +65,41 @@ public sealed partial class GuiderService : IGuiderMediator {
         }
     }
 
+    /// <summary>
+    /// Hands the guide camera back before guiding starts: the Setup → Smart Focus live-focus loop
+    /// borrows it through the guider's polar-align lease, and while that lease is held the guider
+    /// answers a guide request with "polar-alignment session in progress" — a sequence's Start
+    /// Guiding then failed and the night ran unguided with every dither skipped (2026-10-03).
+    /// Program.cs wires this to stop a running live-focus loop; null means nothing to release.
+    /// </summary>
+    public Func<Task>? ReleaseGuideCameraAsync { get; set; }
+
     // ── Guider ops drive the live device ───────────────────────────────────────────────────────────
-    public Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token) =>
-        MediatorGuider()?.StartGuiding(forceCalibration, progress ?? _noProgress, token) ?? Task.FromResult(false);
+    public async Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        var guider = MediatorGuider();
+        if (guider is null) {
+            return false;
+        }
+        await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
+        return await guider.StartGuiding(forceCalibration, progress ?? _noProgress, token).ConfigureAwait(false);
+    }
+
+    /// <summary>Runs <see cref="ReleaseGuideCameraAsync"/>; a fault there is logged, never a reason not to guide.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort release of a borrowed camera: the guide attempt itself reports its own outcome.")]
+    internal async Task ReleaseGuideCameraQuietlyAsync() {
+        if (ReleaseGuideCameraAsync is not { } release) {
+            return;
+        }
+        try {
+            await release().ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogGuideCameraReleaseFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Releasing the guide camera before guiding failed — trying to guide anyway")]
+    partial void LogGuideCameraReleaseFailed(Exception ex);
 
     public Task<bool> StopGuiding(CancellationToken token) =>
         MediatorGuider()?.StopGuiding(token) ?? Task.FromResult(false);
