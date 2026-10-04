@@ -81,8 +81,38 @@ public sealed partial class GuiderService : IGuiderMediator {
             return false;
         }
         await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
+        await ClearPaSessionQuietlyAsync(guider, token).ConfigureAwait(false);
         return await guider.StartGuiding(forceCalibration, progress ?? _noProgress, token).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The guider's polar-align lease outlives whoever took it: a live-focus loop that died with a daemon
+    /// restart left "polar-alignment session in progress" standing with nothing holding it, and every
+    /// guide request after that was refused (2026-10-03, twice). Guiding is about to own the guide
+    /// camera anyway, so the lease is released outright; a refusal here is logged, not fatal.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lease release before guiding: the guide attempt reports its own outcome.")]
+    private async Task ClearPaSessionQuietlyAsync(PHD2Guider guider, CancellationToken token) {
+        try {
+            var status = await guider.GetPaSessionAsync(token).ConfigureAwait(false);
+            if (status.Active != true) {
+                return;
+            }
+            await guider.SetPaSessionAsync(active: false, timeoutS: null, token).ConfigureAwait(false);
+            LogPaSessionCleared();
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            LogPaSessionClearFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Released the guider's polar-align session before guiding (nothing in this daemon was using it)")]
+    partial void LogPaSessionCleared();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not release the guider's polar-align session before guiding — trying to guide anyway")]
+    partial void LogPaSessionClearFailed(Exception ex);
 
     /// <summary>Runs <see cref="ReleaseGuideCameraAsync"/>; a fault there is logged, never a reason not to guide.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
