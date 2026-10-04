@@ -43,7 +43,9 @@ namespace OpenAstroAra.Test {
         // #1265 — the service refreshes every 100 ms here instead of the production 2 s, and the
         // mediator's slot-list budget is ten ticks instead of 6 s, so every "no write arrives"
         // wait is tick-counted rather than seconds of wall clock.
-        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
+        // 150 ms, not 100: the moving-wheel step below has to land inside seed + MaxPendingHomeTicks
+        // ticks, and a loaded 4-core runner needs the extra slack.
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(150);
         private static TimeSpan Ticks(int n) => Tick * n;
 
         /// <summary>A loopback Alpaca FilterWheel: answers <c>position</c>/<c>names</c>/
@@ -222,8 +224,8 @@ namespace OpenAstroAra.Test {
             // known position on a later refresh tick of the SAME connection…
             stub.Position = -1;
             await ConnectAsync(svc, stub, uniqueId: "second-wheel");
-            // Two ticks: inside the pending window (seed + MaxPendingHomeTicks), so the claim is still open below.
-            Assert.That(await WaitForWriteAsync(stub, Ticks(2)), Is.False, "position unknown — nothing to decide yet");
+            // One tick: well inside the pending window (seed + MaxPendingHomeTicks), so the claim is still open below.
+            Assert.That(await WaitForWriteAsync(stub, Ticks(1)), Is.False, "position unknown — nothing to decide yet");
             stub.Position = 3;
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True, "the home fires once the position becomes known");
             Assert.That(stub.PositionWrites.TryDequeue(out var target) && target == FilterWheelService.DefaultSlot, Is.True);
@@ -336,7 +338,7 @@ namespace OpenAstroAra.Test {
             var started = DateTime.UtcNow;
             var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
             Assert.That(result.Position, Is.EqualTo(2), "a skipped change hands back the requested filter");
-            Assert.That(DateTime.UtcNow - started, Is.GreaterThan(Ticks(8)).And.LessThan(TimeSpan.FromSeconds(10)), "the slot wait is bounded by SlotsWaitBudget");
+            Assert.That(DateTime.UtcNow - started, Is.GreaterThan(Ticks(8)).And.LessThan(Ticks(30)), "the slot wait is bounded by SlotsWaitBudget (the 6 s default would miss the ceiling)");
             Assert.That(stub.PositionWrites, Is.Empty, "no slot list → nothing is written to the wheel");
             // The wheel now reports a known, off-0 position: a still-pending home would fire here.
             stub.Position = 3;

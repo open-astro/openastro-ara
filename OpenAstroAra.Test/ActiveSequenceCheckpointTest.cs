@@ -21,7 +21,6 @@ using System.IO;
 namespace OpenAstroAra.Test {
 
     [TestFixture]
-
     [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ActiveSequenceCheckpointTest {
 

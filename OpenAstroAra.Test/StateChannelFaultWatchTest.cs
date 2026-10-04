@@ -342,8 +342,45 @@ namespace OpenAstroAra.Test {
 
             lock (faults) {
                 Assert.That(faults, Has.Count.GreaterThanOrEqualTo(1), "the failed slew published a fault");
-                Assert.That(faults[0].Kind,
-                    Is.EqualTo(EquipmentFaultKind.OpError).Or.EqualTo(EquipmentFaultKind.StallTimeout));
+                Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.OpError));
+                Assert.That(faults[0].DeviceType, Is.EqualTo(DeviceType.Telescope));
+            }
+        }
+
+        [Test]
+        [Category("bench")] // §42.4 stalled op — loopback-only, runs in the default job too
+        public async Task A_slew_the_mount_accepts_but_never_completes_publishes_a_stall_fault_AND_fails_the_instruction() {
+            // The device takes the goto (PUT answers success) but Slewing stays false and the
+            // position never approaches the target, so the settle poll exhausts its bound. Five
+            // polls here instead of the production 6000 (#1265): same code path, half a second.
+            await using var mount = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "1.0"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "-40.0"
+                : path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1"
+                : null);
+            var (hub, faults) = Hub();
+
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick, SlewSettleMaxPolls = 5 };
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
+                HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+                TimeSpan.FromSeconds(15), "the mount to connect");
+
+            var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("did not reach its terminal state"));
+
+            lock (faults) {
+                Assert.That(faults, Has.Count.EqualTo(1), "the stalled slew published exactly one fault");
+                Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
                 Assert.That(faults[0].DeviceType, Is.EqualTo(DeviceType.Telescope));
             }
         }
