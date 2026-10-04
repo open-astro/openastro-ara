@@ -304,9 +304,17 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                         restoreOnFailure, startPosition).ConfigureAwait(false);
                 }
 
-                fit = FocusCurveFit.FitBest(points);
+                // The outer probes of a wide sweep find a handful of stars on doughnut-shaped images and
+                // their HFR stops tracking defocus (11-star probes at ±350 steps read lower than the
+                // 48-star ones at ±150, 2026-10-03); they drag the fit's minimum up and its vertex sideways.
+                // Fit the V on the probes that saw a real star field.
+                var fitPoints = TrimThinWings(points, minTrustworthy);
+                if (fitPoints.Count < points.Count) {
+                    LogThinWingsDropped(points.Count - fitPoints.Count, points.Count);
+                }
+                fit = FocusCurveFit.FitBest(fitPoints);
                 if (fit is not null) {
-                    await RecordFitAsync(fit, points).ConfigureAwait(false);
+                    await RecordFitAsync(fit, fitPoints).ConfigureAwait(false);
                 }
                 if (fit is { IsUsable: true, WithinSampledRange: true }) {
                     break;
@@ -689,6 +697,41 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Autofocus sweep errored")]
     private partial void LogSweepError(Exception ex);
+
+    /// <summary>A probe with fewer stars than this fraction of the sweep's best-populated probe is a
+    /// thin wing: dropped from the fit (never below the trustworthy minimum) so the V is fitted on the
+    /// probes that measured a star field rather than a few fragments of doughnuts.</summary>
+    internal const double ThinWingStarFraction = 0.1;
+
+    internal static List<FocusPoint> TrimThinWings(IReadOnlyList<FocusPoint> points, int keepAtLeast) {
+        var kept = new List<FocusPoint>(points);
+        if (kept.Count == 0) {
+            return kept;
+        }
+        var maxStars = 0;
+        foreach (var p in kept) {
+            maxStars = Math.Max(maxStars, p.StarCount);
+        }
+        var threshold = maxStars * ThinWingStarFraction;
+        // Thinnest first, so the trustworthy floor spares the better-populated of the thin probes.
+        var thin = new List<FocusPoint>();
+        foreach (var p in kept) {
+            if (p.StarCount < threshold) {
+                thin.Add(p);
+            }
+        }
+        thin.Sort((a, b) => a.StarCount.CompareTo(b.StarCount));
+        foreach (var p in thin) {
+            if (kept.Count <= keepAtLeast) {
+                break;
+            }
+            kept.Remove(p);
+        }
+        return kept;
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus: {Dropped} of {Total} probes saw too few stars to trust far from focus — fitting the V on the rest")]
+    private partial void LogThinWingsDropped(int dropped, int total);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus probe: position {Position} HFR {Hfr} ({Stars} stars)")]
     private partial void LogProbe(int position, double hfr, int stars);

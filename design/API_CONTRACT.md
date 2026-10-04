@@ -333,7 +333,15 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 frame at best focus (the fit's predicted minimum when no confirmation frame was usable). The inverse
 map's in-focus HFR and its fold-table anchor use it when present; Smart Focus's "already in focus"
 target is that value × 1.10 (was the re-fitted minimum × 1.05). A calibration written before the field
-existed carries null and behaves as before.
+existed carries null and behaves as before. A Smart run whose confirmation frame reads lower than the
+stored value lowers it (the sweep's own confirmation can sit a few steps off the true minimum).
+
+**Same day, the drawn V:** a bracket-confirmed Smart run now fits the V through its own three to five
+shots with the sweep's fitter (`fit.algorithm` parabolic/hyperbolic, real `r_squared`), so the curve
+passes through the dots; the calibration model curve (`algorithm: "calibration"`) only stands in when
+those points will not fit. The classic sweep fits its V on the probes that saw at least 10 % of the
+best-populated probe's stars (`TrimThinWings`): far-wing probes on doughnut images stop tracking defocus
+and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` (they were measured).
 
 **Why:** the map re-fitted its minimum from the stored samples. A lumpy 15-point sweep re-fitted to
 1.62 px while the same sweep's confirmation frame measured 0.96, so every Smart shot under 1.70 px

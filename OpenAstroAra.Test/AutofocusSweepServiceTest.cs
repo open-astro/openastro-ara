@@ -1085,5 +1085,29 @@ namespace OpenAstroAra.Test {
             Assert.That(result.DetectedStars, Is.GreaterThan(0));
             Assert.That(result.NoiseFlooded, Is.False);
         }
+    
+
+        private static readonly double[] ThinWingSurvivors = { 29663, 29513, 29463, 29413, 29363, 29313, 29213 };
+
+        [Test]
+        public void TrimThinWings_drops_probes_that_saw_almost_no_stars_but_keeps_the_trustworthy_minimum() {
+            // The 2026-10-03 sweep: 11- and 19-star probes at the far ends against 277 at focus.
+            var points = new List<FocusPoint> {
+                new(29763, 5.1, 11), new(29713, 3.8, 19), new(29663, 2.9, 44), new(29513, 2.6, 83),
+                new(29463, 1.4, 204), new(29413, 1.0, 277), new(29363, 1.3, 227), new(29313, 2.6, 101),
+                new(29213, 4.0, 59), new(29113, 4.9, 20),
+            };
+            var kept = AutofocusSweepService.TrimThinWings(points, keepAtLeast: 5);
+            Assert.That(kept.Select(p => p.Position), Is.EquivalentTo(ThinWingSurvivors),
+                "under 10 % of 277 stars (27.7) goes: 11, 19 and 20");
+
+            var floor = AutofocusSweepService.TrimThinWings(points, keepAtLeast: 9);
+            Assert.That(floor, Has.Count.EqualTo(9), "never below the trustworthy minimum: only the thinnest probe goes");
+            Assert.That(floor.Any(p => p.StarCount == 11), Is.False);
+
+            Assert.That(AutofocusSweepService.TrimThinWings(new List<FocusPoint>(), 5), Is.Empty);
+            var even = points.Select(p => p with { StarCount = 50 }).ToList();
+            Assert.That(AutofocusSweepService.TrimThinWings(even, 5), Has.Count.EqualTo(even.Count), "nothing thin, nothing dropped");
+        }
     }
 }

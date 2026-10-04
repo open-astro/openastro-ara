@@ -321,10 +321,10 @@ namespace OpenAstroAra.Test {
             AssertSmartRunRecorded(rig.Tracker, rig.Events, StartPosition);
             var record = rig.Tracker.Snapshot();
             Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(3));
-            Assert.That(record.Fit, Is.Not.Null, "the calibration's curve is drawn through the three shots");
-            Assert.That(record.Fit!.Algorithm, Is.EqualTo("calibration"));
-            Assert.That(record.Fit.BestPosition, Is.EqualTo(StartPosition));
-            Assert.That(record.Fit.Curve.Min(c => c.Hfr), Is.EqualTo(record.Fit.PredictedHfr).Within(0.01), "the curve bottoms at the centre");
+            Assert.That(record.Fit, Is.Not.Null, "the V is fitted through this run's own shots");
+            Assert.That(record.Fit!.Algorithm, Is.Not.EqualTo("calibration"), "a real fit, not the calibration's model curve");
+            Assert.That(record.Fit.BestPosition, Is.EqualTo(StartPosition).Within(1));
+            Assert.That(record.Fit.PredictedHfr, Is.EqualTo(1.5).Within(0.05), "the curve bottoms on the measured dots");
         }
 
         [Test]
@@ -370,7 +370,9 @@ namespace OpenAstroAra.Test {
             Assert.That(record.FinalPosition, Is.EqualTo(StartPosition + 38));
             Assert.That(record.FinalHfr, Is.EqualTo(1.3).Within(0.01), "the confirmation frame's reading");
             Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(4));
-            Assert.That(record.Fit!.BestPosition, Is.EqualTo(StartPosition + 38), "the drawn V bottoms where the run ended");
+            Assert.That(record.Fit!.BestPosition, Is.EqualTo(StartPosition + 38).Within(60), "the drawn V is fitted through the shots and bottoms near where the run ended");
+            Assert.That(rig.Store.GetFocusCalibration()!.InFocusHfr, Is.EqualTo(1.3).Within(0.001),
+                "the confirmation frame beat the calibration's stored in-focus HFR, so the target follows it");
         }
 
         [Test]

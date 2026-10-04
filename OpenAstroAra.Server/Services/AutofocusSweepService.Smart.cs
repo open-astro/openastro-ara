@@ -163,22 +163,43 @@ public sealed partial class AutofocusSweepService {
                 }
                 var vertexSteps = (int)Math.Round(vertexOffset!.Value);
                 var finalShots = 3;
+                FocusPoint? vertexShotTaken = null;
                 int final;
                 if (vertexSteps == 0) {
                     final = await LandFromAboveAsync(startPosition, settings, token).ConfigureAwait(false);
                 } else {
                     var vertexPosition = await LandFromAboveAsync(startPosition + vertexSteps, settings, token).ConfigureAwait(false);
                     var vertexShot = await TakeSmartShotAsync(4, vertexPosition, settings, progress, token).ConfigureAwait(false);
+                    vertexShotTaken = new FocusPoint(vertexPosition, vertexShot.Hfr, vertexShot.Features.StarCount);
                     finalShots = 4;
                     var accepted = vertexShot.Trustworthy && vertexShot.Hfr < shot1.Hfr * VertexImprovementFactor;
                     LogSmartVertex(vertexSteps, vertexShot.Hfr, shot1.Hfr, accepted ? "kept" : "centre kept");
                     final = accepted ? vertexPosition : await LandFromAboveAsync(startPosition, settings, token).ConfigureAwait(false);
                 }
-                // The calibration's own curve, bottomed at where the run ends, so the pane shows the V the
-                // shots were judged against; then shot 5, one confirmation frame AT the final position —
-                // the measured in-focus HFR and the picture of the focused field, as the sweep does.
-                _tracker?.SetModelCurve(final, map.InFocusHfr, bracket, final - 1.3 * bracket, final + 1.3 * bracket);
+                // Shot 5, one confirmation frame AT the final position — the measured in-focus HFR and the
+                // picture of the focused field, as the sweep does.
                 var (confirmedHfr, confirmedStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
+                // The V through THIS run's shots: the same fitter as the sweep, on the three to five points
+                // just measured, so the drawn curve passes through the dots and bottoms where they do. The
+                // calibration's model curve only stands in when those points will not fit.
+                var shots = new List<FocusPoint> {
+                    new(startPosition, shot1.Hfr, shot1.Features.StarCount),
+                    new(minusPosition, minus.Hfr, minus.Features.StarCount),
+                    new(plusPosition, plus.Hfr, plus.Features.StarCount),
+                };
+                if (vertexShotTaken is { } v) {
+                    shots.Add(v);
+                }
+                if (confirmedHfr is { } ch && ch > 0) {
+                    shots.Add(new FocusPoint(final, ch, confirmedStars ?? 0));
+                }
+                var shotFit = FocusCurveFit.FitBest(shots);
+                if (shotFit is { IsUsable: true }) {
+                    await RecordFitAsync(shotFit, shots).ConfigureAwait(false);
+                } else {
+                    _tracker?.SetModelCurve(final, map.InFocusHfr, bracket, final - 1.3 * bracket, final + 1.3 * bracket);
+                }
+                UpdateInFocusHfrQuietly(calibration, confirmedHfr);
                 LogSmartComplete(final, confirmedHfr ?? shot1.Hfr, finalShots + 1);
                 await RecordCompletedAsync("smart", final, confirmedHfr ?? shot1.Hfr, confirmedStars ?? shot1.Features.StarCount, started, finalShots + 1).ConfigureAwait(false);
                 RecordAutofocusQuietly();
@@ -315,6 +336,26 @@ public sealed partial class AutofocusSweepService {
             return $"no clear rise either side ({minusHfr:0.##} / {centreHfr:0.##} / {plusHfr:0.##})";
         }
         return null;
+    }
+
+    /// <summary>The stored in-focus HFR follows the best confirmation frame seen at best focus: the sweep's
+    /// own confirmation can land on a fit that missed the true minimum by a few steps (1.29 at 29425 while
+    /// the Smart run then read 1.00 at 29418, 2026-10-03), and a target that high lets a soft frame pass.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Post-success bookkeeping: a profile-store fault must not turn a completed Smart run into a failure.")]
+    private void UpdateInFocusHfrQuietly(FocusCalibrationDto calibration, double? confirmedHfr) {
+        if (confirmedHfr is not { } measured || !double.IsFinite(measured) || measured <= 0) {
+            return;
+        }
+        if (calibration.InFocusHfr is { } stored && stored <= measured) {
+            return;
+        }
+        try {
+            _profiles.PutFocusCalibration(calibration with { InFocusHfr = Math.Round(measured, 4) });
+            LogInFocusHfrLowered(calibration.InFocusHfr, measured);
+        } catch (Exception ex) {
+            LogCalibrationRecordFailed(ex);
+        }
     }
 
     /// <summary>Every landing in the bracket is made from above — the direction the calibration's
@@ -481,6 +522,9 @@ public sealed partial class AutofocusSweepService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus vertex shot {Offset:+0;-0} steps from the centre: HFR {Hfr:0.###} vs centre {Centre:0.###} — {Outcome}")]
     private partial void LogSmartVertex(int offset, double hfr, double centre, string outcome);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus: stored in-focus HFR lowered from {Previous} to {Measured:0.###} (this run's confirmation frame)")]
+    private partial void LogInFocusHfrLowered(double? previous, double measured);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Smart Focus fell back to the Classic sweep: {Reason}")]
     private partial void LogSmartFellBack(string reason);
