@@ -95,6 +95,22 @@ class _ExposureTimerBannerState extends ConsumerState<ExposureTimerBanner> {
                 ),
               ],
             ),
+            // The question a user actually has mid-sub: how long is left.
+            // Reads from the same clock as the bar; "Reading out" once the
+            // shutter should have closed.
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                downloading
+                    ? 'Reading out the sensor…'
+                    : '${formatRemaining(activity.remaining(now))} left',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AraColors.textSecondary,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
             const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
@@ -127,6 +143,13 @@ String formatExposureClock(Duration elapsed, Duration total) {
       ? totalSec.toStringAsFixed(0)
       : totalSec.toStringAsFixed(1);
   return '${(e.inMilliseconds / 1000.0).toStringAsFixed(1)} / $totalText s';
+}
+
+/// Time left in the exposure: `m:ss` from a minute up, else seconds with a
+/// decimal — the countdown a user watches during a sub.
+String formatRemaining(Duration remaining) {
+  if (remaining.inSeconds >= 60) return _mmss(remaining);
+  return '${(remaining.inMilliseconds / 1000.0).toStringAsFixed(1)} s';
 }
 
 String _mmss(Duration d) {

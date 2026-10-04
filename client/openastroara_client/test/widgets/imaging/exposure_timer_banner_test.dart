@@ -57,6 +57,7 @@ void main() {
     await tester.pump();
     expect(find.text('Exposing · Light · OIII'), findsOneWidget);
     expect(find.textContaining('/ 2:00'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^[12]:[0-5]\d left$')), findsOneWidget);
     final bar = tester.widget<LinearProgressIndicator>(
         find.byType(LinearProgressIndicator));
     expect(bar.value, isNotNull);
@@ -70,6 +71,8 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Downloading · Plate solve'), findsOneWidget);
+    expect(find.text('Reading out the sensor…'), findsOneWidget);
+    expect(find.textContaining('left'), findsNothing);
     expect(
         tester
             .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
@@ -83,6 +86,12 @@ void main() {
     expect(find.textContaining('Downloading'), findsNothing);
     expect(find.textContaining('Exposing'), findsNothing);
     await _teardown(tester, c);
+  });
+
+  test('formatRemaining', () {
+    expect(formatRemaining(const Duration(seconds: 73)), '1:13');
+    expect(formatRemaining(const Duration(milliseconds: 4200)), '4.2 s');
+    expect(formatRemaining(Duration.zero), '0.0 s');
   });
 
   test('formatExposureClock', () {
