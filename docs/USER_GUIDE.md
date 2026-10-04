@@ -148,11 +148,11 @@ The **Live** tab shows the live story: current frame with stretch control, expos
 HFR/star metrics, guiding, and **Take One** for a quick snapshot. **Live View** runs a fast
 framing/focus loop when you need to point or focus by eye.
 
-- **Exposure timer.** Whenever the camera is exposing — a sequence light, a Smart Focus probe, a
-  plate-solve capture or your own Take One — a timer appears over the top of the frame with the
-  frame type and filter, the elapsed / total clock and a progress bar. It switches to
-  **Downloading** once the shutter should have closed and disappears when the frame has landed.
-  If you see no timer, nothing is exposing.
+- **Exposure timer.** Whenever the daemon is exposing — a sequence light, a Smart Focus probe or a
+  plate-solve capture — a timer appears in the right-hand panel under **Take One** with the frame
+  type and filter, the elapsed / total clock and a progress bar. It switches to **Downloading**
+  once the shutter should have closed and disappears when the frame has landed. Your own Take One
+  shows its progress on the Take One card instead, and Live View frames have no timer.
 - **Guiding strip.** The guide graph runs along the bottom of the Live tab and behaves like PHD2's
   graph window (the guider *is* PHD2): RA error in blue, Dec in red, correction pulses as faint
   bars from the zero line, newest frame at the right. Dithers are marked with a dashed line and the
