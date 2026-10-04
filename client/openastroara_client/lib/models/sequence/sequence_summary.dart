@@ -350,6 +350,9 @@ class SequenceRunStateInfo {
   final double? estimatedTotalSeconds;
   final double? estimatedRemainingSeconds;
 
+  /// Frames this run has filed so far (the daemon's run-session count).
+  final int framesCaptured;
+
   const SequenceRunStateInfo({
     this.sequenceId = '',
     this.runId = '',
@@ -363,6 +366,7 @@ class SequenceRunStateInfo {
     this.currentInstructionDescription,
     this.estimatedTotalSeconds,
     this.estimatedRemainingSeconds,
+    this.framesCaptured = 0,
   });
 
   factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
@@ -380,6 +384,7 @@ class SequenceRunStateInfo {
       estimatedTotalSeconds: _doubleOrNull(json['estimated_total_seconds']),
       estimatedRemainingSeconds:
           _doubleOrNull(json['estimated_remaining_seconds']),
+      framesCaptured: _int(json['frames_captured']),
     );
   }
 

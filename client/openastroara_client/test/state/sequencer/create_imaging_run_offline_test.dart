@@ -10,6 +10,8 @@ import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
 /// Captures the key a degraded create stamps into the draft.
@@ -56,6 +58,12 @@ class _ThrowingClient implements SequenceClient {
   @override
   void noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
+}
+
+class _GuiderPhd2 extends Phd2SettingsNotifier {
+  @override
+  Phd2Settings build() =>
+      const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]');
 }
 
 void main() {
@@ -114,6 +122,34 @@ void main() {
     expect(drafts.store.values.single.name, 'M 31');
     // The draft body is a real run body, not a placeholder.
     expect(drafts.store.values.single.body, isNotEmpty);
+  });
+
+  testWidgets('no server: the draft is cooked from the rig the settings describe',
+      (tester) async {
+    // Offline there is no daemon to ask, so a guider counts when the profile
+    // names its camera: with one, Start Guiding rides into the draft; without,
+    // it does not (the night of 2026-10-02 a rig with a guider got none).
+    final plain = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(plain.dispose);
+    await run(tester, api: null, container: plain);
+    expect(drafts.store.values.single.body.toString(),
+        isNot(contains(startGuidingType)));
+    drafts.store.clear();
+
+    final guided = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      sequenceApiProvider.overrideWith((ref) => null),
+      phd2SettingsProvider.overrideWith(_GuiderPhd2.new),
+    ]);
+    addTearDown(guided.dispose);
+    await run(tester, api: null, container: guided);
+    expect(drafts.store.values.single.body.toString(),
+        contains(startGuidingType));
+    // Drain the feedback SnackBar's timer before the tree goes away.
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('no server: a second add APPENDS to the open draft', (tester) async {

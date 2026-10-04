@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
@@ -308,6 +309,132 @@ namespace OpenAstroAra.Test {
             Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(device, connected.Object, profiles.Object, CancellationToken.None), Is.True);
             Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(Device("rc91.lan", "192.168.1.235", 6800, 0), connected.Object, profiles.Object, CancellationToken.None), Is.False);
             Assert.That(CameraConnectGuard.Detail(device, profiles.Object.GetPhd2Settings()), Does.Contain("Setup → Smart Focus"));
+        }
+    
+
+        [Test]
+        public void Production_decoder_reads_a_guider_fits_through_the_daemons_own_cfitsio() {
+            // The NINA-era reader wanted cfitsionative.dll, which the Pi package does not ship:
+            // "gave up after 5 failed frames" on every live-focus frame (2026-10-03). The decoder now
+            // goes through OpenAstroAra.Fits like polar alignment does for the same guider frames.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-guide-decode-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try {
+                var path = Path.Combine(dir, "guide.fits");
+                const int w = 64, h = 48;
+                var pixels = new ushort[w * h];
+                for (int i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(1000 + i % 251);
+                pixels[20 * w + 30] = 60000;
+                using (var fits = OpenAstroAra.Fits.FitsImage.Create(path, w, h, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort)) {
+                    fits.WriteImageData(pixels);
+                    fits.Complete();
+                }
+
+                var (decoded, width, height) = new CfitsioGuideFrameDecoder().Decode(path);
+
+                Assert.That((width, height), Is.EqualTo((w, h)));
+                Assert.That(decoded, Is.EqualTo(pixels));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    
+
+        [Test]
+        public void ExpectedInFocusHfr_follows_the_guide_optics_and_never_drops_below_the_detector_floor() {
+            // A 120 mm guide scope with 3.75 µm pixels: 6.45"/px, seeing-limited stars are sub-pixel,
+            // so the floor is the answer (0.76 measured on the rig, 2026-10-03).
+            var guideScope = GuideFocusService.ExpectedInFocusHfr(120, 3.75, 0);
+            Assert.That(guideScope, Is.Not.Null);
+            Assert.That(guideScope!.Value.PlateScaleArcsec, Is.EqualTo(6.45).Within(0.01));
+            Assert.That(guideScope.Value.ExpectedHfrPx, Is.EqualTo(GuideFocusService.DetectorHfrFloorPx));
+
+            // An OAG on a long focal length samples finely: the seeing disc spans pixels.
+            var oag = GuideFocusService.ExpectedInFocusHfr(2000, 3.75, 200);
+            Assert.That(oag!.Value.PlateScaleArcsec, Is.EqualTo(0.39).Within(0.01));
+            Assert.That(oag.Value.ExpectedHfrPx, Is.GreaterThan(3.5).And.LessThan(4.5), "≈ 3.0\" seeing ⊕ 0.57\" Airy, halved, over 0.39\"/px");
+
+            Assert.That(GuideFocusService.ExpectedInFocusHfr(0, 3.75, 0), Is.Null);
+            Assert.That(GuideFocusService.ExpectedInFocusHfr(120, 0, 0), Is.Null);
+            Assert.That(GuideFocusService.ExpectedInFocusHfr(double.NaN, 3.75, 0), Is.Null);
+        }
+
+        [Test]
+        public void Status_carries_the_expected_hfr_from_the_optics_and_null_without_them() {
+            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            using var withOptics = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
+                decoder: Mock.Of<IGuideFrameDecoder>(), optics: () => (120, 3.75, 0));
+            Assert.That(withOptics.GetStatus().ExpectedHfr, Is.EqualTo(GuideFocusService.DetectorHfrFloorPx));
+            Assert.That(withOptics.GetStatus().PlateScaleArcsec, Is.EqualTo(6.45).Within(0.01));
+
+            using var without = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+            Assert.That(without.GetStatus().ExpectedHfr, Is.Null);
+        }
+
+        [Test]
+        public void MedianHfrOfBrightest_ignores_faint_flickering_stars() {
+            static DetectedStar Star(double hfr, double peak) => new() { HFR = hfr, MaxBrightness = peak };
+            var brightestFirst = new List<DetectedStar> {
+                Star(1.0, 50000), Star(1.1, 40000), Star(0.9, 30000), Star(1.0, 20000), Star(1.2, 10000),
+                Star(3.0, 400), Star(0.2, 300), Star(5.0, 250), // noise-level blobs beyond the bright set
+            };
+            Assert.That(GuideFocusService.MedianHfrOfBrightest(brightestFirst, 5), Is.EqualTo(1.0));
+            Assert.That(GuideFocusService.MedianHfrOfBrightest(brightestFirst, 4), Is.EqualTo(1.0));
+            Assert.That(GuideFocusService.MedianHfrOfBrightest(new List<DetectedStar>(), 12), Is.EqualTo(0.0));
+        }
+    
+
+        [Test]
+        public async Task The_loop_stops_itself_once_the_median_hfr_has_held_under_the_target() {
+            // An OAG at 2000 mm with a 200 mm aperture: the target is ~3.9 px × 1.3, and the synthetic
+            // σ=1.8 stars read ~2 px, so the tenth measurable frame ends the run as "in_focus".
+            using var guider = NewGuider();
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
+                decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: StarFrame, optics: () => (2000, 3.75, 200));
+
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var stopped = await PollStatusAsync(svc, s => s.State == "stopped");
+
+            Assert.That(stopped.StopReason, Is.EqualTo(GuideFocusService.StopReasonInFocus));
+            Assert.That(stopped.Seq, Is.EqualTo(GuideFocusService.InFocusHoldFrames));
+            Assert.That(svc.IsActive, Is.False);
+
+            // A new run starts over: frame counter, trend and stop reason.
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var fresh = svc.GetStatus();
+            Assert.That(fresh.Seq, Is.LessThan(GuideFocusService.InFocusHoldFrames));
+            Assert.That(fresh.StopReason, Is.Null);
+            Assert.That(fresh.Recent.Count, Is.LessThan(GuideFocusService.InFocusHoldFrames));
+            await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task The_loop_keeps_running_while_the_median_sits_above_the_target_or_without_a_target() {
+            using var guider = NewGuider();
+            // Guide scope at 120 mm: target 0.7 × 1.3 = 0.91 px, the σ=1.8 stars read ~2 px → never in focus.
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
+                decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: StarFrame, optics: () => (120, 3.75, 0));
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            var running = await PollStatusAsync(svc, s => s.Seq >= GuideFocusService.InFocusHoldFrames + 2);
+            Assert.That(running.State, Is.EqualTo("running"));
+            Assert.That(running.StopReason, Is.Null);
+            await svc.StopAsync();
+            Assert.That(svc.GetStatus().StopReason, Is.Null, "a user stop carries no reason");
+
+            Assert.That(svc.InFocusHeld(null), Is.False);
+        }
+
+        [Test]
+        public void InFocusHeld_uses_the_median_so_single_bad_frames_do_not_reset_it() {
+            using var guider = NewGuider();
+            using var svc = NewLoopService(guider, StarFrame);
+            // 10 frames at 0.8 with three seeing spikes at 1.6: median 0.8 ≤ 0.91.
+            var hfrs = new[] { 0.8, 1.6, 0.8, 0.8, 1.6, 0.8, 0.8, 0.8, 1.6, 0.8 };
+            for (int i = 0; i < hfrs.Length; i++) {
+                svc.Record(Sample(i + 1, hfrs[i], 10), null);
+                Assert.That(svc.InFocusHeld(0.7), Is.EqualTo(i == hfrs.Length - 1), $"after frame {i + 1}");
+            }
         }
     }
 }

@@ -104,7 +104,16 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// silently falls back to the HFR key. The V-curve fit itself is ALWAYS on HFR — only the inverse
         /// table's axis changes.
         /// </summary>
-        public static FocusInverseMap? Build(IReadOnlyList<FocusCalibrationSample> samples, TelescopeType type) {
+        public static FocusInverseMap? Build(IReadOnlyList<FocusCalibrationSample> samples, TelescopeType type) =>
+            Build(samples, type, measuredInFocusHfr: null);
+
+        /// <summary>
+        /// As <see cref="Build(IReadOnlyList{FocusCalibrationSample}, TelescopeType)"/>, with the in-focus HFR
+        /// the calibrating sweep MEASURED at best focus. When given (and positive) it is the map's
+        /// <see cref="InFocusHfr"/> and the fold table's in-focus anchor instead of the re-fitted minimum —
+        /// a lumpy sample set re-fits to a minimum far above what the sweep actually reached.
+        /// </summary>
+        public static FocusInverseMap? Build(IReadOnlyList<FocusCalibrationSample> samples, TelescopeType type, double? measuredInFocusHfr) {
             ArgumentNullException.ThrowIfNull(samples);
 
             var usable = new List<FocusCalibrationSample>(samples.Count);
@@ -124,6 +133,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             }
 
             double best = fit.BestPosition;
+            double inFocusHfr = measuredInFocusHfr is { } m && double.IsFinite(m) && m > 0 ? m : fit.PredictedHfr;
             double maxHfr = 0;
             foreach (var s in usable) {
                 maxHfr = Math.Max(maxHfr, s.Features.MedianHFR);
@@ -132,14 +142,14 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             if (FocusFeatureProfile.PrefersDonutMagnitudeKey(type)) {
                 var donutTable = FoldTable(usable, best, static f => f.MedianDonutOuterDiameter, anchorKeyValue: 0.0);
                 if (IsConcordant(donutTable)) {
-                    return new FocusInverseMap(best, fit.PredictedHfr, maxHfr, FocusMagnitudeKey.DonutOuterDiameter, donutTable);
+                    return new FocusInverseMap(best, inFocusHfr, maxHfr, FocusMagnitudeKey.DonutOuterDiameter, donutTable);
                 }
             }
 
             // Fold both arms onto one feature→magnitude curve: |offset − best| is the move that nulls the
             // defocus. The vertex anchors the in-focus end at (predicted HFR, magnitude 0).
-            var hfrTable = FoldTable(usable, best, static f => f.MedianHFR, anchorKeyValue: fit.PredictedHfr);
-            return new FocusInverseMap(best, fit.PredictedHfr, maxHfr, FocusMagnitudeKey.MedianHfr, hfrTable);
+            var hfrTable = FoldTable(usable, best, static f => f.MedianHFR, anchorKeyValue: inFocusHfr);
+            return new FocusInverseMap(best, inFocusHfr, maxHfr, FocusMagnitudeKey.MedianHfr, hfrTable);
         }
 
         private static (double KeyValue, double Magnitude)[] FoldTable(

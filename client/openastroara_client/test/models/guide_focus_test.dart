@@ -48,4 +48,13 @@ void main() {
     expect(status.error, contains('gave up'));
     expect(status.consecutiveFailures, 5);
   });
+
+  test('status carries the expected in-focus HFR and plate scale when the daemon sends them', () {
+    final s = GuideFocusStatus.fromJson({'active': true, 'state': 'running', 'expected_hfr': 0.7, 'plate_scale_arcsec': 6.45});
+    expect(s.expectedHfr, 0.7);
+    expect(s.plateScaleArcsec, 6.45);
+    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'idle'}).expectedHfr, isNull);
+    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'stopped', 'stop_reason': 'in_focus'}).stopReason, 'in_focus');
+    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'stopped'}).stopReason, isNull);
+  });
 }

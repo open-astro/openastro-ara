@@ -16,6 +16,7 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -43,6 +44,29 @@ namespace OpenAstroAra.Sequencer.Utility {
             } else {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// The target an item belongs to: the nearest DSO container's target name, else the nearest
+        /// ancestor container that carries an altitude/horizon condition — which is how client-built
+        /// target blocks are marked (a plain SequentialContainer named after the target, with an
+        /// AboveHorizonCondition). Null outside any target. Shared by TakeExposure (so frames are
+        /// filed under the target, not the imaging loop's "Imaging") and the run's live status.
+        /// </summary>
+        public static string? ResolveTargetName(ISequenceItem? item) {
+            for (var c = item?.Parent; c != null; c = c.Parent) {
+                if (c is IDeepSkyObjectContainer dso && !string.IsNullOrWhiteSpace(dso.Target?.TargetName)) {
+                    return dso.Target.TargetName;
+                }
+                if (c is IConditionable conditionable && !string.IsNullOrWhiteSpace(c.Name)) {
+                    foreach (var condition in conditionable.GetConditionsSnapshot()) {
+                        if (condition is LoopForAltitudeBase) {
+                            return c.Name;
+                        }
+                    }
+                }
+            }
+            return null;
         }
 
         public static bool IsInRootContainer(ISequenceContainer? parent) {

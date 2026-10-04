@@ -52,6 +52,9 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
   required double raDeg,
   required double decDeg,
   double? remainingDarkHours,
+  // Whether the rig has a guider at all. Without one the guide toggle is not
+  // offered (the run is cooked from the rig — no guider, no guiding).
+  bool guiderAvailable = true,
 }) =>
     showDialog<TargetPlanChoice>(
       context: context,
@@ -60,6 +63,7 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
         raDeg: raDeg,
         decDeg: decDeg,
         remainingDarkHours: remainingDarkHours,
+        guiderAvailable: guiderAvailable,
       ),
     );
 
@@ -93,12 +97,14 @@ class _TargetPlanDialog extends ConsumerStatefulWidget {
     required this.raDeg,
     required this.decDeg,
     required this.remainingDarkHours,
+    required this.guiderAvailable,
   });
 
   final String targetName;
   final double raDeg;
   final double decDeg;
   final double? remainingDarkHours;
+  final bool guiderAvailable;
 
   @override
   ConsumerState<_TargetPlanDialog> createState() => _TargetPlanDialogState();
@@ -113,7 +119,9 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
   @override
   void initState() {
     super.initState();
-    _guide = ref.read(phd2SettingsProvider).ditherEnabled;
+    // Guide whenever the rig has a guider; dithering is the guider settings'
+    // own call (see _ditherCadence), not the reason to guide.
+    _guide = widget.guiderAvailable;
     // No labelled wheel slots = no filter wheel on this rig: the plan's
     // filter changes become Wait-for-User pauses (screw-in swap + Resume).
     final wheel = ref.read(filterWheelLabelsProvider);
@@ -276,6 +284,16 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                   onTap: () => setState(() => _selected = i),
                 ),
               const SizedBox(height: 4),
+              if (!widget.guiderAvailable)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    'No guider on this rig — the run has no guiding steps.',
+                    style: TextStyle(
+                        color: AraColors.textSecondary, fontSize: 11.5),
+                  ),
+                )
+              else
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,

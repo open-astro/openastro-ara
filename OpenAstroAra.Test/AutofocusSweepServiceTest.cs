@@ -1012,5 +1012,102 @@ namespace OpenAstroAra.Test {
                 TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
                 Messages.Add(formatter(state, exception));
         }
+    
+
+        [Test]
+        public async Task Noise_flooded_probes_are_dropped_and_an_all_noise_sweep_fails() {
+            // A frame the detector flags as noise (thousands of speckle blobs, HFR ~2) must never
+            // become a V-curve point — its flat HFR would fit as "in focus" wherever the focuser is.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var r = Result(2.0, 21000);
+                    r.NoiseFlooded = true;
+                    return r;
+                },
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - StartPosition) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(Current(), Is.EqualTo(StartPosition), "restored after the failed sweep");
+        }
+
+        [Test]
+        public async Task Noise_flooded_edge_probes_are_skipped_like_unmeasurable_ones() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - StartPosition) / 100.0;
+                    if (Math.Abs(Current() - StartPosition) >= 400) {
+                        var noise = Result(2.0, 21000);
+                        noise.NoiseFlooded = true;
+                        return noise;
+                    }
+                    return Result(1.5 + 0.2 * delta * delta, 42);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(StartPosition).Within(30));
+        }
+    
+
+        [Test]
+        public void DefaultMetric_flags_a_frame_whose_blobs_are_noise_not_stars() {
+            // The 2026-10-03 failure: a camera at its power-on gain read one real star and ~21,000
+            // speckle blobs. 5-pixel crosses every 6 px give ~1,100 blobs on 40,000 px — far past the
+            // one-per-400-px plausibility line — while the median/MAD background still sits at 1000.
+            int w = 200, h = 200;
+            var pixels = Enumerable.Repeat((ushort)1000, w * h).ToArray();
+            for (int cy = 3; cy < h - 3; cy += 6) {
+                for (int cx = 3; cx < w - 3; cx += 6) {
+                    foreach (var (dx, dy) in new[] { (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1) }) {
+                        pixels[(cy + dy) * w + cx + dx] = 1400;
+                    }
+                }
+            }
+
+            var result = AutofocusSweepService.DefaultMetric(new AnalysisFrame(pixels, w, h, DateTimeOffset.UnixEpoch), CancellationToken.None);
+
+            Assert.That(result.DetectedStars, Is.GreaterThan(w * h / AutofocusSweepService.NoiseFloodDivisor));
+            Assert.That(result.NoiseFlooded, Is.True);
+        }
+
+        [Test]
+        public void DefaultMetric_does_not_flag_a_real_star_field() {
+            var result = AutofocusSweepService.DefaultMetric(StarFrame(200, 2.0, 40), CancellationToken.None);
+            Assert.That(result.DetectedStars, Is.GreaterThan(0));
+            Assert.That(result.NoiseFlooded, Is.False);
+        }
+    
+
+        private static readonly double[] ThinWingSurvivors = { 29663, 29513, 29463, 29413, 29363, 29313, 29213 };
+
+        [Test]
+        public void TrimThinWings_drops_probes_that_saw_almost_no_stars_but_keeps_the_trustworthy_minimum() {
+            // The 2026-10-03 sweep: 11- and 19-star probes at the far ends against 277 at focus.
+            var points = new List<FocusPoint> {
+                new(29763, 5.1, 11), new(29713, 3.8, 19), new(29663, 2.9, 44), new(29513, 2.6, 83),
+                new(29463, 1.4, 204), new(29413, 1.0, 277), new(29363, 1.3, 227), new(29313, 2.6, 101),
+                new(29213, 4.0, 59), new(29113, 4.9, 20),
+            };
+            var kept = AutofocusSweepService.TrimThinWings(points, keepAtLeast: 5);
+            Assert.That(kept.Select(p => p.Position), Is.EquivalentTo(ThinWingSurvivors),
+                "under 10 % of 277 stars (27.7) goes: 11, 19 and 20");
+
+            var floor = AutofocusSweepService.TrimThinWings(points, keepAtLeast: 9);
+            Assert.That(floor, Has.Count.EqualTo(9), "never below the trustworthy minimum: only the thinnest probe goes");
+            Assert.That(floor.Any(p => p.StarCount == 11), Is.False);
+
+            Assert.That(AutofocusSweepService.TrimThinWings(new List<FocusPoint>(), 5), Is.Empty);
+            var even = points.Select(p => p with { StarCount = 50 }).ToList();
+            Assert.That(AutofocusSweepService.TrimThinWings(even, 5), Has.Count.EqualTo(even.Count), "nothing thin, nothing dropped");
+        }
     }
 }

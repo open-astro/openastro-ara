@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../util/input_coordinates.dart';
 import 'condition_catalog.dart';
 import 'instruction_catalog.dart';
+import 'rig_capabilities.dart';
 import 'nina_dom.dart';
 import 'slew_target_body.dart';
 import 'trigger_catalog.dart';
@@ -69,6 +70,10 @@ Map<String, dynamic> buildImagingRunBody({
   bool startGuiding = false,
   int? ditherEveryNExposures,
   bool manualFilterSwap = false,
+  // What the rig has — every device-bound step below is gated on it (see
+  // [RigCapabilities]). Callers without a rig to read keep the old
+  // "assume everything" shape.
+  RigCapabilities rig = RigCapabilities.everything,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -87,6 +92,7 @@ Map<String, dynamic> buildImagingRunBody({
     startGuiding: startGuiding,
     ditherEveryNExposures: ditherEveryNExposures,
     manualFilterSwap: manualFilterSwap,
+    rig: rig,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -153,7 +159,20 @@ Map<String, dynamic> buildTargetBlock({
   bool startGuiding = false,
   int? ditherEveryNExposures,
   bool manualFilterSwap = false,
+  RigCapabilities rig = RigCapabilities.everything,
 }) {
+  // Cook the block from the rig: a device the rig lacks gets no step and no
+  // trigger, whatever the caller asked for. Without a focuser there is
+  // nothing to autofocus; without a guider nothing to guide or dither with;
+  // without a filter wheel a filter change is a hand swap (Wait for User)
+  // when the user chose a multi-filter plan, and nothing at all for a single
+  // filter (it is already in the train).
+  final hasFocuser = rig.focuser;
+  final guide = startGuiding && rig.guider;
+  final dither = guide ? ditherEveryNExposures : null;
+  final afAtStart = autofocusAtStart && hasFocuser;
+  final afEvery = hasFocuser ? autofocusEveryNExposures : null;
+  final handSwap = manualFilterSwap || !rig.filterWheel;
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
       exposureSeconds,
@@ -185,7 +204,7 @@ Map<String, dynamic> buildTargetBlock({
   // on an OSC or manual rig), a Wait for User that parks the run in the
   // awaiting-user state until the human has swapped the glass and pressed
   // Resume (S58.12-b).
-  Map<String, dynamic> switchTo(String filter) => manualFilterSwap
+  Map<String, dynamic> switchTo(String filter) => handSwap
       ? (_item(waitForUserType)
           ..['Text'] =
               'Switch to the ${filter.trim()} filter, then press Resume.')
@@ -223,7 +242,7 @@ Map<String, dynamic> buildTargetBlock({
     imaging = withConditions(imaging, [loop]);
 
     final triggers = <Map<String, dynamic>>[];
-    if (autofocusEveryNExposures != null) {
+    if (afEvery != null) {
       final afTriggerDef = triggerForType(autofocusAfterExposuresType);
       if (afTriggerDef == null) {
         throw StateError(
@@ -233,22 +252,22 @@ Map<String, dynamic> buildTargetBlock({
       // Keep the TIME cadence constant across differing sub lengths: the
       // caller derived its exposure count at [exposureSeconds].
       final scaled = expSeconds == exposureSeconds
-          ? autofocusEveryNExposures
+          ? afEvery
           : math.max(
               1,
-              (autofocusEveryNExposures * exposureSeconds / expSeconds)
+              (afEvery * exposureSeconds / expSeconds)
                   .round(),
             );
       triggers.add(afTriggerDef.build()..['AfterExposures'] = scaled);
     }
-    if (ditherEveryNExposures != null) {
+    if (dither != null) {
       final ditherDef = triggerForType(ditherAfterExposuresType);
       if (ditherDef == null) {
         throw StateError(
           'DitherAfterExposures missing from the trigger catalog',
         );
       }
-      triggers.add(ditherDef.build()..['AfterExposures'] = ditherEveryNExposures);
+      triggers.add(ditherDef.build()..['AfterExposures'] = dither);
     }
     if (triggers.isNotEmpty) imaging = withTriggers(imaging, triggers);
     return imaging;
@@ -266,16 +285,30 @@ Map<String, dynamic> buildTargetBlock({
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg));
 
   final children = <Map<String, dynamic>>[
+    // A framing angle on a rig WITHOUT a rotator: the daemon becomes the
+    // protractor. Slew to the target FIRST so the readout solves the target's
+    // field (a parked mount looks at nothing solvable; on an alt-az mount the
+    // angle depends on where you point), then Rotate camera by hand
+    // plate-solves in a loop while the run waits for the user to turn the
+    // camera, then Center and Rotate re-centres the field the turn shifted.
+    if (positionAngleDeg != null && !rig.rotator) ...[
+      _item(slewScopeToRaDecType)
+        ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg),
+      _item(rotateCameraByHandType)
+        ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360,
+    ],
     goToTarget,
     // Autofocus runs through the plan's FIRST filter (or the single chosen
     // one) — focusing through a random previously-loaded filter would hand
     // the whole session a soft start.
     if (plan != null)
       switchTo(plan.first.filterName)
-    else if (filterName != null && filterName.trim().isNotEmpty)
+    else if (filterName != null &&
+        filterName.trim().isNotEmpty &&
+        rig.filterWheel)
       switchTo(filterName),
-    if (autofocusAtStart) _item(runAutofocusType),
-    if (startGuiding) _item(startGuidingType),
+    if (afAtStart) _item(runAutofocusType),
+    if (guide) _item(startGuidingType),
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) switchTo(plan[i].filterName),

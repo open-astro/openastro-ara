@@ -183,6 +183,13 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                       ),
                     ),
                   ),
+                  // Frames landed so far — the number the user actually watches — then the
+                  // instruction count (a loop's exposure stays one instruction for all its frames).
+                  if (run.framesCaptured > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AraSpace.s12),
+                      child: Text('${run.framesCaptured} frames', style: AraText.numeric),
+                    ),
                   if (total > 0)
                     Text('$completed/$total', style: AraText.numeric),
                 ],

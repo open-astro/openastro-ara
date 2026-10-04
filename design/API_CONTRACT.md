@@ -309,6 +309,103 @@ The result lives on tmpfs, so after a **reboot** `GET /{id}` is 404: clients tre
 
 ---
 
+### 2026-10-03 — Rotate camera by hand: the rotation readout, the run's target name and frame counter
+
+**Endpoint(s) or area:** `POST /api/v1/rotation-assist/start`, `POST …/stop`, `GET …/state`, `GET …/frame`; the sequencer instruction `OpenAstroAra.Sequencer.SequenceItem.Rotator.RotateCameraByHand` (`PositionAngle`); `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `frames_captured`, and `current_target_name` is now populated; frames' `target_name` for client-built runs.
+
+**Decision:** a rig without a rotator cannot act on a framing angle, so the run builder emits `Rotate camera by hand` (after the blind slew, before `Center and Rotate`) when a position angle is set and the rig has no rotator. The instruction starts the daemon's rotation READOUT and parks the run in `paused_awaiting_user` INSIDE the step (it awaits the pause gate itself), so Resume — or an abort — stops the readout before the next instruction takes the camera; with a rotator connected it is a no-op, and on a rig that cannot solve (no solver binary, no optics in the profile) it logs a warning and skips rather than parking the run on a readout that can only fail. The readout: `POST /rotation-assist/start {position_angle_deg}` (202; 400 non-finite; 409 already running / rig cannot solve) loops capture-through-the-analysis-seam → plate solve with the main optics → `RotationAssistStatusDto { active, state: idle|running|stopped|error, target_position_angle_deg, tolerance_deg (the profile's rotation tolerance), seq, started_utc, latest, recent[≤120], within_tolerance, error, consecutive_failures, has_frame, frame_seq }` where a sample is `{seq, solved_utc, solved_position_angle_deg, delta_deg, ra_deg, dec_deg, pixel_scale_arcsec, flipped, frame_width, frame_height}` — `delta_deg` is the signed shortest turn to the target folded into (−90°, +90°] because a frame rotated by 180° is the same framing. `GET …/frame` is the latest solved frame rendered (JPEG, auto-stretched with star rings, `X-Frame-Seq`; 204 before one exists). The loop ends in `error` after 5 consecutive failed solves; `POST …/stop` is 204 once the in-flight solve has drained. No WebSocket events: the client polls like the guide-focus loop. The client turns the delta history into advice relative to the user's last turn (the daemon cannot know which way "clockwise" turns the sky on a given optical train), draws north and the planned framing over the frame (`flipped` reverses the on-screen sense), and pushes each solve to the planetarium as a second "scope" box beside the planned framing.
+
+The run state carries `frames_captured` (int, default 0): the count of frames filed under the run's §40 session, polled with the live status, so the band can show frames landing while a loop's single `TakeExposure` stays one instruction. `current_target_name` is derived from the live tree (nearest DSO target, else the client-built target block — the container carrying an altitude/horizon condition), and `TakeExposure` files its frames under that same name instead of the imaging loop's container name. `sessions.frame_count` increments per insert.
+
+**Reasoning:** the by-hand turn needs a protractor, not a motor: the plate solver measures, the user turns, and the readout is a loop so the picture follows the hand. Sitting inside the pause is what guarantees the camera is free when `Center and Rotate` runs. Frames under the target and a live frame count are the two facts whose absence made a working run look dead on 2026-10-02.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1rotation-assist~1start` (…`~1stop`, `~1state`, `~1frame`); `Contracts/RotationAssistDtos.cs`, `Services/RotationAssistService.cs`, `Services/RotationFrameSolver.cs`, `OpenAstroAra.Sequencer/SequenceItem/Rotator/RotateCameraByHand.cs`, `OpenAstroAra.Sequencer/Utility/ItemUtility.ResolveTargetName`, `Services/SequencerService.LiveStatus.cs`; client `rotation_overlay.dart`, planetarium `scopeBox` command.
+
+**Related:** §38 rotation fidelity, §45 capture-fetch, §59 analysis seam, §64 Live View; tests `RotateCameraByHandTest`, `RotationAssistServiceTest`, `SequencerLiveStatusTest`.
+
+---
+
+### 2026-10-03 — Smart Focus judges "in focus" against the HFR the sweep measured
+
+**Where:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`.
+
+**Change:** `in_focus_hfr` (nullable) — the HFR the calibrating sweep measured on its confirmation
+frame at best focus (the fit's predicted minimum when no confirmation frame was usable). The inverse
+map's in-focus HFR and its fold-table anchor use it when present; Smart Focus's "already in focus"
+target is that value × 1.10 (was the re-fitted minimum × 1.05). A calibration written before the field
+existed carries null and behaves as before. A Smart run whose confirmation frame reads lower than the
+stored value lowers it (the sweep's own confirmation can sit a few steps off the true minimum).
+
+**Same day, the drawn V:** a bracket-confirmed Smart run now fits the V through its own three to five
+shots with the sweep's fitter (`fit.algorithm` parabolic/hyperbolic, real `r_squared`), so the curve
+passes through the dots; the calibration model curve (`algorithm: "calibration"`) only stands in when
+those points will not fit. The classic sweep fits its V on the probes that saw at least 10 % of the
+best-populated probe's stars (`TrimThinWings`): far-wing probes on doughnut images stop tracking defocus
+and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` (they were measured).
+
+**Why:** the map re-fitted its minimum from the stored samples. A lumpy 15-point sweep re-fitted to
+1.62 px while the same sweep's confirmation frame measured 0.96, so every Smart shot under 1.70 px
+"was in focus" (2026-10-03) and the drawn calibration curve bottomed well above the measured points.
+
+### 2026-10-03 — Smart Focus: a reads-as-focused shot is bracketed before it counts
+
+**Where:** the `autofocus.*` WebSocket events (`fallback_classic` reasons) and the run record's `probes`.
+
+**Change:** when Smart Focus's first shot reads at or under the calibrated in-focus HFR it no longer
+completes on that one shot. It takes one shot either side at the calibration's half-width (where the
+HFR should have doubled; half the classic span when no half-width is stored), returns to the centre,
+and accepts the centre as the minimum only when both sides read ≥ 1.3× the centre (the run then goes
+on to the vertex and confirmation shots under "Five shots" below). A side under 0.97× the centre, no
+clear rise, or a bracket shot with too few stars falls back to the classic sweep with the new
+`fallback_classic` reason `bracket_failed`. The run record carries the bracket's three `smart` probes.
+
+The bracket runs backlash-consistently: the − side first (moving down, the direction every calibration
+sample was approached from), then the + side, then the centre re-entered from above through the sweep's
+one-step overshoot, so the focuser rests on the same side of its backlash as the calibration's best. A
+confirmation frame is then taken at the centre (`final_hfr` / `final_stars` / the picture are measured
+there, as for the sweep). The run record's `fit` is the V fitted through the run's own shots (see
+"Same day, the drawn V" above). Only when those points will not fit does it carry the calibration's
+model curve instead — `algorithm: "calibration"`, `r_squared: 1`, `best_position` = where the run ended,
+`curve` = h₀·√(1 + 3(d/w)²) over ±1.3 half-widths. The client shows no R² for that algorithm.
+
+**Five shots (same day):** after the bracket, the parabola through the three shots gives a vertex. When
+it sits off the centre (and inside the bracket; outside is "no V" → `bracket_failed`) shot 4 is taken
+there, landed from above, and the position is kept only when that frame reads < 0.97× the centre shot;
+otherwise the focuser returns to the centre from above. Shot 5 is the confirmation frame at the final
+position. `total_steps` for a Smart run is now 5 (`SmartMaxShots`); the predict path still completes
+in 2–3. The run record's `smart` probes carry up to four points and `fit.best_position` is the final
+position.
+
+**Why:** one shot against a stored number is a claim, not a check — a calibration from a lumpy sweep,
+or a lucky frame, says "in focus" just as readily (2026-10-03: four one-shot runs at 0.957–0.985 while
+the sweep's own curve was far from a clean V).
+
+### 2026-10-03 — Guide-camera live focus: the expected in-focus HFR
+
+**Where:** `GET /api/v1/equipment/guider/focus` (`GuideFocusStatusDto`).
+
+**Change:** two optional fields, `expected_hfr` and `plate_scale_arcsec` (both nullable, absent-as-null
+for an older daemon). `expected_hfr` is the HFR in pixels an in-focus star should read on the guide
+camera, from the profile's guide optics: a guide scope uses the §63.19 guide focal length and guide pixel
+size; an off-axis guider uses the main telescope's focal length and aperture with the guide pixel size.
+Seeing (3" assumed) and the aperture's Airy FWHM add in quadrature, HFR ≈ FWHM/2 at the plate scale,
+floored at 0.7 px (what the §59 detector reads for a sub-pixel star). Null when the profile has no guide
+focal length or pixel size.
+
+**Why:** the live-focus advice compared one frame with the frame four earlier at 3 %. On a guide scope
+at 6.4"/px the HFR sits at the detector floor (0.76 px) and jitters ±0.05 px, so a focuser nobody was
+touching was told "Keep going" and "Go back" in turn (2026-10-03). The client now says *In focus* at or
+under `expected_hfr` × 1.3 before it reads any trend, and the trend compares 3-frame medians. The sample
+HFR itself is now the median over the 12 brightest stars rather than the mean over every blob, so faint
+stars flickering across the threshold no longer move the number.
+
+**Self-stop (same day):** `stop_reason` (nullable string) on the same DTO. The daemon ends the loop
+itself with `"in_focus"` once the median HFR over the last 10 measurable frames (≥ 2 stars) is at or
+under `expected_hfr` × 1.3 — a median rather than a streak, since seeing throws single frames well above
+the line (an OAG at 3000 mm would never hold ten clean frames in a row). A user stop leaves it null. A
+start now resets the frame counter (`seq`), the trend (`recent`), the picture and the stop reason, so a
+refocus run never carries frames from before it; the client clears its chart from the same payload.
+
 ### 2026-10-03 — Setup → Smart Focus: the autofocus run record and the guide-camera focus loop
 
 **Endpoint(s) or area:** `GET /api/v1/autofocus/state`, `GET /api/v1/autofocus/frame`, `POST /api/v1/autofocus/cancel`; `POST /api/v1/equipment/guider/focus/start`, `POST …/focus/stop`, `GET …/focus`, `GET …/focus/frame`; `POST /api/v1/equipment/camera/connect` gains a 409; WebSocket `autofocus.step_complete`, `autofocus.curve_fit`, `autofocus.completed`, `autofocus.failed`.

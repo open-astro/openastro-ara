@@ -195,5 +195,21 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(FocusInverseMap.Build(blind), Is.Null);
         }
+    
+
+        [Test]
+        public void A_measured_in_focus_hfr_overrides_the_refitted_minimum() {
+            // 2026-10-03: a lumpy 15-point sweep re-fitted to a 1.62 px minimum while its confirmation
+            // frame had measured 0.96 — Smart Focus then accepted 1.3 px as "in focus".
+            var refitted = FocusInverseMap.Build(Sweep(4600, 100, 9))!;
+            var measured = FocusInverseMap.Build(Sweep(4600, 100, 9), TelescopeType.Other, measuredInFocusHfr: 0.96)!;
+            Assert.That(measured.InFocusHfr, Is.EqualTo(0.96));
+            Assert.That(measured.InFocusHfr, Is.LessThan(refitted.InFocusHfr));
+            Assert.That(measured.BestFocusOffset, Is.EqualTo(refitted.BestFocusOffset), "the vertex is still the fit's");
+            Assert.That(FocusInverseMap.Build(Sweep(4600, 100, 9), TelescopeType.Other, measuredInFocusHfr: 0)!.InFocusHfr,
+                Is.EqualTo(refitted.InFocusHfr), "a zero measurement means none: the fit's minimum stands");
+            Assert.That(FocusInverseMap.Build(Sweep(4600, 100, 9), TelescopeType.Other, measuredInFocusHfr: double.NaN)!.InFocusHfr,
+                Is.EqualTo(refitted.InFocusHfr));
+        }
     }
 }

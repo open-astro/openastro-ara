@@ -88,7 +88,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                      recovery_needed, last_completed_instruction_id,
                      current_target_id, frame_count)
                 VALUES
-                    ($id, NULL, NULL, $started, $ended, 0, NULL, NULL, 3);
+                    ($id, NULL, NULL, $started, $ended, 0, NULL, NULL, 0); -- InsertFrameAsync bumps it to 3
                 """;
             sessionCmd.Parameters.AddWithValue("$id", SampleSessionId.ToString());
             sessionCmd.Parameters.AddWithValue("$started",
@@ -399,6 +399,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             JsonSerializer.Serialize(f.Tags, AraJsonSerializerContext.Default.IReadOnlyListString));
         cmd.Parameters.AddWithValue("$focuser_position", DbValue(f.FocuserPosition));
         await cmd.ExecuteNonQueryAsync(ct);
+        // The session's running count (it stayed 0 for every session until now).
+        await using var bump = conn.CreateCommand();
+        bump.CommandText = "UPDATE sessions SET frame_count = frame_count + 1 WHERE id = $session_id;";
+        bump.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
+        await bump.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CountSessionFramesAsync(Guid sessionId, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM frames WHERE session_id = $session_id;";
+        cmd.Parameters.AddWithValue("$session_id", sessionId.ToString());
+        var n = await cmd.ExecuteScalarAsync(ct);
+        return n is long l ? (int)l : 0;
     }
 
     public async Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct) {
@@ -931,9 +946,20 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 idParam.Value = frameId.ToString();
                 await cmd.ExecuteNonQueryAsync(ct);
             }
+            await RecountSessionFramesAsync(conn, tx, ct);
             await tx.CommitAsync(ct);
         }
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
+    }
+
+    /// <summary>A move or delete changes which sessions own which frames; the running
+    /// <c>sessions.frame_count</c> that <see cref="InsertFrameAsync"/> bumps is recomputed from the
+    /// rows so it cannot drift (the same <c>COUNT(*)</c> the capture rescan writes).</summary>
+    private static async Task RecountSessionFramesAsync(SqliteConnection conn, SqliteTransaction tx, CancellationToken ct) {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE sessions SET frame_count = (SELECT COUNT(*) FROM frames WHERE frames.session_id = sessions.id);";
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
@@ -1017,6 +1043,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     idParam.Value = frameId.ToString();
                     await cmd.ExecuteNonQueryAsync(ct);
                 }
+                await RecountSessionFramesAsync(conn, tx, ct);
                 await tx.CommitAsync(ct);
             }
 

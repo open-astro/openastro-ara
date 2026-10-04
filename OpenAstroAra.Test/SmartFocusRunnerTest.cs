@@ -115,7 +115,8 @@ namespace OpenAstroAra.Test {
                 bool restoreOnFailure = true,
                 Func<int, int>? skyStars = null,
                 string telescopeType = "other",
-                Func<int, double>? skySkew = null) {
+                Func<int, double>? skySkew = null,
+                Func<int, bool>? noiseFlooded = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -162,6 +163,7 @@ namespace OpenAstroAra.Test {
                     var skew = skySkew?.Invoke(position) ?? 0.0;
                     return new StarDetectionResult {
                         AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
+                        NoiseFlooded = noiseFlooded?.Invoke(captures) ?? false,
                     };
                 });
             return (svc, store, moves, events, () => captures, posted, tracker);
@@ -247,6 +249,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_noise_flooded_smart_shot_falls_back_to_classic_despite_its_blob_count() {
+            // 21,000 "stars" at HFR 2 on a frame with one real star (camera at power-on gain,
+            // 2026-10-03): the count passes the 30-star gate, the flag must not.
+            var rig = Build(calibration: Calibration(), starCount: 21000, realBest: StartPosition - 150,
+                noiseFlooded: capture => capture == 1);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "the sky cleared for the classic sweep");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one refused Smart shot, then the sweep and its confirmation");
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
+            Assert.That(rig.Tracker.Snapshot().Probes.Any(p => p.Phase == "smart"), Is.False);
+        }
+
+        [Test]
         public async Task Too_few_stars_on_the_smart_shot_falls_back_to_classic() {
             var rig = Build(calibration: Calibration(), starCount: 12, realBest: StartPosition - 150);
             using var _ = rig.Service;
@@ -284,16 +304,141 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task An_already_focused_rig_finishes_in_one_shot_without_moving() {
+        public async Task An_already_focused_rig_is_confirmed_by_a_bracket_and_finishes_in_three_shots() {
+            // One shot against the stored in-focus HFR is a claim, not a check (2026-10-03: "it only took
+            // one shot and was 0.97"). The bracket shots either side must both read clearly worse.
             var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition));
             using var _ = rig.Service;
 
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1));
-            Assert.That(rig.Moves, Is.Empty, "already within tolerance — moving would only add backlash noise");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "the in-focus shot, one bracket shot each side (a symmetric V puts the vertex at the centre, so no vertex shot), one confirmation at the centre");
+            // No half-width in this calibration → half the classic span: 100 × 4 / 2. The − side first
+            // (moving down like every calibration sample), the + side, then the centre from above
+            // through the sweep's overshoot (one step size) so backlash matches the calibration.
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 200, StartPosition + 100, StartPosition }));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, StartPosition);
+            var record = rig.Tracker.Snapshot();
+            Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(3));
+            Assert.That(record.Fit, Is.Not.Null, "the V is fitted through this run's own shots");
+            Assert.That(record.Fit!.Algorithm, Is.Not.EqualTo("calibration"), "a real fit, not the calibration's model curve");
+            Assert.That(record.Fit.BestPosition, Is.EqualTo(StartPosition).Within(1));
+            Assert.That(record.Fit.PredictedHfr, Is.EqualTo(1.5).Within(0.05), "the curve bottoms on the measured dots");
+        }
+
+        [Test]
+        public async Task A_bracket_shot_that_reads_better_than_the_centre_falls_back_to_the_classic_sweep() {
+            // Shot 1 passes the stored target, but the + side reads sharper: the stored number lied, so
+            // the sweep runs and finds the real focus 200 steps up.
+            var rig = Build(realBest: StartPosition + 200, calibration: Calibration(bestPosition: StartPosition),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.5,   // ≤ target at the start position
+                    2 => 2.6,   // − bracket (taken first)
+                    3 => 1.2,   // + bracket: better than the centre
+                    _ => VCurveHfr(position, StartPosition + 200),
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("bracket_failed"));
+            Assert.That(rig.CaptureCount(), Is.GreaterThan(3), "the classic sweep ran after the bracket");
+            Assert.That(rig.Moves[^1], Is.EqualTo(StartPosition + 200).Within(30), "the sweep found the real focus");
+        }
+
+        [Test]
+        public async Task A_lopsided_bracket_takes_a_vertex_shot_and_keeps_it_when_sharper() {
+            // − side 2.6, centre 1.5, + side 2.0 at ±200: the parabola's vertex is +38 steps. Shot 4 there
+            // reads 1.3 (< 1.5 × 0.97) so the run ends at 10,188 after a confirmation frame — five shots.
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.5, 2 => 2.6, 3 => 2.0, 4 => 1.3, _ => 1.3,
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(5));
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 200, StartPosition + 38 + 100, StartPosition + 38 }),
+                "the vertex is landed from above like every other position");
+            var record = rig.Tracker.Snapshot();
+            Assert.That(record.FinalPosition, Is.EqualTo(StartPosition + 38));
+            Assert.That(record.FinalHfr, Is.EqualTo(1.3).Within(0.01), "the confirmation frame's reading");
+            Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(4));
+            Assert.That(record.Fit!.BestPosition, Is.EqualTo(StartPosition + 38).Within(60), "the drawn V is fitted through the shots and bottoms near where the run ended");
+            Assert.That(rig.Store.GetFocusCalibration()!.InFocusHfr, Is.EqualTo(1.3).Within(0.001),
+                "the confirmation frame beat the calibration's stored in-focus HFR, so the target follows it");
+        }
+
+        [Test]
+        public async Task A_vertex_shot_that_is_not_sharper_returns_to_the_centre() {
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.5, 2 => 2.6, 3 => 2.0, 4 => 1.49, _ => 1.5,
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(5));
+            Assert.That(rig.Moves[^2..], Is.EqualTo(new[] { StartPosition + 100, StartPosition }), "back to the centre from above");
+            Assert.That(rig.Tracker.Snapshot().FinalPosition, Is.EqualTo(StartPosition));
+        }
+
+        [Test]
+        public async Task The_in_focus_target_is_the_measured_hfr_not_the_refitted_minimum() {
+            // The sample V bottoms at 1.5, but the sweep MEASURED 1.0 at best focus. A 1.3 px first shot
+            // is within 10 % of 1.5 and would have passed as in focus; against the measured 1.0 it is
+            // not, so Smart Focus goes on to predict a move (and, with nothing between 1.0 and the
+            // 1.5 vertex sample to interpolate on, falls back to the classic sweep).
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition) with { InFocusHfr = 1.0 },
+                skyHfr: (capture, position) => capture == 1 ? 1.3 : VCurveHfr(position, StartPosition));
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            var bracketConfirmed = rig.Tracker.Snapshot().Probes.Count(p => p.Phase == "smart") == 3
+                && rig.Events.All(e => e.Type != WsEventCatalog.AutofocusFallbackClassic);
+            Assert.That(bracketConfirmed, Is.False, "1.3 px must not read as in focus when the sweep measured 1.0");
+        }
+
+        [Test]
+        public void ParabolaVertexOffset_is_pure() {
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 2.6, 1.5, 2.0), Is.EqualTo(37.5).Within(0.1));
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 2.0, 1.0, 2.0), Is.EqualTo(0));
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(277, 2.602, 1.218, 1.76), Is.EqualTo(60).Within(2), "the 2026-10-03 04:14 run");
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, 1.0, 1.5, 1.0), Is.Null, "curves downward: no minimum");
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(0, 2.0, 1.0, 2.0), Is.Null);
+        }
+
+        [Test]
+        public void ParabolaVertexOffset_fits_the_offsets_reached_when_a_side_is_clamped() {
+            // y = 1 + (x − 30)² / 10000, the − side clamped at a travel limit 100 steps out instead of 200.
+            static double Y(double x) => 1 + (x - 30) * (x - 30) / 10000;
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(-100, Y(-100), Y(0), 200, Y(200)), Is.EqualTo(30).Within(1e-9));
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(200, Y(-100), Y(0), Y(200)), Is.LessThan(0),
+                "treating the clamped side as −200 puts the vertex on the wrong side");
+            Assert.That(AutofocusSweepService.ParabolaVertexOffset(0, Y(0), Y(0), 200, Y(200)), Is.Null, "no − side reached");
+        }
+
+        [Test]
+        public void BracketVerdict_and_BracketOffset_are_pure() {
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, true, 2.1, true), Is.Null, "both sides clearly worse");
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 0.9, true, 2.1, true), Does.Contain("+ side"));
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, true, 0.95, true), Does.Contain("− side"));
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 1.1, true, 1.15, true), Does.Contain("no clear rise"));
+            Assert.That(AutofocusSweepService.BracketVerdict(1.0, 2.0, false, 2.1, true), Does.Contain("too few stars"));
+
+            Assert.That(AutofocusSweepService.BracketOffset(277.1, Settings()), Is.EqualTo(277));
+            Assert.That(AutofocusSweepService.BracketOffset(null, Settings()), Is.EqualTo(200), "100 × 4 / 2");
+            Assert.That(AutofocusSweepService.BracketOffset(0.2, Settings()), Is.EqualTo(200), "a degenerate half-width falls back");
         }
 
         [Test]

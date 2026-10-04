@@ -1016,6 +1016,7 @@ const Map<String, Help> helpRegistry = {
         '* **Coarse search** first: software-binned probes walk toward smaller stars until the sweep is centred on focus (small grey dots).\n'
         '* **V-curve**: each fine probe is a dot (hollow = too few stars to trust); the line is the curve Ara fitted; the dashed marker is the fitted best, the solid one the position it moved to.\n'
         '* **HFR at focus (measured)** comes from one confirmation frame taken *at* best focus — the picture shown — so it is a measurement, not the fit\'s prediction.\n'
+        '* **Smart Focus** (after one good sweep) usually needs two or three shots: it reads how far off focus the stars are and moves there. If the first shot already reads in focus it still takes one shot either side as a check; both must be clearly worse, or it runs the full sweep instead of trusting the number. The V through those three shots then says where the bottom really is: if that is off the centre, a fourth shot goes there and stays only if it is sharper, and a fifth confirms the final position.\n'
         '* **Cancel** stops the run and puts the focuser back where it started when the profile says so. It also cancels a run a sequence started.\n\n'
         'A sequence\'s own refocus leaves the same record here, so you can check last night\'s run in the morning.',
     relatedSettings: ['img.autofocus.method', 'img.autofocus.step_size_auto', 'img.autofocus.steps', 'img.autofocus.step_size'],
@@ -1026,12 +1027,28 @@ const Map<String, Help> helpRegistry = {
     title: 'Focusing the guide camera',
     body:
         'A live readout for the hand-turned helical focuser on a guide scope or off-axis guider — there is no motor to sweep, so this is not an autofocus.\n\n'
-        '* **Start live focus** asks the *guider* for one frame after another and measures each here: HFR, star count, peak and FWHM. Turn the focuser slowly until the HFR stops falling; the dashed line on the trend is the best HFR seen so far.\n'
+        '* **Start live focus** asks the *guider* for one frame after another and measures each here: HFR (the median of the brightest stars, so it holds steady while you are not moving), star count, peak and FWHM. Turn the focuser slowly until the HFR stops falling; the dashed line on the trend is the best HFR seen so far.\n'
+        '* **In focus ≤ N px** is what a star should read on this guide camera, worked out from the guide focal length, pixel size and (for an OAG) the main telescope\'s aperture, with typical seeing. At or under it the card says *In focus*: stars are as small as the camera can show, and chasing a lower number only chases noise.\n'
+        '* The loop **stops by itself** once the median of the last 10 frames is under that line (a median, so seeing spikes do not reset it). Press *Start live focus* again for a fresh run: the frame count, the trend and the picture start over, so frames from before a refocus never linger in the chart.\n'
         '* The frames come **through the guider** (the same path polar alignment uses), so the guider must be connected and not guiding or calibrating. Ara never opens the guide camera itself: two programs on one sensor is how guiding breaks.\n'
         '* **Off-axis guider**: the OAG sees the same focal plane as the main camera, so its HFR only means something once the main telescope is focused. The card waits for that, or tick *Already in focus*.\n'
         '* **Exposure**: 1–3 s suits most guide cameras; lengthen it when few stars show.',
     relatedSettings: ['eq.guider.setup_type'],
     keywords: ['guide camera', 'oag', 'guide scope', 'helical', 'focus', 'hfr', 'live'],
+  ),
+  'session.rotate_by_hand': Help(
+    key: 'session.rotate_by_hand',
+    title: 'Rotating the camera by hand',
+    body:
+        'A rig without a motorised rotator still gets the framing you planned: when a sequence reaches *Rotate Camera by Hand* '
+        'the mount has already slewed to the target, the run pauses and this readout appears.\n\n'
+        '* Ara takes a short exposure, plate-solves it and shows how far the camera angle is from the planned one. Loosen the camera, turn it by about that much, then watch the next solve. **Keep going** means the same way, **Go back** means you turned past it.\n'
+        '* Within a couple of degrees reads **On target**. Tighten the camera and press **Done — resume**; the *Center and Rotate* step that follows checks the angle again and tunes the pointing.\n'
+        '* The picture is the solved frame with north marked and the planned framing drawn over it. **Show on sky** draws both the planned frame and where the camera points right now on the planetarium, so you can judge the framing against the stars.\n'
+        '* A 180° turn gives the same framing, so the readout always shows the shorter way round.\n\n'
+        'Rigs with a rotator skip this step; rigs that cannot plate-solve (no solver installed or no optics in the profile) skip it too and the sequence carries on.',
+    relatedSettings: ['img.platesolve.engine', 'img.platesolve.solver_path'],
+    keywords: ['rotation', 'rotate', 'position angle', 'framing', 'rotator', 'by hand', 'plate solve'],
   ),
   'img.autofocus.method': Help(
     key: 'img.autofocus.method',

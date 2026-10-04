@@ -6,9 +6,11 @@ import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
+import 'package:openastroara/widgets/focus/focus_section.dart';
 
 class _StubAutofocus extends AutofocusLiveNotifier {
   final AutofocusLive initial;
@@ -134,7 +136,7 @@ void main() {
       state: AutofocusRunStates.running,
       mode: 'smart',
       phase: 'smart',
-      totalSteps: 3,
+      totalSteps: 5,
       completedSteps: 2,
       probes: [
         AutofocusProbe(index: 1, phase: 'smart', position: 10150, hfr: 1.95, stars: 42, kept: true),
@@ -143,8 +145,8 @@ void main() {
     );
     await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: running)));
     await t.pump();
-    expect(find.text('Smart Focus — shot 2 of 3'), findsOneWidget);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Smart Focus — shot 2 of 5'), findsOneWidget, reason: 'the shot budget comes from the daemon, never a hard-coded 3');
+    expect(find.text('2 / 5'), findsOneWidget);
   });
 
   testWidgets('a failed run reads as a failure with its reason', (t) async {
@@ -210,6 +212,17 @@ void main() {
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
   });
 
+  testWidgets('a bracket-confirmed Smart run shows the calibration curve without an R²', (t) async {
+    const run = AutofocusRun(
+      state: 'complete', mode: 'smart', finalPosition: 29463, finalHfr: 0.98, finalStars: 285,
+      fit: AutofocusFit(algorithm: 'calibration', rSquared: 1, bestPosition: 29463, predictedHfr: 0.96, withinSampledRange: true, curve: []),
+    );
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: StatRow(tiles: MainFocusCard.tilesFor(run)))));
+    final r2 = find.ancestor(of: find.text('Fit R²'), matching: find.byType(StatTile));
+    expect(find.descendant(of: r2, matching: find.text('—')), findsOneWidget);
+    expect(MainFocusCard.weakFitText(run), isNull);
+  });
+
   test('headlineFor says the state in words', () {
     expect(MainFocusCard.headlineFor(const AutofocusRun()).$1, 'Not focused yet');
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'complete', finalHfr: 1.5)).$1, 'In focus · HFR 1.50');
@@ -217,6 +230,26 @@ void main() {
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'failed')).$1, 'Autofocus failed');
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'cancelled')).$1, 'Cancelled');
     expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'running', phase: 'moving')).$1, 'Moving to best focus…');
+  });
+
+  test('guide headlineFor turns green against the expected HFR, live and after a stop', () {
+    const sample = GuideFocusSample(seq: 9, hfr: 0.8, stars: 10, peakAdu: 60000, fwhm: 1.5);
+    const live = GuideFocusStatus(active: true, state: 'running', bestHfr: 0.68, expectedHfr: 0.7, latest: sample);
+    final liveLine = GuideFocusCard.headlineFor(live, gated: false, blocked: false);
+    expect(liveLine.$1, 'Live · HFR 0.80 — in focus');
+    expect(liveLine.$2, AraColors.accentConnected);
+    const stopped = GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68, expectedHfr: 0.7, latest: sample);
+    final stoppedLine = GuideFocusCard.headlineFor(stopped, gated: false, blocked: false);
+    expect(stoppedLine.$1, 'In focus · best HFR 0.68');
+    expect(stoppedLine.$2, AraColors.accentConnected);
+    expect(stopped.focusedThisSession, isTrue);
+    const selfStopped = GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68, latest: sample, stopReason: 'in_focus');
+    final selfLine = GuideFocusCard.headlineFor(selfStopped, gated: false, blocked: false);
+    expect(selfLine.$1, 'In focus — held, stopped · best HFR 0.68');
+    expect(selfLine.$2, AraColors.accentConnected);
+    expect(selfStopped.focusedThisSession, isTrue, reason: 'the daemon\'s own stop is the verdict even without a target');
+    expect(const GuideFocusStatus(active: false, state: 'stopped', bestHfr: 1.2, expectedHfr: 0.7).focusedThisSession, isFalse);
+    expect(const GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68).focusedThisSession, isFalse, reason: 'no target, no verdict');
   });
 
   test('guide headlineFor covers idle, gated, blocked, live and stopped', () {
@@ -279,6 +312,36 @@ void main() {
     });
     test('too few frames asks for a first turn', () {
       expect(guideFocusHint(status([2.0, 2.2], best: 1.5)).advice, TurnAdvice.hold);
+    });
+    test('at or under the expected in-focus HFR is "In focus", whatever the trend', () {
+      // A guide scope at 6.4"/px sits at the detector floor (0.70): 0.76 with ±0.05 jitter
+      // used to flip between Keep going and Go back while the focuser never moved.
+      final s = GuideFocusStatus(
+        active: true,
+        state: 'running',
+        latest: sample(6, 0.81),
+        bestHfr: 0.75,
+        expectedHfr: 0.7,
+        recent: [for (final (i, h) in [0.76, 0.75, 0.8, 0.74, 0.79, 0.81].indexed) sample(i + 1, h)],
+      );
+      final h = guideFocusHint(s);
+      expect(h.advice, TurnAdvice.atBest);
+      expect(h.title, 'In focus');
+      expect(h.detail, contains('0.70 px'));
+    });
+    test('well above the expected HFR still reads the trend', () {
+      final s = GuideFocusStatus(
+        active: true,
+        state: 'running',
+        latest: sample(6, 2.4),
+        bestHfr: 1.5,
+        expectedHfr: 0.7,
+        recent: [for (final (i, h) in [4.0, 3.6, 3.2, 2.9, 2.6, 2.4].indexed) sample(i + 1, h)],
+      );
+      expect(guideFocusHint(s).advice, TurnAdvice.keepGoing);
+    });
+    test('single-frame jitter on a flat run does not become advice', () {
+      expect(guideFocusHint(status([2.0, 2.08, 1.96, 2.02, 2.1, 1.95, 2.07], best: 1.9)).advice, TurnAdvice.hold);
     });
   });
 

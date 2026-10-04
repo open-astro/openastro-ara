@@ -13,86 +13,125 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
 }
 
 Future<void> _pump(WidgetTester tester, SequenceRunStateInfo? run) async {
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(run)),
-    ],
-    child: const MaterialApp(home: Scaffold(body: RunDashboardBand())),
-  ));
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(run)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: RunDashboardBand())),
+    ),
+  );
   await tester.pump();
 }
 
 void main() {
-  testWidgets('idle / no run → band absent (compose mood untouched)',
-      (tester) async {
+  testWidgets('idle / no run → band absent (compose mood untouched)', (
+    tester,
+  ) async {
     await _pump(tester, null);
     expect(find.byKey(const Key('run-dashboard-band')), findsNothing);
     await _pump(
-        tester, const SequenceRunStateInfo(state: SequenceRunState.completed));
+      tester,
+      const SequenceRunStateInfo(state: SequenceRunState.completed),
+    );
     expect(find.byKey(const Key('run-dashboard-band')), findsNothing);
   });
 
-  testWidgets('running → band with progress, counts and instruction line',
-      (tester) async {
+  testWidgets('frames landed so far show next to the instruction count', (
+    tester,
+  ) async {
     await _pump(
-        tester,
-        SequenceRunStateInfo(
-          sequenceId: 's1',
-          state: SequenceRunState.running,
-          instructionsCompleted: 3,
-          instructionsTotal: 12,
-          currentInstructionDescription: 'Take Exposure',
-          startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
-        ));
+      tester,
+      const SequenceRunStateInfo(
+        sequenceId: 's',
+        runId: 'r',
+        state: SequenceRunState.running,
+        instructionsCompleted: 5,
+        instructionsTotal: 6,
+        framesCaptured: 24,
+      ),
+    );
+    expect(find.text('24 frames'), findsOneWidget);
+    expect(find.text('5/6'), findsOneWidget);
+  });
+
+  testWidgets('running → band with progress, counts and instruction line', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      SequenceRunStateInfo(
+        sequenceId: 's1',
+        state: SequenceRunState.running,
+        instructionsCompleted: 3,
+        instructionsTotal: 12,
+        currentInstructionDescription: 'Take Exposure',
+        startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+      ),
+    );
     expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
     expect(find.text('3/12'), findsOneWidget);
     expect(find.textContaining('Take Exposure'), findsOneWidget);
     // S13 glides the bar to its fraction — settle the tween first.
     await tester.pump(const Duration(milliseconds: 500));
-    final bar =
-        tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator));
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
     expect(bar.value, closeTo(0.25, 0.001));
   });
 
-  testWidgets('early in a run the header shows the daemon\'s remaining estimate '
-      '(#1068)', (tester) async {
-    await _pump(
+  testWidgets(
+    'early in a run the header shows the daemon\'s remaining estimate '
+    '(#1068)',
+    (tester) async {
+      await _pump(
         tester,
         SequenceRunStateInfo(
           sequenceId: 's1',
           state: SequenceRunState.running,
           instructionsCompleted: 1,
           instructionsTotal: 10,
-          startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+          startedUtc: DateTime.now().toUtc().subtract(
+            const Duration(minutes: 1),
+          ),
           estimatedTotalSeconds: 1215,
           estimatedRemainingSeconds: 600,
-        ));
-    expect(find.textContaining('~10:00 left'), findsOneWidget,
-        reason: 'the daemon figure is shown before the observed rate is trusted');
-  });
+        ),
+      );
+      expect(
+        find.textContaining('~10:00 left'),
+        findsOneWidget,
+        reason:
+            'the daemon figure is shown before the observed rate is trusted',
+      );
+    },
+  );
 
-  testWidgets('with no daemon estimate the header shows no remaining time',
-      (tester) async {
+  testWidgets('with no daemon estimate the header shows no remaining time', (
+    tester,
+  ) async {
     await _pump(
-        tester,
-        SequenceRunStateInfo(
-          sequenceId: 's1',
-          state: SequenceRunState.running,
-          instructionsCompleted: 1,
-          instructionsTotal: 10,
-          startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
-        ));
+      tester,
+      SequenceRunStateInfo(
+        sequenceId: 's1',
+        state: SequenceRunState.running,
+        instructionsCompleted: 1,
+        instructionsTotal: 10,
+        startedUtc: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+      ),
+    );
     expect(find.textContaining('left'), findsNothing);
   });
 
   testWidgets('needs-attention renders the urgent line', (tester) async {
     await _pump(
-        tester,
-        const SequenceRunStateInfo(
-          state: SequenceRunState.pausedAwaitingUser,
-          instructionsCompleted: 3,
-          instructionsTotal: 12,
-        ));
+      tester,
+      const SequenceRunStateInfo(
+        state: SequenceRunState.pausedAwaitingUser,
+        instructionsCompleted: 3,
+        instructionsTotal: 12,
+      ),
+    );
     expect(find.textContaining('The rig needs you'), findsOneWidget);
   });
 }

@@ -175,6 +175,23 @@ public sealed class AutofocusRunTracker {
         }
     }
 
+    /// <summary>The calibration's curve for a Smart run that was confirmed by a bracket, not fitted: HFR
+    /// doubles <paramref name="halfWidthSteps"/> from <paramref name="centre"/> (the hyperbola
+    /// h₀·√(1 + 3(d/w)²)). Algorithm "calibration", R² 1 — the pane draws it as the V the three shots
+    /// were judged against and hides the R² tile for it.</summary>
+    public void SetModelCurve(int centre, double inFocusHfr, double halfWidthSteps, double minPosition, double maxPosition) {
+        var curve = new List<AutofocusCurvePointDto>();
+        const int samples = 40;
+        for (int i = 0; i <= samples; i++) {
+            var x = minPosition + (maxPosition - minPosition) * i / samples;
+            var d = (x - centre) / halfWidthSteps;
+            curve.Add(new AutofocusCurvePointDto(Math.Round(x, 1), Math.Round(inFocusHfr * Math.Sqrt(1 + 3 * d * d), 4)));
+        }
+        lock (_gate) {
+            _fit = new AutofocusCurveFitDto("calibration", 1.0, centre, Finite(inFocusHfr), true, curve);
+        }
+    }
+
     /// <summary>Attach a rendered frame (JPEG) of the probe at <paramref name="position"/>.</summary>
     public void SetFrame(byte[] jpeg, int position, double hfr) {
         lock (_gate) {

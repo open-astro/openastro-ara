@@ -48,6 +48,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         public double AverageHFR { get; set; }
         public double HFRStdDev { get; set; }
         public IReadOnlyList<DetectedStar> StarList { get; set; } = new List<DetectedStar>();
+
+        /// <summary>Set by a caller that knows the frame's native scale when the blob count is implausible
+        /// for the frame area: the threshold sat in the noise and the "stars" are speckle (a camera left at
+        /// its power-on gain read one real star and 21,000 noise blobs with HFR 2 px, 2026-10-03). The HFR
+        /// of such a frame measures nothing. The detector itself leaves it false.</summary>
+        public bool NoiseFlooded { get; set; }
     }
 
     public class DetectedStar {
