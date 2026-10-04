@@ -518,8 +518,9 @@ loop, whose sub-second frames would flood the stream):
       FITS is written and registered.
   camera.exposure_failed   { frame_id, kind, reason }
       Device timeout (no ImageReady within the wait bound), disconnect or
-      supersede mid-exposure, caller cancellation ("cancelled") or a thrown
-      device fault. Every started is followed by exactly one complete OR
+      supersede mid-exposure, caller cancellation ("cancelled"), a REST abort
+      (POST /equipment/camera/exposure/abort, "aborted": reported at once, no
+      equipment.fault) or a thrown device fault. Every started is followed by exactly one complete OR
       failed for the same frame_id; a client timer should still age out on
       its own (exposure + ~2 min) in case the WS link dropped in between.
       Clients should stamp the exposure start on their OWN clock at receipt:

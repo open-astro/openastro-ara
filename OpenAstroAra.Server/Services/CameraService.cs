@@ -606,15 +606,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// stall_timeout, a device error as op_error) so the reaction service's persistence
     /// escalation can see a camera that keeps failing captures; the abandoned path stays
     /// silent (the §42.3 probe owns disconnects).
-    /// </summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
-    /// <summary>
     /// <paramref name="kind"/> labels the exposure for the <c>camera.exposure_*</c> WS events
     /// (lower-cased image type for a persisted frame, "analysis" / "plate-solve" for the probes) —
     /// this is the ONE place every capture passes through, so it is where a client learns an
     /// exposure is running, whoever asked for it.
     /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, CancellationToken ct) {
         // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
@@ -653,6 +651,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // still kick off an exposure we'd only abort on the first ImageReady poll. Inert for REST
         // (CancellationToken.None).
         ct.ThrowIfCancellationRequested();
+        // A stale abort flag from an abort that landed with no capture running must not kill this
+        // capture on its first poll. Cleared HERE, not when the wait starts: an abort arriving
+        // between StartExposure and the wait (the started event, a cache refresh) must still land.
+        Interlocked.Exchange(ref _abortRequested, 0);
         client.StartExposure(request.ExposureSec, true);
         // Announce AFTER StartExposure returned: a driver that rejects the exposure throws here and
         // the caller's catch must not have to retract a start that never happened.
@@ -1002,9 +1004,6 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     private async Task<ImageWait> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
-        // A stale abort flag from an abort that landed with no capture running must not kill the
-        // NEXT capture on its first poll.
-        Interlocked.Exchange(ref _abortRequested, 0);
         while (DateTimeOffset.UtcNow < deadline) {
             await Task.Delay(ImageReadyPollInterval, ct).ConfigureAwait(false);
             if (Interlocked.Exchange(ref _abortRequested, 0) == 1) {

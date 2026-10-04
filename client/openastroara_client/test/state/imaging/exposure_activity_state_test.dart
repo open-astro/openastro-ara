@@ -84,6 +84,21 @@ void main() {
     expect(rig.state, isNull);
   });
 
+  test('a late failed or complete for an earlier exposure leaves the live '
+      'timer running', () async {
+    final rig = _Rig();
+    addTearDown(rig.dispose);
+    rig.ws.add(_ev('camera.exposure_started', _started('f6', 30)));
+    await Future<void>.delayed(Duration.zero);
+    rig.ws.add(_ev('camera.exposure_failed', {'frame_id': 'f5', 'reason': 'aborted'}, 2));
+    rig.ws.add(_ev('camera.exposure_complete', {'frame_id': 'f5'}, 3));
+    await Future<void>.delayed(Duration.zero);
+    expect(rig.state?.frameId, 'f6', reason: 'events for another frame are not ours');
+    rig.ws.add(_ev('camera.exposure_complete', {'frame_id': 'f6'}, 4));
+    await Future<void>.delayed(Duration.zero);
+    expect(rig.state, isNull);
+  });
+
   test('a newer started replaces the current one', () async {
     final rig = _Rig();
     addTearDown(rig.dispose);

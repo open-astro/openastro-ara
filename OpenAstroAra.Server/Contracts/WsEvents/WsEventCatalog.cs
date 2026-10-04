@@ -65,7 +65,8 @@ public static class WsEventCatalog {
     // the request named one. complete payload adds { elapsed_ms } (shutter open → pixels in
     // hand, so the download is INSIDE the window — the §44.4 backup stream treats the camera as
     // busy until then). failed payload { frame_id, kind, reason } for a device timeout,
-    // disconnect/supersede, caller cancellation or a thrown device fault. A persisted frame's
+    // disconnect/supersede, caller cancellation ("cancelled"), a REST abort ("aborted") or a
+    // thrown device fault. A persisted frame's
     // frame.complete still follows the exposure_complete once the FITS is catalogued.
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";

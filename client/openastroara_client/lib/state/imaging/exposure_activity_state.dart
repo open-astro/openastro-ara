@@ -117,14 +117,13 @@ class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
         case 'frame.complete':
           // frame.complete is the belt to exposure_complete's braces: if the
           // complete event was lost the catalogued frame still closes the
-          // timer. Only for THIS exposure's id — a stale frame registering
-          // late (the §28.8 orphan scan) must not kill a live timer.
+          // timer. Only for THIS exposure's id, for all three: a stale frame
+          // registering late (the §28.8 orphan scan) or a late failed for an
+          // earlier exposure must not kill a live timer.
           final id = payload['frame_id'];
           final current = state;
           if (current == null) return;
-          if (event.type != 'frame.complete' || id == current.frameId) {
-            _end();
-          }
+          if (id == current.frameId) _end();
       }
     });
     // A dropped link means we may never hear the complete event; a frozen
