@@ -1018,6 +1018,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         private async Task ProcessEvent(string phdevent, JObject message) {
             switch (phdevent) {
                 case "Resumed": {
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "resumed" });
                         break;
                     }
                 case "Version": {
@@ -1036,12 +1037,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "GuidingDithered": {
                         GuidingDithered = message.ToObject<PhdEventGuidingDithered>();
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "dithered", Dx = GuidingDithered?.dx, Dy = GuidingDithered?.dy });
                         break;
                     }
                 case "Settling": {
                         var settleInfo = message.ToObject<PhdEventSettling>();
                         Settling = true;
                         Logger.Debug($"PHD2 settling started. Time: {settleInfo.Time}, Distance: {settleInfo.Distance}");
+                        RaiseMarker(new PhdGuiderMarkerEventArgs {
+                            Kind = "settling", Distance = settleInfo?.Distance, TimeSec = settleInfo?.Time, SettleTimeSec = settleInfo?.SettleTime,
+                        });
                         break;
                     }
                 case "SettleDone": {
@@ -1054,14 +1059,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         } else {
                             Logger.Debug("PHD2 settle completed");
                         }
+                        RaiseMarker(new PhdGuiderMarkerEventArgs {
+                            Kind = "settle_done", Status = settleDone?.Status,
+                            Error = string.IsNullOrEmpty(settleDone?.Error) ? null : settleDone!.Error,
+                        });
                         break;
                     }
                 case "Paused": {
                         AppState = new PhdEventAppState() { State = "Paused" };
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "paused" });
                         break;
                     }
                 case "StartCalibration": {
                         AppState = new PhdEventAppState() { State = "Calibrating" };
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "calibration_started" });
                         break;
                     }
                 case "LoopingExposures": {
@@ -1073,6 +1084,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "CalibrationComplete": {
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "calibration_complete" });
+                        break;
+                    }
+                case "CalibrationFailed": {
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "calibration_failed", Error = message["Reason"]?.ToString() });
+                        break;
+                    }
+                case "GuidingStopped": {
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "guiding_stopped" });
                         break;
                     }
                 case "StarSelected": {
@@ -1083,9 +1103,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         var starlost = message.ToObject<PhdEventStarLost>();
                         Logger.Debug($"PHD2 - Star lost! Status: {starlost.Status}");
                         AppState = new PhdEventAppState() { State = "LostLock" };
+                        RaiseMarker(new PhdGuiderMarkerEventArgs {
+                            Kind = "star_lost", Frame = starlost?.Frame, StarMass = starlost?.StarMass, Snr = starlost?.SNR,
+                            Distance = starlost?.AvgDist, Status = starlost?.ErrorCode,
+                            Error = string.IsNullOrEmpty(starlost?.Status) ? null : starlost!.Status,
+                        });
                         break;
                     }
                 case "StartGuiding": {
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "guiding_started" });
                         break;
                     }
                 case "LockPositionSet": {
@@ -1096,6 +1122,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 case "LockPositionLost": {
                         Logger.Debug($"PHD2 - Lock position lost!");
                         AppState = new PhdEventAppState() { State = "LostLock" };
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "lock_position_lost" });
                         break;
                     }
                 case "LockPositionShiftLimitReached": {
@@ -1308,6 +1335,22 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public event EventHandler? PHD2ConnectionLost;
 
         public event EventHandler<IGuideStep>? GuideEvent;
+
+        /// <summary>
+        /// §63.18 — PHD2's session events other than guide steps (dither, settling, settle done,
+        /// star lost, calibration and guiding transitions), one per PHD2 message, so the daemon
+        /// can relay the markers PHD2's own graph draws. Raised on the socket listener thread;
+        /// subscribers must not block.
+        /// </summary>
+        public event EventHandler<PhdGuiderMarkerEventArgs>? MarkerEvent;
+
+        private void RaiseMarker(PhdGuiderMarkerEventArgs marker) {
+            try {
+                MarkerEvent?.Invoke(this, marker);
+            } catch (Exception ex) {
+                Logger.Warning($"PHD2 - marker subscriber threw for {marker.Kind}: {ex.Message}");
+            }
+        }
 
         public IList<string> SupportedActions => [];
 

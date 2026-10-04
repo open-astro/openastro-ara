@@ -537,4 +537,15 @@ is connected, straight from its GuideStep events):
       PHD2's own graph convention. A non-finite reading (lost star) is null,
       never NaN. The windowed RMS stays on GET /equipment/guider
       (rms_total/ra/dec in px, rms_*_arcsec when the scale is known).
+  guider.event { kind, ... }   one per PHD2 session event other than a step —
+      the things PHD2's own graph annotates. kind and its detail fields
+      (omitted when PHD2 sent none):
+        dithered            { dx_px, dy_px }
+        settling            { distance_px, time_sec, settle_time_sec }
+        settle_done         { status (0 = ok), error? }
+        star_lost           { frame?, star_mass?, snr?, distance_px?, status?, error? }
+        calibration_started | calibration_complete | calibration_failed { error? }
+        guiding_started | guiding_stopped | paused | resumed | lock_position_lost
+      A dither is drawn as dithered → (settling …) → settle_done; the client
+      shades the settle window and marks the dither, exactly as PHD2 does.
 ```

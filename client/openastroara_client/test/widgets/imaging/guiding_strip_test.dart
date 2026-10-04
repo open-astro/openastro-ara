@@ -13,6 +13,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/state/guider/guide_graph_settings.dart';
 import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
@@ -148,84 +149,8 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
-  testWidgets('guiding: pixel-only RMS shows as px until a scale is known, '
-      'then converts; the daemon arcsec figure wins when present',
-      (tester) async {
-    final container = await _pump(tester,
-        status: const GuiderStatus(
-          name: 'OpenAstro Guider',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.guiding,
-          rmsTotal: 0.5,
-          rmsRa: 0.3,
-          rmsDec: 0.4,
-        ));
-    expect(find.text('guiding'), findsOneWidget);
-    expect(find.text('Waiting for guide frames…'), findsOneWidget);
-    // The daemon's rms_* are guide-camera pixels; with no scale from the
-    // guider or the §63.5 guide train there is no honest arcsec figure.
-    expect(find.text('RMS 0.50 px'), findsOneWidget);
-    expect(find.text('0.50 px'), findsOneWidget);
-    expect(find.text('0.30 px'), findsOneWidget);
-    expect(find.text('0.40 px'), findsOneWidget);
-    expect(find.text('—'), findsNWidgets(3));
-    expect(find.text('No scale · graph in px'), findsOneWidget);
-
-    // With the §63.5 guide train set the pixels convert:
-    // 206.265 * 3.75 / 200 ≈ 3.867 ″/px → 0.5 px ≈ 1.93″.
-    final phd2N = container.read(phd2SettingsProvider.notifier);
-    phd2N.setGuideFocalLength(200);
-    phd2N.setGuidePixelSize(3.75);
-    await tester.pump();
-    expect(find.text('RMS 1.93″'), findsOneWidget);
-    expect(find.text('1.93″'), findsOneWidget);
-    expect(find.text('1.16″'), findsOneWidget);
-    expect(find.text('1.55″'), findsOneWidget);
-    expect(find.text('0.50 px'), findsOneWidget);
-    expect(find.textContaining('3.87″/px'), findsOneWidget);
-
-    // The tuning controls no longer live inline — they open in the dialog.
-    expect(find.text('RA aggressiveness'), findsNothing);
-
-    await _teardownPanel(tester, container);
-  });
-
-  testWidgets('the daemon arcsec RMS is preferred over a client conversion',
-      (tester) async {
-    final container = await _pump(tester,
-        status: const GuiderStatus(
-          name: 'OpenAstro Guider',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.guiding,
-          rmsTotal: 0.5,
-          rmsRa: 0.3,
-          rmsDec: 0.4,
-          rmsTotalArcsec: 0.95,
-          rmsRaArcsec: 0.57,
-          rmsDecArcsec: 0.76,
-        ));
-    expect(find.text('RMS 0.95″'), findsOneWidget);
-    expect(find.text('0.57″'), findsOneWidget);
-    expect(find.text('0.76″'), findsOneWidget);
-    expect(find.text('0.50 px'), findsOneWidget);
-    await _teardownPanel(tester, container);
-  });
-
-  testWidgets('guider.step events fill the graph and the step count',
-      (tester) async {
-    final ws = StreamController<WsEvent>.broadcast();
-    addTearDown(ws.close);
-    final container = await _pump(tester,
-        status: const GuiderStatus(
-          name: 'OpenAstro Guider',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.guiding,
-          rmsTotal: 0.5,
-        ),
-        ws: ws.stream);
-    expect(find.text('Waiting for guide frames…'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
-      ws.add(WsEvent(
+  WsEvent step(int i, {double? raArcsec, double? decArcsec, double? scale}) =>
+      WsEvent(
         type: 'guider.step',
         ts: DateTime.utc(2026, 10, 4, 21, 0, i),
         seq: i + 1,
@@ -233,50 +158,150 @@ void main() {
           'frame': i,
           'ra_raw_px': 0.2 * i,
           'dec_raw_px': -0.1 * i,
-          'ra_arcsec': 0.4 * i,
-          'dec_arcsec': -0.2 * i,
+          'ra_arcsec': ?raArcsec,
+          'dec_arcsec': ?decArcsec,
           'ra_duration_ms': 50,
           'dec_duration_ms': -20,
-          'pixel_scale_arcsec': 2.0,
+          'pixel_scale_arcsec': ?scale,
         },
-      ));
+      );
+
+  testWidgets('pixel-only steps plot and read in px until a scale is known, '
+      'then in arcsec from the guide train', (tester) async {
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(ws.close);
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        ),
+        ws: ws.stream);
+    expect(find.text('guiding'), findsOneWidget);
+    expect(find.text('Waiting for guide frames…'), findsOneWidget);
+    expect(find.text('RMS —'), findsOneWidget);
+
+    // ra px: 0, 0.2, 0.4; dec px: 0, -0.1, -0.2 → RMS tot = sqrt(mean(ra²+dec²))
+    // = sqrt((0 + 0.05 + 0.20) / 3) = 0.2887 px.
+    for (var i = 0; i < 3; i++) {
+      ws.add(step(i));
     }
     await tester.pump();
     await tester.pump();
+    expect(find.text('RMS 0.29 px'), findsOneWidget);
+    expect(find.text('0.29 px'), findsOneWidget, reason: 'RMS Tot row');
+    expect(find.text('0.40 px'), findsOneWidget, reason: 'Peak RA row');
+    expect(find.text('no scale'), findsOneWidget);
+    expect(find.text('3 of 3 frames · px'), findsOneWidget);
+
+    // With the §63.5 guide train set the pixels convert:
+    // 206.265 * 3.75 / 200 ≈ 3.867 ″/px → 0.2887 px ≈ 1.12″.
+    final phd2N = container.read(phd2SettingsProvider.notifier);
+    phd2N.setGuideFocalLength(200);
+    phd2N.setGuidePixelSize(3.75);
+    await tester.pump();
+    expect(find.text('RMS 1.12″'), findsOneWidget);
+    expect(find.text('3.87″/px'), findsOneWidget);
+    expect(find.text('3 of 3 frames · arc-sec'), findsOneWidget);
+
+    // PHD2's units toggle forces px again.
+    container.read(guideGraphSettingsProvider.notifier).setUnit(GuideGraphUnit.px);
+    await tester.pump();
+    expect(find.text('RMS 0.29 px'), findsOneWidget);
+
+    // The tuning controls no longer live inline — they open in the dialog.
+    expect(find.text('RA aggressiveness'), findsNothing);
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('guider.step events with the guider\'s own scale fill the graph '
+      'in arcsec; markers draw; Clear empties both', (tester) async {
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(ws.close);
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        ),
+        ws: ws.stream);
+    for (var i = 0; i < 3; i++) {
+      ws.add(step(i, raArcsec: 0.4 * i, decArcsec: -0.2 * i, scale: 2.0));
+    }
+    ws.add(WsEvent(
+        type: 'guider.event',
+        ts: DateTime.utc(2026, 10, 4, 21, 0, 5),
+        seq: 9,
+        payload: const <String, dynamic>{'kind': 'dithered', 'dx_px': 2, 'dy_px': -1}));
+    await tester.pump();
+    await tester.pump();
     expect(container.read(guideStepsProvider).length, 3);
+    expect(container.read(guideMarkersProvider).single.kind, GuideMarkerKind.dithered);
     expect(find.text('Waiting for guide frames…'), findsNothing);
     final paint = tester.widget<CustomPaint>(find.byWidgetPredicate(
         (w) => w is CustomPaint && w.painter is GuideGraphPainter));
     expect(paint.painter, isA<GuideGraphPainter>());
-    // The guider's own scale is reported on the steps and drives both the
-    // RMS conversion (0.5 px × 2 = 1.00″) and the footer.
-    expect(find.text('RMS 1.00″'), findsOneWidget);
-    expect(find.text('2.00″/px · 3 steps'), findsOneWidget);
+    // ra″: 0, 0.4, 0.8; dec″: 0, −0.2, −0.4 → tot = sqrt((0 + 0.2 + 0.8)/3) = 0.577″.
+    expect(find.text('RMS 0.58″'), findsOneWidget);
+    expect(find.text('2.00″/px'), findsOneWidget);
+    expect(find.text('3 of 3 frames · arc-sec'), findsOneWidget);
+
+    // The control row scrolls sideways at the test's 800 px width.
+    await tester.ensureVisible(find.text('Clear'));
+    await tester.tap(find.text('Clear'));
+    await tester.pump();
+    expect(container.read(guideStepsProvider), isEmpty);
+    expect(container.read(guideMarkersProvider), isEmpty);
+    expect(find.text('Waiting for guide frames…'), findsOneWidget);
     await _teardownPanel(tester, container);
   });
 
-  test('GuideGraphPainter picks arcsec when any point has a scale and snaps '
-      'the half-range to the PHD2 rung ladder', () {
+  test('GuideGraphModel: unit choice, visible window and auto y-range follow '
+      'PHD2', () {
     final t = DateTime.utc(2026);
-    final arcsec = GuideGraphPainter([
-      GuideStep(at: t, raPx: 0.5, decPx: 0.1, raArcsec: 1.3, decArcsec: 0.2),
-      GuideStep(at: t, raPx: 0.1, decPx: -0.9, raArcsec: 0.2, decArcsec: -1.8),
+    GuideGraphModel model(List<GuideStep> steps,
+            {GuideGraphSettings settings = const GuideGraphSettings(),
+            double? fallbackScale}) =>
+        GuideGraphModel(
+            steps: steps, markers: const [], settings: settings, fallbackScale: fallbackScale);
+
+    final arcsec = model([
+      GuideStep(at: t, raPx: 0.5, decPx: 0.1, raArcsec: 1.3, decArcsec: 0.2, pixelScaleArcsec: 2.6),
+      GuideStep(at: t, raPx: 0.1, decPx: -0.9, raArcsec: 0.2, decArcsec: -1.8, pixelScaleArcsec: 2.6),
     ]);
-    expect(arcsec.scaleFor(arcsec.steps), ('″', 2.0));
-    final px = GuideGraphPainter([
-      GuideStep(at: t, raPx: 0.3, decPx: -0.2),
-    ]);
-    expect(px.scaleFor(px.steps), ('px', 0.5));
+    expect(arcsec.inArcsec, isTrue);
+    expect(arcsec.yHalfRange, 2.0);
+    expect(arcsec.stats.peakDec, 1.8);
+
+    final px = model([GuideStep(at: t, raPx: 0.3, decPx: -0.2)]);
+    expect(px.inArcsec, isFalse);
+    expect(px.yHalfRange, 0.5);
+
     // A client-side scale converts pixel-only steps to arcsec.
-    final converted = GuideGraphPainter([
-      GuideStep(at: t, raPx: 1.0, decPx: 0.0),
-    ], fallbackScale: 3.0);
-    expect(converted.scaleFor(converted.steps), ('″', 4.0));
+    final converted = model([GuideStep(at: t, raPx: 1.0, decPx: 0.0)], fallbackScale: 3.0);
+    expect(converted.inArcsec, isTrue);
+    expect(converted.yHalfRange, 4.0);
+
+    // Forced px ignores the scale; forced arcsec with no scale plots nothing.
+    expect(model([GuideStep(at: t, raPx: 1.0, decPx: 0.0)],
+            fallbackScale: 3.0, settings: const GuideGraphSettings(unit: GuideGraphUnit.px))
+        .inArcsec, isFalse);
+    final blind = model([GuideStep(at: t, raPx: 1.0, decPx: 0.0)],
+        settings: const GuideGraphSettings(unit: GuideGraphUnit.arcsec));
+    expect(blind.inArcsec, isTrue);
+    expect(blind.stats.samples, 0);
+
+    // Fixed y wins over auto; the window is the newest xRange frames.
+    final many = model(
+        [for (var i = 0; i < 120; i++) GuideStep(at: t, raPx: i.toDouble(), decPx: 0)],
+        settings: const GuideGraphSettings(xRange: 50, yHalfRange: 1));
+    expect(many.visible.length, 50);
+    expect(many.visible.first.raPx, 70);
+    expect(many.yHalfRange, 1);
+
     // Beyond the ladder the top rung holds (clipped, not unbounded).
-    final wild = GuideGraphPainter([
-      GuideStep(at: t, raPx: 0, decPx: 0, raArcsec: 40, decArcsec: 0),
-    ]);
-    expect(wild.scaleFor(wild.steps), ('″', 16.0));
+    expect(model([GuideStep(at: t, raPx: 0, decPx: 0, raArcsec: 40, decArcsec: 0, pixelScaleArcsec: 2)]).yHalfRange, 16.0);
   });
 
   testWidgets('the Tune dialog shows the runtime-safe controls only',

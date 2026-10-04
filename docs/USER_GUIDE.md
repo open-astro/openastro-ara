@@ -153,13 +153,17 @@ framing/focus loop when you need to point or focus by eye.
   frame type and filter, the elapsed / total clock and a progress bar. It switches to
   **Downloading** once the shutter should have closed and disappears when the frame has landed.
   If you see no timer, nothing is exposing.
-- **Guiding strip.** The guide graph runs along the bottom of the Live tab, laid out like PHD2 and
-  the guider's web page: RA error in blue, Dec in red, correction pulses as faint bars from the
-  zero line, newest frame at the right. The RMS (Total / RA / Dec) sits beside it in arcseconds
-  with the pixel figure under each; the axis is in arcseconds once the guider has reported its
-  pixel scale (or you have set the guide focal length and pixel size under **Settings → Guider**),
-  and in guide-camera pixels until then. Tap the header to collapse the graph to a one-line
-  status; **Tune** opens the live aggressiveness / minimum-move / dither controls.
+- **Guiding strip.** The guide graph runs along the bottom of the Live tab and behaves like PHD2's
+  graph window (the guider *is* PHD2): RA error in blue, Dec in red, correction pulses as faint
+  bars from the zero line, newest frame at the right. Dithers are marked with a dashed line and the
+  settle window is shaded until PHD2 reports settled; a lost star shows as a red × on the zero
+  line. Under the plot are PHD2's controls — frames in view (50/100/200/400), y range (auto or
+  fixed), arc-sec / pixels, corrections on/off, and **Clear**. Beside it, PHD2's numbers over the
+  frames in view: RMS RA / Dec / Total, peak per axis, and the RA oscillation index. The axis is in
+  arcseconds once the guider has reported its pixel scale (or you have set the guide focal length
+  and pixel size under **Settings → Guider**), and in guide-camera pixels until then. Tap the
+  header to collapse the graph to a one-line status; **Tune** opens the live aggressiveness /
+  minimum-move / dither controls.
 
 ## 7. Unattended safety (the 3 a.m. story)
 

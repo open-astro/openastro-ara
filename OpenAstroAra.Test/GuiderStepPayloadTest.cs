@@ -89,5 +89,35 @@ namespace OpenAstroAra.Test {
             // and the whole object still round-trips through System.Text.Json
             Assert.DoesNotThrow(() => JsonNode.Parse(payload.ToJsonString()));
         }
+
+        [Test]
+        public void Catalog_lists_the_marker_token() {
+            Assert.That(WsEventCatalog.GuiderEvent, Is.EqualTo("guider.event"));
+            Assert.That(WsEventCatalog.All, Does.Contain(WsEventCatalog.GuiderEvent));
+        }
+
+        [Test]
+        public void Marker_payload_carries_kind_and_only_the_details_present() {
+            var dither = GuiderService.BuildGuiderEventPayload(new PhdGuiderMarkerEventArgs { Kind = "dithered", Dx = 2.5, Dy = -1.0 });
+            Assert.That(dither["kind"]!.GetValue<string>(), Is.EqualTo("dithered"));
+            Assert.That(dither["dx_px"]!.GetValue<double>(), Is.EqualTo(2.5));
+            Assert.That(dither["dy_px"]!.GetValue<double>(), Is.EqualTo(-1.0));
+            Assert.That(dither.ContainsKey("error"), Is.False);
+            Assert.That(dither.ContainsKey("status"), Is.False);
+
+            var settle = GuiderService.BuildGuiderEventPayload(new PhdGuiderMarkerEventArgs { Kind = "settle_done", Status = 0 });
+            Assert.That(settle["status"]!.GetValue<int>(), Is.EqualTo(0));
+            Assert.That(settle.ContainsKey("error"), Is.False);
+
+            var lost = GuiderService.BuildGuiderEventPayload(new PhdGuiderMarkerEventArgs {
+                Kind = "star_lost", Frame = 77, StarMass = double.NaN, Snr = 3.2, Error = "low SNR", Status = 2,
+            });
+            Assert.That(lost["frame"]!.GetValue<int>(), Is.EqualTo(77));
+            Assert.That(lost.ContainsKey("star_mass"), Is.False, "NaN is omitted, never serialized");
+            Assert.That(lost["snr"]!.GetValue<double>(), Is.EqualTo(3.2));
+            Assert.That(lost["error"]!.GetValue<string>(), Is.EqualTo("low SNR"));
+            Assert.DoesNotThrow(() => JsonNode.Parse(lost.ToJsonString()));
+        }
+
     }
 }

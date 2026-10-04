@@ -83,6 +83,123 @@ class GuideStep {
 /// setting. At a 2 s guide cadence that is ~13 minutes of history.
 const int kGuideStepHistory = 400;
 
+/// A PHD2 session event other than a step (`guider.event`): what PHD2's own
+/// graph annotates — a dither, the settle window around it, a lost star —
+/// plus the calibration / guiding transitions.
+enum GuideMarkerKind {
+  dithered,
+  settling,
+  settleDone,
+  starLost,
+  calibrationStarted,
+  calibrationComplete,
+  calibrationFailed,
+  guidingStarted,
+  guidingStopped,
+  paused,
+  resumed,
+  lockPositionLost,
+}
+
+class GuideMarker {
+  final DateTime at;
+  final GuideMarkerKind kind;
+  /// Dither offset (px) for [GuideMarkerKind.dithered].
+  final double? dxPx;
+  final double? dyPx;
+  /// PHD2's status: settle_done 0 = ok; star_lost error code.
+  final int? status;
+  final String? error;
+
+  const GuideMarker({
+    required this.at,
+    required this.kind,
+    this.dxPx,
+    this.dyPx,
+    this.status,
+    this.error,
+  });
+
+  static GuideMarkerKind? kindFromWire(String? token) => switch (token) {
+        'dithered' => GuideMarkerKind.dithered,
+        'settling' => GuideMarkerKind.settling,
+        'settle_done' => GuideMarkerKind.settleDone,
+        'star_lost' => GuideMarkerKind.starLost,
+        'calibration_started' => GuideMarkerKind.calibrationStarted,
+        'calibration_complete' => GuideMarkerKind.calibrationComplete,
+        'calibration_failed' => GuideMarkerKind.calibrationFailed,
+        'guiding_started' => GuideMarkerKind.guidingStarted,
+        'guiding_stopped' => GuideMarkerKind.guidingStopped,
+        'paused' => GuideMarkerKind.paused,
+        'resumed' => GuideMarkerKind.resumed,
+        'lock_position_lost' => GuideMarkerKind.lockPositionLost,
+        _ => null,
+      };
+
+  static GuideMarker? fromPayload(Map<String, dynamic> p, DateTime at) {
+    final kind = kindFromWire(p['kind'] is String ? p['kind'] as String : null);
+    if (kind == null) return null;
+    final status = p['status'];
+    final error = p['error'];
+    return GuideMarker(
+      at: at,
+      kind: kind,
+      dxPx: GuideStep._num(p['dx_px']),
+      dyPx: GuideStep._num(p['dy_px']),
+      status: status is int ? status : null,
+      error: error is String && error.isNotEmpty ? error : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is GuideMarker &&
+      other.at == at &&
+      other.kind == kind &&
+      other.dxPx == dxPx &&
+      other.dyPx == dyPx &&
+      other.status == status &&
+      other.error == error;
+
+  @override
+  int get hashCode => Object.hash(at, kind, dxPx, dyPx, status, error);
+}
+
+/// Markers kept alongside the step history. Bounded like the steps; a marker
+/// older than the oldest step is off the graph anyway.
+const int kGuideMarkerHistory = 200;
+
+/// PHD2 session markers for the active server, newest last. Root-scoped for
+/// the same reason as [guideStepsProvider].
+class GuideMarkerNotifier extends Notifier<List<GuideMarker>> {
+  DateTime Function() now = DateTime.now;
+
+  @override
+  List<GuideMarker> build() {
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'guider.event') return;
+      final marker = GuideMarker.fromPayload(event.payload, now());
+      if (marker != null) add(marker);
+    });
+    return const [];
+  }
+
+  void add(GuideMarker marker) {
+    final next = [...state, marker];
+    if (next.length > kGuideMarkerHistory) {
+      next.removeRange(0, next.length - kGuideMarkerHistory);
+    }
+    state = next;
+  }
+
+  void clear() => state = const [];
+}
+
+final guideMarkersProvider =
+    NotifierProvider<GuideMarkerNotifier, List<GuideMarker>>(
+        GuideMarkerNotifier.new);
+
 /// Rolling guide-step history for the active server, newest last. Root-scoped
 /// (not autoDispose) so the trace keeps filling while the user is on another
 /// tab and is already there when they come back to Live.

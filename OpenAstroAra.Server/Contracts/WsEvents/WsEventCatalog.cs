@@ -89,6 +89,13 @@ public static class WsEventCatalog {
     // pixel_scale_arcsec?, star_mass?, snr? }. The client's Live-tab guide graph is built from
     // these; the RMS on GET /equipment/guider stays the daemon's windowed figure.
     public const string GuiderStep = "guider.step";
+    // §63.18 — PHD2's non-step session events, one per PHD2 message, so the client can draw the
+    // markers PHD2's own graph draws: payload { kind, ... } with kind = dithered {dx_px, dy_px} |
+    // settling {distance_px, time_sec, settle_time_sec} | settle_done {status, error?} |
+    // star_lost {frame?, star_mass?, snr?, distance_px?, status?, error?} | calibration_started |
+    // calibration_complete | calibration_failed {error?} | guiding_started | guiding_stopped |
+    // paused | resumed | lock_position_lost. Detail fields are omitted when PHD2 sent none.
+    public const string GuiderEvent = "guider.event";
     public const string GuiderDitherComplete = "guider.dither_complete";
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
@@ -274,7 +281,7 @@ public static class WsEventCatalog {
         SwitchValueMismatch,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
-        GuiderState, GuiderStep, GuiderDitherComplete, GuiderFaultActionTaken,
+        GuiderState, GuiderStep, GuiderEvent, GuiderDitherComplete, GuiderFaultActionTaken,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

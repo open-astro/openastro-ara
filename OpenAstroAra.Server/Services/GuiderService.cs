@@ -201,6 +201,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
             guider.PHD2ConnectionLost += OnConnectionLost;
             guider.GuideEvent += OnGuideStep;
+            guider.MarkerEvent += OnGuiderMarker;
             // §42.2: a structured device fault (guide camera dropped) — the link stays up, so this runs
             // the on_guider_lost policy without dropping to Error or starting §63.3 recovery.
             guider.EquipmentFault += OnEquipmentFault;
@@ -432,6 +433,66 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    // §63.18 — PHD2's non-step session events (dither / settling / settle done / star lost /
+    // calibration + guiding transitions) relayed as guider.event so the client draws PHD2's own
+    // graph markers. Same stale-instance guard and fire-and-forget discipline as OnGuideStep.
+    private void OnGuiderMarker(object? sender, PhdGuiderMarkerEventArgs marker) {
+        if (marker is null) {
+            return;
+        }
+        lock (_gate) {
+            if (!ReferenceEquals(sender, _guider)) {
+                return;
+            }
+        }
+        if (_ws is not null) {
+            _ = PublishGuiderEventAsync(BuildGuiderEventPayload(marker));
+        }
+    }
+
+    /// <summary>The <c>guider.event</c> payload: <c>kind</c> plus whichever details the PHD2
+    /// message carried (absent fields are omitted, not nulled). Pure for unit tests.</summary>
+    internal static JsonObject BuildGuiderEventPayload(PhdGuiderMarkerEventArgs marker) {
+        ArgumentNullException.ThrowIfNull(marker);
+        var payload = new JsonObject { ["kind"] = marker.Kind };
+        void Put(string key, double? v) {
+            if (v is double d && double.IsFinite(d)) {
+                payload[key] = d;
+            }
+        }
+        Put("dx_px", marker.Dx);
+        Put("dy_px", marker.Dy);
+        Put("distance_px", marker.Distance);
+        Put("time_sec", marker.TimeSec);
+        Put("settle_time_sec", marker.SettleTimeSec);
+        Put("star_mass", marker.StarMass);
+        Put("snr", marker.Snr);
+        if (marker.Status is int status) {
+            payload["status"] = status;
+        }
+        if (marker.Frame is int frame) {
+            payload["frame"] = frame;
+        }
+        if (!string.IsNullOrEmpty(marker.Error)) {
+            payload["error"] = marker.Error;
+        }
+        return payload;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort: a broadcaster fault must never reach the guider's socket listener. Log-and-recover boundary.")]
+    private async Task PublishGuiderEventAsync(JsonObject payload) {
+        try {
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws!.PublishAsync(WsEventCatalog.GuiderEvent, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogGuiderEventPublishFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "guider.event WS event failed to publish")]
+    private partial void LogGuiderEventPublishFailed(Exception ex);
+
     /// <summary>
     /// The <c>guider.step</c> payload. Raw distances are the guider's star offset in guide-camera
     /// pixels; the arcsec pair is only present once the guider has reported a pixel scale. The
@@ -546,6 +607,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (_guider is not null) {
             _guider.PHD2ConnectionLost -= OnConnectionLost;
             _guider.GuideEvent -= OnGuideStep;
+            _guider.MarkerEvent -= OnGuiderMarker;
             _guider.EquipmentFault -= OnEquipmentFault;
             _guider.EquipmentReconnected -= OnEquipmentReconnected;
             _guider.Disconnect();
