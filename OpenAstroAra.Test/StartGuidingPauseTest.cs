@@ -34,6 +34,12 @@ namespace OpenAstroAra.Test {
     public class StartGuidingPauseTest {
         private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
 
+        /// <summary>Reports on the caller's thread: <see cref="Progress{T}"/> posts to the thread pool,
+        /// and a short delay is a race under parallel fixtures (#1265).</summary>
+        private sealed class SyncProgress(Action<ApplicationStatus> report) : IProgress<ApplicationStatus> {
+            public void Report(ApplicationStatus value) => report(value);
+        }
+
         private static Mock<IGuiderMediator> Guider() {
             var guider = new Mock<IGuiderMediator>();
             // Validate() (run on attach) reads the guider's info; a connected guider validates clean.
@@ -69,7 +75,7 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(() => ++calls >= 2);
             var (item, gate) = Rig(guider.Object);
             string? status = null;
-            var progress = new Progress<ApplicationStatus>(s => status = s.Status);
+            var progress = new SyncProgress(s => status = s.Status);
 
             var execute = item.Execute(progress, CancellationToken.None);
             await Task.Delay(50);
@@ -83,7 +89,6 @@ namespace OpenAstroAra.Test {
 
             Assert.That(calls, Is.EqualTo(2), "Resume retried and the second attempt guided");
             Assert.That(gate.IsPauseRequested, Is.False);
-            await Task.Delay(10);
             Assert.That(status, Does.Contain("Guiding did not start"));
         }
 
@@ -95,12 +100,11 @@ namespace OpenAstroAra.Test {
                 .Returns(() => ++calls == 1 ? throw new InvalidOperationException("polar-alignment session in progress") : Task.FromResult(true));
             var (item, gate) = Rig(guider.Object);
             string? status = null;
-            var progress = new Progress<ApplicationStatus>(s => status = s.Status);
+            var progress = new SyncProgress(s => status = s.Status);
 
             var execute = item.Execute(progress, CancellationToken.None);
             await Task.Delay(50);
             Assert.That(gate.IsPauseRequested, Is.True);
-            await Task.Delay(10);
             Assert.That(status, Does.Contain("polar-alignment session in progress"));
 
             gate.Resume();

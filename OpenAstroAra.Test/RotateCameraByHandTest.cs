@@ -40,6 +40,12 @@ namespace OpenAstroAra.Test {
             return rotator;
         }
 
+        /// <summary>Reports on the caller's thread: <see cref="Progress{T}"/> posts to the thread pool,
+        /// and under parallel fixtures (#1265) a short delay did not always see the status (CI, #1269).</summary>
+        private sealed class SyncProgress(Action<ApplicationStatus> report) : IProgress<ApplicationStatus> {
+            public void Report(ApplicationStatus value) => report(value);
+        }
+
         private static (RotateCameraByHand Item, SequenceRootContainer Root, PauseGate Gate) Rig(IRotationAssistExecutor assist, bool rotatorConnected = false) {
             var gate = new PauseGate();
             var root = new SequenceRootContainer { PauseGate = gate };
@@ -87,7 +93,7 @@ namespace OpenAstroAra.Test {
             assist.Setup(a => a.StopAsync()).Returns(Task.CompletedTask);
             var (item, _, gate) = Rig(assist.Object);
             string? status = null;
-            var progress = new Progress<ApplicationStatus>(s => status = s.Status);
+            var progress = new SyncProgress(s => status = s.Status);
 
             var execute = item.Execute(progress, CancellationToken.None);
             // The step is sitting inside the pause: armed as AwaitingUser, readout running, not finished.
@@ -103,7 +109,6 @@ namespace OpenAstroAra.Test {
 
             assist.Verify(a => a.StopAsync(), Times.Once, "Resume ends the readout before the next instruction takes the camera");
             Assert.That(gate.IsPauseRequested, Is.False);
-            await Task.Delay(10);
             Assert.That(status, Does.Contain("299"));
         }
 
@@ -159,13 +164,12 @@ namespace OpenAstroAra.Test {
                 .ThrowsAsync(new RotationAssistNotReadyException("the plate solver binary is missing at /usr/bin/astap_cli"));
             var (item, _, gate) = Rig(assist.Object);
             string? status = null;
-            var progress = new Progress<ApplicationStatus>(s => status = s.Status);
+            var progress = new SyncProgress(s => status = s.Status);
 
             await item.Execute(progress, CancellationToken.None);
 
             Assert.That(gate.IsPauseRequested, Is.False);
             assist.Verify(a => a.StopAsync(), Times.Never);
-            await Task.Delay(10);
             Assert.That(status, Does.Contain("skipped"));
         }
 
