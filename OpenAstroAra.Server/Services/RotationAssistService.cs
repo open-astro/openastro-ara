@@ -38,6 +38,9 @@ public interface IRotationAssistService {
     Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct);
     /// <summary>Stop the readout (idempotent; waits for the in-flight solve to drain).</summary>
     Task StopAsync();
+    /// <summary>Done: stop the loop and take ONE 1×1 frame at the full plate-solve exposure; the readout ends
+    /// <c>confirmed</c> (within tolerance) or <c>not_confirmed</c>.</summary>
+    Task ConfirmAsync(CancellationToken ct);
     RotationAssistStatusDto GetStatus();
     /// <summary>The latest solved frame rendered as JPEG (auto-stretched, stars ringed) with its sequence
     /// number, or null before the first successful solve.</summary>
@@ -55,6 +58,12 @@ public interface IRotationAssistService {
 /// the sky on this optical train); that history survives a restart toward the SAME target, so single shots
 /// still get "keep going / go back". One readout at a time; repeated solve failures end it in <c>error</c>
 /// rather than spinning against a cloud.
+///
+/// Binning: the loop runs at the camera's largest square binning capped at 4 (a protractor needs no
+/// resolution; binned frames download and solve several times faster, and a shorter exposure sees the same
+/// stars). When the user says Done, <see cref="ConfirmAsync"/> takes one 1×1 frame at the profile's full
+/// plate-solve exposure and judges THAT against the tolerance — the approval comes from a full-resolution
+/// solve, never from the quick binned one.
 /// </summary>
 public sealed partial class RotationAssistService : IRotationAssistService, IDisposable {
 
@@ -62,6 +71,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     internal const int RecentWindow = 120;
     internal const double MinExposureSeconds = 0.01;
     internal const double MaxExposureSeconds = 60;
+    internal const int MaxLoopBinning = 4;
 
     private readonly IPositionAngleSolver _solver;
     private readonly Func<double> _toleranceDeg;
@@ -73,7 +83,9 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     private string _state = "idle";
     private string _mode = RotationAssistModes.Loop;
     private double _exposureSeconds;
+    private int _binning = 1;
     private double? _target;
+    private RotationAssistSampleDto? _confirmation;
     private long _seq;
     private DateTimeOffset? _started;
     private RotationAssistSampleDto? _latest;
@@ -98,6 +110,14 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         get {
             lock (_gate) {
                 return _state == "running";
+            }
+        }
+    }
+
+    private bool IsBusy {
+        get {
+            lock (_gate) {
+                return _state is "running" or "confirming";
             }
         }
     }
@@ -129,11 +149,33 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         var other => throw new ArgumentException($"mode must be '{RotationAssistModes.Loop}' or '{RotationAssistModes.SingleShot}', not '{other}'.", nameof(requested)),
     };
 
+    /// <summary>The loop's binning: the request's (1 … the camera's maximum, capped at <see cref="MaxLoopBinning"/>;
+    /// an unknown camera maximum allows up to the cap) or, absent, the largest allowed. Pure — unit-tested.</summary>
+    internal static int ResolveBinning(int? requested, int maxBinning) {
+        var ceiling = maxBinning > 0 ? Math.Min(maxBinning, MaxLoopBinning) : MaxLoopBinning;
+        if (requested is not { } b) {
+            return Math.Max(1, ceiling);
+        }
+        if (b < 1 || b > ceiling) {
+            throw new ArgumentOutOfRangeException(nameof(requested), b, $"binning must be between 1 and {ceiling} on this camera.");
+        }
+        return b;
+    }
+
+    private int MaxBinningQuietly() {
+        try {
+            return Math.Max(0, _solver.MaxBinning);
+        } catch (Exception ex) when (ex is not OutOfMemoryException) {
+            return 0;
+        }
+    }
+
     public async Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         var target = NormaliseTarget(request.PositionAngleDeg);
         var exposure = ResolveExposure(request.ExposureSeconds, DefaultExposureQuietly());
         var mode = ResolveMode(request.Mode);
+        var binning = ResolveBinning(request.Binning, MaxBinningQuietly());
         try {
             _solver.EnsureReady();
         } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
@@ -142,8 +184,10 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         await _opLock.WaitAsync(ct).ConfigureAwait(false);
         try {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (IsActive) {
-                throw new InvalidOperationException("the rotation readout is already running");
+            if (IsBusy) {
+                throw new InvalidOperationException(IsActive
+                    ? "the rotation readout is already running"
+                    : "the rotation readout is confirming the framing — wait for it, or stop it first");
             }
             lock (_gate) {
                 // A new target is a new job: the history (and the advice built on it) starts over. The same
@@ -157,6 +201,8 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 _state = "running";
                 _mode = mode;
                 _exposureSeconds = exposure;
+                _binning = binning;
+                _confirmation = null;
                 _target = target;
                 _started = DateTimeOffset.UtcNow;
                 _error = null;
@@ -166,34 +212,70 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
             _loopCts = new CancellationTokenSource();
             var loopCt = _loopCts.Token;
             var single = mode == RotationAssistModes.SingleShot;
-            _loop = Task.Run(() => RunLoopAsync(target, exposure, single, loopCt), CancellationToken.None);
-            LogStarted(target, mode, exposure);
+            _loop = Task.Run(() => RunLoopAsync(target, exposure, binning, single, loopCt), CancellationToken.None);
+            LogStarted(target, mode, exposure, binning);
         } finally {
             _opLock.Release();
         }
     }
 
+    public async Task ConfirmAsync(CancellationToken ct) {
+        await _opLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            double target;
+            lock (_gate) {
+                if (_state == "confirming") {
+                    throw new InvalidOperationException("the rotation readout is already confirming the framing");
+                }
+                if (_target is not { } t) {
+                    throw new InvalidOperationException("nothing to confirm — start the readout toward a framing angle first");
+                }
+                target = t;
+            }
+            // Stop the loop (if any) and let its in-flight solve drain, so the full frame never collides with it.
+            await CancelLoopAsync().ConfigureAwait(false);
+            var exposure = DefaultExposureQuietly();
+            lock (_gate) {
+                _state = "confirming";
+                _error = null;
+                _confirmation = null;
+            }
+            _loopCts = new CancellationTokenSource();
+            var loopCt = _loopCts.Token;
+            _loop = Task.Run(() => RunConfirmAsync(target, exposure, loopCt), CancellationToken.None);
+            LogConfirming(target, exposure);
+        } finally {
+            _opLock.Release();
+        }
+    }
+
+    /// <summary>Cancel the background task and wait for it to drain. Caller holds <see cref="_opLock"/>.</summary>
+    private async Task CancelLoopAsync() {
+        var (cts, loop) = (_loopCts, _loop);
+        _loopCts = null;
+        _loop = null;
+        if (cts is not null) {
+            await cts.CancelAsync().ConfigureAwait(false);
+        }
+        if (loop is not null) {
+            try {
+                // Let the in-flight capture/solve drain so the next camera user never collides with it.
+                await loop.WaitAsync(TimeSpan.FromSeconds(90)).ConfigureAwait(false);
+            } catch (TimeoutException) {
+                LogStopTimedOut();
+            }
+        }
+        cts?.Dispose();
+    }
+
     public async Task StopAsync() {
         await _opLock.WaitAsync().ConfigureAwait(false);
         try {
-            var (cts, loop) = (_loopCts, _loop);
-            _loopCts = null;
-            _loop = null;
-            if (cts is not null) {
-                await cts.CancelAsync().ConfigureAwait(false);
-            }
-            if (loop is not null) {
-                try {
-                    // Let the in-flight capture/solve drain so the next camera user never collides with it.
-                    await loop.WaitAsync(TimeSpan.FromSeconds(90)).ConfigureAwait(false);
-                } catch (TimeoutException) {
-                    LogStopTimedOut();
-                }
-            }
-            cts?.Dispose();
+            await CancelLoopAsync().ConfigureAwait(false);
             bool wasRunning;
             lock (_gate) {
-                wasRunning = _state == "running";
+                wasRunning = _state is "running" or "confirming";
                 if (wasRunning) {
                     _state = "stopped";
                 }
@@ -209,6 +291,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     public RotationAssistStatusDto GetStatus() {
         var tolerance = ToleranceQuietly();
         var defaultExposure = DefaultExposureQuietly();
+        var maxBinning = MaxBinningQuietly();
         lock (_gate) {
             return new RotationAssistStatusDto(
                 Active: _state == "running",
@@ -226,7 +309,11 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 FrameSeq: _frameSeq,
                 Mode: _mode,
                 ExposureSeconds: _exposureSeconds > 0 ? _exposureSeconds : defaultExposure,
-                DefaultExposureSeconds: defaultExposure);
+                DefaultExposureSeconds: defaultExposure,
+                Binning: _binning,
+                AutoBinning: ResolveBinning(null, maxBinning),
+                MaxBinning: maxBinning,
+                Confirmation: _confirmation);
         }
     }
 
@@ -261,12 +348,12 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Loop boundary: a capture or solver fault is one failed sample (counted; the loop ends in `error` after MaxConsecutiveFailures, or at once in single mode), never a faulted background task.")]
-    private async Task RunLoopAsync(double target, double exposureSeconds, bool single, CancellationToken ct) {
+    private async Task RunLoopAsync(double target, double exposureSeconds, int binning, bool single, CancellationToken ct) {
         try {
             while (!ct.IsCancellationRequested) {
                 RotationSolve? solved = null;
                 try {
-                    solved = await _solver.SolvePositionAngleAsync(exposureSeconds, ct).ConfigureAwait(false);
+                    solved = await _solver.SolvePositionAngleAsync(exposureSeconds, binning, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                     return;
                 } catch (Exception ex) {
@@ -277,20 +364,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                     var delta = CenteringService.FoldRotationDelta(target, pa);
                     var jpeg = RenderQuietly(s.Frame);
                     lock (_gate) {
-                        _seq++;
-                        _consecutiveFailures = 0;
-                        _latest = new RotationAssistSampleDto(
-                            _seq, DateTimeOffset.UtcNow, Math.Round(AstroUtil.EuclidianModulus(pa, 360), 2), Math.Round(delta, 2),
-                            Math.Round(s.RaDeg, 4), Math.Round(s.DecDeg, 4), Math.Round(s.PixelScaleArcsec, 3), s.Flipped,
-                            s.Frame.Width, s.Frame.Height);
-                        _recent.Enqueue(_latest);
-                        while (_recent.Count > RecentWindow) {
-                            _recent.Dequeue();
-                        }
-                        if (jpeg is not null) {
-                            _frame = jpeg;
-                            _frameSeq = _seq;
-                        }
+                        RecordSample(s, delta, jpeg);
                         if (single) {
                             _state = "stopped";
                         }
@@ -324,6 +398,63 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         }
     }
 
+    /// <summary>Append one solve as the latest sample (and the picture, when it rendered). Caller holds <see cref="_gate"/>.</summary>
+    private RotationAssistSampleDto RecordSample(RotationSolve s, double delta, byte[]? jpeg) {
+        _seq++;
+        _consecutiveFailures = 0;
+        _latest = new RotationAssistSampleDto(
+            _seq, DateTimeOffset.UtcNow, Math.Round(AstroUtil.EuclidianModulus(s.PositionAngleDeg, 360), 2), Math.Round(delta, 2),
+            Math.Round(s.RaDeg, 4), Math.Round(s.DecDeg, 4), Math.Round(s.PixelScaleArcsec, 3), s.Flipped,
+            s.Frame.Width, s.Frame.Height);
+        _recent.Enqueue(_latest);
+        while (_recent.Count > RecentWindow) {
+            _recent.Dequeue();
+        }
+        if (jpeg is not null) {
+            _frame = jpeg;
+            _frameSeq = _seq;
+        }
+        return _latest;
+    }
+
+    // The Done check: one 1×1 frame at the full plate-solve exposure. Its solve becomes the latest sample (so
+    // the picture and the scope box on the sky show the real pointing) AND the confirmation; the verdict is
+    // the tolerance applied to it. A failed solve ends in `error` — the user retries or goes back to the loop.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Task boundary: a capture or solver fault is the confirmation failing (reported in `error`), never a faulted background task.")]
+    private async Task RunConfirmAsync(double target, double exposureSeconds, CancellationToken ct) {
+        RotationSolve? solved = null;
+        try {
+            solved = await _solver.SolvePositionAngleAsync(exposureSeconds, 1, ct).ConfigureAwait(false);
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            return;
+        } catch (Exception ex) {
+            LogSolveFaulted(ex);
+        }
+        if (ct.IsCancellationRequested) {
+            return;
+        }
+        if (solved is { } s && double.IsFinite(s.PositionAngleDeg)) {
+            var delta = CenteringService.FoldRotationDelta(target, s.PositionAngleDeg);
+            var jpeg = RenderQuietly(s.Frame);
+            var tolerance = ToleranceQuietly();
+            bool within;
+            lock (_gate) {
+                _confirmation = RecordSample(s, delta, jpeg);
+                within = Math.Abs(_confirmation.DeltaDeg) <= tolerance;
+                _state = within ? "confirmed" : "not_confirmed";
+            }
+            LogConfirmed(s.PositionAngleDeg, delta, within);
+            return;
+        }
+        lock (_gate) {
+            _consecutiveFailures++;
+            _state = "error";
+            _error = "the full-resolution frame would not solve — check the sky and the plate-solve exposure, then press Done again";
+        }
+        LogConfirmFailed();
+    }
+
     // §64's renderer (auto-stretch + star rings, ≤1024 px) gives the readout its picture. Frames too small
     // to carry stars (unit-test stubs) are skipped; a render fault never touches the readout.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -348,8 +479,17 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         _opLock.Dispose();
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout started toward position angle {Target:0.#}° ({Mode}, {Exposure:0.##} s)")]
-    private partial void LogStarted(double target, string mode, double exposure);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout started toward position angle {Target:0.#}° ({Mode}, {Exposure:0.##} s, {Binning}×{Binning})")]
+    private partial void LogStarted(double target, string mode, double exposure, int binning);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout: confirming the framing toward {Target:0.#}° with one 1×1 frame at {Exposure:0.##} s")]
+    private partial void LogConfirming(double target, double exposure);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout: full-resolution solve {Solved:0.##}°, {Delta:+0.##;-0.##}° to the target — {Within}")]
+    private partial void LogConfirmed(double solved, double delta, bool within);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: the confirmation frame would not solve")]
+    private partial void LogConfirmFailed();
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout stopped")]
     private partial void LogStopped();

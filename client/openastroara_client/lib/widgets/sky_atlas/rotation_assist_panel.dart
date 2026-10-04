@@ -32,6 +32,8 @@ class RotationAssistPanel extends ConsumerStatefulWidget {
 class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
   final _exposureCtrl = TextEditingController();
   String _mode = RotationAssistModes.loop;
+  // null = the daemon's auto choice (the camera's largest, capped at 4).
+  int? _binning;
   // Set once from the daemon's default so a user's own value is never clobbered
   // by a later status poll.
   bool _exposureSeeded = false;
@@ -44,15 +46,37 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
 
   void _seedExposure(RotationAssistStatus status) {
     if (_exposureSeeded) return;
-    final s = status.exposureSeconds > 0
-        ? status.exposureSeconds
-        : status.defaultExposureSeconds;
-    if (s <= 0) return;
+    if (status.defaultExposureSeconds <= 0 && status.exposureSeconds <= 0) {
+      return;
+    }
     _exposureSeeded = true;
+    // A readout already running / just run: show its settings. Otherwise the
+    // suggested loop exposure for the auto binning.
+    final s = status.exposureSeconds > 0 && status.seq > 0
+        ? status.exposureSeconds
+        : status.defaultExposureSeconds > 0
+        ? suggestedLoopExposure(
+            status.defaultExposureSeconds,
+            status.autoBinning,
+          )
+        : status.exposureSeconds;
     _exposureCtrl.text = _fmtSeconds(s);
     if (status.mode == RotationAssistModes.single) {
       _mode = RotationAssistModes.single;
     }
+  }
+
+  /// A binning choice re-suggests the exposure: b² more light per pixel.
+  void _pickBinning(int? b, RotationAssistStatus status) {
+    setState(() {
+      _binning = b;
+      final full = status.defaultExposureSeconds;
+      if (full > 0) {
+        _exposureCtrl.text = _fmtSeconds(
+          suggestedLoopExposure(full, b ?? status.autoBinning),
+        );
+      }
+    });
   }
 
   static String _fmtSeconds(double s) =>
@@ -72,6 +96,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
         positionAngleDeg: positionAngleDeg,
         exposureSeconds: _exposureSeconds,
         mode: _mode,
+        binning: _binning,
       );
 
   @override
@@ -82,8 +107,11 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     _seedExposure(status);
     final hasTarget = framing.hasTarget;
     final exposureOk = _exposureSeconds != null || _exposureCtrl.text.isEmpty;
-    final canStart = hasTarget && !live.busy && !status.active && exposureOk;
+    final canStart = hasTarget && !live.busy && !status.busy && exposureOk;
     final single = _mode == RotationAssistModes.single;
+    // Done: something has solved toward this target and the camera is free.
+    final canConfirm =
+        status.latest != null && !live.busy && !status.busy && hasTarget;
 
     return Material(
       color: AraColors.bgPanel,
@@ -105,12 +133,25 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                 children: [
                   _targetBlock(framing),
                   const SizedBox(height: AraSpace.s12),
-                  _captureControls(single),
+                  _captureControls(single, status),
                   const SizedBox(height: AraSpace.s12),
                   Row(
                     children: [
                       Expanded(
-                        child: single
+                        child: status.confirming
+                            ? FilledButton.tonalIcon(
+                                key: const Key('rotation-assist-confirming'),
+                                onPressed: null,
+                                icon: const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                label: const Text('Checking at 1×1…'),
+                              )
+                            : single
                             ? FilledButton.icon(
                                 key: const Key('rotation-assist-take-frame'),
                                 onPressed: canStart
@@ -159,6 +200,24 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                                 icon: const Icon(Icons.loop, size: 18),
                                 label: const Text('Start loop'),
                               ),
+                      ),
+                      const SizedBox(width: AraSpace.s8),
+                      // Done: the approval comes from one 1×1 frame at the
+                      // full exposure, never from the quick binned loop.
+                      FilledButton.icon(
+                        key: const Key('rotation-assist-done'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AraColors.accentConnected,
+                        ),
+                        onPressed: canConfirm
+                            ? () => unawaited(
+                                ref
+                                    .read(rotationAssistProvider.notifier)
+                                    .confirm(),
+                              )
+                            : null,
+                        icon: const Icon(Icons.task_alt, size: 18),
+                        label: const Text('Done'),
                       ),
                     ],
                   ),
@@ -303,7 +362,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     );
   }
 
-  Widget _captureControls(bool single) => Column(
+  Widget _captureControls(bool single, RotationAssistStatus status) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Row(
@@ -343,6 +402,8 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
         ],
       ),
       const SizedBox(height: AraSpace.s8),
+      _binningRow(status),
+      const SizedBox(height: AraSpace.s8),
       SegmentedButton<String>(
         key: const Key('rotation-assist-mode'),
         showSelectedIcon: false,
@@ -368,12 +429,47 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     ],
   );
 
+  /// 1× / 2× / 4× for the loop's frames; choices above the camera's ceiling
+  /// are greyed. "Auto" is the daemon's pick (the ceiling, capped at 4).
+  Widget _binningRow(RotationAssistStatus status) {
+    final max = status.maxBinning > 0 ? status.maxBinning : 4;
+    final auto = status.autoBinning;
+    Widget chip(int? b) {
+      final allowed = b == null || b <= max;
+      final selected = _binning == b;
+      return ChoiceChip(
+        key: Key('rotation-assist-bin-${b ?? 'auto'}'),
+        label: Text(b == null ? 'Auto ($auto×)' : '$b×$b'),
+        selected: selected,
+        onSelected: allowed ? (_) => _pickBinning(b, status) : null,
+        visualDensity: VisualDensity.compact,
+        labelStyle: const TextStyle(fontSize: 12),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Binning for the loop',
+          style: TextStyle(fontSize: 13, color: AraColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [chip(null), chip(1), chip(2), chip(4)],
+        ),
+      ],
+    );
+  }
+
   Widget _readout(RotationAssistLive live) {
     final status = live.status;
     final latest = status.latest;
     final hasSomething =
         latest != null ||
-        status.active ||
+        status.busy ||
         status.state == RotationAssistStates.error ||
         live.error != null;
     if (!hasSomething) {
@@ -391,8 +487,22 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     }
     final hint = rotationHint(status);
     final delta = latest?.deltaDeg;
-    final onTarget = hint.advice == RotateAdvice.onTarget;
+    final onTarget =
+        hint.advice == RotateAdvice.onTarget ||
+        hint.advice == RotateAdvice.confirmed;
     final (icon, color) = switch (hint.advice) {
+      RotateAdvice.confirming => (
+        Icons.hourglass_top_rounded,
+        AraColors.accentInfo,
+      ),
+      RotateAdvice.confirmed => (
+        Icons.verified_outlined,
+        AraColors.accentConnected,
+      ),
+      RotateAdvice.notConfirmed => (
+        Icons.error_outline,
+        AraColors.accentWarning,
+      ),
       RotateAdvice.keepGoing => (
         Icons.arrow_forward_rounded,
         AraColors.accentConnected,
@@ -442,27 +552,34 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
         const SizedBox(height: AraSpace.s8),
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 18, color: color),
-                  const SizedBox(width: 6),
-                  Text(
-                    hint.title,
-                    key: const Key('rotation-assist-advice'),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: color,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 18, color: color),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        hint.title,
+                        key: const Key('rotation-assist-advice'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -504,7 +621,11 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Frame ${live.frameSeq} · the arrow is north in this picture; turn the camera until the picture\'s edges line up with the ${onTarget ? 'green' : 'amber'} rectangle. On the sky, the amber scope box shows where the camera points right now beside the planned framing.',
+            'Frame ${live.frameSeq}${status.confirmation?.seq == live.frameSeq
+                ? ' (1×1 check)'
+                : status.binning > 1
+                ? ' (${status.binning}×${status.binning})'
+                : ''} · the arrow is north in this picture; turn the camera until the picture\'s edges line up with the ${onTarget ? 'green' : 'amber'} rectangle. On the sky, the amber scope box shows where the camera points right now beside the planned framing.',
             style: const TextStyle(
               fontSize: 11.5,
               color: AraColors.textSecondary,

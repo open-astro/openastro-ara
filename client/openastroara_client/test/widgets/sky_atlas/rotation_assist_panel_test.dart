@@ -12,8 +12,9 @@ import 'package:openastroara/widgets/sky_atlas/rotation_assist_panel.dart';
 /// Records start/stop calls instead of talking to a daemon.
 class _Stub extends RotationAssistNotifier {
   final RotationAssistLive initial;
-  final starts = <({double pa, double? exposure, String mode})>[];
+  final starts = <({double pa, double? exposure, String mode, int? bin})>[];
   int stops = 0;
+  int confirms = 0;
   _Stub(this.initial);
   @override
   RotationAssistLive build() => initial;
@@ -22,12 +23,21 @@ class _Stub extends RotationAssistNotifier {
     required double positionAngleDeg,
     double? exposureSeconds,
     String mode = RotationAssistModes.loop,
+    int? binning,
   }) async {
-    starts.add((pa: positionAngleDeg, exposure: exposureSeconds, mode: mode));
+    starts.add((
+      pa: positionAngleDeg,
+      exposure: exposureSeconds,
+      mode: mode,
+      bin: binning,
+    ));
   }
 
   @override
   Future<void> stop() async => stops++;
+
+  @override
+  Future<void> confirm() async => confirms++;
 }
 
 final _pngBytes = base64Decode(
@@ -67,7 +77,11 @@ Future<(_Stub, ProviderContainer)> _pump(
 
 void main() {
   const idleWithDefault = RotationAssistLive(
-    status: RotationAssistStatus(defaultExposureSeconds: 3),
+    status: RotationAssistStatus(
+      defaultExposureSeconds: 3,
+      autoBinning: 1,
+      maxBinning: 1,
+    ),
   );
 
   testWidgets('shows the framed target and its planned angle', (tester) async {
@@ -104,7 +118,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('rotation-assist-start')));
     await tester.pump();
-    expect(stub.starts, [(pa: 120.0, exposure: 1.5, mode: 'loop')]);
+    expect(stub.starts, [(pa: 120.0, exposure: 1.5, mode: 'loop', bin: null)]);
   });
 
   testWidgets('Single mode offers Take frame and sends single', (tester) async {
@@ -117,6 +131,126 @@ void main() {
     expect(stub.starts.single.mode, 'single');
     expect(stub.starts.single.exposure, 3.0);
   });
+
+  testWidgets('binning: auto suggests the exposure, a 4× chip sends 4 and '
+      'quarters it twice; chips above the camera ceiling are greyed', (
+    tester,
+  ) async {
+    const status = RotationAssistStatus(
+      defaultExposureSeconds: 4,
+      autoBinning: 2,
+      maxBinning: 2,
+    );
+    final (stub, _) = await _pump(
+      tester,
+      const RotationAssistLive(status: status),
+    );
+    final field = find.byKey(const Key('rotation-assist-exposure'));
+    // Auto = 2×: 4 s / 4 = 1 s suggested.
+    expect(tester.widget<TextField>(field).controller!.text, '1');
+    // 4× is above this camera's ceiling.
+    final four = tester.widget<ChoiceChip>(
+      find.byKey(const Key('rotation-assist-bin-4')),
+    );
+    expect(four.onSelected, isNull);
+    await tester.tap(find.byKey(const Key('rotation-assist-bin-1')));
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text, '4');
+    await tester.tap(find.byKey(const Key('rotation-assist-start')));
+    await tester.pump();
+    expect(stub.starts.single.bin, 1);
+    expect(stub.starts.single.exposure, 4.0);
+  });
+
+  testWidgets('Done is enabled once something solved and sends confirm', (
+    tester,
+  ) async {
+    final (stubIdle, _) = await _pump(tester, idleWithDefault);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('rotation-assist-done')))
+          .onPressed,
+      isNull,
+    );
+    expect(stubIdle.confirms, 0);
+
+    const solved = RotationAssistStatus(
+      state: RotationAssistStates.stopped,
+      targetPositionAngleDeg: 120,
+      latest: RotationAssistSample(
+        seq: 1,
+        solvedPositionAngleDeg: 119.5,
+        deltaDeg: 0.5,
+      ),
+      withinTolerance: true,
+    );
+    final (stub, _) = await _pump(
+      tester,
+      const RotationAssistLive(status: solved),
+    );
+    await tester.tap(find.byKey(const Key('rotation-assist-done')));
+    await tester.pump();
+    expect(stub.confirms, 1);
+  });
+
+  testWidgets(
+    'the confirmation outcomes read approved / not quite / checking',
+    (tester) async {
+      const check = RotationAssistSample(
+        seq: 5,
+        solvedPositionAngleDeg: 119.6,
+        deltaDeg: 0.4,
+      );
+      await _pump(
+        tester,
+        const RotationAssistLive(
+          status: RotationAssistStatus(
+            state: RotationAssistStates.confirmed,
+            targetPositionAngleDeg: 120,
+            latest: check,
+            confirmation: check,
+            withinTolerance: true,
+          ),
+        ),
+      );
+      expect(find.text('Framing approved'), findsOneWidget);
+
+      const off = RotationAssistSample(
+        seq: 6,
+        solvedPositionAngleDeg: 123,
+        deltaDeg: -3,
+      );
+      await _pump(
+        tester,
+        const RotationAssistLive(
+          status: RotationAssistStatus(
+            state: RotationAssistStates.notConfirmed,
+            targetPositionAngleDeg: 120,
+            latest: off,
+            confirmation: off,
+          ),
+        ),
+      );
+      expect(find.text('Not quite'), findsOneWidget);
+      expect(find.textContaining('3.0° off'), findsOneWidget);
+
+      await _pump(
+        tester,
+        const RotationAssistLive(
+          status: RotationAssistStatus(
+            state: RotationAssistStates.confirming,
+            targetPositionAngleDeg: 120,
+            latest: off,
+          ),
+        ),
+      );
+      expect(
+        find.byKey(const Key('rotation-assist-confirming')),
+        findsOneWidget,
+      );
+      expect(find.text('Checking at full resolution'), findsOneWidget);
+    },
+  );
 
   testWidgets('a bad exposure blocks the start', (tester) async {
     final (stub, _) = await _pump(tester, idleWithDefault);

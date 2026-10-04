@@ -1042,9 +1042,9 @@ const Map<String, Help> helpRegistry = {
     body:
         'A rig without a motorised rotator still gets the framing you planned. On the Plan screen, frame your target on the sky and dial the angle, '
         'slew the mount there (GoTo), then open **Rotate camera** — from the toolbar or the Framing card.\n\n'
-        '* Set an **exposure** (the profile\'s plate-solve exposure is the default). **Single** takes one frame per press of *Take frame*: shoot, turn, shoot again. **Loop** solves frame after frame while you turn, until you stop it.\n'
+        '* Set an **exposure** and a **binning**. The loop runs binned by default (the camera\'s largest, up to 4×4): a protractor needs no resolution, and binned frames download and solve several times faster on a much shorter exposure. **Single** takes one frame per press of *Take frame*: shoot, turn, shoot again. **Loop** solves frame after frame while you turn, until you stop it.\n'
         '* Each solve shows how far the camera angle is from the planned one. Loosen the camera, turn it by about that much, then watch the next solve. **Keep going** means the same way, **Go back** means you turned past it.\n'
-        '* Within the rotation tolerance reads **On target** — tighten the camera. The picture is the solved frame with north marked and the planned framing drawn over it, and the amber scope box on the sky shows where the camera really points beside the planned (blue) framing.\n'
+        '* Within the rotation tolerance reads **On target**. Press **Done**: Ara takes one 1×1 frame at the full plate-solve exposure and judges that — **Framing approved** means tighten the camera and you are done; **Not quite** says how far off the full-resolution solve is, so keep adjusting. The picture is the solved frame with north marked and the planned framing drawn over it, and the amber scope box on the sky shows where the camera really points beside the planned (blue) framing.\n'
         '* A 180° turn gives the same framing, so the readout always shows the shorter way round.\n\n'
         'Rigs that cannot plate-solve (no solver installed or no optics in the profile) cannot use the readout; the run\'s *Center and Rotate* still centres the target.',
     relatedSettings: ['img.platesolve.engine', 'img.platesolve.solver_path'],

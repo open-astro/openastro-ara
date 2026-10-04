@@ -25,7 +25,8 @@ namespace OpenAstroAra.Server.Endpoints;
 /// <summary>
 /// The by-hand rotation readout. A run's Rotate camera by hand step starts it and parks the run awaiting the
 /// user; these endpoints let the client read it (and start/stop it outside a run, e.g. from Setup).
-/// start: 202; 400 non-finite angle; 409 already running. stop: 204 once the in-flight solve has drained.
+/// start: 202; 400 non-finite angle / bad exposure, mode or binning; 409 already running or confirming.
+/// confirm: 202; 409 nothing to confirm or already confirming. stop: 204 once the in-flight solve has drained.
 /// </summary>
 public static class RotationAssistEndpoints {
     public static IEndpointRouteBuilder MapRotationAssistEndpoints(this IEndpointRouteBuilder app) {
@@ -55,6 +56,19 @@ public static class RotationAssistEndpoints {
             .Produces(StatusCodes.Status204NoContent)
             .WithName("StopRotationAssist")
             .WithSummary("Stop the by-hand rotation readout.");
+
+        assist.MapPost("/confirm", async (IRotationAssistService svc, CancellationToken ct) => {
+            try {
+                await svc.ConfirmAsync(ct);
+                return Results.Accepted();
+            } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        })
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("ConfirmRotationAssist")
+            .WithSummary("Done: stop the readout and check the framing with one 1×1 frame at the full plate-solve exposure.");
 
         assist.MapGet("/state", (IRotationAssistService svc) => Results.Ok(svc.GetStatus()))
             .Produces<RotationAssistStatusDto>(StatusCodes.Status200OK)
