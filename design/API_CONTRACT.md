@@ -354,18 +354,19 @@ and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` 
 **Change:** when Smart Focus's first shot reads at or under the calibrated in-focus HFR it no longer
 completes on that one shot. It takes one shot either side at the calibration's half-width (where the
 HFR should have doubled; half the classic span when no half-width is stored), returns to the centre,
-and completes in three shots only when both sides read ≥ 1.3× the centre. A side under 0.97× the centre,
-no clear rise, or a bracket shot with too few stars falls back to the classic sweep with the new
-`fallback_classic` reason `bracket_failed`. The run record carries the three `smart` probes.
+and accepts the centre as the minimum only when both sides read ≥ 1.3× the centre (the run then goes
+on to the vertex and confirmation shots under "Five shots" below). A side under 0.97× the centre, no
+clear rise, or a bracket shot with too few stars falls back to the classic sweep with the new
+`fallback_classic` reason `bracket_failed`. The run record carries the bracket's three `smart` probes.
 
 The bracket runs backlash-consistently: the − side first (moving down, the direction every calibration
 sample was approached from), then the + side, then the centre re-entered from above through the sweep's
 one-step overshoot, so the focuser rests on the same side of its backlash as the calibration's best. A
 confirmation frame is then taken at the centre (`final_hfr` / `final_stars` / the picture are measured
-there, as for the sweep), and the run record's `fit` carries the calibration's own curve through the
-three shots — `algorithm: "calibration"`, `r_squared: 1`, `best_position` = where the run ended, `curve` =
-h₀·√(1 + 3(d/w)²) over ±1.3 half-widths — so the pane draws the V the bracket was judged against. The
-client shows no R² for that algorithm.
+there, as for the sweep). The run record's `fit` is the V fitted through the run's own shots (see
+"Same day, the drawn V" above). Only when those points will not fit does it carry the calibration's
+model curve instead — `algorithm: "calibration"`, `r_squared: 1`, `best_position` = where the run ended,
+`curve` = h₀·√(1 + 3(d/w)²) over ±1.3 half-widths. The client shows no R² for that algorithm.
 
 **Five shots (same day):** after the bracket, the parabola through the three shots gives a vertex. When
 it sits off the centre (and inside the bracket; outside is "no V" → `bracket_failed`) shot 4 is taken
