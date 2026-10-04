@@ -136,7 +136,7 @@ void main() {
       state: AutofocusRunStates.running,
       mode: 'smart',
       phase: 'smart',
-      totalSteps: 3,
+      totalSteps: 5,
       completedSteps: 2,
       probes: [
         AutofocusProbe(index: 1, phase: 'smart', position: 10150, hfr: 1.95, stars: 42, kept: true),
@@ -145,8 +145,8 @@ void main() {
     );
     await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: running)));
     await t.pump();
-    expect(find.text('Smart Focus — shot 2 of 5'), findsOneWidget, reason: 'the shot budget comes from the daemon (5), never a hard-coded 3');
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Smart Focus — shot 2 of 5'), findsOneWidget, reason: 'the shot budget comes from the daemon, never a hard-coded 3');
+    expect(find.text('2 / 5'), findsOneWidget);
   });
 
   testWidgets('a failed run reads as a failure with its reason', (t) async {
