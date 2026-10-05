@@ -538,6 +538,28 @@ void main() {
     });
   });
 
+  group('planetarium page touchpad pinch (Linux runner contract)', () {
+    test('the page defines the three pinch hooks the runner calls by name', () {
+      // #1200/#1275 — linux/runner/planetarium_overlay.cc swallows
+      // GDK_TOUCHPAD_PINCH and drives the sky's field of view through
+      // pinchBegin/pinchUpdate/pinchEnd on the page. run_js fails silently,
+      // so a rename on either side would leave touchpad pinch doing nothing
+      // on Linux. No harness runs index.html; this string guard keeps the two
+      // sides in step.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      for (final fn in ['pinchBegin', 'pinchUpdate', 'pinchEnd']) {
+        expect(page, contains('function $fn('), reason: '$fn on the page');
+        expect(runner, contains('"$fn('), reason: '$fn called by the runner');
+      }
+      // The scale must be formatted locale-independently (a decimal comma
+      // would reach JS as two arguments).
+      expect(runner, contains('g_ascii_dtostr('));
+      expect(runner, isNot(contains('pinchUpdate(%')));
+    });
+  });
+
   group('planetarium page scope box', () {
     test('draws the daemon\'s latest solve as a second box and clears on request', () {
       // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}
