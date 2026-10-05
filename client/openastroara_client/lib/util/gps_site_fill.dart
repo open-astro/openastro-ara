@@ -75,13 +75,12 @@ String thisDeviceLabel(ClientPlatform p) => switch (p) {
 
 String get _thisDevice => thisDeviceLabel(clientPlatform);
 
-/// Where the user goes to grant location access, per platform. Linux has no
-/// REGISTERED geolocator implementation — geolocator 14 ships a GeoClue backend
-/// (`geolocator_linux`), but it is absent from the checked-in
-/// linux/flutter/generated_plugin_registrant.cc, so a call there still lands on
-/// a missing implementation. Until that plugin is registered and tested on a
-/// Linux box, Linux gets the honest answer instead of a settings path that
-/// doesn't exist there.
+/// Where the user goes to grant location access, per platform. On Linux
+/// geolocator 14 resolves to `geolocator_linux`, a Dart-only plugin that talks
+/// GeoClue over D-Bus (it never appears in the native plugin registrant).
+/// GeoClue is optional on desktops and nothing here has validated it against a
+/// real Linux box, so the Linux hint still sends users to a GPS dongle rather
+/// than a settings path that may not exist.
 @visibleForTesting
 String permissionHint(ClientPlatform p) => switch (p) {
   ClientPlatform.macOS =>

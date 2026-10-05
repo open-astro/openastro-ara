@@ -2,9 +2,6 @@
 
 #include <math.h>
 #include <webkit2/webkit2.h>
-#ifdef GDK_WINDOWING_WAYLAND
-#include <gdk/gdkwayland.h>
-#endif
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -38,10 +35,8 @@ struct OverlayState {
   // Planning (mirrors webview_all's "GL only inits when a webview is created").
   WebKitWebView* webview = nullptr;
   // The positioned overlay child: a windowed GtkEventBox wrapping the webview.
-  // On X11 it's promoted to a native subwindow (see ensure_webview) so the X
-  // server stacks it ABOVE the toplevel content Flutter blits its GL frame
-  // into. On Wayland it stays client-side and GtkOverlay draw order does the
-  // stacking (#1200).
+  // It stays a client-side GdkWindow; GtkOverlay draw order stacks it above
+  // FlView (#1200). The runner is Wayland-only (#1201).
   GtkWidget* webview_widget = nullptr;
   // Target rect in logical (GTK) pixels, relative to the FlView origin. Flutter
   // logical pixels and GTK widget coordinates share the same scale factor on a
@@ -93,16 +88,13 @@ gboolean on_get_child_position(GtkOverlay* overlay,
 void apply_visibility(OverlayState* state) {
   if (state->webview_widget == nullptr) return;
   if (state->visible && state->has_rect) {
-    // Only raise on a genuine hidden→visible transition. setBounds() calls this
-    // on every resize/DPI tick; raising the subwindow each time flickers the
-    // overlay on compositing WMs. Raise once when it reappears (e.g. returning to
-    // Planning after another tab redrew the view), not on every geometry update.
+    // Only raise on a genuine hidden→visible transition, not on every
+    // setBounds() resize/DPI tick. The window is client-side, so this only
+    // reorders GDK's child list; the visible stacking comes from GtkOverlay
+    // draw order (#1200). Kept so the child list matches the draw order.
     gboolean was_visible = gtk_widget_get_visible(state->webview_widget);
     gtk_widget_show(state->webview_widget);
     if (!was_visible) {
-      // X11: reorders the native subwindow above FlView's. Wayland: the window
-      // is client-side, so this only reorders GDK's child list; stacking there
-      // comes from GtkOverlay draw order (#1200). Harmless on both.
       GdkWindow* window = gtk_widget_get_window(state->webview_widget);
       if (window != nullptr) gdk_window_raise(window);
     }
@@ -290,9 +282,7 @@ int probe_render_nodes(const glob_t& g) {
 // forked child: gbm_create_device loads the Mesa DRI driver, and some drivers
 // (radeonsi) start compiler threads that may outlive gbm_device_destroy, so
 // the parent never loads a driver and stays single-threaded for the setenv.
-// The user's own setting wins. Applies on X11 too: where GBM can't allocate
-// there either (e.g. proprietary NVIDIA drivers without a GBM backend), the
-// shm renderer is the right fallback.
+// The user's own setting wins.
 void planetarium_overlay_configure_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
   const char* reason = nullptr;
@@ -498,10 +488,10 @@ void ensure_webview(OverlayState* state) {
   // Touchpad pinch: see pinch_event_cb.
   g_signal_connect(state->webview, "event", G_CALLBACK(pinch_event_cb), state);
 
-  // Wrap the webview in a windowed GtkEventBox: the event box owns a GdkWindow
-  // that X11 promotes to a native subwindow and Wayland keeps client-side under
-  // GtkOverlay draw order (the webview itself is windowless and would otherwise
-  // draw into the toplevel surface Flutter overpaints).
+  // Wrap the webview in a windowed GtkEventBox: the event box owns a
+  // client-side GdkWindow that GtkOverlay draw order stacks above FlView (the
+  // webview itself is windowless and would otherwise draw into the toplevel
+  // surface Flutter overpaints).
   GtkWidget* event_box = gtk_event_box_new();
   gtk_event_box_set_visible_window(GTK_EVENT_BOX(event_box), TRUE);
   gtk_widget_set_can_focus(event_box, FALSE);
@@ -525,32 +515,17 @@ void ensure_webview(OverlayState* state) {
 
   // The webview child must be visible so it maps when the event box maps.
   gtk_widget_show(GTK_WIDGET(state->webview));
-  // Force the event box's GdkWindow into existence NOW (synchronously). On
-  // X11 it is then promoted to a native subwindow so the X server composites
-  // it above the Flutter GL frame; on Wayland it stays client-side (below).
+  // Force the event box's GdkWindow into existence NOW (synchronously).
   // Relying on the async show→map→realize cycle didn't work: hiding the
   // child before it kept Planning hidden races the realize.
   gtk_widget_realize(event_box);
-  GdkWindow* window = gtk_widget_get_window(event_box);
-  bool wayland = false;
-#ifdef GDK_WINDOWING_WAYLAND
-  wayland = GDK_IS_WAYLAND_DISPLAY(gtk_widget_get_display(event_box));
-#endif
-  if (wayland) {
-    // #1200: on GDK3's Wayland backend a "native" child window is not a
-    // subsurface — it becomes a parentless xdg_toplevel that never receives a
-    // buffer, so the overlay is silently invisible (verified with
-    // WAYLAND_DEBUG=client on KDE Plasma). Leave the event box client-side and
-    // rely on GtkOverlay's draw order: overlay children paint after FlView.
-    g_message("planetarium_overlay: Wayland display, using client-side overlay");
-  } else if (window != nullptr && !gdk_window_ensure_native(window)) {
-    // If the GdkWindow can't be promoted to a native X11 subwindow, the webview
-    // renders into the same client-side surface as Flutter, which overpaints
-    // it — the overlay goes permanently invisible with no other symptom. Warn
-    // so that failure mode is at least diagnosable in logs.
-    g_warning("planetarium_overlay: gdk_window_ensure_native failed — "
-              "overlay may be invisible on this display backend");
-  }
+  // #1200: never gdk_window_ensure_native() here. On GDK3's Wayland backend a
+  // "native" child window is not a subsurface — it becomes a parentless
+  // xdg_toplevel that never receives a buffer, so the overlay is silently
+  // invisible (verified with WAYLAND_DEBUG=client on KDE Plasma). The event
+  // box stays client-side and GtkOverlay's draw order paints it after FlView.
+  // (The X11 native-subwindow path went with X11 support, #1201.)
+  g_message("planetarium_overlay: Wayland display, using client-side overlay");
   // Keep it unmapped until Dart pushes bounds and Planning is the active tab.
   apply_visibility(state);
 }

@@ -1,9 +1,6 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
-#ifdef GDK_WINDOWING_X11
-#include <gdk/gdkx.h>
-#endif
 
 #include "flutter/generated_plugin_registrant.h"
 #include "planetarium_overlay.h"
@@ -40,21 +37,9 @@ static void window_mode_method_cb(FlMethodChannel* channel,
     gtk_window_unmaximize(window);
     gtk_widget_set_size_request(GTK_WIDGET(window), 760, 560);
     gtk_window_resize(window, 960, 680);
-    // Re-center on the current monitor's workarea — set_position(CENTER) only
-    // affects the initial mapping, and unmaximize restores the pre-maximize
-    // spot (review #846 r3; matches macOS center()).
-    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
-    if (gdk_window != nullptr) {
-      GdkDisplay* display = gdk_window_get_display(gdk_window);
-      GdkMonitor* monitor =
-          gdk_display_get_monitor_at_window(display, gdk_window);
-      if (monitor != nullptr) {
-        GdkRectangle wa;
-        gdk_monitor_get_workarea(monitor, &wa);
-        gtk_window_move(window, wa.x + (wa.width - 960) / 2,
-                        wa.y + (wa.height - 680) / 2);
-      }
-    }
+    // No re-centre: Wayland gives clients no window positioning, so the
+    // gtk_window_move() the X11 build used here was a no-op (#1201). The
+    // compositor places the unmaximised window.
     fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else if (g_strcmp0(method, "title") == 0) {
     // "OpenAstro Ara <version>" — composed Dart-side so pubspec.yaml stays
@@ -85,57 +70,20 @@ static void my_application_activate(GApplication* application) {
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
   // desktop).
-  // If running on X and not using GNOME then just use a traditional title bar
-  // in case the window manager does more exotic layout, e.g. tiling.
-  // If running on Wayland assume the header bar will work (may need changing
-  // if future cases occur).
-  gboolean use_header_bar = TRUE;
-#ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
-  if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
-    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
-      use_header_bar = FALSE;
-    }
-  }
-#endif
+  // Wayland only (#1201): always the GTK header bar. The X11 branch that
+  // fell back to a WM title bar outside GNOME Shell is gone with X11.
   // Build-time title; Dart re-stamps it with the version ("OpenAstro Ara
   // 0.0.1a") over the window channel as soon as PackageInfo resolves.
-  if (use_header_bar) {
-    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
-    gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "OpenAstro Ara");
-    gtk_header_bar_set_show_close_button(header_bar, TRUE);
-    gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
-  } else {
-    gtk_window_set_title(window, "OpenAstro Ara");
-  }
+  GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
+  gtk_widget_show(GTK_WIDGET(header_bar));
+  gtk_header_bar_set_title(header_bar, "OpenAstro Ara");
+  gtk_header_bar_set_show_close_button(header_bar, TRUE);
+  gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
 
-  // Window/taskbar icon on X11: the Ara constellation mark, loaded from the
-  // Flutter asset bundle next to the executable (no hicolor-theme install
-  // required — works from a bare `flutter run`/unpacked bundle). Best-effort:
-  // a missing file just leaves the WM default. Wayland ignores per-window
-  // icons; there the compositor resolves the app_id through the installed
-  // org.openastro.openastroara.desktop entry (see linux/CMakeLists.txt and
-  // linux/install-desktop-entry.sh).
-  {
-    g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
-    if (exe_path != nullptr) {
-      g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
-      g_autofree gchar* icon_path = g_build_filename(
-          exe_dir, "data", "flutter_assets", "assets", "icons",
-          "app_icon.png", nullptr);
-      g_autoptr(GError) icon_error = nullptr;
-      GdkPixbuf* icon = gdk_pixbuf_new_from_file(icon_path, &icon_error);
-      if (icon != nullptr) {
-        gtk_window_set_icon(window, icon);
-        g_object_unref(icon);
-      } else {
-        g_warning("app icon not loaded from %s: %s", icon_path,
-                  icon_error != nullptr ? icon_error->message : "unknown");
-      }
-    }
-  }
+  // Window/taskbar icon: Wayland compositors ignore per-window icons and
+  // resolve the app_id (org.openastro.openastroara) through the installed
+  // desktop entry, so the X11-era gtk_window_set_icon() is gone (#1201). See
+  // linux/CMakeLists.txt and linux/install-desktop-entry.sh.
 
   // Launchpad-first sizing: open compact (server connect + profile box); the
   // Dart router flips to the maximized "workstation" mode when the §25 shell

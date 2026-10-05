@@ -98,9 +98,9 @@ class _LinuxPlanetariumOverlayState
 
   // A route was pushed over the app shell — hide the overlay so it doesn't show
   // through the route on top. Hide SYNCHRONOUSLY here, not via the post-frame path:
-  // the GTK webview is stacked above Flutter's surface by the toolkit (a native
-  // subwindow on X11, GtkOverlay draw order on Wayland), so a one-frame deferral
-  // would flash the sky map through the covering route. (Hiding is always safe;
+  // the GTK webview is stacked above Flutter's surface by GtkOverlay draw
+  // order, so a one-frame deferral would flash the sky map through the
+  // covering route. (Hiding is always safe;
   // re-show stays deferred so it honours the isPlanning gate.)
   @override
   void didPushNext() {

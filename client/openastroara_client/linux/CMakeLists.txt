@@ -121,9 +121,9 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
-# Desktop entry + hicolor icons (#1200/#1201). Wayland compositors resolve the
-# window icon from the toplevel app_id via a .desktop file of the same name, so
-# gtk_window_set_icon alone leaves the generic icon. Shipped inside the bundle
+# Desktop entry + hicolor icon (#1200/#1201). Wayland compositors resolve the
+# window icon from the toplevel app_id via a .desktop file of the same name
+# (there is no per-window icon on Wayland). Shipped inside the bundle
 # under share/ so packaging can copy them to /usr/share, and
 # linux/install-desktop-entry.sh can register an unpacked bundle per user.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/org.openastro.openastroara.desktop"

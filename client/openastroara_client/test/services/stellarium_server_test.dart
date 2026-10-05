@@ -572,14 +572,12 @@ void main() {
         greaterThanOrEqualTo(2),
         reason: 'webview and event box non-focusable',
       );
-      expect(runner, contains('GDK_IS_WAYLAND_DISPLAY('));
-      // ensure_native must sit in the non-Wayland branch: the `if (wayland)`
-      // guard comes first, and the only ensure_native call follows it.
-      final guard = runner.indexOf('if (wayland)');
-      final ensureNative = runner.indexOf('gdk_window_ensure_native(');
-      expect(guard, greaterThan(-1));
-      expect(ensureNative, greaterThan(guard));
-      expect('gdk_window_ensure_native('.allMatches(runner).length, 1);
+      // No gdk_window_ensure_native() call may come back: on Wayland it made
+      // a parentless toplevel (#1200), and X11 is refused (#1201). Match the
+      // call form so a reworded comment can't mask a real call.
+      expect(runner, isNot(contains('gdk_window_ensure_native(window')));
+      expect(runner, isNot(matches(RegExp(r'^\s*(if\s*\(.*)?gdk_window_ensure_native\(', multiLine: true))));
+      expect(runner, isNot(contains('GDK_IS_WAYLAND_DISPLAY(')));
     });
   });
 
