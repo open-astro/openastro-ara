@@ -44,8 +44,8 @@ public interface IPositionAngleSolver {
     int MaxBinning => 0;
 
     /// <summary>Throw <see cref="PlateSolverConfigurationException"/> when a solve cannot possibly succeed on
-    /// this rig as configured (checked once at start, so a run skips the step instead of failing five
-    /// solves). Default: nothing to check.</summary>
+    /// this rig as configured (checked once at start, so the start is refused with 409 instead of the loop
+    /// failing five solves). Default: nothing to check.</summary>
     void EnsureReady() { }
 }
 
