@@ -212,6 +212,8 @@ static gboolean my_application_local_command_line(GApplication* application,
   return TRUE;
 }
 
+static gboolean on_terminate_signal(gpointer user_data);
+
 // Implements GApplication::startup.
 static void my_application_startup(GApplication* application) {
   // MyApplication* self = MY_APPLICATION(object);
