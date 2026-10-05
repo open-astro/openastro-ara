@@ -23,7 +23,7 @@ namespace OpenAstroAra.Server.Services;
 /// before the daemon serves traffic. Three responsibilities:
 ///
 /// 1. <b>Mount + writability</b>: probe the configured save path; if not
-///    writable, log critical + skip (server still starts so that profile
+///    writable, log a warning + skip (server still starts so that profile
 ///    edits + non-storage endpoints work; user fixes storage and restarts).
 /// 2. <b>Stale .tmp sweep</b>: any <c>*.tmp</c> file older than 5 minutes
 ///    in the captures tree is presumed crashed-mid-write and deleted
