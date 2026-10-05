@@ -7,10 +7,23 @@
 # Packaged installs (#1203) ship the same files under /usr/share instead.
 #
 # Usage: linux/install-desktop-entry.sh [path/to/bundle]
-#        (default: build/linux/x64/release/bundle next to this script's project)
+#        (default: the one build/linux/<arch>/release/bundle that exists)
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bundle="${1:-$here/../build/linux/x64/release/bundle}"
+if [ $# -ge 1 ]; then
+  bundle="$1"
+else
+  found=()
+  for b in "$here"/../build/linux/*/release/bundle; do
+    [ -x "$b/openastroara" ] && found+=("$b")
+  done
+  case ${#found[@]} in
+    1) bundle="${found[0]}" ;;
+    0) echo "no release bundle under $here/../build/linux; run flutter build linux --release" >&2; exit 1 ;;
+    *) echo "several release bundles found; pass one:" "${found[@]}" >&2; exit 1 ;;
+  esac
+fi
+[ -d "$bundle" ] || { echo "no such directory: $bundle" >&2; exit 1; }
 bundle="$(cd "$bundle" && pwd)"
 [ -x "$bundle/openastroara" ] || { echo "no openastroara binary in $bundle" >&2; exit 1; }
 share="$bundle/share"
