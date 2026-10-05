@@ -222,7 +222,6 @@ struct GbmProbe {
   }
 };
 
-}  // namespace
 
 // Runs in a forked child: returns 0 when some render node can back a GBM
 // buffer, 1 when none can, 2 when libgbm is not loadable.
