@@ -220,12 +220,13 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
     `~/.config/openastroara/webkit-no-dmabuf` so every later launch starts on
     the shm renderer. Delete that file to retry DMABUF after a driver update.
   - **NVIDIA proprietary driver, known limits (2026-10-05):** even on the GPU
-    path GTK3 composites the client-side WebKit child into the GL toplevel on
-    the UI thread, about 75 ms per frame at 6144x3348 (4K at 125 % scale), so a
-    maximised 4K Planning tab stays slow (~13 fps ceiling) however the page is
-    throttled; the same box is smooth at 1600x900. This is GTK3's mixed
-    cairo/GL repaint and is fixed only by a Wayland subsurface for the overlay
-    (#1204). Should a driver update bring the crash back, the
+    path, each planetarium frame makes GTK3 read Flutter's GL frame back
+    through the driver on the UI thread, about 55 ms per frame at 6144x3348
+    (4K at 125 % scale), so a maximised 4K Planning tab redraws at roughly
+    15-30 fps while interacting; the same box is smooth at 1600x900. (The two
+    software fills GTK3 and the embedder used to add are already skipped.)
+    This is GTK3's mixed cairo/GL repaint and is fixed only by a Wayland
+    subsurface for the overlay (#1204). Should a driver update bring the crash back, the
     runner falls to the shm renderer on the next launch (marker above), where
     4K manages only a few frames per second. Fractional
     desktop scaling (e.g. KDE at 125 %) makes it worse: GTK3 only scales by
