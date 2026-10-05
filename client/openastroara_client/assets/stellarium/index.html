@@ -1762,7 +1762,12 @@ var araIdleThrottle = (function () {
   var nativeRaf = window.requestAnimationFrame.bind(window);
   var nativeCancel = window.cancelAnimationFrame.bind(window);
   var lastActive = performance.now();
-  var lastSig = '';
+  // Last seen view (fov, yaw, pitch in radians). A frame counts as motion
+  // only when something moved by more than MOVE_RAD: a goto/zoom animation
+  // moves far more per frame, while an object held centred ("Center"/follow)
+  // drifts ~1e-6 rad per frame with the sky and must still idle at 4 fps.
+  var MOVE_RAD = 1e-3;
+  var lastView = null;
   // Every caller that arrives while idle is queued (the engine loop and the
   // page's own FOV guard both go through here); one timer flushes them all in
   // a single native frame, so no loop can slip back to display rate by taking
@@ -1779,12 +1784,23 @@ var araIdleThrottle = (function () {
     lastActive = performance.now();
     if (timer) { clearTimeout(timer); flush(); }
   }
-  function viewSig() {
-    if (!stel) return '';
+  function viewMoved() {
+    if (!stel) return false;
+    var v;
     try {
       var o = stel.core.observer;
-      return stel.core.fov + ',' + o.yaw + ',' + o.pitch;
-    } catch (e) { return ''; }
+      v = [stel.core.fov, o.yaw, o.pitch];
+    } catch (e) { return false; }
+    if (!(isFinite(v[0]) && isFinite(v[1]) && isFinite(v[2]))) return false;
+    var moved = lastView === null ||
+      Math.abs(v[0] - lastView[0]) > MOVE_RAD ||
+      Math.abs(v[1] - lastView[1]) > MOVE_RAD ||
+      Math.abs(v[2] - lastView[2]) > MOVE_RAD;
+    // Only advance the reference on real motion, so slow drift can't creep
+    // past the threshold one frame at a time without ever tripping it, and
+    // the comparison stays against the last position the user saw settle.
+    if (moved) lastView = v;
+    return moved;
   }
   // Large views render every other display frame while active (~30 fps).
   var skipNext = false;
@@ -1794,8 +1810,7 @@ var araIdleThrottle = (function () {
     return skipNext ? nativeRaf(function () { nativeRaf(cb); }) : nativeRaf(cb);
   }
   window.requestAnimationFrame = function (cb) {
-    var sig = viewSig();
-    if (sig !== lastSig) { lastSig = sig; lastActive = performance.now(); }
+    if (viewMoved()) lastActive = performance.now();
     if (performance.now() - lastActive < IDLE_AFTER_MS) return activeRaf(cb);
     var id = nextId--;
     queue.push({ id: id, cb: cb });

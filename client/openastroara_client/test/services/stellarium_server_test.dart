@@ -676,6 +676,17 @@ void main() {
       expect(runner, contains('g_heavy_compositing'));
     });
 
+    test('view-motion detection uses a threshold, not exact equality', () {
+      // VM run on #1275: with an object centred, follow-mode drift of ~1e-6
+      // rad per frame kept the view "changing" and the throttle never
+      // engaged (37 commits/s idle). Motion must be thresholded.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final body = page.substring(page.indexOf('var araIdleThrottle'));
+      expect(body, contains('var MOVE_RAD = 1e-3;'));
+      expect(body, contains('Math.abs(v[1] - lastView[1]) > MOVE_RAD'));
+      expect(body, isNot(contains('function viewSig()')));
+    });
+
     test('idle callers are queued and flushed together, never one slot', () {
       // Review on #1275: a single throttled slot let the second rAF loop (the
       // page's FOV guard) bounce the engine back to display rate half the
