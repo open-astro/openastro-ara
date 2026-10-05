@@ -213,9 +213,14 @@ namespace OpenAstroAra.Test {
             Assert.That(s.Latest!.DeltaDeg, Is.EqualTo(-10));
             Assert.That(solver.LastExposure, Is.EqualTo(4.0), "no exposure in the request → the profile default");
 
+            // The same angle with float rounding noise is still the same target.
+            await svc.StartAsync(new RotationAssistStartRequestDto(120.004, Mode: "single"), CancellationToken.None);
+            s = await WaitForSeq(svc, 3);
+            Assert.That(s.Recent.Count, Is.EqualTo(3));
+
             // A NEW target starts the history over.
             await svc.StartAsync(new RotationAssistStartRequestDto(90, Mode: "single"), CancellationToken.None);
-            s = await WaitForSeq(svc, 3);
+            s = await WaitForSeq(svc, 4);
             Assert.That(s.Recent.Count, Is.EqualTo(1));
             Assert.That(s.TargetPositionAngleDeg, Is.EqualTo(90));
         }
@@ -299,7 +304,8 @@ namespace OpenAstroAra.Test {
             s = await WaitForSeq(svc, 3);
             await svc.StopAsync();
             Assert.That(s.Confirmation, Is.Null);
-            Assert.That(s.Recent.Count, Is.EqualTo(3));
+            // The loop keeps solving every ~5 ms, so a fourth sample may land before the poll snapshots.
+            Assert.That(s.Recent.Count, Is.GreaterThanOrEqualTo(3), "the history carries on");
         }
 
         [Test]

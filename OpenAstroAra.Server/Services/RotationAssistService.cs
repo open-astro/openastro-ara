@@ -192,7 +192,8 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
             lock (_gate) {
                 // A new target is a new job: the history (and the advice built on it) starts over. The same
                 // target — a single shot after a turn, a loop restarted after a cloud — keeps it.
-                if (_target != target) {
+                // Compared to 0.01°: a float-rounded resend of the same dial angle is the same target.
+                if (_target is not { } prev || Math.Abs(prev - target) > 0.005) {
                     _latest = null;
                     _recent.Clear();
                     _frame = null;
