@@ -2,6 +2,9 @@
 
 #include <math.h>
 #include <webkit2/webkit2.h>
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 
 #include <cstring>
 
@@ -196,11 +199,22 @@ void ensure_webview(OverlayState* state) {
   // work: hiding the child before it kept Planning hidden races the realize.
   gtk_widget_realize(event_box);
   GdkWindow* window = gtk_widget_get_window(event_box);
-  // If the GdkWindow can't be promoted to a native subsurface (some Wayland /
-  // XWayland backends), the webview renders into the same client-side surface as
-  // Flutter, which overpaints it — the overlay goes permanently invisible with no
-  // other symptom. Warn so that failure mode is at least diagnosable in logs.
-  if (window != nullptr && !gdk_window_ensure_native(window)) {
+  bool wayland = false;
+#ifdef GDK_WINDOWING_WAYLAND
+  wayland = GDK_IS_WAYLAND_DISPLAY(gtk_widget_get_display(event_box));
+#endif
+  if (wayland) {
+    // #1200: on GDK3's Wayland backend a "native" child window is not a
+    // subsurface — it becomes a parentless xdg_toplevel that never receives a
+    // buffer, so the overlay is silently invisible (verified with
+    // WAYLAND_DEBUG=client on KDE Plasma). Leave the event box client-side and
+    // rely on GtkOverlay's draw order: overlay children paint after FlView.
+    g_message("planetarium_overlay: Wayland display, using client-side overlay");
+  } else if (window != nullptr && !gdk_window_ensure_native(window)) {
+    // If the GdkWindow can't be promoted to a native X11 subwindow, the webview
+    // renders into the same client-side surface as Flutter, which overpaints
+    // it — the overlay goes permanently invisible with no other symptom. Warn
+    // so that failure mode is at least diagnosable in logs.
     g_warning("planetarium_overlay: gdk_window_ensure_native failed — "
               "overlay may be invisible on this display backend");
   }
