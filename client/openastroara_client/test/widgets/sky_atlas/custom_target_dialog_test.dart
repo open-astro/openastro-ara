@@ -122,8 +122,10 @@ void main() {
     await tester.enterText(
         find.widgetWithText(TextField, 'Name'), 'AB Cas');
     await tester.tap(find.text('Add to plan'));
-    await tester.pumpAndSettle();
-    // Let the confirmation card's auto-dismiss timer expire.
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Created an imaging run for "AB Cas"'),
+        findsOneWidget);
     await tester.pump(const Duration(seconds: 7));
 
     expect(client.createdName, 'AB Cas');
@@ -148,7 +150,8 @@ void main() {
     expect(find.textContaining('from JNow'), findsOneWidget);
 
     await tester.tap(find.text('Add to plan'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
     await tester.pump(const Duration(seconds: 7));
 
     final slew = _slewTarget(client.createdBody)!;
@@ -161,6 +164,25 @@ void main() {
     expect(targets.items.single.typedAsJNow, isTrue);
     // No name typed → the position is the name.
     expect(client.createdName, contains('h '));
+  });
+
+  testWidgets('typing a pair key by key does not split early', (tester) async {
+    await pump(tester);
+    final ra = find.byKey(const Key('custom-target-ra'));
+    var typed = '';
+    for (final ch in '02 37 31.5 +71 18 16'.split('')) {
+      typed += ch;
+      await tester.enterText(ra, typed);
+      await tester.pump();
+    }
+    expect(find.text('02 37 31.5 +71 18 16'), findsOneWidget);
+    expect(find.text("Can't read this RA"), findsOneWidget);
+    // Enter splits the finished line.
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await tester.pumpAndSettle();
+    expect(find.text('02 37 31.5'), findsOneWidget);
+    expect(find.text('+71 18 16'), findsOneWidget);
+    expect(find.byKey(const Key('custom-target-preview')), findsOneWidget);
   });
 
   testWidgets('an ambiguous decimal RA offers the hours/degrees choice',

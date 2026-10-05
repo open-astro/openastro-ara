@@ -9,7 +9,6 @@ import '../../theme/ara_colors.dart';
 import '../../util/apparent_place.dart';
 import '../../util/coord_format.dart';
 import '../../util/coord_parse.dart';
-import 'tonight_sky_panel.dart' show planConfirmationProvider;
 
 /// Plan screen → "Target by coordinates" (#1267 item 1, plus the epoch
 /// choice). Type or paste an RA/Dec from SIMBAD, Gaia, a planetarium or a
@@ -64,14 +63,29 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     super.dispose();
   }
 
+  String _lastRa = '';
+
   /// A whole "RA Dec" line pasted into the RA box splits across both fields.
+  /// Only a PASTE (the text grew by more than one character at once) or
+  /// Enter triggers the split: typing "02 37 31.5 +71 18 16" key by key
+  /// passes through "02 3", which also reads as a pair, and splitting there
+  /// would strand the rest of the keystrokes in the wrong field.
   void _onRaChanged() {
     final text = _ra.text;
-    if (_dec.text.trim().isEmpty && parseRaDec(text) != null) {
+    final pasted = text.length - _lastRa.length > 1;
+    _lastRa = text;
+    if (pasted && _dec.text.trim().isEmpty && parseRaDec(text) != null) {
       _fillFromLine(text);
       return;
     }
     setState(() {});
+  }
+
+  /// Enter in the RA box: split a typed pair, else move on to Dec.
+  void _onRaSubmitted() {
+    if (_dec.text.trim().isEmpty && parseRaDec(_ra.text) != null) {
+      _fillFromLine(_ra.text);
+    }
   }
 
   void _fillFromLine(String line) {
@@ -79,6 +93,7 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     if (halves == null) return;
     _ra.removeListener(_onRaChanged);
     _ra.text = halves.$1;
+    _lastRa = _ra.text;
     _dec.text = halves.$2;
     _ra.addListener(_onRaChanged);
     if (mounted) setState(() {});
@@ -88,6 +103,7 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     _ra.removeListener(_onRaChanged);
     _name.text = t.name;
     _ra.text = formatRaHms(t.raDeg / 15);
+    _lastRa = _ra.text;
     _dec.text = formatDecDms(t.decDeg);
     _ra.addListener(_onRaChanged);
     setState(() => _epoch = _Epoch.j2000);
@@ -148,7 +164,6 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     if (c == null || _busy) return;
     final name = _targetName;
     final messenger = ScaffoldMessenger.of(context);
-    final confirmation = ref.read(planConfirmationProvider.notifier);
     final recents = ref.read(customTargetsProvider.notifier);
     setState(() => _busy = true);
     ImagingRunResult? result;
@@ -175,11 +190,10 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     }
     final remember = recents.remember(_asCustomTarget(c));
     Navigator.of(context).pop();
-    if (result != null && !result.draft) {
-      confirmation.show(name, appended: result.appended);
-    } else {
-      showImagingRunFeedback(messenger, targetName: name, result: result);
-    }
+    // The SnackBar, not the Tonight's Sky confirmation card: the dialog opens
+    // from the search bar with the panel usually closed, and a card inside a
+    // closed panel is no confirmation at all (seen on the first live run).
+    showImagingRunFeedback(messenger, targetName: name, result: result);
     await remember;
   }
 
@@ -224,6 +238,7 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                       controller: _ra,
                       autofocus: widget.initialText == null,
                       textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => _onRaSubmitted(),
                       decoration: InputDecoration(
                         isDense: true,
                         labelText: 'RA',
