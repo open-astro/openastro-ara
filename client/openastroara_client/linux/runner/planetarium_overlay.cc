@@ -179,37 +179,47 @@ void load_changed_cb(WebKitWebView* view,
 // fine, the allocation failed), so try a tiny allocation the way WebKit will.
 // libgbm is loaded at runtime: it ships with Mesa, which WebKitGTK already
 // needs, and this keeps it out of the build and package dependency lists.
-bool gbm_allocation_works(int fd) {
-  void* lib = dlopen("libgbm.so.1", RTLD_NOW | RTLD_LOCAL);
-  if (lib == nullptr) return false;
-  using CreateDevice = void* (*)(int);
-  using DestroyDevice = void (*)(void*);
-  using CreateBo = void* (*)(void*, uint32_t, uint32_t, uint32_t, uint32_t);
-  using DestroyBo = void (*)(void*);
-  auto create_device =
-      reinterpret_cast<CreateDevice>(dlsym(lib, "gbm_create_device"));
-  auto destroy_device =
-      reinterpret_cast<DestroyDevice>(dlsym(lib, "gbm_device_destroy"));
-  auto create_bo = reinterpret_cast<CreateBo>(dlsym(lib, "gbm_bo_create"));
-  auto destroy_bo = reinterpret_cast<DestroyBo>(dlsym(lib, "gbm_bo_destroy"));
-  bool ok = false;
-  if (create_device && destroy_device && create_bo && destroy_bo) {
-    void* dev = create_device(fd);
-    if (dev != nullptr) {
-      // GBM_FORMAT_ARGB8888 ('AR24'), GBM_BO_USE_RENDERING (1 << 2).
-      const uint32_t kArgb8888 = 0x34325241;
-      const uint32_t kUseRendering = 1u << 2;
-      void* bo = create_bo(dev, 64, 64, kArgb8888, kUseRendering);
-      if (bo != nullptr) {
-        ok = true;
-        destroy_bo(bo);
-      }
-      destroy_device(dev);
-    }
+struct GbmProbe {
+  void* lib = nullptr;
+  void* (*create_device)(int) = nullptr;
+  void (*destroy_device)(void*) = nullptr;
+  void* (*create_bo)(void*, uint32_t, uint32_t, uint32_t, uint32_t) = nullptr;
+  void (*destroy_bo)(void*) = nullptr;
+
+  // Loads libgbm once for the whole probe; a multi-GPU box has several render
+  // nodes and should not pay a dlopen per node.
+  bool load() {
+    lib = dlopen("libgbm.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (lib == nullptr) return false;
+    create_device = reinterpret_cast<decltype(create_device)>(
+        dlsym(lib, "gbm_create_device"));
+    destroy_device = reinterpret_cast<decltype(destroy_device)>(
+        dlsym(lib, "gbm_device_destroy"));
+    create_bo =
+        reinterpret_cast<decltype(create_bo)>(dlsym(lib, "gbm_bo_create"));
+    destroy_bo =
+        reinterpret_cast<decltype(destroy_bo)>(dlsym(lib, "gbm_bo_destroy"));
+    return create_device && destroy_device && create_bo && destroy_bo;
   }
-  dlclose(lib);
-  return ok;
-}
+
+  // Tries the allocation WebKit's DMABUF renderer will make on this node.
+  bool allocation_works(int fd) const {
+    void* dev = create_device(fd);
+    if (dev == nullptr) return false;
+    // GBM_FORMAT_ARGB8888 ('AR24'), GBM_BO_USE_RENDERING (1 << 2).
+    const uint32_t kArgb8888 = 0x34325241;
+    const uint32_t kUseRendering = 1u << 2;
+    void* bo = create_bo(dev, 64, 64, kArgb8888, kUseRendering);
+    const bool ok = bo != nullptr;
+    if (ok) destroy_bo(bo);
+    destroy_device(dev);
+    return ok;
+  }
+
+  ~GbmProbe() {
+    if (lib != nullptr) dlclose(lib);
+  }
+};
 
 }  // namespace
 
@@ -220,21 +230,33 @@ bool gbm_allocation_works(int fd) {
 // NVIDIA drivers without a GBM backend), the shm renderer is the right fallback.
 void planetarium_overlay_configure_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
-  glob_t g = {};
-  bool usable = false;
-  if (glob("/dev/dri/renderD*", 0, nullptr, &g) == 0) {
-    for (size_t i = 0; i < g.gl_pathc && !usable; i++) {
-      int fd = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC);
-      if (fd >= 0) {
-        usable = gbm_allocation_works(fd);
-        close(fd);
+  const char* reason = nullptr;
+  GbmProbe probe;
+  if (!probe.load()) {
+    // Distinct from "allocation failed": the library is missing or too old,
+    // which a minimal install can hit even with a working GPU.
+    reason = "libgbm.so.1 is not loadable";
+  } else {
+    glob_t g = {};
+    bool usable = false;
+    if (glob("/dev/dri/renderD*", 0, nullptr, &g) == 0) {
+      for (size_t i = 0; i < g.gl_pathc && !usable; i++) {
+        int fd = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC);
+        if (fd >= 0) {
+          usable = probe.allocation_works(fd);
+          close(fd);
+        }
       }
     }
+    if (!usable) {
+      reason = g.gl_pathc == 0 ? "no DRM render node is present"
+                               : "no DRM render node can back a GBM buffer";
+    }
+    globfree(&g);
   }
-  globfree(&g);
-  if (!usable) {
-    g_message("planetarium_overlay: no DRM render node can back a GBM buffer, "
-              "setting WEBKIT_DISABLE_DMABUF_RENDERER=1");
+  if (reason != nullptr) {
+    g_message("planetarium_overlay: %s, setting WEBKIT_DISABLE_DMABUF_RENDERER=1",
+              reason);
     g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
   }
 }
