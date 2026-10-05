@@ -81,7 +81,9 @@ class CustomTargetsService {
   }
 
   /// Put [target] at the head of the list, replacing any entry with the same
-  /// name and position (so re-adding a saved target does not duplicate it).
+  /// name (so re-adding a saved target does not duplicate it — the name is
+  /// the identity; a JNow entry re-converted seconds later differs in
+  /// position by microarcseconds and must still be the same target).
   /// Returns the new list. Writes are chained so two quick adds cannot
   /// interleave their load/merge/write cycles.
   Future<List<CustomTarget>> remember(CustomTarget target) {
@@ -122,7 +124,5 @@ class CustomTargetsService {
   }
 
   static bool _same(CustomTarget a, CustomTarget b) =>
-      a.name == b.name &&
-      (a.raDeg - b.raDeg).abs() < 1e-6 &&
-      (a.decDeg - b.decDeg).abs() < 1e-6;
+      a.name.trim().toLowerCase() == b.name.trim().toLowerCase();
 }

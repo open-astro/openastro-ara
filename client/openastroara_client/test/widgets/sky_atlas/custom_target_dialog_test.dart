@@ -48,6 +48,9 @@ class _RecordingClient implements SequenceClient {
   }
 
   @override
+  void close() {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError(invocation.memberName.toString());
 }

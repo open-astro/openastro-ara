@@ -36,11 +36,13 @@ void main() {
     expect(again.first.decDeg, -40);
   });
 
-  test('re-adding the same target moves it up instead of duplicating', () async {
+  test('re-adding the same name moves it up instead of duplicating', () async {
     await svc.remember(_t('A', 10, 20));
     await svc.remember(_t('B', 30, -40));
-    final list = await svc.remember(_t('A', 10, 20));
-    expect(list.map((t) => t.name), ['A', 'B']);
+    // Same name, a hair different position (a JNow entry converted again).
+    final list = await svc.remember(_t('a ', 10.00001, 20));
+    expect(list.map((t) => t.name), ['a ', 'B']);
+    expect(list.first.raDeg, 10.00001);
   });
 
   test('caps the list', () async {

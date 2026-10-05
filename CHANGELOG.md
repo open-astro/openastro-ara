@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+- **"Saved as an offline draft" while connected.** Creating an imaging run from Planning with nothing else watching the sequence API (the new coordinates dialog, or a Tonight's Sky row whose panel had just closed) let the client's HTTP connection be released mid-create, so the run silently became a local draft instead of landing on the daemon. The create now holds the connection for its whole duration.
+
 ### Added
 - **Target by coordinates on the Plan screen.** The Planning search bar has a pin button (and a pasted position in the search box opens it) for a target typed as RA/Dec: SIMBAD/Gaia sexagesimal or decimal forms, a J2000 / JNow choice, a name, a live read-back of the J2000 position the run will carry, and a recent-targets list that persists on the device. "Add to plan" builds the same imaging run a Tonight's Sky row does, so the sequence slews there (the daemon precesses to the mount's own epoch); "Show on sky" frames it on the planetarium. JNow entries are converted to J2000 in the client (precession, nutation, aberration; checked against astropy to under 0.5″). Part of #1267.
 - **Live tab exposure timer.** A timer in the right rail, under Take One, shows the exposures the daemon runs (sequence frames, Smart Focus probes, plate-solve captures; a Take One shows its progress on its own card, and Live View has no timer) with the frame type, filter, elapsed / total clock and a progress bar, switching to *Downloading* when the shutter closes. Backed by new `camera.exposure_started` / `camera.exposure_complete` / `camera.exposure_failed` WebSocket events from the daemon's shared capture core.
