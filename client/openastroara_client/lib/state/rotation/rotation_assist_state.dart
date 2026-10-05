@@ -61,8 +61,8 @@ final rotationAssistApiProvider = Provider<RotationAssistClient?>((ref) {
 });
 
 /// Follows the daemon's by-hand rotation readout: polled on a short timer
-/// while a readout runs (a run's Rotate camera by hand step starts it), slowly
-/// otherwise so a readout started by the daemon shows up within seconds.
+/// while a readout runs (the Plan screen's Rotate camera panel starts it),
+/// slowly otherwise so a readout started elsewhere shows up within seconds.
 class RotationAssistNotifier extends Notifier<RotationAssistLive> {
   Timer? _timer;
   int _generation = 0;
@@ -108,7 +108,7 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
 
   void _schedule() {
     _timer?.cancel();
-    final base = state.status.active ? _pollInterval : _idlePollInterval;
+    final base = state.status.busy ? _pollInterval : _idlePollInterval;
     final delay = _consecutiveErrors == 0
         ? base
         : Duration(
@@ -119,12 +119,43 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
-  Future<void> start({required double positionAngleDeg}) async {
+  /// Start (or, in single mode, take one more frame of) the readout toward
+  /// [positionAngleDeg]. The frame is kept: toward the same target the daemon
+  /// keeps the history too, so the picture only changes when a new solve lands.
+  Future<void> start({
+    required double positionAngleDeg,
+    double? exposureSeconds,
+    String mode = RotationAssistModes.loop,
+    int? binning,
+  }) async {
     final api = ref.read(rotationAssistApiProvider);
     if (api == null || state.busy) return;
-    state = state.copyWith(busy: true, clearError: true, clearFrame: true);
+    state = state.copyWith(busy: true, clearError: true);
     try {
-      await api.start(positionAngleDeg: positionAngleDeg);
+      await api.start(
+        positionAngleDeg: positionAngleDeg,
+        exposureSeconds: exposureSeconds,
+        mode: mode,
+        binning: binning,
+      );
+      if (!ref.mounted) return;
+      state = state.copyWith(busy: false);
+      await refresh();
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(busy: false, error: describeRequestError(e));
+    }
+  }
+
+  /// Done: the daemon stops the loop and checks the framing with one 1×1
+  /// frame at the full plate-solve exposure; the status ends `confirmed`
+  /// (approved) or `not_confirmed`.
+  Future<void> confirm() async {
+    final api = ref.read(rotationAssistApiProvider);
+    if (api == null || state.busy) return;
+    state = state.copyWith(busy: true, clearError: true);
+    try {
+      await api.confirm();
       if (!ref.mounted) return;
       state = state.copyWith(busy: false);
       await refresh();
@@ -184,7 +215,28 @@ Map<String, Object?> scopeBoxCommandFor(RotationAssistStatus status) {
 /// flips), so — like the guide-camera focus card — the advice is relative to
 /// the user's last move: a move that shrank the delta is the right way, one
 /// that grew it is the wrong way. Pure — unit-tested.
-enum RotateAdvice { wait, onTarget, makeAMove, keepGoing, goBack, noSolve }
+enum RotateAdvice {
+  wait,
+  onTarget,
+  makeAMove,
+  keepGoing,
+  goBack,
+  noSolve,
+  confirming,
+  confirmed,
+  notConfirmed,
+}
+
+/// The loop exposure to suggest for a binning: a bin of b collects b² times
+/// the light per pixel, so the full plate-solve exposure divided by b², never
+/// under 0.2 s and never over the full exposure. Pure — unit-tested.
+double suggestedLoopExposure(double fullExposureSeconds, int binning) {
+  if (!(fullExposureSeconds > 0)) return 0;
+  final b = binning.clamp(1, 16);
+  final s = fullExposureSeconds / (b * b);
+  final floor = fullExposureSeconds < 0.2 ? fullExposureSeconds : 0.2;
+  return s.clamp(floor, fullExposureSeconds);
+}
 
 class RotationHint {
   final RotateAdvice advice;
@@ -198,11 +250,37 @@ const double rotationMoveThresholdDeg = 0.4;
 
 RotationHint rotationHint(RotationAssistStatus status) {
   final latest = status.latest;
+  // The Done check outranks the loop's advice: its verdict comes from the
+  // full-resolution frame.
+  if (status.confirming) {
+    return const RotationHint(
+      RotateAdvice.confirming,
+      'Checking at full resolution',
+      'One 1×1 frame at the full plate-solve exposure — hold the camera still.',
+    );
+  }
+  if (status.state == RotationAssistStates.confirmed &&
+      status.confirmation != null) {
+    return RotationHint(
+      RotateAdvice.confirmed,
+      'Framing approved',
+      'The full-resolution solve reads ${status.confirmation!.solvedPositionAngleDeg.toStringAsFixed(1)}°, within ±${status.toleranceDeg.toStringAsFixed(1)}° of the plan. Tighten the camera — you are done.',
+    );
+  }
+  if (status.state == RotationAssistStates.notConfirmed &&
+      status.confirmation != null) {
+    final off = status.confirmation!.deltaDeg;
+    return RotationHint(
+      RotateAdvice.notConfirmed,
+      'Not quite',
+      'At full resolution the camera is ${off.abs().toStringAsFixed(1)}° off the plan. Keep adjusting, then press Done again.',
+    );
+  }
   if (status.state == RotationAssistStates.error) {
     return const RotationHint(
       RotateAdvice.noSolve,
       'No solve',
-      'The field would not solve. Check the sky and the exposure, then start again.',
+      'The field would not solve. Check the sky and the exposure, then try again.',
     );
   }
   if (latest == null) {
@@ -217,7 +295,7 @@ RotationHint rotationHint(RotationAssistStatus status) {
     return const RotationHint(
       RotateAdvice.onTarget,
       'On target',
-      'Hold the camera here and press Resume.',
+      'Tighten the camera here — the framing matches the plan.',
     );
   }
   // The user's last move: the newest earlier sample whose delta differs by

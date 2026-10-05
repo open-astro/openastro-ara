@@ -13,6 +13,7 @@ import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../state/rotation/rotation_assist_state.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
+import '../../state/sky_atlas/plan_framing_state.dart';
 import '../../services/planetarium_overlay.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
@@ -29,6 +30,7 @@ import '../../util/planetarium_seed.dart';
 import '../../util/coord_parse.dart';
 import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
+import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
@@ -269,6 +271,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       }
       return;
     }
+    // The framing box as the page has it (switched on/off, moved, dialed): the
+    // Rotate camera panel reads the planned angle from here. `rotateCamera`
+    // is the panel's own button in the page's Framing card — same payload,
+    // and it docks the panel.
+    if (event['type'] == 'framing' || event['type'] == 'rotateCamera') {
+      ref.read(planFramingProvider.notifier).set(PlanFraming.fromEvent(event));
+      if (event['type'] == 'rotateCamera') {
+        ref.read(skyAtlasModeProvider.notifier).set(SkyAtlasMode.rotateCamera);
+      }
+      return;
+    }
     if (event['type'] != 'addToSequence') return;
     final raDeg = (event['raDeg'] as num?)?.toDouble();
     final decDeg = (event['decDeg'] as num?)?.toDouble();
@@ -484,8 +497,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       });
     });
 
-    final tonightOpen =
-        ref.watch(skyAtlasModeProvider) == SkyAtlasMode.tonightsSky;
+    final mode = ref.watch(skyAtlasModeProvider);
+    final tonightOpen = mode == SkyAtlasMode.tonightsSky;
+    final rotateOpen = mode == SkyAtlasMode.rotateCamera;
 
     final planetarium = Expanded(
       child: linuxUrl != null
@@ -517,6 +531,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             onCoordinates: () => showCustomTargetDialog(context),
             onTonight: _toggleTonight,
             tonightOpen: tonightOpen,
+            onRotate: () =>
+                ref.read(skyAtlasModeProvider.notifier).toggleRotateCamera(),
+            rotateOpen: rotateOpen,
             // Touch platforms get on-screen zoom: no wheel/trackpad there, and
             // an overshot pinch otherwise strands the view at the widest FOV.
             onZoom: (Platform.isAndroid || Platform.isIOS)
@@ -536,6 +553,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                       border: Border(left: BorderSide(color: AraColors.border)),
                     ),
                     child: TonightSkyPanel(),
+                  ),
+                // The by-hand rotation readout against the framing on the sky
+                // (rigs without a rotator). Its own rect beside the webview,
+                // like Tonight's Sky — never overlaid on the native view.
+                if (rotateOpen)
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(left: BorderSide(color: AraColors.border)),
+                    ),
+                    child: RotationAssistPanel(),
                   ),
               ],
             ),
@@ -557,6 +584,8 @@ class _SearchBar extends StatelessWidget {
   final VoidCallback onTonight;
   // Highlights the toggle while the docked panel is open.
   final bool tonightOpen;
+  final VoidCallback onRotate;
+  final bool rotateOpen;
   // Present only on touch platforms: factor < 1 zooms in, > 1 out, 0 resets.
   final void Function(double factor)? onZoom;
 
@@ -566,6 +595,8 @@ class _SearchBar extends StatelessWidget {
     required this.onCoordinates,
     required this.onTonight,
     required this.tonightOpen,
+    required this.onRotate,
+    required this.rotateOpen,
     this.onZoom,
   });
 
@@ -637,6 +668,22 @@ class _SearchBar extends StatelessWidget {
               onPressed: () => zoom(0),
             ),
           ],
+          const SizedBox(width: 8),
+          // Rotate camera by hand: the plate-solve readout docked beside the
+          // sky, measured against the framing dial.
+          rotateOpen
+              ? FilledButton.icon(
+                  key: const Key('planning-rotate-toggle'),
+                  onPressed: onRotate,
+                  icon: const Icon(Icons.rotate_90_degrees_ccw, size: 16),
+                  label: const Text('Rotate camera'),
+                )
+              : OutlinedButton.icon(
+                  key: const Key('planning-rotate-toggle'),
+                  onPressed: onRotate,
+                  icon: const Icon(Icons.rotate_90_degrees_ccw_outlined, size: 16),
+                  label: const Text('Rotate camera'),
+                ),
           const SizedBox(width: 8),
           // A filled (vs outlined) button when the panel is open, so the toggle
           // reads its own state at a glance.

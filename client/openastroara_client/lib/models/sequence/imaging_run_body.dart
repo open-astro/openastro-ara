@@ -285,18 +285,10 @@ Map<String, dynamic> buildTargetBlock({
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg));
 
   final children = <Map<String, dynamic>>[
-    // A framing angle on a rig WITHOUT a rotator: the daemon becomes the
-    // protractor. Slew to the target FIRST so the readout solves the target's
-    // field (a parked mount looks at nothing solvable; on an alt-az mount the
-    // angle depends on where you point), then Rotate camera by hand
-    // plate-solves in a loop while the run waits for the user to turn the
-    // camera, then Center and Rotate re-centres the field the turn shifted.
-    if (positionAngleDeg != null && !rig.rotator) ...[
-      _item(slewScopeToRaDecType)
-        ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg),
-      _item(rotateCameraByHandType)
-        ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360,
-    ],
+    // A framing angle on a rig WITHOUT a rotator is the user's job before the
+    // run: the Plan screen's "Rotate camera" panel plate-solves the camera
+    // against the framing so it can be turned by hand. Center and Rotate then
+    // centres (and, without a rotator, leaves the angle as the user set it).
     goToTarget,
     // Autofocus runs through the plan's FIRST filter (or the single chosen
     // one) — focusing through a random previously-loaded filter would hand

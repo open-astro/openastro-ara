@@ -34,14 +34,18 @@ public sealed record RotationSolve(
     bool Flipped,
     AnalysisFrame Frame);
 
-/// <summary>One capture-and-solve of the main camera (null = the solve failed). <see cref="RotationFrameSolver"/>
-/// implements it over the profile's plate-solver stack; tests and the synthetic sky inject their own.</summary>
+/// <summary>One capture-and-solve of the main camera at <paramref name="exposureSeconds"/> (null = the solve
+/// failed). <see cref="RotationFrameSolver"/> implements it over the profile's plate-solver stack; tests and
+/// the synthetic sky inject their own.</summary>
 public interface IPositionAngleSolver {
-    Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct);
+    Task<RotationSolve?> SolvePositionAngleAsync(double exposureSeconds, int binning, CancellationToken ct);
+
+    /// <summary>The largest square binning the camera accepts, or 0 when unknown. Default: unknown.</summary>
+    int MaxBinning => 0;
 
     /// <summary>Throw <see cref="PlateSolverConfigurationException"/> when a solve cannot possibly succeed on
-    /// this rig as configured (checked once at start, so a run skips the step instead of failing five
-    /// solves). Default: nothing to check.</summary>
+    /// this rig as configured (checked once at start, so the start is refused with 409 instead of the loop
+    /// failing five solves). Default: nothing to check.</summary>
     void EnsureReady() { }
 }
 
@@ -83,7 +87,9 @@ public sealed class RotationFrameSolver : IPositionAngleSolver {
         }
     }
 
-    public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {
+    public int MaxBinning => _frames.MaxBinning;
+
+    public async Task<RotationSolve?> SolvePositionAngleAsync(double exposureSeconds, int binning, CancellationToken ct) {
         // ARA store → legacy settings first (same rule and reason as PlateSolveService).
         LegacyProfileBridge.SyncPlateSolve(_profileService, _store);
         var profile = _profileService.ActiveProfile
@@ -96,7 +102,7 @@ public sealed class RotationFrameSolver : IPositionAngleSolver {
                 $"Cannot read the rotation: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) in the profile.");
         }
 
-        var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureTime, settings.Binning, ct).ConfigureAwait(false);
+        var frame = await _frames.CaptureForAnalysisAsync(exposureSeconds, binning, ct).ConfigureAwait(false);
         // The solver ignores the CFA; a one-shot-colour mosaic solves as luminance like every other path here.
         var image = new OpenAstroAra.Image.ImageData.BaseImageData(
             frame.Pixels.ToArray(), frame.Width, frame.Height, bitDepth: 16, isBayered: false,
@@ -112,7 +118,7 @@ public sealed class RotationFrameSolver : IPositionAngleSolver {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
-            Binning = settings.Binning,
+            Binning = (short)Math.Clamp(binning, 1, short.MaxValue),
             Coordinates = _telescope.GetCurrentPosition(),
             BlindFailoverEnabled = settings.BlindFailoverEnabled,
         };

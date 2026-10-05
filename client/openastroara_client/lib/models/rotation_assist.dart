@@ -6,6 +6,19 @@ abstract final class RotationAssistStates {
   static const running = 'running';
   static const stopped = 'stopped';
   static const error = 'error';
+
+  /// The Done check: one 1×1 frame at the full plate-solve exposure is
+  /// being taken / passed the tolerance (framing approved) / did not.
+  static const confirming = 'confirming';
+  static const confirmed = 'confirmed';
+  static const notConfirmed = 'not_confirmed';
+}
+
+/// The readout's capture modes: `loop` solves frame after frame until stopped;
+/// `single` takes one frame, solves it and stops with the result kept.
+abstract final class RotationAssistModes {
+  static const loop = 'loop';
+  static const single = 'single';
 }
 
 class RotationAssistSample {
@@ -74,6 +87,24 @@ class RotationAssistStatus {
   final bool hasFrame;
   final int frameSeq;
 
+  /// The capture settings of the current (or last) readout — `loop` or
+  /// `single` — and the profile's plate-solve exposure the panel pre-fills
+  /// its exposure field with.
+  final String mode;
+  final double exposureSeconds;
+  final double defaultExposureSeconds;
+
+  /// The readout frames' binning: in use (or last used), what a start without
+  /// one would pick (the camera's maximum capped at 4), and the camera's
+  /// ceiling (0 = unknown).
+  final int binning;
+  final int autoBinning;
+  final int maxBinning;
+
+  /// The 1×1 full-exposure solve the Done check took, when [state] is
+  /// `confirmed` or `not_confirmed`.
+  final RotationAssistSample? confirmation;
+
   const RotationAssistStatus({
     this.active = false,
     this.state = RotationAssistStates.idle,
@@ -88,7 +119,19 @@ class RotationAssistStatus {
     this.consecutiveFailures = 0,
     this.hasFrame = false,
     this.frameSeq = 0,
+    this.mode = RotationAssistModes.loop,
+    this.exposureSeconds = 0,
+    this.defaultExposureSeconds = 0,
+    this.binning = 1,
+    this.autoBinning = 1,
+    this.maxBinning = 0,
+    this.confirmation,
   });
+
+  bool get confirming => state == RotationAssistStates.confirming;
+
+  /// The daemon has the camera: a loop, a single shot or the Done check.
+  bool get busy => active || confirming;
 
   static const idle = RotationAssistStatus();
 
@@ -120,6 +163,18 @@ class RotationAssistStatus {
       consecutiveFailures: (json['consecutive_failures'] as num?)?.toInt() ?? 0,
       hasFrame: json['has_frame'] as bool? ?? false,
       frameSeq: (json['frame_seq'] as num?)?.toInt() ?? 0,
+      mode: json['mode'] as String? ?? RotationAssistModes.loop,
+      exposureSeconds: (json['exposure_seconds'] as num?)?.toDouble() ?? 0,
+      defaultExposureSeconds:
+          (json['default_exposure_seconds'] as num?)?.toDouble() ?? 0,
+      binning: (json['binning'] as num?)?.toInt() ?? 1,
+      autoBinning: (json['auto_binning'] as num?)?.toInt() ?? 1,
+      maxBinning: (json['max_binning'] as num?)?.toInt() ?? 0,
+      confirmation: json['confirmation'] is Map<String, dynamic>
+          ? RotationAssistSample.fromJson(
+              json['confirmation'] as Map<String, dynamic>,
+            )
+          : null,
     );
   }
 }
