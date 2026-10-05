@@ -9,6 +9,7 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <glob.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <cstring>
@@ -223,37 +224,69 @@ struct GbmProbe {
 
 }  // namespace
 
+// Runs in a forked child: returns 0 when some render node can back a GBM
+// buffer, 1 when none can, 2 when libgbm is not loadable.
+int probe_render_nodes(const glob_t& g) {
+  GbmProbe probe;
+  if (!probe.load()) return 2;
+  for (size_t i = 0; i < g.gl_pathc; i++) {
+    int fd = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC);
+    if (fd < 0) continue;
+    const bool ok = probe.allocation_works(fd);
+    close(fd);
+    if (ok) return 0;
+  }
+  return 1;
+}
+
+}  // namespace
+
 // Called from main() before GTK and the Flutter engine start, so the g_setenv
 // below happens while the process is still single-threaded (setenv is not
-// thread-safe against a concurrent getenv). The user's own setting wins.
-// Applies on X11 too: where GBM can't allocate there either (e.g. proprietary
-// NVIDIA drivers without a GBM backend), the shm renderer is the right fallback.
+// thread-safe against a concurrent getenv). The GBM probe itself runs in a
+// forked child: gbm_create_device loads the Mesa DRI driver, and some drivers
+// (radeonsi) start compiler threads that may outlive gbm_device_destroy, so
+// the parent never loads a driver and stays single-threaded for the setenv.
+// The user's own setting wins. Applies on X11 too: where GBM can't allocate
+// there either (e.g. proprietary NVIDIA drivers without a GBM backend), the
+// shm renderer is the right fallback.
 void planetarium_overlay_configure_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
   const char* reason = nullptr;
-  GbmProbe probe;
-  if (!probe.load()) {
-    // Distinct from "allocation failed": the library is missing or too old,
-    // which a minimal install can hit even with a working GPU.
-    reason = "libgbm.so.1 is not loadable";
+  glob_t g = {};
+  if (glob("/dev/dri/renderD*", 0, nullptr, &g) != 0 || g.gl_pathc == 0) {
+    // Cheap first check: no node at all means nothing to probe and no driver
+    // to load (headless containers, GPU-less VMs without a DRM device).
+    reason = "no DRM render node is present";
   } else {
-    glob_t g = {};
-    bool usable = false;
-    if (glob("/dev/dri/renderD*", 0, nullptr, &g) == 0) {
-      for (size_t i = 0; i < g.gl_pathc && !usable; i++) {
-        int fd = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC);
-        if (fd >= 0) {
-          usable = probe.allocation_works(fd);
-          close(fd);
-        }
-      }
+    pid_t pid = fork();
+    if (pid == 0) {
+      _exit(probe_render_nodes(g));
     }
-    if (!usable) {
-      reason = g.gl_pathc == 0 ? "no DRM render node is present"
-                               : "no DRM render node can back a GBM buffer";
+    int status = 0;
+    int result = -1;
+    if (pid > 0 && waitpid(pid, &status, 0) == pid && WIFEXITED(status)) {
+      result = WEXITSTATUS(status);
     }
-    globfree(&g);
+    switch (result) {
+      case 0:
+        break;
+      case 2:
+        // Distinct from "allocation failed": the library is missing or too
+        // old, which a minimal install can hit even with a working GPU.
+        reason = "libgbm.so.1 is not loadable";
+        break;
+      case 1:
+        reason = "no DRM render node can back a GBM buffer";
+        break;
+      default:
+        // fork failed or the probe crashed inside the driver: assume the
+        // DMABUF renderer would fail the same way.
+        reason = "the GBM probe did not complete";
+        break;
+    }
   }
+  globfree(&g);
   if (reason != nullptr) {
     g_message("planetarium_overlay: %s, setting WEBKIT_DISABLE_DMABUF_RENDERER=1",
               reason);
