@@ -92,6 +92,24 @@ namespace OpenAstroAra.Test {
         private static async Task<EquipmentConnectionState?> StateOf(TelescopeService svc) =>
             (await svc.GetAsync(CancellationToken.None))?.State;
 
+        // #1255 — the refresh is single-flight, so once the cache reports a runtime state every
+        // later tick started after the script change that produced it. Waiting for the committed
+        // state (not N ticks of wall clock) is what makes "the mount is slewing when the latched
+        // error appears" true under full-suite load, where a tick can stall between its Slewing
+        // and RightAscension reads for longer than the old fixed window.
+        private static Task WaitForRuntimeStateAsync(TelescopeService svc, string state) =>
+            WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.State == state,
+                TimeSpan.FromSeconds(15), $"the runtime never reported '{state}'");
+
+        private static int PositionReads(ScriptedAlpacaDevice box) =>
+            box.Gets.Count(p => p.EndsWith("/rightascension", StringComparison.Ordinal));
+
+        // "Several refresh ticks" counted at the device: the stub has answered N more position
+        // reads since the mark, however long those ticks took.
+        private static Task WaitForPositionReadsAsync(ScriptedAlpacaDevice box, int since, int count) =>
+            WaitForAsync(() => PositionReads(box) >= since + count, TimeSpan.FromSeconds(15),
+                $"the service never read the position {count} more times");
+
         [Test]
         [Category("bench")] // loopback-only, runs in the default job too
         public async Task A_latched_bridge_trips_the_mount_to_Error_with_a_Disconnected_fault_once_per_episode() {
@@ -121,7 +139,7 @@ namespace OpenAstroAra.Test {
             // again within the same episode — one fault, not one per 2 s tick.
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
-            await Task.Delay(Ticks(10)); // two or more refresh ticks on the still-latched bridge
+            await WaitForPositionReadsAsync(box, PositionReads(box), 3); // refresh ticks on the still-latched bridge
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "still latched after the reconnect is the same episode");
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "no second trip while the episode is open");
@@ -155,9 +173,9 @@ namespace OpenAstroAra.Test {
             // the position reads: flipping both at once let a tick straddle the two writes (Slewing
             // still false, position already latched) and trip the mount it was told not to (#1265).
             Volatile.Write(ref slewing, "true");
-            await Task.Delay(Ticks(3));
+            await WaitForRuntimeStateAsync(svc, "slewing");
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
-            await Task.Delay(Ticks(10)); // several ticks: latched reads, but a goto in flight
+            await WaitForPositionReadsAsync(box, PositionReads(box), 5); // several ticks: latched reads, but a goto in flight
             string published;
             lock (faults) { published = string.Join("; ", faults.Select(f => f.Details)); }
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected),

@@ -99,11 +99,29 @@ namespace OpenAstroAra.Test {
         }
 
         private static async Task WaitForStateAsync(SequencerService svc, Guid id, SequenceRunState target) {
+            SequenceRunStateDto? s = null;
             for (var i = 0; i < 250; i++) { // up to ~5s
-                var s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                s = await svc.GetRunStateAsync(id, CancellationToken.None);
                 if (s is not null && s.State == target) return;
                 await Task.Delay(20);
             }
+            // #1244 — a missed transition fails here, where it happened, not three asserts later.
+            Assert.Fail($"run never reached {target} (last seen {s?.State.ToString() ?? "no run"})");
+        }
+
+        /// <summary>#1244 — Running is reported before instruction 0 has started, and "before
+        /// instruction 0" is itself a §38 boundary: a pause requested that early suspends with
+        /// nothing completed. The pause tests want the first instruction IN FLIGHT, so they wait
+        /// for the live status to report it as the running leaf (polled every
+        /// <see cref="SequencerService.LiveStatusPollInterval"/>) before pausing.</summary>
+        private static async Task WaitForInstructionInFlightAsync(SequencerService svc, Guid id, int index) {
+            SequenceRunStateDto? s = null;
+            for (var i = 0; i < 250; i++) { // up to ~5s
+                s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                if (s is { State: SequenceRunState.Running } && s.CurrentInstructionIndex == index) return;
+                await Task.Delay(20);
+            }
+            Assert.Fail($"instruction {index} never went in flight (state {s?.State.ToString() ?? "no run"}, index {s?.CurrentInstructionIndex?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"})");
         }
 
         [Test]
@@ -609,7 +627,7 @@ namespace OpenAstroAra.Test {
                 c.Items.Add(new Annotation { Name = "after-pause" });
             }), ws);
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await WaitForInstructionInFlightAsync(svc, id, 0); // #1244 — the 2 s wait must be running before the pause
 
             await svc.PauseAsync(id, null, CancellationToken.None);
             // The 2s wait must finish first — Paused is reported only when the
@@ -731,7 +749,7 @@ namespace OpenAstroAra.Test {
                 c.Items.Add(new Annotation { Name = "after-safety-pause" });
             }), ws);
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await WaitForInstructionInFlightAsync(svc, id, 0); // #1244 — the 2 s wait must be running before the pause
 
             var pausedIds = await svc.PauseActiveRunsAsync(CancellationToken.None);
             Assert.That(pausedIds, Is.EquivalentTo(new[] { id }));
@@ -942,7 +960,7 @@ namespace OpenAstroAra.Test {
                 c.Items.Add(new WaitForTimeSpan { Time = 30 });
             }), ws);
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await WaitForInstructionInFlightAsync(svc, id, 0); // #1244 — the 2 s wait must be running before the pause
             await svc.PauseAsync(id, null, CancellationToken.None);
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
 
@@ -995,7 +1013,7 @@ namespace OpenAstroAra.Test {
                 c.Items.Add(new WaitForTimeSpan { Time = 30 });
             }));
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await WaitForInstructionInFlightAsync(svc, id, 0); // #1244 — the 2 s wait must be running before the pause
             await svc.PauseAsync(id, null, CancellationToken.None);
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
             await ((IHostedService)svc).StopAsync(CancellationToken.None);
