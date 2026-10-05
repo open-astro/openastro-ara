@@ -2427,7 +2427,7 @@ Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence a
 | During DB row write | `.fits` durable | WAL guarantees no corruption; row may be missing | Orphan scan picks it up. |
 | After DB row inserted (steady state) | `.fits` durable | row durable | Full success. |
 | Mid-WAL-checkpoint | both durable | WAL replay completes on next open | No data loss. |
-| USB drive yanked mid-write | `.fits` partial in OS page cache, never reaches drive | DB write fails | Server logs `storage.unavailable`; on next mount + restart, §28.8 cleans up `.tmp` and any orphans. |
+| USB drive yanked mid-write | `.fits` partial in OS page cache, never reaches drive | DB write fails | The frame write fails and that frame is lost; later frames are refused by the §29 store-ejected gate while nothing is mounted. On next mount + restart (or a storage rescan), §28.8 cleans up `.tmp` and any orphans. |
 
 **Net property of the initial release's durability design:** no partial FITS files ever appear under their real name; no orphan FITS file ever becomes invisible to the library; no SQLite corruption is possible on power loss; the maximum data loss from a power event is "the single exposure that was actively integrating when power died."
 

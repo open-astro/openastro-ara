@@ -216,7 +216,7 @@ The daemon computes sidereal time with a bundled snapshot of the IERS UT1-UTC se
 - Check the firewall: `sudo ufw status` — port 5555/tcp must be open
 - Direct connection: enter the Pi's IP + port in the Flutter client's manual-connect dialog
 
-**Captures fail with "storage.unavailable"**
-USB drive unmounted or read-only. `mount | grep /media/openastroara` to verify. If `errors=remount-ro` triggered, run `sudo fsck -y /dev/sdaN` and `sudo mount -o remount,rw /media/openastroara`.
+**Captures refused: "the store drive is ejected/unmounted"**
+The journal's §29 pre-capture line means nothing is mounted at `/media/openastroara`; `mount | grep /media/openastroara` to verify, then reconnect the drive or choose a store. A drive that is mounted but read-only passes that check and the frame write fails instead: if `errors=remount-ro` triggered, run `sudo fsck -y /dev/sdaN` and `sudo mount -o remount,rw /media/openastroara`.
 
 See [`design/PORT_PLAYBOOK.md`](../design/PORT_PLAYBOOK.md) §13 + §29 for deeper detail.
