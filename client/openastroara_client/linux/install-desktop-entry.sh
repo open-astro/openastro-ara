@@ -32,7 +32,15 @@ share="$bundle/share"
 data="${XDG_DATA_HOME:-$HOME/.local/share}"
 mkdir -p "$data/applications" "$data/icons/hicolor"
 # Exec gets the absolute bundle path; the packaged entry keeps the bare name.
-sed "s|^Exec=.*|Exec=$bundle/openastroara|" \
+# Quoted per the desktop-entry spec so a path with spaces stays one word, and
+# the spec's reserved characters inside it are backslash-escaped. Written with
+# awk, not sed, so the path is never read as a replacement pattern.
+exec_path="$bundle/openastroara"
+exec_path="${exec_path//\\/\\\\}"
+exec_path="${exec_path//\"/\\\"}"
+exec_path="${exec_path//\$/\\\$}"
+exec_path="${exec_path//\`/\\\`}"
+awk -v exec_line="Exec=\"$exec_path\"" '/^Exec=/ { print exec_line; next } { print }' \
   "$share/applications/org.openastro.openastroara.desktop" \
   > "$data/applications/org.openastro.openastroara.desktop"
 fresh_icons=0
@@ -41,7 +49,7 @@ cp -R "$share/icons/hicolor/." "$data/icons/hicolor/"
 # No gtk-update-icon-cache here: the per-user hicolor dir has no index.theme,
 # so a cache file in it is useless and can shadow the plain PNG lookup.
 command -v update-desktop-database >/dev/null && update-desktop-database "$data/applications" >/dev/null 2>&1 || true
-echo "installed $data/applications/org.openastro.openastroara.desktop (Exec=$bundle/openastroara)"
+echo "installed $data/applications/org.openastro.openastroara.desktop (Exec=\"$exec_path\")"
 echo "relaunch the app; a running instance keeps the old icon until restarted"
 if [ "$fresh_icons" = 1 ]; then
   echo "note: the icon directory was just created; a running desktop shell may have"

@@ -92,6 +92,9 @@ void apply_visibility(OverlayState* state) {
     gboolean was_visible = gtk_widget_get_visible(state->webview_widget);
     gtk_widget_show(state->webview_widget);
     if (!was_visible) {
+      // X11: reorders the native subwindow above FlView's. Wayland: the window
+      // is client-side, so this only reorders GDK's child list; stacking there
+      // comes from GtkOverlay draw order (#1200). Harmless on both.
       GdkWindow* window = gtk_widget_get_window(state->webview_widget);
       if (window != nullptr) gdk_window_raise(window);
     }
@@ -381,10 +384,11 @@ void ensure_webview(OverlayState* state) {
 
   // The webview child must be visible so it maps when the event box maps.
   gtk_widget_show(GTK_WIDGET(state->webview));
-  // Force the event box's GdkWindow into existence NOW (synchronously) and
-  // promote it to a native X11 subwindow, so the X server composites it above
-  // the Flutter GL frame. Relying on the async show→map→realize cycle didn't
-  // work: hiding the child before it kept Planning hidden races the realize.
+  // Force the event box's GdkWindow into existence NOW (synchronously). On
+  // X11 it is then promoted to a native subwindow so the X server composites
+  // it above the Flutter GL frame; on Wayland it stays client-side (below).
+  // Relying on the async show→map→realize cycle didn't work: hiding the
+  // child before it kept Planning hidden races the realize.
   gtk_widget_realize(event_box);
   GdkWindow* window = gtk_widget_get_window(event_box);
   bool wayland = false;
