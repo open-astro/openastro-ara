@@ -9727,7 +9727,7 @@ Catalog is implementation source-of-truth in code; table here is the human-reada
 | **Storage** | | | | |
 | `storage.usb_unplugged` | `StorageUsbPayload` | §29.1.2 | C | v1 |
 | `storage.log_pressure` | `StorageLogPressurePayload` | §29.9 | varies | v1 |
-| `storage.unavailable` | `StorageUnavailablePayload` | §28 | C | v1 |
+| ~~`storage.unavailable`~~ | ~~`StorageUnavailablePayload`~~ | §28.8 | C | REMOVED: storage-less startup queues no notification; the §29 store-ejected refusal is the signal (#1208, 2026-10-05) |
 | `storage.full_warning` | `StorageFullPayload` | §29 | W | v1 |
 | **Backup + data manager** | | | | |
 | `backup.zip_created` | `BackupZipPayload` | §43 | I | v1 |
