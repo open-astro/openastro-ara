@@ -342,6 +342,9 @@ namespace {
 gboolean pinch_event_cb(GtkWidget* widget, GdkEvent* event, gpointer user_data) {
   (void)widget;
   if (gdk_event_get_event_type(event) != GDK_TOUCHPAD_PINCH) return FALSE;
+  // Swallowed unconditionally, page loaded or not: letting a pinch through to
+  // WebKit before `stel` exists would still magnify the page. The JS hooks
+  // guard on `stel` themselves, so an early pinch is simply a no-op.
   OverlayState* state = static_cast<OverlayState*>(user_data);
   const GdkEventTouchpadPinch* pinch = &event->touchpad_pinch;
   switch (pinch->phase) {

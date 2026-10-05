@@ -347,6 +347,8 @@ simulators — the same devices the integration tests use
 - **Planetarium blank on Linux, Flutter UI fine** → read **stderr** (the
   terminal, or the journal) for the `planetarium_overlay:` lines described in
   the Linux section.
-- **Planetarium shows a blank/black sky** → the platform webview lacks WebGL2
-  (old WebKitGTK, or missing WebView2 runtime on Windows). Stars + atmosphere
+- **Planetarium shows a blank/black sky** → on Linux, first follow the stderr
+  check in the Linux section above (renderer fallback vs WebGL2). Otherwise the
+  platform webview lacks WebGL2 (old WebKitGTK, or missing WebView2 runtime on
+  Windows). Stars + atmosphere
   drawing = the webview path is healthy.
