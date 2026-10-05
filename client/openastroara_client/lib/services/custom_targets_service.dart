@@ -5,8 +5,9 @@ import 'package:path_provider/path_provider.dart';
 
 /// A target the user typed in by coordinates (#1267 item 1). Stored J2000 so
 /// it goes through the same run path as a catalogue object; [typedAsJNow]
-/// remembers whether the user entered it as JNow, for the dialog to show the
-/// position back the way it was pasted.
+/// records whether the user entered it as JNow. It is only recorded: picking
+/// a recent target refills the stored J2000 position with J2000 selected (a
+/// JNow position re-derived on a later date would not match what was pasted).
 class CustomTarget {
   final String name;
   final double raDeg;
