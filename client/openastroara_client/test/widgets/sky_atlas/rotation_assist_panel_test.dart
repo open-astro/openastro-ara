@@ -324,6 +324,21 @@ void main() {
     expect(stub.starts, isEmpty);
   });
 
+  testWidgets('an exposure under the daemon\'s 0.01 s floor blocks the start', (
+    tester,
+  ) async {
+    final (stub, _) = await _pump(tester, idleWithDefault);
+    await tester.enterText(
+      find.byKey(const Key('rotation-assist-exposure')),
+      '0.005',
+    );
+    await tester.pump();
+    expect(find.textContaining('between 0.01 and 60'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('rotation-assist-start')));
+    await tester.pump();
+    expect(stub.starts, isEmpty);
+  });
+
   testWidgets('a running loop shows Stop and the readout with its frame', (
     tester,
   ) async {

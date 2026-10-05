@@ -192,8 +192,8 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
             lock (_gate) {
                 // A new target is a new job: the history (and the advice built on it) starts over. The same
                 // target — a single shot after a turn, a loop restarted after a cloud — keeps it.
-                // Compared to 0.01°: a float-rounded resend of the same dial angle is the same target.
-                if (_target is not { } prev || Math.Abs(prev - target) > 0.005) {
+                // Compared to 0.01°, folded across north: a float-rounded resend of the same dial angle is the same target.
+                if (_target is not { } prev || Math.Abs(AstroUtil.EuclidianModulus(prev - target + 180, 360) - 180) > 0.005) {
                     _latest = null;
                     _recent.Clear();
                     _frame = null;

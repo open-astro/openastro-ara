@@ -86,7 +86,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
   /// (the daemon then falls back to the profile's plate-solve exposure).
   double? get _exposureSeconds {
     final v = double.tryParse(_exposureCtrl.text.trim().replaceAll(',', '.'));
-    if (v == null || !v.isFinite || v <= 0 || v > 60) return null;
+    if (v == null || !v.isFinite || v < 0.01 || v > 60) return null;
     return v;
   }
 

@@ -268,6 +268,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_restart_across_north_toward_the_same_angle_keeps_the_history() {
+            var solver = new ScriptedSolver(359.5) { MaxBinning = 1 };
+            using var svc = new RotationAssistService(solver, () => 1.0);
+            await svc.StartAsync(new RotationAssistStartRequestDto(359.999, Mode: "single"), CancellationToken.None);
+            await WaitForState(svc, "stopped");
+            // 0.0005° is 0.0015° from 359.999° across north: the same dial angle, float-rounded.
+            await svc.StartAsync(new RotationAssistStartRequestDto(0.0005, Mode: "single"), CancellationToken.None);
+            var s = await WaitForState(svc, "stopped");
+            Assert.That(s.Recent.Count, Is.EqualTo(2), "the history carries on across 0°");
+        }
+
+        [Test]
         public async Task A_single_shot_is_binned_like_the_loop() {
             var solver = new ScriptedSolver(10) { MaxBinning = 4 };
             using var svc = new RotationAssistService(solver, () => 1.0);
