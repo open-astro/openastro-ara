@@ -589,7 +589,10 @@ void main() {
       // report them; keep the two in step.
       final runner = File('linux/runner/planetarium_overlay.cc')
           .readAsStringSync();
-      final doc = File('../../docs/RUNNING.md').readAsStringSync();
+      // The doc wraps long lines, so compare with whitespace collapsed.
+      final doc = File('../../docs/RUNNING.md')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'\s+'), ' ');
       const reasons = [
         'no DRM render node is present',
         'no DRM render node can back a GBM buffer',
