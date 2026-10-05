@@ -201,7 +201,7 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
     (headless containers, GPU-less VMs), `no DRM render node can back a GBM
     buffer` (VMware/virtio without 3D, some NVIDIA drivers), `libgbm.so.1 is
     not loadable` (minimal install), or `the GBM probe did not complete` (the
-    driver crashed while probing). Setting `WEBKIT_DISABLE_DMABUF_RENDERER`
+    driver crashed or hung while probing, or the probe could not be forked). Setting `WEBKIT_DISABLE_DMABUF_RENDERER`
     yourself skips the probe either way.
 - **Taskbar icon on Wayland:** compositors resolve the icon from the app id via
   an installed `org.openastro.openastroara.desktop`, not from the window, so an
@@ -213,10 +213,14 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   (`systemctl --user restart plasma-plasmashell`, or log out and in). Packaged
   installs ship the same files under `/usr/share`.
 - After launching, open the Planning tab and check the planetarium actually draws
-  stars/atmosphere. A blank/black sky **without** a `WEBKIT_DISABLE_DMABUF_RENDERER`
-  line on stderr means a WebGL2 gap in your WebKitGTK build; with that line
-  present, try `WEBKIT_DISABLE_DMABUF_RENDERER=1` explicitly and report the
-  `<reason>`.
+  stars/atmosphere. If the sky is blank/black and there is **no**
+  `WEBKIT_DISABLE_DMABUF_RENDERER` line on stderr, the probe passed but WebKit's
+  DMABUF renderer may still be failing on your driver: launch once with
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` set by hand. Sky back → report your GPU and
+  driver so the probe can learn the case; still blank → a WebGL2 gap in your
+  WebKitGTK build. If the line **is** present, the runner already disabled
+  DMABUF, so setting it again changes nothing: report the `<reason>` with your
+  WebKitGTK version.
 - **Framing photographs:** DSS2 target imagery is fetched through the local
   Stellarium server and cached under the platform application-support directory
   (`stellarium-dss2`; on Linux
