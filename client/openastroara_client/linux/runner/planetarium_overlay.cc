@@ -21,6 +21,11 @@
 
 namespace {
 
+// Set when every planetarium frame still goes through a CPU copy in this
+// process (the shm renderer, or NVIDIA where GTK3 copies the DMABUF frame on
+// the UI thread); the page then caps its backing resolution on large views.
+bool g_heavy_compositing = false;
+
 // Method channel name — must match lib/services/planetarium_overlay.dart.
 const char* kChannelName = "org.openastro.openastroara/planetarium";
 
@@ -176,10 +181,9 @@ void load_changed_cb(WebKitWebView* view,
   if (event == WEBKIT_LOAD_FINISHED && state->night) {
     run_js(view, kNightOnJs);
   }
-  // On the shm renderer every frame is a readback plus a copy; let the page
-  // cap its backing resolution and interactive rate on very large views.
-  if (event == WEBKIT_LOAD_FINISHED &&
-      g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) {
+  // Where every frame still costs a CPU copy (shm renderer, NVIDIA), let the
+  // page cap its backing resolution and interactive rate on very large views.
+  if (event == WEBKIT_LOAD_FINISHED && g_heavy_compositing) {
     run_js(view, "araViewCaps.enable()");
   }
 }
@@ -307,7 +311,21 @@ void planetarium_overlay_configure_renderer() {
                }
                return false;
              }()) {
-    reason = "the proprietary NVIDIA driver is in use";
+    // Keep the DMABUF renderer (31 fps vs 8 on the shm path at 4K) but turn
+    // off NVIDIA's Wayland explicit sync: the driver arms
+    // wp_linux_drm_syncobj on GTK's toplevel surface, GTK3 then commits a
+    // buffer with no acquire point, KWin disconnects the client
+    // ("explicit sync is used, but no acquire point is set") and the web
+    // process dies inside libnvidia-eglcore. Found with WebKitGTK's
+    // MiniBrowser on a plain WebGL page (Kubuntu 26.04, 595.84, 2026-10-05).
+    // The user's own setting wins; the crash marker above remains the
+    // backstop if a driver still fails.
+    if (g_getenv("__NV_DISABLE_EXPLICIT_SYNC") == nullptr) {
+      g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);
+    }
+    g_message("planetarium_overlay: the proprietary NVIDIA driver is in use, "
+              "setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)");
+    g_heavy_compositing = true;
   } else {
     pid_t pid = fork();
     if (pid == 0) {
@@ -358,6 +376,7 @@ void planetarium_overlay_configure_renderer() {
     }
   }
   globfree(&g);
+  if (reason != nullptr) g_heavy_compositing = true;
   if (reason != nullptr) {
     if (probe_ms >= 0) {
       g_message("planetarium_overlay: %s after %" G_GINT64_FORMAT

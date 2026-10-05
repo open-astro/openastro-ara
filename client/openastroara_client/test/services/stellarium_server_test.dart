@@ -595,7 +595,6 @@ void main() {
           .replaceAll(RegExp(r'\s+'), ' ');
       const reasons = [
         'no DRM render node is present',
-        'the proprietary NVIDIA driver is in use',
         "a previous run's WebKit process crashed in the DMABUF renderer",
         'no DRM render node can back a GBM buffer',
         'libgbm.so.1 is not loadable',
@@ -607,6 +606,10 @@ void main() {
       }
       expect(runner, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
       expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
+      // NVIDIA keeps DMABUF and disables the driver's explicit sync instead.
+      expect(runner, contains('g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);'));
+      expect(runner, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)'));
+      expect(doc, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)'));
       // The crash backstop: signal hooked, marker path documented.
       expect(runner, contains('"web-process-terminated"'));
       // Clean teardown: SIGTERM routes through GApplication and the overlay
@@ -653,6 +656,7 @@ void main() {
       final runner = File('linux/runner/planetarium_overlay.cc')
           .readAsStringSync();
       expect(runner, contains('"araViewCaps.enable()"'));
+      expect(runner, contains('g_heavy_compositing'));
     });
 
     test('idle callers are queued and flushed together, never one slot', () {
