@@ -211,12 +211,16 @@ bool gbm_allocation_works(int fd) {
   return ok;
 }
 
-// Must run before the first WebKit object is created; the user's own setting
-// wins. Falls back to WebKit's shared-memory renderer when no render node can
-// back a GBM allocation.
-void maybe_disable_dmabuf_renderer() {
+}  // namespace
+
+// Called from main() before GTK and the Flutter engine start, so the g_setenv
+// below happens while the process is still single-threaded (setenv is not
+// thread-safe against a concurrent getenv). The user's own setting wins.
+// Applies on X11 too: where GBM can't allocate there either (e.g. proprietary
+// NVIDIA drivers without a GBM backend), the shm renderer is the right fallback.
+void planetarium_overlay_configure_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
-  glob_t g;
+  glob_t g = {};
   bool usable = false;
   if (glob("/dev/dri/renderD*", 0, nullptr, &g) == 0) {
     for (size_t i = 0; i < g.gl_pathc && !usable; i++) {
@@ -235,9 +239,10 @@ void maybe_disable_dmabuf_renderer() {
   }
 }
 
+namespace {
+
 void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
-  maybe_disable_dmabuf_renderer();
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
   g_signal_connect(state->webview, "decide-policy",
                    G_CALLBACK(decide_policy_cb), state);

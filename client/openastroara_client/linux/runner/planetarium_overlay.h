@@ -19,6 +19,11 @@
 //
 // `overlay` must be the GtkOverlay whose main child is `view`; `messenger` is
 // the engine's binary messenger (fl_engine_get_binary_messenger).
+// Decides WebKit's renderer before any thread exists: probes GBM on the DRM
+// render nodes and sets WEBKIT_DISABLE_DMABUF_RENDERER=1 when none can back a
+// buffer (#1200). Call first thing in main(), before my_application_new().
+void planetarium_overlay_configure_renderer();
+
 void planetarium_overlay_register(GtkOverlay* overlay,
                                   FlView* view,
                                   FlBinaryMessenger* messenger);
