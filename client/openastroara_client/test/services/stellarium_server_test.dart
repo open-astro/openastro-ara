@@ -619,8 +619,20 @@ void main() {
       expect(wrapper, greaterThan(-1));
       expect(engine, greaterThan(wrapper));
       expect(page, contains('window.requestAnimationFrame = function (cb) {'));
+      expect(page, contains('window.cancelAnimationFrame = function (id) {'));
       // The runner-driven pinch path has no DOM event, so it wakes explicitly.
       expect(page, contains('araIdleThrottle.wake();'));
+    });
+
+    test('idle callers are queued and flushed together, never one slot', () {
+      // Review on #1275: a single throttled slot let the second rAF loop (the
+      // page's FOV guard) bounce the engine back to display rate half the
+      // time. Pin the queue + single-timer shape.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final body = page.substring(page.indexOf('var araIdleThrottle'));
+      expect(body, contains('queue.push({ id: id, cb: cb });'));
+      expect(body, contains('if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);'));
+      expect(body, isNot(contains('one throttled slot')));
     });
   });
 

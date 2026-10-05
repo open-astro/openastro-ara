@@ -1707,16 +1707,24 @@ function wireControls() {
 var araIdleThrottle = (function () {
   var IDLE_AFTER_MS = 1500, IDLE_FPS = 4;
   var nativeRaf = window.requestAnimationFrame.bind(window);
+  var nativeCancel = window.cancelAnimationFrame.bind(window);
   var lastActive = performance.now();
   var lastSig = '';
-  var pending = null;   // { timer, cb } while a throttled frame is queued
+  // Every caller that arrives while idle is queued (the engine loop and the
+  // page's own FOV guard both go through here); one timer flushes them all in
+  // a single native frame, so no loop can slip back to display rate by taking
+  // a free slot while another holds the timer.
+  var queue = [];        // [{ id, cb }]
+  var timer = 0;
+  var nextId = -1;       // throttled ids are negative so they never collide
+  function flush() {
+    timer = 0;
+    var q = queue; queue = [];
+    q.forEach(function (e) { nativeRaf(e.cb); });
+  }
   function wake() {
     lastActive = performance.now();
-    if (pending) {
-      var p = pending; pending = null;
-      clearTimeout(p.timer);
-      nativeRaf(p.cb);
-    }
+    if (timer) { clearTimeout(timer); flush(); }
   }
   function viewSig() {
     if (!stel) return '';
@@ -1729,15 +1737,22 @@ var araIdleThrottle = (function () {
     var sig = viewSig();
     if (sig !== lastSig) { lastSig = sig; lastActive = performance.now(); }
     if (performance.now() - lastActive < IDLE_AFTER_MS) return nativeRaf(cb);
-    if (pending) return nativeRaf(cb);   // one throttled slot; extra callers run now
-    pending = { timer: 0, cb: cb };
-    pending.timer = setTimeout(function () { pending = null; nativeRaf(cb); }, 1000 / IDLE_FPS);
-    return 0;
+    var id = nextId--;
+    queue.push({ id: id, cb: cb });
+    if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);
+    return id;
+  };
+  window.cancelAnimationFrame = function (id) {
+    if (id >= 0) return nativeCancel(id);
+    queue = queue.filter(function (e) { return e.id !== id; });
   };
   ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'touchstart',
    'touchmove', 'touchend', 'keydown'].forEach(function (type) {
     window.addEventListener(type, wake, { capture: true, passive: true });
   });
+  // Host-driven changes that don't move the view (scope box, selection, time
+  // pin) are drawn on the next throttled frame, i.e. up to 1/IDLE_FPS later
+  // while idle. Acceptable for those; anything that must be immediate wakes.
   return { wake: wake, idleFps: IDLE_FPS, idleAfterMs: IDLE_AFTER_MS };
 })();
 

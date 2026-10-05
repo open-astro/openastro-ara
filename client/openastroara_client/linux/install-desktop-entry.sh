@@ -50,6 +50,9 @@ ARA_EXEC_LINE="Exec=\"$exec_path\"" awk '/^Exec=/ { print ENVIRON["ARA_EXEC_LINE
   > "$data/applications/org.openastro.openastroara.desktop"
 fresh_icons=0
 [ -d "$data/icons/hicolor/256x256" ] || fresh_icons=1
+# Drop this app's icons from earlier installs first so a size that stopped
+# shipping doesn't linger, then copy the current set.
+find "$data/icons/hicolor" -path '*/apps/org.openastro.openastroara.*' -type f -delete 2>/dev/null || true
 cp -R "$share/icons/hicolor/." "$data/icons/hicolor/"
 # No gtk-update-icon-cache here: the per-user hicolor dir has no index.theme,
 # so a cache file in it is useless and can shadow the plain PNG lookup.
