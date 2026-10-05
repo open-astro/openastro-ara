@@ -323,8 +323,18 @@ void planetarium_overlay_configure_renderer() {
     if (g_getenv("__NV_DISABLE_EXPLICIT_SYNC") == nullptr) {
       g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);
     }
+    // WebKitGTK's hardware-acceleration policy reads "never" on this driver
+    // (webkit://gpu), which lands the WebGL page on a software compositor at
+    // ~90 % of a core. Forcing the DMABUF renderer and compositing mode gives
+    // the GPU path (WebKit ~5 %). Only applied where the user set neither.
+    if (g_getenv("WEBKIT_FORCE_DMABUF_RENDERER") == nullptr &&
+        g_getenv("WEBKIT_FORCE_COMPOSITING_MODE") == nullptr) {
+      g_setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", TRUE);
+      g_setenv("WEBKIT_FORCE_COMPOSITING_MODE", "1", TRUE);
+    }
     g_message("planetarium_overlay: the proprietary NVIDIA driver is in use, "
-              "setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)");
+              "setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, "
+              "compositing forced)");
     g_heavy_compositing = true;
   } else {
     pid_t pid = fork();
@@ -391,6 +401,13 @@ void planetarium_overlay_configure_renderer() {
 }
 
 namespace {
+
+void webview_widget_destroyed_cb(GtkWidget* widget, gpointer user_data) {
+  (void)widget;
+  OverlayState* state = static_cast<OverlayState*>(user_data);
+  state->webview_widget = nullptr;
+  state->webview = nullptr;
+}
 
 // Desktop WebKitGTK answers a touchpad pinch with page magnification (it
 // ignores the viewport meta), which blew up the whole planetarium UI instead
@@ -488,6 +505,11 @@ void ensure_webview(OverlayState* state) {
   GtkWidget* event_box = gtk_event_box_new();
   gtk_event_box_set_visible_window(GTK_EVENT_BOX(event_box), TRUE);
   gtk_widget_set_can_focus(event_box, FALSE);
+  // The overlay owns the event box: a normal window close destroys it before
+  // GApplication::shutdown runs, so drop our pointers then and
+  // planetarium_overlay_shutdown becomes a no-op instead of a use-after-free.
+  g_signal_connect(event_box, "destroy", G_CALLBACK(webview_widget_destroyed_cb),
+                   state);
   gtk_container_add(GTK_CONTAINER(event_box), GTK_WIDGET(state->webview));
   state->webview_widget = event_box;
 
@@ -627,9 +649,9 @@ OverlayState* g_registered_state = nullptr;
 void planetarium_overlay_shutdown() {
   OverlayState* state = g_registered_state;
   if (state == nullptr || state->webview_widget == nullptr) return;
-  gtk_widget_destroy(state->webview_widget);  // destroys the child webview too
-  state->webview_widget = nullptr;
-  state->webview = nullptr;
+  // Destroys the child webview too; webview_widget_destroyed_cb clears the
+  // pointers. After a normal window close they are already null.
+  gtk_widget_destroy(state->webview_widget);
 }
 
 void planetarium_overlay_register(GtkOverlay* overlay,

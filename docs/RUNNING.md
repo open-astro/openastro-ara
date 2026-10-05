@@ -206,22 +206,26 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
     or hung while probing, or the probe could not be forked). Setting
     `WEBKIT_DISABLE_DMABUF_RENDERER` yourself skips the probe either way.
   - `planetarium_overlay: the proprietary NVIDIA driver is in use, setting
-    __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)` — NVIDIA's EGL arms
-    Wayland explicit sync on GTK's surface, GTK3 commits without an acquire
-    point, the compositor disconnects the client and WebKit's web process dies
-    in the driver. With explicit sync off the DMABUF renderer works (31 fps vs
-    8 on the shm fallback at 4K). Set `__NV_DISABLE_EXPLICIT_SYNC` yourself to
-    override.
+    __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, compositing forced)` —
+    NVIDIA's EGL arms Wayland explicit sync on GTK's surface, GTK3 commits
+    without an acquire point, the compositor disconnects the client and
+    WebKit's web process dies in the driver. With explicit sync off the DMABUF
+    renderer works. WebKitGTK also rates this driver "hardware acceleration:
+    never", so the runner sets `WEBKIT_FORCE_DMABUF_RENDERER=1` and
+    `WEBKIT_FORCE_COMPOSITING_MODE=1` for the GPU path (WebKit ~5 % instead of
+    ~90 %). Any of the three variables set by you is left alone.
   - `planetarium_overlay: WebKit web process crashed ...` — WebKit's renderer
     process died under the planetarium (a driver bug reachable from WebGL). The
     runner reloads the page once and, if the DMABUF renderer was active, writes
     `~/.config/openastroara/webkit-no-dmabuf` so every later launch starts on
     the shm renderer. Delete that file to retry DMABUF after a driver update.
-  - **NVIDIA proprietary driver, known limits (2026-10-05):** even on the
-    DMABUF renderer GTK3 copies each planetarium frame into the GL toplevel on
-    the UI thread, so a maximised 4K Planning tab is still a little laggy (the
-    page caps its backing resolution there); smaller windows are
-    proportionally faster. Should a driver update bring the crash back, the
+  - **NVIDIA proprietary driver, known limits (2026-10-05):** even on the GPU
+    path GTK3 composites the client-side WebKit child into the GL toplevel on
+    the UI thread, about 75 ms per frame at 6144x3348 (4K at 125 % scale), so a
+    maximised 4K Planning tab stays slow (~13 fps ceiling) however the page is
+    throttled; the same box is smooth at 1600x900. This is GTK3's mixed
+    cairo/GL repaint and is fixed only by a Wayland subsurface for the overlay
+    (#1204). Should a driver update bring the crash back, the
     runner falls to the shm renderer on the next launch (marker above), where
     4K manages only a few frames per second. Fractional
     desktop scaling (e.g. KDE at 125 %) makes it worse: GTK3 only scales by

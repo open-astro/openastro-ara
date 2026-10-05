@@ -608,8 +608,10 @@ void main() {
       expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
       // NVIDIA keeps DMABUF and disables the driver's explicit sync instead.
       expect(runner, contains('g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);'));
-      expect(runner, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)'));
-      expect(doc, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept)'));
+      // The runner splits the literal across lines; the doc quotes it whole.
+      expect(runner, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, "'));
+      expect(runner, contains('"compositing forced)"'));
+      expect(doc, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, compositing forced)'));
       // The crash backstop: signal hooked, marker path documented.
       expect(runner, contains('"web-process-terminated"'));
       // Clean teardown: SIGTERM routes through GApplication and the overlay
@@ -618,6 +620,10 @@ void main() {
       expect(app, contains('g_unix_signal_add(SIGTERM, on_terminate_signal'));
       expect(app, contains('planetarium_overlay_shutdown();'));
       expect(runner, contains('void planetarium_overlay_shutdown() {'));
+      // A normal window close destroys the event box before shutdown runs;
+      // the destroy handler clears the pointers so shutdown can't touch
+      // freed memory.
+      expect(runner, contains('G_CALLBACK(webview_widget_destroyed_cb)'));
       expect(runner, contains('"webkit-no-dmabuf"'));
       expect(doc, contains('webkit-no-dmabuf'));
     });
@@ -650,9 +656,14 @@ void main() {
       expect(throttle, greaterThan(caps));
       expect(page, contains("Object.defineProperty(window, 'devicePixelRatio'"));
       expect(page, contains('if (!araViewCaps.isLarge()) return nativeRaf(cb);'));
-      // Off by default; only the Linux runner turns it on, and only when it
-      // fell back to the shm renderer.
+      // Off by default; only the Linux runner turns it on, where a CPU copy
+      // per frame remains (shm renderer, or NVIDIA's GTK3-composited DMABUF).
       expect(page, contains('var enabled = false;'));
+      // The real ratio must be read live, never frozen at load (review on
+      // #1275: a 1x -> 2x monitor move kept the old backing resolution).
+      expect(page, contains("Object.getOwnPropertyDescriptor(proto, 'devicePixelRatio')"));
+      expect(page, contains('return realDprGetter.call(window) || 1;'));
+      expect(page, isNot(contains('var realDpr = window.devicePixelRatio || 1;')));
       final runner = File('linux/runner/planetarium_overlay.cc')
           .readAsStringSync();
       expect(runner, contains('"araViewCaps.enable()"'));
