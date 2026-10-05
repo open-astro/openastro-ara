@@ -386,8 +386,9 @@ void ensure_webview(OverlayState* state) {
   g_signal_connect(state->webview, "event", G_CALLBACK(pinch_event_cb), state);
 
   // Wrap the webview in a windowed GtkEventBox: the event box owns a GdkWindow
-  // we can promote to a native X11 subwindow (the webview itself is windowless
-  // and would otherwise draw into the toplevel surface Flutter overpaints).
+  // that X11 promotes to a native subwindow and Wayland keeps client-side under
+  // GtkOverlay draw order (the webview itself is windowless and would otherwise
+  // draw into the toplevel surface Flutter overpaints).
   GtkWidget* event_box = gtk_event_box_new();
   gtk_event_box_set_visible_window(GTK_EVENT_BOX(event_box), TRUE);
   gtk_widget_set_can_focus(event_box, FALSE);

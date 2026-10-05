@@ -37,10 +37,13 @@ mkdir -p "$data/applications" "$data/icons/hicolor"
 # doubled (field codes). The line reaches awk through ENVIRON, never -v, so
 # awk does not reprocess the backslashes and the path is never a pattern.
 exec_path="$bundle/openastroara"
+# Two escaping layers per the spec: the Exec quoting layer (\\ \" \$ \`) is
+# applied first, then the general string-escaping layer turns every \ into \\.
 exec_path="${exec_path//\\/\\\\}"
 exec_path="${exec_path//\"/\\\"}"
 exec_path="${exec_path//\$/\\\$}"
 exec_path="${exec_path//\`/\\\`}"
+exec_path="${exec_path//\\/\\\\}"
 exec_path="${exec_path//%/%%}"
 ARA_EXEC_LINE="Exec=\"$exec_path\"" awk '/^Exec=/ { print ENVIRON["ARA_EXEC_LINE"]; next } { print }' \
   "$share/applications/org.openastro.openastroara.desktop" \
