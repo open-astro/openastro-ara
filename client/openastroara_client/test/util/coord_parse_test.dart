@@ -105,8 +105,15 @@ void main() {
     test('reads marker and comma separated forms', () {
       expect(parseRaDec('5h35m17s +22d00m52s'), isNotNull);
       expect(parseRaDec('05:35:17.3, -05:23:28'), isNotNull);
-      expect(parseRaDec('5h35m17.3s/-5°23\'28"'), isNull,
-          reason: 'a slash is not a separator we read');
+    });
+
+    test('reads Stellarium\'s slash-separated RA/Dec readout', () {
+      final p = parseRaDec('5h35m17.3s/-5°23\'28"');
+      expect(p!.raDeg, closeTo((5 + 35 / 60 + 17.3 / 3600) * 15, 1e-9));
+      expect(p.decDeg, closeTo(-(5 + 23 / 60 + 28 / 3600), 1e-9));
+      final n = parseRaDec('5h35m17.3s/+22°00\'52"');
+      expect(n!.decDeg, closeTo(22 + 52 / 3600, 1e-9));
+      expect(looksLikeCoordinates('5h35m17.3s/-5°23\'28"'), isTrue);
     });
 
     test('rejects odd field counts and single values', () {
@@ -125,6 +132,9 @@ void main() {
       expect(looksLikeCoordinates('Vega'), isFalse);
       expect(looksLikeCoordinates('Sh2 101'), isFalse);
       expect(looksLikeCoordinates('M 42'), isFalse);
+      // Designations made of unit letters, digits and a sign stay names.
+      expect(looksLikeCoordinates('Sh2-155'), isFalse);
+      expect(looksLikeCoordinates('HD 12345'), isFalse);
     });
   });
 }

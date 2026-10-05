@@ -134,11 +134,17 @@ double? parseDec(String text) {
 }
 
 /// Split one pasted line into its RA and Dec halves, e.g.
-/// `05 35 17.3 -05 23 28`, `83.822 -5.391`, `5h35m17s +22d00m52s` or
-/// `05:35:17.3, -05:23:28`. Splits at the Dec's explicit sign when there is
+/// `05 35 17.3 -05 23 28`, `83.822 -5.391`, `5h35m17s +22d00m52s`,
+/// `05:35:17.3, -05:23:28` or `5h35m17.3s/-5°23'28"`. Splits at the Dec's explicit sign when there is
 /// one, else halves an even run of fields. Null when it cannot find two halves.
 (String ra, String dec)? splitRaDec(String text) {
-  final t = text.replaceAll('−', '-').replaceAll(',', ' ').trim();
+  // Commas (`05:35:17.3, -05:23:28`) and Stellarium's slash
+  // (`5h35m17.3s/-5°23'28"`) separate the halves like whitespace.
+  final t = text
+      .replaceAll('−', '-')
+      .replaceAll(',', ' ')
+      .replaceAll('/', ' ')
+      .trim();
   if (t.isEmpty) return null;
   // Explicit sign that is not the leading character (and is not the fraction
   // separator of a number): split there.
