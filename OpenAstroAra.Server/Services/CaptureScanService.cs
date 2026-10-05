@@ -23,8 +23,9 @@ namespace OpenAstroAra.Server.Services;
 /// before the daemon serves traffic. Three responsibilities:
 ///
 /// 1. <b>Mount + writability</b>: probe the configured save path; if not
-///    writable, log critical + skip (server still starts so that profile
-///    edits + non-storage endpoints work; user fixes storage and restarts).
+///    writable, log a warning + skip (server still starts so that profile
+///    edits + non-storage endpoints work; the scan re-runs on a storage
+///    rescan or configure once the user fixes storage).
 /// 2. <b>Stale .tmp sweep</b>: any <c>*.tmp</c> file older than 5 minutes
 ///    in the captures tree is presumed crashed-mid-write and deleted
 ///    (§28.7's atomic-rename pattern guarantees only crashed writes leave
@@ -529,7 +530,7 @@ public sealed partial class CaptureScanService : IDisposable {
     [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 scan skipped: save path {Path} does not exist")]
     private partial void LogScanSkippedMissingPath(string path);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "§28.8 scan: save path {Path} is not writable; storage.unavailable would queue here")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§28.8 scan skipped: save path {Path} is not writable; no .tmp sweep or orphan recovery this pass")]
     private partial void LogScanPathNotWritable(string path);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 scan complete — swept {TmpCount} stale .tmp file(s), recovered {Orphans} orphan FITS")]

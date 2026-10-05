@@ -32,7 +32,8 @@ Walkthrough: where in the app the change lives (tab → screen → widget), what
 user will notice, anything that looks wrong or unfinished on screen.
 
 ### Server impact  (omit if none; be thorough if present)
-- Endpoints / contracts touched (openapi.yaml if listed there)
+- Endpoints / contracts touched: the endpoint sources, the regenerated `openapi.yaml`
+  snapshot, and the `design/API_CONTRACT.md` entry for any wire-shape change
 - Behaviour change for a running daemon: startup, profile/state files, migrations
 - Hardware / Alpaca / guider paths affected, and whether they were exercised
   (local daemon, Pi rig, simulators) or only read

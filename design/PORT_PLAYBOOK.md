@@ -2372,8 +2372,8 @@ Steps 1–4 take ~5–200 ms on USB SSD (typically 10–50 ms on quality SSDs; l
 
 Before §28.2's equipment-reconnect routine runs, the server performs a quick filesystem audit:
 
-1. **Mount + writability check** — verify the configured save path (default `/media/openastroara`) is mounted and writable. If not, abort startup with a clear error logged to systemd journal + a `storage.unavailable` critical notification queued for next WILMA connect. Server does NOT proceed without writable storage.
-2. **Filesystem type check** — per §28.9, refuse to start if FS is not ext4 (hard refuse, not warning).
+1. **Mount + writability check** — verify the configured save path (default `/media/openastroara`) is mounted and writable. If it is not, the daemon **still starts**: it logs the case to the systemd journal (no save directory configured: `Information`; save path missing, e.g. under an unmounted store: `Debug`, below the production minimum; save path present but not writable: `Warning`), skips the rest of this audit, and serves setup, equipment and the §29.1.1 storage step as normal. A fresh install deliberately runs with no store until the user completes that step (#1186), so storage-less startup is the designed path, not a fault. Capture is where the absence bites: the §29 pre-capture gate (`CameraService.StoreEjected`) refuses every frame with the store-ejected state while a save path under the store mount point has nothing mounted there. The gate checks the mount, not writability: a store that is mounted but read-only (ext4 `errors=remount-ro`, a write-protected stick) passes it, and the frame fails at the file write instead. No startup-time notification is queued; the storage step and the capture refusal are the user-facing signals (#1208). The same scan re-runs on a storage rescan or configure, so its not-writable warning is not startup-only.
+2. **Filesystem type check** — not performed at startup. The §29.1.4 helper validates the filesystem at configure time; the daemon does not refuse to start over the filesystem of a store it finds mounted.
 3. **`.tmp` sweep** — `find <captures>/ -name '*.tmp' -mmin +5 -delete`. Any `.tmp` file older than 5 minutes is assumed crashed-mid-write and deleted. (Live writes finish in seconds; 5 minutes is generous slack for slow USB sticks.)
 4. **Orphan FITS scan** — for every `.fits` file in `<captures>/`, check whether a corresponding `frames` row exists. If not (orphan), re-insert by parsing the FITS header:
    - Required header fields: `DATE-OBS`, `EXPTIME`, `OBJECT` (or fall back to "Unknown Target"), `FILTER` (or "—"), `IMAGETYP`
@@ -2427,7 +2427,7 @@ Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence a
 | During DB row write | `.fits` durable | WAL guarantees no corruption; row may be missing | Orphan scan picks it up. |
 | After DB row inserted (steady state) | `.fits` durable | row durable | Full success. |
 | Mid-WAL-checkpoint | both durable | WAL replay completes on next open | No data loss. |
-| USB drive yanked mid-write | `.fits` partial in OS page cache, never reaches drive | DB write fails | Server logs `storage.unavailable`; on next mount + restart, §28.8 cleans up `.tmp` and any orphans. |
+| USB drive yanked mid-write | `.fits` partial in OS page cache, never reaches drive | DB write fails | The frame write fails and that frame is lost; later frames are refused by the §29 store-ejected gate while nothing is mounted. On next mount + restart (or a storage rescan), §28.8 cleans up `.tmp` and any orphans. |
 
 **Net property of the initial release's durability design:** no partial FITS files ever appear under their real name; no orphan FITS file ever becomes invisible to the library; no SQLite corruption is possible on power loss; the maximum data loss from a power event is "the single exposure that was actively integrating when power died."
 
@@ -9727,7 +9727,7 @@ Catalog is implementation source-of-truth in code; table here is the human-reada
 | **Storage** | | | | |
 | `storage.usb_unplugged` | `StorageUsbPayload` | §29.1.2 | C | v1 |
 | `storage.log_pressure` | `StorageLogPressurePayload` | §29.9 | varies | v1 |
-| `storage.unavailable` | `StorageUnavailablePayload` | §28 | C | v1 |
+| ~~`storage.unavailable`~~ | ~~`StorageUnavailablePayload`~~ | §28.8 | C | REMOVED: storage-less startup queues no notification; the §29 store-ejected refusal is the signal (#1208, 2026-10-05) |
 | `storage.full_warning` | `StorageFullPayload` | §29 | W | v1 |
 | **Backup + data manager** | | | | |
 | `backup.zip_created` | `BackupZipPayload` | §43 | I | v1 |
@@ -12202,7 +12202,7 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
 | `Information` | Sequence start/stop, equipment connect/disconnect, profile load, request entry/exit with timing |
 | `Warning` | Recoverable issues — retry attempts, deprecated API use, capacity warnings, simulator detected (dev only), pre-restart deferral per §34.7 |
 | `Error` | Unhandled exceptions at endpoint boundary, equipment connection failures after exhausted retries, sequence aborts due to faults, cfitsio missing at boot (the daemon keeps running; §72.3) |
-| `Fatal` | Startup failures preventing service from accepting connections — storage unavailable, DB migration aborted |
+| `Fatal` | Startup failures preventing service from accepting connections — DB migration aborted (a missing or read-only store is never `Fatal`: the daemon starts storage-less per §28.8, logging `Information`, `Debug` or `Warning` by case, and the §29 gate refuses capture into an unmounted store) |
 
 Production .deb defaults to `Information` minimum. Log pressure handling per §29.9 downgrades to `Warning` under disk pressure.
 
