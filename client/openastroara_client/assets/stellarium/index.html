@@ -1523,11 +1523,13 @@ function zoomBy(factor) {
 // drag, and an animation restarting on every update would lag the fingers.
 var pinchBaseFov = null;
 function pinchBegin() {
+  araIdleThrottle.wake();
   if (!stel) return;
   var cur = stel.core.fov;
   pinchBaseFov = fovIsUsable(cur) ? cur : lastGoodFov;
 }
 function pinchUpdate(scale) {
+  araIdleThrottle.wake();
   if (!stel) return;
   var s = Number(scale);
   if (!(s > 0) || !isFinite(s)) return;
@@ -1692,6 +1694,52 @@ function wireControls() {
   setInterval(function () { if (pinnedMs === null && !frameOn) setObserverTime(); }, 15000);
   setInterval(renderClock, 1000);
 }
+
+// Idle render throttle (#1275). The engine drives an unconditional
+// requestAnimationFrame loop, so an idle sky still rendered at the display
+// rate: ~40 fps of WebGL plus a full GTK recomposite per frame on Linux
+// (one core in WebKit and most of another in the app, measured 2026-10-05
+// on NVIDIA Wayland; ~4 cores on a software-GL VM). Wrapping rAF before the
+// engine starts lets the page run the loop at IDLE_FPS once nothing has
+// moved for IDLE_AFTER_MS, and snap back to full rate on any input or when
+// the view (fov, yaw, pitch) changes, e.g. a goto/zoom animation. Every
+// platform benefits; the sky still advances with time at the idle rate.
+var araIdleThrottle = (function () {
+  var IDLE_AFTER_MS = 1500, IDLE_FPS = 4;
+  var nativeRaf = window.requestAnimationFrame.bind(window);
+  var lastActive = performance.now();
+  var lastSig = '';
+  var pending = null;   // { timer, cb } while a throttled frame is queued
+  function wake() {
+    lastActive = performance.now();
+    if (pending) {
+      var p = pending; pending = null;
+      clearTimeout(p.timer);
+      nativeRaf(p.cb);
+    }
+  }
+  function viewSig() {
+    if (!stel) return '';
+    try {
+      var o = stel.core.observer;
+      return stel.core.fov + ',' + o.yaw + ',' + o.pitch;
+    } catch (e) { return ''; }
+  }
+  window.requestAnimationFrame = function (cb) {
+    var sig = viewSig();
+    if (sig !== lastSig) { lastSig = sig; lastActive = performance.now(); }
+    if (performance.now() - lastActive < IDLE_AFTER_MS) return nativeRaf(cb);
+    if (pending) return nativeRaf(cb);   // one throttled slot; extra callers run now
+    pending = { timer: 0, cb: cb };
+    pending.timer = setTimeout(function () { pending = null; nativeRaf(cb); }, 1000 / IDLE_FPS);
+    return 0;
+  };
+  ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'touchstart',
+   'touchmove', 'touchend', 'keydown'].forEach(function (type) {
+    window.addEventListener(type, wake, { capture: true, passive: true });
+  });
+  return { wake: wake, idleFps: IDLE_FPS, idleAfterMs: IDLE_AFTER_MS };
+})();
 
 StelWebEngine({
   wasmFile: './stellarium-web-engine.wasm',

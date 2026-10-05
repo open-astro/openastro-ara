@@ -608,6 +608,22 @@ void main() {
     });
   });
 
+  group('planetarium page idle render throttle', () {
+    test('wraps requestAnimationFrame before the engine starts', () {
+      // #1275 — the vendored engine renders unconditionally at display rate;
+      // the page throttles it when idle. The wrapper must precede
+      // StelWebEngine({ so the engine's loop goes through it.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final wrapper = page.indexOf('var araIdleThrottle = (function () {');
+      final engine = page.indexOf('StelWebEngine({');
+      expect(wrapper, greaterThan(-1));
+      expect(engine, greaterThan(wrapper));
+      expect(page, contains('window.requestAnimationFrame = function (cb) {'));
+      // The runner-driven pinch path has no DOM event, so it wakes explicitly.
+      expect(page, contains('araIdleThrottle.wake();'));
+    });
+  });
+
   group('planetarium page scope box', () {
     test('draws the daemon\'s latest solve as a second box and clears on request', () {
       // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}
