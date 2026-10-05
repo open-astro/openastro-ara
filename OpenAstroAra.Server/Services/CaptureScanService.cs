@@ -24,7 +24,8 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// 1. <b>Mount + writability</b>: probe the configured save path; if not
 ///    writable, log a warning + skip (server still starts so that profile
-///    edits + non-storage endpoints work; user fixes storage and restarts).
+///    edits + non-storage endpoints work; the scan re-runs on a storage
+///    rescan or configure once the user fixes storage).
 /// 2. <b>Stale .tmp sweep</b>: any <c>*.tmp</c> file older than 5 minutes
 ///    in the captures tree is presumed crashed-mid-write and deleted
 ///    (§28.7's atomic-rename pattern guarantees only crashed writes leave
