@@ -595,6 +595,8 @@ void main() {
           .replaceAll(RegExp(r'\s+'), ' ');
       const reasons = [
         'no DRM render node is present',
+        'the proprietary NVIDIA driver is in use',
+        "a previous run's WebKit process crashed in the DMABUF renderer",
         'no DRM render node can back a GBM buffer',
         'libgbm.so.1 is not loadable',
         'the GBM probe did not complete',
@@ -605,6 +607,10 @@ void main() {
       }
       expect(runner, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
       expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
+      // The crash backstop: signal hooked, marker path documented.
+      expect(runner, contains('"web-process-terminated"'));
+      expect(runner, contains('"webkit-no-dmabuf"'));
+      expect(doc, contains('webkit-no-dmabuf'));
     });
   });
 

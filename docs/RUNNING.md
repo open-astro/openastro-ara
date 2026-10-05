@@ -199,11 +199,19 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   - `planetarium_overlay: <reason>, setting WEBKIT_DISABLE_DMABUF_RENDERER=1` —
     WebKit's DMABUF renderer would fail, so it uses the shared-memory renderer
     instead. Harmless. `<reason>` is one of: `no DRM render node is present`
-    (headless containers, GPU-less VMs), `no DRM render node can back a GBM
-    buffer` (VMware/virtio without 3D, some NVIDIA drivers), `libgbm.so.1 is
-    not loadable` (minimal install), or `the GBM probe did not complete` (the
-    driver crashed or hung while probing, or the probe could not be forked). Setting `WEBKIT_DISABLE_DMABUF_RENDERER`
-    yourself skips the probe either way.
+    (headless containers, GPU-less VMs), `the proprietary NVIDIA driver is in
+    use` (WebKitGTK's DMABUF renderer segfaults inside NVIDIA's EGL, so the shm
+    renderer is used from the start), `a previous run's WebKit process crashed
+    in the DMABUF renderer` (see the next line), `no DRM render node can back a
+    GBM buffer` (VMware/virtio without 3D), `libgbm.so.1 is not loadable`
+    (minimal install), or `the GBM probe did not complete` (the driver crashed
+    or hung while probing, or the probe could not be forked). Setting
+    `WEBKIT_DISABLE_DMABUF_RENDERER` yourself skips the probe either way.
+  - `planetarium_overlay: WebKit web process crashed ...` — WebKit's renderer
+    process died under the planetarium (a driver bug reachable from WebGL). The
+    runner reloads the page once and, if the DMABUF renderer was active, writes
+    `~/.config/openastroara/webkit-no-dmabuf` so every later launch starts on
+    the shm renderer. Delete that file to retry DMABUF after a driver update.
 - **Taskbar icon on Wayland:** compositors resolve the icon from the app id via
   an installed `org.openastro.openastroara.desktop`, not from the window, so an
   unpacked bundle shows a generic icon until you register it once per user:
