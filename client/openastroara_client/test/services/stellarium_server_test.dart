@@ -558,6 +558,23 @@ void main() {
       expect(runner, contains('g_ascii_dtostr('));
       expect(runner, isNot(contains('pinchUpdate(%')));
     });
+
+    test('the runner keeps focus on FlView and takes the Wayland branch', () {
+      // #1200 — no C++ harness exists; pin the two by-hand-verified fixes so a
+      // revert is caught: the webview and its event box must stay
+      // non-focusable (a click on the sky stole keyboard focus from the
+      // Planning search field), and gdk_window_ensure_native must be skipped
+      // on a Wayland display (it made a parentless, never-mapped toplevel).
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      expect(
+        'gtk_widget_set_can_focus'.allMatches(runner).length,
+        greaterThanOrEqualTo(2),
+        reason: 'webview and event box non-focusable',
+      );
+      expect(runner, contains('GDK_IS_WAYLAND_DISPLAY('));
+      expect(runner, contains('} else if (window != nullptr && !gdk_window_ensure_native(window)) {'));
+    });
   });
 
   group('planetarium page scope box', () {

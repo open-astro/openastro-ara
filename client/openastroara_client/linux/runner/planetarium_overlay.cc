@@ -7,6 +7,7 @@
 #endif
 
 #include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
 #include <signal.h>
@@ -228,7 +229,11 @@ struct GbmProbe {
 
 
 // Runs in a forked child: returns 0 when some render node can back a GBM
-// buffer, 1 when none can, 2 when libgbm is not loadable.
+// buffer, 1 when none can, 2 when libgbm is not loadable. "Some" is a
+// deliberate choice: on a hybrid laptop WebKit allocates on the display's
+// device, which may not be the node that passed, so a working iGPU can mask a
+// failing dGPU; requiring every node to pass would instead disable DMABUF on
+// any box with one dead secondary node. RUNNING.md covers the manual override.
 int probe_render_nodes(const glob_t& g) {
   GbmProbe probe;
   if (!probe.load()) return 2;
@@ -256,6 +261,7 @@ int probe_render_nodes(const glob_t& g) {
 void planetarium_overlay_configure_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
   const char* reason = nullptr;
+  gint64 probe_ms = -1;  // set when the probe had to be killed
   glob_t g = {};
   if (glob("/dev/dri/renderD*", 0, nullptr, &g) != 0 || g.gl_pathc == 0) {
     // Cheap first check: no node at all means nothing to probe and no driver
@@ -272,16 +278,23 @@ void planetarium_overlay_configure_renderer() {
       // Bounded wait: a wedged GPU can hang a driver inside gbm_create_device,
       // and that must not hold the window back forever. 2 s is far above a
       // healthy probe (milliseconds) and short enough to go unnoticed.
-      const gint64 deadline = g_get_monotonic_time() + 2 * G_USEC_PER_SEC;
+      const gint64 started = g_get_monotonic_time();
+      const gint64 deadline = started + 2 * G_USEC_PER_SEC;
       pid_t waited = 0;
-      while ((waited = waitpid(pid, &status, WNOHANG)) == 0 &&
-             g_get_monotonic_time() < deadline) {
+      for (;;) {
+        waited = waitpid(pid, &status, WNOHANG);
+        if (waited == pid) break;
+        if (waited < 0 && errno == EINTR) continue;
+        if (waited < 0 || g_get_monotonic_time() >= deadline) break;
         g_usleep(10 * 1000);
       }
-      if (waited == 0) {
+      if (waited != pid) {
+        // Timed out, or waitpid failed for a reason other than EINTR: never
+        // leave the child running or unreaped.
         kill(pid, SIGKILL);
-        waitpid(pid, &status, 0);
-      } else if (waited == pid && WIFEXITED(status)) {
+        while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+        probe_ms = (g_get_monotonic_time() - started) / 1000;
+      } else if (WIFEXITED(status)) {
         result = WEXITSTATUS(status);
       }
     }
@@ -305,8 +318,14 @@ void planetarium_overlay_configure_renderer() {
   }
   globfree(&g);
   if (reason != nullptr) {
-    g_message("planetarium_overlay: %s, setting WEBKIT_DISABLE_DMABUF_RENDERER=1",
-              reason);
+    if (probe_ms >= 0) {
+      g_message("planetarium_overlay: %s after %" G_GINT64_FORMAT
+                " ms, setting WEBKIT_DISABLE_DMABUF_RENDERER=1",
+                reason, probe_ms);
+    } else {
+      g_message("planetarium_overlay: %s, setting WEBKIT_DISABLE_DMABUF_RENDERER=1",
+                reason);
+    }
     g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
   }
 }

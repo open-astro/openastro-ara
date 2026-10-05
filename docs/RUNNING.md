@@ -194,7 +194,8 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   systemd they land in the journal), so a blank Planning tab is diagnosable
   from the terminal:
   - `planetarium_overlay: Wayland display, using client-side overlay` — the
-    expected line on Wayland (#1200).
+    expected line on Wayland (#1200). It appears when the Planning tab first
+    opens, not at launch.
   - `planetarium_overlay: <reason>, setting WEBKIT_DISABLE_DMABUF_RENDERER=1` —
     WebKit's DMABUF renderer would fail, so it uses the shared-memory renderer
     instead. Harmless. `<reason>` is one of: `no DRM render node is present`
@@ -215,7 +216,9 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
 - After launching, open the Planning tab and check the planetarium actually draws
   stars/atmosphere. If the sky is blank/black and there is **no**
   `WEBKIT_DISABLE_DMABUF_RENDERER` line on stderr, the probe passed but WebKit's
-  DMABUF renderer may still be failing on your driver: launch once with
+  DMABUF renderer may still be failing on your driver (hybrid-GPU laptops:
+  the probe passes if any render node works, WebKit uses the display's): launch
+  once with
   `WEBKIT_DISABLE_DMABUF_RENDERER=1` set by hand. Sky back → report your GPU and
   driver so the probe can learn the case; still blank → a WebGL2 gap in your
   WebKitGTK build. If the line **is** present, the runner already disabled
