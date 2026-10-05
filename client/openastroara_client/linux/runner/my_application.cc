@@ -165,6 +165,13 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(overlay));
   gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(overlay));
+  // FlView paints every pixel of the window through GL, so GTK's own
+  // background fill of the toplevel is wasted work. On Wayland with the
+  // client-side planetarium overlay every WebKit frame repaints the window,
+  // and a perf profile (Kubuntu, RTX 4090, 6144x3348, 2026-10-05) put 37 % of
+  // the UI thread in pixman_fill under gtk_main_do_event: GTK filling the
+  // full toplevel in software before the GL blit. app-paintable skips it.
+  gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.
