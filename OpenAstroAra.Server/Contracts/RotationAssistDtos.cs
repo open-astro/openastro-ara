@@ -28,8 +28,8 @@ public static class RotationAssistModes {
 /// <c>ExposureSeconds</c> (0.01–60; default: the profile's plate-solve exposure) is the main camera's
 /// exposure per frame; <c>Mode</c> is <c>loop</c> (default) or <c>single</c>.
 /// <c>Binning</c> (1–4, never above the camera's maximum; default: the camera's maximum capped at 4) is the
-/// square binning of the loop's frames — a protractor needs no resolution, and binned frames download and
-/// solve several times faster.</summary>
+/// square binning of every readout frame, Single and Loop alike (Done's check is always 1×1) — a protractor
+/// needs no resolution, and binned frames download and solve several times faster.</summary>
 public sealed record RotationAssistStartRequestDto(double PositionAngleDeg, double? ExposureSeconds = null, string? Mode = null, int? Binning = null);
 
 /// <summary>One solved frame of the readout: the sky position angle the solver measured and the signed
@@ -80,7 +80,7 @@ public sealed record RotationAssistStatusDto(
     string Mode = RotationAssistModes.Loop,
     double ExposureSeconds = 0,
     double DefaultExposureSeconds = 0,
-    // The loop's binning: in use (or last used), what a start without one would pick, and the camera's
+    // The readout frames' binning: in use (or last used), what a start without one would pick, and the camera's
     // ceiling (0 = unknown).
     int Binning = 1,
     int AutoBinning = 1,

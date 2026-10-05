@@ -94,9 +94,9 @@ class RotationAssistStatus {
   final double exposureSeconds;
   final double defaultExposureSeconds;
 
-  /// The loop's binning: in use (or last used), what a start without one
-  /// would pick (the camera's maximum capped at 4), and the camera's ceiling
-  /// (0 = unknown).
+  /// The readout frames' binning: in use (or last used), what a start without
+  /// one would pick (the camera's maximum capped at 4), and the camera's
+  /// ceiling (0 = unknown).
   final int binning;
   final int autoBinning;
   final int maxBinning;

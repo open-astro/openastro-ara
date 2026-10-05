@@ -268,6 +268,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_single_shot_is_binned_like_the_loop() {
+            var solver = new ScriptedSolver(10) { MaxBinning = 4 };
+            using var svc = new RotationAssistService(solver, () => 1.0);
+            await svc.StartAsync(new RotationAssistStartRequestDto(10, Mode: "single"), CancellationToken.None);
+            var s = await WaitForState(svc, "stopped");
+            Assert.That(s.Binning, Is.EqualTo(4), "auto binning applies to a single shot too");
+            Assert.That(solver.Binnings, Has.Count.EqualTo(1).And.All.EqualTo(4));
+
+            await svc.StartAsync(new RotationAssistStartRequestDto(10, Mode: "single", Binning: 1), CancellationToken.None);
+            s = await WaitForState(svc, "stopped");
+            Assert.That(s.Binning, Is.EqualTo(1));
+            Assert.That(solver.LastBinning, Is.EqualTo(1));
+        }
+
+        [Test]
         public async Task Done_takes_one_full_resolution_frame_and_confirms_within_tolerance() {
             // Binned loop reads 12° then 10.5°; the 1×1 confirmation reads 10.4° — within ±1°.
             var solver = new ScriptedSolver(12, 10.5, 10.4) { MaxBinning = 4 };

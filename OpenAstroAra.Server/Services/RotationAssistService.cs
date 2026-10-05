@@ -149,7 +149,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         var other => throw new ArgumentException($"mode must be '{RotationAssistModes.Loop}' or '{RotationAssistModes.SingleShot}', not '{other}'.", nameof(requested)),
     };
 
-    /// <summary>The loop's binning: the request's (1 … the camera's maximum, capped at <see cref="MaxLoopBinning"/>;
+    /// <summary>The readout frames' binning (Single and Loop): the request's (1 … the camera's maximum, capped at <see cref="MaxLoopBinning"/>;
     /// an unknown camera maximum allows up to the cap) or, absent, the largest allowed. Pure — unit-tested.</summary>
     internal static int ResolveBinning(int? requested, int maxBinning) {
         var ceiling = maxBinning > 0 ? Math.Min(maxBinning, MaxLoopBinning) : MaxLoopBinning;

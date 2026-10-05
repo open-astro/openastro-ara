@@ -457,8 +457,9 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     ],
   );
 
-  /// 1× / 2× / 4× for the loop's frames; choices above the camera's ceiling
-  /// are greyed. "Auto" is the daemon's pick (the ceiling, capped at 4).
+  /// 1× / 2× / 4× for the readout frames (Single and Loop; Done is 1×1);
+  /// choices above the camera's ceiling are greyed. "Auto" is the daemon's
+  /// pick (the ceiling, capped at 4).
   Widget _binningRow(RotationAssistStatus status) {
     final max = status.maxBinning > 0 ? status.maxBinning : 4;
     final auto = status.autoBinning;
@@ -479,7 +480,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Binning for the loop',
+          'Binning for the readout',
           style: TextStyle(fontSize: 13, color: AraColors.textSecondary),
         ),
         const SizedBox(height: 4),
