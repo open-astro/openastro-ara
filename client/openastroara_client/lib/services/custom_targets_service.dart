@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 /// A target the user typed in by coordinates (#1267 item 1). Stored J2000 so
-/// it goes through the same run path as a catalogue object; [epochTyped]
+/// it goes through the same run path as a catalogue object; [typedAsJNow]
 /// remembers whether the user entered it as JNow, for the dialog to show the
 /// position back the way it was pasted.
 class CustomTarget {
@@ -68,6 +68,20 @@ class CustomTargetsService {
   Future<File> _file() async =>
       File('${(await _supportDir()).path}/$_fileName');
 
+  /// Write-then-rename, so a crash mid-write leaves the previous list rather
+  /// than a torn file that [load] would read as empty. Best effort.
+  Future<void> _write(List<CustomTarget> targets) async {
+    try {
+      final f = await _file();
+      final part = File('${f.path}.part');
+      await part.writeAsString(
+        jsonEncode([for (final t in targets) t.toJson()]),
+        flush: true,
+      );
+      await part.rename(f.path);
+    } catch (_) {/* best effort */}
+  }
+
   Future<List<CustomTarget>> load() async {
     try {
       final f = await _file();
@@ -93,13 +107,7 @@ class CustomTargetsService {
         target,
         ...current.where((t) => !_same(t, target)),
       ].take(maxEntries).toList();
-      try {
-        final f = await _file();
-        await f.writeAsString(
-          jsonEncode([for (final t in merged) t.toJson()]),
-          flush: true,
-        );
-      } catch (_) {/* best effort */}
+      await _write(merged);
       return merged;
     });
     _chain = task.then((_) {});
@@ -110,13 +118,7 @@ class CustomTargetsService {
     final task = _chain.then((_) async {
       final kept =
           (await load()).where((t) => !_same(t, target)).toList();
-      try {
-        final f = await _file();
-        await f.writeAsString(
-          jsonEncode([for (final t in kept) t.toJson()]),
-          flush: true,
-        );
-      } catch (_) {/* best effort */}
+      await _write(kept);
       return kept;
     });
     _chain = task.then((_) {});

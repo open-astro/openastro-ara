@@ -17,8 +17,10 @@
 /// first-order annual aberration from the Sun's longitude). Against astropy's
 /// TETE frame it agrees to well under an arcsecond across the current
 /// decades, which is far below what a slew followed by a plate-solved centre
-/// can tell apart. Light deflection (≤ 4 mas away from the Sun) and the
-/// frame bias (23 mas) are ignored.
+/// can tell apart. The frame bias (23 mas) is included — the Fukushima–Williams
+/// angles used here are the bias-precession set (SOFA `iauPfw06`, as
+/// `iauPnm06a` composes them). Light deflection (≤ 4 mas away from the Sun)
+/// is ignored.
 library;
 
 import 'dart:math' as math;
@@ -44,28 +46,34 @@ const double _as2r = _d2r / 3600.0;
   return _sph(v);
 }
 
-/// Apparent place of date → J2000 (ICRS): the inverse of [j2000ToApparent],
-/// solved by fixed-point iteration on the spherical coordinates (the forward
-/// chain is a rotation plus a ~20″ aberration shift; a dozen passes converge
-/// to the micro-arcsecond level, including within a degree of the pole where
-/// an RA step is a tiny sky step and the contraction is slow).
+/// Apparent place of date → J2000 (ICRS): the inverse of [j2000ToApparent].
+/// The rotation is undone exactly with the transposed matrix; the aberration
+/// shift a = (p + v)/|p + v| is undone on unit vectors by iterating
+/// p = a·|p + v| − v, which converges in a few passes (|v| ≈ 1e-4) and stays
+/// exact at the poles, where an iteration on RA/Dec gets stuck.
 ({double raDeg, double decDeg}) apparentToJ2000(
   double raDeg,
   double decDeg, {
   required DateTime atUtc,
 }) {
-  var ra = raDeg;
-  var dec = decDeg;
-  for (var i = 0; i < 12; i++) {
-    final f = j2000ToApparent(ra, dec, atUtc: atUtc);
-    var dRa = raDeg - f.raDeg;
-    if (dRa > 180) dRa -= 360;
-    if (dRa < -180) dRa += 360;
-    ra = (ra + dRa) % 360;
-    if (ra < 0) ra += 360;
-    dec = (dec + (decDeg - f.decDeg)).clamp(-90.0, 90.0);
+  final t = _centuriesTt(atUtc);
+  final u = _unit(raDeg, decDeg);
+  final r = _matrix(t);
+  final a = [
+    r[0][0] * u[0] + r[1][0] * u[1] + r[2][0] * u[2],
+    r[0][1] * u[0] + r[1][1] * u[1] + r[2][1] * u[2],
+    r[0][2] * u[0] + r[1][2] * u[1] + r[2][2] * u[2],
+  ];
+  final v = _earthVelocity(t);
+  var p = a;
+  for (var i = 0; i < 4; i++) {
+    final s = [p[0] + v[0], p[1] + v[1], p[2] + v[2]];
+    final n = math.sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+    final q = [a[0] * n - v[0], a[1] * n - v[1], a[2] * n - v[2]];
+    final m = math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2]);
+    p = [q[0] / m, q[1] / m, q[2] / m];
   }
-  return (raDeg: ra, decDeg: dec);
+  return _sph(p);
 }
 
 /// Julian centuries of TT since J2000.0. TT − UTC is taken as the 2017+ value
@@ -93,9 +101,18 @@ List<double> _unit(double raDeg, double decDeg) {
 }
 
 /// First-order annual aberration: shift the direction by Earth's orbital
-/// velocity (as a fraction of c) in J2000 equatorial coordinates, derived from
-/// the Sun's apparent longitude and the orbit's eccentricity (Meeus ch. 25).
+/// velocity ([_earthVelocity]) and renormalise.
 List<double> _aberrate(List<double> p, double t) {
+  final v = _earthVelocity(t);
+  final s = [p[0] + v[0], p[1] + v[1], p[2] + v[2]];
+  final n = math.sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+  return [s[0] / n, s[1] / n, s[2] / n];
+}
+
+/// Earth's orbital velocity as a fraction of c in J2000 equatorial
+/// coordinates, derived from the Sun's apparent longitude and the orbit's
+/// eccentricity (Meeus ch. 25).
+List<double> _earthVelocity(double t) {
   final l0 = (280.46646 + 36000.76983 * t + 0.0003032 * t * t) * _d2r;
   final m = (357.52911 + 35999.05029 * t - 0.0001537 * t * t) * _d2r;
   final e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
@@ -119,10 +136,7 @@ List<double> _aberrate(List<double> p, double t) {
   // Rotate ecliptic → equatorial by the J2000 obliquity.
   final eps = 84381.406 * _as2r;
   final ce = math.cos(eps), se = math.sin(eps);
-  final v = [vx, vy * ce, vy * se];
-  final s = [p[0] + v[0], p[1] + v[1], p[2] + v[2]];
-  final n = math.sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
-  return [s[0] / n, s[1] / n, s[2] / n];
+  return [vx, vy * ce, vy * se];
 }
 
 /// IAU 2006 mean obliquity, arcseconds (SOFA `iauObl06`).

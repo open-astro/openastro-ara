@@ -54,6 +54,16 @@ void main() {
       expect(back.decDeg, closeTo(-20.2, 1e-7));
     });
 
+    test('a JNow pole maps back onto the JNow pole', () {
+      final at = DateTime.utc(2026, 10, 4, 22);
+      for (final dec in [90.0, -90.0, 89.99, -89.99]) {
+        final back = apparentToJ2000(37.5, dec, atUtc: at);
+        final app = j2000ToApparent(back.raDeg, back.decDeg, atUtc: at);
+        final sep = _sepArcsec(app.raDeg, app.decDeg, 37.5, dec);
+        expect(sep, lessThan(1e-3), reason: 'Dec $dec: separation $sep″');
+      }
+    });
+
     test('RA stays in [0, 360) across the wrap', () {
       final at = DateTime.utc(2026, 10, 4, 22);
       final back = apparentToJ2000(0.2, 10, atUtc: at);

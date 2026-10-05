@@ -22,6 +22,17 @@ void main() {
   });
   tearDown(() => dir.delete(recursive: true));
 
+  test('writes go through a temp file renamed into place', () async {
+    // A torn temp file from an earlier crash is overwritten, never read.
+    await File('${dir.path}/custom_targets.json.part').writeAsString('[{');
+    await svc.remember(_t('A', 10, 20));
+    await svc.remember(_t('B', 30, 40));
+    await svc.forget(_t('A', 10, 20));
+    final names = dir.listSync().map((e) => e.uri.pathSegments.last).toList();
+    expect(names, ['custom_targets.json']);
+    expect((await svc.load()).map((t) => t.name), ['B']);
+  });
+
   test('loads empty when nothing is stored', () async {
     expect(await svc.load(), isEmpty);
   });
