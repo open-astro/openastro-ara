@@ -109,10 +109,21 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     final exposureOk = _exposureSeconds != null || _exposureCtrl.text.isEmpty;
     final canStart = hasTarget && !live.busy && !status.busy && exposureOk;
     final single = _mode == RotationAssistModes.single;
+    // The readout measures against the angle the daemon was started with. Once
+    // the dial moves away from it the readout is stale: Done would approve the
+    // old angle, so it is disabled until a new start measures against the new one.
+    final stale =
+        hasTarget &&
+        (status.latest != null || status.busy) &&
+        (framing.rotationDeg - status.targetPositionAngleDeg).abs() > 0.05;
     // Done: something has solved toward this target. A running loop is fine —
     // the daemon stops it itself before the 1×1 check.
     final canConfirm =
-        status.latest != null && !live.busy && !status.confirming && hasTarget;
+        status.latest != null &&
+        !live.busy &&
+        !status.confirming &&
+        hasTarget &&
+        !stale;
 
     return Material(
       color: AraColors.bgPanel,
@@ -232,6 +243,22 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                         style: TextStyle(
                           fontSize: 12,
                           color: AraColors.textSecondary,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  if (stale)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AraSpace.s8),
+                      child: Text(
+                        'Plan angle changed — this readout measured against '
+                        '${status.targetPositionAngleDeg.toStringAsFixed(0)}°. '
+                        'Start again to measure against '
+                        '${framing.rotationDeg.toStringAsFixed(0)}°.',
+                        key: const Key('rotation-assist-stale'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AraColors.accentWarning,
                           height: 1.3,
                         ),
                       ),

@@ -193,6 +193,65 @@ void main() {
     expect(stub.confirms, 1);
   });
 
+  testWidgets('a dial moved away from the measured angle disables Done and '
+      'marks the readout stale', (tester) async {
+    const solved = RotationAssistStatus(
+      state: RotationAssistStates.stopped,
+      targetPositionAngleDeg: 10,
+      latest: RotationAssistSample(
+        seq: 1,
+        solvedPositionAngleDeg: 9.5,
+        deltaDeg: 0.5,
+      ),
+      withinTolerance: true,
+    );
+    final (stub, _) = await _pump(
+      tester,
+      const RotationAssistLive(status: solved),
+      framing: const PlanFraming(
+        on: true,
+        raDeg: 314.8,
+        decDeg: 44.5,
+        rotationDeg: 40,
+        name: 'NGC 7000',
+      ),
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('rotation-assist-done')))
+          .onPressed,
+      isNull,
+    );
+    expect(find.byKey(const Key('rotation-assist-stale')), findsOneWidget);
+    expect(find.textContaining('measure against 40°'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('rotation-assist-done')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+    expect(stub.confirms, 0);
+
+    // A loop still running against the old angle shows the note too.
+    await _pump(
+      tester,
+      const RotationAssistLive(
+        status: RotationAssistStatus(
+          active: true,
+          state: RotationAssistStates.running,
+          targetPositionAngleDeg: 10,
+        ),
+      ),
+      framing: const PlanFraming(
+        on: true,
+        raDeg: 314.8,
+        decDeg: 44.5,
+        rotationDeg: 40,
+        name: 'NGC 7000',
+      ),
+    );
+    expect(find.byKey(const Key('rotation-assist-stale')), findsOneWidget);
+  });
+
   testWidgets(
     'the confirmation outcomes read approved / not quite / checking',
     (tester) async {
