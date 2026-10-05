@@ -447,8 +447,6 @@ const String centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 const String startGuidingType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
-const String rotateCameraByHandType =
-    'OpenAstroAra.Sequencer.SequenceItem.Rotator.RotateCameraByHand, OpenAstroAra.Sequencer';
 const String waitForUserType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForUser, OpenAstroAra.Sequencer';
 
@@ -745,23 +743,6 @@ const List<InstructionDef> instructionCatalog = [
         'Inherit from target',
         InstructionFieldType.boolean,
         defaultValue: false,
-      ),
-    ],
-  ),
-  // Rotate camera by hand — the no-rotator framing step: the daemon plate-solves
-  // the main camera in a loop and the run waits (awaiting the user) while the
-  // camera is turned to the angle by hand; a no-op with a rotator connected.
-  InstructionDef(
-    type: rotateCameraByHandType,
-    label: 'Rotate Camera by Hand',
-    category: InstructionCategory.telescope,
-    icon: Icons.rotate_90_degrees_ccw_outlined,
-    fields: [
-      InstructionField(
-        'PositionAngle',
-        'Position angle (°)',
-        InstructionFieldType.number,
-        defaultValue: 0.0,
       ),
     ],
   ),

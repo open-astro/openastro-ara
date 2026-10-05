@@ -68,6 +68,74 @@ void main() {
     expect(RotationAssistStatus.fromJson(const {}).state, 'idle');
   });
 
+  group('suggestedLoopExposure', () {
+    test('divides the full exposure by the bin squared, floored at 0.2 s', () {
+      expect(suggestedLoopExposure(4, 1), 4);
+      expect(suggestedLoopExposure(4, 2), 1);
+      expect(suggestedLoopExposure(4, 4), 0.25);
+      expect(suggestedLoopExposure(2, 4), 0.2);
+      expect(suggestedLoopExposure(0.1, 4), 0.1);
+      expect(suggestedLoopExposure(0, 2), 0);
+    });
+  });
+
+  group('rotationHint — the Done check outranks the loop', () {
+    const check = RotationAssistSample(
+      seq: 9,
+      solvedPositionAngleDeg: 10.4,
+      deltaDeg: -0.4,
+    );
+    test('confirming / confirmed / not confirmed', () {
+      expect(
+        rotationHint(
+          const RotationAssistStatus(state: RotationAssistStates.confirming),
+        ).advice,
+        RotateAdvice.confirming,
+      );
+      final ok = rotationHint(
+        const RotationAssistStatus(
+          state: RotationAssistStates.confirmed,
+          latest: check,
+          confirmation: check,
+          toleranceDeg: 1,
+        ),
+      );
+      expect(ok.advice, RotateAdvice.confirmed);
+      expect(ok.detail, contains('10.4°'));
+      final no = rotationHint(
+        const RotationAssistStatus(
+          state: RotationAssistStates.notConfirmed,
+          latest: RotationAssistSample(
+            seq: 9,
+            solvedPositionAngleDeg: 13,
+            deltaDeg: -3,
+          ),
+          confirmation: RotationAssistSample(
+            seq: 9,
+            solvedPositionAngleDeg: 13,
+            deltaDeg: -3,
+          ),
+        ),
+      );
+      expect(no.advice, RotateAdvice.notConfirmed);
+      expect(no.detail, contains('3.0° off'));
+    });
+    test('fromJson reads binning and the confirmation', () {
+      final s = RotationAssistStatus.fromJson({
+        'state': 'confirmed',
+        'binning': 4,
+        'auto_binning': 4,
+        'max_binning': 8,
+        'confirmation': {'seq': 3, 'solved_position_angle_deg': 10.2, 'delta_deg': -0.2},
+      });
+      expect(s.binning, 4);
+      expect(s.autoBinning, 4);
+      expect(s.maxBinning, 8);
+      expect(s.confirmation?.seq, 3);
+      expect(s.busy, isFalse);
+    });
+  });
+
   group('rotationHint — advice relative to the last turn', () {
     test('waits for the first solve', () {
       expect(rotationHint(_status(const [])).advice, RotateAdvice.wait);

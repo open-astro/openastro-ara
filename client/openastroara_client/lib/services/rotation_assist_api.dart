@@ -15,8 +15,16 @@ class RotationAssistFrame {
 }
 
 abstract interface class RotationAssistClient {
-  Future<void> start({required double positionAngleDeg});
+  Future<void> start({
+    required double positionAngleDeg,
+    double? exposureSeconds,
+    String? mode,
+    int? binning,
+  });
   Future<void> stop();
+
+  /// Done: stop the loop and check the framing with one 1×1 frame.
+  Future<void> confirm();
   Future<RotationAssistStatus> status();
   Future<RotationAssistFrame?> fetchFrame();
   void close();
@@ -37,11 +45,26 @@ class RotationAssistApi implements RotationAssistClient {
       );
 
   @override
-  Future<void> start({required double positionAngleDeg}) async {
+  Future<void> start({
+    required double positionAngleDeg,
+    double? exposureSeconds,
+    String? mode,
+    int? binning,
+  }) async {
     await _dio.post<void>(
       '/api/v1/rotation-assist/start',
-      data: <String, dynamic>{'position_angle_deg': positionAngleDeg},
+      data: <String, dynamic>{
+        'position_angle_deg': positionAngleDeg,
+        'exposure_seconds': ?exposureSeconds,
+        'mode': ?mode,
+        'binning': ?binning,
+      },
     );
+  }
+
+  @override
+  Future<void> confirm() async {
+    await _dio.post<void>('/api/v1/rotation-assist/confirm');
   }
 
   @override

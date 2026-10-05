@@ -43,9 +43,24 @@ public interface IAnalysisFrameSource {
     /// propagates.
     /// </summary>
     Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct);
+
+    /// <summary>The largest square binning the connected camera accepts (the smaller of its MaxBinX /
+    /// MaxBinY), or 0 when unknown (no camera, capabilities not read). Default: unknown.</summary>
+    int MaxBinning => 0;
 }
 
 public sealed partial class CameraService : IAnalysisFrameSource {
+
+    /// <inheritdoc/>
+    public int MaxBinning {
+        get {
+            CameraCapabilitiesDto? caps;
+            lock (_gate) {
+                caps = _capabilities;
+            }
+            return caps is { MaxBinX: > 0, MaxBinY: > 0 } ? Math.Min(caps.MaxBinX, caps.MaxBinY) : 0;
+        }
+    }
 
     /// <inheritdoc/>
     public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {

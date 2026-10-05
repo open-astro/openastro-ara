@@ -120,6 +120,10 @@
     background: var(--accent); color: #04222e; }
   #frame #f-add:hover { background: #6fcef9; }
   #frame #f-add:disabled { opacity: .4; cursor: default; background: rgba(255,255,255,0.12); color: var(--dim); }
+  #frame #f-rotcam { width: 100%; margin-top: 8px; font-size: 12.5px; font-weight: 600; padding: 8px 0; border-radius: 10px;
+    background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
+  #frame #f-rotcam:hover { background: rgba(255,255,255,0.14); }
+  #frame #f-rotcam:disabled { opacity: .4; cursor: default; }
   #frame #f-msg, #frame #f-dss { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
   #frame #f-dss[hidden] { display: none; }
   #frame .warn { color: #ffb74d; }
@@ -224,6 +228,7 @@
   </div>
   <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
   <button id="f-add">Create Run</button>
+  <button id="f-rotcam" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
   <div id="f-msg"></div>
   <div id="f-dss" hidden></div>
 </div>
@@ -1231,6 +1236,45 @@ function updateFrame() {
   var show = frameOn && optics && optics.ok && frameRaDeg != null;
   _frameGeo.data = show ? mosaicData() : { type: 'FeatureCollection', features: [] };
   renderFramePanel();
+  postFraming();
+}
+
+// Tell Flutter about the framing box (on/off, centre, dialed angle, name) so
+// the Rotate-camera panel measures the camera against the SAME angle the dial
+// shows. updateFrame runs on every view move while the frame follows the sky,
+// so coalesce: post only when something the panel cares about changed, and at
+// most a few times a second.
+var _framingPosted = '', _framingTimer = null;
+function framingPayload() {
+  return {
+    type: 'framing', on: !!frameOn,
+    raDeg: frameRaDeg == null ? null : +frameRaDeg.toFixed(3),
+    decDeg: frameDecDeg == null ? null : +frameDecDeg.toFixed(3),
+    rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || '',
+  };
+}
+function postFraming() {
+  if (_framingTimer) return;
+  _framingTimer = setTimeout(function () {
+    _framingTimer = null;
+    var payload = framingPayload(), key = JSON.stringify(payload);
+    if (key === _framingPosted) return;
+    _framingPosted = key;
+    fetch('/araevent', {
+      method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
+      body: key,
+    }).catch(function () { _framingPosted = ''; });
+  }, 250);
+}
+// The Framing card's own way into the panel: the framing as it stands, and
+// Flutter docks the Rotate-camera panel beside the sky.
+function openRotateCamera() {
+  if (frameRaDeg == null) return;
+  var payload = framingPayload(); payload.type = 'rotateCamera';
+  fetch('/araevent', {
+    method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  }).catch(function () {});
 }
 
 function fmtFovDeg(x) { return x >= 1 ? x.toFixed(2) + '°' : (x * 60).toFixed(1) + "'"; }
@@ -1281,6 +1325,8 @@ function renderFramePanel() {
   }
   document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
   document.getElementById('f-add').disabled = !(frameRaDeg != null && optics && optics.ok);
+  // The readout needs the daemon (camera + solver): offline the button stays quiet.
+  document.getElementById('f-rotcam').disabled = !(API && frameRaDeg != null);
   setFrameCoordText();
 }
 
@@ -1388,6 +1434,7 @@ function wireFrame() {
   holdRepeat('f-ov-', function () { frameOverlap = Math.max(0, frameOverlap - 1); updateFrame(); });
   holdRepeat('f-ov+', function () { frameOverlap = Math.min(50, frameOverlap + 1); updateFrame(); });
   document.getElementById('f-add').onclick = addFrameToSequence;
+  document.getElementById('f-rotcam').onclick = openRotateCamera;
   // Pick up optics edited in Options → Imaging → Optics without reopening Frame.
   setInterval(function () { if (frameOn) loadOptics(); }, 3000);
 }

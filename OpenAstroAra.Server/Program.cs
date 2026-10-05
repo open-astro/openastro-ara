@@ -960,11 +960,10 @@ public partial class Program {
                 // §59.9 — autofocus defers while §51 diagnostics carries an open sky-condition issue.
                 autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>(),
                 // §48.3 — the auto-exposure flat set, so FlatPanelFlats executes for real.
-                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(),
-                // Rotate camera by hand — the plate-solve readout for rigs without a rotator.
-                rotationAssist: sp.GetRequiredService<IRotationAssistService>()));
-        // The by-hand rotation readout (a run's Rotate camera by hand step on a rig without a rotator):
-        // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done".
+                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>()));
+        // The by-hand rotation readout (the Plan screen's "Rotate camera" panel on a rig without a rotator):
+        // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done",
+        // the profile's plate-solve exposure as the default exposure.
         builder.Services.AddSingleton<IRotationAssistService>(sp =>
             new RotationAssistService(
                 // Development only (SyntheticSky): the angle comes from a file instead of a plate solve.
@@ -977,6 +976,7 @@ public partial class Program {
                         sp.GetRequiredService<IAnalysisFrameSource>(),
                         sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()),
                 () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
+                () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.ExposureTime ?? 2.0,
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 

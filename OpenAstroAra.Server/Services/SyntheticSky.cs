@@ -178,8 +178,13 @@ public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
 
     private int _frameSeed;
 
-    public async Task<RotationSolve?> SolvePositionAngleAsync(CancellationToken ct) {
-        await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(false); // a capture + solve takes a moment
+    // A dev camera that bins to 4×4, so the auto-binned loop and the 1×1 confirmation both exercise.
+    public int MaxBinning => 4;
+
+    public async Task<RotationSolve?> SolvePositionAngleAsync(double exposureSeconds, int binning, CancellationToken ct) {
+        // The "exposure" plus a moment for the solve — longer at 1×1, as a full frame is on a real rig —
+        // so the panel's cadence feels like the real thing.
+        await Task.Delay(TimeSpan.FromSeconds(Math.Min(exposureSeconds, 10) + (binning <= 1 ? 2.5 : 0.8)), ct).ConfigureAwait(false);
         string text;
         try {
             text = (await System.IO.File.ReadAllTextAsync(_path, ct).ConfigureAwait(false)).Trim();
@@ -192,11 +197,13 @@ public sealed class SyntheticPositionAngleSolver : IPositionAngleSolver {
             return null;
         }
         // A rendered star field stands in for the capture (new noise each solve so the picture visibly updates).
-        const int width = 1024, height = 683;
-        var pixels = SyntheticSky.Render(width, height, hfr: 1.6, seed: 11, stars: 140, frameSeed: ++_frameSeed);
+        // Binned frames are smaller, as the camera's would be (the pixel scale grows to match).
+        var b = Math.Clamp(binning, 1, 4);
+        int width = 1024 / b, height = 683 / b;
+        var pixels = SyntheticSky.Render(width, height, hfr: Math.Max(0.9, 1.6 / b), seed: 11, stars: 140, frameSeed: ++_frameSeed);
         var frame = new AnalysisFrame(pixels, width, height, DateTimeOffset.UtcNow);
         // A pixel scale that gives the rendered 1024 px frame a RedCat-sized field (≈2.6° × 1.7°), so the
         // scope box on the planetarium is the size a real frame's would be.
-        return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 9.0, Flipped: false, frame);
+        return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 9.0 * b, Flipped: false, frame);
     }
 }

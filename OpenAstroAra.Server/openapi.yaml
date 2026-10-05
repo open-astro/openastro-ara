@@ -1585,6 +1585,21 @@ paths:
       responses:
         '204':
           description: No Content
+  /api/v1/rotation-assist/confirm:
+    post:
+      tags:
+        - Rotation assist
+      summary: 'Done: stop the readout and check the framing with one 1×1 frame at the full plate-solve exposure.'
+      operationId: ConfirmRotationAssist
+      responses:
+        '202':
+          description: Accepted
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/rotation-assist/state:
     get:
       tags:
@@ -10149,6 +10164,24 @@ components:
             - number
             - string
           format: double
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mode:
+          type:
+            - 'null'
+            - string
+        binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     RotationAssistStatusDto:
       required:
         - active
@@ -10221,6 +10254,48 @@ components:
             - string
           format: int64
           default: 0
+        mode:
+          type: string
+          default: loop
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        default_exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 1
+        auto_binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 1
+        max_binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        confirmation:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/RotationAssistSampleDto'
     RotatorMoveRequestDto:
       required:
         - target_angle_deg
