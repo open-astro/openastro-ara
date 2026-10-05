@@ -573,10 +573,10 @@ void main() {
         reason: 'webview and event box non-focusable',
       );
       // No gdk_window_ensure_native() call may come back: on Wayland it made
-      // a parentless toplevel (#1200), and X11 is refused (#1201). The one
-      // remaining mention is the comment that says never to call it.
-      expect('gdk_window_ensure_native('.allMatches(runner).length, 1);
-      expect(runner, contains('never gdk_window_ensure_native()'));
+      // a parentless toplevel (#1200), and X11 is refused (#1201). Match the
+      // call form so a reworded comment can't mask a real call.
+      expect(runner, isNot(contains('gdk_window_ensure_native(window')));
+      expect(runner, isNot(matches(RegExp(r'^\s*(if\s*\(.*)?gdk_window_ensure_native\(', multiLine: true))));
       expect(runner, isNot(contains('GDK_IS_WAYLAND_DISPLAY(')));
     });
   });

@@ -282,9 +282,7 @@ int probe_render_nodes(const glob_t& g) {
 // forked child: gbm_create_device loads the Mesa DRI driver, and some drivers
 // (radeonsi) start compiler threads that may outlive gbm_device_destroy, so
 // the parent never loads a driver and stays single-threaded for the setenv.
-// The user's own setting wins. Applies on X11 too: where GBM can't allocate
-// there either (e.g. proprietary NVIDIA drivers without a GBM backend), the
-// shm renderer is the right fallback.
+// The user's own setting wins.
 void planetarium_overlay_configure_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
   const char* reason = nullptr;
