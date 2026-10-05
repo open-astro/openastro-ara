@@ -1516,6 +1516,27 @@ function zoomBy(factor) {
   else stel.core.fov = target;
   lastGoodFov = target;
 }
+// Touchpad pinch, forwarded by the Linux runner (desktop WebKitGTK ignores the
+// viewport meta and would magnify the whole page instead). The runner captures
+// the base FOV at gesture start and streams the cumulative scale; a scale of 2
+// halves the field of view. Direct assignment, not zoomTo: a pinch is a live
+// drag, and an animation restarting on every update would lag the fingers.
+var pinchBaseFov = null;
+function pinchBegin() {
+  if (!stel) return;
+  var cur = stel.core.fov;
+  pinchBaseFov = fovIsUsable(cur) ? cur : lastGoodFov;
+}
+function pinchUpdate(scale) {
+  if (!stel) return;
+  var s = Number(scale);
+  if (!(s > 0) || !isFinite(s)) return;
+  if (pinchBaseFov === null) pinchBegin();
+  var target = Math.max(MIN_FOV, Math.min(MAX_FOV, pinchBaseFov / s));
+  stel.core.fov = target;
+  lastGoodFov = target;
+}
+function pinchEnd() { pinchBaseFov = null; }
 // Per-frame guard (engine-internal gesture changes don't reliably fire stel.change):
 // an overshot or degenerate FOV snaps back to the nearest usable value.
 var lastClampReport = 0;

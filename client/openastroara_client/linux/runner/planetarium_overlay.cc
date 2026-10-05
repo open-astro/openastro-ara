@@ -295,6 +295,36 @@ void planetarium_overlay_configure_renderer() {
 
 namespace {
 
+// Desktop WebKitGTK answers a touchpad pinch with page magnification (it
+// ignores the viewport meta), which blew up the whole planetarium UI instead
+// of zooming the sky (Fedora KDE Wayland, 2026-10-05). The handler runs
+// before WebKit's class handler: it swallows GDK_TOUCHPAD_PINCH and forwards
+// the cumulative scale to the page's pinchUpdate(), which maps it onto the
+// field of view. Mouse wheel and touch pinch are unaffected (the page already
+// handles those itself).
+gboolean pinch_event_cb(GtkWidget* widget, GdkEvent* event, gpointer user_data) {
+  (void)widget;
+  if (gdk_event_get_event_type(event) != GDK_TOUCHPAD_PINCH) return FALSE;
+  OverlayState* state = static_cast<OverlayState*>(user_data);
+  const GdkEventTouchpadPinch* pinch = &event->touchpad_pinch;
+  switch (pinch->phase) {
+    case GDK_TOUCHPAD_GESTURE_PHASE_BEGIN:
+      run_js(state->webview, "pinchBegin()");
+      break;
+    case GDK_TOUCHPAD_GESTURE_PHASE_UPDATE: {
+      gchar* js = g_strdup_printf("pinchUpdate(%.6f)", pinch->scale);
+      run_js(state->webview, js);
+      g_free(js);
+      break;
+    }
+    case GDK_TOUCHPAD_GESTURE_PHASE_END:
+    case GDK_TOUCHPAD_GESTURE_PHASE_CANCEL:
+      run_js(state->webview, "pinchEnd()");
+      break;
+  }
+  return TRUE;
+}
+
 void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
@@ -302,12 +332,20 @@ void ensure_webview(OverlayState* state) {
                    G_CALLBACK(decide_policy_cb), state);
   g_signal_connect(state->webview, "load-changed",
                    G_CALLBACK(load_changed_cb), state);
+  // Keyboard focus stays with FlView. WebKit's button-press handler grabs GTK
+  // focus on click, which is a no-op for a widget that can't focus; without
+  // this, one click on the sky and the Planning search field stops receiving
+  // keys (Fedora KDE Wayland, 2026-10-05). The page needs no keyboard.
+  gtk_widget_set_can_focus(GTK_WIDGET(state->webview), FALSE);
+  // Touchpad pinch: see pinch_event_cb.
+  g_signal_connect(state->webview, "event", G_CALLBACK(pinch_event_cb), state);
 
   // Wrap the webview in a windowed GtkEventBox: the event box owns a GdkWindow
   // we can promote to a native X11 subwindow (the webview itself is windowless
   // and would otherwise draw into the toplevel surface Flutter overpaints).
   GtkWidget* event_box = gtk_event_box_new();
   gtk_event_box_set_visible_window(GTK_EVENT_BOX(event_box), TRUE);
+  gtk_widget_set_can_focus(event_box, FALSE);
   gtk_container_add(GTK_CONTAINER(event_box), GTK_WIDGET(state->webview));
   state->webview_widget = event_box;
 
