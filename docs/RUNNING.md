@@ -216,7 +216,11 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
     renderer every planetarium frame is a WebGL readback plus a copy through
     GTK's GL toplevel. At 4K that pipeline manages only a few frames per
     second however the page is throttled, so Planning is usable but slow on a
-    4K NVIDIA desktop; smaller windows are proportionally faster. And at exit,
+    4K NVIDIA desktop; smaller windows are proportionally faster. Fractional
+    desktop scaling (e.g. KDE at 125 %) makes it worse: GTK3 only scales by
+    integers, so the app renders at 2x and a 4K display costs 7680x4320 pixels
+    per frame. On such a system use 100 % scaling, or keep the Ara window at
+    roughly 1600x900 physical pixels while on Planning. And at exit,
     WebKitWebProcess segfaults inside `libnvidia-eglcore` during its own EGL
     teardown (after the app has already quit), which leaves a harmless
     coredump. Both are driver/WebKitGTK behaviour outside the app; the
