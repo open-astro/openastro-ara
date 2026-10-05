@@ -26,6 +26,8 @@ const char* kChannelName = "org.openastro.openastroara/planetarium";
 
 struct OverlayState {
   GtkOverlay* overlay = nullptr;
+  // Web-process crashes seen this session (see web_process_terminated_cb).
+  int web_process_crashes = 0;
   // Lazily created on the first setUrl so plain registration costs nothing and,
   // crucially, no WebKit GL surface exists until the user actually opens
   // Planning (mirrors webview_all's "GL only inits when a webview is created").
@@ -228,6 +230,29 @@ struct GbmProbe {
 };
 
 
+// Per-user marker written when WebKit's web process crashed while the DMABUF
+// renderer was active (web_process_terminated_cb). Its presence makes every
+// later launch start on the shm renderer: the failure keys on itself, not on
+// a proxy. Delete the file to retry DMABUF after a driver update.
+gchar* no_dmabuf_marker_path() {
+  return g_build_filename(g_get_user_config_dir(), "openastroara",
+                          "webkit-no-dmabuf", nullptr);
+}
+
+// True when a render node is driven by the proprietary NVIDIA module. On that
+// stack GBM allocates fine but WebKitGTK's DMABUF renderer segfaults inside
+// libnvidia-eglcore (Kubuntu 26.04, webkit2gtk 2.52, driver 595.84,
+// 2026-10-05), so the allocation probe cannot detect it.
+bool render_node_is_nvidia(const char* node_path) {
+  g_autofree gchar* base = g_path_get_basename(node_path);
+  g_autofree gchar* link = g_build_filename("/sys/class/drm", base, "device",
+                                            "driver", nullptr);
+  g_autofree gchar* target = g_file_read_link(link, nullptr);
+  if (target == nullptr) return false;
+  g_autofree gchar* driver = g_path_get_basename(target);
+  return g_strcmp0(driver, "nvidia") == 0;
+}
+
 // Runs in a forked child: returns 0 when some render node can back a GBM
 // buffer, 1 when none can, 2 when libgbm is not loadable. "Some" is a
 // deliberate choice: on a hybrid laptop WebKit allocates on the display's
@@ -263,10 +288,20 @@ void planetarium_overlay_configure_renderer() {
   const char* reason = nullptr;
   gint64 probe_ms = -1;  // set when the probe had to be killed
   glob_t g = {};
+  g_autofree gchar* marker = no_dmabuf_marker_path();
   if (glob("/dev/dri/renderD*", 0, nullptr, &g) != 0 || g.gl_pathc == 0) {
     // Cheap first check: no node at all means nothing to probe and no driver
     // to load (headless containers, GPU-less VMs without a DRM device).
     reason = "no DRM render node is present";
+  } else if (g_file_test(marker, G_FILE_TEST_EXISTS)) {
+    reason = "a previous run's WebKit process crashed in the DMABUF renderer";
+  } else if ([&] {
+               for (size_t i = 0; i < g.gl_pathc; i++) {
+                 if (render_node_is_nvidia(g.gl_pathv[i])) return true;
+               }
+               return false;
+             }()) {
+    reason = "the proprietary NVIDIA driver is in use";
   } else {
     pid_t pid = fork();
     if (pid == 0) {
@@ -370,6 +405,40 @@ gboolean pinch_event_cb(GtkWidget* widget, GdkEvent* event, gpointer user_data) 
   return TRUE;
 }
 
+// WebKit's web process died. A crash while the DMABUF renderer is active is
+// the NVIDIA failure above (or a cousin of it): record it so the next launch
+// starts on the shm renderer, tell the user plainly, and reload the page once
+// so the current session isn't left blank. The env var can't be flipped here
+// (threads exist now), so a second crash in the same session just logs.
+void web_process_terminated_cb(WebKitWebView* view,
+                               WebKitWebProcessTerminationReason reason,
+                               gpointer user_data) {
+  OverlayState* state = static_cast<OverlayState*>(user_data);
+  if (reason != WEBKIT_WEB_PROCESS_CRASHED) return;
+  state->web_process_crashes++;
+  const bool dmabuf_active =
+      g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") == nullptr;
+  if (dmabuf_active) {
+    g_autofree gchar* marker = no_dmabuf_marker_path();
+    g_autofree gchar* dir = g_path_get_dirname(marker);
+    g_mkdir_with_parents(dir, 0700);
+    g_file_set_contents(marker, "", 0, nullptr);
+  }
+  if (state->web_process_crashes == 1) {
+    g_warning("planetarium_overlay: WebKit web process crashed%s; reloading "
+              "the planetarium once. %s",
+              dmabuf_active ? " with the DMABUF renderer active" : "",
+              dmabuf_active ? "The next launch will use WebKit's shm renderer."
+                            : "If it recurs, report your WebKitGTK version.");
+    webkit_web_view_reload(view);
+  } else {
+    g_warning("planetarium_overlay: WebKit web process crashed again "
+              "(%d this session); not reloading. Relaunch Ara%s.",
+              state->web_process_crashes,
+              dmabuf_active ? " to switch to the shm renderer" : "");
+  }
+}
+
 void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
@@ -377,6 +446,8 @@ void ensure_webview(OverlayState* state) {
                    G_CALLBACK(decide_policy_cb), state);
   g_signal_connect(state->webview, "load-changed",
                    G_CALLBACK(load_changed_cb), state);
+  g_signal_connect(state->webview, "web-process-terminated",
+                   G_CALLBACK(web_process_terminated_cb), state);
   // Keyboard focus stays with FlView. WebKit's button-press handler grabs GTK
   // focus on click, which is a no-op for a widget that can't focus; without
   // this, one click on the sky and the Planning search field stops receiving
