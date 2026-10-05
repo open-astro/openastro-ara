@@ -1710,13 +1710,18 @@ function wireControls() {
 // RTX 4090, 2026-10-05). Above LARGE_VIEW_PX the WebGL backing store is held
 // to about MAX_BACKING_PX by capping the device pixel ratio the engine sees,
 // and interactive rendering runs at ACTIVE_FPS_LARGE instead of display rate.
-// Smaller views (laptops, tablets, phones) are untouched.
+// Smaller views (laptops, tablets, phones) are untouched, and the caps are
+// OFF until the host enables them: only the Linux runner knows it had to
+// fall back to the shm renderer (it calls araViewCaps.enable() after load);
+// native webviews elsewhere composite cheaply and keep full resolution.
 var araViewCaps = (function () {
   var LARGE_VIEW_PX = 4.5e6, MAX_BACKING_PX = 4.0e6, ACTIVE_FPS_LARGE = 30;
+  var enabled = false;
   var realDpr = window.devicePixelRatio || 1;
   function cssPx() { return window.innerWidth * window.innerHeight; }
-  function isLarge() { return cssPx() * realDpr * realDpr > LARGE_VIEW_PX; }
+  function isLarge() { return enabled && cssPx() * realDpr * realDpr > LARGE_VIEW_PX; }
   function cappedDpr() {
+    if (!enabled) return realDpr;
     var px = cssPx() * realDpr * realDpr;
     if (px <= MAX_BACKING_PX) return realDpr;
     return realDpr * Math.sqrt(MAX_BACKING_PX / px);
@@ -1726,7 +1731,8 @@ var araViewCaps = (function () {
       configurable: true, get: cappedDpr,
     });
   } catch (e) { /* older WebKit: leave the real value */ }
-  return { isLarge: isLarge, activeFps: ACTIVE_FPS_LARGE };
+  function enable() { enabled = true; }
+  return { isLarge: isLarge, enable: enable, activeFps: ACTIVE_FPS_LARGE };
 })();
 
 var araIdleThrottle = (function () {

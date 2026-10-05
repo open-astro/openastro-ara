@@ -176,6 +176,12 @@ void load_changed_cb(WebKitWebView* view,
   if (event == WEBKIT_LOAD_FINISHED && state->night) {
     run_js(view, kNightOnJs);
   }
+  // On the shm renderer every frame is a readback plus a copy; let the page
+  // cap its backing resolution and interactive rate on very large views.
+  if (event == WEBKIT_LOAD_FINISHED &&
+      g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) {
+    run_js(view, "araViewCaps.enable()");
+  }
 }
 
 // WebKitGTK's DMABUF renderer allocates its frames through GBM on a DRM render

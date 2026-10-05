@@ -647,6 +647,12 @@ void main() {
       expect(throttle, greaterThan(caps));
       expect(page, contains("Object.defineProperty(window, 'devicePixelRatio'"));
       expect(page, contains('if (!araViewCaps.isLarge()) return nativeRaf(cb);'));
+      // Off by default; only the Linux runner turns it on, and only when it
+      // fell back to the shm renderer.
+      expect(page, contains('var enabled = false;'));
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      expect(runner, contains('"araViewCaps.enable()"'));
     });
 
     test('idle callers are queued and flushed together, never one slot', () {
