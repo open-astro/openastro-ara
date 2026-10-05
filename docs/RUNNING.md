@@ -203,6 +203,13 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
     not loadable` (minimal install), or `the GBM probe did not complete` (the
     driver crashed while probing). Setting `WEBKIT_DISABLE_DMABUF_RENDERER`
     yourself skips the probe either way.
+- **Taskbar icon on Wayland:** compositors resolve the icon from the app id via
+  an installed `org.openastro.openastroara.desktop`, not from the window, so an
+  unpacked bundle shows a generic icon until you register it once per user:
+  `linux/install-desktop-entry.sh [path/to/bundle]` (copies the entry and the
+  hicolor icons from the bundle's `share/` into `~/.local/share`, with `Exec`
+  pointing at that bundle). Packaged installs ship the same files under
+  `/usr/share`.
 - After launching, open the Planning tab and check the planetarium actually draws
   stars/atmosphere. A blank/black sky **without** a `WEBKIT_DISABLE_DMABUF_RENDERER`
   line on stderr means a WebGL2 gap in your WebKitGTK build; with that line

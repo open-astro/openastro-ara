@@ -108,10 +108,13 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "OpenAstro Ara");
   }
 
-  // Window/taskbar icon: the Ara constellation mark, loaded from the Flutter
-  // asset bundle next to the executable (no hicolor-theme install required —
-  // works from a bare `flutter run`/unpacked bundle). Best-effort: a missing
-  // file just leaves the WM default.
+  // Window/taskbar icon on X11: the Ara constellation mark, loaded from the
+  // Flutter asset bundle next to the executable (no hicolor-theme install
+  // required — works from a bare `flutter run`/unpacked bundle). Best-effort:
+  // a missing file just leaves the WM default. Wayland ignores per-window
+  // icons; there the compositor resolves the app_id through the installed
+  // org.openastro.openastroara.desktop entry (see linux/CMakeLists.txt and
+  // linux/install-desktop-entry.sh).
   {
     g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
     if (exe_path != nullptr) {

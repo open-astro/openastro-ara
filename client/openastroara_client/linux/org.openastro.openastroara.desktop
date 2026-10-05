@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OpenAstro Ara
+Comment=Astrophotography session planner and controller
+Exec=openastroara
+Icon=org.openastro.openastroara
+Terminal=false
+Categories=Science;Astronomy;
+StartupWMClass=org.openastro.openastroara
+StartupNotify=true
