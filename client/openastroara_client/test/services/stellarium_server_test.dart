@@ -583,6 +583,28 @@ void main() {
     });
   });
 
+  group('Linux runner renderer-probe reasons (docs contract)', () {
+    test('RUNNING.md quotes every fallback reason the runner can print', () {
+      // #1275 — docs/RUNNING.md lists the reasons word for word so users can
+      // report them; keep the two in step.
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      final doc = File('../../docs/RUNNING.md').readAsStringSync();
+      const reasons = [
+        'no DRM render node is present',
+        'no DRM render node can back a GBM buffer',
+        'libgbm.so.1 is not loadable',
+        'the GBM probe did not complete',
+      ];
+      for (final r in reasons) {
+        expect(runner, contains('"$r"'), reason: '$r in the runner');
+        expect(doc, contains('`$r`'), reason: '$r in RUNNING.md');
+      }
+      expect(runner, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
+      expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
+    });
+  });
+
   group('planetarium page scope box', () {
     test('draws the daemon\'s latest solve as a second box and clears on request', () {
       // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}

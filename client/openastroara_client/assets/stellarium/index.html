@@ -1532,7 +1532,10 @@ function pinchUpdate(scale) {
   var s = Number(scale);
   if (!(s > 0) || !isFinite(s)) return;
   if (pinchBaseFov === null) pinchBegin();
-  var target = Math.max(MIN_FOV, Math.min(MAX_FOV, pinchBaseFov / s));
+  // Same bounds as wheel zoom and the per-frame guard: a MAX_FOV ceiling and
+  // no floor beyond "positive and finite", so pinch and wheel bottom out alike.
+  var target = Math.min(MAX_FOV, pinchBaseFov / s);
+  if (!fovIsUsable(target)) return;
   stel.core.fov = target;
   lastGoodFov = target;
 }
