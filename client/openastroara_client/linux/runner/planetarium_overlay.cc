@@ -6,6 +6,10 @@
 #include <gdk/gdkwayland.h>
 #endif
 
+#include <fcntl.h>
+#include <glob.h>
+#include <unistd.h>
+
 #include <cstring>
 
 // See planetarium_overlay.h for the why. This file owns the WebKitWebView that
@@ -23,10 +27,10 @@ struct OverlayState {
   // Planning (mirrors webview_all's "GL only inits when a webview is created").
   WebKitWebView* webview = nullptr;
   // The positioned overlay child: a windowed GtkEventBox wrapping the webview.
-  // It's promoted to a native X11 subwindow (see on_overlay_child_realize) so
-  // the X server stacks it ABOVE the toplevel content Flutter blits its GL frame
-  // into — otherwise the windowless webview draws into the same surface Flutter
-  // immediately overpaints, and the planetarium stays invisible.
+  // On X11 it's promoted to a native subwindow (see ensure_webview) so the X
+  // server stacks it ABOVE the toplevel content Flutter blits its GL frame
+  // into. On Wayland it stays client-side and GtkOverlay draw order does the
+  // stacking (#1200).
   GtkWidget* webview_widget = nullptr;
   // Target rect in logical (GTK) pixels, relative to the FlView origin. Flutter
   // logical pixels and GTK widget coordinates share the same scale factor on a
@@ -165,8 +169,36 @@ void load_changed_cb(WebKitWebView* view,
   }
 }
 
+// WebKitGTK's DMABUF renderer needs a DRM render node it can open. Without one
+// (GPU-less VMs, headless containers, some NVIDIA setups) the WebProcess logs
+// "Failed to create GBM buffer ... Permission denied" and never produces a
+// frame, so the planetarium is blank with no other symptom. Fall back to the
+// shared-memory renderer when no render node is usable. Must run before the
+// first WebKit object is created; the user's own setting wins.
+void maybe_disable_dmabuf_renderer() {
+  if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
+  glob_t g;
+  bool usable = false;
+  if (glob("/dev/dri/renderD*", 0, nullptr, &g) == 0) {
+    for (size_t i = 0; i < g.gl_pathc && !usable; i++) {
+      int fd = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC);
+      if (fd >= 0) {
+        usable = true;
+        close(fd);
+      }
+    }
+  }
+  globfree(&g);
+  if (!usable) {
+    g_message("planetarium_overlay: no usable DRM render node, "
+              "setting WEBKIT_DISABLE_DMABUF_RENDERER=1");
+    g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
+  }
+}
+
 void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
+  maybe_disable_dmabuf_renderer();
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
   g_signal_connect(state->webview, "decide-policy",
                    G_CALLBACK(decide_policy_cb), state);
