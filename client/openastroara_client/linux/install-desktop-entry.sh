@@ -35,8 +35,16 @@ mkdir -p "$data/applications" "$data/icons/hicolor"
 sed "s|^Exec=.*|Exec=$bundle/openastroara|" \
   "$share/applications/org.openastro.openastroara.desktop" \
   > "$data/applications/org.openastro.openastroara.desktop"
+fresh_icons=0
+[ -d "$data/icons/hicolor/256x256" ] || fresh_icons=1
 cp -R "$share/icons/hicolor/." "$data/icons/hicolor/"
-command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -f -t "$data/icons/hicolor" >/dev/null 2>&1 || true
+# No gtk-update-icon-cache here: the per-user hicolor dir has no index.theme,
+# so a cache file in it is useless and can shadow the plain PNG lookup.
 command -v update-desktop-database >/dev/null && update-desktop-database "$data/applications" >/dev/null 2>&1 || true
 echo "installed $data/applications/org.openastro.openastroara.desktop (Exec=$bundle/openastroara)"
 echo "relaunch the app; a running instance keeps the old icon until restarted"
+if [ "$fresh_icons" = 1 ]; then
+  echo "note: the icon directory was just created; a running desktop shell may have"
+  echo "      cached the miss. On Plasma: systemctl --user restart plasma-plasmashell"
+  echo "      (or log out and in) once; later installs don't need this."
+fi
