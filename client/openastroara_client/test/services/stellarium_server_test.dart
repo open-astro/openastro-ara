@@ -572,14 +572,12 @@ void main() {
         greaterThanOrEqualTo(2),
         reason: 'webview and event box non-focusable',
       );
-      expect(runner, contains('GDK_IS_WAYLAND_DISPLAY('));
-      // ensure_native must sit in the non-Wayland branch: the `if (wayland)`
-      // guard comes first, and the only ensure_native call follows it.
-      final guard = runner.indexOf('if (wayland)');
-      final ensureNative = runner.indexOf('gdk_window_ensure_native(');
-      expect(guard, greaterThan(-1));
-      expect(ensureNative, greaterThan(guard));
+      // No gdk_window_ensure_native() call may come back: on Wayland it made
+      // a parentless toplevel (#1200), and X11 is refused (#1201). The one
+      // remaining mention is the comment that says never to call it.
       expect('gdk_window_ensure_native('.allMatches(runner).length, 1);
+      expect(runner, contains('never gdk_window_ensure_native()'));
+      expect(runner, isNot(contains('GDK_IS_WAYLAND_DISPLAY(')));
     });
   });
 
@@ -696,22 +694,6 @@ void main() {
       expect(body, contains('queue.push({ id: id, cb: cb });'));
       expect(body, contains('if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);'));
       expect(body, isNot(contains('one throttled slot')));
-    });
-  });
-
-  group('Linux runner is Wayland-only (#1201)', () {
-    test('main refuses X11 and restricts GDK to the Wayland backend', () {
-      final main = File('linux/runner/main.cc').readAsStringSync();
-      expect(main, contains('g_getenv("WAYLAND_DISPLAY") == nullptr'));
-      expect(main, contains('OpenAstro Ara needs a Wayland session.'));
-      expect(main, contains('gdk_set_allowed_backends("wayland");'));
-      // The refusal must precede the renderer probe and the application.
-      expect(main.indexOf('gdk_set_allowed_backends'),
-          lessThan(main.indexOf('planetarium_overlay_configure_renderer();')));
-      final app = File('linux/runner/my_application.cc').readAsStringSync();
-      expect(app, isNot(contains('GDK_WINDOWING_X11')));
-      expect(app, isNot(contains('gtk_window_move(window')));
-      expect(app, isNot(contains('gtk_window_set_icon(window')));
     });
   });
 

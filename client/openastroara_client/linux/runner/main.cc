@@ -5,9 +5,11 @@
 
 int main(int argc, char** argv) {
   // The Linux client is Wayland-only (#1201, #1204): the planetarium overlay
-  // is stacked by GtkOverlay draw order on a Wayland surface and the X11
-  // paths are gone. Refuse X11 and XWayland up front with a plain message
-  // instead of letting GTK fail with "cannot open display".
+  // relies on GtkOverlay draw order on a Wayland surface, and the X11 window
+  // chrome, native-subwindow and icon paths are gone. Refuse X11 and XWayland
+  // up front with a plain message instead of letting GTK fail with "cannot
+  // open display". (A stale WAYLAND_DISPLAY in an X11 login still reaches
+  // GTK's own error; that case is rare enough to leave.)
   if (g_getenv("WAYLAND_DISPLAY") == nullptr) {
     g_printerr(
         "OpenAstro Ara needs a Wayland session. Log in to a Wayland session "

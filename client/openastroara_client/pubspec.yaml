@@ -80,7 +80,6 @@ flutter:
     # The Ara constellation app icon: bundled so the Linux runner can set the
     # GTK window/taskbar icon from the asset bundle (macOS/Windows embed
     # theirs natively in the iconset/.ico).
-    - assets/icons/
     # §35.5 bundled alarm tones (generated sine-synth loops, no third-party
     # audio licensing to carry).
     - assets/audio/
@@ -162,8 +161,9 @@ flutter:
 # App icon for every platform, generated from the sources in icon_sources/
 # with `dart run flutter_launcher_icons`. That directory is deliberately NOT a
 # declared asset: only the generator reads it, so it must not ride along in
-# every app bundle. Linux loads assets/icons/app_icon.png (the one bundled
-# icon) at runtime from linux/runner/my_application.cc.
+# every app bundle. Linux takes its icon from the hicolor install in
+# linux/CMakeLists.txt (which reads assets/icons/app_icon.png straight from the
+# source tree) plus the desktop entry; the file is not a Flutter asset.
 flutter_launcher_icons:
   image_path: "icon_sources/app_icon_1024.png"
   android: true
