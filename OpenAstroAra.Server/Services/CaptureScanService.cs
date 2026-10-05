@@ -529,7 +529,7 @@ public sealed partial class CaptureScanService : IDisposable {
     [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 scan skipped: save path {Path} does not exist")]
     private partial void LogScanSkippedMissingPath(string path);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "§28.8 scan: save path {Path} is not writable; storage.unavailable would queue here")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§28.8 scan: save path {Path} is not writable; starting storage-less, capture is refused until a store is configured")]
     private partial void LogScanPathNotWritable(string path);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 scan complete — swept {TmpCount} stale .tmp file(s), recovered {Orphans} orphan FITS")]

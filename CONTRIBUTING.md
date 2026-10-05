@@ -34,6 +34,7 @@ OpenAstroAra.{Core,Astrometry,Profile,Image,Equipment,Sequencer,PlateSolving}/
 OpenAstroAra.{Fits,Stretch}/   ← Ara-original imaging libraries (FITS IO, display stretch)
 OpenAstroAra.Test/             ← NUnit server tests
 OpenAstroAra.TestHarness/      ← §42.2 virtual-observatory bench (fault-injection fakes)
+bench/                         ← Linux/arm64 bench lane in a container; see bench/README.md
 client/openastroara_client/    ← the Flutter client (AGPL-3.0)
 design/                        ← the product spec (playbook), API contract log, PR rules
 ```
@@ -55,6 +56,11 @@ dotnet test OpenAstroAra.Test --filter "TestCategory!=IO&TestCategory!=Integrati
 cd client/openastroara_client
 flutter analyze && flutter test                # client gate
 ```
+
+The virtual-observatory bench (`OpenAstroAra.TestHarness`) runs hardware-free against fakes;
+`bench/README.md` runs the same suites in a `linux/arm64` container, the kernel and runtime
+family the Raspberry Pi deployment targets. Run it when you touch equipment, guider or Alpaca
+code and have no rig to try the change on.
 
 ## The rules that block merges (not warnings — blocks)
 
@@ -95,6 +101,30 @@ Two hard-won conventions worth knowing before a reviewer tells you:
 - Keep a PR to one logical change; multiple commits are fine (they squash on merge).
 - Fill in the PR template — the registry-gate checkboxes are read, not decoration.
 - For UI changes, attach screenshots.
+
+### Your first PR, start to finish
+
+1. **Pick an issue.** Open issues are labelled `P1`–`P5` (P1 blocks a release, P5 is nice to
+   have); `good first issue` marks the self-contained ones. Comment that you are taking it so
+   two people do not do the same work.
+2. **Set up and build** per `docs/RUNNING.md`, then run the gate commands above once on a
+   clean `master` so you know what green looks like on your machine.
+3. **Branch** from `master`: `git checkout -b fix/<short-name>`.
+4. **Make the change, with a test.** Find the playbook § the code cites and read it first;
+   the spec decides behaviour, the issue describes the symptom. New or changed logic ships
+   with a test in the same PR. A new user-facing setting needs a `settings/registry.dart`
+   entry and a new ⓘ icon needs a `help/registry.dart` entry, or the registry gate fails.
+5. **Run the gates for what you touched** (see "The rules that block merges"): the solution
+   build and `dotnet test` for C#, `flutter analyze && flutter test` for the client, the
+   registry scripts for settings/help, and `python3 .github/scripts/check-unicode.py` always.
+6. **Add a CHANGELOG line** under `[Unreleased]` if a user would notice the change.
+7. **Commit and push** with a conventional prefix (`fix:`, `feat:`, `docs:`, `tests:`) and
+   `Closes #<issue>` in the body. Stage the files you changed by path, not `git add -A`.
+8. **Open the PR** against `master` and fill in the template; attach screenshots for UI.
+9. **Work the review loop.** CI and the review bot comment within minutes. Fix every finding
+   in the same PR (including ones outside the original scope that the review turns up) rather
+   than filing follow-up issues, push, and wait for the next round. A maintainer merges when
+   checks are green and the thread is clean; the branch is squashed.
 
 ### Using Claude Code (optional but recommended)
 

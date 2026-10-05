@@ -256,11 +256,10 @@ The bot is the second pair of eyes, not the test suite. For **every** Defect, in
    from the structural fix, and say so in its comment. Never widen to files the PR does not touch.
 5. **Run the exact CI gate for what changed**, not the whole matrix and not nothing. Mirror
    `.github/workflows/ci.yml`; run `scripts/pre-pr-check.sh` instead if it exists:
-   - **Server / domain C#**: `dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release`,
-     plus `dotnet build OpenAstroAra.<TouchedProject>/OpenAstroAra.<TouchedProject>.csproj -c Release`
-     for each touched domain project (Core / Astrometry / Equipment / Image / Profile /
-     PlateSolving / Test). Not the whole solution: `OpenAstroAra.Sequencer` is still blocked on
-     `NINA.WPF.Base` (tracked as a GitHub issue; `design/PORT_TODO.md` was retired 2026-09-28).
+   - **Server / domain C#**: `dotnet build OpenAstroAra.sln -c Release`. The whole solution
+     builds clean (the `NINA.WPF.Base` blocker on `OpenAstroAra.Sequencer` is long gone, #1205)
+     and CI's analyzer gate builds it with warnings as errors, so a per-project build can pass
+     locally and still fail CI.
    - **Tests**: `dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj` when C# under test changed;
      the `Analyzer gate (full solution, warnings = errors)` job is the CI counterpart, so a new
      warning is a failure, not a nit.

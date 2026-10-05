@@ -2372,8 +2372,8 @@ Steps 1–4 take ~5–200 ms on USB SSD (typically 10–50 ms on quality SSDs; l
 
 Before §28.2's equipment-reconnect routine runs, the server performs a quick filesystem audit:
 
-1. **Mount + writability check** — verify the configured save path (default `/media/openastroara`) is mounted and writable. If not, abort startup with a clear error logged to systemd journal + a `storage.unavailable` critical notification queued for next WILMA connect. Server does NOT proceed without writable storage.
-2. **Filesystem type check** — per §28.9, refuse to start if FS is not ext4 (hard refuse, not warning).
+1. **Mount + writability check** — verify the configured save path (default `/media/openastroara`) is mounted and writable. If it is not, the daemon **still starts**: it logs a warning to the systemd journal, skips the rest of this audit, and serves setup, equipment and the §29.1.1 storage step as normal. A fresh install deliberately runs with no store until the user completes that step (#1186), so storage-less startup is the designed path, not a fault. Capture is where the absence bites: the §29 pre-capture gate refuses every frame with the store-ejected / `storage.unavailable` state until a store is mounted and writable. No startup-time notification is queued; the storage step and the capture refusal are the user-facing signals (#1208).
+2. **Filesystem type check** — advisory only at startup. The §29.1.4 helper validates the filesystem at configure time; the daemon does not refuse to start over the filesystem of a store it finds mounted.
 3. **`.tmp` sweep** — `find <captures>/ -name '*.tmp' -mmin +5 -delete`. Any `.tmp` file older than 5 minutes is assumed crashed-mid-write and deleted. (Live writes finish in seconds; 5 minutes is generous slack for slow USB sticks.)
 4. **Orphan FITS scan** — for every `.fits` file in `<captures>/`, check whether a corresponding `frames` row exists. If not (orphan), re-insert by parsing the FITS header:
    - Required header fields: `DATE-OBS`, `EXPTIME`, `OBJECT` (or fall back to "Unknown Target"), `FILTER` (or "—"), `IMAGETYP`
@@ -12202,7 +12202,7 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
 | `Information` | Sequence start/stop, equipment connect/disconnect, profile load, request entry/exit with timing |
 | `Warning` | Recoverable issues — retry attempts, deprecated API use, capacity warnings, simulator detected (dev only), pre-restart deferral per §34.7 |
 | `Error` | Unhandled exceptions at endpoint boundary, equipment connection failures after exhausted retries, sequence aborts due to faults, cfitsio missing at boot (the daemon keeps running; §72.3) |
-| `Fatal` | Startup failures preventing service from accepting connections — storage unavailable, DB migration aborted |
+| `Fatal` | Startup failures preventing service from accepting connections — DB migration aborted (a missing or read-only store is a `Warning`: the daemon starts storage-less per §28.8 and refuses capture instead) |
 
 Production .deb defaults to `Information` minimum. Log pressure handling per §29.9 downgrades to `Warning` under disk pressure.
 
