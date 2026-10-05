@@ -9,9 +9,9 @@
 /// a live "can't read that" state instead of guessing.
 ///
 /// The one genuine ambiguity is a single decimal RA: `5.5` could mean 5.5 h or
-/// 5.5°. A value above 24 can only be degrees; below that [RaUnit] decides,
-/// and the entry UI shows the chooser only when it matters. An explicit `h`
-/// marker (`5.5h`) always wins.
+/// 5.5°. A value of 24 or more can only be degrees; below that [RaUnit]
+/// decides, and the entry UI shows the chooser only when it matters. An
+/// explicit `h` marker (`5.5h`) always wins.
 library;
 
 /// How to read a single decimal RA value that could be either unit.
@@ -90,7 +90,7 @@ double? _sexagesimal(String raw, List<double> f) {
 /// Parse a right ascension to degrees in [0, 360), or null.
 ///
 /// Two or three fields are always hours/minutes/seconds. A single value is
-/// hours when the text carries an `h` marker, degrees when it exceeds 24,
+/// hours when the text carries an `h` marker, degrees when it is 24 or more,
 /// and otherwise whatever [decimalUnit] says.
 double? parseRa(String text, {RaUnit decimalUnit = RaUnit.degrees}) {
   final f = _numbers(text);
@@ -102,7 +102,7 @@ double? parseRa(String text, {RaUnit decimalUnit = RaUnit.degrees}) {
     hours = true;
   } else if (_hourMarkerRe.hasMatch(text)) {
     hours = true;
-  } else if (v > 24) {
+  } else if (v >= 24) {
     hours = false;
   } else {
     hours = decimalUnit == RaUnit.hours;
@@ -115,13 +115,13 @@ double? parseRa(String text, {RaUnit decimalUnit = RaUnit.degrees}) {
   return v;
 }
 
-/// True when [text] is a single decimal RA at or below 24 with no `h`
+/// True when [text] is a single decimal RA below 24 with no `h`
 /// marker — the case where [RaUnit] changes the answer.
 bool raUnitIsAmbiguous(String text) {
   final f = _numbers(text);
   if (f == null || f.length != 1) return false;
   if (_hourMarkerRe.hasMatch(text)) return false;
-  return f[0].abs() <= 24;
+  return f[0] >= 0 && f[0] < 24;
 }
 
 /// Parse a declination to degrees in [−90, 90], or null.

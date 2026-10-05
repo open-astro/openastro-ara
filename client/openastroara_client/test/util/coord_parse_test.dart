@@ -27,13 +27,18 @@ void main() {
           closeTo(83.82208, 1e-9));
     });
 
-    test('a single decimal at or below 24 follows the chosen unit', () {
+    test('a single decimal below 24 follows the chosen unit', () {
       expect(parseRa('5.5'), closeTo(5.5, 1e-9));
       expect(parseRa('5.5', decimalUnit: RaUnit.hours), closeTo(82.5, 1e-9));
       expect(raUnitIsAmbiguous('5.5'), isTrue);
       expect(raUnitIsAmbiguous('83.8'), isFalse);
       expect(raUnitIsAmbiguous('5.5h'), isFalse);
       expect(raUnitIsAmbiguous('05 35'), isFalse);
+      // 24 h is out of range, so 24 can only be degrees: no chooser.
+      expect(raUnitIsAmbiguous('23.99'), isTrue);
+      expect(raUnitIsAmbiguous('24'), isFalse);
+      expect(parseRa('24'), closeTo(24, 1e-9));
+      expect(parseRa('24', decimalUnit: RaUnit.hours), closeTo(24, 1e-9));
     });
 
     test('an h marker forces hours', () {

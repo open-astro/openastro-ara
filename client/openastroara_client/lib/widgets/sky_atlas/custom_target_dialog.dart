@@ -298,7 +298,7 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                   ),
                   if (raUnitIsAmbiguous(_ra.text))
                     Tooltip(
-                      message: 'A single decimal RA at or below 24 could be '
+                      message: 'A single decimal RA below 24 could be '
                           'hours or degrees — pick which.',
                       child: SegmentedButton<RaUnit>(
                         showSelectedIcon: false,
