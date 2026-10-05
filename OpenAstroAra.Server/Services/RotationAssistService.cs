@@ -232,6 +232,11 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 if (_target is not { } t) {
                     throw new InvalidOperationException("nothing to confirm — start the readout toward a framing angle first");
                 }
+                // Done approves a turn the readout has measured; with no solve toward this target yet
+                // (a new angle cleared the history, or every frame failed) there is nothing to approve.
+                if (_latest is null) {
+                    throw new InvalidOperationException("nothing to confirm yet — wait for a frame to solve toward this angle");
+                }
                 target = t;
             }
             // Stop the loop (if any) and let its in-flight solve drain, so the full frame never collides with it.

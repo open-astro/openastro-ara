@@ -325,6 +325,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Done_before_anything_has_solved_is_a_conflict() {
+            // Every solve fails: the readout has a target but no measured angle, before and after it errors out.
+            var solver = new ScriptedSolver(new double?[] { null });
+            using var svc = new RotationAssistService(solver, () => 1.0);
+            await svc.StartAsync(new RotationAssistStartRequestDto(10), CancellationToken.None);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmAsync(CancellationToken.None));
+            var s = await WaitForState(svc, "error");
+            Assert.That(s.State, Is.EqualTo("error"));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmAsync(CancellationToken.None));
+            Assert.That(svc.GetStatus().State, Is.EqualTo("error"), "a refused Done leaves the readout as it was");
+        }
+
+        [Test]
         public async Task A_start_during_the_confirmation_is_refused_and_stop_cancels_it() {
             var solver = new SlowSolver();
             using var svc = new RotationAssistService(solver, () => 1.0);
