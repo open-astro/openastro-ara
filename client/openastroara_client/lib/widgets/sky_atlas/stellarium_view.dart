@@ -26,6 +26,8 @@ import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/imaging_regions.dart';
 import '../../util/planetarium_seed.dart';
+import '../../util/coord_parse.dart';
+import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
 import 'tonight_sky_panel.dart';
 
@@ -341,6 +343,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   void _submitSearch() {
     final q = _searchCtrl.text.trim();
     if (q.isEmpty) return;
+    // A pasted position ("05 35 17 -05 23 28", "83.82 -5.39") is a target,
+    // not a name: open the coordinate entry with it filled in, where the
+    // epoch can be chosen and it can be added to the plan (#1267 item 1).
+    if (looksLikeCoordinates(q)) {
+      showCustomTargetDialog(context, initialText: q);
+      return;
+    }
     // Our planning catalogs first: the Stellarium engine only knows its own
     // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations (and
     // OpenNGC common names) must resolve against the local mirror — a hit
@@ -505,6 +514,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           _SearchBar(
             controller: _searchCtrl,
             onSubmit: _submitSearch,
+            onCoordinates: () => showCustomTargetDialog(context),
             onTonight: _toggleTonight,
             tonightOpen: tonightOpen,
             // Touch platforms get on-screen zoom: no wheel/trackpad there, and
@@ -542,6 +552,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSubmit;
+  // Opens the RA/Dec entry (a typed target with a J2000/JNow choice).
+  final VoidCallback onCoordinates;
   final VoidCallback onTonight;
   // Highlights the toggle while the docked panel is open.
   final bool tonightOpen;
@@ -551,6 +563,7 @@ class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
     required this.onSubmit,
+    required this.onCoordinates,
     required this.onTonight,
     required this.tonightOpen,
     this.onZoom,
@@ -599,6 +612,12 @@ class _SearchBar extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Target by coordinates (RA/Dec)',
+            icon: const Icon(Icons.add_location_alt_outlined, size: 20),
+            onPressed: onCoordinates,
           ),
           if (onZoom case final zoom?) ...[
             const SizedBox(width: 4),

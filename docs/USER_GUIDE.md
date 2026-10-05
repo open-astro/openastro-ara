@@ -91,6 +91,11 @@ installed). Search anything ("M 42", "NGC 7000", "Vega"), explore, and toggle di
 
 - **Tonight's Sky** ranks deep-sky targets for *your* site, horizon, and rig: visibility windows,
   transit times, achievable integration hours, and a 0–100 score. Tap a row to frame it.
+- **Target by coordinates** — the pin button beside the search box (or pasting a position such as
+  `02 37 31.5 +71 18 16` or `39.381 71.304` into the search) takes an RA/Dec from SIMBAD, Gaia or
+  your mount, as J2000 or JNow, with a name. *Add to plan* builds the same imaging run as a
+  Tonight's Sky row, so the sequence slews there; *Show on sky* frames it. Recent typed targets
+  are kept on the device for the dark site.
 - **Catalogs** — highlight a whole catalog on the sky: colored rings mark every Messier, Caldwell,
   NGC, or IC object (or a type — galaxies, globular clusters, planetary nebulae, …), brightest
   500 first, sized by magnitude so the showpieces stand out. Toggle several at once; each catalog
