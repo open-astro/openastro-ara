@@ -573,7 +573,13 @@ void main() {
         reason: 'webview and event box non-focusable',
       );
       expect(runner, contains('GDK_IS_WAYLAND_DISPLAY('));
-      expect(runner, contains('} else if (window != nullptr && !gdk_window_ensure_native(window)) {'));
+      // ensure_native must sit in the non-Wayland branch: the `if (wayland)`
+      // guard comes first, and the only ensure_native call follows it.
+      final guard = runner.indexOf('if (wayland)');
+      final ensureNative = runner.indexOf('gdk_window_ensure_native(');
+      expect(guard, greaterThan(-1));
+      expect(ensureNative, greaterThan(guard));
+      expect('gdk_window_ensure_native('.allMatches(runner).length, 1);
     });
   });
 
