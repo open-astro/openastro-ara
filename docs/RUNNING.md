@@ -231,8 +231,8 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   `linux/install-desktop-entry.sh [path/to/bundle]` (copies the entry and the
   hicolor icons from the bundle's `share/` into `~/.local/share`, with `Exec`
   pointing at that bundle). The first time, if `~/.local/share/icons` did not
-  exist yet, Plasma keeps showing a blank icon until the shell restarts
-  (`systemctl --user restart plasma-plasmashell`, or log out and in). Packaged
+  exist yet, the running desktop has cached the miss (Plasma's panel and KWin's
+  alt-tab switcher each keep their own): log out and back in once. Packaged
   installs ship the same files under `/usr/share`.
 - After launching, open the Planning tab and check the planetarium actually draws
   stars/atmosphere. If the sky is blank/black and there is **no**

@@ -128,11 +128,10 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 # linux/install-desktop-entry.sh can register an unpacked bundle per user.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/org.openastro.openastroara.desktop"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications" COMPONENT Runtime)
+# 256x256 only: hicolor's index.theme stops at 512x512, so a 1024x1024 dir is
+# never consulted, and the loaders scale 256 down for the panel sizes.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icons/app_icon.png"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/256x256/apps"
-  RENAME "${APPLICATION_ID}.png" COMPONENT Runtime)
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../icon_sources/app_icon_1024.png"
-  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/1024x1024/apps"
   RENAME "${APPLICATION_ID}.png" COMPONENT Runtime)
 
 # Install the AOT library on non-Debug builds only.

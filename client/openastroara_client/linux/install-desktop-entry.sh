@@ -60,7 +60,7 @@ command -v update-desktop-database >/dev/null && update-desktop-database "$data/
 echo "installed $data/applications/org.openastro.openastroara.desktop (Exec=\"$exec_path\")"
 echo "relaunch the app; a running instance keeps the old icon until restarted"
 if [ "$fresh_icons" = 1 ]; then
-  echo "note: the icon directory was just created; a running desktop shell may have"
-  echo "      cached the miss. On Plasma: systemctl --user restart plasma-plasmashell"
-  echo "      (or log out and in) once; later installs don't need this."
+  echo "note: the icon directory was just created; the running desktop (Plasma's"
+  echo "      panel and KWin's alt-tab switcher) has cached the miss. Log out and"
+  echo "      back in once; later installs don't need this."
 fi
