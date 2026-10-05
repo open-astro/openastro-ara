@@ -23,8 +23,8 @@ using System.Threading;
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
-/// The by-hand rotation readout. A run's Rotate camera by hand step starts it and parks the run awaiting the
-/// user; these endpoints let the client read it (and start/stop it outside a run, e.g. from Setup).
+/// The by-hand rotation readout. The Plan screen's rotation panel starts it against the framing dial's angle
+/// and polls it here; these endpoints start, stop, confirm and read it. Nothing in a run depends on it.
 /// start: 202; 400 non-finite angle / bad exposure, mode or binning; 409 already running or confirming.
 /// confirm: 202; 409 nothing to confirm or already confirming. stop: 204 once the in-flight solve has drained.
 /// </summary>
