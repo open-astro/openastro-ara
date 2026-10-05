@@ -135,6 +135,41 @@ Future<ImagingRunResult?> createImagingRun(
   // "View in Run" action instead of yanking the user away mid-planning).
   bool jumpToRun = true,
 }) async {
+  // Pin the autoDispose API for the whole create. With no widget watching
+  // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
+  // closed), Riverpod disposed the provider — closing its Dio — during the
+  // settings/rig awaits below, and the create then died with "Can't
+  // establish connection after the adapter was closed" and was saved as an
+  // OFFLINE DRAFT while the status bar said connected (seen on the rig,
+  // 2026-10-04). The listen keeps one live client until the create returns.
+  final container = ProviderScope.containerOf(ref.context, listen: false);
+  final keepApi = container.listen(sequenceApiProvider, (_, _) {});
+  try {
+    return await _createImagingRunPinned(
+      ref,
+      raDeg: raDeg,
+      decDeg: decDeg,
+      targetName: targetName,
+      remainingDarkHours: remainingDarkHours,
+      positionAngleDeg: positionAngleDeg,
+      mosaicPanels: mosaicPanels,
+      jumpToRun: jumpToRun,
+    );
+  } finally {
+    keepApi.close();
+  }
+}
+
+Future<ImagingRunResult?> _createImagingRunPinned(
+  WidgetRef ref, {
+  required double raDeg,
+  required double decDeg,
+  required String targetName,
+  double? remainingDarkHours,
+  double? positionAngleDeg,
+  List<({double raDeg, double decDeg})> mosaicPanels = const [],
+  bool jumpToRun = true,
+}) async {
   final api = ref.read(sequenceApiProvider);
   final container = ProviderScope.containerOf(ref.context, listen: false);
 
