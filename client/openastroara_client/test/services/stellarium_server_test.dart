@@ -622,6 +622,9 @@ void main() {
       // The toplevel is app-paintable so GTK skips its per-frame software
       // background fill (37 % of the UI thread at 4K on NVIDIA Wayland).
       expect(app, contains('gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);'));
+      // And FlView's background is fully transparent so the embedder skips
+      // its own per-frame software paint (50 % of the UI thread at 4K).
+      expect(app, contains('gdk_rgba_parse(&background_color, "#00000000");'));
       expect(runner, contains('void planetarium_overlay_shutdown() {'));
       // A normal window close destroys the event box before shutdown runs;
       // the destroy handler clears the pointers so shutdown can't touch
