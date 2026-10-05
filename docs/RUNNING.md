@@ -212,6 +212,15 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
     runner reloads the page once and, if the DMABUF renderer was active, writes
     `~/.config/openastroara/webkit-no-dmabuf` so every later launch starts on
     the shm renderer. Delete that file to retry DMABUF after a driver update.
+  - **NVIDIA proprietary driver, known limits (2026-10-05):** on the shm
+    renderer every planetarium frame is a WebGL readback plus a copy through
+    GTK's GL toplevel. At 4K that pipeline manages only a few frames per
+    second however the page is throttled, so Planning is usable but slow on a
+    4K NVIDIA desktop; smaller windows are proportionally faster. And at exit,
+    WebKitWebProcess segfaults inside `libnvidia-eglcore` during its own EGL
+    teardown (after the app has already quit), which leaves a harmless
+    coredump. Both are driver/WebKitGTK behaviour outside the app; the
+    structural fix is a Wayland subsurface for the overlay (tracked in #1204).
 - **Taskbar icon on Wayland:** compositors resolve the icon from the app id via
   an installed `org.openastro.openastroara.desktop`, not from the window, so an
   unpacked bundle shows a generic icon until you register it once per user:
