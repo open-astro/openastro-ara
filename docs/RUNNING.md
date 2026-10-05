@@ -187,19 +187,27 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   (the client uses each platform's native webview — there is no bundled Chromium/CEF).
 - `libsecret-1-dev` + `libjsoncpp-dev` are required by the `flutter_secure_storage_linux`
   plugin — without them the build fails at CMake configure.
-- **Wayland sessions** are the tested path (the Linux client is Wayland-only,
-  #1204). Run the bundle as is; do not set `GDK_BACKEND=x11`. The runner prints
-  one `planetarium_overlay:` line per decision it makes, so a blank Planning tab
-  is diagnosable from stdout:
+- **Wayland sessions** are the tested path (the Linux client targets Wayland,
+  #1204; X11 still works but is not tested). Run the bundle as is; do not set
+  `GDK_BACKEND=x11`. The runner prints one `planetarium_overlay:` line per
+  decision it makes **on stderr** (GLib messages never go to stdout; under
+  systemd they land in the journal), so a blank Planning tab is diagnosable
+  from the terminal:
   - `planetarium_overlay: Wayland display, using client-side overlay` — the
     expected line on Wayland (#1200).
-  - `planetarium_overlay: … setting WEBKIT_DISABLE_DMABUF_RENDERER=1` — no DRM
-    render node could back a GBM buffer (GPU-less VMs, headless containers, some
-    NVIDIA drivers), so WebKit uses its shared-memory renderer. Harmless. Setting
-    `WEBKIT_DISABLE_DMABUF_RENDERER` yourself overrides the probe either way.
+  - `planetarium_overlay: <reason>, setting WEBKIT_DISABLE_DMABUF_RENDERER=1` —
+    WebKit's DMABUF renderer would fail, so it uses the shared-memory renderer
+    instead. Harmless. `<reason>` is one of: `no DRM render node is present`
+    (headless containers, GPU-less VMs), `no DRM render node can back a GBM
+    buffer` (VMware/virtio without 3D, some NVIDIA drivers), `libgbm.so.1 is
+    not loadable` (minimal install), or `the GBM probe did not complete` (the
+    driver crashed while probing). Setting `WEBKIT_DISABLE_DMABUF_RENDERER`
+    yourself skips the probe either way.
 - After launching, open the Planning tab and check the planetarium actually draws
-  stars/atmosphere — a blank/black sky with none of the lines above means a WebGL2
-  gap in your WebKitGTK build.
+  stars/atmosphere. A blank/black sky **without** a `WEBKIT_DISABLE_DMABUF_RENDERER`
+  line on stderr means a WebGL2 gap in your WebKitGTK build; with that line
+  present, try `WEBKIT_DISABLE_DMABUF_RENDERER=1` explicitly and report the
+  `<reason>`.
 - **Framing photographs:** DSS2 target imagery is fetched through the local
   Stellarium server and cached under the platform application-support directory
   (`stellarium-dss2`; on Linux
@@ -320,8 +328,9 @@ simulators — the same devices the integration tests use
 - **GL context / "Failed to create platform view rendering surface" or an OpenGL
   frame-size timeout (Linux)** → remove any forced `GDK_SCALE` / `GDK_BACKEND`
   variables; the client runs on native Wayland (see the Linux section above).
-- **Planetarium blank on Linux, Flutter UI fine** → read stdout for the
-  `planetarium_overlay:` lines described in the Linux section.
+- **Planetarium blank on Linux, Flutter UI fine** → read **stderr** (the
+  terminal, or the journal) for the `planetarium_overlay:` lines described in
+  the Linux section.
 - **Planetarium shows a blank/black sky** → the platform webview lacks WebGL2
   (old WebKitGTK, or missing WebView2 runtime on Windows). Stars + atmosphere
   drawing = the webview path is healthy.
