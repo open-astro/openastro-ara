@@ -6,6 +6,7 @@
 #include <gdk/gdkwayland.h>
 #endif
 
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <glob.h>
 #include <unistd.h>
@@ -169,12 +170,50 @@ void load_changed_cb(WebKitWebView* view,
   }
 }
 
-// WebKitGTK's DMABUF renderer needs a DRM render node it can open. Without one
-// (GPU-less VMs, headless containers, some NVIDIA setups) the WebProcess logs
-// "Failed to create GBM buffer ... Permission denied" and never produces a
-// frame, so the planetarium is blank with no other symptom. Fall back to the
-// shared-memory renderer when no render node is usable. Must run before the
-// first WebKit object is created; the user's own setting wins.
+// WebKitGTK's DMABUF renderer allocates its frames through GBM on a DRM render
+// node. Where that can't work (GPU-less VMs and headless containers whose Mesa
+// has no 3D so GBM falls back to dumb buffers, which render nodes refuse) the
+// WebProcess logs "Failed to create GBM buffer ... Permission denied" and
+// never produces a frame, so the planetarium is blank with no other symptom.
+// An openable render node is not enough to tell (#1200 spike: the node opened
+// fine, the allocation failed), so try a tiny allocation the way WebKit will.
+// libgbm is loaded at runtime: it ships with Mesa, which WebKitGTK already
+// needs, and this keeps it out of the build and package dependency lists.
+bool gbm_allocation_works(int fd) {
+  void* lib = dlopen("libgbm.so.1", RTLD_NOW | RTLD_LOCAL);
+  if (lib == nullptr) return false;
+  using CreateDevice = void* (*)(int);
+  using DestroyDevice = void (*)(void*);
+  using CreateBo = void* (*)(void*, uint32_t, uint32_t, uint32_t, uint32_t);
+  using DestroyBo = void (*)(void*);
+  auto create_device =
+      reinterpret_cast<CreateDevice>(dlsym(lib, "gbm_create_device"));
+  auto destroy_device =
+      reinterpret_cast<DestroyDevice>(dlsym(lib, "gbm_device_destroy"));
+  auto create_bo = reinterpret_cast<CreateBo>(dlsym(lib, "gbm_bo_create"));
+  auto destroy_bo = reinterpret_cast<DestroyBo>(dlsym(lib, "gbm_bo_destroy"));
+  bool ok = false;
+  if (create_device && destroy_device && create_bo && destroy_bo) {
+    void* dev = create_device(fd);
+    if (dev != nullptr) {
+      // GBM_FORMAT_ARGB8888 ('AR24'), GBM_BO_USE_RENDERING (1 << 2).
+      const uint32_t kArgb8888 = 0x34325241;
+      const uint32_t kUseRendering = 1u << 2;
+      void* bo = create_bo(dev, 64, 64, kArgb8888, kUseRendering);
+      if (bo != nullptr) {
+        ok = true;
+        destroy_bo(bo);
+      }
+      destroy_device(dev);
+    }
+  }
+  dlclose(lib);
+  return ok;
+}
+
+// Must run before the first WebKit object is created; the user's own setting
+// wins. Falls back to WebKit's shared-memory renderer when no render node can
+// back a GBM allocation.
 void maybe_disable_dmabuf_renderer() {
   if (g_getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != nullptr) return;
   glob_t g;
@@ -183,14 +222,14 @@ void maybe_disable_dmabuf_renderer() {
     for (size_t i = 0; i < g.gl_pathc && !usable; i++) {
       int fd = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC);
       if (fd >= 0) {
-        usable = true;
+        usable = gbm_allocation_works(fd);
         close(fd);
       }
     }
   }
   globfree(&g);
   if (!usable) {
-    g_message("planetarium_overlay: no usable DRM render node, "
+    g_message("planetarium_overlay: no DRM render node can back a GBM buffer, "
               "setting WEBKIT_DISABLE_DMABUF_RENDERER=1");
     g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
   }
