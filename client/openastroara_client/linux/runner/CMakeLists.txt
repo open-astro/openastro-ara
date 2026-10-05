@@ -29,5 +29,7 @@ pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkit2gtk-4.1)
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::WEBKIT)
+# dlopen of libgbm.so.1 in planetarium_overlay.cc (#1200 DMABUF probe).
+target_link_libraries(${BINARY_NAME} PRIVATE ${CMAKE_DL_LIBS})
 
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")

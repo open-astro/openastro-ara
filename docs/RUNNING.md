@@ -187,14 +187,76 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   (the client uses each platform's native webview — there is no bundled Chromium/CEF).
 - `libsecret-1-dev` + `libjsoncpp-dev` are required by the `flutter_secure_storage_linux`
   plugin — without them the build fails at CMake configure.
-- **Wayland sessions:** Flutter's Linux GL path wants X11. If you hit
-  `Failed to create platform view rendering surface`, a blank window, or an
-  `OpenGL frame ... have ...` size timeout, launch the release bundle with
-  `GDK_BACKEND=x11 path/to/openastroara`. Keep `GDK_SCALE=1` only when the
-  display still reports a framebuffer mismatch; it makes Flutter chrome smaller.
-  Log into an X11 session if XWayland is unavailable.
+- **Wayland sessions** are the tested path (the Linux client targets Wayland,
+  #1204; X11 still works but is not tested). Run the bundle as is; do not set
+  `GDK_BACKEND=x11`. The runner prints one `planetarium_overlay:` line per
+  decision it makes **on stderr** (GLib messages never go to stdout; under
+  systemd they land in the journal), so a blank Planning tab is diagnosable
+  from the terminal:
+  - `planetarium_overlay: Wayland display, using client-side overlay` — the
+    expected line on Wayland (#1200). It appears when the Planning tab first
+    opens, not at launch.
+  - `planetarium_overlay: <reason>, setting WEBKIT_DISABLE_DMABUF_RENDERER=1` —
+    WebKit's DMABUF renderer would fail, so it uses the shared-memory renderer
+    instead. Harmless. `<reason>` is one of: `no DRM render node is present`
+    (headless containers, GPU-less VMs), `a previous run's WebKit process
+    crashed in the DMABUF renderer` (see below), `no DRM render node can back a
+    GBM buffer` (VMware/virtio without 3D), `libgbm.so.1 is not loadable`
+    (minimal install), or `the GBM probe did not complete` (the driver crashed
+    or hung while probing, or the probe could not be forked). Setting
+    `WEBKIT_DISABLE_DMABUF_RENDERER` yourself skips the probe either way.
+  - `planetarium_overlay: the proprietary NVIDIA driver is in use, setting
+    __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, compositing forced)` —
+    NVIDIA's EGL arms Wayland explicit sync on GTK's surface, GTK3 commits
+    without an acquire point, the compositor disconnects the client and
+    WebKit's web process dies in the driver. With explicit sync off the DMABUF
+    renderer works. WebKitGTK also rates this driver "hardware acceleration:
+    never", so the runner sets `WEBKIT_FORCE_DMABUF_RENDERER=1` and
+    `WEBKIT_FORCE_COMPOSITING_MODE=1` for the GPU path (WebKit ~5 % instead of
+    ~90 %). Any of the three variables set by you is left alone.
+  - `planetarium_overlay: WebKit web process crashed ...` — WebKit's renderer
+    process died under the planetarium (a driver bug reachable from WebGL). The
+    runner reloads the page once and, if the DMABUF renderer was active, writes
+    `~/.config/openastroara/webkit-no-dmabuf` so every later launch starts on
+    the shm renderer. Delete that file to retry DMABUF after a driver update.
+  - **NVIDIA proprietary driver, known limits (2026-10-05):** even on the GPU
+    path, each planetarium frame makes GTK3 read Flutter's GL frame back
+    through the driver on the UI thread, about 55 ms per frame at 6144x3348
+    (4K at 125 % scale), so a maximised 4K Planning tab redraws at roughly
+    15-30 fps while interacting; the same box is smooth at 1600x900. (The two
+    software fills GTK3 and the embedder used to add are already skipped.)
+    This is GTK3's mixed cairo/GL repaint and is fixed only by a Wayland
+    subsurface for the overlay (#1204). Should a driver update bring the crash back, the
+    runner falls to the shm renderer on the next launch (marker above), where
+    4K manages only a few frames per second. Fractional
+    desktop scaling (e.g. KDE at 125 %) makes it worse: GTK3 only scales by
+    integers, so the app renders at 2x and a 4K display costs 7680x4320 pixels
+    per frame. On such a system use 100 % scaling, or keep the Ara window at
+    roughly 1600x900 physical pixels while on Planning. And at exit,
+    WebKitWebProcess segfaults inside `libnvidia-eglcore` during its own EGL
+    teardown (after the app has already quit), which leaves a harmless
+    coredump. Both are driver/WebKitGTK behaviour outside the app; the
+    structural fix is a Wayland subsurface for the overlay (tracked in #1204).
+- **Taskbar icon on Wayland:** compositors resolve the icon from the app id via
+  an installed `org.openastro.openastroara.desktop`, not from the window, so an
+  unpacked bundle shows a generic icon until you register it once per user:
+  `linux/install-desktop-entry.sh [path/to/bundle]` (copies the entry and the
+  hicolor icons from the bundle's `share/` into `~/.local/share`, with `Exec`
+  pointing at that bundle). The first time, if `~/.local/share/icons` did not
+  exist yet, the running desktop has cached the miss (Plasma's panel and KWin's
+  alt-tab switcher each keep their own): log out and back in once. Packaged
+  installs ship the same files under `/usr/share`.
 - After launching, open the Planning tab and check the planetarium actually draws
-  stars/atmosphere — a blank/black sky means a WebGL2 gap in your WebKitGTK build.
+  stars/atmosphere. If the sky is blank/black and there is **no**
+  `WEBKIT_DISABLE_DMABUF_RENDERER` line on stderr, the probe passed but WebKit's
+  DMABUF renderer may still be failing on your driver (hybrid-GPU laptops:
+  the probe passes if any render node works, WebKit uses the display's): launch
+  once with
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` set by hand. Sky back → report your GPU and
+  driver so the probe can learn the case; still blank → a WebGL2 gap in your
+  WebKitGTK build. If the line **is** present, the runner already disabled
+  DMABUF, so setting it again changes nothing: report the `<reason>` with your
+  WebKitGTK version.
 - **Framing photographs:** DSS2 target imagery is fetched through the local
   Stellarium server and cached under the platform application-support directory
   (`stellarium-dss2`; on Linux
@@ -313,9 +375,13 @@ simulators — the same devices the integration tests use
   `sudo apt install apt-file && sudo apt-file update && apt-file search libNAME.so`
   tells you which package provides it.
 - **GL context / "Failed to create platform view rendering surface" or an OpenGL
-  frame-size timeout (Linux)** → Wayland/HiDPI resize path; use
-  `GDK_BACKEND=x11` (see the Linux section above), then remove forced scale
-  variables so the UI keeps normal size.
-- **Planetarium shows a blank/black sky** → the platform webview lacks WebGL2
-  (old WebKitGTK, or missing WebView2 runtime on Windows). Stars + atmosphere
+  frame-size timeout (Linux)** → remove any forced `GDK_SCALE` / `GDK_BACKEND`
+  variables; the client runs on native Wayland (see the Linux section above).
+- **Planetarium blank on Linux, Flutter UI fine** → read **stderr** (the
+  terminal, or the journal) for the `planetarium_overlay:` lines described in
+  the Linux section.
+- **Planetarium shows a blank/black sky** → on Linux, first follow the stderr
+  check in the Linux section above (renderer fallback vs WebGL2). Otherwise the
+  platform webview lacks WebGL2 (old WebKitGTK, or missing WebView2 runtime on
+  Windows). Stars + atmosphere
   drawing = the webview path is healthy.

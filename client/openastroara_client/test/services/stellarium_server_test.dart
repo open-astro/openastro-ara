@@ -538,6 +538,167 @@ void main() {
     });
   });
 
+  group('planetarium page touchpad pinch (Linux runner contract)', () {
+    test('the page defines the three pinch hooks the runner calls by name', () {
+      // #1200/#1275 — linux/runner/planetarium_overlay.cc swallows
+      // GDK_TOUCHPAD_PINCH and drives the sky's field of view through
+      // pinchBegin/pinchUpdate/pinchEnd on the page. run_js fails silently,
+      // so a rename on either side would leave touchpad pinch doing nothing
+      // on Linux. No harness runs index.html; this string guard keeps the two
+      // sides in step.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      for (final fn in ['pinchBegin', 'pinchUpdate', 'pinchEnd']) {
+        expect(page, contains('function $fn('), reason: '$fn on the page');
+        expect(runner, contains('"$fn('), reason: '$fn called by the runner');
+      }
+      // The scale must be formatted locale-independently (a decimal comma
+      // would reach JS as two arguments).
+      expect(runner, contains('g_ascii_dtostr('));
+      expect(runner, isNot(contains('pinchUpdate(%')));
+    });
+
+    test('the runner keeps focus on FlView and takes the Wayland branch', () {
+      // #1200 — no C++ harness exists; pin the two by-hand-verified fixes so a
+      // revert is caught: the webview and its event box must stay
+      // non-focusable (a click on the sky stole keyboard focus from the
+      // Planning search field), and gdk_window_ensure_native must be skipped
+      // on a Wayland display (it made a parentless, never-mapped toplevel).
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      expect(
+        'gtk_widget_set_can_focus'.allMatches(runner).length,
+        greaterThanOrEqualTo(2),
+        reason: 'webview and event box non-focusable',
+      );
+      expect(runner, contains('GDK_IS_WAYLAND_DISPLAY('));
+      // ensure_native must sit in the non-Wayland branch: the `if (wayland)`
+      // guard comes first, and the only ensure_native call follows it.
+      final guard = runner.indexOf('if (wayland)');
+      final ensureNative = runner.indexOf('gdk_window_ensure_native(');
+      expect(guard, greaterThan(-1));
+      expect(ensureNative, greaterThan(guard));
+      expect('gdk_window_ensure_native('.allMatches(runner).length, 1);
+    });
+  });
+
+  group('Linux runner renderer-probe reasons (docs contract)', () {
+    test('RUNNING.md quotes every fallback reason the runner can print', () {
+      // #1275 — docs/RUNNING.md lists the reasons word for word so users can
+      // report them; keep the two in step.
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      // The doc wraps long lines, so compare with whitespace collapsed.
+      final doc = File('../../docs/RUNNING.md')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'\s+'), ' ');
+      const reasons = [
+        'no DRM render node is present',
+        "a previous run's WebKit process crashed in the DMABUF renderer",
+        'no DRM render node can back a GBM buffer',
+        'libgbm.so.1 is not loadable',
+        'the GBM probe did not complete',
+      ];
+      for (final r in reasons) {
+        expect(runner, contains('"$r"'), reason: '$r in the runner');
+        expect(doc, contains('`$r`'), reason: '$r in RUNNING.md');
+      }
+      expect(runner, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
+      expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
+      // NVIDIA keeps DMABUF and disables the driver's explicit sync instead.
+      expect(runner, contains('g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);'));
+      // The runner splits the literal across lines; the doc quotes it whole.
+      expect(runner, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, "'));
+      expect(runner, contains('"compositing forced)"'));
+      expect(doc, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, compositing forced)'));
+      // The crash backstop: signal hooked, marker path documented.
+      expect(runner, contains('"web-process-terminated"'));
+      // Clean teardown: SIGTERM routes through GApplication and the overlay
+      // destroys the webview so WebKitWebProcess isn't orphaned.
+      final app = File('linux/runner/my_application.cc').readAsStringSync();
+      expect(app, contains('g_unix_signal_add(SIGTERM, on_terminate_signal'));
+      expect(app, contains('planetarium_overlay_shutdown();'));
+      // The toplevel is app-paintable so GTK skips its per-frame software
+      // background fill (37 % of the UI thread at 4K on NVIDIA Wayland).
+      expect(app, contains('gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);'));
+      // And FlView's background is fully transparent so the embedder skips
+      // its own per-frame software paint (50 % of the UI thread at 4K).
+      expect(app, contains('gdk_rgba_parse(&background_color, "#00000000");'));
+      expect(runner, contains('void planetarium_overlay_shutdown() {'));
+      // A normal window close destroys the event box before shutdown runs;
+      // the destroy handler clears the pointers so shutdown can't touch
+      // freed memory.
+      expect(runner, contains('G_CALLBACK(webview_widget_destroyed_cb)'));
+      expect(runner, contains('"webkit-no-dmabuf"'));
+      expect(doc, contains('webkit-no-dmabuf'));
+    });
+  });
+
+  group('planetarium page idle render throttle', () {
+    test('wraps requestAnimationFrame before the engine starts', () {
+      // #1275 — the vendored engine renders unconditionally at display rate;
+      // the page throttles it when idle. The wrapper must precede
+      // StelWebEngine({ so the engine's loop goes through it.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final wrapper = page.indexOf('var araIdleThrottle = (function () {');
+      final engine = page.indexOf('StelWebEngine({');
+      expect(wrapper, greaterThan(-1));
+      expect(engine, greaterThan(wrapper));
+      expect(page, contains('window.requestAnimationFrame = function (cb) {'));
+      expect(page, contains('window.cancelAnimationFrame = function (id) {'));
+      // The runner-driven pinch path has no DOM event, so it wakes explicitly.
+      expect(page, contains('araIdleThrottle.wake();'));
+    });
+
+    test('large views cap the backing resolution and interactive rate', () {
+      // #1275 — 4K on the shm renderer: ~100 MB of copies per frame. The
+      // caps must be defined before the throttle (which uses them) and the
+      // throttle before the engine starts.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final caps = page.indexOf('var araViewCaps = (function () {');
+      final throttle = page.indexOf('var araIdleThrottle = (function () {');
+      expect(caps, greaterThan(-1));
+      expect(throttle, greaterThan(caps));
+      expect(page, contains("Object.defineProperty(window, 'devicePixelRatio'"));
+      expect(page, contains('if (!araViewCaps.isLarge()) return nativeRaf(cb);'));
+      // Off by default; only the Linux runner turns it on, where a CPU copy
+      // per frame remains (shm renderer, or NVIDIA's GTK3-composited DMABUF).
+      expect(page, contains('var enabled = false;'));
+      // The real ratio must be read live, never frozen at load (review on
+      // #1275: a 1x -> 2x monitor move kept the old backing resolution).
+      expect(page, contains("Object.getOwnPropertyDescriptor(proto, 'devicePixelRatio')"));
+      expect(page, contains('return realDprGetter.call(window) || 1;'));
+      expect(page, isNot(contains('var realDpr = window.devicePixelRatio || 1;')));
+      final runner = File('linux/runner/planetarium_overlay.cc')
+          .readAsStringSync();
+      expect(runner, contains('"araViewCaps.enable()"'));
+      expect(runner, contains('g_heavy_compositing'));
+    });
+
+    test('view-motion detection uses a threshold, not exact equality', () {
+      // VM run on #1275: with an object centred, follow-mode drift of ~1e-6
+      // rad per frame kept the view "changing" and the throttle never
+      // engaged (37 commits/s idle). Motion must be thresholded.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final body = page.substring(page.indexOf('var araIdleThrottle'));
+      expect(body, contains('var MOVE_RAD = 1e-3;'));
+      expect(body, contains('Math.abs(v[1] - lastView[1]) > MOVE_RAD'));
+      expect(body, isNot(contains('function viewSig()')));
+    });
+
+    test('idle callers are queued and flushed together, never one slot', () {
+      // Review on #1275: a single throttled slot let the second rAF loop (the
+      // page's FOV guard) bounce the engine back to display rate half the
+      // time. Pin the queue + single-timer shape.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final body = page.substring(page.indexOf('var araIdleThrottle'));
+      expect(body, contains('queue.push({ id: id, cb: cb });'));
+      expect(body, contains('if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);'));
+      expect(body, isNot(contains('one throttled slot')));
+    });
+  });
+
   group('planetarium page scope box', () {
     test('draws the daemon\'s latest solve as a second box and clears on request', () {
       // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}

@@ -23,4 +23,13 @@ void planetarium_overlay_register(GtkOverlay* overlay,
                                   FlView* view,
                                   FlBinaryMessenger* messenger);
 
+// Tears the WebKit view down so its web process exits cleanly. Called from
+// the application's shutdown path and the SIGTERM/SIGINT handler.
+void planetarium_overlay_shutdown();
+
+// Decides WebKit's renderer before any thread exists: probes GBM on the DRM
+// render nodes and sets WEBKIT_DISABLE_DMABUF_RENDERER=1 when none can back a
+// buffer (#1200). Call first thing in main(), before my_application_new().
+void planetarium_overlay_configure_renderer();
+
 #endif  // RUNNER_PLANETARIUM_OVERLAY_H_

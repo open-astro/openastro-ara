@@ -1516,6 +1516,32 @@ function zoomBy(factor) {
   else stel.core.fov = target;
   lastGoodFov = target;
 }
+// Touchpad pinch, forwarded by the Linux runner (desktop WebKitGTK ignores the
+// viewport meta and would magnify the whole page instead). The runner captures
+// the base FOV at gesture start and streams the cumulative scale; a scale of 2
+// halves the field of view. Direct assignment, not zoomTo: a pinch is a live
+// drag, and an animation restarting on every update would lag the fingers.
+var pinchBaseFov = null;
+function pinchBegin() {
+  araIdleThrottle.wake();
+  if (!stel) return;
+  var cur = stel.core.fov;
+  pinchBaseFov = fovIsUsable(cur) ? cur : lastGoodFov;
+}
+function pinchUpdate(scale) {
+  araIdleThrottle.wake();
+  if (!stel) return;
+  var s = Number(scale);
+  if (!(s > 0) || !isFinite(s)) return;
+  if (pinchBaseFov === null) pinchBegin();
+  // Same bounds as wheel zoom and the per-frame guard: a MAX_FOV ceiling and
+  // no floor beyond "positive and finite", so pinch and wheel bottom out alike.
+  var target = Math.min(MAX_FOV, pinchBaseFov / s);
+  if (!fovIsUsable(target)) return;
+  stel.core.fov = target;
+  lastGoodFov = target;
+}
+function pinchEnd() { pinchBaseFov = null; }
 // Per-frame guard (engine-internal gesture changes don't reliably fire stel.change):
 // an overshot or degenerate FOV snaps back to the nearest usable value.
 var lastClampReport = 0;
@@ -1668,6 +1694,142 @@ function wireControls() {
   setInterval(function () { if (pinnedMs === null && !frameOn) setObserverTime(); }, 15000);
   setInterval(renderClock, 1000);
 }
+
+// Idle render throttle (#1275). The engine drives an unconditional
+// requestAnimationFrame loop, so an idle sky still rendered at the display
+// rate: ~40 fps of WebGL plus a full GTK recomposite per frame on Linux
+// (one core in WebKit and most of another in the app, measured 2026-10-05
+// on NVIDIA Wayland; ~4 cores on a software-GL VM). Wrapping rAF before the
+// engine starts lets the page run the loop at IDLE_FPS once nothing has
+// moved for IDLE_AFTER_MS, and snap back to full rate on any input or when
+// the view (fov, yaw, pitch) changes, e.g. a goto/zoom animation. Every
+// platform benefits; the sky still advances with time at the idle rate.
+// Large-view caps. Without the DMABUF renderer (NVIDIA, VMs) every frame is a
+// WebGL readback into shared memory plus a copy into GTK's toplevel; at 4K
+// (8.3 Mpx) that is ~100 MB per frame and a 60 fps drag lags badly (Kubuntu,
+// RTX 4090, 2026-10-05). Above LARGE_VIEW_PX the WebGL backing store is held
+// to about MAX_BACKING_PX by capping the device pixel ratio the engine sees,
+// and interactive rendering runs at ACTIVE_FPS_LARGE instead of display rate.
+// Smaller views (laptops, tablets, phones) are untouched, and the caps are
+// OFF until the host enables them: only the Linux runner knows that every
+// frame still costs a CPU copy in its process (the shm renderer, or NVIDIA
+// where GTK3 composites the DMABUF frame on the UI thread) and calls
+// araViewCaps.enable() after load; native webviews elsewhere composite
+// cheaply and keep full resolution. The real ratio is read live on every
+// access so a move between 1x and 2x monitors still re-sizes the canvas.
+var araViewCaps = (function () {
+  var LARGE_VIEW_PX = 4.5e6, MAX_BACKING_PX = 4.0e6, ACTIVE_FPS_LARGE = 30;
+  var enabled = false;
+  var realDprGetter = null;
+  (function () {
+    var proto = window, desc = null;
+    while (proto && !desc) {
+      desc = Object.getOwnPropertyDescriptor(proto, 'devicePixelRatio');
+      proto = Object.getPrototypeOf(proto);
+    }
+    if (desc && typeof desc.get === 'function') realDprGetter = desc.get;
+  })();
+  var staticDpr = window.devicePixelRatio || 1;
+  function realDpr() {
+    if (realDprGetter) { try { return realDprGetter.call(window) || 1; } catch (e) {} }
+    return staticDpr;
+  }
+  function cssPx() { return window.innerWidth * window.innerHeight; }
+  function isLarge() {
+    var r = realDpr();
+    return enabled && cssPx() * r * r > LARGE_VIEW_PX;
+  }
+  function cappedDpr() {
+    var r = realDpr();
+    if (!enabled) return r;
+    var px = cssPx() * r * r;
+    if (px <= MAX_BACKING_PX) return r;
+    return r * Math.sqrt(MAX_BACKING_PX / px);
+  }
+  if (realDprGetter) {
+    try {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        configurable: true, get: cappedDpr,
+      });
+    } catch (e) { /* older WebKit: leave the real value */ }
+  }
+  function enable() { enabled = true; }
+  return { isLarge: isLarge, enable: enable, activeFps: ACTIVE_FPS_LARGE };
+})();
+
+var araIdleThrottle = (function () {
+  var IDLE_AFTER_MS = 1500, IDLE_FPS = 4;
+  var nativeRaf = window.requestAnimationFrame.bind(window);
+  var nativeCancel = window.cancelAnimationFrame.bind(window);
+  var lastActive = performance.now();
+  // Last seen view (fov, yaw, pitch in radians). A frame counts as motion
+  // only when something moved by more than MOVE_RAD: a goto/zoom animation
+  // moves far more per frame, while an object held centred ("Center"/follow)
+  // drifts ~1e-6 rad per frame with the sky and must still idle at 4 fps.
+  var MOVE_RAD = 1e-3;
+  var lastView = null;
+  // Every caller that arrives while idle is queued (the engine loop and the
+  // page's own FOV guard both go through here); one timer flushes them all in
+  // a single native frame, so no loop can slip back to display rate by taking
+  // a free slot while another holds the timer.
+  var queue = [];        // [{ id, cb }]
+  var timer = 0;
+  var nextId = -1;       // throttled ids are negative so they never collide
+  function flush() {
+    timer = 0;
+    var q = queue; queue = [];
+    q.forEach(function (e) { nativeRaf(e.cb); });
+  }
+  function wake() {
+    lastActive = performance.now();
+    if (timer) { clearTimeout(timer); flush(); }
+  }
+  function viewMoved() {
+    if (!stel) return false;
+    var v;
+    try {
+      var o = stel.core.observer;
+      v = [stel.core.fov, o.yaw, o.pitch];
+    } catch (e) { return false; }
+    if (!(isFinite(v[0]) && isFinite(v[1]) && isFinite(v[2]))) return false;
+    var moved = lastView === null ||
+      Math.abs(v[0] - lastView[0]) > MOVE_RAD ||
+      Math.abs(v[1] - lastView[1]) > MOVE_RAD ||
+      Math.abs(v[2] - lastView[2]) > MOVE_RAD;
+    // Only advance the reference on real motion, so slow drift can't creep
+    // past the threshold one frame at a time without ever tripping it, and
+    // the comparison stays against the last position the user saw settle.
+    if (moved) lastView = v;
+    return moved;
+  }
+  // Large views render every other display frame while active (~30 fps).
+  var skipNext = false;
+  function activeRaf(cb) {
+    if (!araViewCaps.isLarge()) return nativeRaf(cb);
+    skipNext = !skipNext;
+    return skipNext ? nativeRaf(function () { nativeRaf(cb); }) : nativeRaf(cb);
+  }
+  window.requestAnimationFrame = function (cb) {
+    if (viewMoved()) lastActive = performance.now();
+    if (performance.now() - lastActive < IDLE_AFTER_MS) return activeRaf(cb);
+    var id = nextId--;
+    queue.push({ id: id, cb: cb });
+    if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);
+    return id;
+  };
+  window.cancelAnimationFrame = function (id) {
+    if (id >= 0) return nativeCancel(id);
+    queue = queue.filter(function (e) { return e.id !== id; });
+  };
+  ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'touchstart',
+   'touchmove', 'touchend', 'keydown'].forEach(function (type) {
+    window.addEventListener(type, wake, { capture: true, passive: true });
+  });
+  // Host-driven changes that don't move the view (scope box, selection, time
+  // pin) are drawn on the next throttled frame, i.e. up to 1/IDLE_FPS later
+  // while idle. Acceptable for those; anything that must be immediate wakes.
+  return { wake: wake, idleFps: IDLE_FPS, idleAfterMs: IDLE_AFTER_MS };
+})();
 
 StelWebEngine({
   wasmFile: './stellarium-web-engine.wasm',

@@ -8,6 +8,9 @@
 #include "flutter/generated_plugin_registrant.h"
 #include "planetarium_overlay.h"
 
+#include <glib-unix.h>
+#include <signal.h>
+
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
@@ -108,10 +111,13 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "OpenAstro Ara");
   }
 
-  // Window/taskbar icon: the Ara constellation mark, loaded from the Flutter
-  // asset bundle next to the executable (no hicolor-theme install required —
-  // works from a bare `flutter run`/unpacked bundle). Best-effort: a missing
-  // file just leaves the WM default.
+  // Window/taskbar icon on X11: the Ara constellation mark, loaded from the
+  // Flutter asset bundle next to the executable (no hicolor-theme install
+  // required — works from a bare `flutter run`/unpacked bundle). Best-effort:
+  // a missing file just leaves the WM default. Wayland ignores per-window
+  // icons; there the compositor resolves the app_id through the installed
+  // org.openastro.openastroara.desktop entry (see linux/CMakeLists.txt and
+  // linux/install-desktop-entry.sh).
   {
     g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
     if (exe_path != nullptr) {
@@ -143,9 +149,13 @@ static void my_application_activate(GApplication* application) {
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  // Fully transparent: the embedder's paint_background() cairo_paints the
+  // whole view in software before every GL frame unless the colour is
+  // (0,0,0,0), and with the Wayland planetarium overlay every WebKit frame
+  // redraws the view. perf on a 4090 at 6144x3348 put 50 % of the UI thread
+  // in that paint. Flutter's frame covers the view and the window is only
+  // shown after the first frame, so nothing is visible through it.
+  gdk_rgba_parse(&background_color, "#00000000");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
 
@@ -159,6 +169,13 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(overlay));
   gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(overlay));
+  // FlView paints every pixel of the window through GL, so GTK's own
+  // background fill of the toplevel is wasted work. On Wayland with the
+  // client-side planetarium overlay every WebKit frame repaints the window,
+  // and a perf profile (Kubuntu, RTX 4090, 6144x3348, 2026-10-05) put 37 % of
+  // the UI thread in pixman_fill under gtk_main_do_event: GTK filling the
+  // full toplevel in software before the GL blit. app-paintable skips it.
+  gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.
@@ -206,6 +223,8 @@ static gboolean my_application_local_command_line(GApplication* application,
   return TRUE;
 }
 
+static gboolean on_terminate_signal(gpointer user_data);
+
 // Implements GApplication::startup.
 static void my_application_startup(GApplication* application) {
   // MyApplication* self = MY_APPLICATION(object);
@@ -213,15 +232,26 @@ static void my_application_startup(GApplication* application) {
   // Perform any actions required at application startup.
 
   G_APPLICATION_CLASS(my_application_parent_class)->startup(application);
+
+  g_unix_signal_add(SIGTERM, on_terminate_signal, application);
+  g_unix_signal_add(SIGINT, on_terminate_signal, application);
 }
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
-  // MyApplication* self = MY_APPLICATION(object);
-
-  // Perform any actions required at application shutdown.
+  // Tear the WebKit view down before the process exits so WebKitWebProcess
+  // is told to quit instead of being orphaned (see planetarium_overlay.cc).
+  planetarium_overlay_shutdown();
 
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
+}
+
+// SIGTERM/SIGINT (pkill, Ctrl-C, session logout) default to an immediate
+// exit, which skips GApplication::shutdown and orphans the web process. Route
+// them through the main loop so the normal teardown runs.
+static gboolean on_terminate_signal(gpointer user_data) {
+  g_application_quit(G_APPLICATION(user_data));
+  return G_SOURCE_REMOVE;
 }
 
 // Implements GObject::dispose.

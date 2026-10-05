@@ -76,8 +76,12 @@ open build/macos/Build/Products/Debug/openastroara.app
   stores no server (#1129): every launch scans and lists what it finds; tap
   the rig (it never auto-picks, even with one rig) — say which daemon you
   connected to.
-- Linux hosts: `flutter build linux --debug` and run the bundle; on Wayland
-  prefix `GDK_BACKEND=x11`.
+- Linux hosts: `flutter build linux --debug` and run the bundle on native
+  Wayland (no `GDK_BACKEND=x11`); the `planetarium_overlay:` lines on stderr
+  say which overlay path was taken, and a `WEBKIT_DISABLE_DMABUF_RENDERER`
+  line means the shm renderer was forced (no line = the DMABUF path, unless
+  `WEBKIT_DISABLE_DMABUF_RENDERER` was already set in the environment, which
+  skips the probe silently).
 - Do not run `dart format` on files the PR touched — it restyles whole files.
 
 ## 4. Drive it and capture
