@@ -55,13 +55,15 @@ namespace OpenAstroAra.Test {
             private readonly CancellationTokenSource _cts = new();
             private readonly Task _loop;
             private int _position;
-            private long _namesAvailableAtTicks;
+            private int _namesWithheld;
 
             public readonly ConcurrentQueue<int> PositionWrites = new();
 
-            /// <summary>Until this instant the stub answers <c>names</c>/<c>focusoffsets</c> with an
-            /// Alpaca error, so the service's slot read fails and <c>_slots</c> stays null (#1079).</summary>
-            public DateTime NamesAvailableAt { set => Volatile.Write(ref _namesAvailableAtTicks, value.Ticks); }
+            /// <summary>The stub answers this many <c>names</c> reads with an Alpaca error before
+            /// serving the list, so the service's slot read fails and <c>_slots</c> stays null
+            /// (#1079). Counted in reads, not wall clock (#1249): a loaded runner stretches the
+            /// ticks, never the number of attempts the service makes.</summary>
+            public int NamesWithheldForReads { set => Volatile.Write(ref _namesWithheld, value); }
 
             private StubWheel(HttpListener listener, int port, int position) {
                 BaseUri = new Uri($"http://127.0.0.1:{port}/");
@@ -94,8 +96,8 @@ namespace OpenAstroAra.Test {
                     leaf = leaf[(leaf.LastIndexOf('/') + 1)..].ToUpperInvariant();
                     string value = "true";
                     var errorNumber = 0;
-                    if (ctx.Request.HttpMethod != "PUT" && (leaf == "NAMES" || leaf == "FOCUSOFFSETS")
-                            && DateTime.UtcNow.Ticks < Volatile.Read(ref _namesAvailableAtTicks)) {
+                    // One atomic decrement: a read-then-decrement pair could let two GETs share a slot.
+                    if (ctx.Request.HttpMethod != "PUT" && leaf == "NAMES" && Interlocked.Decrement(ref _namesWithheld) >= 0) {
                         errorNumber = 1024; // not ready yet
                     }
                     if (ctx.Request.HttpMethod == "PUT") {
@@ -305,13 +307,16 @@ namespace OpenAstroAra.Test {
         [Category("bench")]
         public async Task A_sequence_SwitchFilter_issued_before_the_slots_land_is_honoured_and_retires_the_home() {
             // #1079: boot auto-connect immediately followed by a sequence's first SwitchFilter. The
-            // stub withholds the slot list for a few seconds, so ChangeFilter finds _slots null —
-            // it must wait for them (not skip) and move to the requested slot; the first-connect
-            // home (which needs no slot list and may already have been written) must never land
-            // AFTER it, so the wheel ends where the sequence asked.
+            // stub withholds the slot list for the seed read and the next few ticks, so ChangeFilter
+            // finds _slots null — it must wait for them (not skip) and move to the requested slot;
+            // the first-connect home (which needs no slot list and may already have been written)
+            // must never land AFTER it, so the wheel ends where the sequence asked.
+            // #1249 — the slot wait is only a liveness bound here (the budget-expiry case is the
+            // next test), so it is generous: under full-suite load the ticks stretch and a tight
+            // budget expired before the list landed, skipping the change with no write at all.
             await using var stub = StubWheel.Start(position: 3);
-            stub.NamesAvailableAt = DateTime.UtcNow + Ticks(4);
-            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
+            stub.NamesWithheldForReads = 3;
+            using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(200) };
             await ConnectAsync(svc, stub);
             var result = await ((IFilterWheelMediator)svc).ChangeFilter(new FilterInfo("G", 0, 2), progress: null, CancellationToken.None);
             Assert.That(result.Position, Is.EqualTo(2), "the change waited for the slot list and was honoured");
@@ -332,7 +337,7 @@ namespace OpenAstroAra.Test {
             // once the wheel then reports a position, the pending home must NOT fire. Restore the
             // old post-validation retire and the wheel is pulled to 0 behind the sequence.
             await using var stub = StubWheel.Start(position: -1);
-            stub.NamesAvailableAt = DateTime.UtcNow.AddMinutes(5);
+            stub.NamesWithheldForReads = int.MaxValue;
             using var svc = new FilterWheelService() { RefreshPeriod = Tick, SlotsWaitBudget = Ticks(10) };
             await ConnectAsync(svc, stub);
             var started = DateTime.UtcNow;
