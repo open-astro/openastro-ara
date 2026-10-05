@@ -609,6 +609,12 @@ void main() {
       expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
       // The crash backstop: signal hooked, marker path documented.
       expect(runner, contains('"web-process-terminated"'));
+      // Clean teardown: SIGTERM routes through GApplication and the overlay
+      // destroys the webview so WebKitWebProcess isn't orphaned.
+      final app = File('linux/runner/my_application.cc').readAsStringSync();
+      expect(app, contains('g_unix_signal_add(SIGTERM, on_terminate_signal'));
+      expect(app, contains('planetarium_overlay_shutdown();'));
+      expect(runner, contains('void planetarium_overlay_shutdown() {'));
       expect(runner, contains('"webkit-no-dmabuf"'));
       expect(doc, contains('webkit-no-dmabuf'));
     });
@@ -628,6 +634,19 @@ void main() {
       expect(page, contains('window.cancelAnimationFrame = function (id) {'));
       // The runner-driven pinch path has no DOM event, so it wakes explicitly.
       expect(page, contains('araIdleThrottle.wake();'));
+    });
+
+    test('large views cap the backing resolution and interactive rate', () {
+      // #1275 — 4K on the shm renderer: ~100 MB of copies per frame. The
+      // caps must be defined before the throttle (which uses them) and the
+      // throttle before the engine starts.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      final caps = page.indexOf('var araViewCaps = (function () {');
+      final throttle = page.indexOf('var araIdleThrottle = (function () {');
+      expect(caps, greaterThan(-1));
+      expect(throttle, greaterThan(caps));
+      expect(page, contains("Object.defineProperty(window, 'devicePixelRatio'"));
+      expect(page, contains('if (!araViewCaps.isLarge()) return nativeRaf(cb);'));
     });
 
     test('idle callers are queued and flushed together, never one slot', () {

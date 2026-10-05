@@ -8,6 +8,9 @@
 #include "flutter/generated_plugin_registrant.h"
 #include "planetarium_overlay.h"
 
+#include <glib-unix.h>
+#include <signal.h>
+
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
@@ -216,15 +219,26 @@ static void my_application_startup(GApplication* application) {
   // Perform any actions required at application startup.
 
   G_APPLICATION_CLASS(my_application_parent_class)->startup(application);
+
+  g_unix_signal_add(SIGTERM, on_terminate_signal, application);
+  g_unix_signal_add(SIGINT, on_terminate_signal, application);
 }
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
-  // MyApplication* self = MY_APPLICATION(object);
-
-  // Perform any actions required at application shutdown.
+  // Tear the WebKit view down before the process exits so WebKitWebProcess
+  // is told to quit instead of being orphaned (see planetarium_overlay.cc).
+  planetarium_overlay_shutdown();
 
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
+}
+
+// SIGTERM/SIGINT (pkill, Ctrl-C, session logout) default to an immediate
+// exit, which skips GApplication::shutdown and orphans the web process. Route
+// them through the main loop so the normal teardown runs.
+static gboolean on_terminate_signal(gpointer user_data) {
+  g_application_quit(G_APPLICATION(user_data));
+  return G_SOURCE_REMOVE;
 }
 
 // Implements GObject::dispose.

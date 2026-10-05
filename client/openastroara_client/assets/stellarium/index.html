@@ -1704,6 +1704,31 @@ function wireControls() {
 // moved for IDLE_AFTER_MS, and snap back to full rate on any input or when
 // the view (fov, yaw, pitch) changes, e.g. a goto/zoom animation. Every
 // platform benefits; the sky still advances with time at the idle rate.
+// Large-view caps. Without the DMABUF renderer (NVIDIA, VMs) every frame is a
+// WebGL readback into shared memory plus a copy into GTK's toplevel; at 4K
+// (8.3 Mpx) that is ~100 MB per frame and a 60 fps drag lags badly (Kubuntu,
+// RTX 4090, 2026-10-05). Above LARGE_VIEW_PX the WebGL backing store is held
+// to about MAX_BACKING_PX by capping the device pixel ratio the engine sees,
+// and interactive rendering runs at ACTIVE_FPS_LARGE instead of display rate.
+// Smaller views (laptops, tablets, phones) are untouched.
+var araViewCaps = (function () {
+  var LARGE_VIEW_PX = 4.5e6, MAX_BACKING_PX = 4.0e6, ACTIVE_FPS_LARGE = 30;
+  var realDpr = window.devicePixelRatio || 1;
+  function cssPx() { return window.innerWidth * window.innerHeight; }
+  function isLarge() { return cssPx() * realDpr * realDpr > LARGE_VIEW_PX; }
+  function cappedDpr() {
+    var px = cssPx() * realDpr * realDpr;
+    if (px <= MAX_BACKING_PX) return realDpr;
+    return realDpr * Math.sqrt(MAX_BACKING_PX / px);
+  }
+  try {
+    Object.defineProperty(window, 'devicePixelRatio', {
+      configurable: true, get: cappedDpr,
+    });
+  } catch (e) { /* older WebKit: leave the real value */ }
+  return { isLarge: isLarge, activeFps: ACTIVE_FPS_LARGE };
+})();
+
 var araIdleThrottle = (function () {
   var IDLE_AFTER_MS = 1500, IDLE_FPS = 4;
   var nativeRaf = window.requestAnimationFrame.bind(window);
@@ -1733,10 +1758,17 @@ var araIdleThrottle = (function () {
       return stel.core.fov + ',' + o.yaw + ',' + o.pitch;
     } catch (e) { return ''; }
   }
+  // Large views render every other display frame while active (~30 fps).
+  var skipNext = false;
+  function activeRaf(cb) {
+    if (!araViewCaps.isLarge()) return nativeRaf(cb);
+    skipNext = !skipNext;
+    return skipNext ? nativeRaf(function () { nativeRaf(cb); }) : nativeRaf(cb);
+  }
   window.requestAnimationFrame = function (cb) {
     var sig = viewSig();
     if (sig !== lastSig) { lastSig = sig; lastActive = performance.now(); }
-    if (performance.now() - lastActive < IDLE_AFTER_MS) return nativeRaf(cb);
+    if (performance.now() - lastActive < IDLE_AFTER_MS) return activeRaf(cb);
     var id = nextId--;
     queue.push({ id: id, cb: cb });
     if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);

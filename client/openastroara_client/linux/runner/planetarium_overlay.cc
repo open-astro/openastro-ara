@@ -591,11 +591,28 @@ void method_call_cb(FlMethodChannel* channel,
 
 }  // namespace
 
+namespace {
+OverlayState* g_registered_state = nullptr;
+}  // namespace
+
+// Destroys the WebKit view so its web process is told to exit. Without this a
+// SIGTERM to the app orphans WebKitWebProcess, which then segfaults inside
+// NVIDIA's EGL during its own teardown (Kubuntu, 2026-10-05) and leaves a
+// coredump behind. Safe to call more than once.
+void planetarium_overlay_shutdown() {
+  OverlayState* state = g_registered_state;
+  if (state == nullptr || state->webview_widget == nullptr) return;
+  gtk_widget_destroy(state->webview_widget);  // destroys the child webview too
+  state->webview_widget = nullptr;
+  state->webview = nullptr;
+}
+
 void planetarium_overlay_register(GtkOverlay* overlay,
                                   FlView* view,
                                   FlBinaryMessenger* messenger) {
   (void)view;
   OverlayState* state = new OverlayState();
+  g_registered_state = state;
   state->overlay = overlay;
   g_signal_connect(overlay, "get-child-position",
                    G_CALLBACK(on_get_child_position), state);
