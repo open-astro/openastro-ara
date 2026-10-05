@@ -96,8 +96,8 @@ namespace OpenAstroAra.Test {
                     leaf = leaf[(leaf.LastIndexOf('/') + 1)..].ToUpperInvariant();
                     string value = "true";
                     var errorNumber = 0;
-                    if (ctx.Request.HttpMethod != "PUT" && leaf == "NAMES" && Volatile.Read(ref _namesWithheld) > 0) {
-                        Interlocked.Decrement(ref _namesWithheld);
+                    // One atomic decrement: a read-then-decrement pair could let two GETs share a slot.
+                    if (ctx.Request.HttpMethod != "PUT" && leaf == "NAMES" && Interlocked.Decrement(ref _namesWithheld) >= 0) {
                         errorNumber = 1024; // not ready yet
                     }
                     if (ctx.Request.HttpMethod == "PUT") {
