@@ -187,9 +187,26 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   (the client uses each platform's native webview — there is no bundled Chromium/CEF).
 - `libsecret-1-dev` + `libjsoncpp-dev` are required by the `flutter_secure_storage_linux`
   plugin — without them the build fails at CMake configure.
-- **Wayland sessions** are the tested path (the Linux client targets Wayland,
-  #1204; X11 still works but is not tested). Run the bundle as is; do not set
-  `GDK_BACKEND=x11`. The runner prints one `planetarium_overlay:` line per
+- **Runtime packages** for running a built bundle on another machine, per
+  supported family (Ubuntu/Kubuntu 24.04, Fedora KDE, Arch; #1203):
+
+  | Need | Debian/Ubuntu | Fedora | Arch |
+  |---|---|---|---|
+  | WebKitGTK 4.1 (planetarium) | `libwebkit2gtk-4.1-0` | `webkit2gtk4.1` | `webkit2gtk-4.1` |
+  | GTK3 | `libgtk-3-0t64` | `gtk3` | `gtk3` |
+  | Safety-alarm audio | `gstreamer1.0-plugins-{base,good}`, `gstreamer1.0-pipewire` | `gstreamer1-plugins-{base,good}`, `pipewire-gstreamer` | `gst-plugins-{base,good}`, `gst-plugin-pipewire` |
+  | Secure storage | `libsecret-1-0` + a Secret Service (`gnome-keyring` or KWallet) | `libsecret` | `libsecret` |
+  | File picker | `xdg-desktop-portal` + `-gnome`/`-kde`/`-gtk` | same | same |
+  | GPS via GeoClue (optional) | `geoclue-2.0` | `geoclue2` | `geoclue` |
+
+  Serial GPS needs the user in `dialout` (Debian, Fedora) or `uucp` (Arch).
+  Minimal wlroots desktops (sway, Hyprland) lack a Secret Service and a
+  FileChooser portal unless installed.
+- **Wayland only** (#1201, #1204): the runner restricts GDK to the Wayland
+  backend and exits with "OpenAstro Ara needs a Wayland session" when
+  `WAYLAND_DISPLAY` is unset. Run the bundle as is; do not set
+  `GDK_BACKEND=x11`, and log into a Wayland session (GNOME, KDE Plasma) if you
+  are on X11. The runner prints one `planetarium_overlay:` line per
   decision it makes **on stderr** (GLib messages never go to stdout; under
   systemd they land in the journal), so a blank Planning tab is diagnosable
   from the terminal:

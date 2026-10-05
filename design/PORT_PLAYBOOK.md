@@ -12463,14 +12463,14 @@ GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.
 |---|---|---|---|---|
 | **macOS** (universal: arm64 + x86_64) | `OpenAstroAra-{version}-macos.dmg` | `macos-14` (arm64; lipo's the x86_64 binary in) | `flutter build macos --release` → `create-dmg` wrap | ~80 MB |
 | **Windows** (x64) | `OpenAstroAra-{version}-windows-x64.zip` | `windows-2022` | `flutter build windows --release` → 7-zip the `build\windows\runner\Release\` tree | ~60 MB |
-| **Linux** (x86_64 AppImage) | `OpenAstroAra-{version}-linux-x86_64.AppImage` | `ubuntu-22.04` | `flutter build linux --release` → `appimagetool` wrap | ~80 MB |
+| **Linux** (x86-64, Wayland only) | per-family packages, format decided in #1203 (`.deb`/`.rpm`/AUR; no AppImage) | `ubuntu-24.04` (glibc 2.39 floor) | `flutter build linux --release` → packaging per #1203 | ~80 MB |
 
 **Why these specific runner images:**
 - `macos-14` is Apple Silicon (M1) — native arm64 builds + can cross-compile x86_64 via Xcode toolchain
 - `windows-2022` has all the Visual Studio C++ runtime bits Flutter Windows builds need
-- `ubuntu-22.04` for the AppImage gives broad glibc compatibility (matches FUSE 2 era; AppImages built on 24.04 break on 22.04 user machines)
+- `ubuntu-24.04` for Linux, pinned: the glibc 2.39 floor is the support contract (Ubuntu/Kubuntu 24.04 LTS, Fedora KDE current, Arch; #1204), and `ubuntu-latest` would silently raise it
 
-**No Linux .deb, no Flatpak, no Snap for the initial release.** AppImage covers Linux without distro fragmentation; native package formats are future if users ask.
+**Linux target (decided 2026-09-29, #1204; runner landed 2026-10-05, #1201/#1275):** x86-64 only, **Wayland only** — the runner restricts GDK to the Wayland backend and refuses X11 with a message; the planetarium overlay relies on Wayland stacking. Supported and tested on three distros, one per family: Ubuntu/Kubuntu 24.04 LTS, Fedora KDE (current), Arch. The earlier AppImage/`ubuntu-22.04`/X11 plan in this section is superseded; the shipping format is decided in #1203.
 
 **No Apple Silicon-only or Intel-only macOS variants.** Universal binary keeps the download story one-link-per-OS.
 
