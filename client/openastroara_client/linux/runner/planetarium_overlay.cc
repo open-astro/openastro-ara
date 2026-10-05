@@ -9,6 +9,7 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <glob.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -264,8 +265,22 @@ void planetarium_overlay_configure_renderer() {
     }
     int status = 0;
     int result = -1;
-    if (pid > 0 && waitpid(pid, &status, 0) == pid && WIFEXITED(status)) {
-      result = WEXITSTATUS(status);
+    if (pid > 0) {
+      // Bounded wait: a wedged GPU can hang a driver inside gbm_create_device,
+      // and that must not hold the window back forever. 2 s is far above a
+      // healthy probe (milliseconds) and short enough to go unnoticed.
+      const gint64 deadline = g_get_monotonic_time() + 2 * G_USEC_PER_SEC;
+      pid_t waited = 0;
+      while ((waited = waitpid(pid, &status, WNOHANG)) == 0 &&
+             g_get_monotonic_time() < deadline) {
+        g_usleep(10 * 1000);
+      }
+      if (waited == 0) {
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, 0);
+      } else if (waited == pid && WIFEXITED(status)) {
+        result = WEXITSTATUS(status);
+      }
     }
     switch (result) {
       case 0:
@@ -279,8 +294,8 @@ void planetarium_overlay_configure_renderer() {
         reason = "no DRM render node can back a GBM buffer";
         break;
       default:
-        // fork failed or the probe crashed inside the driver: assume the
-        // DMABUF renderer would fail the same way.
+        // fork failed, or the probe crashed or hung inside the driver: assume
+        // the DMABUF renderer would fail the same way.
         reason = "the GBM probe did not complete";
         break;
     }
@@ -312,7 +327,12 @@ gboolean pinch_event_cb(GtkWidget* widget, GdkEvent* event, gpointer user_data) 
       run_js(state->webview, "pinchBegin()");
       break;
     case GDK_TOUCHPAD_GESTURE_PHASE_UPDATE: {
-      gchar* js = g_strdup_printf("pinchUpdate(%.6f)", pinch->scale);
+      // g_ascii_dtostr, not printf: gtk_init applies the user's locale and a
+      // decimal-comma locale (de_DE, fr_FR, ...) would emit "1,5", which JS
+      // parses as two arguments.
+      gchar buf[G_ASCII_DTOSTR_BUF_SIZE];
+      g_ascii_dtostr(buf, sizeof buf, pinch->scale);
+      gchar* js = g_strconcat("pinchUpdate(", buf, ")", nullptr);
       run_js(state->webview, js);
       g_free(js);
       break;
