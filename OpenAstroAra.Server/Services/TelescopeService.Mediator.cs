@@ -405,15 +405,15 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Current pointing from the §32.4 cache in the mount's native epoch; the headless-stub
-    /// (0, 0, J2000) sentinel when not connected or the position hasn't been read yet.
-    /// </summary>
     // #1222 — GetCurrentPosition tries the on-demand equatorial-system read at most once per
     // connection (reset on adopt): a mount whose read never answers must not add the 10 s bound to
     // every centering iteration and rotation frame; the refresh pass keeps retrying the read anyway.
     private bool _positionFrameReadAttempted;
 
+    /// <summary>
+    /// Current pointing from the §32.4 cache in the mount's native epoch; the headless-stub
+    /// (0, 0, J2000) sentinel when not connected or the position hasn't been read yet.
+    /// </summary>
     public Coordinates GetCurrentPosition() {
         AlpacaTelescope? unresolved = null;
         lock (_gate) {
