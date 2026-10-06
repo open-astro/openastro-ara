@@ -10223,10 +10223,14 @@ systemd's `Restart=on-failure` handles basic crash recovery. ARA layers addition
 - **Host gate (#1192)**: the unit above is the *local* `openastro-guider`, so the whole tree — the
   connect-time `systemctl start`, the crash-recovery status poll/restart, and §63.12's manual
   restart — runs only when the profile's guider host is this machine (blank, `localhost`, a
-  loopback/interface address, or this host's name). A remote guider host gets a "Guider
-  connection lost" notification and a plain reconnect loop for the same retry window; nothing
-  local is started or restarted. Recovery also pins the host:port and profile that were live at
-  the drop and abandons (log + Error) if a profile switch or a re-targeted profile changes them.
+  loopback/interface address, or this host's name — a name carrying a domain must be our own
+  FQDN or have exactly `local`/`localdomain`/`lan`/`home`/`home.arpa`/`internal` as its domain;
+  any other domain, `raspberrypi.foo.lan` included, is decided by a bounded DNS resolve, #1234). A remote guider host gets a "Guider connection
+  lost" Warning and a plain reconnect loop for the same retry window; nothing local is started
+  or restarted, and a remote guider that never returns leaves a `guider.process.failed`
+  diagnostic. Recovery decides locality once per pass, pins the host:port that was live at the
+  drop and abandons (log + Error) if the active profile's guider target changes; a profile
+  switch to the same target keeps the pass (#1234).
 
 ### 63.4 Per-ARA-profile to PHD2-profile mapping
 

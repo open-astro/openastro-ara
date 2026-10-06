@@ -89,7 +89,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             IProfileStore? profileStore = null, Func<ISequencerService?>? sequencerResolver = null,
             INotificationService? notifications = null, IFaultLogService? faultLog = null,
             Func<Guid?>? activeProfileIdResolver = null,
-            Func<(Guid Id, string? Name)?>? araProfileResolver = null) {
+            Func<(Guid Id, string? Name)?>? araProfileResolver = null,
+            IDiagnosticsService? diagnostics = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -101,7 +102,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _faultLog = faultLog;
         _activeProfileIdResolver = activeProfileIdResolver;
         _araProfileResolver = araProfileResolver;
+        _diagnostics = diagnostics;
     }
+
+    // #1234 — §29 diagnostics sink for a remote guider that never returns (the coordinator records
+    // the local case itself). Null in benches.
+    private readonly IDiagnosticsService? _diagnostics;
 
     // §63.4 — active ARA profile identity (id + display name) from the multi-profile repository,
     // consumed by PHD2Guider's twin-profile mapping. Null in benches/tests → legacy-store fallback.
@@ -145,9 +151,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     }
 
     // The connect prologue, atomic under _gate. Returns false only for a §63.3 auto-reconnect
-    // (recoveringFor set) whose target is no longer the active profile's guider (#1192): a profile
-    // switch since the drop must not have this pass write the OLD host:port into the NEW profile
-    // and dial it as a "recovery". Every user/mediator connect returns true.
+    // (recoveringFor set) whose target is no longer the active profile's guider (#1192): a host:port
+    // change since the drop (an edit, or a switch to a profile that uses another guider) must not
+    // have this pass write the OLD host:port into the NEW profile and dial it as a "recovery". A
+    // same-target switch keeps the pass (#1234). Every user/mediator connect returns true.
     private bool BeginConnect(GuiderConnectRequestDto request, bool supersedeRecovery, RecoveryTarget? recoveringFor) {
         ArgumentNullException.ThrowIfNull(request);
         long generation;
@@ -214,8 +221,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             connectToken = _connectCts.Token;
             SetStateLocked(EquipmentConnectionState.Connecting);
         }
-        // 202 contract: do the blocking connect off-thread; GetAsync reports the outcome.
-        _ = Task.Run(() => ConnectInBackground(guider, generation, connectToken), CancellationToken.None);
+        // 202 contract: do the blocking connect off-thread; GetAsync reports the outcome. A recovery
+        // attempt carries its pass's locality verdict so the reachability gate does not re-decide (#1234).
+        var knownLocal = recoveringFor?.IsLocal;
+        _ = Task.Run(() => ConnectInBackground(guider, generation, knownLocal, connectToken), CancellationToken.None);
         return true;
     }
 
@@ -253,14 +262,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background connect boundary: PHD2Guider.Connect can throw arbitrary socket/IO/protocol exceptions; any escape must surface as the Error state and be contained. Log-and-recover.")]
-    private async Task ConnectInBackground(PHD2Guider guider, long generation, CancellationToken ct) {
+    private async Task ConnectInBackground(PHD2Guider guider, long generation, bool? knownLocal, CancellationToken ct) {
         try {
             // §63.1: the guider runs as a systemd service. If it isn't reachable yet (e.g. it
             // hasn't finished booting, or is stopped), ask systemd to start it and wait briefly —
             // ARA never spawns the guider itself. Off-systemd (dev/CI) RequestStart is a no-op, so
             // this just probes; the bench's FakeGuider is already listening and passes immediately.
             // ct is cancelled if a newer connect or a disconnect supersedes this attempt.
-            await EnsureGuiderReachableAsync(ct).ConfigureAwait(false);
+            await EnsureGuiderReachableAsync(knownLocal, ct).ConfigureAwait(false);
             // Bail before the (potentially long, uncancellable) socket connect if a disconnect or a
             // newer connect already superseded us — otherwise this task lingers on the OS connect
             // timeout for an unreachable guider even though its result will be discarded.
@@ -289,7 +298,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // case — it booted with the Pi), return at once; otherwise ask systemd to start it and poll
     // for it to come up, bounded by a timeout. Off-systemd the start is a no-op, so this degrades
     // to a probe — fine for dev/CI/bench where the guider (or FakeGuider) is started externally.
-    private async Task EnsureGuiderReachableAsync(CancellationToken ct) {
+    private async Task EnsureGuiderReachableAsync(bool? knownLocal, CancellationToken ct) {
         var settings = _profileService.ActiveProfile.GuiderSettings;
         string host = settings.PHD2ServerHost;
         int port = settings.PHD2ServerPort;
@@ -303,7 +312,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         // #1192: the unit the supervisor starts is the LOCAL openastro-guider. A profile that points
         // at a guider on another machine gets no start and no wait — go straight to the connect,
         // which fails into Error (and §63.3 recovery) if that box really is down.
-        if (!await IsLocalGuiderHostDecision(host, ct).ConfigureAwait(false)) {
+        // #1234: a recovery pass decided locality once; its attempts reuse that verdict.
+        var isLocal = knownLocal ?? await IsLocalGuiderHostDecision(host, ct).ConfigureAwait(false);
+        if (!isLocal) {
             ct.ThrowIfCancellationRequested();
             LogRemoteHostNoLocalStart(host, port);
             return;

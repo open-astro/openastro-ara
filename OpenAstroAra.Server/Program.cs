@@ -358,7 +358,9 @@ public partial class Program {
                     }
                     var name = repo.List().Profiles.FirstOrDefault(p => p.Id == id.Value)?.Name;
                     return (id.Value, name);
-                });
+                },
+                // #1234 — §29 diagnostics for a remote guider that never returns.
+                sp.GetService<IDiagnosticsService>());
             // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
             // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
             // and the guider refuses to guide under it. Resolved lazily: the focus service needs

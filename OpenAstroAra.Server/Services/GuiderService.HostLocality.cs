@@ -71,14 +71,37 @@ public sealed partial class GuiderService {
     private static bool SameAddress(IPAddress a, IPAddress b) =>
         a.AddressFamily == b.AddressFamily && a.GetAddressBytes().AsSpan().SequenceEqual(b.GetAddressBytes());
 
-    // "raspberrypi" == "raspberrypi.local" == "RASPBERRYPI.lan": compare the first DNS label.
-    private static bool SameMachineName(string host, string machineName) {
+    // Domain suffixes under which "<our label>.<suffix>" can only mean this machine: mDNS's own
+    // .local and the usual router / RFC 8375 home suffixes. Any other domain on the profile host is
+    // a real DNS name that two boxes with the same label may share (raspberrypi.site2, #1234), so
+    // the pure check says no and the resolve decides.
+    private static readonly string[] SelfSuffixes = ["local", "localdomain", "lan", "home", "home.arpa", "internal"];
+
+    // "raspberrypi" == "raspberrypi.local" == "RASPBERRYPI.lan": the first DNS label, plus a domain
+    // check when the profile host carries one (#1234): it must be the machine's own domain or one of
+    // SelfSuffixes. "raspberrypi.site2" is NOT this machine by name alone.
+    internal static bool SameMachineName(string host, string machineName) {
         if (string.IsNullOrWhiteSpace(machineName)) {
             return false;
         }
-        var hostLabel = host.Split('.', 2)[0];
-        var machineLabel = machineName.Trim().Split('.', 2)[0];
-        return hostLabel.Length > 0 && hostLabel.Equals(machineLabel, StringComparison.OrdinalIgnoreCase);
+        var hostParts = host.Split('.', 2);
+        var machineParts = machineName.Trim().Split('.', 2);
+        if (hostParts[0].Length == 0 || !hostParts[0].Equals(machineParts[0], StringComparison.OrdinalIgnoreCase)) {
+            return false;
+        }
+        if (hostParts.Length == 1) {
+            return true; // bare label
+        }
+        var hostDomain = hostParts[1].TrimEnd('.');
+        if (machineParts.Length == 2 && hostDomain.Equals(machineParts[1].TrimEnd('.'), StringComparison.OrdinalIgnoreCase)) {
+            return true; // our own FQDN
+        }
+        foreach (var suffix in SelfSuffixes) {
+            if (hostDomain.Equals(suffix, StringComparison.OrdinalIgnoreCase)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>The production decision: the pure check against this machine's name and interface
@@ -103,7 +126,15 @@ public sealed partial class GuiderService {
         try {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(HostResolveTimeout);
-            var resolved = await resolve(name, cts.Token).ConfigureAwait(false);
+            // WaitAsync bounds the CALLER: the token does not abort an in-flight getaddrinfo on every
+            // platform, so without it a restart request (POST .../guider/restart) could sit on the OS
+            // resolver timeout instead of ~1.5 s before its 202 (#1234). An orphaned resolve finishes
+            // on its own and is discarded.
+            var resolving = resolve(name, cts.Token);
+            // An orphaned resolve that faults after WaitAsync gave up must not become an unobserved task exception.
+            _ = resolving.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            var resolved = await resolving.WaitAsync(HostResolveTimeout, ct).ConfigureAwait(false);
             foreach (var address in resolved) {
                 if (IsLocalGuiderHost(address.ToString(), machineName, localAddresses)) {
                     return true;
