@@ -88,9 +88,10 @@ namespace OpenAstroAra.Test {
             // 48 px tall at ~1.9"/px, a ~0.03° field: narrower than D80's range, so the deepest wins.
             var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
-            File.WriteAllBytes(Path.Combine(dir, "d80_0101.1476"), new byte[] { 1 });
-            File.WriteAllBytes(Path.Combine(dir, "h18_0101.1476"), new byte[] { 1 });
-            File.WriteAllBytes(Path.Combine(dir, "w08_0101.001"), new byte[] { 1 });
+            // Two tiles each: a single tile is a partial download since #1215 and is not offered.
+            foreach (var tile in new[] { "d80_0101.1476", "d80_0102.1476", "h18_0101.1476", "h18_0102.1476", "w08_0101.001" }) {
+                File.WriteAllBytes(Path.Combine(dir, tile), new byte[] { 1 });
+            }
             try {
                 var args = Args(new ASTAPSolver("/usr/bin/astap_cli", dir));
                 Assert.That(args, Does.Contain($"-d \"{dir}\" -D h18"));
