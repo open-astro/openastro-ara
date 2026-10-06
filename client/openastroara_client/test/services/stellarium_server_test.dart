@@ -531,8 +531,13 @@ void main() {
       expect(page, isNot(contains("'Slew sent ✓'")));
       expect(page, contains('function waitForSlewEnd('));
       expect(page, contains("fetch(API + '/api/v1/equipment/telescope')"));
-      expect(page, contains("st === 'slewing' || st === 'unparking'"));
-      expect(page, contains("cb('Slewed ✓')"));
+      // ✓ only after the daemon reported slewing and then stopped: a rejected
+      // slew never leaves tracking/idle (ResolveRuntimeState has no 'error'),
+      // and must end on the neutral "Slew sent" (review on #1277).
+      expect(page, contains("if (st === 'slewing') { sawSlewing = true; }"));
+      expect(page, contains("else if (st && sawSlewing) { cb('Slewed ✓'); return; }"));
+      expect(page, isNot(contains("sawSlewing || tries")));
+      expect(page, contains("cb(sawSlewing ? 'Slew failed' : 'Mount parked')"));
       // The GoTo button stays disabled through the interim "Slewing…" label.
       expect(page, contains('if (!done) return;'));
     });

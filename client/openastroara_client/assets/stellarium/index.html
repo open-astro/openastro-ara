@@ -510,11 +510,15 @@ function slewMount(raHours, decDeg, cb) {
 }
 
 // Poll GET /equipment/telescope (1 s) until runtime.state is no longer
-// "slewing"/"unparking" — the same field the Flutter mount overlay watches —
-// and hand cb a final label. Bounded: a slew that the daemon never reports
-// finished within ~2 min ends as "Slew sent" (the daemon owns the mount's
-// truth, the page only reports). A failed poll falls back to the same label
-// rather than inventing a result.
+// "slewing" — the same field the Flutter mount overlay watches — and hand cb
+// a final label. "Slewed ✓" is earned only after the daemon REPORTED slewing
+// and then stopped: SlewInBackground is fire-and-forget, so a driver that
+// rejects the target (past the limits, still parked because the unpark
+// failed) just logs and the state never leaves tracking/idle/parked. Seeing
+// no slewing at all is therefore "the daemon took it, the mount didn't
+// move", reported as the neutral "Slew sent" (review on #1277). A mount that
+// ends parked is reported as such. Bounded (~2 min) and a failed poll falls
+// back to "Slew sent" rather than inventing a result.
 function waitForSlewEnd(cb) {
   var tries = 0, sawSlewing = false;
   function tick() {
@@ -522,9 +526,10 @@ function waitForSlewEnd(cb) {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (t) {
         var st = t && t.runtime ? t.runtime.state : null;
-        if (st === 'slewing' || st === 'unparking') { sawSlewing = true; }
-        else if (st === 'error') { cb('Slew failed'); return; }
-        else if (st && (sawSlewing || tries >= 2)) { cb('Slewed ✓'); return; }
+        if (st === 'slewing') { sawSlewing = true; }
+        else if (st === 'parked') { cb(sawSlewing ? 'Slew failed' : 'Mount parked'); return; }
+        else if (st && sawSlewing) { cb('Slewed ✓'); return; }
+        else if (st && tries >= 4) { cb('Slew sent'); return; } // never slewed: no ✓ to claim
         if (++tries >= 120) { cb('Slew sent'); return; }
         setTimeout(tick, 1000);
       })
