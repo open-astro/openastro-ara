@@ -34,11 +34,12 @@ namespace OpenAstroAra.Astrometry {
     /// <para>
     /// Lookup rules, in order: inside the table, linear interpolation between the bracketing
     /// midnights (a step of 0.5 s or more between neighbours is a leap second and is held, not
-    /// smeared); after the table, Bulletin A's own long-term formula
-    /// <c>UT1-UTC = A + B*(MJD - M0) - (UT2-UT1)</c>, evaluated for at most
-    /// <see cref="ExtrapolationDays"/> past the end and held constant beyond that (the formula is
-    /// a short-range fit that knows nothing of future leap seconds); before the table, the first
-    /// value. Anything outside the table also clamps to the +/-0.9 s that UTC's definition bounds
+    /// smeared), with the last row held for its whole day; from the midnight after the last row,
+    /// Bulletin A's own long-term formula <c>UT1-UTC = A + B*(MJD - M0) - (UT2-UT1)</c> anchored to
+    /// the last table value (offset by <c>last - formula(LastMjd)</c>, so the series continues
+    /// without a step at the seam), evaluated for at most <see cref="ExtrapolationDays"/> past the
+    /// end and held constant beyond that (the formula is a short-range fit that knows nothing of
+    /// future leap seconds); before the table, the first value. Anything outside the table also clamps to the +/-0.9 s that UTC's definition bounds
     /// DUT1 to, and logs once per process. A missing or unparseable table returns 0, which is
     /// what the stub did.
     /// </para>
@@ -68,6 +69,7 @@ namespace OpenAstroAra.Astrometry {
         private readonly double extrapolationA;
         private readonly double extrapolationB;
         private readonly int extrapolationM0;
+        private readonly double extrapolationOffset;
         private int loggedBefore;
         private int loggedAfter;
 
@@ -81,6 +83,9 @@ namespace OpenAstroAra.Astrometry {
             extrapolationA = a;
             extrapolationB = b;
             extrapolationM0 = m0;
+            // Anchor the formula to the table's last value so the series continues smoothly past the end:
+            // Bulletin A's fit and its own final prediction differ by tens of milliseconds at the seam.
+            extrapolationOffset = hasExtrapolation && values.Length > 0 ? values[values.Length - 1] - Formula(LastMjd) : 0;
         }
 
         /// <summary>The table the daemon uses: the <see cref="EnvOverride"/> file if set and readable, else the embedded snapshot.</summary>
@@ -106,7 +111,8 @@ namespace OpenAstroAra.Astrometry {
                 return false;
             }
             var mjd = DateTimeToMjd(date);
-            return mjd >= FirstMjd && mjd <= LastMjd;
+            // The last row covers its whole day: midnight of LastMjd up to (not including) the next midnight.
+            return mjd >= FirstMjd && mjd < LastMjd + 1;
         }
 
         /// <summary>UT1-UTC in seconds at <paramref name="date"/> (any <see cref="DateTimeKind"/>; converted to UTC). Never throws.</summary>
@@ -120,7 +126,7 @@ namespace OpenAstroAra.Astrometry {
                 LogOnce(ref loggedBefore, $"DUT1 requested for {date.ToUniversalTime():yyyy-MM-dd} before the bundled IERS table starts ({FirstDate:yyyy-MM-dd}); holding the first value");
                 return Clamp(values[0]);
             }
-            if (mjd > LastMjd) {
+            if (mjd >= LastMjd + 1) {
                 LogOnce(ref loggedAfter, $"DUT1 requested for {date.ToUniversalTime():yyyy-MM-dd} past the bundled IERS table ({Bulletin}, ends {LastDate:yyyy-MM-dd}); " +
                     (HasExtrapolation ? $"using the Bulletin A long-term formula for up to {ExtrapolationDays} days, then holding" : "holding the last value") +
                     " - regenerate with scripts/update-dut1-table.py or set " + EnvOverride);
@@ -130,6 +136,7 @@ namespace OpenAstroAra.Astrometry {
             var lower = (int)Math.Floor(mjd);
             var index = lower - firstMjd;
             if (index >= values.Length - 1) {
+                // Inside the table's last day: hold its value (there is no next midnight to slope towards).
                 return Clamp(values[values.Length - 1]);
             }
             var v0 = values[index];
@@ -148,8 +155,10 @@ namespace OpenAstroAra.Astrometry {
                 return last;
             }
             var bounded = Math.Min(mjd, LastMjd + (double)ExtrapolationDays);
-            return extrapolationA + extrapolationB * (bounded - extrapolationM0) - Ut2MinusUt1(bounded);
+            return Formula(bounded) + extrapolationOffset;
         }
+
+        private double Formula(double mjd) => extrapolationA + extrapolationB * (mjd - extrapolationM0) - Ut2MinusUt1(mjd);
 
         private static double Clamp(double v) => Math.Max(-MaxAbsDut1, Math.Min(MaxAbsDut1, v));
 
@@ -176,8 +185,16 @@ namespace OpenAstroAra.Astrometry {
 
         public static DateTime MjdToDateTime(double mjd) => MjdEpoch.AddDays(mjd);
 
-        private static Dut1Table LoadDefault() {
-            var overridePath = Environment.GetEnvironmentVariable(EnvOverride);
+        private static Dut1Table LoadDefault() => Load(Environment.GetEnvironmentVariable(EnvOverride));
+
+        /// <summary>
+        /// The <see cref="Bundled"/> factory: <paramref name="overridePath"/> if it names a readable table with rows,
+        /// else the embedded snapshot. Never throws: the result is cached in a <see cref="Lazy{T}"/> for the
+        /// process, so an exception here would poison every later transform.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A pathological OPENASTROARA_DUT1_TABLE value (embedded NUL, a denied path, a security policy) must fall back to the embedded table, not be cached as a permanent failure by the Lazy factory.")]
+        public static Dut1Table Load(string? overridePath) {
             if (!string.IsNullOrWhiteSpace(overridePath)) {
                 try {
                     using var reader = new StreamReader(overridePath);
@@ -187,8 +204,8 @@ namespace OpenAstroAra.Astrometry {
                         return table;
                     }
                     Logger.Warning($"{EnvOverride}={overridePath} holds no UT1-UTC rows; using the embedded IERS table");
-                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                    Logger.Warning($"{EnvOverride}={overridePath} could not be read ({ex.Message}); using the embedded IERS table");
+                } catch (Exception ex) {
+                    Logger.Warning($"{EnvOverride}={overridePath} could not be read ({ex.GetType().Name}: {ex.Message}); using the embedded IERS table");
                 }
             }
 
@@ -202,7 +219,8 @@ namespace OpenAstroAra.Astrometry {
                 var table = Parse(reader, "embedded");
                 table.LogLoaded();
                 return table;
-            } catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException) {
+            } catch (Exception ex) {
+                // Same reasoning as the override read above: this factory's result is cached for the process.
                 Logger.Error($"Embedded IERS DUT1 table could not be parsed; UT1-UTC falls back to 0", ex);
                 return Empty;
             }
