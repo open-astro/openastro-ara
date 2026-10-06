@@ -62,6 +62,11 @@ ClientPlatform get clientPlatform {
   return ClientPlatform.linux;
 }
 
+/// Touch-first platforms: no wheel or trackpad, so on-screen zoom controls
+/// stand in (an overshot pinch otherwise strands the view at the widest FOV).
+bool isTouchPlatform(ClientPlatform p) =>
+    p == ClientPlatform.android || p == ClientPlatform.iOS;
+
 /// What to call the machine running the client, in user-facing copy. The app
 /// ships on macOS, Windows, Linux, Android and iOS, so "this Mac" is wrong
 /// most of the time. Shared with friendly_error.dart's "same network as …".

@@ -749,13 +749,14 @@ void _preferLocalSubnetTests() {
     // The Pi advertises eth0 (house LAN) and ap0 (its own hotspot); the
     // laptop on the LAN must be offered the eth0 address, not whichever
     // A record happened to arrive first.
-    test('keeps only the address sharing a /24 with a local interface', () {
+    test('ranks the address sharing a /24 with a local interface first', () {
+      // #1198: off-subnet candidates are ranked after, not dropped.
       expect(
         ServerDiscoveryService.preferLocalSubnet(
           ['172.24.1.1', '192.168.1.234'],
           ['192.168.1.50'],
         ),
-        ['192.168.1.234'],
+        ['192.168.1.234', '172.24.1.1'],
       );
     });
 
@@ -765,7 +766,7 @@ void _preferLocalSubnetTests() {
           ['172.24.1.1', '192.168.1.234'],
           ['172.24.1.7'],
         ),
-        ['172.24.1.1'],
+        ['172.24.1.1', '192.168.1.234'],
       );
     });
 
@@ -785,13 +786,13 @@ void _preferLocalSubnetTests() {
       ]);
     });
 
-    test('several on-subnet candidates are all kept', () {
+    test('several on-subnet candidates all come first, in received order', () {
       expect(
         ServerDiscoveryService.preferLocalSubnet(
           ['192.168.1.2', '172.24.1.1', '192.168.1.3'],
           ['192.168.1.50', '10.9.9.9'],
         ),
-        ['192.168.1.2', '192.168.1.3'],
+        ['192.168.1.2', '192.168.1.3', '172.24.1.1'],
       );
     });
   });

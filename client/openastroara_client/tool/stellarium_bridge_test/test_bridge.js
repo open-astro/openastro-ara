@@ -1,8 +1,11 @@
-// Headless verification of the §36 planetarium engine + araStel bridge.
+// Headless verification of the §36 planetarium engine + page globals.
 // Serves assets/stellarium, loads index.html in headless Chrome, and asserts the
-// bridge mutates the engine (location/zoom/pan). Run via the puppeteer Docker
-// image — see run.sh. Exits non-zero on failure; prints page console + a result
-// JSON so a fix can be verified with no app and no human.
+// page's globals mutate the engine: `stel` (set in onReady), `zoomBy(factor)`
+// and `pointRaDec(ra, dec)` — the same entry points pollCmd's 'zoom' and
+// 'goto' commands call. (`window.araStel` was removed with #610's rewrite;
+// the harness checked it until #1198.) Run via the puppeteer Docker image —
+// see the Dockerfile beside this file. Exits non-zero on failure; prints page
+// console + a result JSON so a fix can be verified with no app and no human.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -49,36 +52,37 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   for (let i = 0; i < 20; i++) {
     const d = await page.evaluate(() => {
       return {
-        araStel: typeof window.araStel,
+        stel: typeof window.stel,
         engineFn: typeof window.StelWebEngine,
-        stelReady: !!(window.araStel && window.araStel._stel),
-        pending: window.araStel ? window.araStel._pending.length : -1,
+        stelReady: !!(window.stel && window.stel.core),
+        zoomBy: typeof window.zoomBy,
+        pointRaDec: typeof window.pointRaDec,
       };
     });
     console.log('[poll ' + i + '] ' + JSON.stringify(d));
-    if (d.stelReady) { ready = true; break; }
+    if (d.stelReady && d.zoomBy === 'function' && d.pointRaDec === 'function') { ready = true; break; }
     await sleep(3000);
   }
   const res = { ready };
   if (ready) {
-    res.fovType = await page.evaluate(() => typeof window.araStel._stel.fov);
-    await page.evaluate(() => window.araStel.setLocation(34.66, -106.78, 1500));
-    res.latRad = await page.evaluate(() => window.araStel._stel.core.observer.latitude);
-    res.fov0 = await page.evaluate(() => window.araStel._stel.fov);
-    await page.evaluate(() => window.araStel.zoomBy(0.5));
+    // The FOV lives on stel.core.fov (radians); a bare stel.fov is undefined.
+    res.fov0 = await page.evaluate(() => window.stel.core.fov);
+    await page.evaluate(() => window.zoomBy(0.5));
     await sleep(1200);
-    res.fov1 = await page.evaluate(() => window.araStel._stel.fov);
-    res.yaw0 = await page.evaluate(() => window.araStel._stel.core.observer.yaw);
-    await page.evaluate(() => window.araStel.panBy(20, 0));
-    await sleep(300);
-    res.yaw1 = await page.evaluate(() => window.araStel._stel.core.observer.yaw);
+    res.fov1 = await page.evaluate(() => window.stel.core.fov);
+    res.yaw0 = await page.evaluate(() => window.stel.core.observer.yaw);
+    // Point at Vega, then far from it: the view must turn.
+    await page.evaluate(() => window.pointRaDec(279.23, 38.78));
+    await sleep(600);
+    await page.evaluate(() => window.pointRaDec(83.82, -5.39));
+    await sleep(600);
+    res.yaw1 = await page.evaluate(() => window.stel.core.observer.yaw);
   }
   console.log('=== RESULT ===\n' + JSON.stringify(res, null, 2));
   console.log('=== PAGE LOGS (' + logs.length + ') ===\n' + logs.slice(0, 50).join('\n'));
   await browser.close(); server.close();
   // Verdict
-  const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6 &&
-             Math.abs(res.latRad - 34.66 * Math.PI / 180) < 1e-3;
+  const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6;
   console.log('VERDICT=' + (ok ? 'PASS' : 'FAIL'));
   process.exit(ok ? 0 : 2);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });

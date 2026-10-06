@@ -78,8 +78,7 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     final caldwell = iId >= 0 && f.length > iId ? caldwellNumOf(f[iId]) : null;
     String? common;
     if (iCommon >= 0 && f.length > iCommon) {
-      final first = f[iCommon].split(',').first.trim();
-      if (first.isNotEmpty) common = first;
+      common = firstCommonName(f[iCommon]);
     }
     out.add(PlanningDso(
       id: name,
@@ -255,4 +254,17 @@ String prettyDsoName(String name) {
   final rest = name.substring(i);
   if (rest.isEmpty || !_isDigit(rest[0])) return name;
   return '${name.substring(0, prefixLen)} $rest';
+}
+
+/// The display name from an OpenNGC-layout "Common names" cell: the first
+/// comma-separated alias, or null when there is none (a leading comma counts
+/// as none, as the daemon has always treated it). The WR catalogue fills
+/// the cell with "Anon (Marston)", "Anon IR (Wachter)" … for 27 stars that
+/// have NO common name — a placeholder, not a name — so those fall back to
+/// the id (#1198).
+/// Mirrors SkyCatalogReader/SkyCatalogService on the daemon.
+String? firstCommonName(String cell) {
+  final first = cell.split(',').first.trim();
+  if (first.isEmpty || first.startsWith('Anon ')) return null;
+  return first;
 }

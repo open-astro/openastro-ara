@@ -74,8 +74,16 @@ void main() {
     expect(wr.firstWhere((d) => d.id == 'WR 21').name, 'WR 21',
         reason: 'no common name: the id, not the HD identifier');
     expect(wr.firstWhere((d) => d.id == 'WR 19').name, 'WR 19');
-    expect(wr.firstWhere((d) => d.id == 'WR 30').name, 'Anon (Marston)',
-        reason: 'a real common name on a two-classification row survives');
+    // The two-classification row's Common names cell survives the shift and
+    // still reaches the parser — but "Anon (Marston)" is the catalogue's
+    // placeholder for "no common name", so the id is shown instead (#1198).
+    expect(firstCommonName('Anon (Marston)'), isNull);
+    expect(wr.firstWhere((d) => d.id == 'WR 30').name, 'WR 30');
+    expect(wr.where((d) => d.name.startsWith('Anon')), isEmpty);
+    expect(wr.firstWhere((d) => d.id == 'WR 136').name, 'NGC 6888');
+    expect(firstCommonName(',Alt Name'), isNull,
+        reason: 'leading comma = no common name, same as the daemon');
+    expect(firstCommonName('Anon IR (Wachter)'), isNull);
   });
 
   test('planning cull keeps bright + magnitude-less nebulae, drops faint and stars', () {

@@ -497,10 +497,40 @@ function slewMount(raHours, decDeg, cb) {
         body: JSON.stringify({ right_ascension_hours: raHours, declination_degrees: decDeg, sync: false }),
       });
     }).then(function (r) {
-      cb(r.ok ? 'Slew sent ✓' : (r.status === 500 ? 'No mount' : 'Slew failed'));
+      if (!r.ok) { cb(r.status === 500 ? 'No mount' : 'Slew failed', true); return; }
+      // The daemon answers 202 the moment the slew is QUEUED (TelescopeService
+      // runs it in the background), so "✓" here would claim a slew that hasn't
+      // moved the mount yet (#1198). Follow runtime.state until it leaves
+      // slewing/unparking, then report the outcome.
+      cb('Slewing…', false);
+      waitForSlewEnd(function (outcome) { cb(outcome, true); });
     }).catch(function () {
-      cb('No mount');
+      cb('No mount', true);
     });
+}
+
+// Poll GET /equipment/telescope (1 s) until runtime.state is no longer
+// "slewing"/"unparking" — the same field the Flutter mount overlay watches —
+// and hand cb a final label. Bounded: a slew that the daemon never reports
+// finished within ~2 min ends as "Slew sent" (the daemon owns the mount's
+// truth, the page only reports). A failed poll falls back to the same label
+// rather than inventing a result.
+function waitForSlewEnd(cb) {
+  var tries = 0, sawSlewing = false;
+  function tick() {
+    fetch(API + '/api/v1/equipment/telescope')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (t) {
+        var st = t && t.runtime ? t.runtime.state : null;
+        if (st === 'slewing' || st === 'unparking') { sawSlewing = true; }
+        else if (st === 'error') { cb('Slew failed'); return; }
+        else if (st && (sawSlewing || tries >= 2)) { cb('Slewed ✓'); return; }
+        if (++tries >= 120) { cb('Slew sent'); return; }
+        setTimeout(tick, 1000);
+      })
+      .catch(function () { cb('Slew sent'); });
+  }
+  setTimeout(tick, 400);
 }
 
 // Catalog stars render as filled discs; the engine scales the bright ones up so
@@ -572,8 +602,9 @@ function wireSelection() {
     if (block) { showSearchMsg(block, 6000); return; }
     var btn = document.getElementById('i-goto');
     btn.textContent = 'Slewing…'; btn.disabled = true;
-    slewMount(selRaHours, selDecDeg, function (text) {
+    slewMount(selRaHours, selDecDeg, function (text, done) {
       btn.textContent = text;
+      if (!done) return; // interim "Slewing…": the button stays disabled until the mount settles
       setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
     });
   };

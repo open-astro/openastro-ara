@@ -55,9 +55,12 @@ final dsoCatalogProvider = FutureProvider<List<PlanningDso>>((ref) async {
   final bundled = planningCull(await ref.watch(bundledCatalogProvider.future));
   final ids = {for (final d in bundled) d.id};
   final mirror = await ref.watch(dsoCatalogServiceProvider).loadCached();
+  // Mirror rows bypass planningCull (a server-side package the bundle doesn't
+  // know ships uncut), so repeat the star gate here: a star has no field to
+  // frame and would score "size unknown" neutral (#1198, review #1105).
   return [
     ...bundled,
     for (final d in mirror)
-      if (!ids.contains(d.id)) d,
+      if (!ids.contains(d.id) && !isStarType(d.type)) d,
   ];
 });

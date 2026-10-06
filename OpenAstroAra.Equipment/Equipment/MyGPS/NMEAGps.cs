@@ -135,9 +135,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         }
 
         public void Disconnect() {
-            if (currentDevice != null && currentDevice.IsOpen) currentDevice.CloseAsync();
-
             try {
+                // Synchronous by contract (IDisposable path); the port close is awaited so Dispose()
+                // below never races a still-closing stream (#1198 — the Task was dropped before).
+                if (currentDevice != null && currentDevice.IsOpen) currentDevice.CloseAsync().GetAwaiter().GetResult();
                 if (currentDevice != null) { currentDevice.MessageReceived -= Device_MessageReceived; } // unsubscribe to avoid multiple messages
                 if (fixTimer != null) { fixTimer.Enabled = false; fixTimer.Dispose(); }
                 currentDevice?.Dispose();

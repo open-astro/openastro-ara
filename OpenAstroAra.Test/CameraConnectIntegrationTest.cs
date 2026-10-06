@@ -33,39 +33,17 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     [Category("Integration")]
-    public class CameraConnectIntegrationTest {
+    public class CameraConnectIntegrationTest : OmniSimIntegrationFixture {
 
-        private static readonly Uri ManagementProbeUri = new("http://127.0.0.1:32323/management/apiversions");
-        private const int MaxDiscoveryAttempts = 6;
+        protected override string DeviceName => "Camera";
 
         private string _profileDir = string.Empty;
         private SqliteAraDatabase _db = null!;
 
-        [OneTimeSetUp]
-        public async Task OneTimeSetUp() {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            try {
-                using var resp = await http.GetAsync(ManagementProbeUri).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode) {
-                    Assert.Ignore($"OmniSim management API returned {(int)resp.StatusCode} on :32323 — skipping live Camera test.");
-                }
-            } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
-                Assert.Ignore("No ASCOM OmniSim answering on :32323 — start one (or run the alpaca-sim-integration CI job) to exercise this test.");
-            }
-            _profileDir = Path.Combine(Path.GetTempPath(), $"oara-camera-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(_profileDir);
+        protected override async Task OnOmniSimAvailable() {
+            _profileDir = CreateTempDir("camera");
             _db = new SqliteAraDatabase(_profileDir, logger: null);
             await _db.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-
-        [OneTimeTearDown]
-        public void OneTimeTearDown() {
-            // OneTimeSetUp's Assert.Ignore (no OmniSim) fires before _profileDir is set, and
-            // Directory.Delete("") throws ArgumentException, which failed the run with every test green.
-            if (_profileDir.Length == 0) {
-                return;
-            }
-            try { Directory.Delete(_profileDir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
 
         [Test]
