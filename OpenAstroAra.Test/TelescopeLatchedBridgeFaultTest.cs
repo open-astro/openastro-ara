@@ -55,6 +55,13 @@ namespace OpenAstroAra.Test {
                 new InvalidOperationException("Mount communications compromised"))), Is.True, "any read, not the first");
             Assert.That(TelescopeService.IsLatchedBridgeFault(new AggregateException(
                 new InvalidOperationException("Property AtHome is not implemented"))), Is.False);
+            // #1246 — the fault row and log name the read that carried the phrase, not the aggregate's wrapper.
+            var notImpl = new InvalidOperationException("Property AtHome is not implemented");
+            var latched = new InvalidOperationException("Mount communications compromised");
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(new AggregateException(notImpl, latched)), Is.EqualTo(latched.Message));
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(new InvalidOperationException("outer", latched)), Is.EqualTo(latched.Message), "inner of a wrapper");
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(latched), Is.EqualTo(latched.Message));
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(notImpl), Is.EqualTo(notImpl.Message), "no phrase anywhere: the message as given");
         }
 
         // ─── Bench: a scripted mount that latches ─────────────────────────────────────────────
