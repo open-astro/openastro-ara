@@ -99,6 +99,18 @@ public sealed partial class GuiderService {
         var alreadyReacted = _latchedFaultKind is not null
             && !(kind == GuiderFaultKind.LinkDown && _latchedFaultKind == GuiderFaultKind.EquipmentDisconnected);
         if (alreadyReacted) {
+            // #1241 — the reaction stays one-shot, but the history must show every drop: a repeated
+            // camera drop in a latched episode gets its own §42.5 row (no action stamp — nothing was
+            // done) and becomes the open row the next EquipmentReconnected resolves.
+            if (kind == GuiderFaultKind.EquipmentDisconnected && _openCameraDropFault is null) {
+                var repeat = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2",
+                    EquipmentFaultKind.Disconnected,
+                    "guide camera disconnected again — guider link still up; the on_guider_lost reaction already ran this episode",
+                    DateTimeOffset.UtcNow);
+                RecordFaultQuietly(repeat);
+                _openCameraDropFault = repeat;
+                LogRepeatedCameraDrop();
+            }
             return;
         }
         _latchedFaultKind = kind;
@@ -375,4 +387,7 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(EventId = 4229, Level = LogLevel.Information, Message = "§42.2 guider reports its {DeviceType} back — resolving the open camera-drop fault row (#1191); the one-shot reaction stays latched")]
     private partial void LogCameraReconnected(string deviceType);
+
+    [LoggerMessage(EventId = 4230, Level = LogLevel.Warning, Message = "Guide camera dropped again in the same episode — recorded (§42.5, #1241); the on_guider_lost reaction stays one-shot")]
+    private partial void LogRepeatedCameraDrop();
 }
