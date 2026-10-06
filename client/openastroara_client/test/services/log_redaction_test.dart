@@ -52,8 +52,10 @@ void main() {
         LogRedaction.redactLine('k=abcdefghij-klmnopqrst_uvwxyzABCDEF0123=='),
         'k=[REDACTED-TOKEN]',
       );
+      // Unpadded and short of the base64 rule's 32-run floor, so only the
+      // Bearer rule can catch it; the old one stopped at the `+`.
       expect(
-        LogRedaction.redactLine('Bearer abcdefghij+klmnopqrst/uvwxyz0123=='),
+        LogRedaction.redactLine('Bearer abcdefghij+klmnopqrst/uvwxyz'),
         'Bearer [REDACTED-TOKEN]',
       );
       // A git SHA has no padding and is diagnostic.

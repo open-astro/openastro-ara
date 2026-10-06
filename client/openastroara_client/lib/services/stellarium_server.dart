@@ -83,6 +83,11 @@ class StellariumServer {
     _dssRetryAfter = null;
     _dssLastFailure = null;
     _dssLastSuccess = null;
+    _dssSlotsHeld = 0;
+    for (final w in _dssSlotWaiters) {
+      if (!w.isCompleted) w.complete();
+    }
+    _dssSlotWaiters.clear();
   }
 
   /// The DSS route carries the per-run [token] in its PATH (`/dss-<token>/`)
@@ -355,6 +360,8 @@ class StellariumServer {
     try {
       await c.future.timeout(dssHeadersTimeout + dssBodyTimeout);
     } on TimeoutException {
+      // A release in the same turn as the timer already handed us the slot.
+      if (c.isCompleted) return;
       _dssSlotWaiters.remove(c);
       _dssSlotsHeld++; // proceed anyway, counted
     }
@@ -732,6 +739,11 @@ class StellariumServer {
           await _acquireFetchSlot();
           holdsSlot = true;
           inFlight = _dssFetches[key]; // another worker may have started it
+          if (inFlight != null) {
+            // Joining their fetch: the slot is theirs to hold, not ours.
+            _releaseFetchSlot();
+            holdsSlot = false;
+          }
           // Offline may have been established while waiting: a fetch now
           // would only arm the backoff again.
           if (inFlight == null &&

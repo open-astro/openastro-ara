@@ -322,6 +322,7 @@ void main() {
     late HttpServer origin;
     late StellariumServer server;
     var originHits = 0;
+    var originOpen = 0, originPeak = 0;
     final originUris = <Uri>[];
     final tile = Uint8List.fromList([0xFF, 0xD8, 1, 2, 3, 0xFF, 0xD9]);
     final savedOrigin = StellariumServer.dssOrigin;
@@ -342,6 +343,15 @@ void main() {
           // The cache-buster rides the query; the body says which release.
           req.response.headers.contentType = ContentType('image', 'jpeg');
           req.response.add(utf8.encode('v=${req.uri.queryParameters['v']}'));
+        } else if (path.startsWith('/Norder7/')) {
+          // Answers after a delay WITHOUT arming the backoff: the slot frees
+          // on success, which is where a soft cap lets every waiter through.
+          originOpen++;
+          if (originOpen > originPeak) originPeak = originOpen;
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          originOpen--;
+          req.response.headers.contentType = ContentType('image', 'jpeg');
+          req.response.add(tile);
         } else if (path.startsWith('/Norder6/')) {
           // Distinct small tiles for the eviction test.
           req.response.headers.contentType = ContentType('image', 'jpeg');
@@ -549,19 +559,20 @@ void main() {
 
     test('the fetch cap is exact under a burst of misses (#1296 note)', () async {
       server.resetDssState();
+      originPeak = 0;
       final before = originHits;
+      // Twelve distinct misses, cap 2, against tiles that ANSWER after 300 ms:
+      // each success frees a slot, and a soft cap woke every waiter on that
+      // release and let them all start at once (peak 6 on the old code).
       final burst = [
-        for (var i = 10; i < 16; i++)
-          get('${server.dssPathPrefix}Norder5/Dir0/Npix$i.jpg'),
+        for (var i = 10; i < 22; i++)
+          get('${server.dssPathPrefix}Norder7/Dir0/Npix$i.jpg'),
       ];
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      expect(originHits - before, 2, reason: 'cap = 2, four waiters queued');
       for (final r in await Future.wait(burst)) {
-        expect(r.status, HttpStatus.notFound);
+        expect(r.status, HttpStatus.ok);
       }
-      // The two holders timed out and armed the backoff; the waiters were
-      // then answered from it, so the survey never saw more than the cap.
-      expect(originHits - before, 2);
+      expect(originHits - before, 12, reason: 'every miss was fetched once');
+      expect(originPeak, 2, reason: 'never more than the cap in flight');
     });
 
     test("an upstream 404 is the survey's answer: 404 through, nothing written, still online",
