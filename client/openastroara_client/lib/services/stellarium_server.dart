@@ -83,11 +83,9 @@ class StellariumServer {
     _dssRetryAfter = null;
     _dssLastFailure = null;
     _dssLastSuccess = null;
-    _dssSlotsHeld = 0;
-    for (final w in _dssSlotWaiters) {
-      if (!w.isCompleted) w.complete();
-    }
-    _dssSlotWaiters.clear();
+    // Slots are left alone: every holder releases in its own finally, and a
+    // reset that zeroed the count while a fetch ran would send it negative
+    // on that release (review on #1297).
   }
 
   /// The DSS route carries the per-run [token] in its PATH (`/dss-<token>/`)
@@ -371,7 +369,7 @@ class StellariumServer {
     if (_dssSlotWaiters.isNotEmpty) {
       // Hand the slot straight to the next waiter: the count is unchanged.
       _dssSlotWaiters.removeFirst().complete();
-    } else {
+    } else if (_dssSlotsHeld > 0) {
       _dssSlotsHeld--;
     }
   }

@@ -562,8 +562,8 @@ void main() {
       originPeak = 0;
       final before = originHits;
       // Twelve distinct misses, cap 2, against tiles that ANSWER after 300 ms:
-      // each success frees a slot, and a soft cap woke every waiter on that
-      // release and let them all start at once (peak 6 on the old code).
+      // each success frees a slot, and a soft cap that woke every waiter on
+      // a release could let several start at once; the peak must stay at 2.
       final burst = [
         for (var i = 10; i < 22; i++)
           get('${server.dssPathPrefix}Norder7/Dir0/Npix$i.jpg'),
