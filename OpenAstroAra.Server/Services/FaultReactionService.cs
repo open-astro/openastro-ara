@@ -412,7 +412,18 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             while (sw.Elapsed < ConnectConfirmTimeout) {
                 var state = await _reconnector.GetConnectionStateAsync(type, _cts.Token).ConfigureAwait(false);
                 if (state == EquipmentConnectionState.Connected) {
-                    return true;
+                    // #1246 — for the mount, Connected is not recovered: a bridge still latched after the
+                    // reconnect answers Connected while every read fails. Wait for one clean tick, or
+                    // let the confirm window run out and walk the next rung.
+                    if (type.Canonical() != DeviceType.Telescope || _telescope is null || _telescope.HasCleanReadSinceConnect) {
+                        return true;
+                    }
+                } else if (state == EquipmentConnectionState.Error) {
+                    return false; // the background connect already failed — next rung
+                }
+                if (state == EquipmentConnectionState.Connected) {
+                    await Task.Delay(ConnectPollInterval, _cts.Token).ConfigureAwait(false);
+                    continue;
                 }
                 if (state == EquipmentConnectionState.Error) {
                     return false; // the background connect already failed — next rung
