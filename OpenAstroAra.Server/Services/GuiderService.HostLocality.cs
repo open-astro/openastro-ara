@@ -130,7 +130,11 @@ public sealed partial class GuiderService {
             // platform, so without it a restart request (POST .../guider/restart) could sit on the OS
             // resolver timeout instead of ~1.5 s before its 202 (#1234). An orphaned resolve finishes
             // on its own and is discarded.
-            var resolved = await resolve(name, cts.Token).WaitAsync(HostResolveTimeout, ct).ConfigureAwait(false);
+            var resolving = resolve(name, cts.Token);
+            // An orphaned resolve that faults after WaitAsync gave up must not become an unobserved task exception.
+            _ = resolving.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            var resolved = await resolving.WaitAsync(HostResolveTimeout, ct).ConfigureAwait(false);
             foreach (var address in resolved) {
                 if (IsLocalGuiderHost(address.ToString(), machineName, localAddresses)) {
                     return true;

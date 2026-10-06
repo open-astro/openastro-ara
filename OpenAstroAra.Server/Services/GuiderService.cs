@@ -151,9 +151,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     }
 
     // The connect prologue, atomic under _gate. Returns false only for a §63.3 auto-reconnect
-    // (recoveringFor set) whose target is no longer the active profile's guider (#1192): a profile
-    // switch since the drop must not have this pass write the OLD host:port into the NEW profile
-    // and dial it as a "recovery". Every user/mediator connect returns true.
+    // (recoveringFor set) whose target is no longer the active profile's guider (#1192): a host:port
+    // change since the drop (an edit, or a switch to a profile that uses another guider) must not
+    // have this pass write the OLD host:port into the NEW profile and dial it as a "recovery". A
+    // same-target switch keeps the pass (#1234). Every user/mediator connect returns true.
     private bool BeginConnect(GuiderConnectRequestDto request, bool supersedeRecovery, RecoveryTarget? recoveringFor) {
         ArgumentNullException.ThrowIfNull(request);
         long generation;

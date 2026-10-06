@@ -10224,8 +10224,8 @@ systemd's `Restart=on-failure` handles basic crash recovery. ARA layers addition
   connect-time `systemctl start`, the crash-recovery status poll/restart, and §63.12's manual
   restart — runs only when the profile's guider host is this machine (blank, `localhost`, a
   loopback/interface address, or this host's name — a name carrying a domain must be our own
-  FQDN or end in `local`/`localdomain`/`lan`/`home`/`home.arpa`/`internal`; any other domain
-  is decided by a bounded DNS resolve, #1234). A remote guider host gets a "Guider connection
+  FQDN or have exactly `local`/`localdomain`/`lan`/`home`/`home.arpa`/`internal` as its domain;
+  any other domain, `raspberrypi.foo.lan` included, is decided by a bounded DNS resolve, #1234). A remote guider host gets a "Guider connection
   lost" Warning and a plain reconnect loop for the same retry window; nothing local is started
   or restarted, and a remote guider that never returns leaves a `guider.process.failed`
   diagnostic. Recovery decides locality once per pass, pins the host:port that was live at the

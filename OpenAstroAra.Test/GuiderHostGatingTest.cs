@@ -29,8 +29,9 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// #1192 — the guider host is gated in two places. (1) §63.3 recovery reconnects only to the
-    /// host:port that dropped, under the profile that was active when it dropped: a profile switch
-    /// mid-recovery abandons the pass instead of "recovering" onto the new profile's guider. (2) The
+    /// host:port that dropped: a re-targeted active profile (by edit, or a switch to a profile that
+    /// uses another guider) abandons the pass instead of "recovering" onto the new target; a switch
+    /// to a profile on the same host:port keeps it (#1234). (2) The
     /// local systemd unit is only started/restarted when the configured host IS this machine; a
     /// remote guider gets a plain reconnect and a log line, never a <c>systemctl start</c>.
     /// Driven against the bench <see cref="FakeGuider"/>.
@@ -160,7 +161,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void RecoveryAbandonReason_flags_a_profile_or_target_change_only() {
+        public void RecoveryAbandonReason_flags_a_target_change_only() {
             var target = new GuiderService.RecoveryTarget("127.0.0.1", 4400, ProfileA);
             Assert.That(GuiderService.RecoveryAbandonReason(target, "127.0.0.1", 4400, ProfileA), Is.Null);
             // Host comparison is case-insensitive (DNS names).
