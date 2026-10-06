@@ -814,7 +814,7 @@ public partial class Program {
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
         // §42.5 — fault-log retention sweep (#1145): drops fault rows older than storage.fault_log_retention_days
-        // at startup and once a day. 0 keeps everything.
+        // two minutes after start, then once a day. 0 keeps everything.
         builder.Services.AddHostedService<FaultLogRetentionService>();
         builder.Services.AddHostedService<StorageDeviceWatcher>();
 

@@ -59,7 +59,7 @@ public sealed record StorageSettingsDto(
     // still deserialize.
     int BackupRetentionCount = 20,
     // §42.5 — how many days of fault-log rows (the faults table) the daemon keeps. FaultLogRetentionService
-    // deletes rows detected before now − days once a day and at startup. 0 = keep everything (#1145).
+    // deletes rows detected before now − days two minutes after start, then once a day. 0 = keep everything (#1145).
     // Optional ctor default so older profile.json files still deserialize.
     int FaultLogRetentionDays = 90);
 

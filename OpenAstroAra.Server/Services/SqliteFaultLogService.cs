@@ -398,15 +398,20 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             // detected_at is stored as DateTimeOffset "O" text and may carry any offset, so the cutoff is
             // applied after parsing rather than by string comparison.
             var doomed = new List<string>();
+            var unparseable = 0;
             await using (var select = conn.CreateCommand()) {
                 select.CommandText = "SELECT id, detected_at FROM faults;";
                 await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
                 while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
-                    if (DateTimeOffset.TryParse(reader.GetString(1), CultureInfo.InvariantCulture, DateTimeStyles.None, out var detected)
-                            && detected < cutoffUtc) {
+                    if (!DateTimeOffset.TryParse(reader.GetString(1), CultureInfo.InvariantCulture, DateTimeStyles.None, out var detected)) {
+                        unparseable++; // kept forever (the safe choice), but made visible
+                    } else if (detected < cutoffUtc) {
                         doomed.Add(reader.GetString(0));
                     }
                 }
+            }
+            if (unparseable > 0) {
+                LogUnparseableRows(unparseable);
             }
             if (doomed.Count == 0) {
                 return 0;
@@ -433,6 +438,9 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: pruned {Count} row(s) detected before {CutoffUtc:O} (§42.5 retention, #1145)")]
     private partial void LogPruned(int count, DateTimeOffset cutoffUtc);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Fault log: {Count} row(s) have an unparseable detected_at and are skipped by retention (§42.5, #1145)")]
+    private partial void LogUnparseableRows(int count);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fault log: recorded {DeviceType} {Kind} (§42.5)")]
     private partial void LogFaultRecorded(DeviceType deviceType, EquipmentFaultKind kind);

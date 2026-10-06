@@ -582,5 +582,5 @@ namespace OpenAstroAra.Test {
         public async Task PruneBefore_on_an_empty_table_is_a_no_op() {
             Assert.That(await service.PruneBeforeAsync(DateTimeOffset.UtcNow, CancellationToken.None), Is.EqualTo(0));
         }
-}
+    }
 }
