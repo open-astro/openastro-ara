@@ -44,6 +44,16 @@ void main() {
         reason: 'the Nebula column rides in as the common name');
   });
 
+  test('vdB rows drop the illuminating star\'s V-Mag (#1141)', () {
+    final vdb = load('vdb.csv');
+    expect(vdb.length, 158);
+    expect(vdb.every((d) => d.magnitude == null), isTrue,
+        reason: 'vdB "V-Mag" is the star (vdB 1 = 8.6 is BD+57 22), not the nebula');
+    expect(vdb.every((d) => d.type == 'RfN'), isTrue);
+    // Still planning-eligible: RfN is a magnitude-less imaging type.
+    expect(planningCull(vdb).length, 158);
+  });
+
   test('no add-on row carries the separator inside a cell (review #1107)', () {
     // A ";" inside the Hubble cell ("WN5o+O4-6; WN5o+O7V") column-shifted 165
     // of the 717 WR rows: Identifiers landed in Common names, so WR 21 was

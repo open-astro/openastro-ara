@@ -42,13 +42,15 @@ const Map<String, ImagingRegion> overrides = {
   'IC1805': ImagingRegion('Heart Nebula (IC 1805)', 'HII', 150, 150),
   'IC1848': ImagingRegion('Soul Nebula (IC 1848)', 'HII', 150, 75),
   'NGC281': ImagingRegion('Pacman Nebula (NGC 281)', 'HII', 35, 30),
-  'IC443': ImagingRegion('Jellyfish Nebula (IC 443)', 'SNR', 50, 40),
+  // Keys are catalog spelling: OpenNGC zero-pads IC ids below 1000
+  // ('IC0443'), so an unpadded key never matches a real row (#1141).
+  'IC0443': ImagingRegion('Jellyfish Nebula (IC 443)', 'SNR', 50, 40),
   'NGC2264': ImagingRegion('Cone / Christmas Tree region (NGC 2264)', 'HII', 60, 30),
   'NGC2244': ImagingRegion('Rosette Nebula (NGC 2244)', 'HII', 80, 60),
   'NGC1499': ImagingRegion('California Nebula (NGC 1499)', 'HII', 145, 40),
   // Orion.
   'NGC1976': ImagingRegion('Orion Nebula + Running Man (M42)', 'HII', 85, 60),
-  'IC434': ImagingRegion('Horsehead + Flame region (IC 434)', 'HII', 60, 30),
+  'IC0434': ImagingRegion('Horsehead + Flame region (IC 434)', 'HII', 60, 30),
   // Wolf-Rayet shells — the blown-off envelopes of the most massive stars;
   // spectacular OIII/Ha narrowband targets most imagers have never framed.
   'NGC2359': ImagingRegion("Thor's Helmet — WR 7 shell (NGC 2359)", 'EmN', 22, 16),
@@ -62,7 +64,7 @@ const Map<String, ImagingRegion> overrides = {
 };
 
 /// Photogenic tier for catalog rows that carry NO photometry (the Sharpless
-/// package has 314 rows with zero magnitudes and zero surface brightness —
+/// package has 313 rows with zero magnitudes and zero surface brightness —
 /// the ranker literally cannot tell Sh2-110 from the Tulip). 3 = showpiece,
 /// 2 = a good field, 1 = faint/specialist but worth knowing about. A row not
 /// listed here is "no photometry and not a known imaging field" and the
@@ -75,43 +77,70 @@ const Map<String, ImagingRegion> overrides = {
 /// replaced by the region wherever the region is present.
 const Map<String, int> photogenicTier = {
   // Scorpius / Sagittarius / Serpens.
-  'Sh2-8': 3, // Cat's Paw (NGC 6334)
-  'Sh2-11': 3, // Lobster (NGC 6357)
   'Sh2-64': 2, // W40
   // Vulpecula / Cygnus.
   'Sh2-88': 2,
   'Sh2-91': 1, // Cygnus SNR filament — faint
   'Sh2-104': 2,
   'Sh2-106': 2,
-  'Sh2-108': 3, // Sadr / Butterfly (IC 1318)
   'Sh2-112': 2,
   'Sh2-115': 2,
-  'Sh2-117': 3, // North America + Pelican
   'Sh2-119': 2, // Clamshell
   'Sh2-124': 2,
   'Sh2-126': 1, // Lacerta — huge, faint
   // Cepheus / Cassiopeia.
   'Sh2-140': 2,
-  'Sh2-162': 3, // Bubble (NGC 7635)
   'Sh2-170': 2, // Little Rosette
   'Sh2-173': 2, // Phantom
-  'Sh2-185': 3, // Ghost of Cassiopeia (IC 59/63)
   'Sh2-188': 1, // Dolphin — faint
   // Perseus / Auriga / Taurus.
   'Sh2-216': 1, // giant faint PN
   'Sh2-224': 1, // faint SNR
-  'Sh2-229': 3, // Flaming Star (IC 405)
-  'Sh2-236': 3, // Tadpoles (IC 410)
   // Gemini / Orion / Monoceros.
-  'Sh2-252': 3, // Monkey Head (NGC 2174)
   'Sh2-261': 2, // Lower's
   'Sh2-264': 3, // Lambda Orionis ring
   'Sh2-276': 3, // Barnard's Loop
   'Sh2-284': 2,
   'Sh2-292': 3, // Seagull head
-  'Sh2-296': 3, // Seagull (IC 2177)
   'Sh2-302': 2,
   'Sh2-311': 2, // NGC 2467
+  // OpenNGC / IC rows with no photometry at all (#1141). Anchor ids above
+  // (NGC 6334, IC 410 …) are tier 3 by membership and not repeated here.
+  'NGC0281': 3, // Pacman
+  'NGC1432': 2, // Maia Nebula (Pleiades)
+  'NGC1435': 2, // Merope Nebula (Pleiades)
+  'NGC1491': 2,
+  'NGC1579': 2, // Northern Trifid
+  'NGC1909': 3, // Witch Head
+  'NGC1977': 3, // Running Man (own row beside M42)
+  'NGC2023': 2, // beside the Horsehead
+  'NGC2024': 3, // Flame
+  'NGC2237': 3, // Rosette nebula (the cluster NGC 2244 carries the photometry)
+  'NGC2246': 2, // Rosette B
+  'NGC2736': 2, // Pencil (Vela SNR filament)
+  'NGC6188': 3, // Rim / Fighting Dragons of Ara
+  'NGC6526': 2, // Lagoon outskirts
+  'NGC6559': 2,
+  'NGC6726': 2, // Corona Australis
+  'NGC6727': 2, // Corona Australis
+  'NGC6729': 2, // R CrA
+  'NGC7538': 2,
+  'IC0059': 2, // Ghost of Cassiopeia (IC 59 half)
+  'IC0349': 2, // Barnard's Merope Nebula
+  'IC1795': 2, // Fish Head
+  'IC2220': 2, // Toby Jug
+  'IC5068': 2, // below the Pelican
+  'IC5070': 3, // Pelican (has B-Mag in OpenNGC; harmless if it ever loses it)
+  // Abell planetaries: 86 rows, none with photometry. The ranker gives the
+  // type a tier-1 floor; the few imagers actually frame are listed higher.
+  'Abell 21': 3, // Medusa
+  'Abell 7': 2,
+  'Abell 31': 2,
+  'Abell 33': 2,
+  'Abell 36': 2,
+  'Abell 39': 2,
+  'Abell 72': 2,
+  'Abell 74': 2,
 };
 
 /// The tier a photometry-less row earns, or null when it isn't a known
@@ -123,6 +152,7 @@ const Map<String, int> photogenicTier = {
 int? photogenicTierOf(String id) {
   if (overrides.containsKey(id) ||
       _standaloneIds.contains(id) ||
+      _anchorIds.contains(id) ||
       _anchoredSharpless.contains(id)) {
     return 3;
   }
@@ -130,6 +160,9 @@ int? photogenicTierOf(String id) {
 }
 
 final Set<String> _standaloneIds = {for (final r in standaloneRegions) r.id};
+/// Both sides of every anchor pair: the NGC/IC row that stands in for a
+/// Sharpless row is the same showpiece (NGC 6334 has no photometry either).
+final Set<String> _anchorIds = {for (final a in sharplessAnchors) a.$1};
 final Set<String> _anchoredSharpless = {for (final a in sharplessAnchors) a.$2};
 
 /// Curated region → the Sharpless row that is the SAME nebula, so the
@@ -163,13 +196,26 @@ const List<(String region, String sharpless)> sharplessAnchors = [
   ('IC1805', 'Sh2-190'), // Heart
   ('IC1848', 'Sh2-199'), // Soul
   ('NGC1499', 'Sh2-220'), // California
-  ('IC443', 'Sh2-248'), // Jellyfish
+  ('IC0443', 'Sh2-248'), // Jellyfish
   ('NGC2264', 'Sh2-273'), // Cone
   ('NGC2244', 'Sh2-275'), // Rosette
-  ('IC434', 'Sh2-277'), // Flame / Horsehead
+  ('IC0434', 'Sh2-277'), // Flame / Horsehead
   ('NGC1976', 'Sh2-279'), // Running Man
   ('NGC1976', 'Sh2-281'), // Orion Nebula
   ('NGC2359', 'Sh2-298'), // Thor's Helmet
+  // Twins with no override entry (#1141): the NGC/IC row stands in for the
+  // Sharpless row as itself, so both don't list.
+  ('NGC6334', 'Sh2-8'), // Cat's Paw
+  ('NGC6357', 'Sh2-11'), // Lobster
+  ('IC1318', 'Sh2-108'), // Sadr / Butterfly (a star row in OpenNGC, culled —
+  //                        so Sh2-108 is the listing and stays, by design)
+  ('NGC7000', 'Sh2-117'), // North America (+ Pelican, IC 5070)
+  ('NGC7635', 'Sh2-162'), // Bubble
+  ('IC0063', 'Sh2-185'), // Ghost of Cassiopeia
+  ('IC0405', 'Sh2-229'), // Flaming Star
+  ('IC0410', 'Sh2-236'), // Tadpoles
+  ('NGC2174', 'Sh2-252'), // Monkey Head
+  ('IC2177', 'Sh2-296'), // Seagull
 ];
 
 /// Region-scale fields with no single catalog anchor. Ids are stable and

@@ -68,7 +68,12 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     final type = iType >= 0 && f.length > iType ? f[iType] : '';
     if (type == 'Dup' || type == 'NonEx') continue;
     double? num(int i) => i >= 0 && f.length > i ? double.tryParse(f[i].trim()) : null;
-    final mag = num(iV) ?? num(iB);
+    final name = f[iName];
+    // vdB's "V-Mag" column is the illuminating star's magnitude (vdB 1 =
+    // 8.6 is BD+57 22), not the nebula's — scoring it as a bright object put
+    // 156 faint reflection nebulae above real targets (#1141). Rank them as
+    // photometry-less RfN instead.
+    final mag = name.startsWith('vdB ') ? null : num(iV) ?? num(iB);
     final messier = iM >= 0 && f.length > iM ? int.tryParse(f[iM].trim()) : null;
     final caldwell = iId >= 0 && f.length > iId ? caldwellNumOf(f[iId]) : null;
     String? common;
@@ -76,7 +81,6 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
       final first = f[iCommon].split(',').first.trim();
       if (first.isNotEmpty) common = first;
     }
-    final name = f[iName];
     out.add(PlanningDso(
       id: name,
       name: common ?? name,
