@@ -15,7 +15,9 @@ const vm = require('node:vm');
 const PAGE = path.join(__dirname, '..', '..', 'assets', 'stellarium', 'index.html');
 
 function pageSource() {
-  return fs.readFileSync(PAGE, 'utf8');
+  // Windows runners check the page out with CRLF (core.autocrlf=true and
+  // `* text=auto`), which would hide every `\n}\n` closing line below.
+  return fs.readFileSync(PAGE, 'utf8').replace(/\r\n/g, '\n');
 }
 
 // Source text of `function <name>(` up to its closing brace, or throws. Page
