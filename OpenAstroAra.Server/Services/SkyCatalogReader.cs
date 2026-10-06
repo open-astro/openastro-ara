@@ -137,7 +137,8 @@ namespace OpenAstroAra.Server.Services {
                     !TryParseSexagesimalDegrees(Get(f, decI), out var dec)) {
                     continue; // rows without a resolved position (some IC/NGC stubs) are skipped
                 }
-                double? mag = TryParseDoubleField(Get(f, vMagI), out var v) ? v
+                double? mag = CarriesIlluminatingStarMagnitude(Get(f, nameI)) ? null
+                    : TryParseDoubleField(Get(f, vMagI), out var v) ? v
                     : TryParseDoubleField(Get(f, bMagI), out var b) ? b : null;
                 if (maxMag is { } cap && (mag is null || mag > cap)) {
                     continue;
@@ -151,6 +152,16 @@ namespace OpenAstroAra.Server.Services {
             }
             return result;
         }
+
+        /// <summary>
+        /// True for rows whose "V-Mag" is the ILLUMINATING STAR's magnitude, not the object's: the
+        /// van den Bergh reflection-nebula package (vdB 1 = 8.6 is BD+57 22). Ranking or
+        /// magnitude-capping on it treats faint reflection nebulae as bright objects, so both daemon
+        /// parsers read these rows as magnitude-less (#1279; the client's parseOpenNgcCsv does the
+        /// same since #1141).
+        /// </summary>
+        internal static bool CarriesIlluminatingStarMagnitude(string name) =>
+            name.StartsWith("vdB ", StringComparison.Ordinal);
 
         /// <summary>
         /// The first comma-separated alias of an OpenNGC-layout "Common names" cell, or null when the

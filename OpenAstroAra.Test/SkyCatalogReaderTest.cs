@@ -85,6 +85,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Vdb_rows_drop_the_illuminating_stars_magnitude() {
+            // Verbatim vdB 1 from the pinned vdb.csv: 8.60 in V-Mag is BD+57 22, the star lighting the
+            // nebula. Read as magnitude-less (#1279), and therefore excluded by a magnitude cap like
+            // every other photometry-less row.
+            const string csv =
+                "Name;Type;RA;Dec;Const;MajAx;MinAx;PosAng;B-Mag;V-Mag;J-Mag;H-Mag;K-Mag;SurfBr;Hubble;Pax;Pm-RA;Pm-Dec;RadVel;Redshift;Cstar U-Mag;Cstar B-Mag;Cstar V-Mag;M;NGC;IC;Cstar Names;Identifiers;Common names\n" +
+                "vdB 1;RfN;00:10:46.37;+58:46:10.3;Cas;;;;;8.60;;;;;;;;;;;;;;;;;;BD+57   22,HD 627;\n";
+            var rows = SkyCatalogReader.Read("vdb-reflection", S(csv), maxMag: null, limit: null, CancellationToken.None);
+            Assert.That(rows, Has.Count.EqualTo(1));
+            Assert.That(rows[0].Name, Is.EqualTo("vdB 1"));
+            Assert.That(rows[0].Magnitude, Is.Null);
+            Assert.That(SkyCatalogReader.Read("vdb-reflection", S(csv), maxMag: 12, limit: null, CancellationToken.None), Is.Empty);
+        }
+
+        [Test]
         public void First_common_name_skips_blanks_and_the_Anon_placeholder() {
             Assert.That(SkyCatalogReader.FirstCommonName("Andromeda Galaxy,Messier 31"), Is.EqualTo("Andromeda Galaxy"));
             Assert.That(SkyCatalogReader.FirstCommonName(",Alt Name"), Is.Null, "leading comma = none (SkyCatalogService pins this)");

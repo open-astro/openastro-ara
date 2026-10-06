@@ -177,6 +177,22 @@ namespace OpenAstroAra.Test {
             "WR 136;WR*;20:12:06.53;+38:21:17.7;;;;;7.65;7.44;6.13;5.90;5.56;;WN6b(h);;;;;;;;;;;;;HD 192163,DR3 2061690233159124352,V1770 Cyg;NGC 6888\n";
 
         [Test]
+        public void Vdb_rows_are_magnitude_less_in_the_dso_projection() {
+            // #1279 — the client dropped vdB's star V-Mag in #1141; the /dso-catalog mirror must
+            // agree or a vdB row reaching the client only through the mirror ranks as a mag-8 object.
+            WriteCatalog("NGC0224;G;00:42:44.3;+41:16:09;3.44;4.36;031;;;C 076;;;;;Andromeda Galaxy\n");
+            Directory.CreateDirectory(Path.Combine(_root, "vdb-reflection"));
+            File.WriteAllText(Path.Combine(_root, "vdb-reflection", "catalog.csv"), WrRealHeader +
+                "vdB 1;RfN;00:10:46.37;+58:46:10.3;Cas;;;;;8.60;;;;;;;;;;;;;;;;;;BD+57   22,HD 627;\n");
+            var svc = new SkyCatalogService(_root);
+
+            var byName = svc.GetAllDsos(CancellationToken.None)!.ToDictionary(d => d.Name);
+            Assert.That(byName["vdB 1"].Magnitude, Is.Null, "the star's magnitude, not the nebula's");
+            Assert.That(byName["vdB 1"].Type, Is.EqualTo("RfN"));
+            Assert.That(byName["NGC0224"].Magnitude, Is.EqualTo(3.44).Within(1e-6), "other packages unaffected");
+        }
+
+        [Test]
         public void Wr_rows_with_two_spectral_types_keep_their_columns_aligned() {
             WriteCatalog("NGC0224;G;00:42:44.3;+41:16:09;3.44;4.36;031;;;C 076;;;;;Andromeda Galaxy\n");
             Directory.CreateDirectory(Path.Combine(_root, "wr-stars"));

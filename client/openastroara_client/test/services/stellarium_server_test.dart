@@ -523,25 +523,19 @@ void main() {
   });
 
   group('planetarium page GoTo outcome', () {
-    test('GoTo waits for runtime.state to leave slewing before showing ✓', () {
-      // #1198: the daemon answers 202 when the slew is queued, so "Slew sent ✓"
-      // on r.ok claimed a slew that had not moved the mount. No harness runs
-      // index.html; pin the shape of the fix.
+    test('the GoTo poll logic is covered by the node harness, not string guards', () {
+      // #1278: `node --test tool/page_logic/` runs waitForSlewEnd and slewMount
+      // against a scripted daemon (CI: Client analyze + test). This only pins
+      // that the functions the harness loads still exist under those names.
       final page = File('assets/stellarium/index.html').readAsStringSync();
-      expect(page, isNot(contains("'Slew sent ✓'")));
-      expect(page, contains('function waitForSlewEnd('));
-      expect(page, contains("fetch(API + '/api/v1/equipment/telescope')"));
-      // ✓ only after the daemon reported slewing and then stopped: a rejected
-      // slew never leaves tracking/idle (ResolveRuntimeState has no 'error'),
-      // and must end on the neutral "Slew sent" (review on #1277).
-      expect(page, contains("if (st === 'slewing') { sawSlewing = true; }"));
-      expect(page, contains("else if (st && sawSlewing) { cb('Slewed ✓'); return; }"));
-      expect(page, isNot(contains("sawSlewing || tries")));
-      // A stale 'parked' read gets the same grace as 'never slewed'.
-      expect(page, contains("else if (st === 'parked' && tries >= 4) { cb('Mount parked'); return; }"));
-      expect(page, isNot(contains('slewing/unparking')));
-      // The GoTo button stays disabled through the interim "Slewing…" label.
-      expect(page, contains('if (!done) return;'));
+      expect(page, contains('\nfunction slewMount('));
+      expect(page, contains('\nfunction waitForSlewEnd('));
+      expect(page, contains('\nfunction parseRaDec('));
+      expect(File('tool/page_logic/slew_outcome.test.js').existsSync(), isTrue);
+      // …and that CI still runs it: a deleted or skipped step would otherwise
+      // leave the page logic unguarded with every Dart test green.
+      final ci = File('../../.github/workflows/ci.yml').readAsStringSync();
+      expect(ci, contains('run: node --test tool/page_logic/*.test.js'));
     });
   });
 

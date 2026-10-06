@@ -291,7 +291,9 @@ namespace OpenAstroAra.Server.Services {
                     continue;
                 }
                 double? mag = null;
-                if (iV >= 0 && f.Length > iV && TryNum(f[iV], out var v)) {
+                if (SkyCatalogReader.CarriesIlluminatingStarMagnitude(f[iName])) {
+                    // vdB's V-Mag is the star's, not the nebula's (#1279): magnitude-less.
+                } else if (iV >= 0 && f.Length > iV && TryNum(f[iV], out var v)) {
                     mag = v;
                 } else if (iB >= 0 && f.Length > iB && TryNum(f[iB], out var b)) {
                     mag = b;
