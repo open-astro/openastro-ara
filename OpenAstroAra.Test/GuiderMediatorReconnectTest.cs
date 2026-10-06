@@ -17,11 +17,13 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -211,9 +213,124 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
             Assert.That(svc.GetInfo().CanClearCalibration, Is.True,
                 "StartGuiding(ForceCalibration) validation flags a bogus issue when this stays false");
+            Assert.That(svc.GetInfo().CanSetShiftRate, Is.True, "#1228 — PHD2 reports it can shift the lock position");
             var startGuiding = new OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding(svc) { ForceCalibration = true };
             Assert.That(startGuiding.Validate(), Is.True);
             Assert.That(startGuiding.Issues, Is.Empty);
+        }
+    
+
+        // #1228 — a Stop/Abort while the trigger waits on recovery cancels the wait instead of sitting out
+        // the retry timeout.
+        [Test]
+        public async Task Trigger_cancelled_while_waiting_on_recovery_stops_at_once() {
+            await using var fake = StartFake();
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, GatedRecovery(gate.Task), grace: TimeSpan.FromSeconds(20));
+            await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            var sw = Stopwatch.StartNew();
+            var connect = svc.Connect(cts.Token);
+            Assert.That(await Task.WhenAny(connect, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false), Is.SameAs(connect),
+                "the connect must observe the cancelled token, not wait out the 20 s window");
+            await Assert.ThatAsync(() => connect, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(5)));
+
+            gate.SetResult(); // the recovery pass was left in charge and still reconnects
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
+        }
+
+        // #1228 — one deadline for the whole connect: a pass that ends without reconnecting late in the
+        // window does not buy the fallback connect a second full window. The fallback dials a listener
+        // that accepts and never answers, so it lingers in Connecting until the deadline.
+        [Test]
+        public async Task Connect_uses_one_deadline_across_the_pass_wait_and_the_fallback_connect() {
+            var fake = StartFake(); // disposed explicitly below: PHD2 goes away mid-test
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var supervisor = new Mock<IGuiderProcessSupervisor>();
+            var profile = new HeadlessProfileService();
+            var grace = TimeSpan.FromSeconds(4);
+            var recovery = new GuiderRecoveryCoordinator(supervisor.Object, Mock.Of<INotificationService>(),
+                Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance,
+                new[] { TimeSpan.Zero }, (_, ct) => gate.Task.WaitAsync(ct), TimeSpan.FromSeconds(1));
+            // After the gate: Unknown → Unsupervised, so the pass ends without reconnecting.
+            supervisor.Setup(s => s.QueryStatusAsync(It.IsAny<CancellationToken>())).ReturnsAsync(GuiderProcessStatus.Unknown);
+            using var svc = NewService(profile, recovery, grace);
+            await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
+
+            // Swap the profile's target to a black hole before the fallback connect reads it.
+            await fake.DisposeAsync().ConfigureAwait(false);
+            using var blackHole = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            blackHole.Start();
+            profile.ActiveProfile.GuiderSettings.PHD2ServerPort = ((System.Net.IPEndPoint)blackHole.LocalEndpoint).Port;
+
+            var sw = Stopwatch.StartNew();
+            var connect = svc.Connect();
+            await Task.Delay(TimeSpan.FromSeconds(2.5)).ConfigureAwait(false);
+            gate.SetResult(); // the pass ends Unsupervised ~2.5 s into a 4 s window
+            Assert.That(await Task.WhenAny(connect, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(connect));
+            Assert.That(await connect.ConfigureAwait(false), Is.False);
+            Assert.That(sw.Elapsed, Is.LessThan(grace + TimeSpan.FromSeconds(1.5)),
+                "the fallback connect must share the entry deadline, not start a fresh window after the pass");
+            Assert.That(sw.Elapsed, Is.GreaterThanOrEqualTo(grace - TimeSpan.FromMilliseconds(250)));
+        }
+
+        // #1228 — Dispose() landing between Disconnect()'s disposed check and the disconnect call is the
+        // race the catch covers; the seam puts Dispose exactly there. Without the catch this throws
+        // ObjectDisposedException out of DisconnectAsync.
+        [Test]
+        public async Task Mediator_disconnect_racing_dispose_does_not_throw() {
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, UnsupervisedRecovery(new Mock<IGuiderProcessSupervisor>()), grace: TimeSpan.FromSeconds(1));
+            svc.BeforeMediatorDisconnect = svc.Dispose;
+
+            await Assert.ThatAsync(() => ((IGuiderMediator)svc).Disconnect(), Throws.Nothing);
+        }
+
+        // #1228 — the sequencer's Connect Equipment hands its token to the guider's Connect(CancellationToken)
+        // (found by reflection), so a Stop/Abort during the reconnect wait cancels it.
+        [Test]
+        public async Task ConnectEquipment_passes_the_sequencer_token_to_the_guider_connect() {
+            await using var fake = StartFake();
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, GatedRecovery(gate.Task), grace: TimeSpan.FromSeconds(20));
+            await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
+            var item = GuiderTrigger(profile, svc).ConnectEquipmentInstruction;
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            var sw = Stopwatch.StartNew();
+            var run = item.Execute(new Progress<ApplicationStatus>(), cts.Token);
+            Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false), Is.SameAs(run),
+                "Connect Equipment must observe the sequencer token, not wait out the 20 s window");
+            await Assert.ThatAsync(() => run, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(5)));
+
+            gate.SetResult();
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
+        }
+
+        // #1228 — a mediator without the overload still takes the parameterless interface path.
+        [Test]
+        public async Task ConnectEquipment_uses_the_parameterless_connect_for_other_mediators() {
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.CameraSettings.Id = "cam-1";
+            var camera = new Mock<ICameraMediator>();
+            var connected = false;
+            camera.Setup(c => c.Rescan()).ReturnsAsync(new List<string> { "cam-1" });
+            camera.Setup(c => c.Connect()).ReturnsAsync(() => connected = true);
+            camera.Setup(c => c.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = connected });
+            var item = new ConnectEquipment(profile, camera.Object, Mock.Of<IFilterWheelMediator>(), Mock.Of<IFocuserMediator>(),
+                Mock.Of<IRotatorMediator>(), Mock.Of<ITelescopeMediator>(), Mock.Of<IGuiderMediator>(), Mock.Of<ISwitchMediator>(),
+                Mock.Of<IFlatDeviceMediator>(), Mock.Of<IWeatherDataMediator>(), Mock.Of<IDomeMediator>(),
+                Mock.Of<ISafetyMonitorMediator>()) { SelectedDevice = "Camera" };
+
+            await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None).ConfigureAwait(false);
+
+            camera.Verify(c => c.Connect(), Times.Once);
+            Assert.That(item.IsConnected(), Is.True);
         }
     }
 }

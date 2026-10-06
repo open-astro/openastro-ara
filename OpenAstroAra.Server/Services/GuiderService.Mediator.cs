@@ -61,6 +61,9 @@ public sealed partial class GuiderService : IGuiderMediator {
                 PixelScale = connected ? _guider!.PixelScale : 0,
                 // #1123 — StartGuiding(ForceCalibration) validates against this; PHD2 can clear it.
                 CanClearCalibration = connected && _guider!.CanClearCalibration,
+                // #1228 — PHD2 supports lock-position shifting; nothing validates on it today, but the
+                // info should not contradict the device.
+                CanSetShiftRate = connected && _guider!.CanSetShiftRate,
             };
         }
     }
@@ -186,7 +189,15 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// the REST connect path. A pass still running at the deadline is left alone — it keeps owning the
     /// reconnect and its notifications — and the connect reports failure.
     /// </summary>
-    public async Task<bool> Connect() {
+    public Task<bool> Connect() => Connect(CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="Connect()"/> with the sequencer's token (#1228): ConnectEquipment passes its own, so a
+    /// Stop/Abort during the wait cancels it instead of waiting out the window. One deadline is fixed at
+    /// entry and bounds both the wait on the in-flight pass and the fallback connect, so a pass that ends
+    /// without reconnecting cannot start a second full window ("up to the retry timeout" means once).
+    /// </summary>
+    public async Task<bool> Connect(CancellationToken token) {
         Task? pass;
         lock (_gate) {
             if (_disposed) {
@@ -198,12 +209,20 @@ public sealed partial class GuiderService : IGuiderMediator {
             pass = _recovering ? _recoveryPassTask : null;
         }
         var (graceSeconds, window) = ReconnectGraceWindow();
+        var deadline = DateTimeOffset.UtcNow + window;
 
         if (pass is not null) {
             LogMediatorAwaitingRecovery(graceSeconds);
             // RunRecoveryAsync contains its own faults, so the pass task never faults; WhenAny just
-            // bounds the wait.
-            await Task.WhenAny(pass, Task.Delay(window)).ConfigureAwait(false);
+            // bounds the wait. The timer is cancelled once the pass wins so it does not stay armed.
+            using var timerCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var timer = Task.Delay(window, timerCts.Token);
+            var winner = await Task.WhenAny(pass, timer).ConfigureAwait(false);
+            if (winner == timer) {
+                token.ThrowIfCancellationRequested();
+            } else {
+                await timerCts.CancelAsync().ConfigureAwait(false);
+            }
             lock (_gate) {
                 if (_disposed) {
                     return false;
@@ -218,6 +237,11 @@ public sealed partial class GuiderService : IGuiderMediator {
             }
         }
 
+        token.ThrowIfCancellationRequested();
+        if (DateTimeOffset.UtcNow >= deadline) {
+            // The pass used the whole window: a fallback connect would only run past it in the background.
+            return false;
+        }
         try {
             // Null host/port keep the profile's target. Never supersede a recovery pass: the mediator
             // isn't the user, and a pass that started after our check must keep running.
@@ -226,12 +250,12 @@ public sealed partial class GuiderService : IGuiderMediator {
         } catch (ObjectDisposedException) {
             return false;
         }
-        return await WaitForConnectSettledAsync(DateTimeOffset.UtcNow + window).ConfigureAwait(false);
+        return await WaitForConnectSettledAsync(deadline, token).ConfigureAwait(false);
     }
 
     // Poll the 202-style background connect until it settles (Connected → true; Error/Disconnected →
     // false) or the deadline passes (false; the attempt keeps running and settles on its own).
-    private async Task<bool> WaitForConnectSettledAsync(DateTimeOffset deadline) {
+    private async Task<bool> WaitForConnectSettledAsync(DateTimeOffset deadline, CancellationToken token) {
         while (true) {
             lock (_gate) {
                 if (_disposed) {
@@ -247,9 +271,13 @@ public sealed partial class GuiderService : IGuiderMediator {
             if (DateTimeOffset.UtcNow >= deadline) {
                 return false;
             }
-            await Task.Delay(100).ConfigureAwait(false);
+            await Task.Delay(100, token).ConfigureAwait(false);
         }
     }
+
+    /// <summary>Test seam (#1228): runs between <see cref="Disconnect"/>'s disposed check and the disconnect
+    /// call, where a concurrent <see cref="Dispose"/> lands in the race the catch below covers.</summary>
+    internal Action? BeforeMediatorDisconnect { get; set; }
 
     public async Task Disconnect() {
         lock (_gate) {
@@ -257,7 +285,12 @@ public sealed partial class GuiderService : IGuiderMediator {
                 return;
             }
         }
-        await DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+        BeforeMediatorDisconnect?.Invoke();
+        try {
+            await DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+        } catch (ObjectDisposedException) {
+            // Dispose() landed between the check above and the call (#1228): disposed is disconnected.
+        }
     }
 
     // ARA drives exactly one guider (PHD2 over §63.5). ConnectEquipment only calls Connect() when the
