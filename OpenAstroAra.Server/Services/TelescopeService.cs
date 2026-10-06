@@ -116,6 +116,23 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // the trip until a tick reads the mount with no driver error, so a bridge that stays latched
     // after the reconnect is one episode, not a trip per tick.
     private bool _bridgeFaultTripped;
+    // #1246 — set by the first tick after a connect whose runtime reads all answered; the ladder's
+    // "recovered" waits for it. Guarded by _gate.
+    private bool _cleanReadSinceConnect;
+    // #1246 — when the Slewing read itself is latched the never-during-a-slew guard cannot see a goto
+    // in flight, so SlewWatch's open episode stands in — for at most this long, after which the trip
+    // proceeds (a latch that never clears must still reach the ladder).
+    internal TimeSpan LatchedSlewHold { get; set; } = TimeSpan.FromMinutes(5);
+    private DateTimeOffset? _latchedSlewHoldSince;
+    private bool _latchedSlewHoldExpiredLogged;
+
+    public bool HasCleanReadSinceConnect {
+        get {
+            lock (_gate) {
+                return _state == EquipmentConnectionState.Connected && _cleanReadSinceConnect;
+            }
+        }
+    }
     // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
     // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member, so Other is only
     // a placeholder and _equatorialSystemKnown is the truth: until it is set, a mediator slew/sync
@@ -159,18 +176,26 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         ArgumentNullException.ThrowIfNull(request.Device);
         var device = request.Device;
         long generation;
+        AlpacaTelescope? previous;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            // #1246 — a Connected session that is still latched (tripped this episode, no clean read
+            // since) is NOT the idempotent no-op case: the ladder's later rungs connect the same
+            // device again precisely to send the disconnect/connect pair that clears the bridge.
+            var stillLatched = _state == EquipmentConnectionState.Connected && _bridgeFaultTripped && !_cleanReadSinceConnect;
             if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
+                && _device?.UniqueId == device.UniqueId && !stillLatched) {
                 return Task.FromResult(Accepted("telescope.connect", idempotencyKey));
             }
-            DisposeClientLocked();
+            // #1246 — the old client's Connected=false must reach the bridge BEFORE the new client's
+            // Connected=true (that ordered pair is what clears a latched bridge), so the teardown is
+            // handed to the connect task instead of a fire-and-forget race beside it.
+            previous = TakeClientLocked();
             _device = device;
             generation = ++_connectGeneration;
             SetState(EquipmentConnectionState.Connecting);
         }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
+        _ = Task.Run(() => ConnectInBackground(device, generation, previous), CancellationToken.None);
         return Task.FromResult(Accepted("telescope.connect", idempotencyKey));
     }
 
@@ -602,7 +627,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 return; // the device didn't answer — skip this pass's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client, out var readError);
+            var runtime = ReadRuntime(client, out var readError, out var slewingUnknown);
             bool readPierSide;
             lock (_gate) {
                 readPierSide = !_sideOfPierUnsupported;
@@ -612,7 +637,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // during a slew (the reconnect would abandon a moving mount mid-goto; the slew's own
             // watchdog and the next tick get it), and once per episode.
             if (readError is not null && IsLatchedBridgeFault(readError)) {
-                if (!runtime.State.Equals("slewing", StringComparison.Ordinal) && TripLatchedBridgeFault(client, readError)) {
+                if (!SlewMayBeInFlight(runtime, slewingUnknown) && TripLatchedBridgeFault(client, readError)) {
                     return; // tripped to Error — nothing from this pass is worth committing
                 }
             } else {
@@ -621,6 +646,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // hold the flag, or that driver's next latch episode would never be detected.
                 lock (_gate) {
                     _bridgeFaultTripped = false;
+                    _latchedSlewHoldSince = null;
+                    _latchedSlewHoldExpiredLogged = false;
                 }
             }
             // The two pad-axis AxisRates reads feed BOTH the caps DTO's rate list and the #1064
@@ -645,6 +672,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         ? runtime with { TargetRightAscensionHours = null, TargetDeclinationDegrees = null }
                         : runtime;
                     _sideOfPier = sideOfPier;
+                    if (readError is null || !IsLatchedBridgeFault(readError)) {
+                        // #1246 — the ladder's "recovered" waits for this. "Clean" means no LATCHED error,
+                        // the same test the episode reset uses: a driver that always refuses an unrelated
+                        // property (a not-implemented AtHome) must still recover.
+                        _cleanReadSinceConnect = true;
+                    }
                     if (pierSideUnsupported && !_sideOfPierUnsupported) {
                         _sideOfPierUnsupported = true;
                         LogSideOfPierUnsupported(_device?.Name ?? "?");
@@ -689,9 +722,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     // liveness check and the observation are one critical section (the #789
                     // probe lesson); command notes take this gate too.
                     trackingVerdict = _trackingWatch.Observe(
-                        runtime.Tracking, slewing: runtime.State == "slewing", parked: runtime.Parked);
+                        runtime.Tracking,
+                        // #1246 — a latched Slewing read is a fallback; a goto the daemon saw start still counts.
+                        slewing: runtime.State == "slewing" || (slewingUnknown && SlewWatch.InSlew),
+                        parked: runtime.Parked);
                     // §57.8 — slew lifecycle from the same observed snapshot.
-                    slewVerdict = SlewWatch.Observe(runtime.State == "slewing");
+                    // #1246 — a latched Slewing read is a fallback false, not an answer: feeding it would
+                    // close the episode the guard above relies on. The watch waits for a real read. (A
+                    // driver whose Slewing is never implemented never opens an episode either, since
+                    // the runtime state can never read "slewing" — so nothing is left unfinished.)
+                    slewVerdict = slewingUnknown ? new SlewEventWatch.Verdict(SlewEventWatch.Kind.None) : SlewWatch.Observe(runtime.State == "slewing");
                     watchedDevice = _device;
                 }
             }
@@ -801,25 +841,35 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Telescope '{Device}' tracking recovered — watch re-armed (§42.2)")]
     private partial void LogTrackingRecovered(string device);
 
-    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) => ReadRuntime(c, out _);
+    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) => ReadRuntime(c, out _, out _);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read (the first exception is reported to the caller for #1193). CA1031's log-and-recover boundary applies.")]
-    // readError: the first exception any per-field read threw (null when every read answered), so
-    // the refresh can recognise a driver-reported latched fault (#1193) without changing the
-    // per-field fallback semantics. The target registers are left out of it: they legitimately
-    // throw before the first target is set.
-    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c, out Exception? readError) {
-        Exception? first = null;
+        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read (every exception is reported to the caller, aggregated when several, for #1193/#1246). CA1031's log-and-recover boundary applies.")]
+    // readError: EVERY exception the per-field reads threw (null when all answered; one exception
+    // as-is, several as an AggregateException), so the refresh can recognise a driver-reported
+    // latched fault (#1193) even when an unrelated read (a not-implemented AtHome) threw first
+    // (#1246), without changing the per-field fallback semantics. The target registers are left
+    // out of it: they legitimately throw before the first target is set. slewingUnknown: the
+    // Slewing read itself threw, so the "slewing" state is a fallback, not an answer.
+    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c, out Exception? readError, out bool slewingUnknown) {
+        List<Exception>? errors = null;
         T Read<T>(Func<T> read, T fallback) {
             try {
                 return read();
             } catch (Exception ex) {
-                first ??= ex;
+                (errors ??= []).Add(ex);
                 return fallback;
             }
         }
-        var slewing = Read(() => c.Slewing, false);
+        bool slewing;
+        try {
+            slewing = c.Slewing;
+            slewingUnknown = false;
+        } catch (Exception ex) {
+            errors = [ex]; // the first read: nothing has failed yet
+            slewing = false;
+            slewingUnknown = true; // its own try/catch: not inferred from the error count (#1246)
+        }
         var ra = Read<double?>(() => c.RightAscension, null);
         var dec = Read<double?>(() => c.Declination, null);
         // §57.9 — the slew/sync destination, read back from the mount's own target registers.
@@ -833,7 +883,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var tracking = Read(() => c.Tracking, false);
         var parked = Read(() => c.AtPark, false);
         var atHome = Read(() => c.AtHome, false);
-        readError = first;
+        readError = errors is null ? null : errors.Count == 1 ? errors[0] : new AggregateException(errors);
 
         // §42.9 — resolve the runtime-state token from the raw mount flags via
         // the shared helper so the precedence (incl. the parked-over-slewing
@@ -1120,10 +1170,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "Ownership of the AlpacaTelescope is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
+    private void ConnectInBackground(DiscoveredDeviceDto device, long generation, AlpacaTelescope? previous) {
         AlpacaTelescope? client = null;
         var adopted = false;
         try {
+            if (previous is not null) {
+                SafeDisconnectDispose(previous); // #1246 — ordered before the new Connected=true
+            }
             var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
             if (string.IsNullOrWhiteSpace(host)) {
                 throw new InvalidOperationException(
@@ -1146,6 +1199,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _sideOfPier = PierSide.pierUnknown; // #1229 — nor its pier side
                     _sideOfPierUnsupported = false;      // the new device may answer it
+                    _cleanReadSinceConnect = false;      // #1246 — earned by the first clean tick
+                    _latchedSlewHoldSince = null;
+                    _latchedSlewHoldExpiredLogged = false;
                     // _bridgeFaultTripped is deliberately NOT reset here: the §42.3 ladder's reconnect
                     // comes through this path, and a bridge still latched after it must stay one
                     // episode (#1193). A hand-connected different device clears it on its first clean tick.
@@ -1213,12 +1269,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         }
     }
 
-    private void DisposeClientLocked() {
+    // Detach the live client for the caller to tear down (#1246: the connect task does it first).
+    private AlpacaTelescope? TakeClientLocked() {
         var c = _client;
         _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
+        return c;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -1271,8 +1326,36 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // Extracted (internal) for direct unit testing.
     private static readonly string[] LatchedBridgeFaultPhrases = ["communications compromised"];
 
+    // The message of the exception (in the chain or aggregate) that carries the latch phrase, so the
+    // fault row says "Mount communications compromised", not "One or more errors occurred" (#1246).
+    internal static string LatchedBridgeFaultMessage(Exception ex) {
+        for (var e = ex; e is not null; e = e.InnerException) {
+            if (e is AggregateException aggregate) {
+                foreach (var inner in aggregate.InnerExceptions) {
+                    if (IsLatchedBridgeFault(inner)) {
+                        return LatchedBridgeFaultMessage(inner);
+                    }
+                }
+            }
+            foreach (var phrase in LatchedBridgeFaultPhrases) {
+                if (e.Message.Contains(phrase, StringComparison.OrdinalIgnoreCase)) {
+                    return e.Message;
+                }
+            }
+        }
+        return ex.Message;
+    }
+
     internal static bool IsLatchedBridgeFault(Exception? ex) {
         for (var e = ex; e is not null; e = e.InnerException) {
+            // #1246 — ReadRuntime reports every failed read; any one of them carrying the phrase is the latch.
+            if (e is AggregateException aggregate) {
+                foreach (var inner in aggregate.InnerExceptions) {
+                    if (IsLatchedBridgeFault(inner)) {
+                        return true;
+                    }
+                }
+            }
             foreach (var phrase in LatchedBridgeFaultPhrases) {
                 if (e.Message.Contains(phrase, StringComparison.OrdinalIgnoreCase)) {
                     return true;
@@ -1281,6 +1364,47 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         }
         return false;
     }
+
+    // #1193's never-during-a-slew rule. The runtime's own Slewing answer decides when it answered;
+    // when the Slewing read is latched too (#1246) its false is a fallback, so SlewWatch's open
+    // episode (the goto this daemon saw start) stands in — bounded by LatchedSlewHold, after which
+    // the latch trips anyway, since a bridge that never clears must still reach the ladder.
+    private bool SlewMayBeInFlight(TelescopeStateDto runtime, bool slewingUnknown) {
+        if (runtime.State.Equals("slewing", StringComparison.Ordinal)) {
+            return true;
+        }
+        if (!slewingUnknown) {
+            return false;
+        }
+        string? logExpired = null;
+        try {
+            lock (_gate) {
+                if (!SlewWatch.InSlew) {
+                    _latchedSlewHoldSince = null;
+                    _latchedSlewHoldExpiredLogged = false;
+                    return false;
+                }
+                _latchedSlewHoldSince ??= DateTimeOffset.UtcNow;
+                // Once expired it stays expired while the latch persists (only a clean tick or a closed
+                // episode resets it), so every later latched tick trips at once rather than holding again.
+                if (DateTimeOffset.UtcNow - _latchedSlewHoldSince.Value >= LatchedSlewHold) {
+                    if (!_latchedSlewHoldExpiredLogged) {
+                        _latchedSlewHoldExpiredLogged = true; // once per hold, not per tick
+                        logExpired = _device?.Name ?? "?";
+                    }
+                    return false;
+                }
+                return true;
+            }
+        } finally {
+            if (logExpired is not null) {
+                LogLatchedSlewHoldExpired(logExpired); // off-lock, like the file's other logs
+            }
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope '{Device}': the Slewing read has been latched for the whole slew hold with a goto open — tripping the latched fault anyway (#1246)")]
+    private partial void LogLatchedSlewHoldExpired(string device);
 
     // Same transition as the probe streak, with its own fault details so the log says what
     // happened, and latched once per episode (see _bridgeFaultTripped). The §42.3 ladder's
@@ -1298,10 +1422,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             _trackingWatch.Reset();
             SlewWatch.Reset();
         }
-        LogBridgeFaultLatched(device?.Name ?? "?", error.Message);
+        var message = LatchedBridgeFaultMessage(error); // the matching read's text, not an aggregate's wrapper
+        LogBridgeFaultLatched(device?.Name ?? "?", message);
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope, device?.UniqueId, device?.Name,
             EquipmentFaultKind.Disconnected,
-            $"bridge reports a latched mount fault ({error.Message}) — reconnecting clears it (#1193)",
+            $"bridge reports a latched mount fault ({message}) — reconnecting clears it (#1193)",
             DateTimeOffset.UtcNow));
         return true;
     }

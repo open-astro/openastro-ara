@@ -74,6 +74,7 @@ public sealed class PlaceholderCameraService : ICameraService {
 }
 
 public sealed class PlaceholderTelescopeService : ITelescopeService {
+    public bool HasCleanReadSinceConnect => false; // nothing is ever connected here
     public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<TelescopeDto?> GetAsync(CancellationToken ct) => Task.FromResult<TelescopeDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>

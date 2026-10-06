@@ -330,6 +330,73 @@ namespace OpenAstroAra.Test {
             telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
+        // #1246 — a bridge still latched after the reconnect answers Connected while every read fails:
+        // that is not recovered. The ladder walks on and ends in the terminal action, which is also
+        // the user's signal that the reconnect did not clear the latch.
+        [Test]
+        public async Task A_mount_that_reconnects_without_a_clean_read_is_not_recovered_and_the_ladder_walks_on() {
+            ReconnectSucceeds(DeviceType.Telescope);
+            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(false);
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            service.LingerMaxAttempts = 3; // the post-give-up linger must not re-adopt a still-latched mount either
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Not.Contain("recovered"), "Connected with latched reads is not recovered");
+            Assert.That(ActionPayload("gave_up").GetProperty("terminal").GetString(), Is.EqualTo("abort_and_park"));
+            NotificationDto notRecovered;
+            lock (posted) { notRecovered = posted.Find(n => n.Title.Contains("not recovered", StringComparison.Ordinal))!; }
+            Assert.That(notRecovered, Is.Not.Null, "the give-up notice is the 'reconnect did not clear the latch' signal");
+            Assert.That(Actions(), Does.Not.Contain("readopted"), "nor is the linger fooled by Connected-but-latched");
+            // Every rung and every linger tick re-dispatched the connect (the pair that clears the bridge).
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.AtLeast(2));
+        }
+
+        [Test]
+        public async Task The_linger_readopts_a_latched_mount_only_once_it_reads_cleanly() {
+            ReconnectSucceeds(DeviceType.Telescope);
+            var clean = false;
+            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(() => Volatile.Read(ref clean));
+            service.LingerMaxAttempts = 10;
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            _ = Task.Run(async () => {
+                while (!Actions().Contains("gave_up")) {
+                    await Task.Delay(5);
+                }
+                await Task.Delay(50); // a linger tick or two sees Connected-but-latched first
+                Volatile.Write(ref clean, true); // the bridge finally answers
+            });
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("gave_up"));
+            Assert.That(Actions().Last(), Is.EqualTo("readopted"), "re-adopted once a read succeeded, not before");
+        }
+
+        [Test]
+        public async Task A_mount_that_reconnects_with_a_clean_read_is_recovered() {
+            ReconnectSucceeds(DeviceType.Telescope);
+            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(true);
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("recovered"));
+            Assert.That(Actions(), Does.Not.Contain("gave_up"));
+        }
+
+        [Test]
+        public async Task A_camera_reconnect_does_not_consult_the_mount_read_gate() {
+            ReconnectSucceeds(DeviceType.Camera);
+            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(false);
+
+            service.OnFault(Fault(DeviceType.Camera));
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("recovered"), "the clean-read gate is the mount's alone");
+        }
+
         [Test]
         public async Task A_failed_park_is_reported_not_thrown() {
             ReconnectAlwaysFails(DeviceType.Telescope);

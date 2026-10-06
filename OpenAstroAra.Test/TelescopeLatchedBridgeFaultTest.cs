@@ -49,6 +49,19 @@ namespace OpenAstroAra.Test {
                 new InvalidOperationException("ASCOM: MOUNT COMMUNICATIONS COMPROMISED (retry)"))), Is.True, "case-insensitive, inner");
             Assert.That(TelescopeService.IsLatchedBridgeFault(new InvalidOperationException("Property not implemented")), Is.False);
             Assert.That(TelescopeService.IsLatchedBridgeFault(null), Is.False);
+            // #1246 — ReadRuntime reports every failed read; the latch may not be the first one.
+            Assert.That(TelescopeService.IsLatchedBridgeFault(new AggregateException(
+                new InvalidOperationException("Property AtHome is not implemented"),
+                new InvalidOperationException("Mount communications compromised"))), Is.True, "any read, not the first");
+            Assert.That(TelescopeService.IsLatchedBridgeFault(new AggregateException(
+                new InvalidOperationException("Property AtHome is not implemented"))), Is.False);
+            // #1246 — the fault row and log name the read that carried the phrase, not the aggregate's wrapper.
+            var notImpl = new InvalidOperationException("Property AtHome is not implemented");
+            var latched = new InvalidOperationException("Mount communications compromised");
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(new AggregateException(notImpl, latched)), Is.EqualTo(latched.Message));
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(new InvalidOperationException("outer", latched)), Is.EqualTo(latched.Message), "inner of a wrapper");
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(latched), Is.EqualTo(latched.Message));
+            Assert.That(TelescopeService.LatchedBridgeFaultMessage(notImpl), Is.EqualTo(notImpl.Message), "no phrase anywhere: the message as given");
         }
 
         // ─── Bench: a scripted mount that latches ─────────────────────────────────────────────
@@ -188,6 +201,236 @@ namespace OpenAstroAra.Test {
             // The slew ends with the bridge still latched: now it trips.
             Volatile.Write(ref slewing, "false");
             await WaitForTripAsync(svc, faults, 1, "trips once the slew is over");
+        }
+    
+
+        // #1246 — the teardown of the old client (Connected=false) must reach the bridge before the
+        // new client's Connected=true: that ordered pair is what clears a latched bridge.
+        [Test]
+        [Category("bench")]
+        public async Task A_reconnect_sends_the_old_disconnect_before_the_new_connect() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => "6.0", () => "false"));
+            using var svc = new TelescopeService { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
+
+            // A plain disconnect + connect first (the user's path), then the connect-over-live path.
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Disconnected, TimeSpan.FromSeconds(15), "never disconnected");
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
+            await WaitForAsync(() => box.Puts.Count(p => p.Path.EndsWith("/connected", StringComparison.Ordinal)) >= 2, TimeSpan.FromSeconds(15), "the connected writes never all landed");
+
+            // And a connect straight over a live client (what the ladder actually does): the old
+            // client's Connected=false lands before the new Connected=true, every time.
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box) with { UniqueId = "mount-under-test-2" }), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected && svc.GetAsync(CancellationToken.None).Result?.DeviceId == "mount-under-test-2",
+                TimeSpan.FromSeconds(15), "never reconnected over the live client");
+            var connectedWrites = box.Puts.Where(p => p.Path.EndsWith("/connected", StringComparison.Ordinal)).Select(p => p.Body).ToList();
+            var last = connectedWrites.TakeLast(2).ToList();
+            Assert.That(last, Has.Count.EqualTo(2));
+            Assert.That(last[0], Does.Contain("false").IgnoreCase, "the old client's Connected=false goes first");
+            Assert.That(last[1], Does.Contain("true").IgnoreCase, "then the new client's Connected=true");
+        }
+
+        // #1246 — a read that always throws for an unrelated reason, and is read BEFORE the position
+        // (Slewing not implemented), must not hide the latch (it used to: only the first exception
+        // was reported) and must not hold the episode open once the latch clears.
+        [Test]
+        [Category("bench")]
+        public async Task An_unrelated_read_error_neither_hides_the_latch_nor_holds_the_episode() {
+            var position = "6.0";
+            Func<string, string?> mount = path =>
+                path.EndsWith("/connected", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? ScriptedAlpacaDevice.NotImplemented("Slewing")
+                : path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? Volatile.Read(ref position)
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? Volatile.Read(ref position)
+                : null;
+            await using var box = ScriptedAlpacaDevice.Start(mount);
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15),
+                "a driver that always refuses an unrelated property still counts as clean (not latched): the ladder must be able to recover it");
+
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForTripAsync(svc, faults, 1, "the latch must trip even though Slewing threw first on every tick (no goto is open, so nothing holds it)");
+
+            // Reconnect (the ladder's move); the latch clears while Slewing keeps throwing: the
+            // episode must end, so a later latch trips again.
+            Volatile.Write(ref position, "6.0");
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.RightAscensionHours is 6.0,
+                TimeSpan.FromSeconds(15), "the position never came back after the reconnect");
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15),
+                "after the reconnect the mount reads cleanly apart from Slewing: recovered, as before this change");
+            await WaitForPositionReadsAsync(box, PositionReads(box), 2);
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForTripAsync(svc, faults, 2, "a new latch after a clear tick is a new episode, Slewing's error notwithstanding");
+        }
+
+        // #1246 — the ladder's "recovered" waits for a clean tick: still latched after the reconnect,
+        // the mount is Connected but has no clean read; once the bridge answers, it has.
+        [Test]
+        [Category("bench")]
+        public async Task HasCleanReadSinceConnect_is_false_while_the_bridge_is_still_latched_after_a_reconnect() {
+            var position = "6.0";
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => "false"));
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "a healthy mount's first tick is clean");
+
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForTripAsync(svc, faults, 1, "latched");
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
+            await WaitForPositionReadsAsync(box, PositionReads(box), 3);
+            Assert.That(svc.HasCleanReadSinceConnect, Is.False, "Connected, but every read still fails: not recovered");
+
+            Volatile.Write(ref position, "6.0");
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "the first clean tick after the bridge recovers");
+        }
+
+        // #1246 — when the Slewing read is latched too, a goto this daemon saw start holds the trip
+        // (SlewWatch's open episode stands in for the answer the bridge no longer gives).
+        [Test]
+        [Category("bench")]
+        public async Task A_latched_Slewing_read_defers_to_the_open_slew_episode() {
+            var position = "6.0";
+            var slewing = "false";
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => Volatile.Read(ref slewing)));
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
+
+            Volatile.Write(ref slewing, "true");
+            await WaitForRuntimeStateAsync(svc, "slewing"); // the watch opens the episode
+            // Now EVERY read latches, Slewing included: its fallback is false, but the goto is open.
+            Volatile.Write(ref slewing, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForPositionReadsAsync(box, PositionReads(box), 5);
+            Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "a goto the daemon saw start holds the trip while Slewing cannot answer");
+            lock (faults) { Assert.That(faults, Is.Empty); }
+
+            // Slewing answers again (false): the episode closes and the latch trips.
+            Volatile.Write(ref slewing, "false");
+            await WaitForTripAsync(svc, faults, 1, "trips once the slew is known to be over");
+        }
+    
+
+        // #1246 — rung 2+ of the ladder connect the SAME device while the session is Connected-but-
+        // latched; that must not hit the idempotent no-op, or the pair that clears the bridge is
+        // never sent again.
+        [Test]
+        [Category("bench")]
+        public async Task A_connect_of_the_same_device_on_a_still_latched_session_sends_the_pair_again() {
+            var position = "6.0";
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => "false"));
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "never connected cleanly");
+            int ConnectedPuts() => box.Puts.Count(p => p.Path.EndsWith("/connected", StringComparison.Ordinal));
+            var before = ConnectedPuts();
+
+            // A clean session: the same device again is the idempotent no-op (no new PUTs).
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForPositionReadsAsync(box, PositionReads(box), 2);
+            Assert.That(ConnectedPuts(), Is.EqualTo(before), "a clean Connected session is not reconnected");
+
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForTripAsync(svc, faults, 1, "latched");
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 1
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "rung 1 never reconnected");
+            await WaitForPositionReadsAsync(box, PositionReads(box), 2);
+            Assert.That(svc.HasCleanReadSinceConnect, Is.False, "still latched after rung 1");
+            var afterRung1 = ConnectedPuts();
+
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 2: same device
+            await WaitForAsync(() => ConnectedPuts() >= afterRung1 + 2, TimeSpan.FromSeconds(15),
+                "rung 2 must send the disconnect/connect pair again instead of the idempotent no-op");
+            var pair = box.Puts.Where(p => p.Path.EndsWith("/connected", StringComparison.Ordinal)).Select(p => p.Body).TakeLast(2).ToList();
+            Assert.That(pair[0], Does.Contain("false").IgnoreCase);
+            Assert.That(pair[1], Does.Contain("true").IgnoreCase);
+        }
+
+        // #1246 — the slew hold is bounded: once it expires with the latch still there, the trip proceeds.
+        [Test]
+        [Category("bench")]
+        public async Task The_latched_slew_hold_expires_and_the_trip_proceeds() {
+            var position = "6.0";
+            var slewing = "false";
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => Volatile.Read(ref slewing)));
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick, LatchedSlewHold = Ticks(5) };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
+
+            Volatile.Write(ref slewing, "true");
+            await WaitForRuntimeStateAsync(svc, "slewing");
+            Volatile.Write(ref slewing, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+
+            // Nothing answers Slewing again; the hold runs out and the latch trips.
+            await WaitForTripAsync(svc, faults, 1, "the hold must expire and the latch trip even though Slewing never answered");
+        }
+    
+
+        // #1246 — a latched Slewing read mid-goto must not feed the tracking watch a "not slewing,
+        // not tracking" fallback: that fired TrackingLost after three ticks for a mount that was
+        // simply unreadable while a goto was open.
+        [Test]
+        [Category("bench")]
+        public async Task A_fully_latched_bridge_mid_goto_does_not_fire_TrackingLost() {
+            var position = "6.0";
+            var slewing = "false";
+            var tracking = "true";
+            Func<string, string?> mount = path =>
+                path.EndsWith("/connected", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? Volatile.Read(ref slewing)
+                : path.EndsWith("/tracking", StringComparison.Ordinal) ? Volatile.Read(ref tracking)
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? Volatile.Read(ref position)
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? Volatile.Read(ref position)
+                : null;
+            await using var box = ScriptedAlpacaDevice.Start(mount);
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.Tracking == true, TimeSpan.FromSeconds(15), "tracking never armed the watch");
+            await WaitForPositionReadsAsync(box, PositionReads(box), 3); // a few armed ticks
+
+            Volatile.Write(ref slewing, "true");
+            await WaitForRuntimeStateAsync(svc, "slewing");
+            // Everything latches, Slewing and Tracking included.
+            Volatile.Write(ref slewing, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref tracking, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForPositionReadsAsync(box, PositionReads(box), MountTrackingWatch.DefaultDropThreshold + 3);
+
+            lock (faults) {
+                Assert.That(faults.Where(f => f.Kind == EquipmentFaultKind.TrackingLost), Is.Empty,
+                    "a goto the daemon saw start keeps the tracking watch idle while the bridge cannot answer");
+            }
         }
     }
 }
