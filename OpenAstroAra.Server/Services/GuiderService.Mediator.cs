@@ -238,6 +238,10 @@ public sealed partial class GuiderService : IGuiderMediator {
         }
 
         token.ThrowIfCancellationRequested();
+        if (DateTimeOffset.UtcNow >= deadline) {
+            // The pass used the whole window: a fallback connect would only run past it in the background.
+            return false;
+        }
         try {
             // Null host/port keep the profile's target. Never supersede a recovery pass: the mediator
             // isn't the user, and a pass that started after our check must keep running.
@@ -271,12 +275,17 @@ public sealed partial class GuiderService : IGuiderMediator {
         }
     }
 
+    /// <summary>Test seam (#1228): runs between <see cref="Disconnect"/>'s disposed check and the disconnect
+    /// call, where a concurrent <see cref="Dispose"/> lands in the race the catch below covers.</summary>
+    internal Action? BeforeMediatorDisconnect { get; set; }
+
     public async Task Disconnect() {
         lock (_gate) {
             if (_disposed) {
                 return;
             }
         }
+        BeforeMediatorDisconnect?.Invoke();
         try {
             await DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
         } catch (ObjectDisposedException) {
