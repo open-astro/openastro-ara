@@ -171,6 +171,11 @@ namespace OpenAstroAra.Test.AstrometryTest {
         }
 
         private static string FixturePath(string name) {
+            // The csproj copies the fixture next to the test assembly; the walk-up is for an in-place build.
+            var copied = Path.Combine(AppContext.BaseDirectory, "fixtures", name);
+            if (File.Exists(copied)) {
+                return copied;
+            }
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null) {
                 var candidate = Path.Combine(dir.FullName, "OpenAstroAra.Test", "fixtures", name);

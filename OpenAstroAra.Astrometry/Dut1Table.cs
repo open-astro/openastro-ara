@@ -34,11 +34,12 @@ namespace OpenAstroAra.Astrometry {
     /// <para>
     /// Lookup rules, in order: inside the table, linear interpolation between the bracketing
     /// midnights (a step of 0.5 s or more between neighbours is a leap second and is held, not
-    /// smeared); after the table, Bulletin A's own long-term formula
-    /// <c>UT1-UTC = A + B*(MJD - M0) - (UT2-UT1)</c>, evaluated for at most
-    /// <see cref="ExtrapolationDays"/> past the end and held constant beyond that (the formula is
-    /// a short-range fit that knows nothing of future leap seconds); before the table, the first
-    /// value. Anything outside the table also clamps to the +/-0.9 s that UTC's definition bounds
+    /// smeared), with the last row held for its whole day; from the midnight after the last row,
+    /// Bulletin A's own long-term formula <c>UT1-UTC = A + B*(MJD - M0) - (UT2-UT1)</c> anchored to
+    /// the last table value (offset by <c>last - formula(LastMjd)</c>, so the series continues
+    /// without a step at the seam), evaluated for at most <see cref="ExtrapolationDays"/> past the
+    /// end and held constant beyond that (the formula is a short-range fit that knows nothing of
+    /// future leap seconds); before the table, the first value. Anything outside the table also clamps to the +/-0.9 s that UTC's definition bounds
     /// DUT1 to, and logs once per process. A missing or unparseable table returns 0, which is
     /// what the stub did.
     /// </para>
@@ -68,6 +69,7 @@ namespace OpenAstroAra.Astrometry {
         private readonly double extrapolationA;
         private readonly double extrapolationB;
         private readonly int extrapolationM0;
+        private readonly double extrapolationOffset;
         private int loggedBefore;
         private int loggedAfter;
 
@@ -81,6 +83,9 @@ namespace OpenAstroAra.Astrometry {
             extrapolationA = a;
             extrapolationB = b;
             extrapolationM0 = m0;
+            // Anchor the formula to the table's last value so the series continues smoothly past the end:
+            // Bulletin A's fit and its own final prediction differ by tens of milliseconds at the seam.
+            extrapolationOffset = hasExtrapolation && values.Length > 0 ? values[values.Length - 1] - Formula(LastMjd) : 0;
         }
 
         /// <summary>The table the daemon uses: the <see cref="EnvOverride"/> file if set and readable, else the embedded snapshot.</summary>
@@ -150,10 +155,7 @@ namespace OpenAstroAra.Astrometry {
                 return last;
             }
             var bounded = Math.Min(mjd, LastMjd + (double)ExtrapolationDays);
-            // Anchor the formula to the table's last value so the series continues smoothly past the end:
-            // Bulletin A's fit and its own final prediction differ by tens of milliseconds at the seam.
-            var offset = last - Formula(LastMjd);
-            return Formula(bounded) + offset;
+            return Formula(bounded) + extrapolationOffset;
         }
 
         private double Formula(double mjd) => extrapolationA + extrapolationB * (mjd - extrapolationM0) - Ut2MinusUt1(mjd);
@@ -217,7 +219,8 @@ namespace OpenAstroAra.Astrometry {
                 var table = Parse(reader, "embedded");
                 table.LogLoaded();
                 return table;
-            } catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException) {
+            } catch (Exception ex) {
+                // Same reasoning as the override read above: this factory's result is cached for the process.
                 Logger.Error($"Embedded IERS DUT1 table could not be parsed; UT1-UTC falls back to 0", ex);
                 return Empty;
             }

@@ -48,6 +48,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="fixtures\iers-finals2000A-excerpt.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="AstrometryTest\HorizonData\commas.hrz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
