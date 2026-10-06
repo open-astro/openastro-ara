@@ -537,7 +537,9 @@ void main() {
       expect(page, contains("if (st === 'slewing') { sawSlewing = true; }"));
       expect(page, contains("else if (st && sawSlewing) { cb('Slewed ✓'); return; }"));
       expect(page, isNot(contains("sawSlewing || tries")));
-      expect(page, contains("cb(sawSlewing ? 'Slew failed' : 'Mount parked')"));
+      // A stale 'parked' read gets the same grace as 'never slewed'.
+      expect(page, contains("else if (st === 'parked' && tries >= 4) { cb('Mount parked'); return; }"));
+      expect(page, isNot(contains('slewing/unparking')));
       // The GoTo button stays disabled through the interim "Slewing…" label.
       expect(page, contains('if (!done) return;'));
     });

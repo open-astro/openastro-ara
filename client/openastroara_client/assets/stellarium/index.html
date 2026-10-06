@@ -500,8 +500,9 @@ function slewMount(raHours, decDeg, cb) {
       if (!r.ok) { cb(r.status === 500 ? 'No mount' : 'Slew failed', true); return; }
       // The daemon answers 202 the moment the slew is QUEUED (TelescopeService
       // runs it in the background), so "✓" here would claim a slew that hasn't
-      // moved the mount yet (#1198). Follow runtime.state until it leaves
-      // slewing/unparking, then report the outcome.
+      // moved the mount yet (#1198). Follow runtime.state (slewing / parked /
+      // tracking / idle — the daemon has no 'unparking') until a slew has
+      // come and gone, then report the outcome.
       cb('Slewing…', false);
       waitForSlewEnd(function (outcome) { cb(outcome, true); });
     }).catch(function () {
@@ -527,9 +528,13 @@ function waitForSlewEnd(cb) {
       .then(function (t) {
         var st = t && t.runtime ? t.runtime.state : null;
         if (st === 'slewing') { sawSlewing = true; }
-        else if (st === 'parked') { cb(sawSlewing ? 'Slew failed' : 'Mount parked'); return; }
+        else if (st === 'parked' && sawSlewing) { cb('Slew failed'); return; }
         else if (st && sawSlewing) { cb('Slewed ✓'); return; }
-        else if (st && tries >= 4) { cb('Slew sent'); return; } // never slewed: no ✓ to claim
+        // Never slewed: the unpark + slew run as two unserialised tasks and the
+        // daemon's telescope cache refreshes every 2 s, so the first polls can
+        // still read the stale pre-GoTo state. Give it ~4 s before concluding.
+        else if (st === 'parked' && tries >= 4) { cb('Mount parked'); return; }
+        else if (st && tries >= 4) { cb('Slew sent'); return; } // no ✓ to claim
         if (++tries >= 120) { cb('Slew sent'); return; }
         setTimeout(tick, 1000);
       })
