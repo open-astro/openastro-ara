@@ -78,6 +78,10 @@ test('GoTo while an earlier slew is running: the retargeted slew ends as one ✓
   // until the NEW target is reached: the end of slewing is this GoTo's end.
   const d = daemon({ states: ['slewing', 'slewing', 'slewing', 'tracking'] });
   assert.deepEqual(await goTo(d), ['Slewing…', 'Slewed ✓']);
+  // What this pins beyond the first test: the very first poll already reads
+  // the OLD slew as slewing and that counts — ✓ lands on the first
+  // non-slewing read (4 polls), with no extra grace or second transition.
+  assert.equal(d.polls(), 4);
 });
 
 test('the poll is bounded: 120 ticks of slewing end on the neutral label', async () => {

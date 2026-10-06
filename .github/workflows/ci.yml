@@ -954,11 +954,13 @@ jobs:
 
       # #1278 — the planetarium page's pure logic (GoTo outcome polling,
       # coordinate parsing) under node's built-in runner, no browser and
-      # nothing to install; the runners ship Node 20+.
+      # nothing to install; the runners ship Node 20+. Explicit files, not a
+      # directory: Node 22/24 treat the argument as a pattern and fail on a
+      # bare directory (the first run of this step did, on ubuntu-latest).
       - name: planetarium page logic (node --test)
         if: ${{ needs.changes.outputs.docs_only != 'true' }}
         working-directory: client/openastroara_client
-        run: node --test tool/page_logic/
+        run: node --test tool/page_logic/*.test.js
 
   client-build:
     # Matrix + job-level gate. Safe ONLY because these are not required

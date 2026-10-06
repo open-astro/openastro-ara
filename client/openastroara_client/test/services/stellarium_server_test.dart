@@ -535,7 +535,7 @@ void main() {
       // …and that CI still runs it: a deleted or skipped step would otherwise
       // leave the page logic unguarded with every Dart test green.
       final ci = File('../../.github/workflows/ci.yml').readAsStringSync();
-      expect(ci, contains('run: node --test tool/page_logic/'));
+      expect(ci, contains('run: node --test tool/page_logic/*.test.js'));
     });
   });
 
