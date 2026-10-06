@@ -452,11 +452,10 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="deg"></param>
         /// <returns></returns>
         public static string DegreesToFitsDMS(double deg) {
-            if (deg >= 0) {
-                return String.Concat("+", DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal));
-            } else {
-                return DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal);
-            }
+            // The sign is keyed off the formatted string, not the raw value: a negative that wraps to
+            // zero (-359.99999) formats as "00 00 00" and must carry the "+" (#1217).
+            var dms = DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal);
+            return dms.StartsWith('-') ? dms : String.Concat("+", dms);
         }
 
         /// <summary>
