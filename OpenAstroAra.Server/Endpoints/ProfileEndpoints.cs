@@ -211,10 +211,7 @@ public static class ProfileEndpoints {
             .WithName("GetPlateSolveSettings")
             .WithSummary("Get the active profile's plate-solve settings.");
 
-        profile.MapPut("/plate-solve", (PlateSolveSettingsDto body, IProfileStore store) => {
-            store.PutPlateSolveSettings(body);
-            return Results.Ok(body);
-        })
+        profile.MapPut("/plate-solve", PutPlateSolveSettings)
             .Accepts<PlateSolveSettingsDto>("application/json")
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutPlateSolveSettings")
@@ -479,6 +476,15 @@ public static class ProfileEndpoints {
     /// read-side coercion) becomes the <c>guide_scope</c> default. Extracted for unit tests.</summary>
     internal static string NormalizeGuiderSetupType(string? setupType) =>
         setupType?.Trim().ToLowerInvariant() == "oag" ? "oag" : "guide_scope";
+
+    /// <summary>#1215 — <c>PUT /profile/plate-solve</c> echoes what the store HOLDS, not the body as
+    /// typed: the normalizer's <c>/usr/bin/astap</c> → <c>/usr/bin/astap_cli</c> migration runs on the
+    /// write path, and a client that adopts the echo (the settings panels do) kept showing the typed
+    /// path. Extracted so the echo rule is unit-testable with a real store.</summary>
+    internal static IResult PutPlateSolveSettings(PlateSolveSettingsDto body, IProfileStore store) {
+        store.PutPlateSolveSettings(body);
+        return Results.Ok(store.GetPlateSolveSettings());
+    }
 
     /// <summary>§29 / §43-2b / §42.5 — <c>PUT /profile/storage</c> write-boundary validation: an invalid
     /// disk-space pair or a negative retention value is a 400 and never reaches the store. Extracted so

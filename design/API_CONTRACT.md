@@ -294,6 +294,18 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Related:** #1126 (follow-ups of #1087), #1064, #1085, CHANGELOG [Unreleased]
 
+### 2026-10-06 — #1215 plate-solve database status lists complete databases only; the settings PUT echoes what was stored
+
+**Endpoint(s) or area:** `GET /api/v1/platesolve/database` (`databases` semantics; no shape change); `PUT /api/v1/profile/plate-solve` (response body).
+
+**Decision:** `databases` lists the complete databases only: an abbreviation with fewer than two tile files (an interrupted download's orphan tile) is left out, unless its files carry ASTAP's single-file `.001` extension; `file_count` still counts every file on disk. The solver applies the same rule before naming a database with `-D`, and logs the incomplete ones once. The plate-solve settings PUT returns the settings the store holds after its write-path normalisation (the `/usr/bin/astap` → `/usr/bin/astap_cli` migration), not the request body as sent, so a client that adopts the echo shows the stored value.
+
+**Reasoning:** the #1213 reviews: one orphan H18 tile next to a complete D80 got `-D h18` for narrow fields (ASTAP exit 33), and the Settings field kept showing a typed path the daemon had already rewritten.
+
+**Spec ref:** `OpenAstroAra.PlateSolving/Solvers/AstapStarDatabase.cs` (`Scan`, `MinTileFiles`, `PartialDatabases`), `Endpoints/ProfileEndpoints.cs` (`PutPlateSolveSettings`), `Services/SolverPathMigration.cs` (`BootWarning`); tests in `AstapStarDatabaseTest`, `PlateSolveSettingsWiringTest`, `imaging_plate_solve_panel_test.dart`.
+
+**Related:** #1215 (follow-ups of #1213), #1121, CHANGELOG [Unreleased]
+
 ### 2026-10-05 — #1230 pad bands are the primary∩secondary intersections; re-published once a late axis answers
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/telescope` (`capabilities.move_axis_rate_bands_deg_per_sec` and the derived `move_axis_rates_deg_per_sec`; no shape change).

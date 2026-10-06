@@ -1196,9 +1196,9 @@ public partial class Program {
         // #1121 — say at boot when the configured plate-solver binary is missing (after the
         // normalizer's /usr/bin/astap → /usr/bin/astap_cli migration had its chance): otherwise
         // the first sign is a failed centering or polar alignment in the field.
-        if (SolverPathMigration.MissingSolverBinary(
-                app.Services.GetRequiredService<IProfileStore>().GetPlateSolveSettings(), File.Exists) is string missingSolver) {
-            LogPlateSolverMissing(app.Logger, missingSolver);
+        if (SolverPathMigration.BootWarning(
+                app.Services.GetRequiredService<IProfileStore>().GetPlateSolveSettings(), File.Exists) is string solverWarning) {
+            LogPlateSolverWarning(app.Logger, solverWarning);
         }
 
         // §14e — say up front whether the SOFA/NOVAS31 astrometry natives are next to the binary.
@@ -1255,8 +1255,8 @@ public partial class Program {
     [LoggerMessage(Level = LogLevel.Information, Message = "OpenAstroAra.Server listening on :{Port}")]
     private static partial void LogListening(ILogger logger, int port);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Plate solver binary not found at {Path}: every plate solve (centering, polar alignment) will fail. Install astap-cli (apt install astap-cli) or fix Options → Plate solving → solver path.")]
-    private static partial void LogPlateSolverMissing(ILogger logger, string path);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{Warning}")]
+    private static partial void LogPlateSolverWarning(ILogger logger, string warning);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes and guide-camera focus frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
