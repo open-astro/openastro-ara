@@ -124,6 +124,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // proceeds (a latch that never clears must still reach the ladder).
     internal static readonly TimeSpan LatchedSlewHold = TimeSpan.FromMinutes(5);
     private DateTimeOffset? _latchedSlewHoldSince;
+    private bool _latchedSlewHoldExpiredLogged;
 
     public bool HasCleanReadSinceConnect {
         get {
@@ -642,6 +643,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 lock (_gate) {
                     _bridgeFaultTripped = false;
                     _latchedSlewHoldSince = null;
+                    _latchedSlewHoldExpiredLogged = false;
                 }
             }
             // The two pad-axis AxisRates reads feed BOTH the caps DTO's rate list and the #1064
@@ -666,8 +668,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         ? runtime with { TargetRightAscensionHours = null, TargetDeclinationDegrees = null }
                         : runtime;
                     _sideOfPier = sideOfPier;
-                    if (readError is null) {
-                        _cleanReadSinceConnect = true; // #1246 — the ladder's "recovered" waits for this
+                    if (readError is null || !IsLatchedBridgeFault(readError)) {
+                        // #1246 — the ladder's "recovered" waits for this. "Clean" means no LATCHED error,
+                        // the same test the episode reset uses: a driver that always refuses an unrelated
+                        // property (a not-implemented AtHome) must still recover.
+                        _cleanReadSinceConnect = true;
                     }
                     if (pierSideUnsupported && !_sideOfPierUnsupported) {
                         _sideOfPierUnsupported = true;
@@ -713,7 +718,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     // liveness check and the observation are one critical section (the #789
                     // probe lesson); command notes take this gate too.
                     trackingVerdict = _trackingWatch.Observe(
-                        runtime.Tracking, slewing: runtime.State == "slewing", parked: runtime.Parked);
+                        runtime.Tracking,
+                        // #1246 — a latched Slewing read is a fallback; a goto the daemon saw start still counts.
+                        slewing: runtime.State == "slewing" || (slewingUnknown && SlewWatch.InSlew),
+                        parked: runtime.Parked);
                     // §57.8 — slew lifecycle from the same observed snapshot.
                     // #1246 — a latched Slewing read is a fallback false, not an answer: feeding it would
                     // close the episode the guard above relies on. The watch waits for a real read.
@@ -1344,13 +1352,17 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         lock (_gate) {
             if (!SlewWatch.InSlew) {
                 _latchedSlewHoldSince = null;
+                _latchedSlewHoldExpiredLogged = false;
                 return false;
             }
             _latchedSlewHoldSince ??= DateTimeOffset.UtcNow;
             // Once expired it stays expired while the latch persists (only a clean tick or a closed
             // episode resets it), so every later latched tick trips at once rather than holding again.
             if (DateTimeOffset.UtcNow - _latchedSlewHoldSince.Value >= LatchedSlewHold) {
-                LogLatchedSlewHoldExpired(_device?.Name ?? "?");
+                if (!_latchedSlewHoldExpiredLogged) {
+                    _latchedSlewHoldExpiredLogged = true; // once per hold, not per tick
+                    LogLatchedSlewHoldExpired(_device?.Name ?? "?");
+                }
                 return false;
             }
             return true;

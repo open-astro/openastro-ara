@@ -206,12 +206,10 @@ namespace OpenAstroAra.Test {
             using var svc = new TelescopeService { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
-            var puts = box.Puts.Count;
 
-            // The ladder's reconnect: the same device, connected again over the live client.
+            // A plain disconnect + connect first (the user's path), then the connect-over-live path.
             await svc.DisconnectAsync(null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Disconnected, TimeSpan.FromSeconds(15), "never disconnected");
-            puts = box.Puts.Count;
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
             await WaitForAsync(() => box.Puts.Count(p => p.Path.EndsWith("/connected", StringComparison.Ordinal)) >= 2, TimeSpan.FromSeconds(15), "the connected writes never all landed");
@@ -251,7 +249,8 @@ namespace OpenAstroAra.Test {
             using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
-            Assert.That(svc.HasCleanReadSinceConnect, Is.False, "Slewing throws every tick, so no tick is clean");
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15),
+                "a driver that always refuses an unrelated property still counts as clean (not latched): the ladder must be able to recover it");
 
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForTripAsync(svc, faults, 1, "the latch must trip even though Slewing threw first on every tick (no goto is open, so nothing holds it)");
@@ -262,6 +261,8 @@ namespace OpenAstroAra.Test {
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.RightAscensionHours is 6.0,
                 TimeSpan.FromSeconds(15), "the position never came back after the reconnect");
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15),
+                "after the reconnect the mount reads cleanly apart from Slewing: recovered, as before this change");
             await WaitForPositionReadsAsync(box, PositionReads(box), 2);
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForTripAsync(svc, faults, 2, "a new latch after a clear tick is a new episode, Slewing's error notwithstanding");
