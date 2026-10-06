@@ -431,6 +431,32 @@ void main() {
       expect(lines, hasLength(2), reason: 'a clean pass resets the throttle');
     });
 
+    test('socket-error and A-record lines are throttled too (#1295 review)',
+        () async {
+      for (final factory in <MDnsClient Function()>[
+        _AsyncSendErrorMdns.new,
+        _AddressLookupFailsMdns.new,
+      ]) {
+        final lines = <String>[];
+        final prior = debugPrint;
+        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+        final svc = ServerDiscoveryService(
+          mdnsClientFactory: factory,
+          localAddresses: () async => const ['192.0.2.5'],
+          sweepSource: () => const Stream<AraServer>.empty(),
+        );
+        for (var i = 0; i < 3; i++) {
+          await svc.discover().toList();
+        }
+        debugPrint = prior;
+        // Neither failure throws out of the browse, so a clear keyed on
+        // "did not throw" reprinted them on every ~4 s restart.
+        expect(lines.map((l) => l.split(':').first).toSet(), hasLength(1),
+            reason: '$factory: $lines');
+        expect(lines, hasLength(1), reason: '$factory: $lines');
+      }
+    });
+
     test('a failed A-record lookup is reported and the rig is skipped',
         () async {
       final lines = <String>[];

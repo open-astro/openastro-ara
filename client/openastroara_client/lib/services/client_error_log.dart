@@ -342,15 +342,15 @@ class ClientErrorLog {
         final sink = out.openWrite();
         try {
           var any = false;
-          // One redactor across both files so a private-key block that
-          // straddles the rotation is still swallowed whole (§54.6).
+          // One redactor for both files (§54.6); rotation happens at entry
+          // boundaries, so a key block never straddles it in practice.
           final redactor = LineRedactor();
           for (final f in [rotated, current]) {
             if (!await f.exists()) continue;
             any = true;
             await for (final line in f
                 .openRead()
-                .transform(utf8.decoder)
+                .transform(const Utf8Decoder(allowMalformed: true))
                 .transform(const LineSplitter())) {
               final kept = redactor.push(line);
               if (kept != null) sink.writeln(kept);

@@ -354,6 +354,8 @@ class ServerDiscoveryService {
     // Only a pass that actually queried can vouch that the block is gone;
     // one that died in start() (port 5353 contention, say) says nothing.
     var sent = false;
+    var browsed = false;
+    var sawLookupFailure = false;
     // Socket-level errors from the mDNS client. `dart:io` does NOT throw on
     // a datagram send failure; it reports it asynchronously on the socket's
     // event stream, which `multicast_dns` forwards only to the `onError`
@@ -433,6 +435,7 @@ class ServerDiscoveryService {
             // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
           } catch (e) {
+            sawLookupFailure = true;
             _logOnce('[discovery] mDNS A-record lookup for ${srv.target} '
                 'failed: $e');
             continue;
@@ -458,8 +461,8 @@ class ServerDiscoveryService {
       // fallback, so a browse failure must never crash the scan. It is no
       // longer SILENT, though: a release build that never lists a rig that
       // `dns-sd -B` sees on the same machine (#1111) left nothing to read.
+      browsed = true;
       // ignore: avoid_catches_without_on_clauses
-      _printed.clear();
     } catch (e) {
       _logOnce('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
@@ -470,6 +473,12 @@ class ServerDiscoveryService {
       // turn before deciding.
       await Future<void>.delayed(Duration.zero);
       if (sent && !sawSocketError) _localNetworkBlocked.value = false;
+      // A pass with no failure of any kind (browse, socket, A-record) ends
+      // the streak, so the same line is printed again if the failure
+      // returns later. A socket error does not throw (it arrives through
+      // onSocketError) and an A-record failure is caught in the loop, so
+      // neither is visible to the catch above.
+      if (browsed && !sawSocketError && !sawLookupFailure) _printed.clear();
     }
   }
 
