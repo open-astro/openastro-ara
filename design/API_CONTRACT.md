@@ -294,6 +294,18 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Related:** #1126 (follow-ups of #1087), #1064, #1085, CHANGELOG [Unreleased]
 
+### 2026-10-06 — #1149 POST /platesolve/center: another target while one runs is 409
+
+**Endpoint(s) or area:** `POST /api/v1/platesolve/center` (new 409 response); `IBatchJobService.Enqueue` gains an optional job identity.
+
+**Decision:** a batch job may carry an identity (what it is for). The §65.5 one-live-job-per-type rule still joins a repeat enqueue to the running job when the identities match or either is null; a live job of the same type with a *different* identity raises `BatchJobConflictException` and the caller decides. The centering endpoint's identity is its target (`center:{ra:F6}h,{dec:F6}d`), so a second POST for the same coordinates returns the running job as before (202), and one for other coordinates returns `409 Conflict` (`title: center_in_progress`, detail naming the running job id and the cancel route) instead of silently joining and later reporting the wrong target as centred.
+
+**Reasoning:** the #842 review: the single-flight join is right for an identical request and wrong for a different one; a 409 is the honest answer, and cancelling the running job is one call away.
+
+**Spec ref:** `Services/IBatchJobService.cs` (`BatchJobConflictException`), `Services/InMemoryBatchJobService.cs`, `Endpoints/PlateSolveEndpoints.cs` (`CenterIdentity`); tests in `InMemoryBatchJobServiceIdentityTest`, `CenteringEndpointTest`. Also `CameraService.WithCapabilitiesForTest` (a test seam for the solve-path capability guards, `CameraServiceSolveCaptureTest`).
+
+**Related:** #1149, #842, #1090, CHANGELOG [Unreleased]
+
 ### 2026-10-06 — #1215 plate-solve database status lists complete databases only; the settings PUT echoes what was stored
 
 **Endpoint(s) or area:** `GET /api/v1/platesolve/database` (`databases` semantics; no shape change); `PUT /api/v1/profile/plate-solve` (response body).

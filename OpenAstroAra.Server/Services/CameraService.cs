@@ -93,6 +93,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
+
+    /// <summary>Test seam (#1149): the capabilities are otherwise read only on a real Alpaca connect,
+    /// which left the solve-path and autofocus-probe binning/exposure guards untestable.</summary>
+    internal void WithCapabilitiesForTest(CameraCapabilitiesDto capabilities) {
+        lock (_gate) {
+            _capabilities = capabilities;
+        }
+    }
     private CameraStateDto _runtime = IdleRuntime;
     private int _refreshing;
     private int _refreshPending;

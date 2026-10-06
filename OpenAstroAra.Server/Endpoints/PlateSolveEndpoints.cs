@@ -50,6 +50,7 @@ public static class PlateSolveEndpoints {
         solve.MapPost("/center", CenterAsync)
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict) // #1149 — a centering job for another target is running
             .WithName("CenterOnCoordinates")
             .WithSummary("Slew the mount to coordinates and center by iterative plate solves, as a background job.");
 
@@ -101,9 +102,27 @@ public static class PlateSolveEndpoints {
         // progress bar); the job service's monotone/clamped tick keeps done in range if the
         // live loop runs a different attempt count.
         var attempts = Math.Max(1, profileService.ActiveProfile?.PlateSolveSettings?.NumberOfAttempts ?? 1);
-        var job = jobs.Enqueue("center", totalSteps: attempts, CenterWork(centering, target, attempts));
+        // #1149 — the job's identity is its target: a second POST for the SAME coordinates joins the
+        // running job (the §65.5 policy); one for OTHER coordinates is a 409 naming the running job,
+        // not a silent join that reports the wrong target as centred.
+        var identity = CenterIdentity(request.RaHours, request.DecDegrees);
+        BatchJobDto job;
+        try {
+            job = jobs.Enqueue("center", totalSteps: attempts, CenterWork(centering, target, attempts), identity);
+        } catch (BatchJobConflictException ex) {
+            return Results.Problem(
+                title: "center_in_progress",
+                detail: $"A centering job for another target ({ex.RunningIdentity}) is already running (job {ex.RunningJobId}); "
+                    + "wait for it or cancel it (DELETE /api/v1/jobs/{id}) before centering on a different target.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
         return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
     }
+
+    /// <summary>The centering job's identity (#1149): its target to 1e-6 h / 1e-6°, so a repeat POST
+    /// for the same target joins the running job and one for another target conflicts.</summary>
+    internal static string CenterIdentity(double raHours, double decDegrees) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"center:{raHours:F6}h,{decDegrees:F6}d");
 
     /// <summary>The job body <see cref="CenterAsync"/> enqueues: one tick per completed solve
     /// attempt, then converge-or-fail. Public so tests run the real body against a mocked

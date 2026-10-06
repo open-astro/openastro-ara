@@ -109,6 +109,28 @@ namespace OpenAstroAra.Test {
                 "the 202 must point at the pollable job resource");
         }
 
+        // #1149 — a second POST for OTHER coordinates while a centering job runs is a 409 naming the
+        // running job; the same coordinates join it (the §65.5 policy).
+        [Test]
+        public void A_center_for_another_target_while_one_runs_is_409_and_the_same_target_joins() {
+            var jobs = new InMemoryBatchJobService(null);
+            var gate = new TaskCompletionSource<PlateSolveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var centering = Centering(_ => gate.Task).Object;
+            try {
+                var first = (Accepted<BatchJobDto>)PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
+
+                var other = PlateSolveEndpoints.CenterAsync(new CenterRequestDto(6.5, -10.0), centering, jobs, Profile(attempts: 1).Object);
+                var problem = other as ProblemHttpResult;
+                Assert.That(problem?.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict), "another target must not silently join");
+                Assert.That(problem!.ProblemDetails.Detail, Does.Contain(first.Value!.JobId.ToString()).And.Contain("DELETE /api/v1/jobs/"));
+
+                var same = (Accepted<BatchJobDto>)PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
+                Assert.That(same.Value!.JobId, Is.EqualTo(first.Value.JobId), "the same target joins the running job");
+            } finally {
+                gate.SetResult(new PlateSolveResult());
+            }
+        }
+
         [Test]
         public void A_nonsense_attempt_budget_still_yields_a_sane_one_step_job() {
             var jobs = new InMemoryBatchJobService(null);

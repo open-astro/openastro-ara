@@ -52,12 +52,13 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget worker: every failure must land on the job as 'failed' rather than " +
             "faulting the unobserved task and leaving the job wedged at 'running'.")]
-    public BatchJobDto Enqueue(string jobType, int totalSteps, Func<Action<int>, CancellationToken, Task> work) {
+    public BatchJobDto Enqueue(string jobType, int totalSteps, Func<Action<int>, CancellationToken, Task> work, string? identity = null) {
         var jobId = Guid.NewGuid();
         var cts = new CancellationTokenSource();
         var state = new JobState {
             JobId = jobId,
             JobType = jobType,
+            Identity = identity,
             Total = Math.Max(0, totalSteps),
             Done = 0,
             State = "queued",
@@ -75,9 +76,15 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
             if (_activeByType.TryGetValue(jobType, out var existing) &&
                 _jobs.TryGetValue(existing, out var existingState)) {
                 string existingPhase;
-                lock (existingState) { existingPhase = existingState.State; }
+                string? existingIdentity;
+                lock (existingState) { (existingPhase, existingIdentity) = (existingState.State, existingState.Identity); }
                 if (existingPhase is "queued" or "running") {
                     cts.Dispose();
+                    // #1149 — a live job FOR SOMETHING ELSE is not this job: say so instead of joining it.
+                    if (identity is not null && existingIdentity is not null
+                            && !string.Equals(identity, existingIdentity, StringComparison.Ordinal)) {
+                        throw new BatchJobConflictException(existing, existingIdentity, identity);
+                    }
                     return Snapshot(existingState);
                 }
             }
@@ -189,6 +196,7 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
     private sealed class JobState {
         public Guid JobId { get; set; }
         public string JobType { get; set; } = "";
+        public string? Identity { get; set; }
         public string State { get; set; } = "queued";
         public int Done { get; set; }
         public int Total { get; set; }
