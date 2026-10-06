@@ -417,6 +417,17 @@ namespace OpenAstroAra.Test {
             Assert.That(sep.RA.Degree, Is.GreaterThanOrEqualTo(-180.0).And.LessThan(180.0));
         }
 
+        // #1217: the plate-solve result's RA error reads the short way round, signed, end to end.
+        [Test]
+        public void PlateSolveResult_RaError_StraddlingZeroHours_ReadsTheShortWayRound() {
+            var solved = new Coordinates(23.9, 10, Epoch.J2000, Coordinates.RAType.Hours);
+            var target = new Coordinates(0.1, 10, Epoch.J2000, Coordinates.RAType.Hours);
+            var result = new OpenAstroAra.PlateSolving.PlateSolveResult { Pixscale = 1.0, Separation = solved - target };
+
+            Assert.That(result.RaErrorString, Is.EqualTo("-00:12:00"));
+            Assert.That(result.RaPixError, Is.EqualTo(-3.0 * 3600).Within(1e-6));
+        }
+
         [Test]
         [TestCase(0, 0, 0, 0, 0, 0)]
         [TestCase(0, 0, -10, -10, 10, 10)]
