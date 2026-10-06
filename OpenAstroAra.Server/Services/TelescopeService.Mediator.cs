@@ -409,10 +409,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// Current pointing from the §32.4 cache in the mount's native epoch; the headless-stub
     /// (0, 0, J2000) sentinel when not connected or the position hasn't been read yet.
     /// </summary>
+    // #1222 — GetCurrentPosition tries the on-demand equatorial-system read at most once per
+    // connection (reset on adopt): a mount whose read never answers must not add the 10 s bound to
+    // every centering iteration and rotation frame; the refresh pass keeps retrying the read anyway.
+    private bool _positionFrameReadAttempted;
+
     public Coordinates GetCurrentPosition() {
         AlpacaTelescope? unresolved = null;
         lock (_gate) {
-            if (!_disposed && _state == EquipmentConnectionState.Connected && _client is not null && !_equatorialSystemKnown) {
+            if (!_disposed && _state == EquipmentConnectionState.Connected && _client is not null
+                    && !_equatorialSystemKnown && !_positionFrameReadAttempted) {
+                _positionFrameReadAttempted = true;
                 unresolved = _client;
             }
         }
@@ -420,11 +427,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             // #1222 — the centering loop labels this position with the mount's frame to compute its
             // offset; in the window before the first refresh read the system, the label was a guess
             // (JNOW) and a J2000 mount's first iteration carried the ~0.36° precession error into the
-            // offset. Read the system now, bounded like the slew/sync paths (#1124). This is a sync
-            // API on the sequencer thread; RunMountOpAsync blocks it the same way.
+            // offset. Read the system now, once, bounded like the slew/sync paths (#1124). This is a
+            // sync API on the sequencer thread; RunMountOpAsync blocks it the same way.
             var resolved = ResolveEquatorialSystemAsync(unresolved, CancellationToken.None).GetAwaiter().GetResult();
             if (resolved is null) {
-                LogPositionFrameGuessed();
+                LogPositionFrameGuessed(); // once per connection, by construction
             }
         }
         lock (_gate) {
