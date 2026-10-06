@@ -28,6 +28,7 @@ namespace OpenAstroAra.Test {
     public class AstapStarDatabaseTest {
 
         private static readonly string[] D80AndW08 = { "d80", "w08" };
+        private static readonly string[] H18Only = { "h18" };
 
         private string dir = null!;
 
@@ -35,6 +36,7 @@ namespace OpenAstroAra.Test {
         public void SetUp() {
             dir = Path.Combine(Path.GetTempPath(), "ara-astap-db-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
+            AstapStarDatabase.InvalidateCache();
         }
 
         [TearDown]
@@ -54,6 +56,40 @@ namespace OpenAstroAra.Test {
 
             Assert.That(AstapStarDatabase.Databases(dir), Is.EqualTo(D80AndW08));
             Assert.That(AstapStarDatabase.CountFiles(dir), Is.EqualTo(5));
+        }
+
+        // #1215 — an interrupted download that left one orphan tile next to a complete database
+        // used to count as installed, and a narrow field then got "-D h18" and ASTAP exit 33.
+        [Test]
+        public void A_database_with_a_single_tile_is_partial_unless_it_is_a_single_file_layout() {
+            Touch("d80_0101.1476");
+            Touch("d80_0102.1476");
+            Touch("h18_0101.1476"); // one tile of a many-tile database
+            Touch("w08_0101.001");  // ASTAP's single-file layout
+
+            Assert.That(AstapStarDatabase.Databases(dir), Is.EqualTo(D80AndW08), "h18 is not offered");
+            Assert.That(AstapStarDatabase.PartialDatabases(dir), Is.EqualTo(H18Only));
+            Assert.That(AstapStarDatabase.Select(AstapStarDatabase.Databases(dir), 0.1), Is.EqualTo("d80"),
+                "a narrow field falls back to the complete database, never the orphan tile");
+            Assert.That(AstapStarDatabase.CountFiles(dir), Is.EqualTo(4), "the file count still says what is on disk");
+        }
+
+        // #1215 — one scan per directory state: the cache is keyed on the directory's last-write
+        // time, which every file add or remove bumps.
+        [Test]
+        public void The_scan_is_cached_until_the_directory_changes() {
+            Touch("d80_0101.1476");
+            Touch("d80_0102.1476");
+            var first = AstapStarDatabase.Scan(dir);
+            Assert.That(ReferenceEquals(AstapStarDatabase.Scan(dir), first), Is.True, "same directory state → the cached scan instance");
+
+            // A new file bumps the directory's mtime; force it in case the filesystem's resolution is coarse.
+            Touch("h18_0101.1476");
+            Directory.SetLastWriteTimeUtc(dir, DateTime.UtcNow.AddSeconds(5));
+            var second = AstapStarDatabase.Scan(dir);
+            Assert.That(ReferenceEquals(second, first), Is.False, "a changed directory is re-scanned");
+            Assert.That(second.Partial, Is.EqualTo(H18Only));
+            Assert.That(second.FileCount, Is.EqualTo(3));
         }
 
         [Test]

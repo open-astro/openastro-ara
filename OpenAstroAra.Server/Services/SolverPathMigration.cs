@@ -45,4 +45,28 @@ public static class SolverPathMigration {
         var path = ps.PathOrEndpoint?.Trim();
         return string.IsNullOrEmpty(path) || fileExists(path) ? null : path;
     }
+
+    /// <summary>True when the configured solver path is a URL: a legacy astrometry.net endpoint kept
+    /// from a NINA profile. ARA solves with ASTAP only, so "binary not found at https://…" would
+    /// point the user at the wrong fix (#1215).</summary>
+    public static bool IsEndpointUrl(string? pathOrEndpoint) =>
+        Uri.TryCreate(pathOrEndpoint?.Trim(), UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>The boot warning for the configured solver, or null when nothing is wrong: the
+    /// binary is missing, or the setting is a URL. The text is built here (not in Program.cs) so it
+    /// is unit-testable; Program.cs only logs it.</summary>
+    public static string? BootWarning(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
+        var path = ps.PathOrEndpoint?.Trim();
+        if (string.IsNullOrEmpty(path)) {
+            return null;
+        }
+        if (IsEndpointUrl(path)) {
+            return $"Plate solver is configured as a URL ({path}), which ARA does not support (astrometry.net endpoints are not used): every plate solve (centering, polar alignment) will fail. Set Options → Plate solving → solver path to {AstapCliPath} (apt install astap-cli).";
+        }
+        if (!fileExists(path)) {
+            return $"Plate solver binary not found at {path}: every plate solve (centering, polar alignment) will fail. Install astap-cli (apt install astap-cli) or fix Options → Plate solving → solver path.";
+        }
+        return null;
+    }
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/server.dart';
 import '../../../services/plate_solve_database_api.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
@@ -15,6 +18,11 @@ import '../../../widgets/settings/settings_row.dart';
 /// persist back on Save.
 class ImagingPlateSolvePanel extends ConsumerStatefulWidget {
   const ImagingPlateSolvePanel({super.key});
+
+  /// How the panel reaches the daemon; tests swap in an API over a recording
+  /// transport so the Save round-trip can be exercised without a server (#1215).
+  @visibleForTesting
+  static ProfileApi Function(AraServer server) apiFactory = ProfileApi.new;
 
   @override
   ConsumerState<ImagingPlateSolvePanel> createState() =>
@@ -63,7 +71,15 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
       return;
     }
     try {
-      await ref.read(plateSolveSettingsProvider.notifier).persistToServer(api);
+      // A field still being edited commits on focus loss; drop focus first so
+      // the typed value is what gets sent, and so the rows re-sync afterwards.
+      FocusManager.instance.primaryFocus?.unfocus();
+      final notifier = ref.read(plateSolveSettingsProvider.notifier);
+      await notifier.persistToServer(api);
+      if (!mounted) return;
+      // #1215 — the daemon normalises on write (/usr/bin/astap → /usr/bin/astap_cli);
+      // re-read so the fields show what was stored, not what was typed.
+      await notifier.hydrateFromServer(api);
       if (!mounted) return;
       // The index path or solver path may have changed: re-read the status.
       ref.invalidate(plateSolveDatabaseStatusProvider);
@@ -77,7 +93,7 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
 
   ProfileApi? _api() {
     final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    return server == null ? null : ImagingPlateSolvePanel.apiFactory(server);
   }
 
   @override

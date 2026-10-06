@@ -56,6 +56,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         // Process-wide: the factory builds a new solver per solve, so an instance flag would warn on
         // every attempt of every centering loop.
         private static int databaseMissingWarned;
+        private static int partialDatabaseWarned;
 
         /// <summary>The <c>-d</c> directory this solver will pass, or null when unset, absent on disk,
         /// or empty (the .deb's tmpfiles entry creates the directory before any database is downloaded
@@ -185,6 +186,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 // #1121 — with several databases installed ASTAP picks one itself; name it instead,
                 // from the field of view (AstapStarDatabase.Select has the rule).
                 var installed = AstapStarDatabase.Databases(db);
+                var partial = AstapStarDatabase.PartialDatabases(db);
+                if (partial.Count > 0 && System.Threading.Interlocked.CompareExchange(ref partialDatabaseWarned, 1, 0) == 0) {
+                    Logger.Warning($"Plate solve - ASTAP star database(s) {string.Join(", ", partial)} in '{db}' are incomplete (fewer than {AstapStarDatabase.MinTileFiles} tiles — an interrupted download?) and will not be used; finish or remove them (#1215).");
+                }
                 if (AstapStarDatabase.Select(installed, imageProperties.FoVH) is string database) {
                     Logger.Debug($"Plate solve - ASTAP star databases {string.Join(", ", installed)} installed; using {database} for a {imageProperties.FoVH.ToString("0.###", CultureInfo.InvariantCulture)}° field");
                     args.Add($"-D {database}");
