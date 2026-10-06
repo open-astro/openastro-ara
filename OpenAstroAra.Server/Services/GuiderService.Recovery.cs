@@ -180,11 +180,12 @@ public sealed partial class GuiderService {
                         return; // the user (or a prior attempt) settled it
                     }
                 }
-                // A profile switch (or a re-targeted profile) since the drop makes this pass's guider
-                // no longer the one in use: BeginConnect refuses (false, logged) and we leave Error
-                // for the new profile's own connect — the sequencer's ConnectEquipment /
-                // ReconnectTrigger and the user's connect both go to the ACTIVE profile's target (a
-                // clean restart, not a carry-over).
+                // A re-targeted active profile since the drop (a different host:port, whether by edit
+                // or by a switch to a profile that uses another guider) makes this pass's guider no
+                // longer the one in use: BeginConnect refuses (false, logged) and we leave Error for
+                // the new target's own connect — the sequencer's ConnectEquipment / ReconnectTrigger
+                // and the user's connect both go to the ACTIVE profile's target (a clean restart, not
+                // a carry-over). A switch to a profile on the SAME target keeps the pass (#1234).
                 if (!BeginConnect(new GuiderConnectRequestDto(host, port), supersedeRecovery: false, recoveringFor: target)) {
                     return;
                 }
@@ -256,7 +257,7 @@ public sealed partial class GuiderService {
         }
     }
 
-    [LoggerMessage(EventId = 6366, Level = LogLevel.Warning, Message = "Could not record the remote-guider diagnostic (best-effort, #1234)")]
+    [LoggerMessage(EventId = 6367, Level = LogLevel.Warning, Message = "Could not record the remote-guider diagnostic (best-effort, #1234)")]
     private partial void LogDiagnosticRecordFailed(Exception exception);
 
     // The profile's guider_retry_timeout_sec and the grace window it maps to. Shared by the §63.3

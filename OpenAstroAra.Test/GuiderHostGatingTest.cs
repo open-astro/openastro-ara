@@ -337,8 +337,13 @@ namespace OpenAstroAra.Test {
             svc.ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(1.5);
             var decisions = 0;
             svc.IsLocalGuiderHostDecision = (_, _) => { Interlocked.Increment(ref decisions); return Task.FromResult(false); };
-            await ConnectThenLoseForGoodAsync(svc, fake).ConfigureAwait(false);
-            // The user connect found the fake reachable, so its gate never asked; every decision is the pass's.
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True, "never reached Connected against the fake guider");
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1), Is.True, "event stream never settled");
+            Volatile.Write(ref decisions, 0); // count only what the recovery pass decides, whatever the user connect asked
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected a live connection to drop");
+            await fake.DisposeAsync().ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !svc.GetInfo().Connected), Is.True, "the drop never surfaced");
 
             Assert.That(await Task.WhenAny(gaveUp.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(gaveUp.Task),
                 "the pass must give up once the window passes");
