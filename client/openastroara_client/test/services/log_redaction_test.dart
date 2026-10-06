@@ -46,6 +46,18 @@ void main() {
         ),
         'secret=[REDACTED-TOKEN]',
       );
+      // URL-safe alphabet with padding (§54.6's own pattern) is caught too,
+      // and a standard-base64 bearer token is not cut at its first `+`.
+      expect(
+        LogRedaction.redactLine('k=abcdefghij-klmnopqrst_uvwxyzABCDEF0123=='),
+        'k=[REDACTED-TOKEN]',
+      );
+      // Unpadded and short of the base64 rule's 32-run floor, so only the
+      // Bearer rule can catch it; the old one stopped at the `+`.
+      expect(
+        LogRedaction.redactLine('Bearer abcdefghij+klmnopqrst/uvwxyz'),
+        'Bearer [REDACTED-TOKEN]',
+      );
       // A git SHA has no padding and is diagnostic.
       const sha = 'commit 6c42c9af4a1b2c3d4e5f60718293a4b5c6d7e8f9';
       expect(LogRedaction.redactLine(sha), sha);

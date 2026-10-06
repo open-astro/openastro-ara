@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -82,6 +83,9 @@ class StellariumServer {
     _dssRetryAfter = null;
     _dssLastFailure = null;
     _dssLastSuccess = null;
+    // Slots are left alone: every holder releases in its own finally, and a
+    // reset that zeroed the count while a fetch ran would send it negative
+    // on that release (review on #1297).
   }
 
   /// The DSS route carries the per-run [token] in its PATH (`/dss-<token>/`)
@@ -107,11 +111,11 @@ class StellariumServer {
   String get dssPathPrefix => _dssPathPrefix;
 
   /// Upstream fetches in flight at once. A miss beyond this waits for a slot
-  /// (bounded by [dssHeadersTimeout]) rather than opening another upstream
-  /// connection: the page's sockets are still parked, but behind one
-  /// connect/first-byte deadline, not one per miss (#1143). Cached tiles never
-  /// queue. Not a 404 shed: the engine's HiPS loader may remember a 404 for
-  /// the session, which would leave a tile blank while online.
+  /// rather than opening another upstream connection: the page's sockets are
+  /// still parked, but behind one connect/first-byte deadline, not one per
+  /// miss (#1143). Cached tiles never queue. Not a 404 shed: the engine's
+  /// HiPS loader may remember a 404 for the session, which would leave a
+  /// tile blank while online.
   @visibleForTesting
   static int maxDssConcurrentFetches = 6;
 
@@ -334,17 +338,39 @@ class StellariumServer {
     }
   }
 
-  /// Wait until fewer than [maxDssConcurrentFetches] fetches are in flight,
-  /// or [dssHeadersTimeout] has passed (then the caller fetches anyway: the
-  /// slot count is a brake, never a refusal).
-  Future<void> _awaitFetchSlot() async {
-    final deadline = DateTime.now().add(dssHeadersTimeout);
-    while (_dssFetches.length >= maxDssConcurrentFetches &&
-        DateTime.now().isBefore(deadline)) {
-      // Any in-flight fetch finishing frees a slot; a failed one is swallowed
-      // here (its own caller reports it) and only wakes this waiter.
-      await Future.any(_dssFetches.values.map((f) => f.catchError((_) => null)))
-          .timeout(const Duration(milliseconds: 500), onTimeout: () => null);
+  // Counting semaphore over upstream fetch starts: exactly
+  // [maxDssConcurrentFetches] holders, waiters served in order, one waiter
+  // woken per release (review on #1296: a shared Future.any woke every
+  // waiter at once and the cap was soft). Coalesced joiners of an in-flight
+  // fetch never take a slot.
+  int _dssSlotsHeld = 0;
+  final Queue<Completer<void>> _dssSlotWaiters = Queue();
+
+  Future<void> _acquireFetchSlot() async {
+    if (_dssSlotsHeld < maxDssConcurrentFetches) {
+      _dssSlotsHeld++;
+      return;
+    }
+    final c = Completer<void>();
+    _dssSlotWaiters.add(c);
+    // Every fetch is bounded (connect + first byte + body), so a slot always
+    // comes back; the deadline is a backstop against a bug, never the plan.
+    try {
+      await c.future.timeout(dssHeadersTimeout + dssBodyTimeout);
+    } on TimeoutException {
+      // A release in the same turn as the timer already handed us the slot.
+      if (c.isCompleted) return;
+      _dssSlotWaiters.remove(c);
+      _dssSlotsHeld++; // proceed anyway, counted
+    }
+  }
+
+  void _releaseFetchSlot() {
+    if (_dssSlotWaiters.isNotEmpty) {
+      // Hand the slot straight to the next waiter: the count is unchanged.
+      _dssSlotWaiters.removeFirst().complete();
+    } else if (_dssSlotsHeld > 0) {
+      _dssSlotsHeld--;
     }
   }
 
@@ -706,9 +732,16 @@ class StellariumServer {
           DateTime.now().isAfter(_dssRetryAfter!)) {
         // Coalesce duplicate tile requests from the engine's render workers.
         var inFlight = _dssFetches[key];
+        var holdsSlot = false;
         if (inFlight == null) {
-          await _awaitFetchSlot();
+          await _acquireFetchSlot();
+          holdsSlot = true;
           inFlight = _dssFetches[key]; // another worker may have started it
+          if (inFlight != null) {
+            // Joining their fetch: the slot is theirs to hold, not ours.
+            _releaseFetchSlot();
+            holdsSlot = false;
+          }
           // Offline may have been established while waiting: a fetch now
           // would only arm the backoff again.
           if (inFlight == null &&
@@ -717,21 +750,24 @@ class StellariumServer {
             shed = true;
           }
         }
-        if (!shed) {
-          final pending =
-              inFlight ?? (_dssFetches[key] = _fetchDss(key, buster, file));
-          try {
-            bytes = await pending;
-          } finally {
-            if (identical(_dssFetches[key], pending)) _dssFetches.remove(key);
+        try {
+          if (!shed) {
+            final pending =
+                inFlight ?? (_dssFetches[key] = _fetchDss(key, buster, file));
+            try {
+              bytes = await pending;
+            } finally {
+              if (identical(_dssFetches[key], pending)) _dssFetches.remove(key);
+            }
           }
+        } finally {
+          if (holdsSlot) _releaseFetchSlot();
         }
       }
     } catch (e, st) {
       debugPrint('StellariumServer: DSS cache failed for $key: $e\n$st');
     }
     if (bytes == null) {
-      if (shed) response.headers.set('x-ara-dss-backoff', '1');
       // A missing offline tile is a normal cache miss. The vector sky and frame
       // overlay remain usable; the page simply has no photographic backdrop.
       response.statusCode = HttpStatus.notFound;

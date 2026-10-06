@@ -26,7 +26,7 @@ class LogRedaction {
       caseSensitive: false,
     ),
     // Authorization: Bearer <jwt or opaque>
-    RegExp(r'(\bBearer\s+)[A-Za-z0-9_\-.]{20,}'),
+    RegExp(r'(\bBearer\s+)[A-Za-z0-9_\-.+/=]{20,}'),
     // Query-string token=… (the DSS route cannot set a header, #1143).
     RegExp(r'([?&]token=)[A-Za-z0-9_\-.]{8,}', caseSensitive: false),
     // Vendor key prefixes that someone may have in their environment.
@@ -37,10 +37,11 @@ class LogRedaction {
     RegExp(r'(?<![A-Za-z0-9])(AKIA)[A-Z0-9]{16}'),
   ];
 
-  /// A base64-looking run of 32+ characters ending in `=` padding. Kept
+  /// A base64-looking run of 32+ characters ending in `=` padding, in the
+  /// standard or the URL-safe alphabet (§54.6 writes the latter). Kept
   /// separate because it has no prefix to preserve.
   static final RegExp _base64Rule = RegExp(
-    r'(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{32,}={1,2}(?![A-Za-z0-9+/=])',
+    r'(?<![A-Za-z0-9+/_-])[A-Za-z0-9+/_-]{32,}={1,2}(?![A-Za-z0-9+/_=-])',
   );
 
   static final RegExp _beginKey = RegExp(
