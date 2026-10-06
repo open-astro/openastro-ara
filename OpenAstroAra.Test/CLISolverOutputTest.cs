@@ -117,19 +117,30 @@ namespace OpenAstroAra.Test {
             Assert.That(solver.Lines.Count, Is.EqualTo(3), "and the solver kept reading");
         }
 
-        // #1219 — the non-zero-exit warning carries the last 20 lines, stderr tagged.
+        // #1219 — the non-zero-exit warning carries the last 20 lines.
         [Test]
-        public async Task A_non_zero_exit_keeps_the_last_twenty_lines_with_stderr_tagged() {
-            var solver = new FakeSolver(Script("for i in $(seq 1 30); do echo \"line $i\"; done; echo oops >&2; exit 3"));
+        public async Task A_non_zero_exit_keeps_the_last_twenty_lines() {
+            var solver = new FakeSolver(Script("for i in $(seq 1 30); do echo \"line $i\"; done; exit 3"));
 
             await solver.Run(new RecordingProgress(), CancellationToken.None);
 
             var tail = solver.Tail!;
             Assert.That(tail, Has.Count.EqualTo(20));
-            // stdout and stderr arrive on two reader threads, so the stderr line's position in the
-            // tail is not fixed; its presence and tag are.
-            Assert.That(tail, Does.Contain("[stderr] oops"));
             Assert.That(tail, Does.Contain("line 30").And.Not.Contain("line 10"), "only the last twenty");
+        }
+
+        // #1219 — stderr lines are tagged in the tail. Kept under the 20-line cap on purpose: stdout
+        // and stderr arrive on two reader threads, so a stderr line's place among 30 stdout lines
+        // is not fixed and could fall outside the window.
+        [Test]
+        public async Task A_non_zero_exit_tags_stderr_lines_in_the_tail() {
+            var solver = new FakeSolver(Script("for i in $(seq 1 5); do echo \"line $i\"; done; echo oops >&2; exit 3"));
+
+            await solver.Run(new RecordingProgress(), CancellationToken.None);
+
+            var tail = solver.Tail!;
+            Assert.That(tail, Has.Count.EqualTo(6));
+            Assert.That(tail, Does.Contain("[stderr] oops").And.Contain("line 5"));
         }
 
         [Test]
