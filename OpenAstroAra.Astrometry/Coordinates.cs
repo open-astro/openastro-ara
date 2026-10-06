@@ -553,7 +553,7 @@ namespace OpenAstroAra.Astrometry {
                 b = b.Transform(a.Epoch);
             }
 
-            // Fold the RA difference to (-180°, 180°] so a separation straddling 0h reports the short
+            // Fold the RA difference to [-180°, 180°) so a separation straddling 0h reports the short
             // way round (#1217); the trig below is periodic, and the +/- operators re-wrap to [0, 360).
             var raDiff = Angle.ByDegree(a.raAngle.Degree - b.raAngle.Degree - 360.0 * Math.Floor((a.raAngle.Degree - b.raAngle.Degree + 180.0) / 360.0));
             var decDiff = a.decAngle - b.decAngle;

@@ -414,7 +414,7 @@ namespace OpenAstroAra.Test {
             var sep = a - b;
 
             Assert.That(sep.RA.Degree, Is.EqualTo(expectedRaDeg).Within(1e-9));
-            Assert.That(sep.RA.Degree, Is.InRange(-180.0, 180.0));
+            Assert.That(sep.RA.Degree, Is.GreaterThanOrEqualTo(-180.0).And.LessThan(180.0));
         }
 
         [Test]
