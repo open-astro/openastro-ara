@@ -97,6 +97,10 @@ List<SlewRateBand> slewRateBandsFromLegacyRates(List<double> mountRates) {
 
 /// Builds the sorted, deduped rate list for the speed picker from an older
 /// daemon's endpoint list (see [slewRateBandsFromLegacyRates]).
+///
+/// Legacy adapter with no production caller (kept for the tests that pin the
+/// endpoint-list reading): the production entry point is
+/// `MountCapabilities.padRateBands` fed to [buildSlewRateOptionsFromBands].
 List<SlewRateOption> buildSlewRateOptions(List<double> mountRates) =>
     buildSlewRateOptionsFromBands(slewRateBandsFromLegacyRates(mountRates));
 

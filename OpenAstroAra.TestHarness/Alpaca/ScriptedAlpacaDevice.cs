@@ -61,6 +61,7 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
     private volatile Func<string, string?>? _responder;
+    private volatile Func<string, string, string?>? _queryResponder;
     private readonly Func<string, string?>? _putResponder;
 
     /// <summary>Every PUT the device received, as (lower-cased path, form body) — for tests that
@@ -85,6 +86,10 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     /// <summary>Replace the responder (thread-safe) — subsequent GETs answer with the new script.</summary>
     public void Respond(Func<string, string?> responder) => _responder = responder;
 
+    /// <summary>A responder that also sees the lower-cased query string (<c>axis=1</c>): consulted
+    /// first; a null answer falls through to <see cref="Respond"/>'s path-only script (#1230).</summary>
+    public void RespondWithQuery(Func<string, string, string?> responder) => _queryResponder = responder;
+
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Not a round-trip normalization: Alpaca URL paths are lower-case on the wire, and the responder contract documents receiving the lower-cased path — upper-casing would fight the ecosystem's own convention.")]
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -101,8 +106,10 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
             }
             var value = "true";
             if (ctx.Request.HttpMethod == "GET") {
-                Gets.Enqueue(ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "");
-                var scripted = _responder?.Invoke(ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "");
+                var getPath = ctx.Request.Url?.AbsolutePath.ToLowerInvariant() ?? "";
+                Gets.Enqueue(getPath);
+                var scripted = _queryResponder?.Invoke(getPath, ctx.Request.Url?.Query.TrimStart('?').ToLowerInvariant() ?? "")
+                    ?? _responder?.Invoke(getPath);
                 if (scripted is not null) {
                     value = scripted;
                 }
