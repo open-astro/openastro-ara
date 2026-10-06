@@ -211,9 +211,78 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
             Assert.That(svc.GetInfo().CanClearCalibration, Is.True,
                 "StartGuiding(ForceCalibration) validation flags a bogus issue when this stays false");
+            Assert.That(svc.GetInfo().CanSetShiftRate, Is.True, "#1228 — PHD2 reports it can shift the lock position");
             var startGuiding = new OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding(svc) { ForceCalibration = true };
             Assert.That(startGuiding.Validate(), Is.True);
             Assert.That(startGuiding.Issues, Is.Empty);
+        }
+    
+
+        // #1228 — a Stop/Abort while the trigger waits on recovery cancels the wait instead of sitting out
+        // the retry timeout.
+        [Test]
+        public async Task Trigger_cancelled_while_waiting_on_recovery_stops_at_once() {
+            await using var fake = StartFake();
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, GatedRecovery(gate.Task), grace: TimeSpan.FromSeconds(20));
+            await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            var sw = Stopwatch.StartNew();
+            var connect = svc.Connect(cts.Token);
+            Assert.That(await Task.WhenAny(connect, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false), Is.SameAs(connect),
+                "the connect must observe the cancelled token, not wait out the 20 s window");
+            await Assert.ThatAsync(() => connect, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(5)));
+
+            gate.SetResult(); // the recovery pass was left in charge and still reconnects
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
+        }
+
+        // #1228 — one deadline for the whole connect: a pass that ends without reconnecting late in the
+        // window does not buy the fallback connect a second full window. The fallback dials a listener
+        // that accepts and never answers, so it lingers in Connecting until the deadline.
+        [Test]
+        public async Task Connect_uses_one_deadline_across_the_pass_wait_and_the_fallback_connect() {
+            var fake = StartFake(); // disposed explicitly below: PHD2 goes away mid-test
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var supervisor = new Mock<IGuiderProcessSupervisor>();
+            var profile = new HeadlessProfileService();
+            var grace = TimeSpan.FromSeconds(4);
+            var recovery = new GuiderRecoveryCoordinator(supervisor.Object, Mock.Of<INotificationService>(),
+                Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance,
+                new[] { TimeSpan.Zero }, (_, ct) => gate.Task.WaitAsync(ct), TimeSpan.FromSeconds(1));
+            // After the gate: Unknown → Unsupervised, so the pass ends without reconnecting.
+            supervisor.Setup(s => s.QueryStatusAsync(It.IsAny<CancellationToken>())).ReturnsAsync(GuiderProcessStatus.Unknown);
+            using var svc = NewService(profile, recovery, grace);
+            await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
+
+            // Swap the profile's target to a black hole before the fallback connect reads it.
+            await fake.DisposeAsync().ConfigureAwait(false);
+            using var blackHole = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            blackHole.Start();
+            profile.ActiveProfile.GuiderSettings.PHD2ServerPort = ((System.Net.IPEndPoint)blackHole.LocalEndpoint).Port;
+
+            var sw = Stopwatch.StartNew();
+            var connect = svc.Connect();
+            await Task.Delay(TimeSpan.FromSeconds(2.5)).ConfigureAwait(false);
+            gate.SetResult(); // the pass ends Unsupervised ~2.5 s into a 4 s window
+            Assert.That(await Task.WhenAny(connect, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(connect));
+            Assert.That(await connect.ConfigureAwait(false), Is.False);
+            Assert.That(sw.Elapsed, Is.LessThan(grace + TimeSpan.FromSeconds(1.5)),
+                "the fallback connect must share the entry deadline, not start a fresh window after the pass");
+            Assert.That(sw.Elapsed, Is.GreaterThanOrEqualTo(grace - TimeSpan.FromMilliseconds(250)));
+        }
+
+        // #1228 — Disconnect() after Dispose() is a no-op, not an ObjectDisposedException.
+        [Test]
+        public async Task Mediator_disconnect_after_dispose_does_not_throw() {
+            var profile = new HeadlessProfileService();
+            var svc = NewService(profile, UnsupervisedRecovery(new Mock<IGuiderProcessSupervisor>()), grace: TimeSpan.FromSeconds(1));
+            svc.Dispose();
+
+            await Assert.ThatAsync(() => ((IGuiderMediator)svc).Disconnect(), Throws.Nothing);
         }
     }
 }

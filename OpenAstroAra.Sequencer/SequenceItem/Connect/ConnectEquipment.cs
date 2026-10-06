@@ -174,8 +174,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                 var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
 
                 if (profileId != null && devices.Contains(profileId)) {
-                    var Connect = type.GetMethod("Connect");
-                    var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
+                    // #1228 — a mediator that offers Connect(CancellationToken) gets the sequencer's token, so a
+                    // Stop/Abort cancels a connect that is waiting out a reconnect window; the rest keep the
+                    // parameterless interface method (looked up by exact signature so the overload can't make
+                    // GetMethod ambiguous).
+                    var connectWithToken = type.GetMethod("Connect", new[] { typeof(CancellationToken) });
+                    var success = connectWithToken is not null
+                        ? await (Task<bool>)connectWithToken.Invoke(mediator, new object[] { token })!
+                        : await (Task<bool>)type.GetMethod("Connect", Type.EmptyTypes)!.Invoke(mediator, null)!;
 
                     DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     success = success && infoAfterConnect.Connected;
