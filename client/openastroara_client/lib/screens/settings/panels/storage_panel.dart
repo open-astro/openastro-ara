@@ -15,6 +15,7 @@ import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../services/storage_browse_api.dart';
+import '../../../widgets/storage/sky_photo_cache_row.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -212,6 +213,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         ),
         const SettingsSectionHeader('Preview cache'),
         const _PreviewCacheRow(),
+        const SkyPhotoCacheRow(),
         const SettingsSectionHeader('Backups'),
         EditableNumberRow(
           label: 'Keep backup snapshots',
