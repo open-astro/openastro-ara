@@ -86,6 +86,18 @@ test('the poll is bounded: 120 ticks of slewing end on the neutral label', async
   assert.ok(d.polls() <= 121);
 });
 
+test('a poll that answers non-OK (t is null) keeps waiting, then a real slew is ✓', async () => {
+  // GET /equipment/telescope can 503 while the daemon reconnects the mount:
+  // `r.ok` false → `t` null → no state → keep polling within the bound.
+  const d = daemon({ states: ['slewing', 'tracking'] });
+  let n = 0;
+  const real = d.sandbox.fetch;
+  d.sandbox.fetch = (url, init) =>
+    (!init || init.method !== 'POST') && n++ < 3 ? Promise.resolve({ ok: false, status: 503 }) : real(url, init);
+  assert.deepEqual(await goTo(d), ['Slewing…', 'Slewed ✓']);
+  assert.equal(d.polls(), 2, 'the daemon was only read after the three non-OK polls');
+});
+
 test('a failed telescope poll never invents a result', async () => {
   const d = daemon({ states: ['slewing'] });
   d.sandbox.fetch = (url, init) =>
