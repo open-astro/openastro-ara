@@ -126,7 +126,9 @@ namespace OpenAstroAra.Test {
 
             var tail = solver.Tail!;
             Assert.That(tail, Has.Count.EqualTo(20));
-            Assert.That(tail[^1], Is.EqualTo("[stderr] oops"));
+            // stdout and stderr arrive on two reader threads, so the stderr line's position in the
+            // tail is not fixed; its presence and tag are.
+            Assert.That(tail, Does.Contain("[stderr] oops"));
             Assert.That(tail, Does.Contain("line 30").And.Not.Contain("line 10"), "only the last twenty");
         }
 
