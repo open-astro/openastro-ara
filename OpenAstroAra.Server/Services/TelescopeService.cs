@@ -844,7 +844,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) => ReadRuntime(c, out _, out _);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read (the first exception is reported to the caller for #1193). CA1031's log-and-recover boundary applies.")]
+        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read (every exception is reported to the caller, aggregated when several, for #1193/#1246). CA1031's log-and-recover boundary applies.")]
     // readError: EVERY exception the per-field reads threw (null when all answered; one exception
     // as-is, several as an AggregateException), so the refresh can recognise a driver-reported
     // latched fault (#1193) even when an unrelated read (a not-implemented AtHome) threw first
@@ -1376,23 +1376,30 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (!slewingUnknown) {
             return false;
         }
-        lock (_gate) {
-            if (!SlewWatch.InSlew) {
-                _latchedSlewHoldSince = null;
-                _latchedSlewHoldExpiredLogged = false;
-                return false;
-            }
-            _latchedSlewHoldSince ??= DateTimeOffset.UtcNow;
-            // Once expired it stays expired while the latch persists (only a clean tick or a closed
-            // episode resets it), so every later latched tick trips at once rather than holding again.
-            if (DateTimeOffset.UtcNow - _latchedSlewHoldSince.Value >= LatchedSlewHold) {
-                if (!_latchedSlewHoldExpiredLogged) {
-                    _latchedSlewHoldExpiredLogged = true; // once per hold, not per tick
-                    LogLatchedSlewHoldExpired(_device?.Name ?? "?");
+        string? logExpired = null;
+        try {
+            lock (_gate) {
+                if (!SlewWatch.InSlew) {
+                    _latchedSlewHoldSince = null;
+                    _latchedSlewHoldExpiredLogged = false;
+                    return false;
                 }
-                return false;
+                _latchedSlewHoldSince ??= DateTimeOffset.UtcNow;
+                // Once expired it stays expired while the latch persists (only a clean tick or a closed
+                // episode resets it), so every later latched tick trips at once rather than holding again.
+                if (DateTimeOffset.UtcNow - _latchedSlewHoldSince.Value >= LatchedSlewHold) {
+                    if (!_latchedSlewHoldExpiredLogged) {
+                        _latchedSlewHoldExpiredLogged = true; // once per hold, not per tick
+                        logExpired = _device?.Name ?? "?";
+                    }
+                    return false;
+                }
+                return true;
             }
-            return true;
+        } finally {
+            if (logExpired is not null) {
+                LogLatchedSlewHoldExpired(logExpired); // off-lock, like the file's other logs
+            }
         }
     }
 

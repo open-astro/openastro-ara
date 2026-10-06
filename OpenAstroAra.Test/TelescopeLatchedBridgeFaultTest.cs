@@ -255,7 +255,7 @@ namespace OpenAstroAra.Test {
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForTripAsync(svc, faults, 1, "the latch must trip even though Slewing threw first on every tick (no goto is open, so nothing holds it)");
 
-            // Reconnect (the ladder's move); the latch clears while AtHome keeps throwing: the
+            // Reconnect (the ladder's move); the latch clears while Slewing keeps throwing: the
             // episode must end, so a later latch trips again.
             Volatile.Write(ref position, "6.0");
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
@@ -382,6 +382,48 @@ namespace OpenAstroAra.Test {
 
             // Nothing answers Slewing again; the hold runs out and the latch trips.
             await WaitForTripAsync(svc, faults, 1, "the hold must expire and the latch trip even though Slewing never answered");
+        }
+    
+
+        // #1246 — a latched Slewing read mid-goto must not feed the tracking watch a "not slewing,
+        // not tracking" fallback: that fired TrackingLost after three ticks for a mount that was
+        // simply unreadable while a goto was open.
+        [Test]
+        [Category("bench")]
+        public async Task A_fully_latched_bridge_mid_goto_does_not_fire_TrackingLost() {
+            var position = "6.0";
+            var slewing = "false";
+            var tracking = "true";
+            Func<string, string?> mount = path =>
+                path.EndsWith("/connected", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? Volatile.Read(ref slewing)
+                : path.EndsWith("/tracking", StringComparison.Ordinal) ? Volatile.Read(ref tracking)
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? Volatile.Read(ref position)
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? Volatile.Read(ref position)
+                : null;
+            await using var box = ScriptedAlpacaDevice.Start(mount);
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.Tracking == true, TimeSpan.FromSeconds(15), "tracking never armed the watch");
+            await WaitForPositionReadsAsync(box, PositionReads(box), 3); // a few armed ticks
+
+            Volatile.Write(ref slewing, "true");
+            await WaitForRuntimeStateAsync(svc, "slewing");
+            // Everything latches, Slewing and Tracking included.
+            Volatile.Write(ref slewing, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref tracking, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForPositionReadsAsync(box, PositionReads(box), MountTrackingWatch.DefaultDropThreshold + 3);
+
+            lock (faults) {
+                Assert.That(faults.Where(f => f.Kind == EquipmentFaultKind.TrackingLost), Is.Empty,
+                    "a goto the daemon saw start keeps the tracking watch idle while the bridge cannot answer");
+            }
         }
     }
 }
