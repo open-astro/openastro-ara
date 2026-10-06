@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -987,6 +988,17 @@ namespace OpenAstroAra.Test {
             var mount = NewMount();
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
+        }
+
+        // #1222 — the mediator refuses a slew it cannot frame (#1124) by throwing; that is a slew
+        // failure for the user, not internal_error.
+        [Test]
+        public async Task A_seed_slew_the_mediator_refuses_by_throwing_fails_as_slew_failed() {
+            var mount = NewMount();
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new SequenceEntityFailedException("the mount's equatorial system is unknown; slew refused"));
 
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
         }

@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
@@ -405,7 +406,16 @@ namespace OpenAstroAra.Server.Services {
                 var dirSign = haDeg >= 0 ? -1.0 : 1.0;
                 var targetRaDeg = (mountRaDeg + dirSign * settings.SeedRotationDeg + 360.0) % 360.0;
                 var target = new Coordinates(targetRaDeg, mountDecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
-                if (!await _mount.SlewToCoordinatesAsync(target, ct).ConfigureAwait(false)) {
+                bool slewed;
+                try {
+                    slewed = await _mount.SlewToCoordinatesAsync(target, ct).ConfigureAwait(false);
+                } catch (SequenceEntityFailedException ex) {
+                    // #1222 — the mediator refuses a slew it cannot frame (#1124: equatorial system
+                    // unknown) or that the mount rejected by throwing; that is a slew failure, not
+                    // internal_error.
+                    throw new RoutineFailedException("slew_failed", $"the RA seed slew was refused: {ex.Message}");
+                }
+                if (!slewed) {
                     throw new RoutineFailedException("slew_failed", "the RA seed slew was rejected by the mount");
                 }
                 await _mount.WaitForSlew(ct).ConfigureAwait(false);

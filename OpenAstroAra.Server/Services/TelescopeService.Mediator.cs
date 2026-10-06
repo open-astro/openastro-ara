@@ -410,6 +410,23 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// (0, 0, J2000) sentinel when not connected or the position hasn't been read yet.
     /// </summary>
     public Coordinates GetCurrentPosition() {
+        AlpacaTelescope? unresolved = null;
+        lock (_gate) {
+            if (!_disposed && _state == EquipmentConnectionState.Connected && _client is not null && !_equatorialSystemKnown) {
+                unresolved = _client;
+            }
+        }
+        if (unresolved is not null) {
+            // #1222 — the centering loop labels this position with the mount's frame to compute its
+            // offset; in the window before the first refresh read the system, the label was a guess
+            // (JNOW) and a J2000 mount's first iteration carried the ~0.36° precession error into the
+            // offset. Read the system now, bounded like the slew/sync paths (#1124). This is a sync
+            // API on the sequencer thread; RunMountOpAsync blocks it the same way.
+            var resolved = ResolveEquatorialSystemAsync(unresolved, CancellationToken.None).GetAwaiter().GetResult();
+            if (resolved is null) {
+                LogPositionFrameGuessed();
+            }
+        }
         lock (_gate) {
             var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
             if (connected && _runtime.RightAscensionHours is double ra && _runtime.DeclinationDegrees is double dec) {
@@ -418,6 +435,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
         return new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000);
     }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope position requested while its equatorial system is still unknown (the read did not answer); labelling it JNOW — a J2000 mount's centering offset is off by the precession until the system reads (#1222)")]
+    private partial void LogPositionFrameGuessed();
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
@@ -628,9 +648,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// (a J2000 solve result synced raw to a JNOW mount would recalibrate to the wrong place). Unlike a slew,
     /// sync is instantaneous, so there's no settle-poll — a returning <c>SyncToCoordinates</c> is done.
     /// </summary>
+    public Task<bool> Sync(Coordinates coordinates) => Sync(coordinates, CancellationToken.None);
+
+    /// <summary>#1222 — <see cref="Sync(Coordinates)"/> with the caller's token: the equatorial-system
+    /// read it may need (#1124) waits up to its 10 s bound, and a sequence Stop during a centering
+    /// sync used to sit that out. The centering loop passes its token.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Mount sync boundary: the blocking ASCOM SyncToCoordinates/CanSync can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-call; every escape is logged and reported as a failed sync (false) so the centering loop falls back to offset compensation rather than faulting the run. CA1031's log-and-recover boundary applies.")]
-    public async Task<bool> Sync(Coordinates coordinates) {
+    public async Task<bool> Sync(Coordinates coordinates, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(coordinates);
         bool parked;
         lock (_gate) {
@@ -653,7 +678,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // #1124 — as for the slew: read the system now if the first refresh hasn't. Still unknown →
         // a clean "not synced" (the centering loop offset-compensates, and its re-slew is refused in
         // turn) rather than recalibrate the pointing model in a guessed frame.
-        var equatorialSystem = await ResolveEquatorialSystemAsync(client, CancellationToken.None).ConfigureAwait(false);
+        var equatorialSystem = await ResolveEquatorialSystemAsync(client, token).ConfigureAwait(false);
         if (equatorialSystem is null) {
             LogMountOpRejectedUnknownSystem("telescope.sync");
             return false;
