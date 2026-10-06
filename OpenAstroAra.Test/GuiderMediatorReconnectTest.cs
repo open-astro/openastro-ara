@@ -17,11 +17,13 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -275,14 +277,60 @@ namespace OpenAstroAra.Test {
             Assert.That(sw.Elapsed, Is.GreaterThanOrEqualTo(grace - TimeSpan.FromMilliseconds(250)));
         }
 
-        // #1228 — Disconnect() after Dispose() is a no-op, not an ObjectDisposedException.
+        // #1228 — Dispose() landing between Disconnect()'s disposed check and the disconnect call is the
+        // race the catch covers; the seam puts Dispose exactly there. Without the catch this throws
+        // ObjectDisposedException out of DisconnectAsync.
         [Test]
-        public async Task Mediator_disconnect_after_dispose_does_not_throw() {
+        public async Task Mediator_disconnect_racing_dispose_does_not_throw() {
             var profile = new HeadlessProfileService();
-            var svc = NewService(profile, UnsupervisedRecovery(new Mock<IGuiderProcessSupervisor>()), grace: TimeSpan.FromSeconds(1));
-            svc.Dispose();
+            using var svc = NewService(profile, UnsupervisedRecovery(new Mock<IGuiderProcessSupervisor>()), grace: TimeSpan.FromSeconds(1));
+            svc.BeforeMediatorDisconnect = svc.Dispose;
 
             await Assert.ThatAsync(() => ((IGuiderMediator)svc).Disconnect(), Throws.Nothing);
+        }
+
+        // #1228 — the sequencer's Connect Equipment hands its token to the guider's Connect(CancellationToken)
+        // (found by reflection), so a Stop/Abort during the reconnect wait cancels it.
+        [Test]
+        public async Task ConnectEquipment_passes_the_sequencer_token_to_the_guider_connect() {
+            await using var fake = StartFake();
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, GatedRecovery(gate.Task), grace: TimeSpan.FromSeconds(20));
+            await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
+            var item = GuiderTrigger(profile, svc).ConnectEquipmentInstruction;
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            var sw = Stopwatch.StartNew();
+            var run = item.Execute(new Progress<ApplicationStatus>(), cts.Token);
+            Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false), Is.SameAs(run),
+                "Connect Equipment must observe the sequencer token, not wait out the 20 s window");
+            await Assert.ThatAsync(() => run, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(5)));
+
+            gate.SetResult();
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
+        }
+
+        // #1228 — a mediator without the overload still takes the parameterless interface path.
+        [Test]
+        public async Task ConnectEquipment_uses_the_parameterless_connect_for_other_mediators() {
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.CameraSettings.Id = "cam-1";
+            var camera = new Mock<ICameraMediator>();
+            var connected = false;
+            camera.Setup(c => c.Rescan()).ReturnsAsync(new List<string> { "cam-1" });
+            camera.Setup(c => c.Connect()).ReturnsAsync(() => connected = true);
+            camera.Setup(c => c.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = connected });
+            var item = new ConnectEquipment(profile, camera.Object, Mock.Of<IFilterWheelMediator>(), Mock.Of<IFocuserMediator>(),
+                Mock.Of<IRotatorMediator>(), Mock.Of<ITelescopeMediator>(), Mock.Of<IGuiderMediator>(), Mock.Of<ISwitchMediator>(),
+                Mock.Of<IFlatDeviceMediator>(), Mock.Of<IWeatherDataMediator>(), Mock.Of<IDomeMediator>(),
+                Mock.Of<ISafetyMonitorMediator>()) { SelectedDevice = "Camera" };
+
+            await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None).ConfigureAwait(false);
+
+            camera.Verify(c => c.Connect(), Times.Once);
+            Assert.That(item.IsConnected(), Is.True);
         }
     }
 }
