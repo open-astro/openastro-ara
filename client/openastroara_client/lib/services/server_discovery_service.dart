@@ -533,10 +533,13 @@ class ServerDiscoveryService {
   ///
   /// Dart exposes no netmask, so "same subnet" means the same /24 as a local
   /// interface — the assumption the sweep already makes. When one or more
-  /// candidates match they come first, and the rest follow in the order
-  /// received (#1198: they used to be dropped, which hid a rig reachable
-  /// through a routed segment or a /16 LAN behind a "no address" row). When
-  /// none match every candidate is returned as received.
+  /// candidates match, only those are returned: the caller emits one row per
+  /// address and the UI shows every row, so an off-subnet address (the rig's
+  /// own hotspot seen from the house LAN) would appear as a dead row with the
+  /// same name. (#1198 proposed ranking instead; review on #1277 showed the
+  /// order changes nothing at the emit site, so the filter stays.) When none
+  /// match — a /16 LAN, a routed segment — every candidate is returned in the
+  /// order received so the user can still pick.
   @visibleForTesting
   static List<String> preferLocalSubnet(
     List<String> candidates,
@@ -545,12 +548,11 @@ class ServerDiscoveryService {
     final localBases = {
       for (final a in localAddresses) _slash24(a),
     }..remove(null);
-    return [
+    final onSubnet = [
       for (final c in candidates)
         if (localBases.contains(_slash24(c))) c,
-      for (final c in candidates)
-        if (!localBases.contains(_slash24(c))) c,
     ];
+    return onSubnet.isNotEmpty ? onSubnet : List.of(candidates);
   }
 
   static String? _slash24(String address) {

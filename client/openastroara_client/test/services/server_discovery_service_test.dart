@@ -99,6 +99,25 @@ class _AnsweringMdns extends MDnsClient {
   void stop() {}
 }
 
+/// Answers like [_AnsweringMdns] but the rig advertises TWO addresses: its
+/// LAN side and its own hotspot (a Pi with eth0 + ap0). What discover() emits
+/// for that is what the first-run list shows, one row per entry.
+class _TwoAddressMdns extends _AnsweringMdns {
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    if (T == IPAddressResourceRecord) {
+      return Stream<T>.fromIterable([
+        IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('172.24.1.1')) as T,
+        IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('192.0.2.20')) as T,
+      ]);
+    }
+    return super.lookup<T>(query, timeout: timeout);
+  }
+}
+
 /// Starts, then fails the very first query send the way macOS does when the
 /// app has no Local Network permission: a synchronous SocketException with
 /// errno 65 (EHOSTUNREACH) out of RawDatagramSocket.send inside lookup().
@@ -395,6 +414,32 @@ void main() {
     });
   });
   group('ServerDiscoveryService.discover', () {
+    test('a rig advertising its LAN and hotspot addresses is ONE row, the reachable one',
+        () async {
+      // Review on #1277: discover() dedups on hostname:port and the first-run
+      // screen lists every entry, so an off-subnet address would surface as a
+      // dead row under the same mDNS name. The filter, not the order, is what
+      // the user sees.
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _TwoAddressMdns.new,
+        localAddresses: () async => const ['192.0.2.5'],
+        sweepSource: () => const Stream.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.map((s) => s.hostname), ['192.0.2.20']);
+      expect(found.single.mdnsName, 'openastro');
+    });
+
+    test('with no on-subnet address every advertised address is offered', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _TwoAddressMdns.new,
+        localAddresses: () async => const ['10.9.9.9'],
+        sweepSource: () => const Stream.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.map((s) => s.hostname), ['172.24.1.1', '192.0.2.20']);
+    });
+
     test('sweep does NOT run when mDNS produced a result', () async {
       var sweepRan = false;
       final svc = ServerDiscoveryService(
@@ -749,14 +794,13 @@ void _preferLocalSubnetTests() {
     // The Pi advertises eth0 (house LAN) and ap0 (its own hotspot); the
     // laptop on the LAN must be offered the eth0 address, not whichever
     // A record happened to arrive first.
-    test('ranks the address sharing a /24 with a local interface first', () {
-      // #1198: off-subnet candidates are ranked after, not dropped.
+    test('keeps only the address sharing a /24 with a local interface', () {
       expect(
         ServerDiscoveryService.preferLocalSubnet(
           ['172.24.1.1', '192.168.1.234'],
           ['192.168.1.50'],
         ),
-        ['192.168.1.234', '172.24.1.1'],
+        ['192.168.1.234'],
       );
     });
 
@@ -766,7 +810,7 @@ void _preferLocalSubnetTests() {
           ['172.24.1.1', '192.168.1.234'],
           ['172.24.1.7'],
         ),
-        ['172.24.1.1', '192.168.1.234'],
+        ['172.24.1.1'],
       );
     });
 
@@ -786,13 +830,13 @@ void _preferLocalSubnetTests() {
       ]);
     });
 
-    test('several on-subnet candidates all come first, in received order', () {
+    test('several on-subnet candidates are all kept', () {
       expect(
         ServerDiscoveryService.preferLocalSubnet(
           ['192.168.1.2', '172.24.1.1', '192.168.1.3'],
           ['192.168.1.50', '10.9.9.9'],
         ),
-        ['192.168.1.2', '192.168.1.3', '172.24.1.1'],
+        ['192.168.1.2', '192.168.1.3'],
       );
     });
   });
