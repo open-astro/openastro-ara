@@ -388,6 +388,6 @@ public sealed partial class GuiderService {
     [LoggerMessage(EventId = 4229, Level = LogLevel.Information, Message = "§42.2 guider reports its {DeviceType} back — resolving the open camera-drop fault row (#1191); the one-shot reaction stays latched")]
     private partial void LogCameraReconnected(string deviceType);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Guide camera dropped again in the same episode — recorded (§42.5, #1241); the on_guider_lost reaction stays one-shot")]
+    [LoggerMessage(EventId = 4230, Level = LogLevel.Warning, Message = "Guide camera dropped again in the same episode — recorded (§42.5, #1241); the on_guider_lost reaction stays one-shot")]
     private partial void LogRepeatedCameraDrop();
 }

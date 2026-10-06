@@ -866,10 +866,11 @@ namespace OpenAstroAra.Test {
             Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State,
                 Is.EqualTo(EquipmentConnectionState.Connected));
 
-            // The one-shot stays latched: a second drop in the same episode records nothing new and
-            // does not pause again; a second reconnect has no open row to resolve. The events arrive
+            // The one-shot stays latched: a second drop in the same episode does not pause again. It
+            // does get its own §42.5 row (#1241), which the second reconnect resolves. The events arrive
             // in order on one stream, so a state change broadcast AFTER them is the observable
-            // "they have been processed" signal (no fixed delay).
+            // "they have been processed" signal (no fixed delay); the row writes themselves are
+            // fire-and-forget, so they are polled for below.
             var firstRow = recorded;
             await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
@@ -879,6 +880,8 @@ namespace OpenAstroAra.Test {
             Assert.That(Volatile.Read(ref pauses), Is.EqualTo(1), "a flapping camera must not re-trigger the policy per cycle");
             // #1241 — but every drop goes on the record: the second drop gets its own §42.5 row (no action,
             // the reaction stays one-shot) and the second reconnect resolves that row.
+            Assert.That(await PollUntilAsync(() => recorded is not null && !ReferenceEquals(recorded, firstRow)).ConfigureAwait(false), Is.True,
+                "the second camera drop never recorded its own fault row");
             faultLog.Verify(f => f.RecordFaultAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<CancellationToken>()), Times.Exactly(2),
                 "the second camera drop must get its own fault row");
             Assert.That(recorded, Is.Not.SameAs(firstRow), "the second row is a new event, not the first one re-recorded");
