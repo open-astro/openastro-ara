@@ -57,30 +57,7 @@ public static class ProfileEndpoints {
             .WithName("GetStorageSettings")
             .WithSummary("Get the active profile's storage settings.");
 
-        profile.MapPut("/storage", (StorageSettingsDto body, IProfileStore store) => {
-            // §29 — reject an invalid disk-space threshold pair at write so the stored profile always matches
-            // what the monitor enforces (no silent fallback to defaults while the UI shows the bad numbers).
-            if (body.MinFreeDiskCriticalGb < 1 || body.MinFreeDiskWarnGb <= body.MinFreeDiskCriticalGb) {
-                return Results.Problem(
-                    detail: "min_free_disk_critical_gb must be >= 1 and strictly below min_free_disk_warn_gb.",
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-            // §43-2b retention — 0 means keep everything; negative is meaningless, reject at write so the
-            // stored profile always matches what the pruner enforces.
-            if (body.BackupRetentionCount < 0) {
-                return Results.Problem(
-                    detail: "backup_retention_count must be >= 0 (0 keeps every snapshot).",
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-            // §42.5 fault-log retention — same contract: 0 keeps everything, negative is rejected (#1145).
-            if (body.FaultLogRetentionDays < 0) {
-                return Results.Problem(
-                    detail: "fault_log_retention_days must be >= 0 (0 keeps every fault row).",
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-            store.PutStorageSettings(body);
-            return Results.Ok(body);
-        })
+        profile.MapPut("/storage", PutStorageSettings)
             .Accepts<StorageSettingsDto>("application/json")
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -502,6 +479,34 @@ public static class ProfileEndpoints {
     /// read-side coercion) becomes the <c>guide_scope</c> default. Extracted for unit tests.</summary>
     internal static string NormalizeGuiderSetupType(string? setupType) =>
         setupType?.Trim().ToLowerInvariant() == "oag" ? "oag" : "guide_scope";
+
+    /// <summary>§29 / §43-2b / §42.5 — <c>PUT /profile/storage</c> write-boundary validation: an invalid
+    /// disk-space pair or a negative retention value is a 400 and never reaches the store. Extracted so
+    /// the 400s are unit-testable without a host (#1145).</summary>
+    internal static IResult PutStorageSettings(StorageSettingsDto body, IProfileStore store) {
+        // §29 — reject an invalid disk-space threshold pair at write so the stored profile always matches
+        // what the monitor enforces (no silent fallback to defaults while the UI shows the bad numbers).
+        if (body.MinFreeDiskCriticalGb < 1 || body.MinFreeDiskWarnGb <= body.MinFreeDiskCriticalGb) {
+            return Results.Problem(
+                detail: "min_free_disk_critical_gb must be >= 1 and strictly below min_free_disk_warn_gb.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        // §43-2b retention — 0 means keep everything; negative is meaningless, reject at write so the
+        // stored profile always matches what the pruner enforces.
+        if (body.BackupRetentionCount < 0) {
+            return Results.Problem(
+                detail: "backup_retention_count must be >= 0 (0 keeps every snapshot).",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        // §42.5 fault-log retention — same contract: 0 keeps everything, negative is rejected (#1145).
+        if (body.FaultLogRetentionDays < 0) {
+            return Results.Problem(
+                detail: "fault_log_retention_days must be >= 0 (0 keeps every fault row).",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        store.PutStorageSettings(body);
+        return Results.Ok(body);
+    }
 
     /// <summary>§45.12 — <c>PUT /profile/polar-align</c>. The live loop re-reads these settings before
     /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
