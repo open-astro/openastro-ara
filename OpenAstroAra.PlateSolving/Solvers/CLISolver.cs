@@ -188,15 +188,20 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 // explicit rather than an implementation detail of Process.
                 await Task.WhenAll(stdoutClosed.Task, stderrClosed.Task).WaitAsync(ct);
             } catch (OperationCanceledException) {
-                // Timeout or caller cancellation: kill the solver (and its children) before propagating.
+                // Timeout or caller cancellation: kill the solver AND its children before propagating.
+                // Unconditionally (#1219): a solver that has exited while a grandchild still holds the
+                // pipe is exactly the case the tree kill is for, and Kill on an exited root is a no-op.
                 try {
-                    if (!process.HasExited) {
-                        process.Kill(entireProcessTree: true);
-                    }
+                    process.Kill(entireProcessTree: true);
                 } catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException) {
                     Logger.Error(ex);
                 }
                 throw;
+            } finally {
+                // Stop the async readers before the process is disposed (#1219): a reader still
+                // attached to a pipe a grandchild holds would otherwise outlive the Process object.
+                CancelReadQuietly(process.CancelOutputRead);
+                CancelReadQuietly(process.CancelErrorRead);
             }
             // §42.2 row 14 — a solver crash used to be indistinguishable from a clean no-solution
             // (success was inferred solely from the sidecar file). Surface the exit code so the
@@ -207,9 +212,25 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             if (exitCode != 0) {
                 string lastOutput;
                 lock (tail) {
+                    LastExitTail = tail.ToArray();
                     lastOutput = tail.Count == 0 ? string.Empty : $"; last output:{Environment.NewLine}{string.Join(Environment.NewLine, tail)}";
                 }
                 Logger.Warning($"Plate solver '{Path.GetFileName(executableLocation)}' exited with code {exitCode}{DescribeExitCode(exitCode)}{lastOutput}");
+            }
+        }
+
+        /// <summary>The last <see cref="OutputTailLines"/> lines the solver printed before a non-zero
+        /// exit (stderr lines prefixed <c>[stderr]</c>), as carried by the exit warning; null until a
+        /// run ends that way. Exposed for subclasses and tests (#1219).</summary>
+        protected IReadOnlyList<string>? LastExitTail { get; private set; }
+
+        // CancelOutputRead/CancelErrorRead throw InvalidOperationException when the matching
+        // Begin*ReadLine never ran (a Start that failed); nothing to stop then.
+        private static void CancelReadQuietly(Action cancel) {
+            try {
+                cancel();
+            } catch (InvalidOperationException) {
+                // reader was never started
             }
         }
 
@@ -247,7 +268,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         /// (the two streams can call concurrently). The line becomes the solve's progress status and
         /// is logged at Debug. stderr used to be logged at Error, but CLI solvers print routine
         /// progress and diagnostics there, so a successful solve would have filled the log with
-        /// errors; a failing solve surfaces the last lines at Warning with its exit code instead.</summary>
+        /// errors; a failing solve surfaces the last lines at Warning with its exit code instead.
+        /// Note (#1219): with the file sink at Debug every line is a synchronous log write on the
+        /// pipe-drain thread; a verbose solver under DEBUG logging is slowed by its own output.</summary>
         protected virtual void OnSolverOutput(string line, bool stdErr, IProgress<ApplicationStatus>? progress) {
             progress?.Report(new ApplicationStatus() { Status = line });
             Logger.Debug(stdErr ? $"[stderr] {line}" : line);

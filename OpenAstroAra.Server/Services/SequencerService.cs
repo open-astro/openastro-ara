@@ -597,6 +597,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         lock (_checkpointGate) { _checkpointOwner = run.RunId; }
     }
 
+    /// <summary>#1219 — the shortest gap between two progress-driven checkpoint writes (lifecycle writes
+    /// are immediate). Tests shorten it.</summary>
+    internal static TimeSpan CheckpointMinInterval { get; set; } = TimeSpan.FromSeconds(1);
+
     private void WriteCheckpointIfOwner(RunState run, Guid sequenceId) {
         if (_checkpoint is null) return;
         lock (_checkpointGate) {
@@ -710,6 +714,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // Declared ahead of the try so the catch blocks can seal+drain it before
         // their terminal emits; null until the run body constructs it.
         CoalescingAsyncPublisher? progressPublisher = null;
+        CoalescingCheckpointWriter? checkpointWriter = null;
         // Same hoisting for the §42.4 failure-report drain: the exception/cancellation
         // paths below must also await in-flight failure emits before their terminal
         // emits, or an instruction_failed could land after sequence.failed/stopped
@@ -793,12 +798,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // state (read at publish time). Lifecycle events stay unthrottled.
                 progressPublisher = new CoalescingAsyncPublisher(
                     () => EmitAsync("sequence.progress", sequenceId, run));
+                // #1219 — the checkpoint write that rides every progress report is rate-limited:
+                // a solver's per-line output (#1188) reaches this sink, and each report used to
+                // serialize + move the checkpoint on the SD card.
+                checkpointWriter = new CoalescingCheckpointWriter(
+                    () => WriteCheckpointIfOwner(run, sequenceId), CheckpointMinInterval);
+                var checkpoints = checkpointWriter;
                 var progress = new Progress<ApplicationStatus>(status => {
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
                     run.SetDescription(status.Status);
                     progressPublisher.Poke();
-                    WriteCheckpointIfOwner(run, sequenceId);
+                    checkpoints.Poke();
                 });
 
                 // §40/§50 — this run owns its own catalog session: frames its
@@ -834,7 +845,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var publisher = progressPublisher;
                 var pollTask = PollLiveStatusAsync(run, () => {
                     publisher.Poke();
-                    WriteCheckpointIfOwner(run, sequenceId);
+                    checkpoints.Poke();
                 }, capCts.Token);
                 try {
                     await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
@@ -842,6 +853,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     await capCts.CancelAsync();
                     await capTask;
                     await pollTask;
+                    checkpoints.Flush(); // the freshest progress state lands before the terminal write
                 }
 
                 // Final snapshot — fast instructions may finish without firing a
@@ -890,6 +902,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (progressPublisher is not null) {
                 await progressPublisher.SealAndDrainAsync();
             }
+            checkpointWriter?.Stop();
             if (drainFailureReports is not null) {
                 await drainFailureReports();
             }

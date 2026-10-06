@@ -104,6 +104,60 @@ namespace OpenAstroAra.Test {
             Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)));
         }
 
+        // #1219 — a progress sink that throws must not take the process down (the reader callback
+        // runs on a thread-pool thread, where an escaping exception is fatal).
+        [Test]
+        public async Task A_throwing_progress_sink_does_not_stop_the_solve() {
+            var solver = new FakeSolver(Script("printf 'one\\ntwo\\nthree\\n'; exit 0"));
+            var sink = new ThrowingProgress();
+
+            await solver.Run(sink, CancellationToken.None);
+
+            Assert.That(sink.Reports, Is.EqualTo(3), "every line still reached the sink");
+            Assert.That(solver.Lines.Count, Is.EqualTo(3), "and the solver kept reading");
+        }
+
+        // #1219 — the non-zero-exit warning carries the last 20 lines, stderr tagged.
+        [Test]
+        public async Task A_non_zero_exit_keeps_the_last_twenty_lines_with_stderr_tagged() {
+            var solver = new FakeSolver(Script("for i in $(seq 1 30); do echo \"line $i\"; done; echo oops >&2; exit 3"));
+
+            await solver.Run(new RecordingProgress(), CancellationToken.None);
+
+            var tail = solver.Tail!;
+            Assert.That(tail, Has.Count.EqualTo(20));
+            Assert.That(tail[^1], Is.EqualTo("[stderr] oops"));
+            Assert.That(tail, Does.Contain("line 30").And.Not.Contain("line 10"), "only the last twenty");
+        }
+
+        [Test]
+        public async Task A_clean_exit_records_no_tail() {
+            var solver = new FakeSolver(Script("echo fine; exit 0"));
+            await solver.Run(new RecordingProgress(), CancellationToken.None);
+            Assert.That(solver.Tail, Is.Null);
+        }
+
+        // #1219 — the solver exits but a grandchild still holds the pipe: cancellation must still
+        // return promptly (the tree kill is unconditional and the readers are cancelled).
+        [Test]
+        public async Task Cancellation_returns_promptly_when_a_grandchild_holds_the_pipe() {
+            var solver = new FakeSolver(Script("(sleep 30) & echo started; exit 0"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            await Assert.ThatAsync(() => solver.Run(new RecordingProgress(), cts.Token), Throws.InstanceOf<OperationCanceledException>());
+
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(15)), "must not wait out the grandchild's sleep");
+        }
+
+        private sealed class ThrowingProgress : IProgress<ApplicationStatus> {
+            public int Reports;
+            public void Report(ApplicationStatus value) {
+                Interlocked.Increment(ref Reports);
+                throw new InvalidOperationException("sink is broken");
+            }
+        }
+
         private sealed class RecordingProgress : IProgress<ApplicationStatus> {
             public ConcurrentQueue<string> Statuses { get; } = new();
             public void Report(ApplicationStatus value) => Statuses.Enqueue(value.Status);
@@ -117,6 +171,8 @@ namespace OpenAstroAra.Test {
             }
 
             public ConcurrentQueue<(string Line, bool StdErr)> Lines { get; } = new();
+
+            public IReadOnlyList<string>? Tail => LastExitTail;
 
             public Task Run(IProgress<ApplicationStatus>? progress, CancellationToken ct) =>
                 StartCLI("unused.fits", "unused.ini", new PlateSolveParameter(), null!, progress, ct);
