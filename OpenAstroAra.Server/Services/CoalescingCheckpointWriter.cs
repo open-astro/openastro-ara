@@ -47,8 +47,10 @@ public sealed class CoalescingCheckpointWriter {
         _clockMs = clockMs ?? (static () => Environment.TickCount64);
     }
 
-    /// <summary>Checkpoint writes performed so far (tests).</summary>
-    public int Writes { get; private set; }
+    private int _writes;
+
+    /// <summary>Checkpoint writes performed so far (tests; read on another thread than the writer).</summary>
+    public int Writes => System.Threading.Volatile.Read(ref _writes);
 
     /// <summary>Something changed: write now if the interval has passed, else arm the trailing write.</summary>
     public void Poke() {
@@ -94,7 +96,7 @@ public sealed class CoalescingCheckpointWriter {
     private void WriteLocked(long now) {
         _pending = false;
         _lastWriteMs = now;
-        Writes++;
+        System.Threading.Interlocked.Increment(ref _writes);
         _write();
     }
 

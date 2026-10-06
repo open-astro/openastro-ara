@@ -150,17 +150,25 @@ namespace OpenAstroAra.Test {
             Assert.That(solver.Tail, Is.Null);
         }
 
-        // #1219 — the solver exits but a grandchild still holds the pipe: cancellation must still
-        // return promptly (the tree kill is unconditional and the readers are cancelled).
+        // #1219 — the solver exits but a grandchild still holds the pipe: the cancelled solve returns
+        // promptly, and the grandchild's later output never reaches the progress sink after the
+        // solve is over. A contract guard, not a revert-catcher: disposing the Process closes the
+        // pipes, so this holds with or without the explicit CancelOutputRead/CancelErrorRead (which
+        // are hygiene), and the grandchild itself is reparented once the solver is reaped and out
+        // of Kill(entireProcessTree)'s reach on Unix.
         [Test]
-        public async Task Cancellation_returns_promptly_when_a_grandchild_holds_the_pipe() {
-            var solver = new FakeSolver(Script("(sleep 30) & echo started; exit 0"));
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        public async Task Cancellation_stops_the_readers_so_a_grandchild_cannot_report_after_the_solve() {
+            var sink = new RecordingProgress();
+            var solver = new FakeSolver(Script("(sleep 3; echo late) & echo started; exit 0"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
-            await Assert.ThatAsync(() => solver.Run(new RecordingProgress(), cts.Token), Throws.InstanceOf<OperationCanceledException>());
+            await Assert.ThatAsync(() => solver.Run(sink, cts.Token), Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)), "must not wait out the grandchild");
 
-            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(15)), "must not wait out the grandchild's sleep");
+            await Task.Delay(TimeSpan.FromSeconds(4)); // the grandchild prints "late" at ~3 s
+            Assert.That(sink.Statuses, Does.Contain("started").And.Not.Contain("late"),
+                "a line printed into the pipe after the solve ended must not reach the sink");
         }
 
         private sealed class ThrowingProgress : IProgress<ApplicationStatus> {

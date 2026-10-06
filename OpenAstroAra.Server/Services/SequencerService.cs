@@ -902,7 +902,6 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (progressPublisher is not null) {
                 await progressPublisher.SealAndDrainAsync();
             }
-            checkpointWriter?.Stop();
             if (drainFailureReports is not null) {
                 await drainFailureReports();
             }
@@ -937,6 +936,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // §28 — terminal transition clears active/current.json (only if this
             // run still owns it); a missing file is the canonical "nothing
             // running" signal for §28.2.
+            checkpointWriter?.Stop(); // #1219 — no trailing write may land after the clear below
             ClearCheckpointIfOwner(run);
             // The run is terminal: dispose its CTS (the only IDisposable). The
             // RunState record stays in _runs for post-completion GetRunState

@@ -188,9 +188,13 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 // explicit rather than an implementation detail of Process.
                 await Task.WhenAll(stdoutClosed.Task, stderrClosed.Task).WaitAsync(ct);
             } catch (OperationCanceledException) {
-                // Timeout or caller cancellation: kill the solver AND its children before propagating.
-                // Unconditionally (#1219): a solver that has exited while a grandchild still holds the
-                // pipe is exactly the case the tree kill is for, and Kill on an exited root is a no-op.
+                // Timeout or caller cancellation: kill the solver and its still-attached children before
+                // propagating. Unconditional (#1219) so a root that exits between the OCE and the kill
+                // cannot skip its descendants — but no stronger than that: on Unix the tree walk finds
+                // children by parent PID, so a grandchild that outlived an already-reaped solver has been
+                // reparented and is NOT reached (that needs a process group, which .NET cannot create for
+                // a child). What is guaranteed is that the readers below are stopped, so such a
+                // grandchild's later output never reaches the progress sink after the solve is over.
                 try {
                     process.Kill(entireProcessTree: true);
                 } catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException) {
@@ -199,7 +203,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 throw;
             } finally {
                 // Stop the async readers before the process is disposed (#1219): a reader still
-                // attached to a pipe a grandchild holds would otherwise outlive the Process object.
+                // attached to a pipe a grandchild holds would otherwise keep delivering that
+                // grandchild's output to the progress sink after the solve has ended.
                 CancelReadQuietly(process.CancelOutputRead);
                 CancelReadQuietly(process.CancelErrorRead);
             }
