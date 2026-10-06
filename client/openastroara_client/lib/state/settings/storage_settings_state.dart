@@ -27,6 +27,10 @@ class StorageSettings {
   // after each new backup. 0 = keep everything.
   final int backupRetentionCount;
 
+  // §42.5 — how many days of fault-log rows the daemon keeps; older rows are
+  // pruned once a day. 0 = keep everything (#1145).
+  final int faultLogRetentionDays;
+
   const StorageSettings({
     this.saveDirectory = '/media/openastroara',
     this.fileFormat = StorageFileFormat.fits,
@@ -36,6 +40,7 @@ class StorageSettings {
     this.minFreeDiskWarnGb = 10,
     this.minFreeDiskCriticalGb = 2,
     this.backupRetentionCount = 20,
+    this.faultLogRetentionDays = 90,
   });
 
   StorageSettings copyWith({
@@ -46,6 +51,7 @@ class StorageSettings {
     int? minFreeDiskWarnGb,
     int? minFreeDiskCriticalGb,
     int? backupRetentionCount,
+    int? faultLogRetentionDays,
   }) =>
       StorageSettings(
         saveDirectory: saveDirectory ?? this.saveDirectory,
@@ -55,6 +61,8 @@ class StorageSettings {
         minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
         minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
         backupRetentionCount: backupRetentionCount ?? this.backupRetentionCount,
+        faultLogRetentionDays:
+            faultLogRetentionDays ?? this.faultLogRetentionDays,
       );
 }
 
@@ -100,6 +108,13 @@ class StorageSettingsNotifier extends Notifier<StorageSettings>
   void setBackupRetentionCount(int v) {
     if (v < 0) return;
     state = state.copyWith(backupRetentionCount: v);
+  }
+
+  // §42.5 — same contract as the backup count: 0 keeps everything, negatives
+  // are rejected like the server's 400 (fault_log_retention_days must be >= 0).
+  void setFaultLogRetentionDays(int v) {
+    if (v < 0) return;
+    state = state.copyWith(faultLogRetentionDays: v);
   }
 
   /// Whether the current pair satisfies critical &lt; warn (checked before persisting).

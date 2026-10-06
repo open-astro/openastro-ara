@@ -795,6 +795,16 @@ const List<Setting> settingsRegistry = [
     defaultValue: 20,
     profilePath: 'storage.backup_retention_count',
   ),
+  Setting(
+    id: 'session.storage.fault_log_retention_days',
+    label: 'Keep fault history (days)',
+    description: 'How many days of equipment fault history Ara keeps. Once a day, fault log rows detected longer ago than this are deleted. 0 keeps every fault forever.',
+    keywords: ['fault', 'faults', 'history', 'retention', 'prune', 'days', 'log', 'cleanup', 'equipment'],
+    path: ['Settings', 'Your night', 'Storage'],
+    type: SettingType.intRange(min: 0, max: 3650),
+    defaultValue: 90,
+    profilePath: 'storage.fault_log_retention_days',
+  ),
 
   // §54 Notifications — 14 fields (7 channel/delivery + 7 triggers). State lives in
   // `notificationsSettingsProvider`.

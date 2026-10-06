@@ -82,6 +82,19 @@ void main() {
       expect(container.read(storageSettingsProvider).backupRetentionCount, 50);
     });
 
+    test('§42.5 fault-log retention defaults to 90 days and rejects negatives (0 = keep all)', () {
+      final n = container.read(storageSettingsProvider.notifier);
+      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 90);
+      n.setFaultLogRetentionDays(-1);
+      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 90,
+          reason: 'negative is meaningless — mirrors the server 400');
+      n.setFaultLogRetentionDays(0);
+      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 0,
+          reason: '0 is the explicit keep-everything value');
+      n.setFaultLogRetentionDays(365);
+      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 365);
+    });
+
     test('§29 thresholdsValid flags an inverted pair (the save-time check)', () {
       final n = container.read(storageSettingsProvider.notifier);
       expect(n.thresholdsValid, isTrue); // defaults 10 > 2

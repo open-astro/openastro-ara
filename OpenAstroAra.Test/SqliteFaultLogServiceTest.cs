@@ -548,5 +548,39 @@ namespace OpenAstroAra.Test {
             Assert.That(recorded.Last(), Is.EqualTo("gave_up:pause_sequence"),
                 "the stored action carries the terminal outcome inline");
         }
+    
+        // §42.5 retention (#1145): rows detected before the cutoff go, resolved or not; newer rows stay.
+        [Test]
+        public async Task PruneBefore_removes_rows_older_than_the_cutoff_and_keeps_the_rest() {
+            var old = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            var oldResolved = new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero);
+            var recent = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
+            await service.RecordFaultAsync(Fault(DeviceType.Camera, detectedUtc: old), CancellationToken.None);
+            await service.RecordActionAsync(Fault(DeviceType.Focuser, detectedUtc: oldResolved), "recovered", oldResolved.AddMinutes(1), CancellationToken.None);
+            await service.RecordFaultAsync(Fault(DeviceType.Telescope, detectedUtc: recent), CancellationToken.None);
+
+            var removed = await service.PruneBeforeAsync(new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero), CancellationToken.None);
+
+            Assert.That(removed, Is.EqualTo(2));
+            var left = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items;
+            Assert.That(left.Select(f => f.EquipmentType), Is.EqualTo(TelescopeOnly));
+        }
+
+        [Test]
+        public async Task PruneBefore_compares_instants_not_strings_across_offsets() {
+            // 2026-03-31T23:00-02:00 is 2026-04-01T01:00Z: AFTER a midnight-UTC cutoff although its text sorts before it.
+            var offsetRow = new DateTimeOffset(2026, 3, 31, 23, 0, 0, TimeSpan.FromHours(-2));
+            await service.RecordFaultAsync(Fault(detectedUtc: offsetRow), CancellationToken.None);
+
+            var removed = await service.PruneBeforeAsync(new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero), CancellationToken.None);
+
+            Assert.That(removed, Is.EqualTo(0));
+            Assert.That((await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task PruneBefore_on_an_empty_table_is_a_no_op() {
+            Assert.That(await service.PruneBeforeAsync(DateTimeOffset.UtcNow, CancellationToken.None), Is.EqualTo(0));
+        }
     }
 }

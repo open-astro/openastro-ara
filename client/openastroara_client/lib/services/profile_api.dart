@@ -640,6 +640,8 @@ class ProfileApi {
     minFreeDiskCriticalGb:
         (j['min_free_disk_critical_gb'] as num?)?.toInt() ?? 2,
     backupRetentionCount: (j['backup_retention_count'] as num?)?.toInt() ?? 20,
+    faultLogRetentionDays:
+        (j['fault_log_retention_days'] as num?)?.toInt() ?? 90,
   );
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {
@@ -650,6 +652,7 @@ class ProfileApi {
     'min_free_disk_warn_gb': v.minFreeDiskWarnGb,
     'min_free_disk_critical_gb': v.minFreeDiskCriticalGb,
     'backup_retention_count': v.backupRetentionCount,
+    'fault_log_retention_days': v.faultLogRetentionDays,
   };
 
   static StorageFileFormat _fileFormatFromString(String? s) {

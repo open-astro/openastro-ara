@@ -57,7 +57,11 @@ public sealed record StorageSettingsDto(
     // create, older snapshots beyond this count are pruned (zip + manifest, oldest first). 0 = keep
     // everything (the pre-retention behaviour). Optional ctor default so older profile.json files
     // still deserialize.
-    int BackupRetentionCount = 20);
+    int BackupRetentionCount = 20,
+    // §42.5 — how many days of fault-log rows (the faults table) the daemon keeps. FaultLogRetentionService
+    // deletes rows detected before now − days two minutes after start, then once a day. 0 = keep everything (#1145).
+    // Optional ctor default so older profile.json files still deserialize.
+    int FaultLogRetentionDays = 90);
 
 /// <summary>
 /// §54 notifications settings — channel toggles + per-channel tokens +
