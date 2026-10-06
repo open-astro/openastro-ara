@@ -635,6 +635,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             var slewVerdict = new SlewEventWatch.Verdict(SlewEventWatch.Kind.None);
             DiscoveredDeviceDto? watchedDevice = null;
             string? axisRatesUnknownReason = null;
+            int? republishedBands = null;
             (double? Primary, double? Secondary) axisRatesUnknownValues = default;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
@@ -660,6 +661,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         // is belt-and-braces, not a retry path).
                         _axisBands[0] = _axisBands[0] is { Count: > 0 } ? _axisBands[0] : pad.Primary ?? _axisBands[0];
                         _axisBands[1] = _axisBands[1] is { Count: > 0 } ? _axisBands[1] : pad.Secondary ?? _axisBands[1];
+                        republishedBands = RepublishPadBandsLocked(); // #1230 — caps built before an axis answered catch up here
                         var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false; // under _gate like every caps read
                         var windowElapsed = DateTimeOffset.UtcNow >= _axisRatesDeadline;
                         // Both axes known across passes (primary on one, secondary on a later one)
@@ -692,6 +694,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     slewVerdict = SlewWatch.Observe(runtime.State == "slewing");
                     watchedDevice = _device;
                 }
+            }
+            if (republishedBands is { } republished) {
+                LogPadBandsRepublished(_logger, republished);
             }
             if (axisRatesUnknownReason is not null) {
                 LogAxisRatesUnknown(_logger, axisRatesUnknownValues.Primary, axisRatesUnknownValues.Secondary, axisRatesUnknownReason);
@@ -920,7 +925,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // The direction pad drives BOTH axes (N/S = secondary, E/W = primary, corners = both), so
         // gate it conservatively on the mount supporting MoveAxis on each — a mount that can move only
         // one axis would silently fail the other half of the pad. The bands below are the primary
-        // axis's, clipped to the secondary's floor and ceiling (PadBandsFrom, #1126).
+        // axis's bands intersected with the secondary's (PadBandsFrom, #1126/#1230).
         try {
             canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary) && c.CanMoveAxis(TelescopeAxis.Secondary);
         } catch (Exception) {
@@ -965,18 +970,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     internal static List<MoveAxisRateBandDto> BandDtosOf(IReadOnlyList<(double Min, double Max)> bands) =>
         bands.Select(b => new MoveAxisRateBandDto(b.Min, b.Max)).ToList();
 
-    /// <summary>The bands the direction pad may pick from: the primary axis's bands, each clipped to
-    /// the secondary axis's floor (its lowest Min) and ceiling (its highest Max), ascending by Min.
-    /// The pad drives BOTH axes with the same picked rate, but ASCOM allows each axis its own range,
-    /// so a rate the primary honours could be refused on the secondary (N/S): above its ceiling it
-    /// is capped, below its floor by more than <see cref="SnapUpBoundFactor"/> it is REFUSED (#1085)
-    /// — which used to leave a slow diagonal press moving E/W while N/S 409'd (#1126). Inside
-    /// [floor, ceiling] the secondary's snap never throws (a gap between its discrete steps snaps
-    /// to the nearest edge), so every rate inside a clipped band is never refused on either axis
-    /// (a gap on the secondary still snaps it to that axis's nearest step). A thrown
-    /// (null) or honestly-empty secondary applies no clip; when nothing survives the clip the
-    /// primary set is offered as-is rather than no speeds at all (better a rate the secondary may
-    /// snap than none). Internal static so the rule is unit-testable.</summary>
+    /// <summary>The bands the direction pad may pick from: every non-empty intersection of a primary
+    /// axis band with a secondary axis band, ascending by Min. The pad drives BOTH axes with the same
+    /// picked rate, but ASCOM allows each axis its own range, so a rate the primary honours could be
+    /// refused on the secondary (N/S): above its ceiling it is capped, below its floor by more than
+    /// <see cref="SnapUpBoundFactor"/> it is REFUSED (#1085) — which used to leave a slow diagonal
+    /// press moving E/W while N/S 409'd (#1126). Clipping to the secondary's [floor, ceiling] alone
+    /// stopped the 409 but not a large mismatch: a continuous primary over a discrete secondary
+    /// (0.002),(0.008),(0.033),(1–4) published (0.002, 4.0), and a 5 % chip (0.2 °/s) snapped to
+    /// 0.033 on N/S, so a diagonal press ran E/W 6× faster than N/S (#1230). Intersecting with the
+    /// secondary's bands publishes exactly the rates BOTH axes honour as given: a rate inside any
+    /// published band is never refused and never snapped on either axis. A thrown (null) or
+    /// honestly-empty secondary applies no clip. When no intersection is non-empty (two discrete
+    /// ladders with no step in common) the #1126 clip to the secondary's [floor, ceiling] is used
+    /// instead — inside that window the secondary snaps but never refuses — and only when that is
+    /// empty too is the primary set offered as-is rather than no speeds at all. Internal static so
+    /// the rule is unit-testable.</summary>
     internal static List<(double Min, double Max)> PadBandsFrom((IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) pad) {
         if (pad.Primary is not { Count: > 0 }) {
             return [];
@@ -985,20 +994,69 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (pad.Secondary is not { Count: > 0 }) {
             return primary;
         }
-        var floor = pad.Secondary.Min(b => b.Min);
-        var ceiling = pad.Secondary.Max(b => b.Max);
+        var usable = new List<(double Min, double Max)>();
+        foreach (var (pMin, pMax) in primary) {
+            foreach (var (sMin, sMax) in pad.Secondary) {
+                var lo = Math.Max(pMin, sMin);
+                var hi = Math.Min(pMax, sMax);
+                if (lo > hi + 1e-9) {
+                    continue; // disjoint
+                }
+                var both = (lo, Math.Max(lo, hi));
+                // Two pairs that intersect to the same window would publish twice.
+                if (!usable.Contains(both)) {
+                    usable.Add(both);
+                }
+            }
+        }
+        usable.Sort((a, b) => a.Min != b.Min ? a.Min.CompareTo(b.Min) : a.Max.CompareTo(b.Max));
+        if (usable.Count > 0) {
+            return usable;
+        }
+        var clipped = ClipToWindow(primary, pad.Secondary.Min(b => b.Min), pad.Secondary.Max(b => b.Max));
+        return clipped.Count > 0 ? clipped : primary;
+    }
+
+    // The #1126 rule, kept as the fallback: each primary band clipped to [floor, ceiling], deduped.
+    private static List<(double Min, double Max)> ClipToWindow(List<(double Min, double Max)> primary, double floor, double ceiling) {
         var usable = new List<(double Min, double Max)>();
         foreach (var (min, max) in primary) {
             var lo = Math.Max(min, floor);
             var hi = Math.Min(max, ceiling);
             var clipped = (lo, Math.Max(lo, hi));
-            // Two primary bands clipped to the same window would publish twice.
             if (lo <= hi + 1e-9 && !usable.Contains(clipped)) {
                 usable.Add(clipped);
             }
         }
-        return usable.Count > 0 ? usable : primary;
+        return usable;
     }
+
+    /// <summary>#1230 — the capabilities are built on the first pass whose reads answered; if the
+    /// secondary's AxisRates threw on that pass, the unclipped primary bands went on the wire for the
+    /// session while the snap later used the real secondary bands (a chip under its floor 409'd).
+    /// Called under <c>_gate</c> after the band cache is updated: re-publishes the two rate lists from
+    /// the cache whenever they differ from what is published.</summary>
+    /// <returns>The number of bands re-published, or null when nothing changed — logged by the
+    /// caller after <c>_gate</c> is released (the nudge/stop path takes the gate too).</returns>
+    private int? RepublishPadBandsLocked() {
+        if (_capabilities is null || _axisBands is null) {
+            return null;
+        }
+        var padBands = PadBandsFrom((_axisBands[0], _axisBands[1]));
+        var bandDtos = BandDtosOf(padBands);
+        if (_capabilities.MoveAxisRateBandsDegPerSec is { } published && published.SequenceEqual(bandDtos)) {
+            return null;
+        }
+        _capabilities = _capabilities with {
+            MoveAxisRatesDegPerSec = [.. EndpointsOf(padBands)],
+            MoveAxisRateBandsDegPerSec = bandDtos,
+        };
+        return bandDtos.Count;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "MoveAxis pad bands re-published from the settled AxisRates cache ({Count} band(s)); the first capabilities pass had an axis still unread (#1230).")]
+    private static partial void LogPadBandsRepublished(ILogger logger, int count);
 
     // Every [Minimum, Maximum] rate band for one axis (discrete rate → Min==Max), ascending by Min,
     // bands with a non-positive maximum dropped; empty when the mount answers with no bands; NULL

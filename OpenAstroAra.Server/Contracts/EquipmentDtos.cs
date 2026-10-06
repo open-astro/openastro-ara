@@ -208,7 +208,7 @@ public sealed record TelescopeCapabilitiesDto(
     // Manual control: whether the mount supports MoveAxis on BOTH pad axes, and the
     // rates the direction pad may ask for (deg/sec). `MoveAxisRateBandsDegPerSec`
     // (#1126) is the authoritative shape: the primary axis's AxisRates [min, max]
-    // bands, ascending, each clipped to the secondary axis's floor and ceiling so
+    // bands, ascending, each intersected with the secondary axis's bands (#1230) so
     // one picked rate is honoured on both axes; a discrete rate is a band with
     // min == max, a "any speed up to max" band has min 0. `MoveAxisRatesDegPerSec`
     // is the legacy flattening of the same bands to their positive endpoints

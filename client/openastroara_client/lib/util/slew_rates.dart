@@ -2,10 +2,10 @@
 /// mount's reported MoveAxis rate BANDS (#1126).
 ///
 /// The daemon publishes each pad band as `{min, max}` deg/s
-/// (`move_axis_rate_bands_deg_per_sec`): the primary axis's AxisRates bands,
-/// each already clipped to the secondary axis's floor and ceiling so one picked
-/// rate is honoured on both axes. A discrete rate is a band with `min == max`;
-/// "any speed up to max" is a band with `min` 0.
+/// (`move_axis_rate_bands_deg_per_sec`): the non-empty intersections of the
+/// primary axis's AxisRates bands with the secondary axis's (#1230), so one
+/// picked rate is honoured as given on both axes. A discrete rate is a band
+/// with `min == max`; "any speed up to max" is a band with `min` 0.
 ///
 /// Rules:
 /// - Every band discrete (`min == max`): the driver's own ladder is honored
@@ -97,6 +97,10 @@ List<SlewRateBand> slewRateBandsFromLegacyRates(List<double> mountRates) {
 
 /// Builds the sorted, deduped rate list for the speed picker from an older
 /// daemon's endpoint list (see [slewRateBandsFromLegacyRates]).
+///
+/// Legacy adapter with no production caller (kept for the tests that pin the
+/// endpoint-list reading): the production entry point is
+/// `MountCapabilities.padRateBands` fed to [buildSlewRateOptionsFromBands].
 List<SlewRateOption> buildSlewRateOptions(List<double> mountRates) =>
     buildSlewRateOptionsFromBands(slewRateBandsFromLegacyRates(mountRates));
 

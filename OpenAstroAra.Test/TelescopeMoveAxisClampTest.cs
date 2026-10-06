@@ -163,9 +163,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Pad_bands_are_the_primary_bands_clipped_to_the_secondary_floor_and_ceiling() {
+        public void Pad_bands_are_the_primary_bands_intersected_with_the_secondary_bands() {
             // #1126 — the pad drives both axes with one rate. The secondary's ceiling was already
-            // applied; its FLOOR was not, so a slow diagonal press moved E/W and 409'd N/S.
+            // applied; its FLOOR was not, so a slow diagonal press moved E/W and 409'd N/S. Since
+            // #1230 the rule is intersection, which for a single-band secondary is the same clip.
             IReadOnlyList<(double Min, double Max)> highFloor = [(2.0, 6.0)];
             Assert.That(TelescopeService.PadBandsFrom((OneBand, highFloor)), Is.EqualTo(new[] { (2.0, 6.0) }));
             IReadOnlyList<(double Min, double Max)> lowCeiling = [(0.001, 4.0)];
@@ -174,8 +175,9 @@ namespace OpenAstroAra.Test {
             // band is clipped, not dropped.
             IReadOnlyList<(double Min, double Max)> midRange = [(0.01, 2.0)];
             Assert.That(TelescopeService.PadBandsFrom((Discrete, midRange)), Is.EqualTo(new[] { (0.033, 0.033), (1.0, 2.0) }));
-            // A discrete secondary: only its floor and ceiling clip (its gaps snap, never refuse).
-            Assert.That(TelescopeService.PadBandsFrom((OneBand, Discrete)), Is.EqualTo(new[] { (0.002, 4.0) }));
+            // A discrete secondary (#1230): the intersections, i.e. the secondary's own steps — not the
+            // [floor, ceiling] window, inside which a 0.2 °/s chip snapped to 0.033 on N/S.
+            Assert.That(TelescopeService.PadBandsFrom((OneBand, Discrete)), Is.EqualTo(Discrete));
             // A thrown (null) or honestly-empty secondary applies no clip.
             Assert.That(TelescopeService.PadBandsFrom((OneBand, null)), Is.EqualTo(OneBand));
             Assert.That(TelescopeService.PadBandsFrom((OneBand, [])), Is.EqualTo(OneBand));
@@ -203,20 +205,54 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Any_rate_inside_a_pad_band_is_accepted_by_both_axes_of_an_asymmetric_mount() {
-            // The diagonal press: the same rate goes to both axes, and neither may refuse it.
+            // The diagonal press: the same rate goes to both axes, and neither may refuse OR snap it (#1230).
             IReadOnlyList<(double Min, double Max)> primary = [(0.001, 6.016)];
             IReadOnlyList<(double Min, double Max)> secondary = [(0.5, 0.5), (2.0, 4.0)];
             var pad = TelescopeService.PadBandsFrom((primary, secondary));
-            Assert.That(pad, Is.EqualTo(new[] { (0.5, 4.0) }));
+            Assert.That(pad, Is.EqualTo(new[] { (0.5, 0.5), (2.0, 4.0) }));
             foreach (var (min, max) in pad) {
-                foreach (var rate in new[] { min, (min + max) / 2, max, max * 0.01 + min, min * 1.0001 }) {
-                    Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(rate, primary), $"primary refused {rate}");
-                    Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(rate, secondary), $"secondary refused {rate}");
-                    Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(-rate, secondary), $"secondary refused {-rate}");
+                foreach (var rate in new[] { min, (min + max) / 2, max }) {
+                    Assert.That(TelescopeService.SnapMoveAxisRate(rate, primary), Is.EqualTo(rate).Within(1e-12), $"primary snapped {rate}");
+                    Assert.That(TelescopeService.SnapMoveAxisRate(rate, secondary), Is.EqualTo(rate).Within(1e-12), $"secondary snapped {rate}");
+                    Assert.That(TelescopeService.SnapMoveAxisRate(-rate, secondary), Is.EqualTo(-rate).Within(1e-12), $"secondary snapped {-rate}");
                 }
             }
             // The unclipped primary floor is what used to be offered — and it 409s the secondary.
             Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, secondary));
+        }
+
+
+        [Test]
+        public void Pad_bands_are_the_intersections_with_the_secondary_bands_not_its_window() {
+            // #1230 — the issue's case: a continuous primary over a discrete secondary used to publish
+            // (0.002, 4.0); the 5 %/10 % chips of 4.0 (0.2 / 0.4 °/s) then snapped to 0.033 on N/S, so a
+            // diagonal press ran E/W 6–12× faster than N/S. Now only the secondary's steps are offered.
+            IReadOnlyList<(double Min, double Max)> continuous = [(0.002, 4.0)];
+            var pad = TelescopeService.PadBandsFrom((continuous, Discrete));
+            Assert.That(pad, Is.EqualTo(Discrete));
+            foreach (var chip in new[] { 0.2, 0.4 }) {
+                Assert.That(pad.Any(b => chip >= b.Min && chip <= b.Max), Is.False, $"{chip} is not offered");
+            }
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.2, Discrete), Is.EqualTo(0.033).Within(1e-12), "what 0.2 would have become on N/S");
+            // Two discrete ladders intersect on their common steps only.
+            IReadOnlyList<(double Min, double Max)> other = [(0.008, 0.008), (0.5, 0.5), (1.0, 4.0)];
+            Assert.That(TelescopeService.PadBandsFrom((Discrete, other)), Is.EqualTo(new[] { (0.008, 0.008), (1.0, 4.0) }));
+            // Disjoint everywhere AND outside the secondary's window → the primary as-is (better a
+            // rate the secondary may snap than none).
+            IReadOnlyList<(double Min, double Max)> disjoint = [(5.0, 6.0)];
+            Assert.That(TelescopeService.PadBandsFrom((Discrete, disjoint)), Is.EqualTo(Discrete));
+            // Two discrete ladders with no step in common fall back to the #1126 window clip, not the
+            // raw primary: 0.001 would be 100× under the secondary's floor and 409 N/S (review of #1288).
+            IReadOnlyList<(double Min, double Max)> ladderA = [(0.001, 0.001), (0.5, 0.5)];
+            IReadOnlyList<(double Min, double Max)> ladderB = [(0.1, 0.1), (1.0, 1.0)];
+            var fallback = TelescopeService.PadBandsFrom((ladderA, ladderB));
+            Assert.That(fallback, Is.EqualTo(new[] { (0.5, 0.5) }));
+            Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(0.5, ladderB), "inside the window the secondary snaps, never refuses");
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.001, ladderB), "what the raw primary would have offered");
+            // Overlapping primary bands produce intersections out of order; the result is still ascending.
+            IReadOnlyList<(double Min, double Max)> overlappingPrimary = [(0.0, 4.0), (1.0, 2.0)];
+            IReadOnlyList<(double Min, double Max)> twoSteps = [(0.5, 0.5), (1.5, 1.5)];
+            Assert.That(TelescopeService.PadBandsFrom((overlappingPrimary, twoSteps)), Is.EqualTo(new[] { (0.5, 0.5), (1.5, 1.5) }));
         }
     }
 }
