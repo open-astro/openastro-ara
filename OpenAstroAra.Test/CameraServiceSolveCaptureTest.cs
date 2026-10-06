@@ -76,6 +76,38 @@ namespace OpenAstroAra.Test {
             Assert.That((req.BinX, req.BinY), Is.EqualTo((1, 1)));
         }
 
+        private static CameraCapabilitiesDto Caps(int maxBin, double maxExposure) => new(
+            SensorWidth: 1000, SensorHeight: 800, PixelSizeUm: 3.76,
+            CanSetTemperature: false, CanAbortExposure: true, CanGetCoolerPower: false,
+            MinGain: 0, MaxGain: 0, MinOffset: 0, MaxOffset: 0,
+            MinBinX: 1, MaxBinX: maxBin, MinBinY: 1, MaxBinY: maxBin,
+            MinExposureSec: 0.001, MaxExposureSec: maxExposure);
+
+        // #1149 — the solve-path guards read the capabilities, which only a real Alpaca connect used to
+        // set; WithCapabilitiesForTest seats them so the guards are testable. Without the seam these
+        // sequences fall through to "camera is not connected" (an InvalidOperationException) instead.
+        [Test]
+        public async Task Solve_capture_binning_above_the_cameras_maximum_is_refused_before_any_capture() {
+            using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
+            svc.WithCapabilitiesForTest(Caps(maxBin: 2, maxExposure: 60));
+            var seq = new CaptureSequence(2.0, ImageTypes.SNAPSHOT, null, new BinningMode(4, 4), exposureCount: 1);
+
+            var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
+            Assert.That(ex!.Message, Does.Contain("binning").And.Contain("2x2"));
+        }
+
+        [Test]
+        public async Task Solve_capture_exposure_outside_the_cameras_range_is_refused_before_any_capture() {
+            using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
+            svc.WithCapabilitiesForTest(Caps(maxBin: 4, maxExposure: 60));
+            var seq = new CaptureSequence(120.0, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
+
+            var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
+            Assert.That(ex!.Message, Does.Contain("exposure"));
+        }
+
         [Test]
         public async Task Capture_without_a_camera_fails_as_not_connected_not_not_supported() {
             // The whole point: a disconnected camera is an ordinary equipment failure the

@@ -28,7 +28,33 @@ namespace OpenAstroAra.Server.Services;
 /// enough or to wait + retry.
 /// </summary>
 public interface IBatchJobService {
-    BatchJobDto Enqueue(string jobType, int totalSteps, Func<Action<int>, CancellationToken, Task> work);
+    /// <summary>Enqueue a job of <paramref name="jobType"/>. One live job per type (§65.5): a second
+    /// enqueue while one is queued/running returns that job instead of starting another. With an
+    /// <paramref name="identity"/> (#1149: what the job is for, e.g. the centering target), a live
+    /// job of the same type but a different identity is a <see cref="BatchJobConflictException"/>
+    /// rather than a silent join; null identities always join.</summary>
+    BatchJobDto Enqueue(string jobType, int totalSteps, Func<Action<int>, CancellationToken, Task> work, string? identity = null);
     BatchJobDto? GetJob(Guid jobId);
     bool TryCancel(Guid jobId);
+}
+
+/// <summary>#1149 — a live job of the same type exists for a different identity (e.g. a centering
+/// job for other coordinates); the caller decides whether to report it (409) or cancel it first.</summary>
+public sealed class BatchJobConflictException : InvalidOperationException {
+    public BatchJobConflictException(Guid runningJobId, string? runningIdentity, string requestedIdentity)
+        : base($"a '{runningIdentity}' job is already running ({runningJobId}); '{requestedIdentity}' was requested") {
+        RunningJobId = runningJobId;
+        RunningIdentity = runningIdentity;
+        RequestedIdentity = requestedIdentity;
+    }
+
+    public BatchJobConflictException() { }
+
+    public BatchJobConflictException(string message) : base(message) { }
+
+    public BatchJobConflictException(string message, Exception innerException) : base(message, innerException) { }
+
+    public Guid RunningJobId { get; }
+    public string? RunningIdentity { get; }
+    public string? RequestedIdentity { get; }
 }
