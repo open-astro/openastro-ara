@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/sequence_api.dart';
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
@@ -122,6 +123,68 @@ Future<bool> confirmAndDeleteSequence(
         content: Text("Couldn't delete that sequence. Check the connection "
             'and try again.'),
         backgroundColor: AraColors.accentError));
+    return false;
+  }
+}
+
+/// Confirm-then-delete for an offline draft — the one flow behind BOTH draft
+/// delete surfaces (the toolbar's Delete for the open draft and the Load
+/// dialog's per-row trash). Removes the local file, then clears the selection
+/// and the editor when either still holds the draft, so the Run tab isn't left
+/// editing a ghost: [DraftSequencesNotifier.saveBody] deliberately resurrects
+/// an unknown id, so an editor still pointed at a deleted draft would bring it
+/// back (unnamed) on the next Save (#1142).
+///
+/// Returns true when the draft was deleted. Post-await provider work goes
+/// through the container, not [ref], for the same reason as
+/// [confirmAndDeleteSequence]: the Load dialog can be barrier-dismissed while
+/// the delete is in flight and the cleanup must still run.
+Future<bool> confirmAndDeleteDraft(
+  BuildContext context, {
+  required String id,
+  required String? name,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final container = ProviderScope.containerOf(context, listen: false);
+  final display = (name == null || name.isEmpty) ? '(untitled draft)' : name;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete draft?'),
+      content: Text('"$display" will be removed from this device. '
+          "This can't be undone."),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel')),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AraColors.accentError),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return false;
+  try {
+    await container.read(draftSequencesProvider.notifier).delete(id);
+    if (container.read(selectedSequenceIdProvider) == id) {
+      container.read(selectedSequenceIdProvider.notifier).select(null);
+    }
+    // Checked separately from the selection: deselecting leaves the editor in
+    // place by design (sequencer_tab), so an editor still holding this draft
+    // must be cleared explicitly.
+    if (container.read(sequenceEditorProvider)?.id == id) {
+      container.read(sequenceEditorProvider.notifier).clear();
+    }
+    messenger.showSnackBar(SnackBar(content: Text('Deleted "$display".')));
+    return true;
+  } catch (e) {
+    debugPrint('[sequencer] draft delete failed: $e');
+    messenger.showSnackBar(const SnackBar(
+      content: Text("Couldn't delete the draft."),
+      backgroundColor: AraColors.accentError,
+    ));
     return false;
   }
 }

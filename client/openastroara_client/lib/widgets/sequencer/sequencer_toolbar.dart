@@ -685,68 +685,19 @@ Future<void> _delete(
   }
 }
 
-/// Confirm-then-delete for the open offline draft: removes the local file and
-/// clears the selection + editor so the Run tab isn't editing a ghost.
+/// Confirm-then-delete for the open offline draft via the shared
+/// [confirmAndDeleteDraft]. Holds the busy fence across the confirm too, like
+/// the shared _delete: a keyboard-driven command while the dialog sits open
+/// must not slip past (review #1106 note).
 Future<void> _deleteDraft(
     BuildContext context, WidgetRef ref, String id, String? name) async {
   if (ref.read(sequenceCommandBusyProvider)) return;
-  final messenger = ScaffoldMessenger.of(context);
-  final display = (name == null || name.isEmpty) ? '(untitled draft)' : name;
-  // Hold the busy fence across the confirm too, like the shared _delete: a
-  // keyboard-driven command while the dialog sits open must not slip past
-  // (review #1106 note).
-  final container = ProviderScope.containerOf(context, listen: false);
-  final busy = container.read(sequenceCommandBusyProvider.notifier);
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
   busy.setBusy(true);
   try {
-    await _deleteDraftConfirmed(context, container, messenger, id, display);
+    await confirmAndDeleteDraft(context, id: id, name: name);
   } finally {
     busy.setBusy(false);
-  }
-}
-
-Future<void> _deleteDraftConfirmed(
-    BuildContext context,
-    ProviderContainer container,
-    ScaffoldMessengerState messenger,
-    String id,
-    String display) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Delete draft?'),
-      content: Text('"$display" will be removed from this device. '
-          "This can't be undone."),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel')),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: AraColors.accentError),
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
-  );
-  if (ok != true || !context.mounted) return;
-  try {
-    await container.read(draftSequencesProvider.notifier).delete(id);
-    if (container.read(selectedSequenceIdProvider) == id) {
-      container.read(selectedSequenceIdProvider.notifier).select(null);
-    }
-    if (container.read(sequenceEditorProvider)?.id == id) {
-      container.read(sequenceEditorProvider.notifier).clear();
-    }
-    // Same confirmation the shared delete gives, so the draft doesn't just
-    // silently vanish from the Run tab.
-    messenger.showSnackBar(SnackBar(content: Text('Deleted "$display".')));
-  } catch (e) {
-    debugPrint('[sequencer] draft delete failed: $e');
-    messenger.showSnackBar(const SnackBar(
-      content: Text("Couldn't delete the draft."),
-      backgroundColor: AraColors.accentError,
-    ));
   }
 }
 
