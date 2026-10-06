@@ -547,6 +547,23 @@ void main() {
       expect(originHits - before, 2);
     });
 
+    test('the fetch cap is exact under a burst of misses (#1296 note)', () async {
+      server.resetDssState();
+      final before = originHits;
+      final burst = [
+        for (var i = 10; i < 16; i++)
+          get('${server.dssPathPrefix}Norder5/Dir0/Npix$i.jpg'),
+      ];
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(originHits - before, 2, reason: 'cap = 2, four waiters queued');
+      for (final r in await Future.wait(burst)) {
+        expect(r.status, HttpStatus.notFound);
+      }
+      // The two holders timed out and armed the backoff; the waiters were
+      // then answered from it, so the survey never saw more than the cap.
+      expect(originHits - before, 2);
+    });
+
     test("an upstream 404 is the survey's answer: 404 through, nothing written, still online",
         () async {
       expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix9.jpg')).status, HttpStatus.notFound);
