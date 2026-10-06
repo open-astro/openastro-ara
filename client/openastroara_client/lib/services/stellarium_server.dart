@@ -680,10 +680,11 @@ class StellariumServer {
     // cache key, so a survey re-release is fetched again instead of served
     // from the old tile for ever (#1143). Anything else in the query is
     // ignored, as before.
-    final buster = request.uri.queryParameters['v'];
-    final key = buster != null && _dssSegment.hasMatch(buster)
-        ? '$rel@$buster'
-        : rel;
+    final rawBuster = request.uri.queryParameters['v'];
+    // Validated once; only this value reaches the key and the upstream URL.
+    final buster =
+        rawBuster != null && _dssSegment.hasMatch(rawBuster) ? rawBuster : null;
+    final key = buster == null ? rel : '$rel@$buster';
     final file = File('${_dssCacheDir.path}/$key');
     Uint8List? bytes;
     var shed = false;

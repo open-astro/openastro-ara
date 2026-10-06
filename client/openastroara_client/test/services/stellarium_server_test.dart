@@ -322,6 +322,7 @@ void main() {
     late HttpServer origin;
     late StellariumServer server;
     var originHits = 0;
+    final originUris = <Uri>[];
     final tile = Uint8List.fromList([0xFF, 0xD8, 1, 2, 3, 0xFF, 0xD9]);
     final savedOrigin = StellariumServer.dssOrigin;
     final savedCap = StellariumServer.maxDssResourceBytes;
@@ -332,6 +333,7 @@ void main() {
       origin = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       origin.listen((req) async {
         originHits++;
+        originUris.add(req.uri);
         final path = req.uri.path;
         if (path == '/Norder3/Dir0/Npix7.jpg') {
           req.response.headers.contentType = ContentType('image', 'jpeg');
@@ -431,10 +433,20 @@ void main() {
       final before = originHits;
       await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=2017-01-01');
       expect(originHits, before, reason: 'each release is its own cache hit');
-      // A buster outside the HiPS alphabet is ignored, never a file name.
-      await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=..%2Fx');
+      // A buster outside the HiPS alphabet is dropped entirely: the key is
+      // the bare tile and upstream sees the bare path with no `v`.
+      originUris.clear();
+      final bad = await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=..%2Fx');
+      expect(bad.status, HttpStatus.ok);
+      expect(utf8.decode(bad.body), 'v=null');
+      expect(originUris.map((u) => u.toString()), ['/Norder3/Allsky.jpg']);
+      expect(File('${server.dssCacheDir.path}/Norder3/Allsky.jpg').existsSync(), isTrue);
       expect(server.dssCacheDir.listSync(recursive: true).map((e) => e.path),
           everyElement(isNot(contains('..'))));
+      originUris.clear();
+      expect((await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=')).status, HttpStatus.ok,
+          reason: 'an empty buster is a cache hit on the bare tile');
+      expect(originUris, isEmpty);
     });
 
     test('a tile cached before the key carried the buster is adopted, not re-fetched',

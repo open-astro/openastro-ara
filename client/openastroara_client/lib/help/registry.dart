@@ -583,7 +583,8 @@ const Map<String, Help> helpRegistry = {
         'The planetarium shows real DSS2 sky photographs as you zoom into a target. Each tile is '
         'downloaded once while you are online and kept on this computer (in the app\'s support folder, '
         'under stellarium-dss2) so the same areas still show at a dark site with no internet. The cache '
-        'caps itself at about 512 MB: past that, the tiles fetched longest ago are removed first. '
+        'caps itself at about 512 MB: past that, the tiles fetched longest ago are removed first, except '
+        'the survey\'s index and overview images, which every session needs. '
         'Cleaning it frees the space and clears a corrupted backdrop; the photos simply download again '
         'the next time you look at that part of the sky while online. The rig is never involved.',
   ),
