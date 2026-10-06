@@ -321,5 +321,67 @@ namespace OpenAstroAra.Test {
             Volatile.Write(ref slewing, "false");
             await WaitForTripAsync(svc, faults, 1, "trips once the slew is known to be over");
         }
+    
+
+        // #1246 — rung 2+ of the ladder connect the SAME device while the session is Connected-but-
+        // latched; that must not hit the idempotent no-op, or the pair that clears the bridge is
+        // never sent again.
+        [Test]
+        [Category("bench")]
+        public async Task A_connect_of_the_same_device_on_a_still_latched_session_sends_the_pair_again() {
+            var position = "6.0";
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => "false"));
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "never connected cleanly");
+            int ConnectedPuts() => box.Puts.Count(p => p.Path.EndsWith("/connected", StringComparison.Ordinal));
+            var before = ConnectedPuts();
+
+            // A clean session: the same device again is the idempotent no-op (no new PUTs).
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForPositionReadsAsync(box, PositionReads(box), 2);
+            Assert.That(ConnectedPuts(), Is.EqualTo(before), "a clean Connected session is not reconnected");
+
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+            await WaitForTripAsync(svc, faults, 1, "latched");
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 1
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "rung 1 never reconnected");
+            await WaitForPositionReadsAsync(box, PositionReads(box), 2);
+            Assert.That(svc.HasCleanReadSinceConnect, Is.False, "still latched after rung 1");
+            var afterRung1 = ConnectedPuts();
+
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 2: same device
+            await WaitForAsync(() => ConnectedPuts() >= afterRung1 + 2, TimeSpan.FromSeconds(15),
+                "rung 2 must send the disconnect/connect pair again instead of the idempotent no-op");
+            var pair = box.Puts.Where(p => p.Path.EndsWith("/connected", StringComparison.Ordinal)).Select(p => p.Body).TakeLast(2).ToList();
+            Assert.That(pair[0], Does.Contain("false").IgnoreCase);
+            Assert.That(pair[1], Does.Contain("true").IgnoreCase);
+        }
+
+        // #1246 — the slew hold is bounded: once it expires with the latch still there, the trip proceeds.
+        [Test]
+        [Category("bench")]
+        public async Task The_latched_slew_hold_expires_and_the_trip_proceeds() {
+            var position = "6.0";
+            var slewing = "false";
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => Volatile.Read(ref slewing)));
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick, LatchedSlewHold = Ticks(5) };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
+
+            Volatile.Write(ref slewing, "true");
+            await WaitForRuntimeStateAsync(svc, "slewing");
+            Volatile.Write(ref slewing, ScriptedAlpacaDevice.Error(Latched));
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
+
+            // Nothing answers Slewing again; the hold runs out and the latch trips.
+            await WaitForTripAsync(svc, faults, 1, "the hold must expire and the latch trip even though Slewing never answered");
+        }
     }
 }

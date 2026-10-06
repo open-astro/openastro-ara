@@ -348,6 +348,13 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             }
             var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
             switch (state) {
+                case EquipmentConnectionState.Connected when !IsCleanlyConnected(fault.DeviceType):
+                    // #1246 — Connected but still latched (every read fails): not back. Re-dispatch
+                    // like the Error branch; the service's connect sends the disconnect/connect pair.
+                    if (!await TryReconnectAsync(fault.DeviceType).ConfigureAwait(false)) {
+                        continue;
+                    }
+                    break;
                 case EquipmentConnectionState.Connected:
                     break; // re-adopted (by us or by the user) — fall through to the celebration
                 case EquipmentConnectionState.Connecting:
@@ -414,8 +421,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 // #1246 — for the mount, Connected is not recovered: a bridge still latched after the
                 // reconnect answers Connected while every read fails. Wait for one clean tick, or let
                 // the confirm window run out and walk the next rung.
-                if (state == EquipmentConnectionState.Connected
-                        && (type.Canonical() != DeviceType.Telescope || _telescope is null || _telescope.HasCleanReadSinceConnect)) {
+                if (state == EquipmentConnectionState.Connected && IsCleanlyConnected(type)) {
                     return true;
                 }
                 if (state == EquipmentConnectionState.Error) {
@@ -431,6 +437,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return false;
         }
     }
+
+    // #1246 — Connected is "recovered" for every device but the mount, whose bridge can answer
+    // Connected while every read fails after a latch; the mount also needs a clean read since connect.
+    private bool IsCleanlyConnected(DeviceType type) =>
+        type.Canonical() != DeviceType.Telescope || _telescope is null || _telescope.HasCleanReadSinceConnect;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort recovery attempt: a SetTracking/read fault counts as a failed attempt; it must never abort the episode. CA1031's log-and-recover boundary applies.")]

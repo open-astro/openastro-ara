@@ -338,6 +338,7 @@ namespace OpenAstroAra.Test {
             ReconnectSucceeds(DeviceType.Telescope);
             telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(false);
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            service.LingerMaxAttempts = 3; // the post-give-up linger must not re-adopt a still-latched mount either
 
             service.OnFault(Fault(DeviceType.Telescope));
             await service.WhenIdleAsync();
@@ -347,6 +348,30 @@ namespace OpenAstroAra.Test {
             NotificationDto notRecovered;
             lock (posted) { notRecovered = posted.Find(n => n.Title.Contains("not recovered", StringComparison.Ordinal))!; }
             Assert.That(notRecovered, Is.Not.Null, "the give-up notice is the 'reconnect did not clear the latch' signal");
+            Assert.That(Actions(), Does.Not.Contain("readopted"), "nor is the linger fooled by Connected-but-latched");
+            // Every rung and every linger tick re-dispatched the connect (the pair that clears the bridge).
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.AtLeast(2));
+        }
+
+        [Test]
+        public async Task The_linger_readopts_a_latched_mount_only_once_it_reads_cleanly() {
+            ReconnectSucceeds(DeviceType.Telescope);
+            var clean = false;
+            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(() => Volatile.Read(ref clean));
+            service.LingerMaxAttempts = 10;
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            _ = Task.Run(async () => {
+                while (!Actions().Contains("gave_up")) {
+                    await Task.Delay(5);
+                }
+                await Task.Delay(50); // a linger tick or two sees Connected-but-latched first
+                Volatile.Write(ref clean, true); // the bridge finally answers
+            });
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("gave_up"));
+            Assert.That(Actions().Last(), Is.EqualTo("readopted"), "re-adopted once a read succeeded, not before");
         }
 
         [Test]

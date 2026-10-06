@@ -122,7 +122,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // #1246 — when the Slewing read itself is latched the never-during-a-slew guard cannot see a goto
     // in flight, so SlewWatch's open episode stands in — for at most this long, after which the trip
     // proceeds (a latch that never clears must still reach the ladder).
-    internal static readonly TimeSpan LatchedSlewHold = TimeSpan.FromMinutes(5);
+    internal TimeSpan LatchedSlewHold { get; set; } = TimeSpan.FromMinutes(5);
     private DateTimeOffset? _latchedSlewHoldSince;
     private bool _latchedSlewHoldExpiredLogged;
 
@@ -179,8 +179,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         AlpacaTelescope? previous;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            // #1246 — a Connected session that is still latched (tripped this episode, no clean read
+            // since) is NOT the idempotent no-op case: the ladder's later rungs connect the same
+            // device again precisely to send the disconnect/connect pair that clears the bridge.
+            var stillLatched = _state == EquipmentConnectionState.Connected && _bridgeFaultTripped && !_cleanReadSinceConnect;
             if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
+                && _device?.UniqueId == device.UniqueId && !stillLatched) {
                 return Task.FromResult(Accepted("telescope.connect", idempotencyKey));
             }
             // #1246 — the old client's Connected=false must reach the bridge BEFORE the new client's
@@ -724,7 +728,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         parked: runtime.Parked);
                     // §57.8 — slew lifecycle from the same observed snapshot.
                     // #1246 — a latched Slewing read is a fallback false, not an answer: feeding it would
-                    // close the episode the guard above relies on. The watch waits for a real read.
+                    // close the episode the guard above relies on. The watch waits for a real read. (A
+                    // driver whose Slewing is never implemented never opens an episode either, since
+                    // the runtime state can never read "slewing" — so nothing is left unfinished.)
                     slewVerdict = slewingUnknown ? new SlewEventWatch.Verdict(SlewEventWatch.Kind.None) : SlewWatch.Observe(runtime.State == "slewing");
                     watchedDevice = _device;
                 }
@@ -1319,6 +1325,26 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // Extracted (internal) for direct unit testing.
     private static readonly string[] LatchedBridgeFaultPhrases = ["communications compromised"];
 
+    // The message of the exception (in the chain or aggregate) that carries the latch phrase, so the
+    // fault row says "Mount communications compromised", not "One or more errors occurred" (#1246).
+    internal static string LatchedBridgeFaultMessage(Exception ex) {
+        for (var e = ex; e is not null; e = e.InnerException) {
+            if (e is AggregateException aggregate) {
+                foreach (var inner in aggregate.InnerExceptions) {
+                    if (IsLatchedBridgeFault(inner)) {
+                        return LatchedBridgeFaultMessage(inner);
+                    }
+                }
+            }
+            foreach (var phrase in LatchedBridgeFaultPhrases) {
+                if (e.Message.Contains(phrase, StringComparison.OrdinalIgnoreCase)) {
+                    return e.Message;
+                }
+            }
+        }
+        return ex.Message;
+    }
+
     internal static bool IsLatchedBridgeFault(Exception? ex) {
         for (var e = ex; e is not null; e = e.InnerException) {
             // #1246 — ReadRuntime reports every failed read; any one of them carrying the phrase is the latch.
@@ -1388,10 +1414,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             _trackingWatch.Reset();
             SlewWatch.Reset();
         }
-        LogBridgeFaultLatched(device?.Name ?? "?", error.Message);
+        var message = LatchedBridgeFaultMessage(error); // the matching read's text, not an aggregate's wrapper
+        LogBridgeFaultLatched(device?.Name ?? "?", message);
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope, device?.UniqueId, device?.Name,
             EquipmentFaultKind.Disconnected,
-            $"bridge reports a latched mount fault ({error.Message}) — reconnecting clears it (#1193)",
+            $"bridge reports a latched mount fault ({message}) — reconnecting clears it (#1193)",
             DateTimeOffset.UtcNow));
         return true;
     }
