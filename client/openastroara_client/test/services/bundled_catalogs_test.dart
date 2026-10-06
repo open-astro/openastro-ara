@@ -54,6 +54,17 @@ void main() {
     expect(planningCull(vdb).length, 158);
   });
 
+  test('IC 1318 is a star row in OpenNGC, so Sh2-108 is the Sadr listing (#1141)', () {
+    // The ('IC1318', 'Sh2-108') anchor relies on this: IC 1318 is typed `*`
+    // and culled, so the anchor never fires and the Sharpless row stays. If a
+    // catalog update retypes it as a nebula, the anchor will drop Sh2-108 in
+    // favour of IC1318 — which is then the intended outcome, but this test
+    // makes that change visible rather than silent (review on #1277).
+    final ic1318 = load('NGC.csv').firstWhere((d) => d.id == 'IC1318');
+    expect(isStarType(ic1318.type), isTrue);
+    expect(planningCull([ic1318]), isEmpty);
+  });
+
   test('no add-on row carries the separator inside a cell (review #1107)', () {
     // A ";" inside the Hubble cell ("WN5o+O4-6; WN5o+O7V") column-shifted 165
     // of the 717 WR rows: Identifiers landed in Common names, so WR 21 was

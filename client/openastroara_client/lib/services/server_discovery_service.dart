@@ -574,17 +574,24 @@ class ServerDiscoveryService {
     'zt',
     'ipsec',
     'gpd',
-    // Container / VM host-side bridges (#1198): a Docker or VMware subnet is
-    // not one a rig on the desk is reachable through either.
-    'bridge',
+    // Container / VM host-side interfaces (#1198): a Docker or VMware subnet
+    // is not one a rig on the desk is reachable through either. Not 'bridge':
+    // macOS names its Internet Sharing interface bridge100, and a rig on a
+    // Mac's shared Ethernet IS reachable there (review on #1277).
     'docker',
     'vmnet',
     'veth',
   ];
 
-  static bool _isTunnel(NetworkInterface i) {
-    final name = i.name.toLowerCase();
-    return _tunnelPrefixes.any(name.startsWith);
+  static bool _isTunnel(NetworkInterface i) => isTunnelName(i.name);
+
+  /// Whether an interface name is a tunnel / container / VM interface the
+  /// sweep and subnet match ignore. Split from [_isTunnel] because
+  /// `NetworkInterface` cannot be constructed in a test.
+  @visibleForTesting
+  static bool isTunnelName(String name) {
+    final lower = name.toLowerCase();
+    return _tunnelPrefixes.any(lower.startsWith);
   }
 
   /// IPv4 addresses of the local non-tunnel interfaces; empty when the

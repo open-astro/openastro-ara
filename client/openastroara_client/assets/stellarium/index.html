@@ -517,8 +517,11 @@ function slewMount(raHours, decDeg, cb) {
 // rejects the target (past the limits, still parked because the unpark
 // failed) just logs and the state never leaves tracking/idle/parked. Seeing
 // no slewing at all is therefore "the daemon took it, the mount didn't
-// move", reported as the neutral "Slew sent" (review on #1277). A mount that
-// ends parked is reported as such. Bounded (~2 min) and a failed poll falls
+// move", reported as the neutral "Slew sent" (review on #1277). That is
+// deliberately conservative: a short slew that starts AND finishes inside
+// the daemon's ~2 s telescope-cache window is never seen as slewing and also
+// ends on "Slew sent", never a false ✓. A mount that ends parked is reported
+// as such. Bounded (~2 min) and a failed poll falls
 // back to "Slew sent" rather than inventing a result.
 function waitForSlewEnd(cb) {
   var tries = 0, sawSlewing = false;

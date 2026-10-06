@@ -790,6 +790,19 @@ void main() {
 }
 
 void _preferLocalSubnetTests() {
+  group('ServerDiscoveryService.isTunnelName', () {
+    test('tunnels and container/VM interfaces are ignored, physical and shared ones kept', () {
+      for (final n in ['utun3', 'tun0', 'wg0', 'ppp0', 'docker0', 'vmnet8', 'veth1a2b', 'ZT1234']) {
+        expect(ServerDiscoveryService.isTunnelName(n), isTrue, reason: n);
+      }
+      // bridge100 is macOS Internet Sharing: a rig on the shared Ethernet is
+      // reachable there, so it is NOT excluded (review on #1277).
+      for (final n in ['en0', 'eth0', 'wlan0', 'bridge100', 'Ethernet', 'Wi-Fi']) {
+        expect(ServerDiscoveryService.isTunnelName(n), isFalse, reason: n);
+      }
+    });
+  });
+
   group('ServerDiscoveryService.preferLocalSubnet', () {
     // The Pi advertises eth0 (house LAN) and ap0 (its own hotspot); the
     // laptop on the LAN must be offered the eth0 address, not whichever
