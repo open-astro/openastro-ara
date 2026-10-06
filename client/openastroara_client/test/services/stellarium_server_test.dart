@@ -340,6 +340,10 @@ void main() {
           // The cache-buster rides the query; the body says which release.
           req.response.headers.contentType = ContentType('image', 'jpeg');
           req.response.add(utf8.encode('v=${req.uri.queryParameters['v']}'));
+        } else if (path.startsWith('/Norder6/')) {
+          // Distinct small tiles for the eviction test.
+          req.response.headers.contentType = ContentType('image', 'jpeg');
+          req.response.add(tile);
         } else if (path.startsWith('/Norder5/')) {
           // Never answers: a stalled upstream parks the page's socket until
           // the first-byte deadline.
@@ -433,8 +437,79 @@ void main() {
           everyElement(isNot(contains('..'))));
     });
 
+    test('a tile cached before the key carried the buster is adopted, not re-fetched',
+        () async {
+      final legacy = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix30.jpg');
+      await legacy.parent.create(recursive: true);
+      await legacy.writeAsBytes(tile);
+      final before = originHits;
+      final res = await get('${server.dssPathPrefix}Norder3/Dir0/Npix30.jpg?v=2017');
+      expect(res.status, HttpStatus.ok);
+      expect(res.body, tile);
+      expect(originHits, before, reason: 'served from the renamed legacy file');
+      expect(legacy.existsSync(), isFalse);
+      expect(File('${legacy.path}@2017').existsSync(), isTrue);
+    });
+
+    test('measureDssCache and clearDssCache act on the running server\'s cache',
+        () async {
+      await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg');
+      final seeded = File('${server.dssCacheDir.path}/Norder3/Dir1/Npix99.jpg');
+      await seeded.parent.create(recursive: true);
+      await seeded.writeAsBytes(List<int>.filled(10, 2));
+      final measured = await StellariumServer.measureDssCache();
+      expect(measured.files, greaterThanOrEqualTo(2));
+      final onDisk = server.dssCacheDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .fold<int>(0, (a, f) => a + f.lengthSync());
+      expect(measured.bytes, onDisk, reason: 'recursive, every file counted');
+      final cleared = await StellariumServer.clearDssCache();
+      expect(cleared, measured);
+      expect(server.dssCacheDir.existsSync(), isTrue, reason: 'the folder stays');
+      expect(server.dssCacheDir.listSync(), isEmpty);
+      expect(await StellariumServer.measureDssCache(), (files: 0, bytes: 0));
+      // The next request is a miss again, served and re-persisted.
+      final before = originHits;
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
+      expect(originHits, before + 1);
+    });
+
+    test('writes past the cap evict the oldest-fetched tiles (behavioural)', () async {
+      final savedMax = StellariumServer.maxDssCacheBytes;
+      final savedEvery = StellariumServer.dssPruneCheckEvery;
+      // Cap of 2 tiles (7 B each): under 90 % of 15 B is one tile.
+      StellariumServer.maxDssCacheBytes = 15;
+      StellariumServer.dssPruneCheckEvery = 1;
+      try {
+        await StellariumServer.clearDssCache();
+        for (var i = 1; i <= 3; i++) {
+          await get('${server.dssPathPrefix}Norder6/Dir0/Npix$i.jpg');
+          // Distinct mtimes on a coarse filesystem clock.
+          await Future<void>.delayed(const Duration(milliseconds: 1100));
+        }
+        // The prune runs unawaited after the write; give it a moment.
+        var files = <String>[];
+        for (var tries = 0; tries < 20; tries++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          files = server.dssCacheDir
+              .listSync(recursive: true)
+              .whereType<File>()
+              .map((f) => f.uri.pathSegments.last)
+              .toList();
+          if (files.length == 1) break;
+        }
+        expect(files, ['Npix3.jpg'], reason: 'oldest two evicted, newest kept');
+      } finally {
+        StellariumServer.maxDssCacheBytes = savedMax;
+        StellariumServer.dssPruneCheckEvery = savedEvery;
+      }
+    });
+
     test('misses beyond the concurrency cap are shed with a 404, not queued (#1143)',
         () async {
+      // Warm one hit first (an earlier test may have evicted it).
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
       // Two fetches park on the stalled origin; a third distinct miss must
       // come back at once instead of waiting on the first-byte deadline.
       final parked = [
@@ -608,11 +683,10 @@ void main() {
       expect(File('${dir.path}/d.jpg.part-1').existsSync(), isTrue);
     });
 
-    test('a running server sweeps and prunes its cache on start', () async {
-      // Under flutter test the cache is the temp fallback, so seed it after
-      // start: housekeeping runs once at start and once per write batch.
-      // Here the start-time pass is observed through the static API; the
-      // wiring is pinned by the start() source guard below.
+    test('start() wires the sweep and the start-time prune', () async {
+      // The write-triggered prune is covered behaviourally above; the
+      // start-time pass runs before a test can seed the temp cache, so its
+      // wiring is pinned here.
       final src = File('lib/services/stellarium_server.dart').readAsStringSync();
       expect(src, contains('unawaited(instance._houseKeep());'));
       expect(src, contains('await sweepPartFiles(_dssCacheDir);'));

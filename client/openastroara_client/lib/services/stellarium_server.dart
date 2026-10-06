@@ -90,9 +90,10 @@ class StellariumServer {
   /// cache nor read what is in it (#1143). The page builds the same prefix
   /// from its own `?token=`.
   late final String _dssPathPrefix = '/dss-$token/';
-  // Any `/dss…` path is this route: the bare `/dss/` of older pages and a
-  // wrong token are refused here, never handed to the asset handler.
-  static const _dssPathStem = '/dss';
+  /// The bare `/dss/` of older pages and a wrong token are refused here,
+  /// never handed to the asset handler.
+  static bool _isDssPath(String path) =>
+      path == '/dss' || path.startsWith('/dss/') || path.startsWith('/dss-');
 
   /// Route prefix the page must use for tiles, e.g. `/dss-<token>/`.
   @visibleForTesting
@@ -110,7 +111,8 @@ class StellariumServer {
   /// [pruneDssCache]). ~16 MiB of writes between checks keeps the scan rare.
   @visibleForTesting
   static int maxDssCacheBytes = 512 * 1024 * 1024;
-  static const int _dssPruneCheckEvery = 16 * 1024 * 1024;
+  @visibleForTesting
+  static int dssPruneCheckEvery = 16 * 1024 * 1024;
   int _dssBytesSincePrune = 0;
   bool _dssPruning = false;
 
@@ -284,7 +286,7 @@ class StellariumServer {
 
   Future<void> _pruneIfNeeded({bool force = false}) async {
     if (_dssPruning) return;
-    if (!force && _dssBytesSincePrune < _dssPruneCheckEvery) return;
+    if (!force && _dssBytesSincePrune < dssPruneCheckEvery) return;
     _dssPruning = true;
     _dssBytesSincePrune = 0;
     try {
@@ -320,6 +322,12 @@ class StellariumServer {
   static Future<({int files, int bytes})> clearDssCache() async {
     final dir = await _dssCacheDirectory();
     final before = await measureDssCache();
+    final running = _instance;
+    if (running != null) {
+      try {
+        (await running)._dssBytesSincePrune = 0;
+      } catch (_) {/* a failed start */}
+    }
     if (await dir.exists()) {
       await for (final e in dir.list(followLinks: false)) {
         try {
@@ -496,7 +504,7 @@ class StellariumServer {
       // data source points at this fixed prefix; a cache miss fetches only the
       // requested path from the fixed CDS origin, then stores it for offline
       // use. No arbitrary proxying is allowed.
-      if (path.startsWith(_dssPathStem)) {
+      if (_isDssPath(path)) {
         if (!path.startsWith(_dssPathPrefix)) {
           // Wrong or missing token in the path: not our page.
           response.statusCode = HttpStatus.forbidden;
@@ -631,6 +639,17 @@ class StellariumServer {
     Uint8List? bytes;
     var shed = false;
     try {
+      if (key != rel && !await file.exists()) {
+        // A tile cached before the key carried the buster: adopt it under
+        // the new name rather than re-download it (and leave the old file to
+        // sit until eviction). Lazy, one rename, only on a miss.
+        final legacy = File('${_dssCacheDir.path}/$rel');
+        if (await legacy.exists()) {
+          try {
+            await legacy.rename(file.path);
+          } catch (_) {/* raced with a write: fall through to a fetch */}
+        }
+      }
       if (await file.exists()) {
         bytes = await file.readAsBytes();
       } else if (_dssRetryAfter == null ||
