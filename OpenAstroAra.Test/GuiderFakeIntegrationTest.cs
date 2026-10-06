@@ -870,14 +870,25 @@ namespace OpenAstroAra.Test {
             // does not pause again; a second reconnect has no open row to resolve. The events arrive
             // in order on one stream, so a state change broadcast AFTER them is the observable
             // "they have been processed" signal (no fixed delay).
+            var firstRow = recorded;
             await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
             Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null,
                 "the trailing AppState never landed, so the flapping events cannot be assumed processed");
             Assert.That(Volatile.Read(ref pauses), Is.EqualTo(1), "a flapping camera must not re-trigger the policy per cycle");
+            // #1241 — but every drop goes on the record: the second drop gets its own §42.5 row (no action,
+            // the reaction stays one-shot) and the second reconnect resolves that row.
+            faultLog.Verify(f => f.RecordFaultAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<CancellationToken>()), Times.Exactly(2),
+                "the second camera drop must get its own fault row");
+            Assert.That(recorded, Is.Not.SameAs(firstRow), "the second row is a new event, not the first one re-recorded");
+            Assert.That(recorded!.Details, Does.Contain("again"));
+            Assert.That(await PollUntilAsync(() => resolved is not null && ReferenceEquals(resolved, recorded)).ConfigureAwait(false), Is.True,
+                "the second reconnect never resolved the second drop's row");
             faultLog.Verify(f => f.ResolveAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
-                Times.Once);
+                Times.Exactly(2));
+            faultLog.Verify(f => f.RecordActionAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()),
+                Times.Once, "only the first drop's row carries the reaction's action stamp");
         }
 
         [Test]
@@ -993,6 +1004,14 @@ namespace OpenAstroAra.Test {
             MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
             OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: onGuiderLost,
             GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false);
+
+        private static async Task<bool> PollUntilAsync(Func<bool> condition, int timeoutMs = 15000) {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (!condition() && sw.ElapsedMilliseconds < timeoutMs) {
+                await Task.Delay(50).ConfigureAwait(false);
+            }
+            return condition();
+        }
 
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
