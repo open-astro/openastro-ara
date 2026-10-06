@@ -115,6 +115,17 @@ class ServerDiscoveryService {
   /// `NetworkInterface.list`).
   final Future<List<String>> Function() _localAddresses;
 
+  /// Lines already printed by this instance. The connect screen restarts
+  /// discovery every ~4 s, so an environment where the browse always fails
+  /// (Android, a sandbox denial) printed the same line ~15 times a minute
+  /// (#1144). The service is an app-lifetime singleton, so each distinct
+  /// message is printed once per launch; a different error is a new line.
+  final Set<String> _printed = <String>{};
+
+  void _logOnce(String line) {
+    if (_printed.add(line)) debugPrint(line);
+  }
+
   final Stream<AraServer> Function()? mdnsSource;
   final Stream<AraServer> Function()? sweepSource;
 
@@ -349,7 +360,7 @@ class ServerDiscoveryService {
     // attaches the hook to its IPv4 socket, the only socket it sends on for
     // the default IPv4 mDNS address this service uses.
     void onSocketError(Object error, StackTrace stack) {
-      debugPrint('[discovery] mDNS socket error: $error');
+      _logOnce('[discovery] mDNS socket error: $error');
       sawSocketError = true;
       final rigJustAnswered = _lastRigSeen != null &&
           DateTime.now().difference(_lastRigSeen!) < _rigSeenVouchesFor;
@@ -420,7 +431,7 @@ class ServerDiscoveryService {
             // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
           } catch (e) {
-            debugPrint('[discovery] mDNS A-record lookup for ${srv.target} '
+            _logOnce('[discovery] mDNS A-record lookup for ${srv.target} '
                 'failed: $e');
             continue;
           }
@@ -447,7 +458,7 @@ class ServerDiscoveryService {
       // `dns-sd -B` sees on the same machine (#1111) left nothing to read.
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
-      debugPrint('[discovery] mDNS browse failed, sweep carries discovery: $e');
+      _logOnce('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
       mdns.stop();
       // A pass that sent without a socket error means the block is gone

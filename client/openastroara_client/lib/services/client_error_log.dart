@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../app_version.dart';
+import 'log_redaction.dart';
 
 /// What the client log knows about itself without touching the disk — the
 /// Support card and the help dialog's "Copy diagnostics" read this, so neither
@@ -309,7 +310,9 @@ class ClientErrorLog {
   Future<void> note(String message) => record(noteKind, message);
 
   /// Writes the whole log — the rotated file first, then the current one —
-  /// to [path]. Returns the number of bytes written. A log that has never
+  /// to [path], with the §54.6 credential blacklist applied line by line
+  /// ([LogRedaction]): the file is written by this app, beside the daemon's
+  /// bundle, so the daemon's own stripping never sees it (#1144). Returns the number of bytes written. A log that has never
   /// been written to still exports its header, so the file is never empty
   /// and a "no errors" export means exactly that.
   ///
@@ -339,10 +342,19 @@ class ClientErrorLog {
         final sink = out.openWrite();
         try {
           var any = false;
+          // One redactor across both files so a private-key block that
+          // straddles the rotation is still swallowed whole (§54.6).
+          final redactor = LineRedactor();
           for (final f in [rotated, current]) {
             if (!await f.exists()) continue;
             any = true;
-            await sink.addStream(f.openRead());
+            await for (final line in f
+                .openRead()
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())) {
+              final kept = redactor.push(line);
+              if (kept != null) sink.writeln(kept);
+            }
           }
           if (!any) sink.write(await _header());
         } finally {

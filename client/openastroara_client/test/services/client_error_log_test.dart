@@ -150,6 +150,25 @@ void main() {
     );
   });
 
+  test('exportTo applies the §54.6 blacklist, the file on disk keeps it',
+      () async {
+    final l = log();
+    await l.record('dio', 'headers {X-Ara-Token: abcdefghij12345} host pi.local');
+    await l.record(
+      'ssh',
+      '-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----',
+    );
+    final out = '${dir.path}/export.log';
+    await l.exportTo(out);
+    final text = File(out).readAsStringSync();
+    expect(text, contains('X-Ara-Token: [REDACTED-TOKEN]} host pi.local'));
+    expect(text, contains('[REDACTED-KEY]'));
+    expect(text, isNot(contains('abcdefghij12345')));
+    expect(text, isNot(contains('AAAA')));
+    expect(current().readAsStringSync(), contains('abcdefghij12345'),
+        reason: 'the local log keeps full info (§54.1); only the export is cut');
+  });
+
   test('exportTo with nothing recorded still writes the header', () async {
     final l = log();
     final out = '${dir.path}/empty.log';

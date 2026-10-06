@@ -393,6 +393,25 @@ void main() {
       expect(lines.single, contains('Operation not permitted'));
     });
 
+    test('a repeated browse failure is printed once per instance (#1144)',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _UnstartableMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      // The connect screen restarts discovery every ~4 s on the same
+      // singleton; three passes used to be three identical lines.
+      for (var i = 0; i < 3; i++) {
+        await svc.discover().toList();
+      }
+      expect(lines, hasLength(1));
+      expect(lines.single, startsWith('[discovery] mDNS browse failed'));
+    });
+
     test('a failed A-record lookup is reported and the rig is skipped',
         () async {
       final lines = <String>[];
