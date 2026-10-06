@@ -533,10 +533,13 @@ class ServerDiscoveryService {
   ///
   /// Dart exposes no netmask, so "same subnet" means the same /24 as a local
   /// interface — the assumption the sweep already makes. When one or more
-  /// candidates match, only those are returned (the rest are that rig's
-  /// other networks and would show as dead rows). When none match — a /16
-  /// LAN, a routed segment — every candidate is returned in the order
-  /// received so the user can still pick.
+  /// candidates match, only those are returned: the caller emits one row per
+  /// address and the UI shows every row, so an off-subnet address (the rig's
+  /// own hotspot seen from the house LAN) would appear as a dead row with the
+  /// same name. (#1198 proposed ranking instead; review on #1277 showed the
+  /// order changes nothing at the emit site, so the filter stays.) When none
+  /// match — a /16 LAN, a routed segment — every candidate is returned in the
+  /// order received so the user can still pick.
   @visibleForTesting
   static List<String> preferLocalSubnet(
     List<String> candidates,
@@ -571,11 +574,24 @@ class ServerDiscoveryService {
     'zt',
     'ipsec',
     'gpd',
+    // Container / VM host-side interfaces (#1198): a Docker or VMware subnet
+    // is not one a rig on the desk is reachable through either. Not 'bridge':
+    // macOS names its Internet Sharing interface bridge100, and a rig on a
+    // Mac's shared Ethernet IS reachable there (review on #1277).
+    'docker',
+    'vmnet',
+    'veth',
   ];
 
-  static bool _isTunnel(NetworkInterface i) {
-    final name = i.name.toLowerCase();
-    return _tunnelPrefixes.any(name.startsWith);
+  static bool _isTunnel(NetworkInterface i) => isTunnelName(i.name);
+
+  /// Whether an interface name is a tunnel / container / VM interface the
+  /// sweep and subnet match ignore. Split from [_isTunnel] because
+  /// `NetworkInterface` cannot be constructed in a test.
+  @visibleForTesting
+  static bool isTunnelName(String name) {
+    final lower = name.toLowerCase();
+    return _tunnelPrefixes.any(lower.startsWith);
   }
 
   /// IPv4 addresses of the local non-tunnel interfaces; empty when the

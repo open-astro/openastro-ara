@@ -33,23 +33,9 @@ namespace OpenAstroAra.Test {
     /// </summary>
     [TestFixture]
     [Category("Integration")]
-    public class SwitchConnectIntegrationTest {
+    public class SwitchConnectIntegrationTest : OmniSimIntegrationFixture {
 
-        private static readonly Uri ManagementProbeUri = new("http://127.0.0.1:32323/management/apiversions");
-        private const int MaxDiscoveryAttempts = 6;
-
-        [OneTimeSetUp]
-        public async Task OneTimeSetUp() {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            try {
-                using var resp = await http.GetAsync(ManagementProbeUri).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode) {
-                    Assert.Ignore($"OmniSim management API returned {(int)resp.StatusCode} on :32323 — skipping live Switch test.");
-                }
-            } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
-                Assert.Ignore("No ASCOM OmniSim answering on :32323 — start one (or run the alpaca-sim-integration CI job) to exercise this test.");
-            }
-        }
+        protected override string DeviceName => "Switch";
 
         [Test]
         public async Task Connect_reads_ports_writes_one_then_disconnects() {

@@ -311,6 +311,93 @@ void main() {
         reason: 'no narrowband is no narrowband, declared or not');
   });
 
+  test('Sharpless twins of NGC/IC rows list once, as the NGC/IC row (#1141)', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const nb = FilterSetSettings(filters: [
+      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+    ]);
+    PlanningDso row(String id, String type) => PlanningDso(
+        id: id, name: id, type: type, magnitude: null,
+        raDeg: 92.3, decDeg: 20.5, sizeMajArcmin: 40);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, filterSet: nb,
+        catalog: [row('Sh2-252', 'HII'), row('NGC2174', 'Neb'),
+                  row('Sh2-8', 'HII') /* NGC 6334 absent */],
+        limit: 50);
+    final ids = list.map((o) => o.id).toList();
+    expect(ids, isNot(contains('Sh2-252')), reason: 'Monkey Head lists once');
+    expect(ids, contains('NGC2174'));
+    expect(ids, contains('Sh2-8'), reason: 'no twin present → the Sharpless row stays');
+    // Both sides of an anchor are showpieces by membership — the NGC row
+    // has no photometry either and must not fall to the unknown-field ×0.5.
+    expect(list.firstWhere((o) => o.id == 'NGC2174').scoreReasons!.join(' '),
+        contains('showpiece imaging field (+0)'));
+    expect(photogenicTierOf('NGC6334'), 3);
+    expect(photogenicTierOf('Sh2-8'), 3);
+    expect(photogenicTierOf('Sh2-252'), 3);
+  });
+
+  test('NGC/IC overrides use the catalog\'s zero-padded ids (#1141)', () {
+    // Every override/anchor key below 1000 must carry the catalog's zero
+    // padding, or the region silently never applies (IC 443, IC 434, NGC 281
+    // and NGC 246 all did).
+    final shortId = RegExp(r'^(NGC|IC)\d{1,3}$');
+    for (final k in overrides.keys) {
+      expect(shortId.hasMatch(k), isFalse, reason: '$k is not catalog spelling');
+    }
+    for (final a in sharplessAnchors) {
+      expect(shortId.hasMatch(a.$1), isFalse, reason: '${a.$1} is not catalog spelling');
+    }
+    expect(photogenicTierOf('NGC0281'), 3, reason: 'Pacman is an override');
+    // 'IC443' never matched OpenNGC's 'IC0443', so the Jellyfish was never
+    // renamed and Sh2-248 listed beside it.
+    final night = DateTime.utc(2026, 1, 15, 3);
+    const jelly = PlanningDso(
+        id: 'IC0443', name: 'IC0443', type: 'SNR', magnitude: 12.0,
+        raDeg: 94.25, decDeg: 22.5, sizeMajArcmin: 50);
+    const sh2 = PlanningDso(
+        id: 'Sh2-248', name: 'Sh2-248', type: 'HII', magnitude: null,
+        raDeg: 94.25, decDeg: 22.5, sizeMajArcmin: 50);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night,
+        filterSet: const FilterSetSettings(filters: []),
+        catalog: const [jelly, sh2], limit: 50);
+    // Standalone regions ride along in every list; look at the catalog rows.
+    final rows = list.where((o) => !o.id.startsWith('REGION-')).toList();
+    expect(rows.map((o) => o.id), ['IC0443']);
+    expect(rows.single.name, contains('Jellyfish'));
+  });
+
+  test('photometry-less PN / RfN / SNR rows take a type floor, not both neutrals (#1141)', () {
+    final night = DateTime.utc(2026, 2, 15, 3);
+    const none = FilterSetSettings(filters: []);
+    const galaxy = PlanningDso(
+        id: 'NGC2903', name: 'NGC2903', type: 'G', magnitude: 9.0,
+        raDeg: 143.04, decDeg: 21.5,
+        sizeMajArcmin: 12.6, sizeMinArcmin: 6.0, surfaceBrightness: 22.8);
+    PlanningDso bare(String id, String type) => PlanningDso(
+        id: id, name: id, type: type, magnitude: null,
+        raDeg: 143.0, decDeg: 21.5, sizeMajArcmin: 10);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, filterSet: none,
+        catalog: [galaxy, bare('Abell 1', 'PN'), bare('Abell 21', 'PN'),
+                  bare('vdB 1', 'RfN'), bare('NGC6974', 'SNR')],
+        limit: 50);
+    double score(String id) => list.firstWhere((o) => o.id == id).score!;
+    String why(String id) => list.firstWhere((o) => o.id == id).scoreReasons!.join(' ');
+    // Before: Abell 1 scored 0.5 neutral on SB AND magnitude with no
+    // discount, so it sat beside a mag-9 galaxy on geometry alone.
+    expect(score('Abell 1'), lessThan(score('NGC2903')));
+    expect(why('Abell 1'), contains('faint, specialist field (−30%)'));
+    expect(why('vdB 1'), contains('faint, specialist field (−30%)'));
+    expect(why('NGC6974'), contains('faint, specialist field (−30%)'));
+    // …but not the emission "mostly stars" discount: these are real targets.
+    expect(why('Abell 1'), isNot(contains('not a known imaging field')));
+    // The Medusa is seeded as a showpiece and outranks an unlisted Abell.
+    expect(score('Abell 21'), greaterThan(score('Abell 1')));
+    expect(why('Abell 21'), contains('showpiece'));
+  });
+
   test('a standalone curated region replaces the raw Sharpless row', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     const raw = PlanningDso(

@@ -99,6 +99,25 @@ class _AnsweringMdns extends MDnsClient {
   void stop() {}
 }
 
+/// Answers like [_AnsweringMdns] but the rig advertises TWO addresses: its
+/// LAN side and its own hotspot (a Pi with eth0 + ap0). What discover() emits
+/// for that is what the first-run list shows, one row per entry.
+class _TwoAddressMdns extends _AnsweringMdns {
+  @override
+  Stream<T> lookup<T extends ResourceRecord>(
+    ResourceRecordQuery query, {
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    if (T == IPAddressResourceRecord) {
+      return Stream<T>.fromIterable([
+        IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('172.24.1.1')) as T,
+        IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('192.0.2.20')) as T,
+      ]);
+    }
+    return super.lookup<T>(query, timeout: timeout);
+  }
+}
+
 /// Starts, then fails the very first query send the way macOS does when the
 /// app has no Local Network permission: a synchronous SocketException with
 /// errno 65 (EHOSTUNREACH) out of RawDatagramSocket.send inside lookup().
@@ -395,6 +414,32 @@ void main() {
     });
   });
   group('ServerDiscoveryService.discover', () {
+    test('a rig advertising its LAN and hotspot addresses is ONE row, the reachable one',
+        () async {
+      // Review on #1277: discover() dedups on hostname:port and the first-run
+      // screen lists every entry, so an off-subnet address would surface as a
+      // dead row under the same mDNS name. The filter, not the order, is what
+      // the user sees.
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _TwoAddressMdns.new,
+        localAddresses: () async => const ['192.0.2.5'],
+        sweepSource: () => const Stream.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.map((s) => s.hostname), ['192.0.2.20']);
+      expect(found.single.mdnsName, 'openastro');
+    });
+
+    test('with no on-subnet address every advertised address is offered', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _TwoAddressMdns.new,
+        localAddresses: () async => const ['10.9.9.9'],
+        sweepSource: () => const Stream.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.map((s) => s.hostname), ['172.24.1.1', '192.0.2.20']);
+    });
+
     test('sweep does NOT run when mDNS produced a result', () async {
       var sweepRan = false;
       final svc = ServerDiscoveryService(
@@ -745,6 +790,19 @@ void main() {
 }
 
 void _preferLocalSubnetTests() {
+  group('ServerDiscoveryService.isTunnelName', () {
+    test('tunnels and container/VM interfaces are ignored, physical and shared ones kept', () {
+      for (final n in ['utun3', 'tun0', 'wg0', 'ppp0', 'docker0', 'vmnet8', 'veth1a2b', 'ZT1234']) {
+        expect(ServerDiscoveryService.isTunnelName(n), isTrue, reason: n);
+      }
+      // bridge100 is macOS Internet Sharing: a rig on the shared Ethernet is
+      // reachable there, so it is NOT excluded (review on #1277).
+      for (final n in ['en0', 'eth0', 'wlan0', 'bridge100', 'Ethernet', 'Wi-Fi']) {
+        expect(ServerDiscoveryService.isTunnelName(n), isFalse, reason: n);
+      }
+    });
+  });
+
   group('ServerDiscoveryService.preferLocalSubnet', () {
     // The Pi advertises eth0 (house LAN) and ap0 (its own hotspot); the
     // laptop on the LAN must be offered the eth0 address, not whichever

@@ -65,7 +65,9 @@ namespace OpenAstroAra.Test {
                 Is.Empty, "limit 0 returns nothing, not one (the cap is checked before adding)");
         }
 
-        private static readonly string[] WrNamesByIdThenCommon = { "WR 21", "Anon (Marston)" };
+        // WR 30's cell says "Anon (Marston)": the catalogue's placeholder for "no common name", so
+        // the id is shown (#1198) — the point of the test is that the cell is REACHED, not its text.
+        private static readonly string[] WrNamesByIdThenCommon = { "WR 21", "WR 30" };
 
         [Test]
         public void OpenNgc_layout_wr_rows_with_two_spectral_types_name_by_id_not_identifier() {
@@ -80,6 +82,15 @@ namespace OpenAstroAra.Test {
 
             Assert.That(rows.Select(r => r.Name), Is.EqualTo(WrNamesByIdThenCommon));
             Assert.That(rows[0].Magnitude, Is.EqualTo(9.71).Within(1e-6));
+        }
+
+        [Test]
+        public void First_common_name_skips_blanks_and_the_Anon_placeholder() {
+            Assert.That(SkyCatalogReader.FirstCommonName("Andromeda Galaxy,Messier 31"), Is.EqualTo("Andromeda Galaxy"));
+            Assert.That(SkyCatalogReader.FirstCommonName(",Alt Name"), Is.Null, "leading comma = none (SkyCatalogService pins this)");
+            Assert.That(SkyCatalogReader.FirstCommonName("Anon (Marston)"), Is.Null, "a placeholder, not a name");
+            Assert.That(SkyCatalogReader.FirstCommonName("Anon IR (Wachter)"), Is.Null);
+            Assert.That(SkyCatalogReader.FirstCommonName(""), Is.Null);
         }
 
         [Test]

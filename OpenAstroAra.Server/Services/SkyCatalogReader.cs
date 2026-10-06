@@ -145,12 +145,22 @@ namespace OpenAstroAra.Server.Services {
                 if (result.Count >= limit) {
                     break; // checked BEFORE Add so limit=0 (or negative) yields none, not one
                 }
-                var common = Get(f, commonI).Trim();
-                // "Common names" can list several comma-separated aliases — take the first; fall back to the catalog id.
-                var name = common.Length > 0 ? common.Split(',')[0].Trim() : Get(f, nameI).Trim();
+                // "Common names" can list several comma-separated aliases — take the first real one; fall back to the catalog id.
+                var name = FirstCommonName(Get(f, commonI)) ?? Get(f, nameI).Trim();
                 result.Add(new CatalogObjectDto(name, NormalizeRaDeg(raHours * 15.0), dec, mag));
             }
             return result;
+        }
+
+        /// <summary>
+        /// The first comma-separated alias of an OpenNGC-layout "Common names" cell, or null when the
+        /// cell holds none (a leading comma, ",Alt Name", counts as none — long-standing behaviour). The WR catalogue fills the cell with "Anon (Marston)", "Anon IR (Wachter)" …
+        /// for 27 stars that have NO common name — a placeholder, not a name — so those fall back to the id (#1198).
+        /// Mirrored by the client's firstCommonName (bundled_catalogs.dart).
+        /// </summary>
+        internal static string? FirstCommonName(string cell) {
+            var first = cell.Split(',')[0].Trim();
+            return first.Length == 0 || first.StartsWith("Anon ", StringComparison.Ordinal) ? null : first;
         }
 
         // ── helpers ────────────────────────────────────────────────────────────────────────────────────────

@@ -185,7 +185,7 @@ namespace OpenAstroAra.Test {
 
             var byName = svc.GetAllDsos(CancellationToken.None)!.ToDictionary(d => d.Name);
             Assert.That(byName["WR 21"].CommonName, Is.Null, "Identifiers must not read as the common name");
-            Assert.That(byName["WR 30"].CommonName, Is.EqualTo("Anon (Marston)"));
+            Assert.That(byName["WR 30"].CommonName, Is.Null, "\"Anon (Marston)\" is a placeholder, not a name (#1198)");
             Assert.That(byName["WR 136"].CommonName, Is.EqualTo("NGC 6888"));
             Assert.That(byName["WR 21"].Magnitude, Is.EqualTo(9.71).Within(1e-6), "V, left of Hubble, never shifted");
         }

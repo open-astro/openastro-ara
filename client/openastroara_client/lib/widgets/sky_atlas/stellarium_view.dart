@@ -28,6 +28,7 @@ import '../../theme/ara_colors.dart';
 import '../../util/imaging_regions.dart';
 import '../../util/planetarium_seed.dart';
 import '../../util/coord_parse.dart';
+import '../../util/gps_site_fill.dart' show clientPlatform, isTouchPlatform;
 import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
 import 'rotation_assist_panel.dart';
@@ -525,7 +526,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         children: [
           // The search bar drives the page over the loopback command channel, so
           // it works for the embedded webview AND the Linux native overlay page.
-          _SearchBar(
+          PlanetariumSearchBar(
             controller: _searchCtrl,
             onSubmit: _submitSearch,
             onCoordinates: () => showCustomTargetDialog(context),
@@ -534,9 +535,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             onRotate: () =>
                 ref.read(skyAtlasModeProvider.notifier).toggleRotateCamera(),
             rotateOpen: rotateOpen,
-            // Touch platforms get on-screen zoom: no wheel/trackpad there, and
-            // an overshot pinch otherwise strands the view at the widest FOV.
-            onZoom: (Platform.isAndroid || Platform.isIOS)
+            // Touch platforms get on-screen zoom (see isTouchPlatform).
+            onZoom: isTouchPlatform(clientPlatform)
                 ? (factor) => _pushCmd({'type': 'zoom', 'factor': factor})
                 : null,
           ),
@@ -575,8 +575,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 
 /// Thin top bar over the planetarium: a universal search field + a Tonight's Sky
 /// toggle. The field is Flutter (so the keyboard works); submitting it hands the
-/// query to the page via the loopback command channel.
-class _SearchBar extends StatelessWidget {
+/// query to the page via the loopback command channel. Public so the zoom row
+/// (touch platforms only) can be widget-tested without a webview (#1198).
+class PlanetariumSearchBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSubmit;
   // Opens the RA/Dec entry (a typed target with a J2000/JNow choice).
@@ -589,7 +590,8 @@ class _SearchBar extends StatelessWidget {
   // Present only on touch platforms: factor < 1 zooms in, > 1 out, 0 resets.
   final void Function(double factor)? onZoom;
 
-  const _SearchBar({
+  const PlanetariumSearchBar({
+    super.key,
     required this.controller,
     required this.onSubmit,
     required this.onCoordinates,

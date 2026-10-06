@@ -44,6 +44,27 @@ void main() {
         reason: 'the Nebula column rides in as the common name');
   });
 
+  test('vdB rows drop the illuminating star\'s V-Mag (#1141)', () {
+    final vdb = load('vdb.csv');
+    expect(vdb.length, 158);
+    expect(vdb.every((d) => d.magnitude == null), isTrue,
+        reason: 'vdB "V-Mag" is the star (vdB 1 = 8.6 is BD+57 22), not the nebula');
+    expect(vdb.every((d) => d.type == 'RfN'), isTrue);
+    // Still planning-eligible: RfN is a magnitude-less imaging type.
+    expect(planningCull(vdb).length, 158);
+  });
+
+  test('IC 1318 is a star row in OpenNGC, so Sh2-108 is the Sadr listing (#1141)', () {
+    // The ('IC1318', 'Sh2-108') anchor relies on this: IC 1318 is typed `*`
+    // and culled, so the anchor never fires and the Sharpless row stays. If a
+    // catalog update retypes it as a nebula, the anchor will drop Sh2-108 in
+    // favour of IC1318 — which is then the intended outcome, but this test
+    // makes that change visible rather than silent (review on #1277).
+    final ic1318 = load('NGC.csv').firstWhere((d) => d.id == 'IC1318');
+    expect(isStarType(ic1318.type), isTrue);
+    expect(planningCull([ic1318]), isEmpty);
+  });
+
   test('no add-on row carries the separator inside a cell (review #1107)', () {
     // A ";" inside the Hubble cell ("WN5o+O4-6; WN5o+O7V") column-shifted 165
     // of the 717 WR rows: Identifiers landed in Common names, so WR 21 was
@@ -64,8 +85,16 @@ void main() {
     expect(wr.firstWhere((d) => d.id == 'WR 21').name, 'WR 21',
         reason: 'no common name: the id, not the HD identifier');
     expect(wr.firstWhere((d) => d.id == 'WR 19').name, 'WR 19');
-    expect(wr.firstWhere((d) => d.id == 'WR 30').name, 'Anon (Marston)',
-        reason: 'a real common name on a two-classification row survives');
+    // The two-classification row's Common names cell survives the shift and
+    // still reaches the parser — but "Anon (Marston)" is the catalogue's
+    // placeholder for "no common name", so the id is shown instead (#1198).
+    expect(firstCommonName('Anon (Marston)'), isNull);
+    expect(wr.firstWhere((d) => d.id == 'WR 30').name, 'WR 30');
+    expect(wr.where((d) => d.name.startsWith('Anon')), isEmpty);
+    expect(wr.firstWhere((d) => d.id == 'WR 136').name, 'NGC 6888');
+    expect(firstCommonName(',Alt Name'), isNull,
+        reason: 'leading comma = no common name, same as the daemon');
+    expect(firstCommonName('Anon IR (Wachter)'), isNull);
   });
 
   test('planning cull keeps bright + magnitude-less nebulae, drops faint and stars', () {

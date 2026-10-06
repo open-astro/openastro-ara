@@ -914,26 +914,6 @@ namespace OpenAstroAra.Astrometry {
         }
 
         /// <summary>
-        /// Calculates position angle between two coordinates
-        /// </summary>
-        /// <param name="a1">Right Ascension in degrees</param>
-        /// <param name="a2">Right Ascension in degrees</param>
-        /// <param name="d1">Declination in degrees</param>
-        /// <param name="d2">Declination in degrees</param>
-        /// <returns>Position Angle in degrees</returns>
-        public static double CalculatePositionAngle(double a1deg, double a2deg, double d1deg, double d2deg) {
-            var a1 = ToRadians(a1deg);
-            var a2 = ToRadians(a2deg);
-            var d1 = ToRadians(d1deg);
-            var d2 = ToRadians(d2deg);
-
-            var numerator = Math.Sin(a1 - a2);
-            var denominator = Math.Cos(d2) * Math.Tan(d1) - Math.Sin(d2) * Math.Cos(a1 - a2);
-            var result = AstroUtil.ToDegree(Math.Atan(numerator / denominator));
-            return result;
-        }
-
-        /// <summary>
         /// Calculates the refraction adjusted (observed) altitude for a given topocentric (in vacuum) altitude
         /// The Method works for Altitudes down to about 5°. For lower altitudes the method will produce unreliable results.
         /// </summary>

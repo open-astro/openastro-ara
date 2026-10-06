@@ -522,6 +522,29 @@ void main() {
     });
   });
 
+  group('planetarium page GoTo outcome', () {
+    test('GoTo waits for runtime.state to leave slewing before showing ✓', () {
+      // #1198: the daemon answers 202 when the slew is queued, so "Slew sent ✓"
+      // on r.ok claimed a slew that had not moved the mount. No harness runs
+      // index.html; pin the shape of the fix.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      expect(page, isNot(contains("'Slew sent ✓'")));
+      expect(page, contains('function waitForSlewEnd('));
+      expect(page, contains("fetch(API + '/api/v1/equipment/telescope')"));
+      // ✓ only after the daemon reported slewing and then stopped: a rejected
+      // slew never leaves tracking/idle (ResolveRuntimeState has no 'error'),
+      // and must end on the neutral "Slew sent" (review on #1277).
+      expect(page, contains("if (st === 'slewing') { sawSlewing = true; }"));
+      expect(page, contains("else if (st && sawSlewing) { cb('Slewed ✓'); return; }"));
+      expect(page, isNot(contains("sawSlewing || tries")));
+      // A stale 'parked' read gets the same grace as 'never slewed'.
+      expect(page, contains("else if (st === 'parked' && tries >= 4) { cb('Mount parked'); return; }"));
+      expect(page, isNot(contains('slewing/unparking')));
+      // The GoTo button stays disabled through the interim "Slewing…" label.
+      expect(page, contains('if (!done) return;'));
+    });
+  });
+
   group('planetarium page framing target', () {
     test('a goto without a name clears the framing name; the search bar sends one', () {
       // Night of 2026-10-02: select the Moon, type "NGC 7000" (a catalog hit →

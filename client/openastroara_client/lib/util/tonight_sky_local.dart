@@ -49,9 +49,12 @@ import 'star_model.dart' as stars;
 // * Missing surface brightness scores neutral, except DrkN (floor — darker
 //   than the sky by definition). Photogenic multipliers OCl ×0.85, GCl ×0.95,
 //   DrkN ×0.6 keep ~2,100 size-only LDN/Barnard rows from flooding the list.
-// * Magnitude-less emission rows take a photogenic tier from the curated
-//   imaging regions (3 ×1.0, 2 ×0.9, 1 ×0.7, unlisted ×0.5); an anchored
-//   Sharpless row is replaced by its region, never listed beside it.
+// * Magnitude-less nebula rows take a photogenic tier from the curated
+//   imaging regions (3 ×1.0, 2 ×0.9, 1 ×0.7; unlisted emission ×0.5, unlisted
+//   PN/RfN/SNR floor at tier 1); an anchored Sharpless row is replaced by
+//   its NGC/IC twin or region, never listed beside it.
+// * vdB rows carry the illuminating STAR's V-Mag, not the nebula's: the
+//   loader drops it so they rank as photometry-less reflection nebulae.
 // * Filter reality: emission target with no narrowband glass ×0.85 (×0.75
 //   under Bortle ≥ 5); narrowband in the set ×1.05; continuum untouched.
 // * RemainingHours = max(0, windowEnd − max(now, windowStart)), always
@@ -494,20 +497,22 @@ List<TonightSkyObject> computeTonightSkyLocal({
         'dark nebula — a silhouette target that needs a dark sky and long '
         'broadband integration (−40%)',
       );
-    } else if ((o.type == 'HII' ||
-            o.type == 'EmN' ||
-            o.type == 'Neb' ||
-            o.type == 'Cl+N') &&
+    } else if (_isTieredNebulaType(o.type) &&
         o.magnitude == null &&
         o.surfaceBrightness == null) {
-      // Emission rows with NO photometry, whatever catalog they came from:
-      // the Sharpless package (314 rows) carries none at all, and OpenNGC
+      // Nebula rows with NO photometry, whatever catalog they came from:
+      // the Sharpless package (313 rows) carries none at all, and OpenNGC
       // has magnitude-less nebulae too. A faint smudge that is mostly stars
       // scored a flat 90 on size alone — "there is nothing there to image
       // but stars". A curated tier (or membership in the curated regions
       // layer) says which of them imagers actually frame; the rest are
-      // discounted hard.
-      switch (photogenicTierOf(o.id)) {
+      // discounted hard. PN / RfN / SNR rows (all 86 Abell planetaries, the
+      // vdB reflection nebulae, OpenNGC's photometry-less remnants) used to
+      // skip this block and keep the 0.5 neutral on BOTH terms — ranking
+      // above fields with real photometry. They are real but faint,
+      // specialist targets, so unlisted ones take the tier-1 floor rather
+      // than the emission "unknown field" discount (#1141).
+      switch (photogenicTierOf(o.id) ?? _typeFloorTier(o.type)) {
         case 3:
           adjustReasons.add('a showpiece imaging field (+0)');
         case 2:
@@ -1063,3 +1068,16 @@ String _adviceTag(TonightFilterAdvice approach) => switch (approach) {
 
 String _shortNum(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+/// Nebula types whose photometry-less rows are tiered (see the adjust block).
+bool _isTieredNebulaType(String type) => const {
+      'HII', 'EmN', 'Neb', 'Cl+N', 'PN', 'RfN', 'SNR',
+    }.contains(type);
+
+/// Tier for an unlisted photometry-less row of [type]: faint planetaries,
+/// reflection nebulae and remnants are specialist targets (tier 1); an
+/// unlisted emission region is "mostly stars" and keeps the hard discount.
+int? _typeFloorTier(String type) => switch (type) {
+      'PN' || 'RfN' || 'SNR' => 1,
+      _ => null,
+    };

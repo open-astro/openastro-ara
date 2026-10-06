@@ -68,15 +68,18 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     final type = iType >= 0 && f.length > iType ? f[iType] : '';
     if (type == 'Dup' || type == 'NonEx') continue;
     double? num(int i) => i >= 0 && f.length > i ? double.tryParse(f[i].trim()) : null;
-    final mag = num(iV) ?? num(iB);
+    final name = f[iName];
+    // vdB's "V-Mag" column is the illuminating star's magnitude (vdB 1 =
+    // 8.6 is BD+57 22), not the nebula's — scoring it as a bright object put
+    // 156 faint reflection nebulae above real targets (#1141). Rank them as
+    // photometry-less RfN instead.
+    final mag = name.startsWith('vdB ') ? null : num(iV) ?? num(iB);
     final messier = iM >= 0 && f.length > iM ? int.tryParse(f[iM].trim()) : null;
     final caldwell = iId >= 0 && f.length > iId ? caldwellNumOf(f[iId]) : null;
     String? common;
     if (iCommon >= 0 && f.length > iCommon) {
-      final first = f[iCommon].split(',').first.trim();
-      if (first.isNotEmpty) common = first;
+      common = firstCommonName(f[iCommon]);
     }
-    final name = f[iName];
     out.add(PlanningDso(
       id: name,
       name: common ?? name,
@@ -251,4 +254,17 @@ String prettyDsoName(String name) {
   final rest = name.substring(i);
   if (rest.isEmpty || !_isDigit(rest[0])) return name;
   return '${name.substring(0, prefixLen)} $rest';
+}
+
+/// The display name from an OpenNGC-layout "Common names" cell: the first
+/// comma-separated alias, or null when there is none (a leading comma counts
+/// as none, as the daemon has always treated it). The WR catalogue fills
+/// the cell with "Anon (Marston)", "Anon IR (Wachter)" … for 27 stars that
+/// have NO common name — a placeholder, not a name — so those fall back to
+/// the id (#1198).
+/// Mirrors SkyCatalogReader/SkyCatalogService on the daemon.
+String? firstCommonName(String cell) {
+  final first = cell.split(',').first.trim();
+  if (first.isEmpty || first.startsWith('Anon ')) return null;
+  return first;
 }

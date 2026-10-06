@@ -230,36 +230,9 @@ class _DraftsSectionState extends ConsumerState<_DraftsSection> {
 
   Future<void> _delete(BuildContext context, String id, String name) async {
     if (_busy) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete draft?'),
-        content: Text(
-            '"${name.isEmpty ? '(untitled draft)' : name}" will be removed from this device. This can\'t be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
-          FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: AraColors.accentError),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !context.mounted) return;
     setState(() => _busy = true);
     try {
-      await ref.read(draftSequencesProvider.notifier).delete(id);
-    } catch (e) {
-      debugPrint('[sequencer] draft delete failed: $e');
-      messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't delete the draft."),
-        backgroundColor: AraColors.accentError,
-      ));
+      await confirmAndDeleteDraft(context, id: id, name: name);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
