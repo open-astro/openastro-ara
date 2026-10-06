@@ -635,6 +635,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             var slewVerdict = new SlewEventWatch.Verdict(SlewEventWatch.Kind.None);
             DiscoveredDeviceDto? watchedDevice = null;
             string? axisRatesUnknownReason = null;
+            int? republishedBands = null;
             (double? Primary, double? Secondary) axisRatesUnknownValues = default;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
@@ -660,7 +661,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         // is belt-and-braces, not a retry path).
                         _axisBands[0] = _axisBands[0] is { Count: > 0 } ? _axisBands[0] : pad.Primary ?? _axisBands[0];
                         _axisBands[1] = _axisBands[1] is { Count: > 0 } ? _axisBands[1] : pad.Secondary ?? _axisBands[1];
-                        RepublishPadBandsLocked(); // #1230 — caps built before an axis answered catch up here
+                        republishedBands = RepublishPadBandsLocked(); // #1230 — caps built before an axis answered catch up here
                         var mountCannotMoveAxis = (caps ?? _capabilities)?.CanMoveAxis == false; // under _gate like every caps read
                         var windowElapsed = DateTimeOffset.UtcNow >= _axisRatesDeadline;
                         // Both axes known across passes (primary on one, secondary on a later one)
@@ -693,6 +694,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     slewVerdict = SlewWatch.Observe(runtime.State == "slewing");
                     watchedDevice = _device;
                 }
+            }
+            if (republishedBands is { } republished) {
+                LogPadBandsRepublished(_logger, republished);
             }
             if (axisRatesUnknownReason is not null) {
                 LogAxisRatesUnknown(_logger, axisRatesUnknownValues.Primary, axisRatesUnknownValues.Secondary, axisRatesUnknownReason);
@@ -1012,20 +1016,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// session while the snap later used the real secondary bands (a chip under its floor 409'd).
     /// Called under <c>_gate</c> after the band cache is updated: re-publishes the two rate lists from
     /// the cache whenever they differ from what is published.</summary>
-    private void RepublishPadBandsLocked() {
+    /// <returns>The number of bands re-published, or null when nothing changed — logged by the
+    /// caller after <c>_gate</c> is released (the nudge/stop path takes the gate too).</returns>
+    private int? RepublishPadBandsLocked() {
         if (_capabilities is null || _axisBands is null) {
-            return;
+            return null;
         }
         var padBands = PadBandsFrom((_axisBands[0], _axisBands[1]));
         var bandDtos = BandDtosOf(padBands);
         if (_capabilities.MoveAxisRateBandsDegPerSec is { } published && published.SequenceEqual(bandDtos)) {
-            return;
+            return null;
         }
         _capabilities = _capabilities with {
             MoveAxisRatesDegPerSec = [.. EndpointsOf(padBands)],
             MoveAxisRateBandsDegPerSec = bandDtos,
         };
-        LogPadBandsRepublished(_logger, bandDtos.Count);
+        return bandDtos.Count;
     }
 
     [LoggerMessage(Level = LogLevel.Information,

@@ -220,7 +220,7 @@ namespace OpenAstroAra.Test {
             // The unclipped primary floor is what used to be offered — and it 409s the secondary.
             Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, secondary));
         }
-    
+
 
         [Test]
         public void Pad_bands_are_the_intersections_with_the_secondary_bands_not_its_window() {

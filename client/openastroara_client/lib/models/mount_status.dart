@@ -18,9 +18,10 @@ class MountCapabilities {
   /// daemons that predate [axisRateBands]; read through [padRateBands].
   final List<double> axisRatesDegPerSec;
 
-  /// The pad's MoveAxis rate bands (#1126): the primary axis's AxisRates
-  /// `[min, max]` bands, ascending, each clipped to the secondary axis's floor
-  /// and ceiling so one picked rate is honoured on both axes. A discrete rate
+  /// The pad's MoveAxis rate bands (#1126): the non-empty intersections of the
+  /// primary axis's AxisRates `[min, max]` bands with the secondary axis's
+  /// (#1230), ascending, so one picked rate is honoured as given on both axes.
+  /// A discrete rate
   /// is `min == max`; "any speed up to max" has `min` 0. Empty when the mount
   /// reports none or the daemon predates the field.
   final List<SlewRateBand> axisRateBands;

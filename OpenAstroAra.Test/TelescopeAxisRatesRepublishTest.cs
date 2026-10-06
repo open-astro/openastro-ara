@@ -100,5 +100,33 @@ namespace OpenAstroAra.Test {
             // And the pad can now use a published rate on the secondary without a 409.
             await svc.MoveAxisAsync(1, 0.5, CancellationToken.None);
         }
+    
+
+        [Test]
+        public async Task A_transient_secondary_error_on_a_later_pass_does_not_unclip_the_published_bands() {
+            // The cache holds both axes from the first pass; the caps are then rebuilt on a pass whose
+            // secondary read throws. The re-publish rebuilds from the cache, so the clipped bands stay.
+            var secondaryFails = 0;
+            await using var box = ScriptedAlpacaDevice.Start(Mount());
+            box.RespondWithQuery((path, query) => {
+                if (!path.EndsWith("/axisrates", StringComparison.Ordinal)) {
+                    return null;
+                }
+                if (query.Contains("axis=0", StringComparison.Ordinal)) {
+                    return PrimaryBands;
+                }
+                return Volatile.Read(ref secondaryFails) == 1 ? ScriptedAlpacaDevice.Error("AxisRates(Secondary) busy") : SecondaryBands;
+            });
+            using var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100) };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            var caps = await WaitForCapsAsync(svc, c => c?.MoveAxisRateBandsDegPerSec?.Count == 2, "capabilities never published from both axes");
+
+            Volatile.Write(ref secondaryFails, 1);
+            await Task.Delay(500); // several refresh passes with the secondary throwing
+            caps = await CapsAsync(svc);
+
+            Assert.That(caps!.MoveAxisRateBandsDegPerSec, Is.EqualTo(new[] { new MoveAxisRateBandDto(0.5, 0.5), new MoveAxisRateBandDto(2.0, 4.0) }),
+                "a later transient secondary error must not put the unclipped primary bands back on the wire");
+        }
     }
 }
