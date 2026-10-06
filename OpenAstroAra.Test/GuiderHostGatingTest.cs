@@ -79,6 +79,17 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => !svc.GetInfo().Connected), Is.True, "the drop never surfaced");
         }
 
+        // Connect, then take PHD2 away for good BEFORE the drop surfaces, so the recovery pass's very
+        // first attempt already finds a closed port (a fake left listening is reconnected at once).
+        private static async Task ConnectThenLoseForGoodAsync(GuiderService svc, FakeGuider fake) {
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True, "never reached Connected against the fake guider");
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1), Is.True, "event stream never settled");
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected a live connection to drop");
+            await fake.DisposeAsync().ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !svc.GetInfo().Connected), Is.True, "the drop never surfaced");
+        }
+
         private static FakeGuider StartFake() {
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
@@ -154,7 +165,9 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderService.RecoveryAbandonReason(target, "127.0.0.1", 4400, ProfileA), Is.Null);
             // Host comparison is case-insensitive (DNS names).
             Assert.That(GuiderService.RecoveryAbandonReason(new GuiderService.RecoveryTarget("Pi.local", 4400, ProfileA), "pi.local", 4400, ProfileA), Is.Null);
-            Assert.That(GuiderService.RecoveryAbandonReason(target, "127.0.0.1", 4400, ProfileB), Is.Not.Null, "profile switched");
+            // #1234: a profile switch to the SAME target is not a reason — both profiles use this guider.
+            Assert.That(GuiderService.RecoveryAbandonReason(target, "127.0.0.1", 4400, ProfileB), Is.Null, "profile switched, same target");
+            Assert.That(GuiderService.RecoveryAbandonReason(target, "192.0.2.10", 4400, ProfileB), Does.Contain("active profile changed"), "a switch that re-targets names both");
             Assert.That(GuiderService.RecoveryAbandonReason(target, "192.0.2.10", 4400, ProfileA), Is.Not.Null, "host changed");
             Assert.That(GuiderService.RecoveryAbandonReason(target, "127.0.0.1", 4401, ProfileA), Is.Not.Null, "port changed");
             // No repository (benches/tests): only the target is compared.
@@ -172,8 +185,9 @@ namespace OpenAstroAra.Test {
                                           "raspberrypi", "RaspberryPi.local", "raspberrypi.lan", "192.168.4.1", "10.0.0.7", "0.0.0.0" }) {
                 Assert.That(GuiderService.IsLocalGuiderHost(local, machine, addresses), Is.True, $"'{local}' is this machine");
             }
-            foreach (var remote in new[] { "192.0.2.1", "192.168.4.2", "phd2-laptop", "phd2-laptop.lan", "raspberrypi2" }) {
-                Assert.That(GuiderService.IsLocalGuiderHost(remote, machine, addresses), Is.False, $"'{remote}' is not this machine");
+            foreach (var remote in new[] { "192.0.2.1", "192.168.4.2", "phd2-laptop", "phd2-laptop.lan", "raspberrypi2",
+                                           "raspberrypi.site2", "raspberrypi.example.org" }) {
+                Assert.That(GuiderService.IsLocalGuiderHost(remote, machine, addresses), Is.False, $"'{remote}' is not this machine by name alone");
             }
             Assert.That(GuiderService.IsLocalGuiderHost(null, machine, addresses), Is.True, "no host means the default (local) guider");
         }
@@ -262,6 +276,105 @@ namespace OpenAstroAra.Test {
             var accepted = await svc.RestartGuiderAsync("idem-r", CancellationToken.None).ConfigureAwait(false);
             Assert.That(accepted.OperationType, Is.EqualTo("guider.restart"));
             supervisor.Verify(s => s.RequestRestart(), Times.Never, "the local unit is not the guider this profile uses");
+        }
+    
+
+        [Test]
+        public void SameMachineName_compares_the_domain_when_the_profile_host_carries_one() {
+            // #1234: two SBCs both named raspberrypi; a profile host raspberrypi.site2 is the OTHER one.
+            Assert.That(GuiderService.SameMachineName("raspberrypi", "raspberrypi"), Is.True);
+            Assert.That(GuiderService.SameMachineName("raspberrypi.local", "raspberrypi"), Is.True, "mDNS self name");
+            Assert.That(GuiderService.SameMachineName("raspberrypi.lan", "raspberrypi"), Is.True, "router default suffix");
+            Assert.That(GuiderService.SameMachineName("raspberrypi.site2", "raspberrypi"), Is.False, "a real domain the pure check cannot vouch for");
+            Assert.That(GuiderService.SameMachineName("raspberrypi.site2", "raspberrypi.site2"), Is.True, "our own FQDN");
+            Assert.That(GuiderService.SameMachineName("raspberrypi.site2.", "raspberrypi.site2"), Is.True, "trailing dot");
+            Assert.That(GuiderService.SameMachineName("raspberrypi.site1", "raspberrypi.site2"), Is.False);
+            Assert.That(GuiderService.SameMachineName("raspberrypi", "raspberrypi.site2"), Is.True, "bare label against our FQDN");
+        }
+
+        [Test]
+        public async Task IsLocalGuiderHostAsync_lets_the_resolve_decide_a_same_label_host_in_another_domain() {
+            var ours = new[] { IPAddress.Parse("192.168.4.1") };
+            Task<IPAddress[]> Resolve(string name, CancellationToken _) => name switch {
+                "raspberrypi.site1" => Task.FromResult(new[] { IPAddress.Parse("192.168.4.1") }),
+                "raspberrypi.site2" => Task.FromResult(new[] { IPAddress.Parse("192.168.4.2") }),
+                _ => Task.FromException<IPAddress[]>(new SocketException()),
+            };
+            Assert.That(await GuiderService.IsLocalGuiderHostAsync("raspberrypi.site1", "raspberrypi", ours, Resolve, CancellationToken.None), Is.True,
+                "our label in a domain that resolves to our own address is us");
+            Assert.That(await GuiderService.IsLocalGuiderHostAsync("raspberrypi.site2", "raspberrypi", ours, Resolve, CancellationToken.None), Is.False,
+                "our label in a domain that resolves elsewhere is the other box: no local systemctl for it");
+        }
+
+        [Test]
+        public async Task IsLocalGuiderHostAsync_returns_within_the_bound_when_the_resolver_ignores_cancellation() {
+            // #1234: getaddrinfo does not honour the token on every platform; the caller must still return.
+            var never = new TaskCompletionSource<IPAddress[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var sw = Stopwatch.StartNew();
+            var local = await GuiderService.IsLocalGuiderHostAsync("phd2-laptop.lan", "raspberrypi", new[] { IPAddress.Parse("192.168.4.1") },
+                (_, _) => never.Task, CancellationToken.None);
+            Assert.That(local, Is.False);
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(4)), "the resolve must be bounded by the caller, not by the resolver");
+        }
+
+        [Test]
+        public async Task Remote_host_recovery_decides_locality_once_per_pass_and_posts_a_Warning() {
+            // #1234: the attempts inside one pass used to re-run the decision (interfaces + DNS) each time.
+            // PHD2 goes away for good, so a 1.5 s window at 200 ms makes several attempts before giving up.
+            var fake = StartFake();
+            var supervisor = new Mock<IGuiderProcessSupervisor>();
+            var notifications = new Mock<INotificationService>();
+            var posted = new System.Collections.Generic.List<NotificationDto>();
+            var gaveUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Callback<NotificationDto, CancellationToken>((d, _) => {
+                    lock (posted) { posted.Add(d); }
+                    if (d.Title == "Guider not reconnected") { gaveUp.TrySetResult(); }
+                })
+                .Returns(Task.CompletedTask);
+            var profile = new HeadlessProfileService();
+            using var svc = NewService(profile, GatedRecovery(Task.CompletedTask, supervisor), supervisor, () => ProfileA, notifications.Object);
+            svc.ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(1.5);
+            var decisions = 0;
+            svc.IsLocalGuiderHostDecision = (_, _) => { Interlocked.Increment(ref decisions); return Task.FromResult(false); };
+            await ConnectThenLoseForGoodAsync(svc, fake).ConfigureAwait(false);
+            // The user connect found the fake reachable, so its gate never asked; every decision is the pass's.
+
+            Assert.That(await Task.WhenAny(gaveUp.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(gaveUp.Task),
+                "the pass must give up once the window passes");
+            Assert.That(Volatile.Read(ref decisions), Is.EqualTo(1), "one locality decision per recovery pass, however many attempts it makes");
+            NotificationDto lost;
+            lock (posted) { lost = posted.Find(d => d.Title == "Guider connection lost")!; }
+            Assert.That(lost, Is.Not.Null);
+            Assert.That(lost.Severity, Is.EqualTo(NotificationSeverity.Warning), "same severity as the coordinator's identically titled notification");
+        }
+
+        [Test]
+        public async Task A_remote_guider_that_never_returns_leaves_a_guider_process_failed_diagnostic() {
+            var fake = StartFake();
+            var supervisor = new Mock<IGuiderProcessSupervisor>();
+            var diagnostics = new Mock<IDiagnosticsService>();
+            DiagnosticEventDto? recorded = null;
+            var recordedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            diagnostics.Setup(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+                .Callback<DiagnosticEventDto, string?, bool?, CancellationToken>((e, _, _, _) => { recorded = e; recordedTcs.TrySetResult(); })
+                .Returns(Task.CompletedTask);
+            var profile = new HeadlessProfileService();
+            using var svc = new GuiderService(profile, GatedRecovery(Task.CompletedTask, supervisor), NullLogger<GuiderService>.Instance, supervisor.Object,
+                ws: null, profileStore: null, sequencerResolver: () => Mock.Of<ISequencerService>(),
+                notifications: Mock.Of<INotificationService>(), faultLog: null, activeProfileIdResolver: () => ProfileA,
+                diagnostics: diagnostics.Object) {
+                ReconnectAttemptInterval = TimeSpan.FromMilliseconds(200),
+                ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(1),
+            };
+            svc.IsLocalGuiderHostDecision = static (_, _) => Task.FromResult(false);
+            await ConnectThenLoseForGoodAsync(svc, fake).ConfigureAwait(false);
+
+            Assert.That(await Task.WhenAny(recordedTcs.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(recordedTcs.Task),
+                "a remote guider that never came back must leave a §29 diagnostic like a local failure does");
+            Assert.That(recorded!.EventType, Is.EqualTo("guider.process.failed"));
+            Assert.That(recorded.AutoActionTaken, Is.False, "nothing was restarted — the unit is not ours");
+            Assert.That(recorded.Description, Does.Contain("another machine"));
         }
     }
 }

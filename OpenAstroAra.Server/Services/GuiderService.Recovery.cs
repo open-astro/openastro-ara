@@ -72,18 +72,23 @@ public sealed partial class GuiderService {
 
     /// <summary>#1192 — the connection a recovery pass is recovering: the host:port that dropped and
     /// the ARA profile that was active when it dropped (null without a profile repository — benches).
-    /// Captured at link-down, compared before every reconnect attempt.</summary>
-    internal sealed record RecoveryTarget(string Host, int Port, Guid? ProfileId);
+    /// Captured at link-down, compared before every reconnect attempt. <see cref="IsLocal"/> is the
+    /// #1192 host-locality verdict for <see cref="Host"/>, resolved once per pass (#1234) so the
+    /// reconnect attempts inside the pass neither re-enumerate the interfaces nor re-resolve DNS;
+    /// null until the pass has decided.</summary>
+    internal sealed record RecoveryTarget(string Host, int Port, Guid? ProfileId, bool? IsLocal = null);
 
     /// <summary>Why a recovery pass must be abandoned, or null while its target is still current:
-    /// the active profile changed (a profile switch never carries a recovery across), or the active
-    /// profile's guider target no longer matches the connection that dropped.</summary>
+    /// the active profile's guider target no longer matches the connection that dropped. A profile
+    /// switch alone is not a reason (#1234): two profiles that both use the SBC's local guider share
+    /// one target, and the reconnect is the same connect either way — the #1192 write-through hazard
+    /// only exists when host:port differ, and that is what is compared.</summary>
     internal static string? RecoveryAbandonReason(RecoveryTarget target, string activeHost, int activePort, Guid? activeProfileId) {
-        if (activeProfileId != target.ProfileId) {
-            return $"the active profile changed from {target.ProfileId?.ToString() ?? "(none)"} to {activeProfileId?.ToString() ?? "(none)"}";
-        }
         if (!string.Equals(activeHost?.Trim(), target.Host.Trim(), StringComparison.OrdinalIgnoreCase) || activePort != target.Port) {
-            return $"the profile's guider target changed from {target.Host}:{target.Port} to {activeHost}:{activePort}";
+            var switched = activeProfileId != target.ProfileId
+                ? $" (the active profile changed from {target.ProfileId?.ToString() ?? "(none)"} to {activeProfileId?.ToString() ?? "(none)"})"
+                : string.Empty;
+            return $"the profile's guider target changed from {target.Host}:{target.Port} to {activeHost}:{activePort}{switched}";
         }
         return null;
     }
@@ -108,14 +113,17 @@ public sealed partial class GuiderService {
             // #1192: the coordinator supervises the LOCAL openastro-guider unit. A guider on another
             // machine has nothing here to poll or restart — its own host supervises it — so skip the
             // systemd tree and just retry the connection within the grace window.
-            if (!await IsLocalGuiderHostDecision(target.Host, token).ConfigureAwait(false)) {
+            // #1234: decided once per pass; the attempts inside it reuse the verdict (RecoveryTarget.IsLocal).
+            target = target with { IsLocal = await IsLocalGuiderHostDecision(target.Host, token).ConfigureAwait(false) };
+            if (target.IsLocal == false) {
                 token.ThrowIfCancellationRequested();
                 LogRemoteHostNoLocalRecovery(target.Host, target.Port);
                 // The coordinator would have posted its "Guider connection lost" here, and the §42.2
                 // fault reaction stays quiet on a LinkDown with no sequence running because it
                 // expects that — so a dropped remote guider must announce itself, or the user
-                // hears nothing until the grace window expires.
-                await NotifyFaultQuietlyAsync("Guider connection lost",
+                // hears nothing until the grace window expires. Same severity as the coordinator's
+                // identically titled notification (Warning; #1234): the loss is being handled.
+                await NotifyQuietlyAsync(NotificationSeverity.Warning, "Guider connection lost",
                     $"Lost the link to the guider at {target.Host}:{target.Port}. It runs on another machine, so ARA cannot restart it; "
                     + "retrying the connection within the guider retry window…").ConfigureAwait(false);
                 await TryAutoReconnectAsync(target, localUnitRestarted: false, token).ConfigureAwait(false);
@@ -211,12 +219,45 @@ public sealed partial class GuiderService {
                     ? "The guider process was restarted, but ARA could not re-establish its connection within the retry window. "
                     : $"The guider at {host}:{port} runs on another machine (ARA cannot restart it) and did not come back within the retry window. ")
                 + "Reconnect it manually (Equipment → Guider), then Resume any paused run.").ConfigureAwait(false);
+            if (!localUnitRestarted) {
+                // #1234: a local failure leaves a guider.process.failed diagnostic through the coordinator;
+                // a remote guider that never returned gets the same §29 record here.
+                await RecordRemoteGuiderLostQuietlyAsync(host, port, graceSeconds).ConfigureAwait(false);
+            }
         } catch (OperationCanceledException) {
             // User action superseded the auto-reconnect — nothing to report.
         } catch (Exception ex) {
             LogReconnectFailed(ex);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Diagnostics store faults must never mask the recovery outcome itself; log-and-recover boundary like the notification helpers.")]
+    private async Task RecordRemoteGuiderLostQuietlyAsync(string host, int port, int graceSeconds) {
+        if (_diagnostics is null) {
+            return;
+        }
+        try {
+            await _diagnostics.CreateEventAsync(
+                new DiagnosticEventDto(
+                    Id: Guid.NewGuid(),
+                    EventType: "guider.process.failed",
+                    Severity: DiagnosticHealth.Red,
+                    Description: $"The guider at {host}:{port} runs on another machine and did not come back within the {graceSeconds} s retry window.",
+                    DetectedUtc: DateTimeOffset.UtcNow,
+                    ClearedUtc: null,
+                    AutoActionTaken: false,
+                    AutoActionDescription: null),
+                recommendedAction: $"Check the guider on {host} (its own service and journal), then reconnect under Equipment → Guider.",
+                autoCorrectible: false,
+                CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogDiagnosticRecordFailed(ex);
+        }
+    }
+
+    [LoggerMessage(EventId = 6366, Level = LogLevel.Warning, Message = "Could not record the remote-guider diagnostic (best-effort, #1234)")]
+    private partial void LogDiagnosticRecordFailed(Exception exception);
 
     // The profile's guider_retry_timeout_sec and the grace window it maps to. Shared by the §63.3
     // auto-reconnect and the sequencer mediator's Connect() (#1123) so both honour the same bound.
