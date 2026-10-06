@@ -115,6 +115,19 @@ class ServerDiscoveryService {
   /// `NetworkInterface.list`).
   final Future<List<String>> Function() _localAddresses;
 
+  /// Lines already printed by this instance. The connect screen restarts
+  /// discovery every ~4 s, so an environment where the browse always fails
+  /// (Android, a sandbox denial) printed the same line ~15 times a minute
+  /// (#1144). The service is an app-lifetime singleton, so each distinct
+  /// message is printed once per streak; a pass that completes without a
+  /// browse failure clears the set, so a failure that comes back after a
+  /// healthy spell is printed again (review on #1295).
+  final Set<String> _printed = <String>{};
+
+  void _logOnce(String line) {
+    if (_printed.add(line)) debugPrint(line);
+  }
+
   final Stream<AraServer> Function()? mdnsSource;
   final Stream<AraServer> Function()? sweepSource;
 
@@ -341,6 +354,8 @@ class ServerDiscoveryService {
     // Only a pass that actually queried can vouch that the block is gone;
     // one that died in start() (port 5353 contention, say) says nothing.
     var sent = false;
+    var browsed = false;
+    var sawLookupFailure = false;
     // Socket-level errors from the mDNS client. `dart:io` does NOT throw on
     // a datagram send failure; it reports it asynchronously on the socket's
     // event stream, which `multicast_dns` forwards only to the `onError`
@@ -349,7 +364,7 @@ class ServerDiscoveryService {
     // attaches the hook to its IPv4 socket, the only socket it sends on for
     // the default IPv4 mDNS address this service uses.
     void onSocketError(Object error, StackTrace stack) {
-      debugPrint('[discovery] mDNS socket error: $error');
+      _logOnce('[discovery] mDNS socket error: $error');
       sawSocketError = true;
       final rigJustAnswered = _lastRigSeen != null &&
           DateTime.now().difference(_lastRigSeen!) < _rigSeenVouchesFor;
@@ -420,7 +435,8 @@ class ServerDiscoveryService {
             // flaky-multicast mode this file survives.
             // ignore: avoid_catches_without_on_clauses
           } catch (e) {
-            debugPrint('[discovery] mDNS A-record lookup for ${srv.target} '
+            sawLookupFailure = true;
+            _logOnce('[discovery] mDNS A-record lookup for ${srv.target} '
                 'failed: $e');
             continue;
           }
@@ -445,9 +461,10 @@ class ServerDiscoveryService {
       // fallback, so a browse failure must never crash the scan. It is no
       // longer SILENT, though: a release build that never lists a rig that
       // `dns-sd -B` sees on the same machine (#1111) left nothing to read.
+      browsed = true;
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
-      debugPrint('[discovery] mDNS browse failed, sweep carries discovery: $e');
+      _logOnce('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
       mdns.stop();
       // A pass that sent without a socket error means the block is gone
@@ -456,6 +473,12 @@ class ServerDiscoveryService {
       // turn before deciding.
       await Future<void>.delayed(Duration.zero);
       if (sent && !sawSocketError) _localNetworkBlocked.value = false;
+      // A pass with no failure of any kind (browse, socket, A-record) ends
+      // the streak, so the same line is printed again if the failure
+      // returns later. A socket error does not throw (it arrives through
+      // onSocketError) and an A-record failure is caught in the loop, so
+      // neither is visible to the catch above.
+      if (browsed && !sawSocketError && !sawLookupFailure) _printed.clear();
     }
   }
 

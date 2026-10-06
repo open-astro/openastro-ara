@@ -393,6 +393,70 @@ void main() {
       expect(lines.single, contains('Operation not permitted'));
     });
 
+    test('a repeated browse failure is printed once per instance (#1144)',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _UnstartableMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      // The connect screen restarts discovery every ~4 s on the same
+      // singleton; three passes used to be three identical lines.
+      for (var i = 0; i < 3; i++) {
+        await svc.discover().toList();
+      }
+      expect(lines, hasLength(1));
+      expect(lines.single, startsWith('[discovery] mDNS browse failed'));
+    });
+
+    test('a failure that returns after a healthy pass is printed again',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      var fail = true;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => fail ? _UnstartableMdns() : _SilentMdns(),
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      fail = false;
+      await svc.discover().toList();
+      fail = true;
+      await svc.discover().toList();
+      expect(lines, hasLength(2), reason: 'a clean pass resets the throttle');
+    });
+
+    test('socket-error and A-record lines are throttled too (#1295 review)',
+        () async {
+      for (final factory in <MDnsClient Function()>[
+        _AsyncSendErrorMdns.new,
+        _AddressLookupFailsMdns.new,
+      ]) {
+        final lines = <String>[];
+        final prior = debugPrint;
+        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+        final svc = ServerDiscoveryService(
+          mdnsClientFactory: factory,
+          localAddresses: () async => const ['192.0.2.5'],
+          sweepSource: () => const Stream<AraServer>.empty(),
+        );
+        for (var i = 0; i < 3; i++) {
+          await svc.discover().toList();
+        }
+        debugPrint = prior;
+        // Neither failure throws out of the browse, so a clear keyed on
+        // "did not throw" reprinted them on every ~4 s restart.
+        expect(lines.map((l) => l.split(':').first).toSet(), hasLength(1),
+            reason: '$factory: $lines');
+        expect(lines, hasLength(1), reason: '$factory: $lines');
+      }
+    });
+
     test('a failed A-record lookup is reported and the rig is skipped',
         () async {
       final lines = <String>[];
