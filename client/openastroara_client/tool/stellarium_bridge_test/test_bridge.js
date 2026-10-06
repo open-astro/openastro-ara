@@ -45,7 +45,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   page.on('requestfailed', r => logs.push('[reqfail] ' + r.url()));
   page.on('response', r => { if (r.status() >= 400) logs.push('[http ' + r.status() + '] ' + r.url()); });
 
-  await page.goto(`http://localhost:${PORT}/index.html`, { waitUntil: 'load', timeout: 40000 });
+  // The observer site is seeded from the URL (lat/lon) and later moved by the
+  // 'site' command; assert the seed reaches stel.core.observer.
+  await page.goto(`http://localhost:${PORT}/index.html?lat=34.66&lon=-106.78`, { waitUntil: 'load', timeout: 40000 });
   // Poll engine state for up to 60s, dumping diagnostics so we can tell
   // "slow" from "broken" (headless WebGL, missing onReady, etc.).
   let ready = false;
@@ -65,6 +67,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   }
   const res = { ready };
   if (ready) {
+    res.latRad = await page.evaluate(() => window.stel.core.observer.latitude);
     // The FOV lives on stel.core.fov (radians); a bare stel.fov is undefined.
     res.fov0 = await page.evaluate(() => window.stel.core.fov);
     await page.evaluate(() => window.zoomBy(0.5));
@@ -82,7 +85,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   console.log('=== PAGE LOGS (' + logs.length + ') ===\n' + logs.slice(0, 50).join('\n'));
   await browser.close(); server.close();
   // Verdict
-  const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6;
+  const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6 &&
+             Math.abs(res.latRad - 34.66 * Math.PI / 180) < 1e-3;
   console.log('VERDICT=' + (ok ? 'PASS' : 'FAIL'));
   process.exit(ok ? 0 : 2);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });

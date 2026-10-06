@@ -337,7 +337,18 @@ void main() {
     expect(photogenicTierOf('Sh2-252'), 3);
   });
 
-  test('IC overrides use the catalog\'s zero-padded ids (#1141)', () {
+  test('NGC/IC overrides use the catalog\'s zero-padded ids (#1141)', () {
+    // Every override/anchor key below 1000 must carry the catalog's zero
+    // padding, or the region silently never applies (IC 443, IC 434, NGC 281
+    // and NGC 246 all did).
+    final shortId = RegExp(r'^(NGC|IC)\d{1,3}$');
+    for (final k in overrides.keys) {
+      expect(shortId.hasMatch(k), isFalse, reason: '$k is not catalog spelling');
+    }
+    for (final a in sharplessAnchors) {
+      expect(shortId.hasMatch(a.$1), isFalse, reason: '${a.$1} is not catalog spelling');
+    }
+    expect(photogenicTierOf('NGC0281'), 3, reason: 'Pacman is an override');
     // 'IC443' never matched OpenNGC's 'IC0443', so the Jellyfish was never
     // renamed and Sh2-248 listed beside it.
     final night = DateTime.utc(2026, 1, 15, 3);

@@ -41,9 +41,9 @@ const Map<String, ImagingRegion> overrides = {
   // Cassiopeia / Auriga / Monoceros — the winter corridor.
   'IC1805': ImagingRegion('Heart Nebula (IC 1805)', 'HII', 150, 150),
   'IC1848': ImagingRegion('Soul Nebula (IC 1848)', 'HII', 150, 75),
-  'NGC281': ImagingRegion('Pacman Nebula (NGC 281)', 'HII', 35, 30),
-  // Keys are catalog spelling: OpenNGC zero-pads IC ids below 1000
-  // ('IC0443'), so an unpadded key never matches a real row (#1141).
+  // Keys are catalog spelling: OpenNGC zero-pads NGC/IC ids below 1000
+  // ('NGC0281', 'IC0443'), so an unpadded key never matches a real row (#1141).
+  'NGC0281': ImagingRegion('Pacman Nebula (NGC 281)', 'HII', 35, 30),
   'IC0443': ImagingRegion('Jellyfish Nebula (IC 443)', 'SNR', 50, 40),
   'NGC2264': ImagingRegion('Cone / Christmas Tree region (NGC 2264)', 'HII', 60, 30),
   'NGC2244': ImagingRegion('Rosette Nebula (NGC 2244)', 'HII', 80, 60),
@@ -57,7 +57,7 @@ const Map<String, ImagingRegion> overrides = {
   'NGC6888': ImagingRegion('Crescent Nebula — WR 136 shell (NGC 6888)', 'EmN', 20, 12),
   'NGC3199': ImagingRegion('Dragon-head — WR 18 shell (NGC 3199)', 'EmN', 22, 15),
   // Named favourites whose catalog rows undersell or anonymise them.
-  'NGC246': ImagingRegion('Skull Nebula (NGC 246)', 'PN', 4.5, 4),
+  'NGC0246': ImagingRegion('Skull Nebula (NGC 246)', 'PN', 4.5, 4),
   'NGC7822': ImagingRegion('Question Mark region (NGC 7822 / Ced 214)', 'HII', 100, 60),
   'NGC6820': ImagingRegion('Sh2-86 region (NGC 6820)', 'HII', 40, 30),
   'NGC7380': ImagingRegion('Wizard Nebula (NGC 7380)', 'HII', 25, 25),
@@ -106,7 +106,6 @@ const Map<String, int> photogenicTier = {
   'Sh2-311': 2, // NGC 2467
   // OpenNGC / IC rows with no photometry at all (#1141). Anchor ids above
   // (NGC 6334, IC 410 …) are tier 3 by membership and not repeated here.
-  'NGC0281': 3, // Pacman
   'NGC1432': 2, // Maia Nebula (Pleiades)
   'NGC1435': 2, // Merope Nebula (Pleiades)
   'NGC1491': 2,

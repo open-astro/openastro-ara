@@ -138,7 +138,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             try {
                 // Synchronous by contract (IDisposable path); the port close is awaited so Dispose()
                 // below never races a still-closing stream (#1198 — the Task was dropped before).
-                if (currentDevice != null && currentDevice.IsOpen) currentDevice.CloseAsync().GetAwaiter().GetResult();
+                // Bounded: a serial close that hangs must not pin the Dispose caller (review on #1277).
+                if (currentDevice != null && currentDevice.IsOpen && !currentDevice.CloseAsync().Wait(TimeSpan.FromSeconds(5))) {
+                    Logger.Warning("GPS serial port did not close within 5 s; disposing anyway.");
+                }
                 if (currentDevice != null) { currentDevice.MessageReceived -= Device_MessageReceived; } // unsubscribe to avoid multiple messages
                 if (fixTimer != null) { fixTimer.Enabled = false; fixTimer.Dispose(); }
                 currentDevice?.Dispose();
