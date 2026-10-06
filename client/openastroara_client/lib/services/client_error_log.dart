@@ -27,7 +27,7 @@ class ClientErrorLogStatus {
   });
 
   /// Error entries on disk — the current file plus the rotated one, earlier
-  /// runs included. [ClientErrorLog.exportTo] ships those same two files;
+  /// runs included. [ClientErrorLog.exportTo] ships those same two files (redacted);
   /// notes and headers are in them too but are not counted here.
   final int entries;
 

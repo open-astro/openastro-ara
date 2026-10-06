@@ -15,10 +15,14 @@ class LogRedaction {
   /// Line-local patterns. Order matters only for readability: each is
   /// applied to the whole line, so an overlap just redacts twice.
   static final List<RegExp> _lineRules = [
-    // Our own header, in any casing, with or without a colon-space.
-    RegExp(r'(x-ara-token\s*[:=]\s*)[A-Za-z0-9_\-.]{8,}', caseSensitive: false),
+    // Our own header, in any casing, with or without a colon-space, and in
+    // the `x-ara-token: [value]` form Dio's Headers.toString() prints.
     RegExp(
-      r'(x-openastroara-token\s*[:=]\s*)[A-Za-z0-9_\-.]{8,}',
+      r'(x-ara-token\s*[:=]\s*\[?)[A-Za-z0-9_\-.]{8,}',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'(x-openastroara-token\s*[:=]\s*\[?)[A-Za-z0-9_\-.]{8,}',
       caseSensitive: false,
     ),
     // Authorization: Bearer <jwt or opaque>
@@ -75,10 +79,20 @@ class LogRedaction {
 class LineRedactor {
   bool _inKey = false;
 
+  /// A line that starts a new log entry ([ClientErrorLog.entryMarker]) ends
+  /// an unterminated key block: a key cut by the entry byte cap would
+  /// otherwise hide every later entry in the export.
+  static bool _isEntryStart(String line) => line.startsWith('=== ');
+
   String? push(String line) {
     if (_inKey) {
-      if (LogRedaction._endKey.hasMatch(line)) _inKey = false;
-      return null;
+      if (LogRedaction._endKey.hasMatch(line)) {
+        _inKey = false;
+        return null;
+      }
+      if (!_isEntryStart(line)) return null;
+      _inKey = false;
+      // fall through: the marker line itself is kept
     }
     if (LogRedaction._beginKey.hasMatch(line)) {
       // A one-line key (BEGIN … END on the same line) closes immediately.

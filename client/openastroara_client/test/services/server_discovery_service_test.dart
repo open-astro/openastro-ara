@@ -412,6 +412,25 @@ void main() {
       expect(lines.single, startsWith('[discovery] mDNS browse failed'));
     });
 
+    test('a failure that returns after a healthy pass is printed again',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      var fail = true;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => fail ? _UnstartableMdns() : _SilentMdns(),
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      fail = false;
+      await svc.discover().toList();
+      fail = true;
+      await svc.discover().toList();
+      expect(lines, hasLength(2), reason: 'a clean pass resets the throttle');
+    });
+
     test('a failed A-record lookup is reported and the rig is skipped',
         () async {
       final lines = <String>[];

@@ -12,6 +12,10 @@ void main() {
         LogRedaction.redactLine('x-ara-token=abcdefghij12345&x=1'),
         'x-ara-token=[REDACTED-TOKEN]&x=1',
       );
+      expect(
+        LogRedaction.redactLine('x-ara-token: [abcdefghij12345]'),
+        'x-ara-token: [[REDACTED-TOKEN]]',
+      );
     });
 
     test('bearer tokens, query tokens and vendor key prefixes', () {
@@ -66,11 +70,20 @@ void main() {
       expect(LogRedaction.redactText(text), 'before\n[REDACTED-KEY]\nafter');
     });
 
-    test('an unterminated block swallows the rest, a one-liner does not', () {
+    test('an unterminated block stops at the next entry marker', () {
       expect(
         LogRedaction.redactText('a\n-----BEGIN RSA PRIVATE KEY-----\nxx\nyy'),
         'a\n[REDACTED-KEY]',
       );
+      expect(
+        LogRedaction.redactText(
+          'a\n-----BEGIN RSA PRIVATE KEY-----\nxx\n=== 2026 b ===\nkept',
+        ),
+        'a\n[REDACTED-KEY]\n=== 2026 b ===\nkept',
+      );
+    });
+
+    test('a one-line key block does not swallow what follows', () {
       expect(
         LogRedaction.redactText(
           '-----BEGIN RSA PRIVATE KEY----- -----END RSA PRIVATE KEY-----\nz',

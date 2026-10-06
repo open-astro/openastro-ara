@@ -119,7 +119,9 @@ class ServerDiscoveryService {
   /// discovery every ~4 s, so an environment where the browse always fails
   /// (Android, a sandbox denial) printed the same line ~15 times a minute
   /// (#1144). The service is an app-lifetime singleton, so each distinct
-  /// message is printed once per launch; a different error is a new line.
+  /// message is printed once per streak; a pass that completes without a
+  /// browse failure clears the set, so a failure that comes back after a
+  /// healthy spell is printed again (review on #1295).
   final Set<String> _printed = <String>{};
 
   void _logOnce(String line) {
@@ -457,6 +459,7 @@ class ServerDiscoveryService {
       // longer SILENT, though: a release build that never lists a rig that
       // `dns-sd -B` sees on the same machine (#1111) left nothing to read.
       // ignore: avoid_catches_without_on_clauses
+      _printed.clear();
     } catch (e) {
       _logOnce('[discovery] mDNS browse failed, sweep carries discovery: $e');
     } finally {
