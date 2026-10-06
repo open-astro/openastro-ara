@@ -506,26 +506,33 @@ void main() {
       }
     });
 
-    test('misses beyond the concurrency cap are shed with a 404, not queued (#1143)',
+    test('misses beyond the concurrency cap wait for a slot, hits never queue (#1143)',
         () async {
       // Warm one hit first (an earlier test may have evicted it).
       expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
-      // Two fetches park on the stalled origin; a third distinct miss must
-      // come back at once instead of waiting on the first-byte deadline.
+      final before = originHits;
+      // Two fetches park on the stalled origin (cap = 2); a third distinct
+      // miss is held back until one of them times out, so the survey sees
+      // two connections, then the third.
       final parked = [
         get('${server.dssPathPrefix}Norder5/Dir0/Npix1.jpg'),
         get('${server.dssPathPrefix}Norder5/Dir0/Npix2.jpg'),
       ];
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      final sw = Stopwatch()..start();
-      final shed = await get('${server.dssPathPrefix}Norder5/Dir0/Npix3.jpg');
-      expect(shed.status, HttpStatus.notFound);
-      expect(sw.elapsedMilliseconds, lessThan(1000));
+      final third = get('${server.dssPathPrefix}Norder5/Dir0/Npix3.jpg');
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(originHits - before, 2, reason: 'the third miss is waiting');
       // A cache hit never queues behind the parked fetches.
+      final sw = Stopwatch()..start();
       expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
+      expect(sw.elapsedMilliseconds, lessThan(500));
       for (final r in await Future.wait(parked)) {
         expect(r.status, HttpStatus.notFound);
       }
+      // The first two timed out (backoff armed), so the third is answered
+      // from the offline state without a connection of its own.
+      expect((await third).status, HttpStatus.notFound);
+      expect(originHits - before, 2);
     });
 
     test("an upstream 404 is the survey's answer: 404 through, nothing written, still online",
@@ -664,6 +671,39 @@ void main() {
       expect(File('${dir.path}/Norder3/Dir0/partial.jpg').existsSync(), isTrue);
       expect(File('${dir.path}/Norder3/Dir0/Npix2.jpg.part-1234567890').existsSync(), isFalse);
       expect(await StellariumServer.sweepPartFiles(Directory('${dir.path}/nope')), 0);
+    });
+
+    test('the survey root is never evicted, however old (#1296 review)', () async {
+      final t0 = DateTime(2026, 1, 1);
+      put('properties', 100, modified: t0);
+      put('Norder3/Allsky.jpg', 100, modified: t0);
+      put('Norder3/Dir0/Npix1.jpg', 100, modified: t0);
+      put('Norder7/Dir10000/Npix1.jpg', 100, modified: t0.add(const Duration(days: 1)));
+      put('Norder8/Dir10000/Npix1.jpg', 100, modified: t0.add(const Duration(days: 2)));
+      // 500 B over a 450 B cap (target 405): the only candidates are the two
+      // deep tiles, oldest first, and one of them is enough.
+      expect(await StellariumServer.pruneDssCache(dir, maxBytes: 450), 100);
+      expect(File('${dir.path}/properties').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder3/Allsky.jpg').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder3/Dir0/Npix1.jpg').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder7/Dir10000/Npix1.jpg').existsSync(), isFalse);
+      expect(File('${dir.path}/Norder8/Dir10000/Npix1.jpg').existsSync(), isTrue);
+      // Pinned bytes alone over the cap: nothing to do, nothing deleted.
+      expect(await StellariumServer.pruneDssCache(dir, maxBytes: 50), 100);
+      expect(File('${dir.path}/properties').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder8/Dir10000/Npix1.jpg').existsSync(), isFalse);
+    });
+
+    test('isDssRootResource pins properties, Allsky and order ≤ 3', () {
+      expect(StellariumServer.isDssRootResource('properties'), isTrue);
+      expect(StellariumServer.isDssRootResource('properties@2017'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder3/Allsky.jpg'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder6/Allsky.jpg@2017'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder0/Dir0/Npix0.jpg'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder3/Dir0/Npix1.jpg'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder4/Dir0/Npix1.jpg'), isFalse);
+      expect(StellariumServer.isDssRootResource('Norder9/Dir10000/Npix1.jpg'), isFalse);
+      expect(StellariumServer.isDssRootResource('other/thing.jpg'), isFalse);
     });
 
     test('pruneDssCache evicts oldest-fetched first, down to 90 % of the cap', () async {

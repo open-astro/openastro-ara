@@ -36,7 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Added
-- **Sky photo cache housekeeping (#1143).** The planetarium's DSS2 tile cache caps itself at 512 MB (oldest-fetched tiles evicted first), sweeps orphaned `.part-*` temp files at launch, keys the engine's `?v=` cache-buster so a survey re-release is fetched again, sheds tile misses beyond six in-flight upstream fetches instead of parking the page's sockets, and carries the per-run token in its route path. Settings → Storage gains a "Sky photos (this computer)" row with the size and a Clean cache button.
+- **Sky photo cache housekeeping (#1143).** The planetarium's DSS2 tile cache caps itself at 512 MB (oldest-fetched tiles evicted first), sweeps orphaned `.part-*` temp files at launch, keys the engine's `?v=` cache-buster so a survey re-release is fetched again, holds tile misses beyond six in-flight upstream fetches behind one connect deadline instead of one per miss, and carries the per-run token in its route path. Settings → Storage gains a "Sky photos (this computer)" row with the size and a Clean cache button.
 
 ### Fixed
 - **"Saved as an offline draft" while connected.** Creating an imaging run from Planning with nothing else watching the sequence API (the new coordinates dialog, or a Tonight's Sky row whose panel had just closed) let the client's HTTP connection be released mid-create, so the run silently became a local draft instead of landing on the daemon. The create now holds the connection for its whole duration.

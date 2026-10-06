@@ -43,7 +43,7 @@ class StellariumServer {
   /// same-origin to see it) can't forge these mount-slewing requests.
   final String token;
 
-  /// Local lazy cache for DSS2 HiPS tiles. The page talks to `/dss/` on this
+  /// Local lazy cache for DSS2 HiPS tiles. The page talks to `/dss-<token>/` on this
   /// loopback server instead of CDS directly, so tiles downloaded while online
   /// remain available when the computer later joins the SBC-only hotspot.
   final Directory _dssCacheDir;
@@ -68,7 +68,7 @@ class StellariumServer {
   DateTime? _dssLastSuccess;
 
   /// True once an upstream fetch has failed more recently than one succeeded:
-  /// the page's Frame panel asks `/dss/status` so it can say why the photo
+  /// the page's Frame panel asks `/dss-<token>/status` so it can say why the photo
   /// backdrop is blank at a dark site even when the manifest is cached.
   bool get _dssOffline =>
       _dssLastFailure != null &&
@@ -95,14 +95,23 @@ class StellariumServer {
   static bool _isDssPath(String path) =>
       path == '/dss' || path.startsWith('/dss/') || path.startsWith('/dss-');
 
+  /// Same comparison the header token gets: the prefix is compared in
+  /// constant time, so a wrong token in the path leaks nothing by timing.
+  bool _hasDssPrefix(String path) =>
+      path.length >= _dssPathPrefix.length &&
+      _constantTimeEquals(
+          path.substring(0, _dssPathPrefix.length), _dssPathPrefix);
+
   /// Route prefix the page must use for tiles, e.g. `/dss-<token>/`.
   @visibleForTesting
   String get dssPathPrefix => _dssPathPrefix;
 
-  /// Upstream fetches in flight beyond this answer the page with an
-  /// immediate 404 (no-store, so it asks again later) instead of parking
-  /// another of the page's ~6 sockets behind a connect/first-byte timeout
-  /// (#1143). Cached tiles never queue.
+  /// Upstream fetches in flight at once. A miss beyond this waits for a slot
+  /// (bounded by [dssHeadersTimeout]) rather than opening another upstream
+  /// connection: the page's sockets are still parked, but behind one
+  /// connect/first-byte deadline, not one per miss (#1143). Cached tiles never
+  /// queue. Not a 404 shed: the engine's HiPS loader may remember a 404 for
+  /// the session, which would leave a tile blank while online.
   @visibleForTesting
   static int maxDssConcurrentFetches = 6;
 
@@ -110,7 +119,7 @@ class StellariumServer {
   /// oldest-fetched files until it is back under 90 % of the cap (see
   /// [pruneDssCache]). ~16 MiB of writes between checks keeps the scan rare.
   @visibleForTesting
-  static int maxDssCacheBytes = 512 * 1024 * 1024;
+  static int maxDssCacheBytes = 512 * 1000 * 1000;
   @visibleForTesting
   static int dssPruneCheckEvery = 16 * 1024 * 1024;
   int _dssBytesSincePrune = 0;
@@ -252,22 +261,44 @@ class StellariumServer {
 
   static final RegExp _partName = RegExp(r'\.part-\d+$');
 
+  /// `properties`, any `Allsky.*` preview, and tiles of order 3 or lower:
+  /// what every session reads before any deep tile, and what an offline
+  /// launch cannot do without. Pinned by [pruneDssCache]. Keys may carry a
+  /// `@<buster>` suffix.
+  @visibleForTesting
+  static bool isDssRootResource(String rel) {
+    if (rel == 'properties' || rel.startsWith('properties@')) return true;
+    final parts = rel.split('/');
+    final order = RegExp(r'^Norder(\d+)$').firstMatch(parts.first);
+    if (order == null) return false;
+    if (parts.length == 2 && parts[1].startsWith('Allsky.')) return true;
+    return int.parse(order[1]!) <= 3;
+  }
+
   /// Evict the oldest-fetched files until the cache is under 90 % of
   /// [maxBytes]; `.part-*` files are never counted or removed here. Returns
   /// the bytes freed. Modification time stands in for "last fetched" (a hit
   /// does not touch the file: one stat per tile served would cost more than
-  /// the odd re-download). Static so a test can run it on any directory.
+  /// the odd re-download). The survey root is pinned ([isDssRootResource]):
+  /// hits never touch mtime, so the first files a session fetches —
+  /// `properties`, the Allsky previews and the low-order tiles every view
+  /// goes through — would otherwise be the first evicted, and an offline
+  /// launch would 404 on `properties` with hundreds of MB of tiles still on
+  /// disk (review on #1296). Static so a test can run it on any directory.
   @visibleForTesting
   static Future<int> pruneDssCache(Directory dir, {required int maxBytes}) async {
     if (!await dir.exists()) return 0;
     final files = <({File file, int size, DateTime modified})>[];
     var total = 0;
+    final root = dir.path.length + 1;
     await for (final e in dir.list(recursive: true, followLinks: false)) {
       if (e is! File || _partName.hasMatch(e.uri.pathSegments.last)) continue;
       try {
         final st = await e.stat();
-        files.add((file: e, size: st.size, modified: st.modified));
         total += st.size;
+        final rel = e.path.substring(root).replaceAll(r'\', '/');
+        if (isDssRootResource(rel)) continue; // counted, never evicted
+        files.add((file: e, size: st.size, modified: st.modified));
       } catch (_) {/* vanished mid-scan */}
     }
     if (total <= maxBytes) return 0;
@@ -294,8 +325,26 @@ class StellariumServer {
       if (freed > 0) {
         debugPrint('StellariumServer: DSS cache over cap, evicted $freed bytes');
       }
+    } on FileSystemException {
+      // Disposed (temp cache removed) mid-scan: nothing left to prune.
+    } catch (e) {
+      debugPrint('StellariumServer: DSS cache prune failed: $e');
     } finally {
       _dssPruning = false;
+    }
+  }
+
+  /// Wait until fewer than [maxDssConcurrentFetches] fetches are in flight,
+  /// or [dssHeadersTimeout] has passed (then the caller fetches anyway: the
+  /// slot count is a brake, never a refusal).
+  Future<void> _awaitFetchSlot() async {
+    final deadline = DateTime.now().add(dssHeadersTimeout);
+    while (_dssFetches.length >= maxDssConcurrentFetches &&
+        DateTime.now().isBefore(deadline)) {
+      // Any in-flight fetch finishing frees a slot; a failed one is swallowed
+      // here (its own caller reports it) and only wakes this waiter.
+      await Future.any(_dssFetches.values.map((f) => f.catchError((_) => null)))
+          .timeout(const Duration(milliseconds: 500), onTimeout: () => null);
     }
   }
 
@@ -505,7 +554,7 @@ class StellariumServer {
       // requested path from the fixed CDS origin, then stores it for offline
       // use. No arbitrary proxying is allowed.
       if (_isDssPath(path)) {
-        if (!path.startsWith(_dssPathPrefix)) {
+        if (!_hasDssPrefix(path)) {
           // Wrong or missing token in the path: not our page.
           response.statusCode = HttpStatus.forbidden;
           await response.close();
@@ -655,13 +704,19 @@ class StellariumServer {
       } else if (_dssRetryAfter == null ||
           DateTime.now().isAfter(_dssRetryAfter!)) {
         // Coalesce duplicate tile requests from the engine's render workers.
-        final inFlight = _dssFetches[key];
-        if (inFlight == null && _dssFetches.length >= maxDssConcurrentFetches) {
-          // Enough sockets are already waiting on the survey: answer this
-          // one now rather than park it too. The page re-asks on its next
-          // render pass, by which time a slot is free or the backoff is armed.
-          shed = true;
-        } else {
+        var inFlight = _dssFetches[key];
+        if (inFlight == null) {
+          await _awaitFetchSlot();
+          inFlight = _dssFetches[key]; // another worker may have started it
+          // Offline may have been established while waiting: a fetch now
+          // would only arm the backoff again.
+          if (inFlight == null &&
+              _dssRetryAfter != null &&
+              DateTime.now().isBefore(_dssRetryAfter!)) {
+            shed = true;
+          }
+        }
+        if (!shed) {
           final pending =
               inFlight ?? (_dssFetches[key] = _fetchDss(key, buster, file));
           try {
@@ -675,7 +730,7 @@ class StellariumServer {
       debugPrint('StellariumServer: DSS cache failed for $key: $e\n$st');
     }
     if (bytes == null) {
-      if (shed) response.headers.set('x-ara-dss-shed', '1');
+      if (shed) response.headers.set('x-ara-dss-backoff', '1');
       // A missing offline tile is a normal cache miss. The vector sky and frame
       // overlay remain usable; the page simply has no photographic backdrop.
       response.statusCode = HttpStatus.notFound;
