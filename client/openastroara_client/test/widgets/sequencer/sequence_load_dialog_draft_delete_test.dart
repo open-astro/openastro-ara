@@ -30,49 +30,64 @@ const _id = '${draftIdPrefix}abc';
 Future<(ProviderContainer, _MemDrafts)> _pump(WidgetTester tester) async {
   final drafts = _MemDrafts()
     ..store[_id] = DraftSequence(
-        id: _id, name: 'M 31 night', updatedUtc: DateTime.utc(2026), body: const {});
-  final container = ProviderContainer(overrides: [
-    sequenceApiProvider.overrideWithValue(null), // offline: drafts only
-    draftSequenceServiceProvider.overrideWithValue(drafts),
-  ]);
+      id: _id,
+      name: 'M 31 night',
+      updatedUtc: DateTime.utc(2026),
+      body: const {},
+    );
+  final container = ProviderContainer(
+    overrides: [
+      sequenceApiProvider.overrideWithValue(null), // offline: drafts only
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+    ],
+  );
   addTearDown(container.dispose);
   await container.read(draftSequencesProvider.future);
   // The doomed draft is the one open in the Run tab.
   container.read(selectedSequenceIdProvider.notifier).select(_id);
-  container.read(sequenceEditorProvider.notifier).load(
-      SequenceDetail(id: _id, name: 'M 31 night', body: const {}));
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: const MaterialApp(home: Scaffold(body: SequenceLoadDialog())),
-  ));
+  container
+      .read(sequenceEditorProvider.notifier)
+      .load(SequenceDetail(id: _id, name: 'M 31 night', body: const {}));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequenceLoadDialog())),
+    ),
+  );
   await tester.pumpAndSettle();
   return (container, drafts);
 }
 
 void main() {
   testWidgets(
-      'per-row draft delete clears the open selection + editor (#1142)',
-      (tester) async {
-    final (container, drafts) = await _pump(tester);
+    'per-row draft delete clears the open selection + editor (#1142)',
+    (tester) async {
+      final (container, drafts) = await _pump(tester);
 
-    await tester.tap(find.byTooltip('Delete draft'));
-    await tester.pumpAndSettle();
-    expect(find.text('Delete draft?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, 'Delete'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byTooltip('Delete draft'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete draft?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
-    expect(drafts.deleted, [_id]);
-    expect(find.text('Deleted "M 31 night".'), findsOneWidget);
-    expect(container.read(selectedSequenceIdProvider), isNull);
-    expect(container.read(sequenceEditorProvider), isNull,
-        reason: 'an editor left on the deleted draft would resurrect it via '
-            'saveBody on the next Save');
-    await tester.pumpAndSettle();
-  });
+      expect(drafts.deleted, [_id]);
+      expect(find.text('Deleted "M 31 night".'), findsOneWidget);
+      expect(container.read(selectedSequenceIdProvider), isNull);
+      expect(
+        container.read(sequenceEditorProvider),
+        isNull,
+        reason:
+            'an editor left on the deleted draft would resurrect it via '
+            'saveBody on the next Save',
+      );
+      await tester.pumpAndSettle();
+    },
+  );
 
-  testWidgets('cancelling the confirm keeps the draft and the editor',
-      (tester) async {
+  testWidgets('cancelling the confirm keeps the draft and the editor', (
+    tester,
+  ) async {
     final (container, drafts) = await _pump(tester);
     await tester.tap(find.byTooltip('Delete draft'));
     await tester.pumpAndSettle();
