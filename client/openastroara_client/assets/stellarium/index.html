@@ -281,6 +281,11 @@ var API = (function () {
 // channels, so a DNS-rebinding or other same-machine page that can reach the
 // loopback port but can't read our URL can't forge a mount-slewing event.
 var ARA_TOKEN = qp('token', '');
+// The DSS2 tile route carries the token in its PATH: the engine's HiPS loader
+// cannot set a header, so the per-run prefix is what keeps a rebinding page
+// from driving or reading the tile cache (#1143). No trailing slash — see the
+// data-source note below.
+var DSS_BASE = './dss-' + ARA_TOKEN;
 // Headers for the loopback control channels: always carry the token; callers
 // merge in Content-Type when POSTing a body.
 function araHeaders(extra) {
@@ -1389,10 +1394,10 @@ function probeDssPhotos() {
     // Photos the user switched off are not "missing": say nothing for them,
     // and send no request. Inside probe() so the delayed re-probe obeys too.
     if (stel && !dispState('dss')) { el.hidden = true; return; }
-    fetch('./dss/properties', { method: 'HEAD', cache: 'no-store' })
+    fetch(DSS_BASE + '/properties', { method: 'HEAD', cache: 'no-store' })
       .then(function (r) {
         if (!r.ok) { el.hidden = false; return; }
-        return fetch('./dss/status', { cache: 'no-store' })
+        return fetch(DSS_BASE + '/status', { cache: 'no-store' })
           .then(function (s) { return s.json(); })
           .then(function (st) { el.hidden = !st.offline; });
       })
@@ -1901,12 +1906,12 @@ StelWebEngine({
     core.satellites.addDataSource({ url: base + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
     // DSS2 colour survey (real photographic sky imagery, shown as you zoom into a
     // target). The loopback server proxies and caches these HiPS tiles under
-    // /dss/, so tiles downloaded once while online remain usable on the SBC-only
-    // hotspot. A cache miss off-net simply leaves the vector sky visible.
+    // /dss-<token>/, so tiles downloaded once while online remain usable on the
+    // SBC-only hotspot. A cache miss off-net simply leaves the vector sky visible.
     // NB: no trailing slash — the engine joins `url + '/' + path` verbatim
-    // (hips.c get_url_for), so './dss/' would request '/dss//properties' and
-    // the server's path validator rejects the empty segment.
-    core.dss.addDataSource({ url: './dss' });
+    // (hips.c get_url_for), so a trailing slash would request '//properties'
+    // and the server's path validator rejects the empty segment.
+    core.dss.addDataSource({ url: DSS_BASE });
     s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
     s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 

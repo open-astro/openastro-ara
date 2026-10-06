@@ -15,6 +15,7 @@ import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../services/storage_browse_api.dart';
+import '../../../services/stellarium_server.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -212,6 +213,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         ),
         const SettingsSectionHeader('Preview cache'),
         const _PreviewCacheRow(),
+        const _SkyPhotoCacheRow(),
         const SettingsSectionHeader('Backups'),
         EditableNumberRow(
           label: 'Keep backup snapshots',
@@ -810,6 +812,115 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
                   ),
                 ),
                 const HelpIcon(helpKey: 'session.storage.preview_cache'),
+              ],
+            ),
+          ),
+          Expanded(child: Text(sizeText)),
+          OutlinedButton.icon(
+            onPressed: _cleaning || info == null || info.files == 0
+                ? null
+                : _clean,
+            icon: _cleaning
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cleaning_services_outlined, size: 16),
+            label: Text(_cleaning ? 'Cleaning…' : 'Clean cache'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Size of this computer's DSS2 sky-photo tile cache (#1143); no server
+/// involved, so it reads even before a rig is connected.
+final skyPhotoCacheProvider =
+    FutureProvider.autoDispose<({int files, int bytes})>(
+  (ref) => StellariumServer.measureDssCache(),
+);
+
+/// "Sky photos" row — the planetarium's DSS2 tile cache on THIS computer,
+/// beside the server-side preview cache: size + a Clean button. The cache
+/// also caps itself (oldest tiles go first past the cap), so this is for a
+/// corrupted backdrop or reclaiming the space before a trip.
+class _SkyPhotoCacheRow extends ConsumerStatefulWidget {
+  const _SkyPhotoCacheRow();
+
+  @override
+  ConsumerState<_SkyPhotoCacheRow> createState() => _SkyPhotoCacheRowState();
+}
+
+class _SkyPhotoCacheRowState extends ConsumerState<_SkyPhotoCacheRow> {
+  bool _cleaning = false;
+
+  static String _size(({int files, int bytes}) info) {
+    final mb = info.bytes / 1e6;
+    final size = mb >= 1000
+        ? '${(mb / 1000).toStringAsFixed(2)} GB'
+        : '${mb.toStringAsFixed(0)} MB';
+    return '$size · ${info.files} file${info.files == 1 ? '' : 's'}';
+  }
+
+  Future<void> _clean() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _cleaning = true);
+    try {
+      final freed = await StellariumServer.clearDssCache();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            freed.files == 0
+                ? 'Sky photo cache was already empty.'
+                : 'Cleaned the sky photo cache — freed ${_size(freed)}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(friendlyError(e, action: 'clean the sky photo cache')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _cleaning = false);
+      ref.invalidate(skyPhotoCacheProvider);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cache = ref.watch(skyPhotoCacheProvider);
+    final info = cache.asData?.value;
+    final String sizeText;
+    if (cache.isLoading) {
+      sizeText = 'Measuring…';
+    } else if (info == null) {
+      sizeText = 'Size unavailable';
+    } else if (info.files == 0) {
+      sizeText = 'Empty';
+    } else {
+      sizeText = _size(info);
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Row(
+              children: [
+                Text(
+                  'Sky photos (this computer)',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+                ),
+                const HelpIcon(helpKey: 'session.storage.sky_photo_cache'),
               ],
             ),
           ),

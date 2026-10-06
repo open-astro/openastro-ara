@@ -285,7 +285,12 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
   available when the computer joins the SBC-only hotspot. The frame outline,
   coordinates, and vector objects always work offline. A tile never viewed
   online cannot appear without internet or a separately staged cache. This is a
-  client-only cache; the SBC needs no DSS service or Internet route.
+  client-only cache; the SBC needs no DSS service or Internet route. It caps
+  itself at 512 MB (the tiles fetched longest ago are evicted first once it is
+  over), orphaned `*.part-*` temp files are swept at launch, and
+  Settings → Storage → "Sky photos (this computer)" shows its size with a
+  Clean cache button. Deleting the folder by hand while the app is closed is
+  equally safe.
 
 ### macOS
 
