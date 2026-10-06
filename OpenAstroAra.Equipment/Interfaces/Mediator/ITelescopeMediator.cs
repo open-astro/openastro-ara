@@ -30,6 +30,10 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> Sync(Coordinates coordinates);
 
+        /// <summary>#1222 — <see cref="Sync(Coordinates)"/> observing the caller's token. Mediators that
+        /// cannot cancel their sync keep the parameterless behaviour.</summary>
+        Task<bool> Sync(Coordinates coordinates, System.Threading.CancellationToken token) => Sync(coordinates);
+
         Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token);
 
         [Obsolete("Use SlewToTopocentricCoordinates instead.")]

@@ -105,7 +105,7 @@ namespace OpenAstroAra.PlateSolving {
                         var syncMeasurement = new Measurement("Sync").Start();
 
                         progress?.Report(new ApplicationStatus() { Status = Loc.Instance["LblPlateSolveNotInsideToleranceSyncing"] });
-                        if (parameter.NoSync || !await telescopeMediator.Sync(resultCoordinates)) {
+                        if (parameter.NoSync || !await telescopeMediator.Sync(resultCoordinates, ct)) {
                             var oldOffset = offset;
                             offset = position - resultCoordinates;
 

@@ -1196,6 +1196,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     Interlocked.Exchange(ref _secondaryFallbackLogged, 0); // same primitive as the read side
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
+                    _positionFrameReadAttempted = false; // #1222 — one on-demand read per connection
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _sideOfPier = PierSide.pierUnknown; // #1229 — nor its pier side
                     _sideOfPierUnsupported = false;      // the new device may answer it

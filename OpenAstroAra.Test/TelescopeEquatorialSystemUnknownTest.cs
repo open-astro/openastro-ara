@@ -163,5 +163,64 @@ namespace OpenAstroAra.Test {
             Assert.That(coords.Epoch, Is.EqualTo(Epoch.J2000));
             Assert.That(coords.RA, Is.EqualTo(6.0).Within(1e-9));
         }
+
+
+        // #1222 — the centering loop's position read labels the cached RA/Dec with the mount's frame;
+        // in the window before the first refresh read the system, resolve it first.
+        [Test]
+        public async Task GetCurrentPosition_resolves_the_equatorial_system_before_labelling_the_frame() {
+            var system = EquatorialSystemUnreadable;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref system)));
+            using var svc = await ConnectAsync(box);
+            Volatile.Write(ref system, J2000); // readable now; the next refresh is up to 2 s away
+
+            var position = ((ITelescopeMediator)svc).GetCurrentPosition();
+
+            Assert.That(position.Epoch, Is.EqualTo(Epoch.J2000), "read on demand, not guessed as JNOW");
+            Assert.That(position.RA, Is.EqualTo(6.0).Within(1e-9));
+        }
+
+        [Test]
+        public async Task GetCurrentPosition_still_answers_from_the_cache_when_the_system_cannot_be_read() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount(() => EquatorialSystemUnreadable));
+            using var svc = await ConnectAsync(box);
+
+            var position = ((ITelescopeMediator)svc).GetCurrentPosition();
+
+            Assert.That(position.RA, Is.EqualTo(6.0).Within(1e-9), "the cached pointing is still returned (labelled JNOW, logged)");
+            Assert.That(position.Dec, Is.EqualTo(45.0).Within(1e-9));
+            // The on-demand read is tried once per connection: later calls answer from the cache at once.
+            var reads = box.Gets.Count(p => p.EndsWith("/equatorialsystem", StringComparison.Ordinal));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (var i = 0; i < 5; i++) {
+                ((ITelescopeMediator)svc).GetCurrentPosition();
+            }
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromMilliseconds(500)), "no per-call device read");
+            Assert.That(box.Gets.Count(p => p.EndsWith("/equatorialsystem", StringComparison.Ordinal)) - reads, Is.LessThanOrEqualTo(1),
+                "at most the refresh pass's own retry, never one per position call");
+        }
+
+        // #1222 — a sequence Stop during a centering sync no longer waits out the system read.
+        [Test]
+        public async Task Sync_observes_the_callers_token_while_the_system_read_is_slow() {
+            var slow = 0;
+            await using var box = ScriptedAlpacaDevice.Start(path => {
+                if (path.EndsWith("/equatorialsystem", StringComparison.Ordinal)) {
+                    if (Volatile.Read(ref slow) == 1) {
+                        Thread.Sleep(1500); // a mount that answers the system read late (kept short: it outlives the test)
+                    }
+                    return EquatorialSystemUnreadable; // and never usefully: the system stays unknown
+                }
+                return Mount(() => EquatorialSystemUnreadable)(path);
+            });
+            using var svc = await ConnectAsync(box);
+            Volatile.Write(ref slow, 1);
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            await Assert.ThatAsync(() => ((ITelescopeMediator)svc).Sync(J2000Target(), cts.Token), Throws.InstanceOf<OperationCanceledException>());
+
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(1)), "the cancel must not wait out the slow read");
+        }
     }
 }
