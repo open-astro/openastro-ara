@@ -57,6 +57,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **CI builds Android and iOS.** The native-build matrix now compiles a release APK and an unsigned iOS build, and checks that the committed launcher icons match `icon_sources/`. (#1129)
 
 ### Fixed
+- **Plate-solve RA error near 0h.** A solve whose field straddled 0h reported the RA separation the long way round (a ~24h figure, shown as `00:00:00`), so the RA error and RA pixel error were wrong for targets near the equinox. The separation is now folded to ±12h. A declination that wraps through zero in a FITS `OBJCTDEC` card now carries its `+` sign. (#1217)
 - **Tune Guiding → Apply no longer stops guiding.** Apply used the full profile push, which also re-sends the guider's equipment selections; the guider only accepts those with its equipment disconnected, so every Apply ran `stop_capture` + `set_connected(false)` and ended the guide session (seen 2026-10-04 while changing aggressiveness mid-run). Apply now asks for the tuning-only push (`POST /api/v1/equipment/guider/profile/push?scope=tuning`: aggressiveness, minimum move, dec guide mode, guide exposure), which leaves the equipment connected; `guider.profile_pushed` carries `scope: "tuning"`.
 - **Sequences no longer skip every target.** The altitude conditions were not registered, so their check failed and every target block was skipped; they are registered now (and skipped only when the astrometry libraries are missing). (#1266)
 - **The Imaging viewer shows a sequence's frames**, not only Take One's. (#1266)

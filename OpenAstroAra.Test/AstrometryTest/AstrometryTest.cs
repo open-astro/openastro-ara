@@ -19,8 +19,6 @@ using System.Text.RegularExpressions;
 
 namespace OpenAstroAra.Test.AstrometryTest {
 
-    [Platform("Win")]
-
     [TestFixture]
     public class AstrometryTests {
         private const double DEWPOINT_TOLERANCE = 0.5;
@@ -815,6 +813,8 @@ namespace OpenAstroAra.Test.AstrometryTest {
 
         [TestCase(89.99999, "+90 00 00")]
         [TestCase(-89.99999, "-90 00 00")]
+        [TestCase(-359.99999, "+00 00 00")]    // #1217: a wrapped negative is +0, not an unsigned "00 00 00"
+        [TestCase(-0.5, "-00 30 00")]
         public void DegreesToFitsDMS_carries_to_the_pole(double degrees, string expected) {
             Assert.That(AstroUtil.DegreesToFitsDMS(degrees), Is.EqualTo(expected));
         }

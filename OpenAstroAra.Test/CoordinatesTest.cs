@@ -15,16 +15,14 @@ using NUnit.Framework.Legacy;
 using OpenAstroAra.Astrometry;
 using System.IO;
 using System.Text;
-using System.Windows;
 using System.Xml.Serialization;
 
 namespace OpenAstroAra.Test {
 
-    [Platform("Win")]
-
     [TestFixture]
     public class CoordinatesTest {
         private static double ANGLE_TOLERANCE = 0.000000000001;
+        private static double PLATFORM_TRIG_TOLERANCE = 1e-9;
 
         [Test]
         [TestCase(10, 10)]
@@ -304,8 +302,10 @@ namespace OpenAstroAra.Test {
 
             var shifted = coordinates.Shift(deltaX, deltaY, rotation, Coordinates.ProjectionType.Stereographic);
 
-            Assert.That(shifted.RADegrees, Is.EqualTo(expectedRA).Within(ANGLE_TOLERANCE));
-            Assert.That(shifted.Dec, Is.EqualTo(expectedDec).Within(ANGLE_TOLERANCE));
+            // The pinned values were produced on Windows; macOS/Linux libm trig differs in the last
+            // bits (~1.5e-11° here, far below an arcsecond), so this fixture gets a looser bound (#1217).
+            Assert.That(shifted.RADegrees, Is.EqualTo(expectedRA).Within(PLATFORM_TRIG_TOLERANCE));
+            Assert.That(shifted.Dec, Is.EqualTo(expectedDec).Within(PLATFORM_TRIG_TOLERANCE));
         }
 
         [Test]
@@ -399,6 +399,22 @@ namespace OpenAstroAra.Test {
 
             sut.RADegrees.Should().Be(expectedRA);
             sut.Dec.Should().Be(expectedDec);
+        }
+
+        // #1217: a separation straddling 0h must report the short way round (±12h), not a ~24h RA error.
+        [Test]
+        [TestCase(0.1, 10, 23.9, 10, 3.0)]      // 00h06m − 23h54m = +12 min = +3°, not −357°
+        [TestCase(23.9, 10, 0.1, 10, -3.0)]
+        [TestCase(12.0, 10, 11.0, 10, 15.0)]     // ordinary case is untouched
+        [TestCase(6.0, 10, 18.0, 10, -180.0)]    // exactly opposite folds to −180°, never +180°
+        public void CoordinateSubtraction_FoldsRaToPlusMinus12h(double ra1, double dec1, double ra2, double dec2, double expectedRaDeg) {
+            var a = new Coordinates(ra1, dec1, Epoch.J2000, Coordinates.RAType.Hours);
+            var b = new Coordinates(ra2, dec2, Epoch.J2000, Coordinates.RAType.Hours);
+
+            var sep = a - b;
+
+            Assert.That(sep.RA.Degree, Is.EqualTo(expectedRaDeg).Within(1e-9));
+            Assert.That(sep.RA.Degree, Is.InRange(-180.0, 180.0));
         }
 
         [Test]
