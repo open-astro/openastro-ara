@@ -104,6 +104,81 @@ namespace OpenAstroAra.Test {
             Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)));
         }
 
+        // #1219 — a progress sink that throws must not take the process down (the reader callback
+        // runs on a thread-pool thread, where an escaping exception is fatal).
+        [Test]
+        public async Task A_throwing_progress_sink_does_not_stop_the_solve() {
+            var solver = new FakeSolver(Script("printf 'one\\ntwo\\nthree\\n'; exit 0"));
+            var sink = new ThrowingProgress();
+
+            await solver.Run(sink, CancellationToken.None);
+
+            Assert.That(sink.Reports, Is.EqualTo(3), "every line still reached the sink");
+            Assert.That(solver.Lines.Count, Is.EqualTo(3), "and the solver kept reading");
+        }
+
+        // #1219 — the non-zero-exit warning carries the last 20 lines.
+        [Test]
+        public async Task A_non_zero_exit_keeps_the_last_twenty_lines() {
+            var solver = new FakeSolver(Script("for i in $(seq 1 30); do echo \"line $i\"; done; exit 3"));
+
+            await solver.Run(new RecordingProgress(), CancellationToken.None);
+
+            var tail = solver.Tail!;
+            Assert.That(tail, Has.Count.EqualTo(20));
+            Assert.That(tail, Does.Contain("line 30").And.Not.Contain("line 10"), "only the last twenty");
+        }
+
+        // #1219 — stderr lines are tagged in the tail. Kept under the 20-line cap on purpose: stdout
+        // and stderr arrive on two reader threads, so a stderr line's place among 30 stdout lines
+        // is not fixed and could fall outside the window.
+        [Test]
+        public async Task A_non_zero_exit_tags_stderr_lines_in_the_tail() {
+            var solver = new FakeSolver(Script("for i in $(seq 1 5); do echo \"line $i\"; done; echo oops >&2; exit 3"));
+
+            await solver.Run(new RecordingProgress(), CancellationToken.None);
+
+            var tail = solver.Tail!;
+            Assert.That(tail, Has.Count.EqualTo(6));
+            Assert.That(tail, Does.Contain("[stderr] oops").And.Contain("line 5"));
+        }
+
+        [Test]
+        public async Task A_clean_exit_records_no_tail() {
+            var solver = new FakeSolver(Script("echo fine; exit 0"));
+            await solver.Run(new RecordingProgress(), CancellationToken.None);
+            Assert.That(solver.Tail, Is.Null);
+        }
+
+        // #1219 — the solver exits but a grandchild still holds the pipe: the cancelled solve returns
+        // promptly, and the grandchild's later output never reaches the progress sink after the
+        // solve is over. A contract guard, not a revert-catcher: disposing the Process closes the
+        // pipes, so this holds with or without the explicit CancelOutputRead/CancelErrorRead (which
+        // are hygiene), and the grandchild itself is reparented once the solver is reaped and out
+        // of Kill(entireProcessTree)'s reach on Unix.
+        [Test]
+        public async Task Cancellation_stops_the_readers_so_a_grandchild_cannot_report_after_the_solve() {
+            var sink = new RecordingProgress();
+            var solver = new FakeSolver(Script("(sleep 3; echo late) & echo started; exit 0"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            await Assert.ThatAsync(() => solver.Run(sink, cts.Token), Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)), "must not wait out the grandchild");
+
+            await Task.Delay(TimeSpan.FromSeconds(4)); // the grandchild prints "late" at ~3 s
+            Assert.That(sink.Statuses, Does.Contain("started").And.Not.Contain("late"),
+                "a line printed into the pipe after the solve ended must not reach the sink");
+        }
+
+        private sealed class ThrowingProgress : IProgress<ApplicationStatus> {
+            public int Reports;
+            public void Report(ApplicationStatus value) {
+                Interlocked.Increment(ref Reports);
+                throw new InvalidOperationException("sink is broken");
+            }
+        }
+
         private sealed class RecordingProgress : IProgress<ApplicationStatus> {
             public ConcurrentQueue<string> Statuses { get; } = new();
             public void Report(ApplicationStatus value) => Statuses.Enqueue(value.Status);
@@ -117,6 +192,8 @@ namespace OpenAstroAra.Test {
             }
 
             public ConcurrentQueue<(string Line, bool StdErr)> Lines { get; } = new();
+
+            public IReadOnlyList<string>? Tail => LastExitTail;
 
             public Task Run(IProgress<ApplicationStatus>? progress, CancellationToken ct) =>
                 StartCLI("unused.fits", "unused.ini", new PlateSolveParameter(), null!, progress, ct);
