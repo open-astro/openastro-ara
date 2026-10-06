@@ -125,6 +125,69 @@ void main() {
       expect(stars.cumulativeStarsPerDeg2(9.0, 0), closeTo(2.941788, 1e-6));
     });
 
+    // NEXTGEN §3.1 validation gate (restored from the daemon's deleted
+    // StarCountModelTest, #1196): the pooled HYG grid is embedded here, the
+    // per-band fit is re-derived in the test, and the out-of-sample m=9
+    // extrapolation must land within 2× at EVERY band. Regenerate with
+    // scripts/fit-star-count-model.py against the sha-pinned hygdata_v40.
+    test('the validation gate holds at every latitude band', () {
+      for (var band = 0; band < hygDensities.length; band++) {
+        final fit = _fitLogLinear(hygDensities[band]);
+        final predicted9 = math.pow(10.0, fit.intercept + fit.slope * 9.0);
+        final ratio = predicted9 / hygDensities[band][4];
+        expect(ratio, inInclusiveRange(0.5, 2.0),
+            reason: '|b|=${bandLatitudes[band]}°: the m=9 extrapolation '
+                'must sit inside the factor-2 gate');
+      }
+    });
+
+    test('the model anchors exactly at the real m=9 densities', () {
+      for (var band = 0; band < bandLatitudes.length; band++) {
+        expect(stars.cumulativeStarsPerDeg2(9.0, bandLatitudes[band]),
+            closeTo(hygDensities[band][4], 1e-9),
+            reason: '|b|=${bandLatitudes[band]}°: at m=9 the model IS the '
+                'measured HYG density');
+      }
+    });
+
+    test('the shipped slopes match the grid-derived fit', () {
+      // The anchor test is blind to the slope (exponent zero at m=9), so
+      // check it behaviourally: one magnitude of depth at a band centre must
+      // multiply counts by 10^(slope re-derived from the embedded grid).
+      for (var band = 0; band < bandLatitudes.length; band++) {
+        final derived = _fitLogLinear(hygDensities[band]).slope;
+        final ratio = stars.cumulativeStarsPerDeg2(10, bandLatitudes[band]) /
+            stars.cumulativeStarsPerDeg2(9, bandLatitudes[band]);
+        // Two 6-dp rounding sources stack (shipped slope ≤5e-7, grid
+        // densities ≲1.5e-6 on the fitted slope); 2e-6 covers both.
+        expect(_log10(ratio), closeTo(derived, 2e-6),
+            reason: '|b|=${bandLatitudes[band]}°: the shipped slope must be '
+                'the grid-derived fit');
+      }
+    });
+
+    test('counts are symmetric about the plane', () {
+      expect(stars.cumulativeStarsPerDeg2(11, -30),
+          closeTo(stars.cumulativeStarsPerDeg2(11, 30), 1e-12));
+    });
+
+    test('galactic latitude reproduces the defining identities', () {
+      expect(stars.galacticLatitudeDeg(266.417, -29.008), closeTo(0, 0.1));
+      expect(stars.galacticLatitudeDeg(12.85948, -27.12825),
+          closeTo(-90, 0.01));
+    });
+
+    test('invalid inputs throw', () {
+      expect(() => stars.cumulativeStarsPerDeg2(double.nan, 30),
+          throwsArgumentError);
+      expect(() => stars.cumulativeStarsPerDeg2(9, double.infinity),
+          throwsArgumentError);
+      expect(() => stars.cumulativeStarsPerDeg2(9, 91), throwsArgumentError);
+      expect(() => stars.galacticLatitudeDeg(180, 95), throwsArgumentError);
+      expect(() => stars.galacticLatitudeDeg(double.nan, 0),
+          throwsArgumentError);
+    });
+
     test('counts increase with limiting magnitude and toward the plane', () {
       final faint = stars.cumulativeStarsPerDeg2(12, 30);
       final bright = stars.cumulativeStarsPerDeg2(9, 30);
@@ -235,4 +298,41 @@ void main() {
       expect(effectiveBandwidthNm(haFilter), 7); // explicit
     });
   });
+}
+
+/// Pooled HYG densities N(<m)/deg², m = 5..9, per |b| band
+/// {0,10,20,30,50,70,90}°.
+/// Derived from hygdata_v40.csv.gz (sha256 8e3ff9e6…, the DataManagerService
+/// pin) by scripts/fit-star-count-model.py.
+const List<List<double>> hygDensities = [
+  [0.063136, 0.196360, 0.615503, 1.571994, 2.941788], // |b| =  0°
+  [0.053378, 0.162110, 0.507087, 1.307893, 2.517927], // |b| = 10°
+  [0.046913, 0.141627, 0.423252, 1.096164, 2.121440], // |b| = 20°
+  [0.029225, 0.101004, 0.331916, 0.928467, 1.872188], // |b| = 30°
+  [0.029856, 0.087837, 0.271948, 0.774090, 1.649431], // |b| = 50°
+  [0.028869, 0.082133, 0.254938, 0.661945, 1.546706], // |b| = 70°
+  [0.031851, 0.070073, 0.248439, 0.611543, 1.458785], // |b| = 90°
+];
+
+const List<double> bandLatitudes = [0, 10, 20, 30, 50, 70, 90];
+
+double _log10(double x) => math.log(x) / math.ln10;
+
+/// Least-squares fit of log₁₀N on m ∈ [5,8] (the first four columns).
+({double slope, double intercept}) _fitLogLinear(List<double> densities) {
+  var meanX = 0.0, meanY = 0.0;
+  for (var i = 0; i < 4; i++) {
+    meanX += 5 + i;
+    meanY += _log10(densities[i]);
+  }
+  meanX /= 4;
+  meanY /= 4;
+  var num = 0.0, den = 0.0;
+  for (var i = 0; i < 4; i++) {
+    final dx = 5 + i - meanX;
+    num += dx * (_log10(densities[i]) - meanY);
+    den += dx * dx;
+  }
+  final slope = num / den;
+  return (slope: slope, intercept: meanY - slope * meanX);
 }
