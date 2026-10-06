@@ -237,9 +237,18 @@ namespace OpenAstroAra.Test {
             // Two discrete ladders intersect on their common steps only.
             IReadOnlyList<(double Min, double Max)> other = [(0.008, 0.008), (0.5, 0.5), (1.0, 4.0)];
             Assert.That(TelescopeService.PadBandsFrom((Discrete, other)), Is.EqualTo(new[] { (0.008, 0.008), (1.0, 4.0) }));
-            // Disjoint everywhere → the primary as-is (better a rate the secondary may snap than none).
+            // Disjoint everywhere AND outside the secondary's window → the primary as-is (better a
+            // rate the secondary may snap than none).
             IReadOnlyList<(double Min, double Max)> disjoint = [(5.0, 6.0)];
             Assert.That(TelescopeService.PadBandsFrom((Discrete, disjoint)), Is.EqualTo(Discrete));
+            // Two discrete ladders with no step in common fall back to the #1126 window clip, not the
+            // raw primary: 0.001 would be 100× under the secondary's floor and 409 N/S (review of #1288).
+            IReadOnlyList<(double Min, double Max)> ladderA = [(0.001, 0.001), (0.5, 0.5)];
+            IReadOnlyList<(double Min, double Max)> ladderB = [(0.1, 0.1), (1.0, 1.0)];
+            var fallback = TelescopeService.PadBandsFrom((ladderA, ladderB));
+            Assert.That(fallback, Is.EqualTo(new[] { (0.5, 0.5) }));
+            Assert.DoesNotThrow(() => TelescopeService.SnapMoveAxisRate(0.5, ladderB), "inside the window the secondary snaps, never refuses");
+            Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.001, ladderB), "what the raw primary would have offered");
             // Overlapping primary bands produce intersections out of order; the result is still ascending.
             IReadOnlyList<(double Min, double Max)> overlappingPrimary = [(0.0, 4.0), (1.0, 2.0)];
             IReadOnlyList<(double Min, double Max)> twoSteps = [(0.5, 0.5), (1.5, 1.5)];

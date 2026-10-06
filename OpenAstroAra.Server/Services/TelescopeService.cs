@@ -981,9 +981,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// 0.033 on N/S, so a diagonal press ran E/W 6× faster than N/S (#1230). Intersecting with the
     /// secondary's bands publishes exactly the rates BOTH axes honour as given: a rate inside any
     /// published band is never refused and never snapped on either axis. A thrown (null) or
-    /// honestly-empty secondary applies no clip; when nothing survives the primary set is offered
-    /// as-is rather than no speeds at all (better a rate the secondary may snap than none).
-    /// Internal static so the rule is unit-testable.</summary>
+    /// honestly-empty secondary applies no clip. When no intersection is non-empty (two discrete
+    /// ladders with no step in common) the #1126 clip to the secondary's [floor, ceiling] is used
+    /// instead — inside that window the secondary snaps but never refuses — and only when that is
+    /// empty too is the primary set offered as-is rather than no speeds at all. Internal static so
+    /// the rule is unit-testable.</summary>
     internal static List<(double Min, double Max)> PadBandsFrom((IReadOnlyList<(double Min, double Max)>? Primary, IReadOnlyList<(double Min, double Max)>? Secondary) pad) {
         if (pad.Primary is not { Count: > 0 }) {
             return [];
@@ -1008,7 +1010,25 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
         }
         usable.Sort((a, b) => a.Min != b.Min ? a.Min.CompareTo(b.Min) : a.Max.CompareTo(b.Max));
-        return usable.Count > 0 ? usable : primary;
+        if (usable.Count > 0) {
+            return usable;
+        }
+        var clipped = ClipToWindow(primary, pad.Secondary.Min(b => b.Min), pad.Secondary.Max(b => b.Max));
+        return clipped.Count > 0 ? clipped : primary;
+    }
+
+    // The #1126 rule, kept as the fallback: each primary band clipped to [floor, ceiling], deduped.
+    private static List<(double Min, double Max)> ClipToWindow(List<(double Min, double Max)> primary, double floor, double ceiling) {
+        var usable = new List<(double Min, double Max)>();
+        foreach (var (min, max) in primary) {
+            var lo = Math.Max(min, floor);
+            var hi = Math.Min(max, ceiling);
+            var clipped = (lo, Math.Max(lo, hi));
+            if (lo <= hi + 1e-9 && !usable.Contains(clipped)) {
+                usable.Add(clipped);
+            }
+        }
+        return usable;
     }
 
     /// <summary>#1230 — the capabilities are built on the first pass whose reads answered; if the
