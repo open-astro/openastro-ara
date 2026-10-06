@@ -813,6 +813,9 @@ public partial class Program {
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
+        // §42.5 — fault-log retention sweep (#1145): drops fault rows older than storage.fault_log_retention_days
+        // at startup and once a day. 0 keeps everything.
+        builder.Services.AddHostedService<FaultLogRetentionService>();
         builder.Services.AddHostedService<StorageDeviceWatcher>();
 
         // §65.4 — background thumbnail warmer: renders any missing

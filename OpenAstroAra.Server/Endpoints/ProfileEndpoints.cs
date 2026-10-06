@@ -72,6 +72,12 @@ public static class ProfileEndpoints {
                     detail: "backup_retention_count must be >= 0 (0 keeps every snapshot).",
                     statusCode: StatusCodes.Status400BadRequest);
             }
+            // §42.5 fault-log retention — same contract: 0 keeps everything, negative is rejected (#1145).
+            if (body.FaultLogRetentionDays < 0) {
+                return Results.Problem(
+                    detail: "fault_log_retention_days must be >= 0 (0 keeps every fault row).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             store.PutStorageSettings(body);
             return Results.Ok(body);
         })

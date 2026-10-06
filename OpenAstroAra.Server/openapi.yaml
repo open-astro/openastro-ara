@@ -11795,6 +11795,13 @@ components:
             - string
           format: int32
           default: 20
+        fault_log_retention_days:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 90
     StorageSpaceDto:
       required:
         - save_directory

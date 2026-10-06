@@ -224,6 +224,18 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             if (count != null) n.setBackupRetentionCount(count);
           },
         ),
+        const SettingsSectionHeader('Fault history'),
+        EditableNumberRow(
+          label: 'Keep fault history (days)',
+          helpKey: 'session.storage.fault_log_retention_days',
+          currentValue: s.faultLogRetentionDays.toString(),
+          getCanonical: () =>
+              ref.read(storageSettingsProvider).faultLogRetentionDays.toString(),
+          parse: (v) {
+            final days = int.tryParse(v.trim());
+            if (days != null) n.setFaultLogRetentionDays(days);
+          },
+        ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(

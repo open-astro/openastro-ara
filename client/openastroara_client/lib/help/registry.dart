@@ -638,6 +638,17 @@ const Map<String, Help> helpRegistry = {
       'session.storage.min_free_disk_warn_gb',
     ],
   ),
+  'session.storage.fault_log_retention_days': Help(
+    key: 'session.storage.fault_log_retention_days',
+    title: 'Fault history retention',
+    body:
+        'How many days of equipment fault history (disconnects, tracking loss, guider drops, and what Ara did about each) are kept in the fault log. Once a day Ara deletes rows detected longer ago than this.\n\n'
+        'Rows are tiny, so the default of 90 days keeps a season of nights for the Stats and fault views at no real cost. Set **0** to keep every fault forever.',
+    relatedSettings: [
+      'session.storage.fault_log_retention_days',
+      'session.storage.backup_retention_count',
+    ],
+  ),
   'session.storage.min_free_disk_warn_gb': Help(
     key: 'session.storage.min_free_disk_warn_gb',
     title: 'Low-disk warning threshold',

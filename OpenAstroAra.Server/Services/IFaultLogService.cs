@@ -71,4 +71,9 @@ public interface IFaultLogService {
 
     /// <summary>One fault by id, or null when unknown.</summary>
     Task<FaultDto?> GetAsync(Guid id, CancellationToken ct);
+
+    /// <summary>§42.5 retention (#1145): delete every fault row detected before
+    /// <paramref name="cutoffUtc"/>, resolved or not. Returns the number of rows removed.
+    /// The §42.6 <c>affected_frames</c> list goes with the row; frames themselves are untouched.</summary>
+    Task<int> PruneBeforeAsync(DateTimeOffset cutoffUtc, CancellationToken ct);
 }
