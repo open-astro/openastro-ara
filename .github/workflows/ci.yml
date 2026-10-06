@@ -952,6 +952,14 @@ jobs:
         working-directory: client/openastroara_client
         run: flutter test
 
+      # #1278 — the planetarium page's pure logic (GoTo outcome polling,
+      # coordinate parsing) under node's built-in runner, no browser and
+      # nothing to install; the runners ship Node 20+.
+      - name: planetarium page logic (node --test)
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
+        working-directory: client/openastroara_client
+        run: node --test tool/page_logic/
+
   client-build:
     # Matrix + job-level gate. Safe ONLY because these are not required
     # contexts: skipped at job level the matrix never expands, so this reports
