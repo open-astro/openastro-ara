@@ -106,7 +106,8 @@ namespace OpenAstroAra.Astrometry {
                 return false;
             }
             var mjd = DateTimeToMjd(date);
-            return mjd >= FirstMjd && mjd <= LastMjd;
+            // The last row covers its whole day: midnight of LastMjd up to (not including) the next midnight.
+            return mjd >= FirstMjd && mjd < LastMjd + 1;
         }
 
         /// <summary>UT1-UTC in seconds at <paramref name="date"/> (any <see cref="DateTimeKind"/>; converted to UTC). Never throws.</summary>
@@ -120,7 +121,7 @@ namespace OpenAstroAra.Astrometry {
                 LogOnce(ref loggedBefore, $"DUT1 requested for {date.ToUniversalTime():yyyy-MM-dd} before the bundled IERS table starts ({FirstDate:yyyy-MM-dd}); holding the first value");
                 return Clamp(values[0]);
             }
-            if (mjd > LastMjd) {
+            if (mjd >= LastMjd + 1) {
                 LogOnce(ref loggedAfter, $"DUT1 requested for {date.ToUniversalTime():yyyy-MM-dd} past the bundled IERS table ({Bulletin}, ends {LastDate:yyyy-MM-dd}); " +
                     (HasExtrapolation ? $"using the Bulletin A long-term formula for up to {ExtrapolationDays} days, then holding" : "holding the last value") +
                     " - regenerate with scripts/update-dut1-table.py or set " + EnvOverride);
@@ -130,6 +131,7 @@ namespace OpenAstroAra.Astrometry {
             var lower = (int)Math.Floor(mjd);
             var index = lower - firstMjd;
             if (index >= values.Length - 1) {
+                // Inside the table's last day: hold its value (there is no next midnight to slope towards).
                 return Clamp(values[values.Length - 1]);
             }
             var v0 = values[index];
@@ -148,8 +150,13 @@ namespace OpenAstroAra.Astrometry {
                 return last;
             }
             var bounded = Math.Min(mjd, LastMjd + (double)ExtrapolationDays);
-            return extrapolationA + extrapolationB * (bounded - extrapolationM0) - Ut2MinusUt1(bounded);
+            // Anchor the formula to the table's last value so the series continues smoothly past the end:
+            // Bulletin A's fit and its own final prediction differ by tens of milliseconds at the seam.
+            var offset = last - Formula(LastMjd);
+            return Formula(bounded) + offset;
         }
+
+        private double Formula(double mjd) => extrapolationA + extrapolationB * (mjd - extrapolationM0) - Ut2MinusUt1(mjd);
 
         private static double Clamp(double v) => Math.Max(-MaxAbsDut1, Math.Min(MaxAbsDut1, v));
 
@@ -176,8 +183,16 @@ namespace OpenAstroAra.Astrometry {
 
         public static DateTime MjdToDateTime(double mjd) => MjdEpoch.AddDays(mjd);
 
-        private static Dut1Table LoadDefault() {
-            var overridePath = Environment.GetEnvironmentVariable(EnvOverride);
+        private static Dut1Table LoadDefault() => Load(Environment.GetEnvironmentVariable(EnvOverride));
+
+        /// <summary>
+        /// The <see cref="Bundled"/> factory: <paramref name="overridePath"/> if it names a readable table with rows,
+        /// else the embedded snapshot. Never throws: the result is cached in a <see cref="Lazy{T}"/> for the
+        /// process, so an exception here would poison every later transform.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A pathological OPENASTROARA_DUT1_TABLE value (embedded NUL, a denied path, a security policy) must fall back to the embedded table, not be cached as a permanent failure by the Lazy factory.")]
+        public static Dut1Table Load(string? overridePath) {
             if (!string.IsNullOrWhiteSpace(overridePath)) {
                 try {
                     using var reader = new StreamReader(overridePath);
@@ -187,8 +202,8 @@ namespace OpenAstroAra.Astrometry {
                         return table;
                     }
                     Logger.Warning($"{EnvOverride}={overridePath} holds no UT1-UTC rows; using the embedded IERS table");
-                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                    Logger.Warning($"{EnvOverride}={overridePath} could not be read ({ex.Message}); using the embedded IERS table");
+                } catch (Exception ex) {
+                    Logger.Warning($"{EnvOverride}={overridePath} could not be read ({ex.GetType().Name}: {ex.Message}); using the embedded IERS table");
                 }
             }
 

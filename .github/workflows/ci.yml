@@ -88,6 +88,13 @@ jobs:
       - name: Python tooling tests
         run: python3 -m unittest discover -s scripts/tests -v
 
+      # #1232 — the bundled IERS DUT1 snapshot goes stale about a year after its bulletin. Nothing
+      # else signals that before a release except one Warning at daemon boot, so this surfaces the
+      # table's end date on every run and warns (never fails: a stale table extrapolates within a
+      # few hundredths of a second) once it is within 90 days of the end.
+      - name: DUT1 table freshness
+        run: python3 scripts/check-dut1-freshness.py
+
       # NOTE: We intentionally don't yaml-lint workflow files here.
       # GitHub Actions' own parser is the ultimate validator — a malformed
       # workflow won't run at all. A lint step is duplicate work.
