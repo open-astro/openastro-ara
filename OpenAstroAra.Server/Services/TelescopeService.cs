@@ -847,8 +847,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 return fallback;
             }
         }
-        var slewing = Read(() => c.Slewing, false);
-        slewingUnknown = errors is { Count: > 0 };
+        bool slewing;
+        try {
+            slewing = c.Slewing;
+            slewingUnknown = false;
+        } catch (Exception ex) {
+            errors = [ex]; // the first read: nothing has failed yet
+            slewing = false;
+            slewingUnknown = true; // its own try/catch: not inferred from the error count (#1246)
+        }
         var ra = Read<double?>(() => c.RightAscension, null);
         var dec = Read<double?>(() => c.Declination, null);
         // §57.9 — the slew/sync destination, read back from the mount's own target registers.
@@ -1340,6 +1347,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 return false;
             }
             _latchedSlewHoldSince ??= DateTimeOffset.UtcNow;
+            // Once expired it stays expired while the latch persists (only a clean tick or a closed
+            // episode resets it), so every later latched tick trips at once rather than holding again.
             if (DateTimeOffset.UtcNow - _latchedSlewHoldSince.Value >= LatchedSlewHold) {
                 LogLatchedSlewHoldExpired(_device?.Name ?? "?");
                 return false;

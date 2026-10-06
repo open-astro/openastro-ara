@@ -47,6 +47,8 @@ internal sealed class SlewEventWatch {
     internal static readonly TimeSpan PendingTargetTtl = TimeSpan.FromSeconds(15);
 
     private bool _slewing;
+    /// <summary>#1246 — a slew episode is open (a Started verdict with no Completed yet).</summary>
+    internal bool InSlew => _slewing;
     private long _startedAtTickMs;
     // Noted at slew-command time so the Started event can carry the intent; a park/home slew has
     // no coordinate target and publishes nulls.
