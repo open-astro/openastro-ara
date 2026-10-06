@@ -335,7 +335,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // LingerMaxAttempts (~an hour at the defaults). While the service reports Error the remembered
     // device is re-dispatched through the same TryReconnectAsync the ladder uses; the moment the
     // type reads Connected — whether the linger's own dispatch landed or the user re-seated a
-    // cable and the daemon auto-connected — the device is re-adopted: runs the terminal pause left
+    // cable and the daemon auto-connected — and, for the mount, has had a clean read since that
+    // connect (#1246: a latched bridge answers Connected while every read fails, and gets the
+    // re-dispatch instead) — the device is re-adopted: runs the terminal pause left
     // paused are resumed, and the recovery is published + notified. A Disconnected state stops the
     // linger silently: that is the shape of a DELIBERATE user disconnect (the services only park
     // in Error on a lost device), and the daemon must not fight the user for the device.

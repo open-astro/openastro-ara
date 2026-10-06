@@ -1201,6 +1201,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _sideOfPierUnsupported = false;      // the new device may answer it
                     _cleanReadSinceConnect = false;      // #1246 — earned by the first clean tick
                     _latchedSlewHoldSince = null;
+                    _latchedSlewHoldExpiredLogged = false;
                     // _bridgeFaultTripped is deliberately NOT reset here: the §42.3 ladder's reconnect
                     // comes through this path, and a bridge still latched after it must stay one
                     // episode (#1193). A hand-connected different device clears it on its first clean tick.
