@@ -260,8 +260,12 @@ namespace OpenAstroAra.Test {
             Assert.That(s.Binning, Is.EqualTo(4));
             Assert.That(solver.LastBinning, Is.EqualTo(4));
 
+            // Seq is monotonic across a same-target restart and the 5 ms scripted solver outruns the
+            // poll, so the first loop may already be past seq 2 when it stops: wait for a sample
+            // the second loop produced, not for an absolute number (flaked in CI on #1283).
+            var stoppedAt = svc.GetStatus().Seq;
             await svc.StartAsync(new RotationAssistStartRequestDto(10, Binning: 2), CancellationToken.None);
-            s = await WaitForSeq(svc, 2);
+            s = await WaitForSeq(svc, stoppedAt + 1);
             await svc.StopAsync();
             Assert.That(s.Binning, Is.EqualTo(2));
             Assert.That(solver.LastBinning, Is.EqualTo(2));
