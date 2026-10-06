@@ -921,7 +921,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // The direction pad drives BOTH axes (N/S = secondary, E/W = primary, corners = both), so
         // gate it conservatively on the mount supporting MoveAxis on each — a mount that can move only
         // one axis would silently fail the other half of the pad. The bands below are the primary
-        // axis's, clipped to the secondary's floor and ceiling (PadBandsFrom, #1126).
+        // axis's bands intersected with the secondary's (PadBandsFrom, #1126/#1230).
         try {
             canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary) && c.CanMoveAxis(TelescopeAxis.Secondary);
         } catch (Exception) {

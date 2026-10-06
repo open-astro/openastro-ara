@@ -52,16 +52,23 @@ namespace OpenAstroAra.Test {
             : path.EndsWith("/declination", StringComparison.Ordinal) ? "45.0"
             : null;
 
-        private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout, string failure) {
-            var sw = Stopwatch.StartNew();
-            while (!condition() && sw.Elapsed < timeout) {
-                await Task.Delay(50);
-            }
-            Assert.That(condition(), Is.True, failure);
-        }
-
         private static async Task<TelescopeCapabilitiesDto?> CapsAsync(TelescopeService svc) =>
             (await svc.GetAsync(CancellationToken.None))?.Capabilities;
+
+        /// <summary>Polls the capabilities until <paramref name="ready"/> accepts them; the last read on timeout.</summary>
+        private static async Task<TelescopeCapabilitiesDto?> WaitForCapsAsync(TelescopeService svc, Func<TelescopeCapabilitiesDto?, bool> ready, string failure) {
+            var sw = Stopwatch.StartNew();
+            TelescopeCapabilitiesDto? caps = null;
+            while (sw.Elapsed < TimeSpan.FromSeconds(15)) {
+                caps = await CapsAsync(svc);
+                if (ready(caps)) {
+                    return caps;
+                }
+                await Task.Delay(50);
+            }
+            Assert.Fail(failure);
+            return caps;
+        }
 
         [Test]
         public async Task Capabilities_are_republished_once_a_late_secondary_AxisRates_answers() {
@@ -80,15 +87,13 @@ namespace OpenAstroAra.Test {
             using var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100) };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
 
-            TelescopeCapabilitiesDto? caps = null;
-            await WaitForAsync(() => (caps = CapsAsync(svc).GetAwaiter().GetResult()) is not null,
-                TimeSpan.FromSeconds(15), "capabilities never published");
+            var caps = await WaitForCapsAsync(svc, c => c is not null, "capabilities never published");
             Assert.That(caps!.MoveAxisRateBandsDegPerSec, Is.EqualTo(new[] { new MoveAxisRateBandDto(0.002, 4.0) }),
                 "with the secondary unread, the primary bands go out unclipped (as before)");
 
             Volatile.Write(ref secondaryAnswers, 1);
-            await WaitForAsync(() => (caps = CapsAsync(svc).GetAwaiter().GetResult())?.MoveAxisRateBandsDegPerSec?.Count == 2,
-                TimeSpan.FromSeconds(15), "the capabilities were never re-published after the secondary answered");
+            caps = await WaitForCapsAsync(svc, c => c?.MoveAxisRateBandsDegPerSec?.Count == 2,
+                "the capabilities were never re-published after the secondary answered");
             Assert.That(caps!.MoveAxisRateBandsDegPerSec, Is.EqualTo(new[] { new MoveAxisRateBandDto(0.5, 0.5), new MoveAxisRateBandDto(2.0, 4.0) }));
             Assert.That(caps.MoveAxisRatesDegPerSec, Is.EqualTo(RepublishedLegacyList), "the legacy list follows the re-published bands");
 

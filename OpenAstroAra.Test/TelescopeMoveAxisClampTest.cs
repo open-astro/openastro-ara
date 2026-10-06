@@ -163,9 +163,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Pad_bands_are_the_primary_bands_clipped_to_the_secondary_floor_and_ceiling() {
+        public void Pad_bands_are_the_primary_bands_intersected_with_the_secondary_bands() {
             // #1126 — the pad drives both axes with one rate. The secondary's ceiling was already
-            // applied; its FLOOR was not, so a slow diagonal press moved E/W and 409'd N/S.
+            // applied; its FLOOR was not, so a slow diagonal press moved E/W and 409'd N/S. Since
+            // #1230 the rule is intersection, which for a single-band secondary is the same clip.
             IReadOnlyList<(double Min, double Max)> highFloor = [(2.0, 6.0)];
             Assert.That(TelescopeService.PadBandsFrom((OneBand, highFloor)), Is.EqualTo(new[] { (2.0, 6.0) }));
             IReadOnlyList<(double Min, double Max)> lowCeiling = [(0.001, 4.0)];
@@ -239,6 +240,10 @@ namespace OpenAstroAra.Test {
             // Disjoint everywhere → the primary as-is (better a rate the secondary may snap than none).
             IReadOnlyList<(double Min, double Max)> disjoint = [(5.0, 6.0)];
             Assert.That(TelescopeService.PadBandsFrom((Discrete, disjoint)), Is.EqualTo(Discrete));
+            // Overlapping primary bands produce intersections out of order; the result is still ascending.
+            IReadOnlyList<(double Min, double Max)> overlappingPrimary = [(0.0, 4.0), (1.0, 2.0)];
+            IReadOnlyList<(double Min, double Max)> twoSteps = [(0.5, 0.5), (1.5, 1.5)];
+            Assert.That(TelescopeService.PadBandsFrom((overlappingPrimary, twoSteps)), Is.EqualTo(new[] { (0.5, 0.5), (1.5, 1.5) }));
         }
     }
 }
