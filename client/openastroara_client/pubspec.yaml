@@ -19,7 +19,7 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   dio: ^5.11.1
   web_socket_channel: ^3.0.3
   geolocator: ^14.1.1
@@ -36,20 +36,20 @@ dependencies:
   # package's embedded boundary snapshot can age — see the P1–P5 issue backlog if legislatures
   # actually kill DST and boundaries shift.
   lat_lng_to_timezone: ^0.2.0
-  url_launcher: ^6.3.1
+  url_launcher: ^6.3.3
   path_provider: ^2.1.6
   # §44 backup stream — sha-256 verification of pulled frames.
   crypto: ^3.0.6
   # §35.5 audible safety alarm — loops the bundled tone on safety.unsafe /
   # safety.emergency_stop until silenced.
   audioplayers: ^6.1.0
-  package_info_plus: ^10.2.1
+  package_info_plus: ^10.2.2
   # §36 Planetarium renderer: the platform's native webview embedded as a platform
   # view — WKWebView (macOS/iOS), WebView2 (Windows), WebKitGTK (Linux), System
   # WebView (Android). Replaced the CEF OSR path, which stalled under sustained GPU
   # offscreen render on macOS and broke Flutter's GL context on Linux. See
   # lib/widgets/sky_atlas/stellarium_view.dart and PORT_DECISIONS.
-  webview_all: ^1.4.1
+  webview_all: ^1.4.4
 dev_dependencies:
   flutter_test:
     sdk: flutter
