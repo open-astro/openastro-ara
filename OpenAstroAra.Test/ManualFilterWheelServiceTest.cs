@@ -188,6 +188,9 @@ namespace OpenAstroAra.Test {
             var cancelled = wheel.ChangeFilter(Filter("B", 3), token: cts.Token);
             await cts.CancelAsync();
             await Assert.CatchAsync<OperationCanceledException>(() => cancelled.WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.That((await wheel.GetAsync(CancellationToken.None))!.Runtime,
+                Is.EqualTo(new FilterWheelStateDto("idle", null)),
+                "a stopped run withdraws the prompt it raised");
         }
 
         [Test]
@@ -228,6 +231,20 @@ namespace OpenAstroAra.Test {
             Assert.That(manual.RetainedDevice, Is.Null);
             Assert.That((await router.GetAsync(CancellationToken.None))!.DeviceId, Is.EqualTo("efw-1"));
             Assert.That(router.GetInfo().DeviceId, Is.EqualTo("efw-1"));
+        }
+
+        [Test]
+        public async Task Router_switching_away_fails_a_waiting_manual_change() {
+            using var alpaca = new FilterWheelService();
+            using var manual = NewWheel();
+            using var router = new FilterWheelRouter(alpaca, manual);
+            await router.ConnectAsync(Manual(), null, CancellationToken.None);
+            var change = router.ChangeFilter(Filter("Ha", 4));
+            await Task.Delay(100);
+            Assert.That(change.IsCompleted, Is.False);
+            var efw = new DiscoveredDeviceDto("efw-1", "EFW", DeviceType.FilterWheel, "", "127.0.0.1", 9, 0, false);
+            await router.ConnectAsync(new ConnectRequestDto(efw), null, CancellationToken.None);
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => change.WaitAsync(TimeSpan.FromSeconds(2)));
         }
 
         [Test]

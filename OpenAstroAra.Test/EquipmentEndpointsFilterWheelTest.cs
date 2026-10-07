@@ -79,5 +79,19 @@ namespace OpenAstroAra.Test {
                     Is.EqualTo(StatusCodes.Status409Conflict), "manual wheel disconnected");
             }
         }
+
+        [Test]
+        public async Task Swap_cancel_is_409_off_the_manual_wheel_and_204_on_it() {
+            var (router, alpaca, manual) = NewRouter();
+            using (router) using (alpaca) using (manual) {
+                Assert.That(StatusOf(await EquipmentEndpoints.CancelManualSwapAsync(router, CancellationToken.None)),
+                    Is.EqualTo(StatusCodes.Status409Conflict));
+                await router.ConnectAsync(new ConnectRequestDto(ManualFilterWheelService.Descriptor), null, CancellationToken.None);
+                await router.ChangeFilterAsync(new FilterChangeRequestDto(1), null, CancellationToken.None);
+                Assert.That(StatusOf(await EquipmentEndpoints.CancelManualSwapAsync(router, CancellationToken.None)),
+                    Is.EqualTo(StatusCodes.Status204NoContent));
+                Assert.That((await router.GetAsync(CancellationToken.None))!.Runtime.PendingSlot, Is.Null);
+            }
+        }
     }
 }

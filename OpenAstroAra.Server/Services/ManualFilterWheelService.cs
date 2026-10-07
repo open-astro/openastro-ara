@@ -265,6 +265,21 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
     }
 
     // Raise (or re-raise) the prompt for `position`. Returns false when it is already installed.
+    // Drop the standing prompt if it is still the one for `position`.
+    private void WithdrawPrompt(int position) {
+        int? current;
+        lock (_gate) {
+            if (_pending != position) {
+                return;
+            }
+            _pending = null;
+            current = _current;
+            SignalLocked();
+        }
+        var slots = RefreshSlots();
+        _events?.ManualFilterSwap(null, null, current, current is int c ? NameAt(slots, c) : null);
+    }
+
     private bool RequestSwap(List<FilterSlotDto> slots, int position) {
         int? current;
         lock (_gate) {
@@ -353,7 +368,14 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
                 changed = _changed.Task;
             }
             progress?.Report(new ApplicationStatus { Status = $"Waiting for you to install the {name} filter" });
-            await changed.WaitAsync(token).ConfigureAwait(false);
+            try {
+                await changed.WaitAsync(token).ConfigureAwait(false);
+            } catch (OperationCanceledException) when (token.IsCancellationRequested) {
+                // The run was stopped: nothing needs this filter any more, so drop the prompt it
+                // raised rather than leave every screen asking for it (review on #1303).
+                WithdrawPrompt(target);
+                throw;
+            }
         }
         return FilterWheelService.ResolveFilter(SnapshotProfileFilters(), slots, target) ?? inputFilter;
     }

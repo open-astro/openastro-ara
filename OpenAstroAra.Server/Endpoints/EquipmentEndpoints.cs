@@ -66,6 +66,18 @@ public static partial class EquipmentEndpoints {
         }
     }
 
+    /// <summary>#1298 — POST /equipment/filterwheel/swap/cancel: drop a standing hand-swap prompt.
+    /// 409 when the selected wheel is not the manual one.</summary>
+    internal static async Task<IResult> CancelManualSwapAsync(FilterWheelRouter router, CancellationToken ct) {
+        if (!router.ManualSelected) {
+            return Results.Problem(title: "not_manual_filter_wheel",
+                detail: "The selected filter wheel moves its own filters; there is no hand swap to cancel.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+        await router.Manual.CancelPendingAsync(ct);
+        return Results.NoContent();
+    }
+
     public static IEndpointRouteBuilder MapEquipmentEndpoints(this IEndpointRouteBuilder app) {
         var equipment = app.MapGroup("/api/v1/equipment").WithTags("Equipment");
         // §58.12 — any explicit equipment COMMAND (connect, slew, park, cooler,
@@ -289,15 +301,8 @@ public static partial class EquipmentEndpoints {
         // is not the manual one.
         filterwheel.MapPost("/installed", ([FromBody] FilterInstalledRequestDto request, FilterWheelRouter router, CancellationToken ct) =>
             ReportFilterInstalledAsync(request, router, ct));
-        filterwheel.MapPost("/swap/cancel", async (FilterWheelRouter router, CancellationToken ct) => {
-            if (!router.ManualSelected) {
-                return Results.Problem(title: "not_manual_filter_wheel",
-                    detail: "The selected filter wheel moves its own filters; there is no hand swap to cancel.",
-                    statusCode: StatusCodes.Status409Conflict);
-            }
-            await router.Manual.CancelPendingAsync(ct);
-            return Results.NoContent();
-        });
+        filterwheel.MapPost("/swap/cancel", (FilterWheelRouter router, CancellationToken ct) =>
+            CancelManualSwapAsync(router, ct));
 
         // ─── Rotator ───
         var rotator = equipment.MapGroup("/rotator");
