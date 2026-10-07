@@ -131,7 +131,10 @@ public partial class Program {
         // Phase 7 — sequence services (ISequenceService, ICaptureOrchestratorService)
         // Phase 8 — image services (IImageDataFactory, IFrameRepository)
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
-        builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
+        builder.Services.AddSingleton<AlpacaEquipmentDiscoveryService>();
+        // #1298 — every filter-wheel listing also offers the driverless manual filter wheel.
+        builder.Services.AddSingleton<IEquipmentDiscoveryService>(sp =>
+            new ManualDeviceDiscoveryService(sp.GetRequiredService<AlpacaEquipmentDiscoveryService>()));
 
         // §28 SqliteFrameRepository — reads frames from the catalog with
         // sample data seeded on first init. Bulk ops still return placeholder
@@ -279,7 +282,10 @@ public partial class Program {
         // below; this replaces the HeadlessFilterWheelMediator stub). On connect the wheel's filter
         // list imports into the active profile so SwitchFilter resolves filters by name/position.
         builder.Services.AddSingleton<FilterWheelService>();
-        builder.Services.AddSingleton<IFilterWheelService>(sp => sp.GetRequiredService<FilterWheelService>());
+        // #1298 — the router fronts the Alpaca wheel and the driverless manual wheel (registered
+        // below, once the profile dir is known); it is THE IFilterWheelService and mediator.
+        builder.Services.AddSingleton<FilterWheelRouter>();
+        builder.Services.AddSingleton<IFilterWheelService>(sp => sp.GetRequiredService<FilterWheelRouter>());
         // §14e — fifth real device service: live rotator (mechanical/sky angle) + Move. REST-only;
         // One singleton backs BOTH the REST IRotatorService and the Sequencer's IRotatorMediator
         // (§8.1), so MoveRotatorMechanical drives the live device (mediator wiring is below; this
@@ -453,6 +459,14 @@ public partial class Program {
         //   2. /var/lib/openastroara (matches §13 systemd unit StateDirectory=)
         //   3. ~/.local/share/openastroara as a per-user fallback
         var profileDir = ResolveProfileDir();
+        // #1298 — the manual filter wheel remembers the installed filter under the profile dir.
+        builder.Services.AddSingleton(sp => new ManualFilterWheelService(
+            sp.GetService<ILogger<ManualFilterWheelService>>(),
+            sp.GetService<IProfileStore>(),
+            sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+            sp.GetService<EquipmentEventPublisher>(),
+            sp.GetService<INotificationService>(),
+            profileDir));
 
         // §29.9.2 — wire the rolling CLEF (Compact-JSON) file sink now that the
         // profile dir is known. The §29.9 log endpoints (LogService) tail +
@@ -900,7 +914,7 @@ public partial class Program {
         // list imports into IProfileService.ActiveProfile on connect (SwitchFilter resolves by
         // name/position against that list).
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(
-            sp => sp.GetRequiredService<FilterWheelService>());
+            sp => sp.GetRequiredService<FilterWheelRouter>());
         // §14e — the real RotatorService backs IRotatorMediator too (replaces HeadlessRotatorMediator),
         // so MoveRotatorMechanical drives the live Alpaca rotator.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(

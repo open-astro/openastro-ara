@@ -48,6 +48,16 @@ class FilterWheelNotifier extends EquipmentDeviceNotifier<FilterWheelStatus> {
   /// and the busy poll tracks it to the new slot.
   Future<bool> changeFilter(int position) =>
       performAction((api) => api.command('change', {'position': position}));
+
+  /// #1298 — manual filter wheel: report the filter now in the train. Completes
+  /// a pending hand swap to [position] (a run waiting on it continues).
+  Future<bool> reportInstalled(int position) =>
+      performAction((api) => api.command('installed', {'position': position}));
+
+  /// #1298 — manual filter wheel: drop a standing hand-swap prompt. A run
+  /// waiting on it fails that step (its retries apply).
+  Future<bool> cancelManualSwap() =>
+      performAction((api) => api.command('swap/cancel'));
 }
 
 final filterWheelProvider =

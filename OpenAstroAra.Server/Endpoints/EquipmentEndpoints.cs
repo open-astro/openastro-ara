@@ -34,6 +34,38 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static partial class EquipmentEndpoints {
 
+    /// <summary>POST /equipment/filterwheel/change. Out of range is the caller's mistake (400);
+    /// not connected, or a manual wheel with no filters, is a state conflict (409). Both used to
+    /// surface as 500. A disposed service is the daemon shutting down and stays a 5xx.</summary>
+    internal static async Task<IResult> ChangeFilterAsync(FilterChangeRequestDto request, string? key, IFilterWheelService svc, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.ChangeFilterAsync(request, key, ct));
+        } catch (ArgumentOutOfRangeException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    /// <summary>#1298 — POST /equipment/filterwheel/installed: the user reports the filter now in
+    /// the manual wheel. 409 when the selected wheel is not the manual one or is not connected;
+    /// 400 for a slot it does not have.</summary>
+    internal static async Task<IResult> ReportFilterInstalledAsync(FilterInstalledRequestDto request, FilterWheelRouter router, CancellationToken ct) {
+        if (!router.ManualSelected) {
+            return Results.Problem(title: "not_manual_filter_wheel",
+                detail: "The selected filter wheel moves its own filters; /installed is for the manual filter wheel.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+        try {
+            await router.Manual.ReportInstalledAsync(request.Position, ct);
+            return Results.NoContent();
+        } catch (ArgumentOutOfRangeException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     public static IEndpointRouteBuilder MapEquipmentEndpoints(this IEndpointRouteBuilder app) {
         var equipment = app.MapGroup("/api/v1/equipment").WithTags("Equipment");
         // §58.12 — any explicit equipment COMMAND (connect, slew, park, cooler,
@@ -248,8 +280,24 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
         filterwheel.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        filterwheel.MapPost("/change", async ([FromBody] FilterChangeRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.ChangeFilterAsync(request, key, ct)));
+        // An out-of-range slot is the caller's mistake (400) and a wheel that is not connected
+        // (or a manual one with no filters) a state conflict (409); both used to surface as 500.
+        filterwheel.MapPost("/change", ([FromBody] FilterChangeRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
+            ChangeFilterAsync(request, key, svc, ct));
+        // #1298 — manual filter wheel: the user reports the filter now in the train (completes a
+        // pending hand swap to it), or drops a standing swap prompt. 409 when the selected wheel
+        // is not the manual one.
+        filterwheel.MapPost("/installed", ([FromBody] FilterInstalledRequestDto request, FilterWheelRouter router, CancellationToken ct) =>
+            ReportFilterInstalledAsync(request, router, ct));
+        filterwheel.MapPost("/swap/cancel", async (FilterWheelRouter router, CancellationToken ct) => {
+            if (!router.ManualSelected) {
+                return Results.Problem(title: "not_manual_filter_wheel",
+                    detail: "The selected filter wheel moves its own filters; there is no hand swap to cancel.",
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+            await router.Manual.CancelPendingAsync(ct);
+            return Results.NoContent();
+        });
 
         // ─── Rotator ───
         var rotator = equipment.MapGroup("/rotator");

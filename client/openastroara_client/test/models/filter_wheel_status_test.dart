@@ -36,4 +36,31 @@ void main() {
     expect(f.currentSlot, isNull); // wire -1 normalized to null
     expect(f.current, isNull);
   });
+
+  test('#1298 manual wheel: manual flag and pending slot parse', () {
+    final s = FilterWheelStatus.fromJson({
+      'device_id': 'ara-manual-filter-wheel',
+      'name': 'Manual filter wheel',
+      'state': 'connected',
+      'manual': true,
+      'runtime': {'state': 'awaiting_user', 'current_slot': 0, 'pending_slot': 1},
+      'slots': [
+        {'position': 0, 'name': 'L', 'focus_offset': 0},
+        {'position': 1, 'name': 'Ha', 'focus_offset': 0},
+      ],
+    });
+    expect(s.manual, isTrue);
+    expect(s.isAwaitingUser, isTrue);
+    expect(s.pending?.name, 'Ha');
+    expect(s.current?.name, 'L');
+    expect(s.isBusy, isFalse, reason: 'a hand swap is not a fast-poll move');
+
+    final plain = FilterWheelStatus.fromJson({
+      'state': 'connected',
+      'runtime': {'state': 'idle', 'current_slot': 0},
+    });
+    expect(plain.manual, isFalse);
+    expect(plain.pendingSlot, isNull);
+    expect(plain.isAwaitingUser, isFalse);
+  });
 }

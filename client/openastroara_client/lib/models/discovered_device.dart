@@ -12,6 +12,12 @@ class DiscoveredDevice {
   final int alpacaDeviceNumber;
   final bool useHttps;
 
+  /// #1298 — the daemon's driverless manual filter wheel, offered in every
+  /// filter-wheel discovery. Nothing is dialled for it.
+  static const manualFilterWheelId = 'ara-manual-filter-wheel';
+
+  bool get isManualFilterWheel => uniqueId == manualFilterWheelId;
+
   const DiscoveredDevice({
     required this.uniqueId,
     required this.name,

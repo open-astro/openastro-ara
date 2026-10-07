@@ -47,6 +47,20 @@ class _FakeFwApi implements EquipmentDeviceClient<FilterWheelStatus> {
   void close() {}
 }
 
+FilterWheelStatus _manual({int? currentSlot, int? pendingSlot}) => FilterWheelStatus(
+      deviceId: 'ara-manual-filter-wheel',
+      name: 'Manual filter wheel',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: pendingSlot == null ? 'idle' : 'awaiting_user',
+      currentSlot: currentSlot,
+      pendingSlot: pendingSlot,
+      manual: true,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'Hα', focusOffset: 0),
+      ],
+    );
+
 FilterWheelStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
   int? currentSlot = 0,
@@ -219,5 +233,38 @@ void main() {
     await _pump(tester, null);
     expect(find.text('No filter wheel connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
+  });
+
+  group('#1298 manual filter wheel', () {
+    testWidgets('asks which filter is in, keeps the filter editor, drops the park toggle',
+        (tester) async {
+      await _pump(tester, _manual());
+      expect(find.text('Unknown'), findsOneWidget);
+      expect(find.text('Tap the filter that is in the train now.'), findsOneWidget);
+      expect(find.text('Filters (manual filter wheel)'), findsOneWidget);
+      expect(find.text('Park on slot 0 on first connect'), findsNothing);
+    });
+
+    testWidgets('tapping a filter reports it installed (no change command)',
+        (tester) async {
+      final api = await _pump(tester, _manual(currentSlot: 0));
+      await tester.tap(find.byKey(const ValueKey('manual-slot-1')));
+      await tester.pump();
+      expect(api.calls, contains('command:installed:1'));
+      expect(api.calls.where((c) => c.startsWith('command:change')), isEmpty);
+    });
+
+    testWidgets('a pending swap shows the call to action; confirm and cancel',
+        (tester) async {
+      final api = await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1));
+      // The card on the panel (the app-wide dialog lives in the shell).
+      expect(find.text('Install the Hα filter'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Hα is in'));
+      await tester.pump();
+      expect(api.calls, contains('command:installed:1'));
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel swap'));
+      await tester.pump();
+      expect(api.calls, contains('command:swap/cancel:null'));
+    });
   });
 }

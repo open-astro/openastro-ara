@@ -1315,6 +1315,25 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['eq.guider.dec_aggressiveness'],
   ),
 
+  // #1298 — manual filter wheel: the labels ARE its filters.
+  'eq.filterwheel.manual_filters': Help(
+    key: 'eq.filterwheel.manual_filters',
+    title: 'Manual filter wheel filters',
+    body:
+        'The **manual filter wheel** is for a filter drawer, slider or hand-turned wheel: there is no '
+        'driver, so these names are its filters, in slot order. Blank slots at the end are ignored; a '
+        'blank slot in the middle is shown as "Filter N" so the positions stay put.\n\n'
+        '**How a change works.** When a run, the Imaging tab or a plate solve needs a different filter, '
+        'Ara asks you to install it (a prompt on screen and a notification) and waits. Swap the filter, '
+        'then press **"<name> is in"**. A run waits for as long as it takes; it does not fail. '
+        '**Cancel swap** fails that one step instead, and its retries apply.\n\n'
+        '**Which filter is in.** Ara remembers the last filter you confirmed, across restarts. If you '
+        'swap by hand without being asked, tap the filter on the card so the FITS `FILTER` header and '
+        'focus offsets stay right.\n\n'
+        'Focus offsets and per-filter autofocus settings carry over from the profile\'s filter list.',
+    relatedSettings: ['eq.filterwheel.slot_labels'],
+  ),
+
   // §37.4 Filter Wheel slot labels.
   'eq.filterwheel.slot_labels': Help(
     key: 'eq.filterwheel.slot_labels',

@@ -92,7 +92,16 @@ namespace OpenAstroAra.Test {
         [Test] public void Focuser_mediator_is_the_live_service() => AssertLive<IFocuserMediator, FocuserService>();
         [Test] public void Camera_mediator_is_the_live_service() => AssertLive<ICameraMediator, CameraService>();
         [Test] public void Imaging_mediator_is_the_live_camera_service() => AssertLive<IImagingMediator, CameraService>();
-        [Test] public void FilterWheel_mediator_is_the_live_service() => AssertLive<IFilterWheelMediator, FilterWheelService>();
+        // #1298 — the filter wheel mediator is the router in front of the live Alpaca wheel and the
+        // manual wheel, and it is the SAME singleton the REST endpoints use.
+        [Test] public void FilterWheel_mediator_is_the_live_service() => AssertLive<IFilterWheelMediator, FilterWheelRouter>();
+
+        [Test]
+        public void FilterWheel_rest_service_is_the_same_router() {
+            Assert.That(app.Services.GetRequiredService<IFilterWheelService>(),
+                Is.SameAs(app.Services.GetRequiredService<FilterWheelRouter>()));
+            Assert.That(app.Services.GetRequiredService<IEquipmentDiscoveryService>(), Is.TypeOf<ManualDeviceDiscoveryService>());
+        }
         [Test] public void Rotator_mediator_is_the_live_service() => AssertLive<IRotatorMediator, RotatorService>();
         [Test] public void Switch_mediator_is_the_live_service() => AssertLive<ISwitchMediator, SwitchService>();
         [Test] public void Dome_mediator_is_the_live_service() => AssertLive<IDomeMediator, DomeService>();

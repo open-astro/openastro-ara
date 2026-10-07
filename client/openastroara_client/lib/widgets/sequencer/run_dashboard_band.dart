@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/run_eta.dart';
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../state/sequencer/run_event_ticker.dart';
 import '../../state/sequencer/run_latest_frame_state.dart';
@@ -58,7 +59,14 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
     final total = run.instructionsTotal;
     final completed = run.instructionsCompleted;
     final progress = total > 0 ? (completed / total).clamp(0.0, 1.0) : null;
-    final needsAttention = state == SequenceRunState.pausedAwaitingUser;
+    // #1298 — a run blocked on a manual filter wheel swap is still "running"
+    // to the sequencer, but it is waiting for the user just the same.
+    final wheel = ref.watch(filterWheelProvider).asData?.value;
+    final handSwap = wheel != null && wheel.manual && wheel.isAwaitingUser
+        ? wheel.pending?.name
+        : null;
+    final needsAttention =
+        state == SequenceRunState.pausedAwaitingUser || handSwap != null;
 
     // #1068/#1080 — the daemon publishes the sequencer's own estimate and the
     // band shows it as-is; the observed elapsed rate is only the fallback for
@@ -169,7 +177,9 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                         }
                       },
                       child: Text(
-                        needsAttention
+                        handSwap != null
+                            ? 'The rig needs you — install the $handSwap filter'
+                            : needsAttention
                             ? 'The rig needs you — ${run.currentInstructionDescription ?? 'check the mount/guider and resume'}'
                             : (run.currentInstructionDescription?.isNotEmpty ==
                                     true

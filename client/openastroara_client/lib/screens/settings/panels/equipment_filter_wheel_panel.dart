@@ -12,6 +12,7 @@ import '../../../state/settings/filter_wheel_labels_state.dart';
 import '../../../state/settings/filter_wheel_policy_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
+import '../../../widgets/equipment/manual_filter_wheel_body.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
@@ -38,8 +39,14 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
     // status that is genuinely absent/disconnected; loading and (transient) error
     // keep it hidden so a single failed poll can't flash the editor in over a
     // still-registered wheel.
+    // #1298 — the manual filter wheel has no driver names: its slots ARE these
+    // labels, so the editor stays up while it is connected.
+    final manual = status.maybeWhen(
+      data: (s) => s != null && s.manual && s.isConnected,
+      orElse: () => false,
+    );
     final showSlotLabels = status.maybeWhen(
-      data: (s) => s == null || !s.isConnected,
+      data: (s) => s == null || !s.isConnected || s.manual,
       orElse: () => false,
     );
 
@@ -68,22 +75,29 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         ),
         // #1075 — the daemon's first-connect home (#1066) is a profile policy
         // the user can turn off; the daemon reads it at connect time.
-        SettingsSwitchRow(
-          label: 'Park on slot 0 on first connect',
-          helpKey: 'eq.filterwheel.home_on_first_connect',
-          value: policy.homeOnFirstConnect,
-          onChanged: policyN.setHomeOnFirstConnect,
-        ),
+        // Nothing to park on a wheel you turn by hand.
+        if (!manual)
+          SettingsSwitchRow(
+            label: 'Park on slot 0 on first connect',
+            helpKey: 'eq.filterwheel.home_on_first_connect',
+            value: policy.homeOnFirstConnect,
+            onChanged: policyN.setHomeOnFirstConnect,
+          ),
         // Local slot labels — the user's filter names used when authoring
         // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
         // independent of the connected wheel's own names shown live above. Hidden
         // while a wheel is connected (its driver names take over) to avoid duplication.
         if (showSlotLabels) ...[
-          const SettingsSectionHeader('Slot labels (for sequences)'),
+          SettingsSectionHeader(
+              manual ? 'Filters (manual filter wheel)' : 'Slot labels (for sequences)'),
           for (var slot = 1; slot <= labels.slotCount; slot++)
             EditableTextRow(
               label: 'Slot $slot',
-              helpKey: slot == 1 ? 'eq.filterwheel.slot_labels' : null,
+              helpKey: slot == 1
+                  ? (manual
+                      ? 'eq.filterwheel.manual_filters'
+                      : 'eq.filterwheel.slot_labels')
+                  : null,
               currentValue: labels.labelAt(slot),
               getCanonical: () =>
                   ref.read(filterWheelLabelsProvider).labelAt(slot),
@@ -224,6 +238,9 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
 
     final status = widget.status;
     if (status.isConnecting) return const Text('Reading…');
+    if (status.manual && status.isConnected) {
+      return ManualFilterWheelBody(status: status);
+    }
     if (status.connectionState == EquipmentConnectionState.error) {
       return const Row(
         children: [
@@ -410,6 +427,12 @@ class _SlotRow extends StatelessWidget {
 Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
   try {
     await ref.read(filterWheelLabelsProvider.notifier).persistToServer();
+    // #1298 — a manual wheel's slots are these labels: re-read so the card
+    // above shows the new names straight away.
+    final wheel = ref.read(filterWheelProvider).asData?.value;
+    if (wheel != null && wheel.manual) {
+      unawaited(ref.read(filterWheelProvider.notifier).refresh());
+    }
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(
