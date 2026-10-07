@@ -178,7 +178,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2015, the Dart project authors",
     },
     "cupertino_icons": {
-        "version": "1.0.9",
+        # 2.0.0 verified 2026-10-07: LICENSE byte-identical to 1.0.9 (MIT, Vladimir Kharlampidi).
+        "version": "2.0.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2016 Vladimir Kharlampidi",
     },
@@ -220,7 +221,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "package_info_plus": {
-        "version": "10.2.1",
+        # 10.2.2 verified 2026-10-07: LICENSE byte-identical to 10.2.1.
+        "version": "10.2.2",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 The Chromium Authors",
     },
@@ -236,7 +238,9 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
     "url_launcher": {
-        "version": "6.3.2",
+        # 6.3.3 verified 2026-10-07: LICENSE drops the trailing "All rights
+        # reserved." from the copyright line; terms unchanged.
+        "version": "6.3.3",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2013 The Flutter Authors",
     },
@@ -246,8 +250,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2016, the Dart project authors",
     },
     "webview_all": {
-        # 1.4.1 verified 2026-09-19: LICENSE byte-identical to 1.3.5 (MIT, Abandoft).
-        "version": "1.4.1",
+        # 1.4.4 verified 2026-10-07: LICENSE byte-identical to 1.4.1 (MIT, Abandoft).
+        "version": "1.4.4",
         "license": "MIT",
         "copyright": "Copyright 2021-2026 Abandoft",
     },
