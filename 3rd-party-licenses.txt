@@ -879,7 +879,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/crypto/license
 
 ------------------------------------------------------------------------
-Package:        cupertino_icons 1.0.9
+Package:        cupertino_icons 2.0.0
 Copyright:      Copyright (c) 2016 Vladimir Kharlampidi
 License:        MIT
 License source: https://pub.dev/packages/cupertino_icons/license
@@ -933,7 +933,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/multicast_dns/license
 
 ------------------------------------------------------------------------
-Package:        package_info_plus 10.2.1
+Package:        package_info_plus 10.2.2
 Copyright:      Copyright 2017 The Chromium Authors
 License:        BSD-3-Clause
 License source: https://pub.dev/packages/package_info_plus/license
@@ -951,7 +951,7 @@ License:        MIT
 License source: https://pub.dev/packages/riverpod/license
 
 ------------------------------------------------------------------------
-Package:        url_launcher 6.3.2
+Package:        url_launcher 6.3.3
 Copyright:      Copyright 2013 The Flutter Authors
 License:        BSD-3-Clause
 License source: https://pub.dev/packages/url_launcher/license
@@ -963,7 +963,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/web_socket_channel/license
 
 ------------------------------------------------------------------------
-Package:        webview_all 1.4.1
+Package:        webview_all 1.4.4
 Copyright:      Copyright 2021-2026 Abandoft
 License:        MIT
 License source: https://pub.dev/packages/webview_all/license
