@@ -60,7 +60,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     // on the refresh thread, and GetInfo/ChangeFilter iterate it on the sequence thread. Deliberately
     // separate from _gate (the import must not run inside _gate — observable-callback re-entry) and
     // never nested inside it (readers snapshot under this lock BEFORE taking _gate).
-    private readonly object _profileFiltersLock = new();
+    // #1298 — static and shared with ManualFilterWheelService: both wheels write the same profile
+    // collection, and a router switch can overlap an Alpaca refresh-thread import with the manual
+    // wheel's sync. One lock for the one collection.
+    internal static readonly object ProfileFiltersLock = new();
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache (no blocking HTTP on
@@ -176,11 +179,11 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         }
     }
 
-    // Copy-on-read under _profileFiltersLock so iteration can never observe a concurrent import
+    // Copy-on-read under ProfileFiltersLock so iteration can never observe a concurrent import
     // mutating the observable collection. The only in-daemon writer is ImportProfileFilters (same
     // lock); the snapshot is tiny (filter count).
     private List<FilterInfo>? SnapshotProfileFilters() {
-        lock (_profileFiltersLock) {
+        lock (ProfileFiltersLock) {
             var filters = ProfileFilters();
             return filters is null ? null : new List<FilterInfo>(filters);
         }
@@ -328,7 +331,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     private void ImportProfileFilters(List<FilterSlotDto> slots) {
         // Resolve the collection reference INSIDE the lock (consistent with SnapshotProfileFilters)
         // so a concurrent ActiveProfile swap can't land the import in an orphaned collection.
-        lock (_profileFiltersLock) {
+        lock (ProfileFiltersLock) {
             var filters = ProfileFilters();
             if (filters is null) {
                 return; // REST-only construction (unit tests): no profile to import into

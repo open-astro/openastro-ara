@@ -81,9 +81,8 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
     private readonly INotificationService? _notifications;
     private readonly string? _stateFile;
     private readonly object _gate = new();
-    // Guards the NINA profile's observable filter collection (not safe for concurrent read+write);
-    // never taken inside _gate.
-    private readonly object _profileFiltersLock = new();
+    // The NINA profile's observable filter collection is guarded by the lock the Alpaca wheel uses
+    // (FilterWheelService.ProfileFiltersLock): one lock for the one collection. Never taken inside _gate.
 
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
@@ -282,6 +281,7 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
 
     private bool RequestSwap(List<FilterSlotDto> slots, int position) {
         int? current;
+        var withdrawn = false;
         lock (_gate) {
             if (_current == position) {
                 if (_pending is null) {
@@ -290,17 +290,22 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
                 // Asking for what is in the train cancels a prompt for something else.
                 _pending = null;
                 SignalLocked();
+                withdrawn = true;
                 current = _current;
-                _events?.ManualFilterSwap(null, null, current, NameAt(slots, position));
-                return false;
+            } else {
+                var unchanged = _pending == position;
+                _pending = position;
+                current = _current;
+                SignalLocked();
+                if (unchanged) {
+                    return true; // same prompt already standing: no second notification
+                }
             }
-            var unchanged = _pending == position;
-            _pending = position;
-            current = _current;
-            SignalLocked();
-            if (unchanged) {
-                return true; // same prompt already standing: no second notification
-            }
+        }
+        if (withdrawn) {
+            // Published after releasing _gate, like every other path.
+            _events?.ManualFilterSwap(null, null, current, NameAt(slots, position));
+            return false;
         }
         var targetName = NameAt(slots, position);
         var currentName = current is int c ? NameAt(slots, c) : null;
@@ -462,7 +467,7 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
             names = [];
         }
         var offsets = new Dictionary<int, int>();
-        lock (_profileFiltersLock) {
+        lock (FilterWheelService.ProfileFiltersLock) {
             var filters = _profileService?.ActiveProfile?.FilterWheelSettings?.FilterWheelFilters;
             bool connected;
             lock (_gate) {
@@ -487,7 +492,7 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
     }
 
     private List<FilterInfo>? SnapshotProfileFilters() {
-        lock (_profileFiltersLock) {
+        lock (FilterWheelService.ProfileFiltersLock) {
             var filters = _profileService?.ActiveProfile?.FilterWheelSettings?.FilterWheelFilters;
             return filters is null ? null : new List<FilterInfo>(filters);
         }
