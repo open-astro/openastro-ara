@@ -638,7 +638,10 @@ public partial class Program {
                 legacyProfile: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
                 // §29.2 — the mount's RA/Dec at readout for the OBJCTRA/OBJCTDEC/RA/DEC cards
                 // (Func<>: the telescope mediator is registered later in this file).
-                telescope: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()));
+                telescope: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                // The installed filter for FILTER / the catalog row / {filter} when a capture names
+                // none (every sequence TakeExposure). Func<>: registered later in this file.
+                filterWheel: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).

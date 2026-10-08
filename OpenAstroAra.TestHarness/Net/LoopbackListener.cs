@@ -51,6 +51,22 @@ public static class LoopbackListener {
         }
     }
 
+    /// <summary>
+    /// Closes a listener at teardown. On macOS and Linux (the managed <see cref="HttpListener"/>)
+    /// <see cref="HttpListener.Stop"/> already released the endpoint, and <see cref="HttpListener.Close"/>
+    /// releases it again by looking it up, which re-binds the port: if a parallel fixture took the
+    /// freed port in between, Close throws "Address already in use". The listener is finished either
+    /// way, so that throw is not the test's failure.
+    /// </summary>
+    public static void Close(HttpListener listener) {
+        ArgumentNullException.ThrowIfNull(listener);
+        try {
+            listener.Close();
+        } catch (HttpListenerException) {
+            // The port was reused by another fixture; nothing of ours is left bound.
+        }
+    }
+
     private static int FreePort() {
         using var probe = new TcpListener(IPAddress.Loopback, 0);
         probe.Start();
