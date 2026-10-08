@@ -13,6 +13,7 @@ import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/backup/backup_stream_state.dart';
 import '../../widgets/imaging/fault_panel.dart' show FaultHistoryTile;
+import '../../widgets/imaging/polar_error_rating.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
 import '../../widgets/library/load_more_button.dart';
@@ -556,6 +557,7 @@ class _SessionHeader extends ConsumerWidget {
               ],
             ),
           ),
+          _SessionPaResidualBadge(sessionId: session.id),
           _SessionFaultsBadge(
             sessionId: session.id,
             targetName: session.targetName,
@@ -642,6 +644,40 @@ class _SessionHeader extends ConsumerWidget {
 /// faults; otherwise an amber count that opens the session's fault timeline.
 /// Lazily fetched per card (like the frame grid): the sessions endpoint
 /// carries no fault count, so each visible card asks the §42.5 log directly.
+/// #1311 — the polar alignment left after Align during this session, measured
+/// from guiding ("PA ≥ 48″"); the tooltip carries every measurement, newest
+/// first. Nothing while loading, on error, or when the session was unguided.
+class _SessionPaResidualBadge extends ConsumerWidget {
+  final String sessionId;
+  const _SessionPaResidualBadge({required this.sessionId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rows = ref.watch(sessionPaResidualsProvider(sessionId)).asData?.value;
+    if (rows == null || rows.isEmpty) return const SizedBox.shrink();
+    final latest = rows.first;
+    final error = latest.paErrorMinArcmin!;
+    final color = latest.reliable ? zoneColor(error) : AraColors.textSecondary;
+    return Tooltip(
+      message: rows.map(paResidualDetail).join('\n\n'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.explore_outlined, size: 16, color: color),
+            const SizedBox(width: 4),
+            Text(
+              'PA ≥ ${formatPoleOffset(error).$1}',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SessionFaultsBadge extends ConsumerWidget {
   final String sessionId;
   final String targetName;

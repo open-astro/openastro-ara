@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/library/live_library.dart';
+import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/screens/library/image_library_screen.dart';
 import 'package:openastroara/services/library_api.dart';
 import 'package:openastroara/widgets/library/bulk_action_bar.dart';
@@ -165,6 +166,12 @@ class _FakeLibraryClient implements LibraryClient {
     return 'seq-resume-1';
   }
 
+  Map<String, List<PaResidual>> paResiduals = const {};
+
+  @override
+  Future<List<PaResidual>> sessionPaResiduals(String sessionId) async =>
+      paResiduals[sessionId] ?? const [];
+
   (List<String>, int)? rated;
   (List<String>, List<String>, List<String>)? tagged;
   (List<String>, bool)? deleted;
@@ -259,6 +266,31 @@ void main() {
     expect(find.textContaining('Ha · OIII'), findsOneWidget);
     // Both frames' thumbnails rendered (filter label overlay).
     expect(find.text('Ha'), findsNWidgets(2));
+  });
+
+  testWidgets('#1311: the session header shows the polar alignment residual '
+      'measured from guiding, every measurement in the tooltip', (tester) async {
+    final fake = _FakeLibraryClient(sessions: [_session()])
+      ..paResiduals = {
+        'sess-1': const [
+          PaResidual(id: 'late', status: PaResidualStatus.done, sampleSeconds: 300, paErrorMinArcmin: 2.5),
+          PaResidual(id: 'early', status: PaResidualStatus.done, sampleSeconds: 300, paErrorMinArcmin: 0.8),
+        ],
+      };
+    await _pump(tester, fake);
+
+    expect(find.text('PA ≥ 2′'), findsNothing, reason: 'under 10′ reads in arcseconds');
+    expect(find.text('PA ≥ 150″'), findsOneWidget, reason: 'the newest measurement');
+    final tip = tester.widget<Tooltip>(
+      find.ancestor(of: find.text('PA ≥ 150″'), matching: find.byType(Tooltip)),
+    );
+    expect(tip.message, contains('at least 150″'));
+    expect(tip.message, contains('at least 48″'));
+  });
+
+  testWidgets('#1311: an unguided session shows no PA badge', (tester) async {
+    await _pump(tester, _FakeLibraryClient(sessions: [_session()]));
+    expect(find.textContaining('PA ≥'), findsNothing);
   });
 
   testWidgets('the session card opens the §39.5 matching-flats dialog', (

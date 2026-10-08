@@ -433,6 +433,12 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.StopGuidingAsync(key, ct)));
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
+        // #1311 — polar alignment residuals measured from guiding, newest first; ?sessionId= narrows
+        // to one imaging session (the library's session header), ?limit= caps the rows (default 20).
+        guider.MapGet("/pa-residuals", async (Guid? sessionId, int? limit, IPaResidualLog log, CancellationToken ct) =>
+            Results.Ok(await log.ListAsync(sessionId, limit ?? 20, ct)))
+            .Produces<IReadOnlyList<PaResidualDto>>(StatusCodes.Status200OK)
+            .WithName("ListPaResiduals");
 
         // Guide-camera focus loop (Setup → Smart Focus): frames borrowed through the guider, measured here.
         // start: 202; 400 bad exposure/binning; 409 not connected / guiding / polar aligning / already running.

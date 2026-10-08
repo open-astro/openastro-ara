@@ -12,6 +12,9 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../fit_pane.dart';
+import 'polar_error_rating.dart';
+
+export 'polar_error_rating.dart';
 
 /// §45.10 dynamic bullseye zoom: the outer ring's radius in arcminutes for the
 /// current total error — ~5° while far off, 30′ once under 1°, 5′ once under
@@ -22,15 +25,6 @@ double bullseyeRangeArcmin(double? totalErrorArcmin) {
   if (total == null || total >= 60.0) return 300.0;
   if (total >= 5.0) return 30.0;
   return 5.0;
-}
-
-/// §45.10 color zones: red > 1°, yellow 10′–1°, green < 10′. Pure — unit-tested.
-Color zoneColor(double? totalErrorArcmin) {
-  final total = totalErrorArcmin;
-  if (total == null) return AraColors.textSecondary;
-  if (total >= 60.0) return AraColors.accentError;
-  if (total >= 10.0) return AraColors.accentBusy;
-  return AraColors.accentConnected;
 }
 
 /// Fractional dot offset inside the bullseye for the current error —
@@ -52,35 +46,11 @@ String formatArcmin(double? v) {
   return '$sign${v.abs().toStringAsFixed(1)}′';
 }
 
-/// Total polar error in the unit people read most easily: arcseconds under
-/// 10′ (`48″`), arcminutes under 1° (`24′`), degrees above (`1.5°`), with
-/// the unit spelled out. Pure — unit-tested.
-(String, String) formatPoleOffset(double arcmin) {
-  final a = arcmin.abs();
-  // Compare the ROUNDED figure, so 59.7′ reads 1.0° rather than "60′".
-  final arcsec = (a * 60).round();
-  if (arcsec < 600) return ('$arcsec″', 'arcseconds from the pole');
-  final arcminutes = a.round();
-  if (arcminutes < 60) return ('$arcminutes′', 'arcminutes from the pole');
-  return ('${(a / 60).toStringAsFixed(1)}°', 'degrees from the pole');
-}
-
 /// Worst-case declination drift, in arcseconds, that a polar error of
 /// [arcmin] causes over [seconds]: error × Earth's rotation rate
 /// (7.292e-5 rad/s), i.e. ~0.26″ per minute per arcminute of error.
 /// Pure — unit-tested.
 double maxDriftArcsec(double arcmin, double seconds) => arcmin.abs() * 60 * 7.2921e-5 * seconds;
-
-/// Plain-English verdict for a total error (label, what it means).
-/// Pure — unit-tested.
-(String, String) polarErrorRating(double arcmin) {
-  final a = arcmin.abs();
-  if (a <= 1) return ('Excellent', "Polar alignment won't limit your exposures.");
-  if (a <= 3) return ('Very good', 'Plenty for guided imaging.');
-  if (a <= 10) return ('Good', 'Fine with guiding; keep unguided exposures short.');
-  if (a <= 30) return ('Rough', 'Keep adjusting — stars will drift in longer exposures.');
-  return ('Far off', 'Keep turning the knobs toward the arrows.');
-}
 
 /// [arcmin] as a share of the Moon's ~31′ width: `1/39 of the Moon's width`
 /// or `1.5× the Moon's width`. Pure — unit-tested.
@@ -858,7 +828,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_ratingIcon(total!), size: 34, color: color),
+                          Icon(polarErrorRatingIcon(total!), size: 34, color: color),
                           const SizedBox(width: 10),
                           Text(rating.$1,
                               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: color)),
@@ -902,15 +872,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         ],
       ),
     );
-  }
-
-  static IconData _ratingIcon(double arcmin) {
-    final a = arcmin.abs();
-    if (a <= 1) return Icons.verified_outlined;
-    if (a <= 3) return Icons.thumb_up_outlined;
-    if (a <= 10) return Icons.check_circle_outline;
-    if (a <= 30) return Icons.warning_amber_rounded;
-    return Icons.error_outline;
   }
 
   Widget _fact(String label, String value) {

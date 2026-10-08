@@ -318,6 +318,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Related:** #1215 (follow-ups of #1213), #1121, CHANGELOG [Unreleased]
 
+### 2026-10-08 — #1311 polar alignment residual from guiding
+
+**Endpoint(s) or area:** new WS event `guider.pa_residual`; `GET /api/v1/equipment/guider` (`runtime.pa_residual`, nullable); new `GET /api/v1/equipment/guider/pa-residuals?sessionId=&limit=`.
+
+**Decision:** each guided run (guiding started → stopped) is measured once, over its first 300 s of clean guiding (frames inside a dither settle or a guider pause are left out; a dither, settle, pause or lost star closes a segment and each segment gets its own intercept). The daemon rebuilds the uncorrected Dec motion as the Dec offset minus every Dec pulse already applied × the calibration's Dec rate (`get_calibration_data` yRate, read once per run), fits its slope, and reports `pa_error_min_arcmin = |drift ″/min| / (3600 ω)` ≈ 3.809 × drift. Payload (`PaResidualDto`): `{ id, status: measuring|done|unavailable, started_utc, completed_utc?, sample_seconds, target_seconds, frames, drift_arcsec_per_min?, pa_error_min_arcmin?, uncertainty_arcmin?, reliable?, hour_angle_hours?, dec_deg?, align_error_arcmin?, align_ended_utc?, session_id?, reason? }`. `measuring` is published at the start and every 30 s of sample; `done` once. `reason` on `unavailable`: `lock_shift` (comet tracking moves the star in Dec on purpose), `no_calibration`, `no_pixel_scale`, `no_fit`. `reliable` is false when the 1σ uncertainty (least squares, widened by the residuals' lag-1 autocorrelation) exceeds max(1′, half the value). Guiding that stops after 120 s of sample still reports; earlier, the measurement is dropped and the previous result is re-published (`{ status: "idle" }` when there is none). `align_error_arcmin` is the newest Polar Align result with a measured error (complete, or stopped while adjusting) in the 12 h before. Hour angle and Dec are the mount's at the end. A `done` result is logged to the `pa_residuals` table with the running imaging session (`ActiveRunSessionRegistry.Current`); the list route returns rows newest first, `?sessionId=` narrows to one session, `limit` defaults to 20 (1–500).
+
+**Reasoning:** plate-solve alignment gives the geometric error; the drift the guider actually fights also carries refraction, flexure and the mount's own slop, and a drift check costs minutes of setup. The guide stream already has it. The value is a LOWER BOUND: Dec drift at one hour angle sees only the component of the error across the star's hour circle, so the client says "≥". The Dec of the star does not enter: dδ/dt = ω ε sin θ (rotating the sky about a pole ε off the true one), so the 1 / cos δ in Barrett's formula, which PHD2's Guiding Assistant copies, is not applied; at Dec 45° it would read 41 % high.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1pa-residuals`; `Services/PaResidualEstimator.cs`, `Services/PaResidualTracker.cs`, `Services/GuiderService.PaResidual.cs`, `Services/SqlitePaResidualLog.cs`, `Services/SqlitePolarAlignmentLog.cs` (`GetLatestMeasuredAsync`), `Contracts/EquipmentDtos.cs` (`PaResidualDto`), `PHD2Guider.GetDecGuideRateAsync`; client `state/guider/pa_residual_state.dart`, `widgets/imaging/guiding_strip.dart`.
+
+**Related:** #1311; tests `PaResidualEstimatorTest`, `PaResidualTrackerTest`, `SqlitePaResidualLogTest`, `GuiderFakeIntegrationTest.A_guided_run_reports_the_polar_alignment_residual_from_its_dec_drift`.
+
+---
+
 ### 2026-10-07 — #1299 Bahtinov mask focus readout; autofocus and sequence starts refused while it runs
 
 **Endpoint(s) or area:** new `POST /api/v1/bahtinov-focus/start`, `POST …/stop`, `GET …/state`, `GET …/frame`; `POST /api/v1/equipment/focuser/autofocus` and `POST /api/v1/sequences/{id}/start` gain a 409.
@@ -632,4 +646,15 @@ is connected, straight from its GuideStep events):
         guiding_started | guiding_stopped | paused | resumed | lock_position_lost
       A dither is drawn as dithered → (settling …) → settle_done; the client
       shades the settle window and marks the dither, exactly as PHD2 does.
+  guider.pa_residual { id, status, started_utc, completed_utc?, sample_seconds,
+                       target_seconds, frames, drift_arcsec_per_min?,
+                       pa_error_min_arcmin?, uncertainty_arcmin?, reliable?,
+                       hour_angle_hours?, dec_deg?, align_error_arcmin?,
+                       align_ended_utc?, session_id?, reason? }
+      #1311 — the polar alignment residual from the first 300 s of clean
+      guiding of each guided run: status measuring (at the start, then every
+      30 s of sample) → done | unavailable (reason). pa_error_min_arcmin is a
+      lower bound. A dropped measurement re-publishes the previous result, or
+      { status: "idle" }. The same object is runtime.pa_residual on
+      GET /equipment/guider.
 ```

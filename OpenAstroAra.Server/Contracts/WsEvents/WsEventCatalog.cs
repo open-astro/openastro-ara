@@ -101,6 +101,10 @@ public static class WsEventCatalog {
     // calibration_complete | calibration_failed {error?} | guiding_started | guiding_stopped |
     // paused | resumed | lock_position_lost. Detail fields are omitted when PHD2 sent none.
     public const string GuiderEvent = "guider.event";
+    // #1311 — the polar alignment residual measured from the first minutes of each guided run:
+    // payload = PaResidualDto (status measuring → done | unavailable; a dropped measurement
+    // republishes the previous result, or { status: "idle" } when there is none).
+    public const string GuiderPaResidual = "guider.pa_residual";
     public const string GuiderDitherComplete = "guider.dither_complete";
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).

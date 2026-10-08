@@ -378,6 +378,20 @@ public partial class Program {
             };
             // ...but never the lease a running polar alignment holds (resolved lazily for the same reason).
             guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
+            // #1311 — the polar alignment residual from guiding: logged with the running imaging
+            // session, compared with tonight's Polar Align result, stamped with where the mount pointed.
+            guider.PaResidualLog = sp.GetService<IPaResidualLog>();
+            guider.PolarAlignmentLog = sp.GetService<IPolarAlignmentLog>();
+            guider.ActiveRunSession = () => sp.GetService<ActiveRunSessionRegistry>()?.Current;
+            guider.MountPointing = () => {
+                var info = sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()?.GetInfo();
+                if (info is not { Connected: true } || !double.IsFinite(info.SiderealTime)) {
+                    return null;
+                }
+                var ha = (info.SiderealTime - info.RightAscension) % 24.0;
+                ha = ha >= 12 ? ha - 24 : ha < -12 ? ha + 24 : ha;
+                return (info.Declination, ha);
+            };
             return guider;
         });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
@@ -391,6 +405,8 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>()));
         builder.Services.AddSingleton<IPolarAlignmentLog>(sp =>
             new SqlitePolarAlignmentLog(sp.GetRequiredService<IAraDatabase>()));
+        builder.Services.AddSingleton<IPaResidualLog>(sp =>
+            new SqlitePaResidualLog(sp.GetRequiredService<IAraDatabase>()));
         // §45 capture-fetch — one shared HttpClient for the daemon's capture endpoint.
         builder.Services.AddSingleton<IPolarAlignFrameFetcher, HttpPolarAlignFrameFetcher>();
         builder.Services.AddSingleton<IPolarAlignService>(sp =>

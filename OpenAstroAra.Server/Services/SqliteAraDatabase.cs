@@ -253,6 +253,29 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
             """, ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_polar_alignments_started_at ON polar_alignments(started_at);", ct);
 
+        // #1311 — one row per polar-alignment residual measured from guiding (the first minutes of a
+        // guided run). session_id is the imaging session running at the time, when exactly one is.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS pa_residuals (
+                id                     TEXT PRIMARY KEY NOT NULL,
+                session_id             TEXT REFERENCES sessions(id),
+                started_at             TEXT NOT NULL,
+                completed_at           TEXT NOT NULL,
+                sample_seconds         REAL NOT NULL,
+                frames                 INTEGER NOT NULL,
+                drift_arcsec_per_min   REAL NOT NULL,
+                pa_error_min_arcmin    REAL NOT NULL,
+                uncertainty_arcmin     REAL NOT NULL,
+                reliable               INTEGER NOT NULL,
+                hour_angle_hours       REAL,
+                dec_deg                REAL,
+                align_error_arcmin     REAL,
+                align_ended_at         TEXT
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_completed_at ON pa_residuals(completed_at);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_session_id ON pa_residuals(session_id);", ct);
+
         LogCatalogInitialized(DatabasePath);
     }
 

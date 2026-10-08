@@ -147,6 +147,80 @@ namespace OpenAstroAra.Test {
             Assert.That(marker.GetProperty("dx_px").GetDouble(), Is.EqualTo(2.0));
         }
 
+        private sealed class RecordingPaResidualLog : IPaResidualLog {
+            public List<PaResidualDto> Rows { get; } = new();
+            public Task InsertAsync(PaResidualDto result, CancellationToken ct) {
+                lock (Rows) {
+                    Rows.Add(result);
+                }
+                return Task.CompletedTask;
+            }
+            public Task<IReadOnlyList<PaResidualDto>> ListAsync(Guid? sessionId, int limit, CancellationToken ct) =>
+                Task.FromResult<IReadOnlyList<PaResidualDto>>(Rows);
+        }
+
+        [Test]
+        public async Task A_guided_run_reports_the_polar_alignment_residual_from_its_dec_drift() {
+            // #1311 — end to end through the real PHD2Guider: guiding starts, the guider corrects a steady
+            // Dec drift, and the daemon rebuilds that drift from the offsets plus the pulses (the
+            // calibration's Dec rate from get_calibration_data), publishes it and logs it.
+            const double ratePxPerSec = 4.0, scale = 1.5, driftPxPerSec = 0.05; // 4.5″/min → 17.1′
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(scale));
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            fake.OnRpc("get_calibration_data", _ => new JsonObject {
+                ["xAngle"] = -114.5, ["xRate"] = 3.2, ["xParity"] = "+",
+                ["yAngle"] = -24.5, ["yRate"] = ratePxPerSec, ["yParity"] = "+",
+            });
+            var ws = new RecordingBroadcaster();
+            var log = new RecordingPaResidualLog();
+            var session = Guid.NewGuid();
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws) {
+                PaResidualLog = log,
+                ActiveRunSession = () => session,
+                MountPointing = () => (41.5, -0.75),
+                // Frames 2 s apart on the guider's clock, not the test's.
+                PaResidualStepTime = step => step.Frame * 2.0,
+            };
+            svc.UsePaResidualTracker(new PaResidualTracker(targetSeconds: 30, minSeconds: 10, progressEverySeconds: 10));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().PixelScale > 0).ConfigureAwait(false), Is.True,
+                "precondition: the guider's pixel scale was read on connect");
+
+            await fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            var star = 0.0;
+            for (var frame = 1; frame <= 20; frame++) {
+                var pulseMs = 0.7 * Math.Abs(star) / (ratePxPerSec / 1000.0);
+                var direction = star > 0 ? "South" : "North"; // PHD2: a positive Dec offset gets a South pulse
+                await fake.BroadcastAsync(PhdEvents.GuideStep(0, star, frame: frame, decDurationMs: pulseMs, decDirection: direction))
+                    .ConfigureAwait(false);
+                star += (direction == "South" ? -pulseMs : pulseMs) * ratePxPerSec / 1000.0 + driftPxPerSec * 2.0;
+            }
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.pa_residual").Any(e => e.GetProperty("status").GetString() == "done"))
+                .ConfigureAwait(false), Is.True, "the run's residual was published");
+            var events = ws.Of("guider.pa_residual");
+            Assert.That(events[0].GetProperty("status").GetString(), Is.EqualTo("measuring"), "guiding started → measuring");
+            var done = events.Single(e => e.GetProperty("status").GetString() == "done");
+            Assert.That(done.GetProperty("drift_arcsec_per_min").GetDouble(), Is.EqualTo(4.5).Within(1e-6));
+            Assert.That(done.GetProperty("pa_error_min_arcmin").GetDouble(),
+                Is.EqualTo(4.5 * PaResidualEstimator.ArcminPerArcsecPerMin).Within(1e-5));
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.True);
+            Assert.That(done.GetProperty("hour_angle_hours").GetDouble(), Is.EqualTo(-0.75));
+            Assert.That(done.GetProperty("session_id").GetGuid(), Is.EqualTo(session));
+
+            Assert.That(await WaitUntilAsync(() => log.Rows.Count == 1).ConfigureAwait(false), Is.True, "logged once");
+            var status = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status!.Runtime.PaResidual?.Status, Is.EqualTo("done"), "a reconnecting client reads it from GET");
+            Assert.That(fake.ReceivedMethods, Does.Contain("get_calibration_data"));
+        }
+
         [Test]
         public async Task A_connect_naming_a_DIFFERENT_target_reconnects_instead_of_no_op() {
             // The wizard's Test connection while the daemon is still linked to the OLD

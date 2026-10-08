@@ -307,6 +307,26 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             });
         }
 
+        /// <summary>
+        /// #1311 — the mount calibration's Dec guide rate in guide-camera pixels per second
+        /// (<c>get_calibration_data</c> yRate; PHD2 reports px/ms × 1000). Null when the guider is
+        /// not calibrated, answers without a rate, or the call fails.
+        /// </summary>
+        public async Task<double?> GetDecGuideRateAsync() {
+            try {
+                var resp = await SendMessage(new Phd2GetCalibrationData(), 10000).ConfigureAwait(false);
+                if (resp?.error == null && resp?.result is JObject calibration
+                        && calibration["yRate"] is JToken token
+                        && token.Type is JTokenType.Float or JTokenType.Integer) {
+                    var rate = token.Value<double>();
+                    return double.IsFinite(rate) && rate > 0 ? rate : null;
+                }
+            } catch (Exception ex) {
+                Logger.Error(ex);
+            }
+            return null;
+        }
+
         private async Task<bool> ProfileSelectionChanged() {
             if (SelectedProfile == null) {
                 Logger.Error("No profile selected");

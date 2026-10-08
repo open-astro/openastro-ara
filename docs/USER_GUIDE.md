@@ -173,6 +173,17 @@ framing/focus loop when you need to point or focus by eye.
   good start on a harmonic mount). Apply sends only these runtime-safe values to the guider, so
   guiding keeps running; equipment and optics changes live in **Settings → Guider** and do
   reconnect the guider.
+- **Polar alignment left after Align.** Each time guiding starts, Ara measures how much polar
+  alignment error is really left, at no setup cost: over the first 5 minutes of clean guiding
+  (dithers and settling are left out) it adds the guider's Dec corrections back onto the star's
+  offset to get the drift the guider is fighting, and turns that into a polar alignment error. The
+  guiding strip's header reads "PA residual · measuring 2:00 / 5:00", then e.g. **PA ≥ 48″ ·
+  Excellent**, with the same bands as the Polar Align card. It catches what a plate-solve alignment
+  can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
+  one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
+  tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm
+  figure; "n/a" means it could not be measured (lock-position shift on, or no calibration data).
+  Guiding that stops after 2 minutes still reports what it has.
 
 ## 7. Unattended safety (the 3 a.m. story)
 
@@ -258,7 +269,8 @@ Ara assumes you're asleep while it works:
 
 - **Library** organizes frames by session/target with a frame viewer (stretch presets + manual),
   auto-rating with HFR drift, bulk operations, and **Resume Target** to pick up where a previous
-  night stopped.
+  night stopped. A session that was guided shows the polar alignment left after Align in its
+  header (**PA ≥ 48″**); hover it for every measurement that night.
 - **Stats** rolls the catalog up: per-target integration, focus-vs-temperature trends, guiding
   RMS history, frame-quality scoring, best-frames sorting, calendar heatmap, CSV export.
 
