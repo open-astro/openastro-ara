@@ -1291,9 +1291,6 @@ public partial class Program {
         Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes, guide-camera focus frames and Bahtinov readout frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
     private static partial void LogSyntheticSky(ILogger logger, string envVar, int best, double hfr, double scale);
 
-    /// <summary>The guide camera's optics for the live-focus target: an off-axis guider sees the main
-    /// telescope's focal length and aperture with the guide camera's pixels; a guide scope uses the
-    /// §63.19 guide focal length (its aperture is not in the profile, so diffraction is left out).</summary>
     /// <summary>#1299 — the main telescope's working focal ratio (the reducer applied) and pixel size for the
     /// Bahtinov readout's focus zone, or null when the profile lacks the focal length, aperture or pixel size.</summary>
     internal static BahtinovOptics? BahtinovOpticsFor(IProfileStore store) {
@@ -1305,6 +1302,9 @@ public partial class Program {
         return new BahtinovOptics(focal / optics.ApertureMm, optics.PixelSizeUm);
     }
 
+    /// <summary>The guide camera's optics for the live-focus target: an off-axis guider sees the main
+    /// telescope's focal length and aperture with the guide camera's pixels; a guide scope uses the
+    /// §63.19 guide focal length (its aperture is not in the profile, so diffraction is left out).</summary>
     internal static (double FocalLengthMm, double PixelSizeUm, double ApertureMm)? GuideOpticsFor(IProfileStore store) {
         var phd2 = store.GetPhd2Settings();
         if (string.Equals(phd2.GuiderSetupType, "oag", StringComparison.OrdinalIgnoreCase)) {
