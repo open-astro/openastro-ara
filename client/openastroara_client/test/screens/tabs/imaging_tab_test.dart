@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/screens/tabs/imaging_tab.dart';
+import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/imaging/exposure_activity_state.dart';
@@ -79,6 +80,15 @@ Future<void> _teardown(WidgetTester tester, _Rig rig) async {
 final _banner = find.text('Exposing · Light');
 
 void main() {
+  testWidgets('the guiding strip is sized from the Live tab height', (tester) async {
+    final rig = await _pumpTab(tester);
+    final tab = tester.getSize(find.byType(ImagingTab)).height;
+    final strip = tester.widget<GuidingStrip>(find.byType(GuidingStrip));
+    expect(strip.graphHeight, GuidingStrip.graphHeightFor(tab));
+    expect(strip.graphHeight, isNot(GuidingStrip.defaultGraphHeight));
+    await _teardown(tester, rig);
+  });
+
   testWidgets('the rail exposure timer shows for a daemon exposure, and '
       'steps aside while Take One is capturing', (tester) async {
     final rig = await _pumpTab(tester);

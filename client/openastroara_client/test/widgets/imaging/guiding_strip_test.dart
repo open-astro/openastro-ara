@@ -119,7 +119,8 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     bool withServer = true,
     ProfileApi? profileApi,
     Stream<WsEvent>? ws,
-    GuiderEquipmentClient? equipment}) async {
+    GuiderEquipmentClient? equipment,
+    double graphHeight = GuidingStrip.defaultGraphHeight}) async {
   final api = _FakeGuiderApi()..status = status;
   final equipmentClient = equipment ?? _RecordingEquipmentClient();
   final container = ProviderContainer(overrides: [
@@ -146,8 +147,8 @@ Future<ProviderContainer> _pump(WidgetTester tester,
   container.read(guideMarkersProvider.notifier).now = tick;
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(
-      home: Scaffold(body: GuidingStrip()),
+    child: MaterialApp(
+      home: Scaffold(body: GuidingStrip(graphHeight: graphHeight)),
     ),
   ));
   // Let saved servers load + the initial status read land.
@@ -217,6 +218,31 @@ void main() {
           'pixel_scale_arcsec': ?scale,
         },
       );
+
+  testWidgets('at its laptop floor (110 px) the open strip fits its stats grid', (tester) async {
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(ws.close);
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        ),
+        ws: ws.stream,
+        graphHeight: GuidingStrip.graphHeightFor(500));
+    expect(GuidingStrip.graphHeightFor(500), 110);
+    for (var i = 0; i < 5; i++) {
+      ws.add(step(i, raArcsec: 0.3 * i, decArcsec: -0.2 * i, scale: 1.5));
+    }
+    await tester.pump();
+    await tester.pump();
+    // Six stats in a 2x3 grid plus the frame count: the old single column of
+    // six rows overflowed the 110 px floor.
+    expect(tester.takeException(), isNull);
+    expect(find.text('RMS RA'), findsOneWidget);
+    expect(find.text('RA Osc'), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
 
   testWidgets('pixel-only steps plot and read in px until a scale is known, '
       'then in arcsec from the guide train', (tester) async {
