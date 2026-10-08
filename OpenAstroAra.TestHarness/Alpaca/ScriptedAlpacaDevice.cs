@@ -156,7 +156,7 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     public async ValueTask DisposeAsync() {
         await _cts.CancelAsync().ConfigureAwait(false);
         try { _listener.Stop(); } catch (ObjectDisposedException) { }
-        _listener.Close();
+        LoopbackListener.Close(_listener);
         try {
             await _loop.ConfigureAwait(false);
         } catch (HttpListenerException) {

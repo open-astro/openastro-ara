@@ -124,11 +124,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         IObservingConditionsService? weather = null,
         Func<ICoolingFanActuator?>? fan = null,
         Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? legacyProfile = null,
-        Func<ITelescopeMediator?>? telescope = null) {
+        Func<ITelescopeMediator?>? telescope = null,
+        Func<IFilterWheelMediator?>? filterWheel = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _fan = fan;
         _legacyProfile = legacyProfile;
         _telescope = telescope;
+        _filterWheel = filterWheel;
         _events = events;
         _faults = faults;
         _frames = frames;
@@ -159,6 +161,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // OBJCTRA/OBJCTDEC/RA/DEC cards. Func<>: the telescope mediator is registered after this
     // service in Program.cs.
     private readonly Func<ITelescopeMediator?>? _telescope;
+    // The filter actually in the light path, for frames whose request names none: a sequence's
+    // TakeExposure carries no FilterType (the filter is set by a separate SwitchFilter step), so
+    // without this FILTER, the catalog row and the {filter} filename token stay empty on every
+    // wheel. Func<>: the filter-wheel mediator is registered after this service in Program.cs.
+    private readonly Func<IFilterWheelMediator?>? _filterWheel;
 
     /// <summary>A frame's pointing as written to its header, with the epoch the numbers are in:
     /// J2000 when the transform succeeded, else the mount's native epoch (see
@@ -610,6 +617,22 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     }
 
     /// <summary>
+    /// The request with its filter filled from the connected wheel when it names none. A named
+    /// filter is kept: it is what the caller drove the wheel to. A disconnected wheel or one
+    /// reporting no selected filter leaves the frame unfiltered (a mono rig without a wheel), and
+    /// so does a wheel still moving or a manual swap still pending: the filter in the light path
+    /// is unknown then, and the old slot's name would be wrong.
+    /// </summary>
+    internal ExposureRequestDto WithInstalledFilter(ExposureRequestDto request) {
+        if (!string.IsNullOrWhiteSpace(request.FilterName)) {
+            return request;
+        }
+        var info = _filterWheel?.Invoke()?.GetInfo();
+        var installed = info is { Connected: true, IsMoving: false } ? info.SelectedFilter?.Name : null;
+        return string.IsNullOrWhiteSpace(installed) ? request : request with { FilterName = installed };
+    }
+
+    /// <summary>
     /// The device half of a capture — settings → expose → poll ImageReady → download → pixel
     /// conversion — extracted from <see cref="CaptureCoreAsync"/> so the §59 autofocus sweep can
     /// capture analysis frames through the IDENTICAL device path without the persistence half
@@ -799,6 +822,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogPreCaptureStoreEjected(frameId, ejectedDir);
             return false;
         }
+        request = WithInstalledFilter(request);
         var exposed = await ExposeAndDownloadAsync(client, frameId, request, imageType.ToLowerInvariant(), ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged

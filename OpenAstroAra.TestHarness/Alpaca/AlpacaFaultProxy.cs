@@ -444,7 +444,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         await Task.WhenAll(_inFlight.Keys)
             .ContinueWith(static _ => { }, TaskScheduler.Default)
             .ConfigureAwait(false);
-        _listener.Close();
+        LoopbackListener.Close(_listener);
         _client.Dispose();
         _handler.Dispose();
         _cts.Dispose();

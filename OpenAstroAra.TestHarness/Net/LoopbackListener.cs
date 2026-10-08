@@ -31,6 +31,10 @@ namespace OpenAstroAra.TestHarness.Net;
 /// </remarks>
 public static class LoopbackListener {
     private const int MaxAttempts = 8;
+    // EADDRINUSE as the managed HttpListener reports it (raw errno); any other teardown failure
+    // still fails the test.
+    private const int EaddrinuseMacOs = 48;
+    private const int EaddrinuseLinux = 98;
 
     /// <summary>
     /// Returns a started <see cref="HttpListener"/> bound to <c>http://127.0.0.1:{port}/</c>
@@ -48,6 +52,22 @@ public static class LoopbackListener {
                 // Port stolen between the probe release and Start() — try a fresh one.
                 listener.Close();
             }
+        }
+    }
+
+    /// <summary>
+    /// Closes a listener at teardown. On macOS and Linux (the managed <see cref="HttpListener"/>)
+    /// <see cref="HttpListener.Stop"/> already released the endpoint, and <see cref="HttpListener.Close"/>
+    /// releases it again by looking it up, which re-binds the port: if a parallel fixture took the
+    /// freed port in between, Close throws "Address already in use". The listener is finished either
+    /// way, so that throw is not the test's failure.
+    /// </summary>
+    public static void Close(HttpListener listener) {
+        ArgumentNullException.ThrowIfNull(listener);
+        try {
+            listener.Close();
+        } catch (HttpListenerException ex) when (ex.ErrorCode is EaddrinuseMacOs or EaddrinuseLinux) {
+            // The port was reused by another fixture; nothing of ours is left bound.
         }
     }
 
