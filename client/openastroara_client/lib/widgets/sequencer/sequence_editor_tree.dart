@@ -272,7 +272,7 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
         final isCurrent = currentKey != null && rowKey == currentKey;
         final isCompleted = completedKeys.contains(rowKey);
         final isContainerRow = isContainer(row.node);
-        // What the container DOES ("× 56 · 310 s · ≈ 4.8 h", "AF every 23"),
+        // What the container DOES ("× 56 · 5.2 min · ≈ 4.8 h", "AF every 23"),
         // not how many conditions/triggers it holds: a bare "⟳ 1" on a 56-frame
         // loop read as "loops once".
         final summary = isContainerRow ? summarizeContainer(row.node) : null;

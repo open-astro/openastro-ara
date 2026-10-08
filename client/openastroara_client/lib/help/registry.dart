@@ -1328,8 +1328,8 @@ const Map<String, Help> helpRegistry = {
         'then press **"<name> is in"**. A run waits for as long as it takes; it does not fail. '
         '**Cancel swap** fails that one step instead, and its retries apply.\n\n'
         '**Which filter is in.** Ara remembers the last filter you confirmed, across restarts. If you '
-        'swap by hand without being asked, tap the filter on the card so the FITS `FILTER` header and '
-        'focus offsets stay right.\n\n'
+        'swap by hand without being asked, tap the filter on the card so focus offsets and the FITS `FILTER` header '
+        '(Imaging tab captures) stay right.\n\n'
         'Focus offsets and per-filter autofocus settings carry over from the profile\'s filter list.',
     relatedSettings: ['eq.filterwheel.slot_labels'],
   ),

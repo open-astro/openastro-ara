@@ -50,7 +50,7 @@ class LoopSummary {
     return Duration(milliseconds: (frames * exp * 1000).round());
   }
 
-  /// The row chip for the loop: "× 56 · 310 s · ≈ 4.8 h". Null when the
+  /// The row chip for the loop: "× 56 · 5.2 min · ≈ 4.8 h". Null when the
   /// container has no Loop or loops just once (nothing to say).
   String? get loopChip {
     final n = iterations;
@@ -174,7 +174,7 @@ String _triggerNote(Map<String, dynamic> t) {
   return def?.label ?? shortTypeName(type) ?? 'trigger';
 }
 
-/// "310 s", "5 min", "5.2 min".
+/// "90 s", "5 min", "5.2 min".
 String formatSeconds(double s) {
   if (s < 120) return '${_trim(s)} s';
   final m = s / 60;
