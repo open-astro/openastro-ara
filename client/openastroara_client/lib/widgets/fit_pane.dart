@@ -116,6 +116,19 @@ class _RenderFitColumn extends RenderBox
     if (child.parentData is! _FitParentData) child.parentData = _FitParentData();
   }
 
+  // No dry layout: the fill height depends on laying the other children
+  // out. Asserting with a reason beats a silent Size.zero under a Wrap or an
+  // IntrinsicHeight.
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    assert(debugCannotComputeDryLayout(
+      reason: 'FitColumn lays its children out to find the fill height; it cannot '
+          'be measured without layout. Keep it out of IntrinsicHeight, Wrap and '
+          'similar parents (see FitPane).',
+    ));
+    return Size.zero;
+  }
+
   @override
   void performLayout() {
     final width = constraints.maxWidth;
@@ -188,6 +201,19 @@ class _RenderFitRow extends RenderBox
   @override
   void setupParentData(RenderBox child) {
     if (child.parentData is! _FitParentData) child.parentData = _FitParentData();
+  }
+
+  // No dry layout: the fill height depends on laying the other children
+  // out. Asserting with a reason beats a silent Size.zero under a Wrap or an
+  // IntrinsicHeight.
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    assert(debugCannotComputeDryLayout(
+      reason: 'FitRow lays its children out to find the fill height; it cannot '
+          'be measured without layout. Keep it out of IntrinsicHeight, Wrap and '
+          'similar parents (see FitPane).',
+    ));
+    return Size.zero;
   }
 
   @override

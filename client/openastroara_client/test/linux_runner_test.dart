@@ -25,4 +25,18 @@ void main() {
     });
   });
 
+  test('planetarium bounds that arrive while hidden are applied on show', () {
+    // A size request set while the webview was hidden read as unchanged on
+    // show and GTK kept the old allocation (window grown behind another tab).
+    final overlay = File('linux/runner/planetarium_overlay.cc').readAsStringSync();
+    final setBounds = overlay.substring(overlay.indexOf('strcmp(method, "setBounds")'),
+        overlay.indexOf('strcmp(method, "setVisible")'));
+    expect(setBounds, contains('state->webview_widget != nullptr && state->visible'));
+    final apply = overlay.substring(overlay.indexOf('void apply_visibility('),
+        overlay.indexOf('gtk_widget_hide(state->webview_widget);'));
+    expect(apply, contains('if (!was_visible) {'));
+    expect(apply.substring(apply.indexOf('if (!was_visible) {')),
+        contains('gtk_widget_set_size_request(state->webview_widget, state->rect.width,'));
+  });
+
 }
