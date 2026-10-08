@@ -276,7 +276,7 @@ class _Hero extends StatelessWidget {
           ),
           if (status.active) ...[
             const SizedBox(height: 14),
-            _TurnHint(hint: hint),
+            TurnHint(hint: hint),
           ],
           const SizedBox(height: 18),
           const Divider(height: 1, color: Color(0x1FFFFFFF)),
@@ -388,9 +388,9 @@ double _medianEndingAt(List<GuideFocusSample> measured, int end) {
 
 /// The advice as a bold tinted capsule (the polar-align knob hint), with the
 /// one-line detail under it.
-class _TurnHint extends StatelessWidget {
+class TurnHint extends StatelessWidget {
   final GuideFocusHint hint;
-  const _TurnHint({required this.hint});
+  const TurnHint({super.key, required this.hint});
 
   @override
   Widget build(BuildContext context) {

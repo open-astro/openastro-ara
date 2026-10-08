@@ -997,6 +997,20 @@ public partial class Program {
                 () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.RotationTolerance ?? 1.0,
                 () => sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>().ActiveProfile?.PlateSolveSettings.ExposureTime ?? 2.0,
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RotationAssistService>>()));
+        // #1299 — the Bahtinov mask focus readout (Setup → Smart Focus → Main telescope): the main camera through
+        // the analysis seam, the profile's optics for the focus zone. It refuses to start while an autofocus run
+        // or a sequence has the camera (and those refuse to start while it runs — see the run guards).
+        builder.Services.AddSingleton<IBahtinovFocusService>(sp =>
+            new BahtinovFocusService(
+                // Development only (SyntheticSky): a mask star whose offset follows the simulator focuser.
+                sp.GetService<SyntheticSkySettings>() is { } sky
+                    ? new SyntheticBahtinovFrameSource(sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(), sky)
+                    : sp.GetRequiredService<IAnalysisFrameSource>(),
+                () => BahtinovOpticsFor(sp.GetRequiredService<IProfileStore>()),
+                () => sp.GetRequiredService<AutofocusRunTracker>().IsRunning ? "an autofocus run is in progress"
+                    : sp.GetRequiredService<ActiveRunSessionRegistry>().HasAny ? "a sequence is running"
+                    : null,
+                sp.GetRequiredService<ILogger<BahtinovFocusService>>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
@@ -1037,6 +1051,7 @@ public partial class Program {
         // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
         app.MapAutofocusEndpoints();
         app.MapRotationAssistEndpoints();
+        app.MapBahtinovFocusEndpoints();
 
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();
@@ -1273,12 +1288,23 @@ public partial class Program {
     private static partial void LogPlateSolverWarning(ILogger logger, string warning);
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes and guide-camera focus frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
+        Message = "SYNTHETIC SKY ({EnvVar}): autofocus probes, guide-camera focus frames and Bahtinov readout frames are RENDERED, not captured — best focus at {Best}, HFR {Hfr} there, {Scale} focuser steps per pixel of defocus. Development only.")]
     private static partial void LogSyntheticSky(ILogger logger, string envVar, int best, double hfr, double scale);
 
     /// <summary>The guide camera's optics for the live-focus target: an off-axis guider sees the main
     /// telescope's focal length and aperture with the guide camera's pixels; a guide scope uses the
     /// §63.19 guide focal length (its aperture is not in the profile, so diffraction is left out).</summary>
+    /// <summary>#1299 — the main telescope's working focal ratio (the reducer applied) and pixel size for the
+    /// Bahtinov readout's focus zone, or null when the profile lacks the focal length, aperture or pixel size.</summary>
+    internal static BahtinovOptics? BahtinovOpticsFor(IProfileStore store) {
+        var optics = store.GetOpticsSettings();
+        if (optics is null || !(optics.FocalLengthMm > 0) || !(optics.ApertureMm > 0) || !(optics.PixelSizeUm > 0)) {
+            return null;
+        }
+        var focal = optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1.0);
+        return new BahtinovOptics(focal / optics.ApertureMm, optics.PixelSizeUm);
+    }
+
     internal static (double FocalLengthMm, double PixelSizeUm, double ApertureMm)? GuideOpticsFor(IProfileStore store) {
         var phd2 = store.GetPhd2Settings();
         if (string.Equals(phd2.GuiderSetupType, "oag", StringComparison.OrdinalIgnoreCase)) {

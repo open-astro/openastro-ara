@@ -6,9 +6,11 @@ import '../../models/equipment_device_status.dart';
 import '../../models/guide_focus.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
+import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
+import 'bahtinov_focus_card.dart';
 import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart';
@@ -157,6 +159,18 @@ class MainFocusCard extends ConsumerWidget {
     final focuser = ref.watch(focuserProvider).asData?.value;
     final focuserConnected =
         focuser?.connectionState == EquipmentConnectionState.connected;
+    // #1299 — Autofocus or Bahtinov mask: the user's pick, else the rig's
+    // (no focuser to drive means a sweep can't run). A readout already running
+    // (another client, a reconnect) shows itself.
+    final bahtinovActive = ref.watch(bahtinovFocusProvider.select((s) => s.status.active));
+    final method = bahtinovActive
+        ? MainFocusMethod.bahtinov
+        : ref.watch(mainFocusMethodProvider) ??
+            (focuserConnected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
+    final selector = MainFocusMethodSelector(method: method);
+    if (method == MainFocusMethod.bahtinov) {
+      return BahtinovFocusCard(methodSelector: selector);
+    }
     final run = live.run;
     final apiAvailable = ref.watch(autofocusApiProvider) != null;
     final hasData = run.probes.any((p) => p.kept) || run.fit != null || live.frame != null;
@@ -196,6 +210,7 @@ class MainFocusCard extends ConsumerWidget {
     return FocusSection(
       title: 'Main telescope',
       helpKey: 'setup.focusing.main',
+      titleTrailing: selector,
       headline: headline,
       headlineColor: headlineColor,
       subhead: subheadParts.join(' · '),

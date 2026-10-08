@@ -15,6 +15,9 @@ class FocusSection extends StatelessWidget {
   final String? subhead;
   final Widget action;
   final Widget? secondaryAction;
+  /// Drawn at the right end of the title row (the main telescope's method
+  /// picker).
+  final Widget? titleTrailing;
   final Widget child;
 
   const FocusSection({
@@ -27,6 +30,7 @@ class FocusSection extends StatelessWidget {
     this.headlineColor,
     this.subhead,
     this.secondaryAction,
+    this.titleTrailing,
   });
 
   @override
@@ -42,18 +46,33 @@ class FocusSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // The trailing widget sits at the right end of the title row, or
+          // wraps under the title when the card is too narrow for both. Full
+          // width, or the Wrap shrinks to its children and nothing spreads.
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 8,
             children: [
-              Text(
-                title.toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: AraColors.textSecondary,
-                  letterSpacing: 1.1,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AraColors.textSecondary,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  HelpIcon(helpKey: helpKey),
+                ],
               ),
-              const SizedBox(width: 2),
-              HelpIcon(helpKey: helpKey),
+              ?titleTrailing,
             ],
+          ),
           ),
           const SizedBox(height: 6),
           LayoutBuilder(

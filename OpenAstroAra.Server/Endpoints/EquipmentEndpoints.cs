@@ -264,7 +264,15 @@ public static partial class EquipmentEndpoints {
                 OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
                 IBatchJobService jobs,
                 IProfileStore profiles,
-                AutofocusRunTracker tracker) => {
+                AutofocusRunTracker tracker,
+                IBahtinovFocusService bahtinov) => {
+            // #1299 — the Bahtinov readout has the camera, and the mask is probably still on: a sweep through
+            // it would fit diffraction spikes. The user finishes (and takes the mask off) first.
+            if (bahtinov.IsActive) {
+                return Results.Problem(title: "bahtinov_focus_active",
+                    detail: "The Bahtinov focus readout is running. Finish it and remove the mask before running autofocus.",
+                    statusCode: StatusCodes.Status409Conflict);
+            }
             // Real progress: the job's total is the sweep's probe count (from the
             // profile's §37.11 settings), and the sweep reports structured
             // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
@@ -281,6 +289,7 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
         })
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("RunAutofocus");
 
         // ─── FilterWheel ───

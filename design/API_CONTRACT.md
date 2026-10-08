@@ -318,6 +318,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Related:** #1215 (follow-ups of #1213), #1121, CHANGELOG [Unreleased]
 
+### 2026-10-07 — #1299 Bahtinov mask focus readout; autofocus and sequence starts refused while it runs
+
+**Endpoint(s) or area:** new `POST /api/v1/bahtinov-focus/start`, `POST …/stop`, `GET …/state`, `GET …/frame`; `POST /api/v1/equipment/focuser/autofocus` and `POST /api/v1/sequences/{id}/start` gain a 409.
+
+**Decision:** `start {exposure_sec 0.05–30 (default 1), binning? 1–4 (default 1)}` → 202; 400 out of range; 409 already running, or the camera is busy (an autofocus run, or any sequence run in flight). The loop captures through the §59 analysis seam and fits the mask pattern on the brightest star (locked to that star after the first fit; the whole frame is searched again after 5 misses). `state` → `BahtinovFocusStatusDto { active, state: idle|running|stopped|error, exposure_sec, binning, seq, started_utc, latest, recent[≤120], best_offset_px, zone_px, zone_from_optics, zone_um, focal_ratio, within_zone, error, consecutive_failures, has_frame, frame_seq }`; a sample is `{ seq, captured_utc, detected, problem: no_star|near_edge|no_pattern|null, offset_px, defocus_um, within_zone, star_x, star_y, peak_adu, overlay? }`, with `overlay { crop_size, lines[3] { role: outer|central, x1, y1, x2, y2, angle_deg }, intersection_x, intersection_y, spread_deg }` on `latest` only, in crop pixels. `offset_px` is the central spike's signed distance from the outer spikes' crossing; its sign convention is fixed by the session's first fit (which way that is on the focuser depends on the mask and the optical train, so the client gives advice relative to the user's last move). `defocus_um = offset × pixel size × binning × 3πN/4` (N = working focal ratio, reducer applied); `zone_um` is half the CFZ the autofocus step sizing uses (2.2 µm × N² / 2) and `zone_px` its offset equivalent, else a fixed 0.5 px when the profile lacks focal length, aperture or pixel size. A frame without a pattern is a sample, never an error; 3 consecutive capture faults end the readout in `error`. `frame` is the star crop the overlay is drawn on (or the whole frame, stars ringed, when nothing was measured), JPEG with `X-Frame-Seq`, 204 before one. No WebSocket events: the client polls, as for the guide-camera focus loop. While the readout is active, `POST /equipment/focuser/autofocus` and `POST /sequences/{id}/start` return 409 Problem `title: bahtinov_focus_active`.
+
+**Reasoning:** the mask is on while the readout runs; a sweep through it fits diffraction spikes and a sequence would image through it. Refusing at the daemon makes that impossible from any client. The µm figure ignores the crossing angle's ±tan θ/2 term, whose sign depends on how the mask is cut (about ±15% for a typical mask); it is for "inside the zone or not", not for the micron.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1bahtinov-focus~1start` (…`~1stop`, `~1state`, `~1frame`); `Contracts/BahtinovFocusDtos.cs`, `Services/BahtinovFocusService.cs`, `OpenAstroAra.Image/ImageAnalysis/BahtinovAnalyzer.cs`, `Endpoints/BahtinovFocusEndpoints.cs`, `Program.cs` (`BahtinovOpticsFor`); client `widgets/focus/bahtinov_focus_card.dart`, `state/focus/bahtinov_focus_state.dart`.
+
+**Related:** #1299; tests `BahtinovAnalyzerTest`, `BahtinovFocusServiceTest`, client `bahtinov_focus_card_test`, `bahtinov_focus_state_test`.
+
+---
+
 ### 2026-10-07 — #1298 manual filter wheel: hand-swap prompt, installed report, swap cancel
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/discover/filterwheel` (always lists the manual wheel); `GET /api/v1/equipment/filterwheel` (`manual`, `runtime.pending_slot`, `runtime.state = "awaiting_user"`); new `POST /api/v1/equipment/filterwheel/installed` and `POST /api/v1/equipment/filterwheel/swap/cancel`; new WS event `equipment.filter_wheel.manual_swap`.

@@ -176,8 +176,15 @@ public static class SequenceEndpoints {
            .WithName("GetSequenceState");
 
         seq.MapPost("/{id:guid}/start",
-                async (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.StartAsync(id, request, key, ct)))
+                async (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, CancellationToken ct) => {
+                    // #1299 — never image through a Bahtinov mask: the readout running means the mask is on.
+                    if (bahtinov.IsActive) {
+                        return Results.Problem(title: "bahtinov_focus_active",
+                            detail: "The Bahtinov focus readout is running. Finish it and remove the mask before starting a sequence.",
+                            statusCode: StatusCodes.Status409Conflict);
+                    }
+                    return Results.Accepted(value: await svc.StartAsync(id, request, key, ct));
+                })
            .Accepts<SequenceStartRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
