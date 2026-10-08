@@ -300,9 +300,14 @@ public static partial class EquipmentEndpoints {
         // pending hand swap to it), or drops a standing swap prompt. 409 when the selected wheel
         // is not the manual one.
         filterwheel.MapPost("/installed", ([FromBody] FilterInstalledRequestDto request, FilterWheelRouter router, CancellationToken ct) =>
-            ReportFilterInstalledAsync(request, router, ct));
+            ReportFilterInstalledAsync(request, router, ct))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         filterwheel.MapPost("/swap/cancel", (FilterWheelRouter router, CancellationToken ct) =>
-            CancelManualSwapAsync(router, ct));
+            CancelManualSwapAsync(router, ct))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         // ─── Rotator ───
         var rotator = equipment.MapGroup("/rotator");

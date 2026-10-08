@@ -43,6 +43,9 @@ public sealed class FilterWheelRouter : IFilterWheelService, IFilterWheelMediato
     private readonly FilterWheelService _alpaca;
     private readonly ManualFilterWheelService _manual;
     private readonly SemaphoreSlim _switch = new(1, 1);
+    // In memory only: false (Alpaca) on every boot. The boot reconnect restores the manual wheel by
+    // connecting the remembered selection through ConnectAsync, which sets it; with nothing
+    // remembered, RetainedDevice is the Alpaca wheel's.
     private volatile bool _manualSelected;
 
     public FilterWheelRouter(FilterWheelService alpaca, ManualFilterWheelService manual) {

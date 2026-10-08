@@ -516,15 +516,33 @@ paths:
               $ref: '#/components/schemas/FilterInstalledRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/filterwheel/swap/cancel:
     post:
       tags:
         - Equipment
       responses:
-        '200':
-          description: OK
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/filterwheel/reconnect:
     post:
       tags:
