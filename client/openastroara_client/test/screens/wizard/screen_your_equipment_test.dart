@@ -184,6 +184,37 @@ void main() {
         findsOneWidget);
   });
 
+  // #1298: discovery always lists the daemon's manual filter wheel, so it
+  // must not count toward the one-device auto-assign or be assigned by itself.
+  final manualWheel = _device(EquipmentDeviceType.filterWheel,
+      DiscoveredDevice.manualFilterWheelId, 'Manual filter wheel');
+
+  testWidgets(
+      'one Alpaca filter wheel still auto-assigns beside the manual wheel',
+      (tester) async {
+    final byType = {
+      EquipmentDeviceType.filterWheel: [
+        _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+        manualWheel,
+      ],
+    };
+    final container = await _pump(tester, byType: byType);
+
+    final draft = container.read(wizardControllerProvider).draft;
+    expect(draft.equipment.filterWheelDeviceId, 'fw-1');
+  });
+
+  testWidgets('the manual filter wheel alone is never auto-assigned',
+      (tester) async {
+    final byType = {
+      EquipmentDeviceType.filterWheel: [manualWheel],
+    };
+    final container = await _pump(tester, byType: byType);
+
+    final draft = container.read(wizardControllerProvider).draft;
+    expect(draft.equipment.filterWheelDeviceId, isNull);
+  });
+
   testWidgets('re-entry does not re-assign a slot the user explicitly cleared',
       (tester) async {
     final byType = {
