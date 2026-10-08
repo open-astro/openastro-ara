@@ -705,7 +705,9 @@ void _deleteSelectedItem(
   if (!notifier.canUndo) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text('Deleted $label'),
-    action: SnackBarAction(label: 'Undo', onPressed: notifier.undo),
+    // The default action colour is near-white on the light snackbar.
+    action: SnackBarAction(
+        label: 'Undo', textColor: AraColors.accentInfo, onPressed: notifier.undo),
   ));
 }
 

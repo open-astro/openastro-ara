@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
@@ -84,6 +85,15 @@ void main() {
       findsOneWidget,
       reason: 'the target block runs once and ends when NGC0205 sets',
     );
+    // On a desktop-width editor the chips show their whole text; the first
+    // layout cut them to "× 34 · 5.2 mi…".
+    for (final t in [
+      '× 56 · 5.2 min · ≈ 4.8 h',
+      'AF every 23 · dither every 1',
+    ]) {
+      final p = tester.renderObject<RenderParagraph>(find.text(t).first);
+      expect(p.didExceedMaxLines, isFalse, reason: '"$t" is ellipsized');
+    }
   });
 
   testWidgets('a Take Exposure inspector says how many frames it will take', (

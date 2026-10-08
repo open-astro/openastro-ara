@@ -183,6 +183,7 @@ String formatSeconds(double s) {
 
 /// "≈ 25 min" / "4.8 h" style, without the ≈.
 String formatDuration(Duration d) {
+  if (d.inSeconds < 60) return '${d.inSeconds} s';
   final minutes = d.inSeconds / 60;
   if (minutes < 90) return '${minutes.round()} min';
   final h = minutes / 60;

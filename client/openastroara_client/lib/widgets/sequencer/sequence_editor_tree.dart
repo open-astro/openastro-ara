@@ -302,35 +302,64 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
                           // S7 — category hue per instruction kind.
                           : nodeAccentColor(row.node)),
               const SizedBox(width: 8),
-              // The name keeps most of the row; the summary chips share the
-              // rest and ellipsize (the full text is in their tooltips).
+              // The name takes what the chips leave; the chips take their
+              // natural width, capped at 70% of the row so a long name still
+              // shows. (Flex alone cut "× 34 · 5.2 min · ≈ 2.9 h" to
+              // "× 34 · 5.2 mi…" on a wide window.)
               Expanded(
-                flex: 3,
-                child: Text(
-                  nodeLabel(row.node),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: AraColors.textPrimary,
-                      fontSize: 13,
-                      // Containers are structure — a touch of weight sets the
-                      // grouping without another colour.
-                      fontWeight:
-                          isContainerRow ? FontWeight.w600 : FontWeight.w400),
+                child: LayoutBuilder(
+                  builder: (context, box) => Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          nodeLabel(row.node),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: AraColors.textPrimary,
+                              fontSize: 13,
+                              // Containers are structure — a touch of weight
+                              // sets the grouping without another colour.
+                              fontWeight: isContainerRow
+                                  ? FontWeight.w600
+                                  : FontWeight.w400),
+                        ),
+                      ),
+                      // S9 — a container's loops/triggers surface inline as
+                      // quiet chips instead of hiding in the inspector.
+                      if (loopChip != null ||
+                          conditionChip != null ||
+                          triggerChip != null)
+                        ConstrainedBox(
+                          constraints:
+                              BoxConstraints(maxWidth: box.maxWidth * 0.7),
+                          // Each chip takes its natural width (capped, with
+                          // ellipsis); a narrow screen wraps them onto a
+                          // second line instead of splitting the space evenly
+                          // and clipping the longer one.
+                          child: Wrap(
+                            alignment: WrapAlignment.end,
+                            runSpacing: 4,
+                            children: [
+                              for (final (icon, text) in [
+                                if (loopChip != null) (Icons.repeat, loopChip),
+                                if (conditionChip != null)
+                                  (Icons.flag_outlined, conditionChip),
+                                if (triggerChip != null)
+                                  (Icons.bolt_outlined, triggerChip),
+                              ])
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                      maxWidth: box.maxWidth * 0.7),
+                                  child: _MetaChip(icon: icon, text: text),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              // S9 — a container's loops/triggers surface inline as quiet
-              // chips instead of hiding in the inspector.
-              if (loopChip != null)
-                Flexible(child: _MetaChip(icon: Icons.repeat, text: loopChip)),
-              if (conditionChip != null)
-                Flexible(
-                    child: _MetaChip(
-                        icon: Icons.flag_outlined, text: conditionChip)),
-              if (triggerChip != null)
-                Flexible(
-                    child: _MetaChip(
-                        icon: Icons.bolt_outlined, text: triggerChip)),
               // Reorder + delete affordances on the selected row — never the
               // root, which can't move or be removed (it's the sequence
               // container itself).

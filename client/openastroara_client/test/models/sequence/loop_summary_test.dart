@@ -77,6 +77,8 @@ void main() {
     expect(formatSeconds(30), '30 s');
     expect(formatSeconds(300), '5 min');
     expect(formatSeconds(310), '5.2 min');
+    expect(formatDuration(const Duration(seconds: 4)), '4 s',
+        reason: 'a short test loop must not read "≈ 0 min"');
     expect(formatDuration(const Duration(minutes: 25)), '25 min');
     expect(formatDuration(const Duration(minutes: 289)), '4.8 h');
   });
