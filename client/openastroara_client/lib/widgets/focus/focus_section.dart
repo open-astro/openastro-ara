@@ -216,6 +216,8 @@ class StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No tiles: nothing to lay out (and no per-row count to divide by).
+    if (tiles.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (context, c) {
         // One row while each tile still gets ~140 px (a 1100-wide window);

@@ -37,6 +37,12 @@ class FitPane extends StatelessWidget {
 /// column's minimum leaves after the other children (which take their natural
 /// height). Any child may build taller; the column then grows past the
 /// minimum and the [FitPane] scrolls.
+///
+/// The other children are laid out with unbounded height, so an [Expanded]
+/// or [Spacer] inside one throws; put flex children inside the [FitFill].
+/// Neither [FitColumn] nor [FitRow] answers intrinsic-size or dry-layout
+/// queries, so don't place them under [IntrinsicHeight], [IntrinsicWidth] or
+/// anything else that asks (the default implementations assert).
 class FitColumn extends MultiChildRenderObjectWidget {
   const FitColumn({super.key, super.children});
 
@@ -77,7 +83,8 @@ class FitBand extends StatelessWidget {
 /// Side-by-side columns that share one height: the height their parent's
 /// minimum asks for, or the tallest column's own minimum when that is more.
 /// Each child gets [flex] of the width after [spacing]; make the children
-/// [FitColumn]s so the extra height reaches their [FitFill].
+/// [FitColumn]s so the extra height reaches their [FitFill]. Like [FitColumn],
+/// it answers no intrinsic-size or dry-layout queries.
 class FitRow extends MultiChildRenderObjectWidget {
   final List<int> flex;
   final double spacing;
