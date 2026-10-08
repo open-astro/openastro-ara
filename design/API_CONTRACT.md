@@ -318,6 +318,23 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Related:** #1215 (follow-ups of #1213), #1121, CHANGELOG [Unreleased]
 
+### 2026-10-07 — #1298 manual filter wheel: hand-swap prompt, installed report, swap cancel
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/discover/filterwheel` (always lists the manual wheel); `GET /api/v1/equipment/filterwheel` (`manual`, `runtime.pending_slot`, `runtime.state = "awaiting_user"`); new `POST /api/v1/equipment/filterwheel/installed` and `POST /api/v1/equipment/filterwheel/swap/cancel`; new WS event `equipment.filter_wheel.manual_swap`.
+
+**Decision:**
+- Filter-wheel discovery always ends with the driverless manual wheel (`unique_id: "ara-manual-filter-wheel"`), whether or not any Alpaca wheel answers, so it can be chosen offline. Connecting it selects the manual wheel behind the same `/equipment/filterwheel` routes; its slots are the profile's filter labels.
+- `FilterWheelDto` gains `manual` (default `false`). `FilterWheelStateDto` gains `pending_slot` (default null) and the state `awaiting_user`: a change was requested and the user has not yet reported that filter installed. A manual change waits with no time limit.
+- `POST /filterwheel/installed` `{ "position": n }` records slot `n` as installed and resolves a pending change to it: `204`; out-of-range slot `400`; another wheel selected `409 not_manual_filter_wheel`; manual wheel not connected `409`. The slot is remembered across daemon restarts (`manual-filter-wheel.json` in the profile directory).
+- `POST /filterwheel/swap/cancel` drops a standing prompt, failing a waiting change: `204` (also when nothing was pending); not the manual wheel `409 not_manual_filter_wheel`.
+- `equipment.filter_wheel.manual_swap` payload: `{ device_type: "filterwheel", pending_slot, pending_name, current_slot, current_name }`. `pending_slot` set = a prompt was raised; null = resolved or cancelled. Clients show or drop the "install the X filter" prompt and re-read the wheel. The prompt also goes out as a §46 notification.
+
+**Reasoning:** a filter drawer has no driver, so Ara has to ask for each swap and trust the user's answer. Putting the manual wheel in discovery and behind the existing routes keeps the chooser, the sequencer's `SwitchFilter` and the Imaging tab unchanged.
+
+**Spec ref:** `Services/ManualFilterWheelService.cs`, `Services/FilterWheelRouter.cs`, `Services/ManualDeviceDiscoveryService.cs`, `Endpoints/EquipmentEndpoints.cs` (`ReportFilterInstalledAsync`, `CancelManualSwapAsync`), `Services/EquipmentEventPublisher.cs` (`ManualFilterSwap`), `Contracts/EquipmentDtos.cs`; tests in `ManualFilterWheelServiceTest`, `EquipmentEndpointsFilterWheelTest`.
+
+**Related:** #1298, PR #1303, CHANGELOG [Unreleased]
+
 ### 2026-10-05 — #1230 pad bands are the primary∩secondary intersections; re-published once a late axis answers
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/telescope` (`capabilities.move_axis_rate_bands_deg_per_sec` and the derived `move_axis_rates_deg_per_sec`; no shape change).

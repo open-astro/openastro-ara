@@ -138,13 +138,21 @@ String _conditionNote(Map<String, dynamic> c) {
     case 'TimeSpanCondition':
       final h = _int(c['Hours']) ?? 0;
       final m = _int(c['Minutes']) ?? 0;
-      return 'for ${h > 0 ? '${h}h ' : ''}${m}m';
+      final sec = _int(c['Seconds']) ?? 0;
+      final parts = [
+        if (h > 0) '${h}h',
+        if (m > 0 || (h == 0 && sec == 0)) '${m}m',
+        if (sec > 0) '${sec}s',
+      ];
+      return 'for ${parts.join(' ')}';
     case 'TimeCondition':
       final h = _int(c['Hours']) ?? _int(c['Hour']);
       final m = _int(c['Minutes']) ?? 0;
+      final sec = _int(c['Seconds']) ?? 0;
+      String two(int v) => v.toString().padLeft(2, '0');
       return h == null
           ? 'until a time'
-          : 'until ${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+          : 'until ${two(h)}:${two(m)}${sec > 0 ? ':${two(sec)}' : ''}';
   }
   final def = type is String ? conditionForType(type) : null;
   return (def?.label ?? shortTypeName(type) ?? 'condition').toLowerCase();
