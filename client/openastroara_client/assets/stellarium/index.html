@@ -28,7 +28,7 @@
   /* Linux desktop: WebKitGTK's software renderer (the planetarium overlay's
      shm path) draws no backdrop blur, so the glass cards let sky labels show
      through. Near-opaque there; the class is set before the body renders. */
-  :root.no-glass { --mat: rgba(28,28,30,0.98); --mat-2: rgba(58,58,60,0.98); }
+  :root.no-glass { --mat: rgb(28,28,30); --mat-2: rgb(58,58,60); }
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
     font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Roboto, "Segoe UI", sans-serif;
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
