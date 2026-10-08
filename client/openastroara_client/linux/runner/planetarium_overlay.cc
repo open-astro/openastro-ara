@@ -95,6 +95,11 @@ void apply_visibility(OverlayState* state) {
     gboolean was_visible = gtk_widget_get_visible(state->webview_widget);
     gtk_widget_show(state->webview_widget);
     if (!was_visible) {
+      // Bounds set while hidden never reached an allocation; re-apply them so
+      // a window that grew behind another tab isn't drawn at the old size.
+      gtk_widget_set_size_request(state->webview_widget, state->rect.width,
+                                  state->rect.height);
+      gtk_widget_queue_resize(GTK_WIDGET(state->overlay));
       GdkWindow* window = gtk_widget_get_window(state->webview_widget);
       if (window != nullptr) gdk_window_raise(window);
     }

@@ -178,6 +178,29 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
                 height: h,
               );
               final hero = _Hero(status: status);
+              if (short && width >= AraBreakpoints.sideBySide(context)) {
+                // A laptop screen: the readout takes the full height on the
+                // right so its hint and facts stay in view; the picture and
+                // the trend share the left column.
+                final total = math.max(height, 240.0);
+                return SizedBox(
+                  height: total,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: (width - 16) * 5 / 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [frame(total - trendHeight - 12), const SizedBox(height: 12), trend],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: hero),
+                    ],
+                  ),
+                );
+              }
               if (width >= AraBreakpoints.sideBySide(context)) {
                 // The frame stays 4:3 and takes up to 5/8 of the width; the
                 // readout gets the rest. Past that the band stops growing.
@@ -226,9 +249,10 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
 // more while a hand is on the focuser.
 const double _heroFont = 88;
 // A short window keeps the readout's caption in view under the figure.
-const double _heroFontShort = 64;
+const double _heroFontShort = 52;
 const double _hintFont = 28;
 const double _statFont = 24;
+const double _statFontShort = 20;
 const double _textFont = 14;
 const _tabular = [FontFeature.tabularFigures()];
 
@@ -252,8 +276,10 @@ class _Hero extends StatelessWidget {
     final bestLine = best == null ? 'px · best so far —' : 'px · best so far ${f(best)}';
     // Centred when it fits, scrolls when the frame beside it is shorter than the
     // facts need (the stats row overflowed the panel by 18 px on a laptop window).
+    // A short window tightens the spacing so the facts row stays in view.
+    final short = AraBreakpoints.isShort(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, short ? 10 : 16, 20, short ? 10 : 16),
       decoration: BoxDecoration(
         color: AraColors.bgPanelAlt,
         borderRadius: BorderRadius.circular(10),
@@ -274,7 +300,7 @@ class _Hero extends StatelessWidget {
             child: Text(
               f(hfr),
               style: TextStyle(
-                fontSize: AraBreakpoints.isShort(context) ? _heroFontShort : _heroFont,
+                fontSize: short ? _heroFontShort : _heroFont,
                 fontWeight: FontWeight.w300,
                 height: 1.05,
                 color: color,
@@ -286,15 +312,15 @@ class _Hero extends StatelessWidget {
           Text(
             target == null ? bestLine : '$bestLine · in focus ≤ ${f(target)}',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: AraColors.textSecondary, fontFeatures: _tabular),
+            style: TextStyle(fontSize: short ? 14 : 16, color: AraColors.textSecondary, fontFeatures: _tabular),
           ),
           if (status.active) ...[
-            const SizedBox(height: 14),
+            SizedBox(height: short ? 8 : 14),
             TurnHint(hint: hint),
           ],
-          const SizedBox(height: 18),
+          SizedBox(height: short ? 10 : 18),
           const Divider(height: 1, color: Color(0x1FFFFFFF)),
-          const SizedBox(height: 14),
+          SizedBox(height: short ? 8 : 14),
           Row(
             children: [
               Expanded(child: _Fact(label: 'Stars', value: latest == null ? '—' : '${latest.stars}')),
@@ -326,7 +352,10 @@ class _Fact extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(value,
-              style: const TextStyle(fontSize: _statFont, fontWeight: FontWeight.w600, fontFeatures: _tabular)),
+              style: TextStyle(
+                  fontSize: AraBreakpoints.isShort(context) ? _statFontShort : _statFont,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: _tabular)),
         ),
       ],
     );
@@ -416,12 +445,14 @@ class TurnHint extends StatelessWidget {
       TurnAdvice.wait => (Icons.hourglass_empty_rounded, AraColors.textSecondary),
       TurnAdvice.hold => (Icons.pause_circle_outline, AraColors.accentInfo),
     };
+    // A short window: a smaller capsule so the facts under it stay in view.
+    final hintFont = AraBreakpoints.isShort(context) ? 22.0 : _hintFont;
     return Column(
       children: [
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: hintFont < _hintFont ? 4 : 8),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(14),
@@ -429,16 +460,16 @@ class TurnHint extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: _hintFont + 4, color: color),
+                Icon(icon, size: hintFont + 4, color: color),
                 const SizedBox(width: 8),
-                Text(hint.title, style: TextStyle(fontSize: _hintFont, fontWeight: FontWeight.w700, color: color)),
+                Text(hint.title, style: TextStyle(fontSize: hintFont, fontWeight: FontWeight.w700, color: color)),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: hintFont < _hintFont ? 4 : 8),
         Text(hint.detail, textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: AraColors.textSecondary, height: 1.3)),
+            style: TextStyle(fontSize: hintFont < _hintFont ? 14 : 16, color: AraColors.textSecondary, height: 1.3)),
       ],
     );
   }

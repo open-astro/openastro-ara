@@ -25,6 +25,10 @@
     --shadow: 0 10px 34px rgba(0,0,0,0.46);
     --blur: blur(26px) saturate(180%);
   }
+  /* Linux desktop: WebKitGTK's software renderer (the planetarium overlay's
+     shm path) draws no backdrop blur, so the glass cards let sky labels show
+     through. Near-opaque there; the class is set before the body renders. */
+  :root.no-glass { --mat: rgba(28,28,30,0.94); --mat-2: rgba(58,58,60,0.94); }
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
     font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Roboto, "Segoe UI", sans-serif;
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
@@ -128,10 +132,12 @@
      card fits without scrolling. */
   @media (max-height: 560px) {
     #frame { padding: 10px 13px 12px; }
-    #frame .frow { padding: 3px 0; }
-    #frame .frot { padding: 2px 0 4px; }
-    #frame .dial { width: 50px; height: 50px; }
-    #frame .dial-hand { height: 20px; }
+    #frame .card-title { margin-bottom: 6px; }
+    #frame .frow { padding: 2px 0; }
+    #frame .frot { padding: 0 0 2px; }
+    #frame .dial { width: 44px; height: 44px; }
+    #frame .dial-hand { height: 17px; }
+    #frame #f-msg, #frame #f-dss { margin-top: 6px; }
     #frame #f-add { margin-top: 8px; padding: 7px 0; }
     #frame #f-rotcam { margin-top: 6px; padding: 6px 0; }
   }
@@ -165,6 +171,11 @@
   #catalogs #cat-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; line-height: 1.35; }
   #catalogs #cat-msg:empty { display: none; }
 </style>
+<script>
+  if (/Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
+    document.documentElement.classList.add('no-glass');
+  }
+</script>
 </head>
 <body>
 <canvas id="stel-canvas"></canvas>

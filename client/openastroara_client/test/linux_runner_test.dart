@@ -18,6 +18,10 @@ void main() {
       expect(app, isNot(contains('GDK_WINDOWING_X11')));
       expect(app, isNot(contains('gtk_window_move(window')));
       expect(app, isNot(contains('gtk_window_set_icon(window')));
+      // The size floor sits on the content, not the CSD window (whose request
+      // includes the shadow margins and let the content shrink ~90 px short).
+      expect(app, isNot(contains('gtk_widget_set_size_request(GTK_WIDGET(window)')));
+      expect(app, contains('set_content_min_size(window, 1100, 600);'));
     });
   });
 

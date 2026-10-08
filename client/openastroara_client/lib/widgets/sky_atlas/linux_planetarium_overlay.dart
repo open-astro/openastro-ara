@@ -134,10 +134,19 @@ class _LinuxPlanetariumOverlayState
     final isPlanning = ref.watch(selectedTabIndexProvider) == _planningTabIndex;
     final visible = isPlanning && !_routeOnTop;
     // Geometry and visibility can only be read/applied after this frame lays the
-    // slot out. Re-push bounds when becoming visible in case the window resized
-    // while Planning was hidden.
+    // slot out. Becoming visible: show first, then push the bounds even when
+    // they match the last push — a resize while Planning was hidden reached
+    // the hidden webview, and WebKit kept drawing at the old size until the
+    // next bounds change (a dead strip right and bottom, KDE Wayland
+    // 2026-10-08).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (visible && _lastVisible != true) {
+        _applyVisibility(true);
+        _lastBounds = null;
+        _pushBounds();
+        return;
+      }
       if (visible) _pushBounds();
       _applyVisibility(visible);
     });

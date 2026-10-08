@@ -157,8 +157,8 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
             const SizedBox(height: 16),
           ] else if (measured && !status.zoneFromOptics) ...[
             InlineNotice.info(
-                'Set the focal length, aperture and pixel size in Options → Imaging → Optics to judge the critical focus zone. '
-                'Until then, in focus means within ${formatOffset(status.zonePx)} px.'),
+                // One line on a laptop screen, so the readout keeps its height.
+                'Until the optics are set (Options → Imaging → Optics), in focus means within ${formatOffset(status.zonePx)} px.'),
             const SizedBox(height: 16),
           ],
           if (!hasData)
@@ -189,6 +189,29 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
                 height: h,
               );
               final hero = _Hero(status: status);
+              if (short && width >= AraBreakpoints.sideBySide(context)) {
+                // A laptop screen: the readout takes the full height on the
+                // right so its hint and facts stay in view; the picture and
+                // the trend share the left column.
+                final total = math.max(height, 240.0);
+                return SizedBox(
+                  height: total,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: (width - 16) * 5 / 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [frame(total - trendHeight - 12), const SizedBox(height: 12), trend],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: hero),
+                    ],
+                  ),
+                );
+              }
               if (width >= AraBreakpoints.sideBySide(context)) {
                 // The frame stays 4:3 and takes up to 5/8 of the width; the
                 // readout gets the rest. Past that the band stops growing.
@@ -412,8 +435,9 @@ double _medianEndingAt(List<double> values, int end) {
 
 const double _heroFont = 88;
 // A short window keeps the readout's caption in view under the figure.
-const double _heroFontShort = 64;
+const double _heroFontShort = 52;
 const double _statFont = 24;
+const double _statFontShort = 20;
 const double _textFont = 14;
 const _tabular = [FontFeature.tabularFigures()];
 
@@ -438,8 +462,10 @@ class _Hero extends StatelessWidget {
             'in focus ≤ $zone',
           ].join(' · ');
     final best = status.bestOffsetPx;
+    // A short window tightens the spacing so the facts row stays in view.
+    final short = AraBreakpoints.isShort(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, short ? 10 : 16, 20, short ? 10 : 16),
       decoration: BoxDecoration(
         color: AraColors.bgPanelAlt,
         borderRadius: BorderRadius.circular(10),
@@ -460,7 +486,7 @@ class _Hero extends StatelessWidget {
                   child: Text(
                     offset == null ? '—' : formatOffset(offset, signed: true),
                     style: TextStyle(
-                      fontSize: AraBreakpoints.isShort(context) ? _heroFontShort : _heroFont,
+                      fontSize: short ? _heroFontShort : _heroFont,
                       fontWeight: FontWeight.w300,
                       height: 1.05,
                       color: within ? AraColors.accentConnected : AraColors.textPrimary,
@@ -470,14 +496,14 @@ class _Hero extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(sub, textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, color: AraColors.textSecondary, fontFeatures: _tabular)),
+                    style: TextStyle(fontSize: short ? 14 : 16, color: AraColors.textSecondary, fontFeatures: _tabular)),
                 if (status.active) ...[
-                  const SizedBox(height: 14),
+                  SizedBox(height: short ? 8 : 14),
                   TurnHint(hint: bahtinovHint(status)),
                 ],
-                const SizedBox(height: 18),
+                SizedBox(height: short ? 10 : 18),
                 const Divider(height: 1, color: Color(0x1FFFFFFF)),
-                const SizedBox(height: 14),
+                SizedBox(height: short ? 8 : 14),
                 Row(
                   children: [
                     Expanded(child: _Fact(label: 'Best', value: best == null ? '—' : formatOffset(best, signed: true))),
@@ -513,7 +539,10 @@ class _Fact extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(value,
-              style: const TextStyle(fontSize: _statFont, fontWeight: FontWeight.w600, fontFeatures: _tabular)),
+              style: TextStyle(
+                  fontSize: AraBreakpoints.isShort(context) ? _statFontShort : _statFont,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: _tabular)),
         ),
       ],
     );
