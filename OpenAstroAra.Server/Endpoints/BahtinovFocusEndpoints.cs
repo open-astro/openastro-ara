@@ -29,6 +29,19 @@ namespace OpenAstroAra.Server.Endpoints;
 /// camera. stop: 204 once the in-flight frame has drained.
 /// </summary>
 public static class BahtinovFocusEndpoints {
+
+    /// <summary>The Problem <c>title</c> of the 409 a camera user gets while the readout runs.</summary>
+    public const string ActiveProblemTitle = "bahtinov_focus_active";
+
+    /// <summary>The run guards' refusal (autofocus, sequence start): while the readout runs the mask is on, so
+    /// a sweep would fit diffraction spikes and a sequence would image through it. Null when the camera is free
+    /// of it. <paramref name="before"/> finishes "…remove the mask before …".</summary>
+    internal static IResult? MaskOnConflict(IBahtinovFocusService bahtinov, string before) =>
+        bahtinov.IsActive
+            ? Results.Problem(title: ActiveProblemTitle,
+                detail: $"The Bahtinov focus readout is running. Finish it and remove the mask before {before}.",
+                statusCode: StatusCodes.Status409Conflict)
+            : null;
     public static IEndpointRouteBuilder MapBahtinovFocusEndpoints(this IEndpointRouteBuilder app) {
         var bahtinov = app.MapGroup("/api/v1/bahtinov-focus").WithTags("Bahtinov focus");
 

@@ -265,29 +265,7 @@ public static partial class EquipmentEndpoints {
                 IBatchJobService jobs,
                 IProfileStore profiles,
                 AutofocusRunTracker tracker,
-                IBahtinovFocusService bahtinov) => {
-            // #1299 — the Bahtinov readout has the camera, and the mask is probably still on: a sweep through
-            // it would fit diffraction spikes. The user finishes (and takes the mask off) first.
-            if (bahtinov.IsActive) {
-                return Results.Problem(title: "bahtinov_focus_active",
-                    detail: "The Bahtinov focus readout is running. Finish it and remove the mask before running autofocus.",
-                    statusCode: StatusCodes.Status409Conflict);
-            }
-            // Real progress: the job's total is the sweep's probe count (from the
-            // profile's §37.11 settings), and the sweep reports structured
-            // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
-            // Read once at enqueue time via the sweep's OWN probe-count helper, so
-            // the job's denominator and the sweep's stepping scheme can't drift
-            // apart. If Steps changes while this job waits its turn, the tick
-            // invariant in InMemoryBatchJobService (monotone + clamped to Total)
-            // keeps done sane either way: a bigger live sweep clamps at this
-            // total, a smaller one settles to it below.
-            var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
-            // §59.12 — this run is the user's (the Smart Focus pane / focuser panel), not a sequence's.
-            tracker.StampNextTrigger("manual");
-            var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, AutofocusJobWork(autofocus, tracker, totalProbes));
-            return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
-        })
+                IBahtinovFocusService bahtinov) => RunAutofocus(autofocus, jobs, profiles, tracker, bahtinov))
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("RunAutofocus");
@@ -646,6 +624,35 @@ public static partial class EquipmentEndpoints {
         flat.MapDelete("", (IFlatDeviceService svc, IEquipmentSelectionStore s, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => RemoveDeviceAsync(() => svc.ForgetAsync(ct), s, DeviceType.CoverCalibrator, logger, ct));
 
         return app;
+    }
+
+    /// <summary>The body of <c>POST /equipment/focuser/autofocus</c>: 409 while the Bahtinov readout runs, else
+    /// the sweep enqueued as a background job (202).</summary>
+    internal static IResult RunAutofocus(
+            OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
+            IBatchJobService jobs,
+            IProfileStore profiles,
+            AutofocusRunTracker tracker,
+            IBahtinovFocusService bahtinov) {
+        // #1299 — the Bahtinov readout has the camera, and the mask is probably still on: a sweep through
+        // it would fit diffraction spikes. The user finishes (and takes the mask off) first.
+        if (BahtinovFocusEndpoints.MaskOnConflict(bahtinov, "running autofocus") is { } refused) {
+            return refused;
+        }
+        // Real progress: the job's total is the sweep's probe count (from the
+        // profile's §37.11 settings), and the sweep reports structured
+        // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
+        // Read once at enqueue time via the sweep's OWN probe-count helper, so
+        // the job's denominator and the sweep's stepping scheme can't drift
+        // apart. If Steps changes while this job waits its turn, the tick
+        // invariant in InMemoryBatchJobService (monotone + clamped to Total)
+        // keeps done sane either way: a bigger live sweep clamps at this
+        // total, a smaller one settles to it below.
+        var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
+        // §59.12 — this run is the user's (the Smart Focus pane / focuser panel), not a sequence's.
+        tracker.StampNextTrigger("manual");
+        var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, AutofocusJobWork(autofocus, tracker, totalProbes));
+        return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
     }
 
     /// <summary>§59 — the work body of the <c>POST /equipment/focuser/autofocus</c> job, extracted so the
