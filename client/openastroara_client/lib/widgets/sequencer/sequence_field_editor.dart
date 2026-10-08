@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
+import '../../models/sequence/loop_summary.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/instruction_style.dart';
 import '../../models/sequence/node_display.dart' show nodeLabel, nodeIcon, shortTypeName;
@@ -48,6 +49,12 @@ class SequenceFieldEditor extends ConsumerWidget {
     // one). isContainer recognises both catalogued and imported container types.
     final container = isContainer(node);
     final notifier = ref.read(sequenceEditorProvider.notifier);
+    // A Take Exposure is ONE frame; how many it takes lives on its container's
+    // Loop. Say so here, so "Capture one frame" never reads as the whole story.
+    final parent = type == takeExposureType && selectedPath.isNotEmpty
+        ? nodeAt(editor!.body, selectedPath.sublist(0, selectedPath.length - 1))
+        : null;
+    final repeatLine = parent == null ? null : exposureRepeatLine(parent);
 
     final children = <Widget>[
       // S9 — the title echoes the instruction's category hue (icon) and, for
@@ -75,6 +82,22 @@ class SequenceFieldEditor extends ConsumerWidget {
         Text(desc,
             style: const TextStyle(
                 color: AraColors.textSecondary, fontSize: 11.5)),
+      ],
+      if (repeatLine != null) ...[
+        const SizedBox(height: 6),
+        Row(
+          key: const ValueKey('exposure-repeat-line'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.repeat, size: 14, color: AraColors.accentInfo),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(repeatLine,
+                  style: const TextStyle(
+                      color: AraColors.accentInfo, fontSize: 12)),
+            ),
+          ],
+        ),
       ],
       const SizedBox(height: 12),
       if (container) ...[

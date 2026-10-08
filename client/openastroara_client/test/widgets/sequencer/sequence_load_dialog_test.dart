@@ -395,7 +395,7 @@ void main() {
 
       // No selection → the toolbar Delete is disabled.
       TextButton deleteButton() => tester.widget<TextButton>(find.ancestor(
-          of: find.text('Delete'), matching: find.byType(TextButton)));
+          of: find.text('Delete sequence'), matching: find.byType(TextButton)));
       expect(deleteButton().onPressed, isNull);
 
       container.read(selectedSequenceIdProvider.notifier).select('s9');
@@ -404,11 +404,11 @@ void main() {
 
       // wideSurface pinned a desktop width, so Delete is inline (not folded
       // into the More menu) and tappable as-is.
-      await tester.tap(find.text('Delete'));
+      await tester.tap(find.text('Delete sequence'));
       await tester.pumpAndSettle();
       expect(find.text('Delete sequence?'), findsOneWidget);
-      // Two "Delete" texts are on screen (toolbar + confirm); the confirm's is
-      // the topmost route's — the last in the tree.
+      // With no instruction highlighted the toolbar reads "Delete sequence";
+      // the confirm's "Delete" is the topmost route's — the last in the tree.
       await tester.tap(find.widgetWithText(TextButton, 'Delete').last);
       await tester.pumpAndSettle();
 
