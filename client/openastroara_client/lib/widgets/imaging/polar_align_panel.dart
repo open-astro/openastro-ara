@@ -1075,8 +1075,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     ),
                   )
                 // Rounded on the image itself, so a frame narrower than the
-                // card is not boxed in black bars.
-                : Center(
+                // card is not boxed in black bars. FittedBox, not Center: the
+                // frame scales UP to the card too (it sat at its own pixel
+                // size in a big empty card at 4K).
+                : FittedBox(
                     child: GestureDetector(
                       key: const Key('polar-align-live-view'),
                       onTap: () => _showFullFrame(jpeg),

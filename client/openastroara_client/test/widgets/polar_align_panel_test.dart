@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -427,23 +428,30 @@ void main() {
     });
 
     testWidgets('an active routine shows the guide camera live view', (tester) async {
-      // 1x1 PNG — any image format Image.memory decodes works for the view.
-      const png = <int>[
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
-      ];
+      // A real 64×48 PNG, so the view decodes and lays out the frame.
+      final png = (await tester.runAsync(() async {
+        final recorder = ui.PictureRecorder();
+        Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 64, 48), Paint()..color = Colors.white);
+        final image = await recorder.endRecording().toImage(64, 48);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data!.buffer.asUint8List();
+      }))!;
       final api = _FakePolarAlignClient()
         ..status = const PolarAlignStatus(state: PolarAlignStates.adjusting, currentErrorArcmin: 30)
-        ..frame = Uint8List.fromList(png);
+        ..frame = png;
       await tester.pumpWidget(_harness(
           api, const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
       await tester.pumpAndSettle();
 
       expect(api.calls, contains('frame'));
       expect(find.byKey(const Key('polar-align-live-view')), findsOneWidget);
+      // The 64-pixel frame scales up to its card instead of sitting at its own
+      // pixel size (it stayed small in a big empty card at 4K).
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+      expect(tester.getRect(find.byKey(const Key('polar-align-live-view'))).width, greaterThan(100));
       // The other controls stay alongside it.
       expect(find.byKey(const Key('polar-align-exposure')), findsOneWidget);
       expect(find.byKey(const Key('polar-align-mode')), findsOneWidget);

@@ -55,6 +55,16 @@
   #timebar button { padding: 5px 11px; font-size: 12px; color: var(--dim); }
   #timebar button:hover { color: var(--txt); background: rgba(255,255,255,0.08); }
   #timebar button.on { background: var(--accent-bg); color: var(--accent); }
+  /* A narrow view (a small window with a side panel open): centred, the time
+     pill slid under the layer pills — right-align it, and below ~640 px drop
+     it to a second row, the object card moving down with it. */
+  @media (max-width: 840px) {
+    #timebar { left: auto; right: 14px; transform: none; }
+  }
+  @media (max-width: 640px) {
+    #timebar { top: 58px; }
+    #info { top: 108px; max-height: calc(100% - 122px); }
+  }
   #clock { font-variant-numeric: tabular-nums; min-width: 126px; text-align: center; font-size: 12px; padding: 0 6px; }
 
   /* Pan + zoom are native (trackpad/mouse) in the webview, so there are no
