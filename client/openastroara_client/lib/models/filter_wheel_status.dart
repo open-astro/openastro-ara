@@ -45,6 +45,14 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
   final int? currentSlot;
   final List<FilterSlot> slots;
 
+  /// #1298 — the driverless manual filter wheel: filters are swapped by hand,
+  /// the slots are the profile's labels, and a change waits for the user.
+  final bool manual;
+
+  /// #1298 — the slot a manual wheel is waiting for the user to install, or
+  /// `null` when no hand swap is pending.
+  final int? pendingSlot;
+
   FilterWheelStatus({
     required this.deviceId,
     required this.name,
@@ -52,9 +60,22 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
     required this.runtimeState,
     required this.currentSlot,
     required this.slots,
+    this.manual = false,
+    this.pendingSlot,
   });
 
   bool get isMoving => runtimeState == 'moving';
+
+  /// A manual wheel is waiting for the user to swap in [pending].
+  bool get isAwaitingUser => runtimeState == 'awaiting_user' && pendingSlot != null;
+
+  /// The slot a pending hand swap wants, or `null`.
+  FilterSlot? get pending {
+    for (final s in slots) {
+      if (s.position == pendingSlot) return s;
+    }
+    return null;
+  }
 
   @override
   bool get isBusy => isMoving;
@@ -87,6 +108,8 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
       runtimeState: r['state'] as String? ?? '',
       currentSlot: (rawSlot != null && rawSlot >= 0) ? rawSlot : null,
       slots: slots,
+      manual: json['manual'] as bool? ?? false,
+      pendingSlot: (r['pending_slot'] as num?)?.toInt(),
     );
   }
 
@@ -99,9 +122,11 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
           other.connectionState == connectionState &&
           other.runtimeState == runtimeState &&
           other.currentSlot == currentSlot &&
+          other.manual == manual &&
+          other.pendingSlot == pendingSlot &&
           listEquals(other.slots, slots));
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
-      currentSlot, Object.hashAll(slots));
+      currentSlot, Object.hashAll(slots), manual, pendingSlot);
 }

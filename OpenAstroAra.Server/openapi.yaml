@@ -505,6 +505,44 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/filterwheel/installed:
+    post:
+      tags:
+        - Equipment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilterInstalledRequestDto'
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/filterwheel/swap/cancel:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/filterwheel/reconnect:
     post:
       tags:
@@ -7734,6 +7772,17 @@ components:
           type: boolean
           default: true
     FilterChangeRequestDto:
+      required:
+        - position
+      type: object
+      properties:
+        position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+    FilterInstalledRequestDto:
       required:
         - position
       type: object

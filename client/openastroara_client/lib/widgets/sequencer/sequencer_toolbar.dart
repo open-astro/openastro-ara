@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/draft_sequence.dart';
+import '../../models/sequence/nina_dom.dart';
+import '../../models/sequence/node_display.dart' show nodeLabel;
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart';
 import '../../state/sequencer/draft_sequences_state.dart';
@@ -100,6 +102,18 @@ class SequencerToolbar extends ConsumerWidget {
     // paused nothing is running to skip, so the daemon treats it as a harmless
     // accepted no-op.
     final canSkip = hasSelection && isActive && !isAborting;
+    // Delete acts on what is HIGHLIGHTED: a selected instruction or target
+    // block is removed on its own (undoable, like the row's trash icon), and
+    // only with nothing selected below the top does it offer to delete the
+    // whole sequence. It used to always delete the sequence, every target in
+    // it, which is not what a user pressing Delete on one row expects.
+    final editorState = ref.watch(sequenceEditorProvider);
+    final selectedNodePath = editorState?.selectedPath;
+    final selectedNode = (editorState != null &&
+            selectedNodePath != null &&
+            selectedNodePath.isNotEmpty)
+        ? nodeAt(editorState.body, selectedNodePath)
+        : null;
 
     // Every action as data, so the toolbar can decide per-width which ones
     // sit inline and which fold into the overflow menu (see _ToolbarLayout).
@@ -153,9 +167,19 @@ class SequencerToolbar extends ConsumerWidget {
         // validator and report valid / the first problem.
         onPressed: canValidate ? () => _validate(context, ref) : null,
       ),
+      if (selectedNode != null)
+        _ToolAction(
+          icon: Icons.delete_outline,
+          label: 'Delete',
+          onPressed: busy
+              ? null
+              : () => _deleteSelectedItem(
+                  context, ref, selectedNodePath!, nodeLabel(selectedNode)),
+        )
+      else
       _ToolAction(
         icon: Icons.delete_outline,
-        label: 'Delete',
+        label: 'Delete sequence',
         // Delete the OPEN sequence right from the tab (the Load
         // dialog's per-row trash covers the rest). The shared flow
         // confirms, stop-and-deletes an active run, and clears the
@@ -668,6 +692,23 @@ Future<void> _validate(BuildContext context, WidgetRef ref) async {
   } finally {
     busy.setBusy(false);
   }
+}
+
+/// Remove the highlighted instruction or block from the open sequence, the
+/// same edit as the row's trash icon, and offer Undo. During a live run the
+/// editor applies it to the run (or explains why it can't) and there is no
+/// local undo, so no Undo is offered then.
+void _deleteSelectedItem(
+    BuildContext context, WidgetRef ref, NodePath path, String label) {
+  final notifier = ref.read(sequenceEditorProvider.notifier);
+  notifier.removeNode(path);
+  if (!notifier.canUndo) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text('Deleted $label'),
+    // The default action colour is near-white on the light snackbar.
+    action: SnackBarAction(
+        label: 'Undo', textColor: AraColors.accentInfo, onPressed: notifier.undo),
+  ));
 }
 
 /// Delete the open sequence via the shared confirm/stop-and-delete flow,

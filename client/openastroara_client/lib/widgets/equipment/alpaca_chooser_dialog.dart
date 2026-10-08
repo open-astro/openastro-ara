@@ -151,8 +151,10 @@ class _DeviceTile extends StatelessWidget {
     return ListTile(
       title: Text(device.name),
       subtitle: Text(
-        '$scheme://${device.hostName.isNotEmpty ? device.hostName : device.ipAddress}:${device.ipPort}'
-        ' ·  device #${device.alpacaDeviceNumber}',
+        device.isManualFilterWheel
+            ? 'No driver: you swap filters by hand and Ara asks for each one'
+            : '$scheme://${device.hostName.isNotEmpty ? device.hostName : device.ipAddress}:${device.ipPort}'
+                ' ·  device #${device.alpacaDeviceNumber}',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AraColors.textSecondary,
             ),

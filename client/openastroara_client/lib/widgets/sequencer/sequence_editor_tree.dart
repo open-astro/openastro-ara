@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/instruction_catalog.dart';
+import '../../models/sequence/loop_summary.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
 import '../../models/sequence/instruction_style.dart';
@@ -271,8 +272,13 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
         final isCurrent = currentKey != null && rowKey == currentKey;
         final isCompleted = completedKeys.contains(rowKey);
         final isContainerRow = isContainer(row.node);
-        final conditionCount = isContainerRow ? conditionsOf(row.node).length : 0;
-        final triggerCount = isContainerRow ? triggersOf(row.node).length : 0;
+        // What the container DOES ("× 56 · 5.2 min · ≈ 4.8 h", "AF every 23"),
+        // not how many conditions/triggers it holds: a bare "⟳ 1" on a 56-frame
+        // loop read as "loops once".
+        final summary = isContainerRow ? summarizeContainer(row.node) : null;
+        final loopChip = summary?.loopChip;
+        final conditionChip = summary?.conditionChip;
+        final triggerChip = summary?.triggerChip;
         final showActions =
             (isSelected || _hoveredKey == rowKey) && row.path.isNotEmpty;
         final content = ConstrainedBox(
@@ -296,26 +302,64 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
                           // S7 — category hue per instruction kind.
                           : nodeAccentColor(row.node)),
               const SizedBox(width: 8),
+              // The name takes what the chips leave; the chips take their
+              // natural width, capped at 70% of the row so a long name still
+              // shows. (Flex alone cut "× 34 · 5.2 min · ≈ 2.9 h" to
+              // "× 34 · 5.2 mi…" on a wide window.)
               Expanded(
-                child: Text(
-                  nodeLabel(row.node),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: AraColors.textPrimary,
-                      fontSize: 13,
-                      // Containers are structure — a touch of weight sets the
-                      // grouping without another colour.
-                      fontWeight:
-                          isContainerRow ? FontWeight.w600 : FontWeight.w400),
+                child: LayoutBuilder(
+                  builder: (context, box) => Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          nodeLabel(row.node),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: AraColors.textPrimary,
+                              fontSize: 13,
+                              // Containers are structure — a touch of weight
+                              // sets the grouping without another colour.
+                              fontWeight: isContainerRow
+                                  ? FontWeight.w600
+                                  : FontWeight.w400),
+                        ),
+                      ),
+                      // S9 — a container's loops/triggers surface inline as
+                      // quiet chips instead of hiding in the inspector.
+                      if (loopChip != null ||
+                          conditionChip != null ||
+                          triggerChip != null)
+                        ConstrainedBox(
+                          constraints:
+                              BoxConstraints(maxWidth: box.maxWidth * 0.7),
+                          // Each chip takes its natural width (capped, with
+                          // ellipsis); a narrow screen wraps them onto a
+                          // second line instead of splitting the space evenly
+                          // and clipping the longer one.
+                          child: Wrap(
+                            alignment: WrapAlignment.end,
+                            runSpacing: 4,
+                            children: [
+                              for (final (icon, text) in [
+                                if (loopChip != null) (Icons.repeat, loopChip),
+                                if (conditionChip != null)
+                                  (Icons.flag_outlined, conditionChip),
+                                if (triggerChip != null)
+                                  (Icons.bolt_outlined, triggerChip),
+                              ])
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                      maxWidth: box.maxWidth * 0.7),
+                                  child: _MetaChip(icon: icon, text: text),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              // S9 — a container's loops/triggers surface inline as quiet
-              // chips instead of hiding in the inspector.
-              if (conditionCount > 0)
-                _MetaChip(icon: Icons.loop, count: conditionCount),
-              if (triggerCount > 0)
-                _MetaChip(icon: Icons.bolt_outlined, count: triggerCount),
               // Reorder + delete affordances on the selected row — never the
               // root, which can't move or be removed (it's the sequence
               // container itself).
@@ -556,26 +600,33 @@ class SequenceDragChip extends StatelessWidget {
 /// Quiet count chip for a container's loops/triggers (S9).
 class _MetaChip extends StatelessWidget {
   final IconData icon;
-  final int count;
-  const _MetaChip({required this.icon, required this.count});
+  final String text;
+  const _MetaChip({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-        decoration: BoxDecoration(
-          color: AraColors.bgInput,
-          borderRadius: BorderRadius.circular(8),
+    return Tooltip(
+      message: text,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(
+            color: AraColors.bgInput,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 11, color: AraColors.textSecondary),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 10.5, color: AraColors.textSecondary)),
+            ),
+          ]),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 11, color: AraColors.textSecondary),
-          const SizedBox(width: 3),
-          Text('$count',
-              style: const TextStyle(
-                  fontSize: 10.5, color: AraColors.textSecondary)),
-        ]),
       ),
     );
   }

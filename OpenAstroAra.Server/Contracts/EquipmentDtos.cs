@@ -273,18 +273,29 @@ public sealed record FocuserMoveRequestDto(int TargetPosition, bool? UseTempComp
 
 // ─── FilterWheel (§10.6 row 4) ────────────────────────────────────────────────
 
+/// <summary><c>Manual</c> (#1298): the wheel is the driverless manual filter wheel — filters are
+/// swapped by hand, its slots are the profile's filter labels, and a change waits for the user to
+/// report the filter installed (<c>POST /equipment/filterwheel/installed</c>).</summary>
 public sealed record FilterWheelDto(
     string DeviceId,
     string Name,
     EquipmentConnectionState State,
     FilterWheelStateDto Runtime,
-    IReadOnlyList<FilterSlotDto> Slots);
+    IReadOnlyList<FilterSlotDto> Slots,
+    bool Manual = false);
 
 public sealed record FilterSlotDto(int Position, string Name, int FocusOffset);
 
-public sealed record FilterWheelStateDto(string State, int? CurrentSlot);
+/// <summary><c>State</c> is <c>idle</c> | <c>moving</c> (Alpaca, slot -1 while rotating) |
+/// <c>awaiting_user</c> (#1298 manual wheel: a change was requested and the user has not yet
+/// reported <c>PendingSlot</c> installed). <c>CurrentSlot</c> is null when unknown.</summary>
+public sealed record FilterWheelStateDto(string State, int? CurrentSlot, int? PendingSlot = null);
 
 public sealed record FilterChangeRequestDto(int Position);
+
+/// <summary>#1298 — the user reports which filter is now in the manual filter wheel. Completes a
+/// pending change to that position; any other position just records what is installed.</summary>
+public sealed record FilterInstalledRequestDto(int Position);
 
 // ─── Rotator (§10.6 row 5) ────────────────────────────────────────────────────
 

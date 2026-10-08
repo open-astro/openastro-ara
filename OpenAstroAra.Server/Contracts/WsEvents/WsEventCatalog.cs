@@ -52,6 +52,10 @@ public static class WsEventCatalog {
     // device_name, kind, action, … } where action is sequence_paused | reconnecting | recovered
     // | gave_up | notify_only (gave_up carries the terminal action taken).
     public const string EquipmentFaultActionTaken = "equipment.fault_action_taken";
+    // #1298 — the manual filter wheel asked for, or got, a hand swap; payload { pending_slot,
+    // pending_name, current_slot, current_name } (pending_* null once the swap is resolved or
+    // cancelled). Clients raise / drop their "install the X filter" prompt on it.
+    public const string FilterWheelManualSwap = "equipment.filter_wheel.manual_swap";
     // §42.4 — a written switch port whose read-back disagrees with the commanded value beyond
     // the profile tolerance past the settle window; payload { device_id, device_name, port_id,
     // port_name, commanded, read_back, tolerance_pct }. Fires alongside the equipment.fault
@@ -279,6 +283,7 @@ public static class WsEventCatalog {
     public static readonly IReadOnlyList<string> All = new[] {
         EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
         EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault, EquipmentFaultActionTaken,
+        FilterWheelManualSwap,
         SwitchValueMismatch,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,

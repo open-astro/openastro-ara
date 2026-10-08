@@ -84,4 +84,56 @@ void main() {
       reason: 'the §68.2 service diagnostic must ride it too',
     );
   });
+
+  testWidgets('#1298 the manual filter wheel row says there is no driver',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          savedServerServiceProvider
+              .overrideWithValue(_FakeSavedServerService()),
+          equipmentDiscoveryApiFactoryProvider.overrideWithValue((server) =>
+              _FakeDiscoveryApi(server)
+                ..result = const [
+                  DiscoveredDevice(
+                    uniqueId: DiscoveredDevice.manualFilterWheelId,
+                    name: 'Manual filter wheel',
+                    deviceType: EquipmentDeviceType.filterWheel,
+                    hostName: '',
+                    ipAddress: '',
+                    ipPort: 0,
+                    alpacaDeviceNumber: 0,
+                    useHttps: false,
+                  ),
+                ]),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showAlpacaChooserDialog(
+                  context,
+                  EquipmentDeviceType.filterWheel,
+                  deviceTypeLabel: 'filter wheel',
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('open')),
+    );
+    await container.read(savedServersProvider.future);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manual filter wheel'), findsOneWidget);
+    expect(find.textContaining('No driver'), findsOneWidget);
+    expect(find.textContaining('http://'), findsNothing,
+        reason: 'no host or port to show for a device nobody dials');
+  });
 }

@@ -194,11 +194,15 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
   /// One slot's auto-assign: a single discovered device claims the slot;
   /// zero or several leave it for the user (ambiguity gets a question, per
   /// §76.2 — never a guess between two cameras). Discovery errors leave the
-  /// slot unassigned; the card's Choose path retries interactively.
+  /// slot unassigned; the card's Choose path retries interactively. The
+  /// daemon's manual filter wheel (#1298) is in every filter-wheel listing, so
+  /// it never counts: a hand-swapped wheel is the user's choice, not a guess.
   Future<void> _autoAssign(
       EquipmentDiscoveryApi api, EquipmentDeviceType type) async {
     try {
-      final devices = await api.discover(type);
+      final devices = (await api.discover(type))
+          .where((d) => !d.isManualFilterWheel)
+          .toList();
       if (devices.length == 1) {
         _slotSet(_draft.equipment, type, devices.single.uniqueId);
         _draft.deviceNames[devices.single.uniqueId] = devices.single.name;

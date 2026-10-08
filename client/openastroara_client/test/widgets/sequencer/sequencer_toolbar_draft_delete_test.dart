@@ -29,7 +29,7 @@ class _MemDrafts extends DraftSequenceService {
 const _id = '${draftIdPrefix}abc';
 
 TextButton _deleteButton(WidgetTester tester) => tester.widget<TextButton>(
-      find.ancestor(of: find.text('Delete'), matching: find.byType(TextButton)),
+      find.ancestor(of: find.text('Delete sequence'), matching: find.byType(TextButton)),
     );
 
 void main() {
@@ -57,7 +57,7 @@ void main() {
     // Before #1106 this was `: null` for any draft.
     expect(_deleteButton(tester).onPressed, isNotNull);
 
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Delete sequence'));
     await tester.pumpAndSettle();
     expect(find.text('Delete draft?'), findsOneWidget);
     await tester.tap(find.widgetWithText(TextButton, 'Delete').last);
@@ -93,7 +93,7 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
     ));
     await tester.pump();
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Delete sequence'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();

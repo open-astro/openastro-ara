@@ -105,6 +105,27 @@ public sealed partial class EquipmentEventPublisher {
         }
     }
 
+    /// <summary>#1298 — the manual filter wheel's hand-swap prompt changed: raised (pending set),
+    /// resolved or cancelled (pending null). Clients show or drop the "install the X filter"
+    /// prompt and re-read the wheel.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into a filter change. CA1031's log-and-recover boundary applies.")]
+    public void ManualFilterSwap(int? pendingSlot, string? pendingName, int? currentSlot, string? currentName) {
+        try {
+            var payload = new JsonObject {
+                ["device_type"] = DeviceType.FilterWheel.ToString().ToLowerInvariant(),
+                ["pending_slot"] = pendingSlot,
+                ["pending_name"] = pendingName,
+                ["current_slot"] = currentSlot,
+                ["current_name"] = currentName,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            Publish(WsEventCatalog.FilterWheelManualSwap, doc.RootElement.Clone());
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.FilterWheelManualSwap);
+        }
+    }
+
     /// <summary>Publish that a device left the daemon's known list (the card's Remove, #1127):
     /// an <c>equipment.state_changed</c> carrying <c>state: "disconnected"</c> and
     /// <c>removed: true</c>. The same event the clients already refresh on, so a second open

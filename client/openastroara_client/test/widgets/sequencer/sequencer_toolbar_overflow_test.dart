@@ -49,7 +49,7 @@ void main() {
       'Save',
       'Export',
       'Validate',
-      'Delete',
+      'Delete sequence',
     ]) {
       expect(find.widgetWithText(TextButton, l), findsOneWidget, reason: l);
     }
@@ -63,15 +63,15 @@ void main() {
     expect(find.widgetWithText(TextButton, 'New'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Run'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Abort'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Delete'), findsNothing);
+    expect(find.widgetWithText(TextButton, 'Delete sequence'), findsNothing);
     expect(moreMenu(), findsOneWidget);
 
     await tester.tap(moreMenu());
     await tester.pumpAndSettle();
-    expect(menuRow('Delete'), findsOneWidget);
+    expect(menuRow('Delete sequence'), findsOneWidget);
     expect(menuRow('Validate'), findsOneWidget);
     // Offline with nothing selected → Delete is disabled in the menu too.
-    expect(rowEnabled(tester, 'Delete'), isFalse);
+    expect(rowEnabled(tester, 'Delete sequence'), isFalse);
     // Load fits inline at this width and never needs a server.
     expect(
       tester
@@ -100,13 +100,13 @@ void main() {
       'Save',
       'Export',
       'Validate',
-      'Delete',
+      'Delete sequence',
     ];
     final inline = [
       for (final l in all)
         if (find.widgetWithText(TextButton, l).evaluate().isNotEmpty) l,
     ];
-    expect(inline, isNot(contains('Delete')));
+    expect(inline, isNot(contains('Delete sequence')));
     expect(inline.length, lessThan(3));
 
     await tester.tap(moreMenu());
