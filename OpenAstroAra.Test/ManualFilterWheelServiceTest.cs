@@ -175,6 +175,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Asking_for_the_installed_filter_withdraws_a_standing_prompt() {
+            using var wheel = NewWheel();
+            await wheel.ConnectAsync(Manual(), null, CancellationToken.None);
+            await wheel.ReportInstalledAsync(0, CancellationToken.None); // L is in
+            await wheel.ChangeFilterAsync(new FilterChangeRequestDto(4), null, CancellationToken.None);
+            Assert.That((await wheel.GetAsync(CancellationToken.None))!.Runtime,
+                Is.EqualTo(new FilterWheelStateDto("awaiting_user", 0, 4)));
+            _ws.Events.Clear();
+
+            await wheel.ChangeFilterAsync(new FilterChangeRequestDto(0), null, CancellationToken.None);
+            Assert.That((await wheel.GetAsync(CancellationToken.None))!.Runtime,
+                Is.EqualTo(new FilterWheelStateDto("idle", 0)),
+                "asking for what is in the train drops the Ha prompt");
+            var dropped = _ws.Events.Where(e => e.EventType == WsEventCatalog.FilterWheelManualSwap).ToList();
+            Assert.That(dropped, Has.Count.EqualTo(1));
+            Assert.That(dropped[0].Payload.GetProperty("pending_slot").ValueKind, Is.EqualTo(System.Text.Json.JsonValueKind.Null));
+            Assert.That(dropped[0].Payload.GetProperty("current_slot").GetInt32(), Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task A_prompt_replaced_by_another_filter_fails_the_waiting_change() {
+            using var wheel = NewWheel();
+            await wheel.ConnectAsync(Manual(), null, CancellationToken.None);
+            var change = wheel.ChangeFilter(Filter("G", 2));
+            await Task.Delay(100);
+            Assert.That(change.IsCompleted, Is.False);
+
+            await wheel.ChangeFilterAsync(new FilterChangeRequestDto(3), null, CancellationToken.None);
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => change.WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.That((await wheel.GetAsync(CancellationToken.None))!.Runtime,
+                Is.EqualTo(new FilterWheelStateDto("awaiting_user", null, 3)),
+                "the new prompt (B) stands; only the replaced change fails");
+        }
+
+        [Test]
         public async Task A_disconnect_fails_the_waiting_change_and_a_cancel_token_propagates() {
             using var wheel = NewWheel();
             await wheel.ConnectAsync(Manual(), null, CancellationToken.None);
