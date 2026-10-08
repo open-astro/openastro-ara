@@ -11,6 +11,8 @@ import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../fit_pane.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart' show GuideFocusHint, TurnAdvice, TurnHint;
 
@@ -138,8 +140,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
         onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.first),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: FitColumn(
         children: [
           if (live.error != null || status.error != null) ...[
             InlineNotice.error(live.error ?? status.error!),
@@ -161,24 +162,20 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
             const SizedBox(height: 16),
           ],
           if (!hasData)
-            const EmptyState(
+            const FitFill(child: EmptyState(
               icon: Icons.flare,
               title: 'Fit the mask, then Start',
               message: 'Put the Bahtinov mask over the front of the telescope and point at a bright star. '
                   'Ara uses the brightest star in the frame and shows how far the middle spike sits from the centre of the X.',
-            )
+            ))
           else ...[
-            LayoutBuilder(builder: (context, c) {
-              final wide = c.maxWidth >= 760;
-              // Budgeted like the guide-camera card so the picture, the readout
-              // and the trend fit a 1080-tall window without scrolling.
-              final viewport = MediaQuery.sizeOf(context).height;
-              final budget = (viewport - 600).clamp(200.0, 900.0);
-              final band = (wide
-                      ? ((c.maxWidth - 16) * 5 / 8 * 0.75).clamp(300.0, 900.0)
-                      : (c.maxWidth * 0.75).clamp(220.0, 480.0))
-                  .clamp(200.0, budget);
-              final frame = BahtinovFrameView(
+            FitFill(child: FitBand(builder: (context, width, height) {
+              // The trend keeps a fixed strip; the picture and the readout
+              // take the rest of the height the window leaves.
+              final short = AraBreakpoints.isShort(context);
+              final trendHeight = short ? 100.0 : (width * 0.11).clamp(140.0, 200.0);
+              final trend = SizedBox(height: trendHeight, child: BahtinovTrendChart(status: status));
+              Widget frame(double h) => BahtinovFrameView(
                 frame: live.frame,
                 overlay: live.overlay,
                 offsetPx: latest?.offsetPx,
@@ -189,26 +186,45 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
                         'frame ${latest.seq}',
                         if (latest.peakAdu > 0) 'peak ${(latest.peakAdu / 1000).toStringAsFixed(1)}k',
                       ].join(' · '),
-                height: band,
+                height: h,
               );
-              final hero = SizedBox(height: wide ? band : null, child: _Hero(status: status));
-              if (wide) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              final hero = _Hero(status: status);
+              if (width >= 760) {
+                // The frame stays 4:3 and takes up to 5/8 of the width; the
+                // readout gets the rest. Past that the band stops growing.
+                final band = math.max(height - trendHeight - 16, short ? 160.0 : 200.0);
+                final frameWidth = math.min(band * 4 / 3, (width - 16) * 5 / 8);
+                final h = math.min(band, frameWidth * 0.75);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(flex: 5, child: frame),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 3, child: hero),
+                    SizedBox(
+                      height: h,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(width: frameWidth, child: frame(h)),
+                          const SizedBox(width: 16),
+                          Expanded(child: hero),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    trend,
                   ],
                 );
               }
-              return Column(children: [frame, const SizedBox(height: 12), hero]);
-            }),
-            const SizedBox(height: 16),
-            LayoutBuilder(builder: (context, c) => SizedBox(
-              height: (c.maxWidth * 0.11).clamp(140.0, 200.0),
-              child: BahtinovTrendChart(status: status),
-            )),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  frame((width * 0.75).clamp(220.0, 480.0)),
+                  const SizedBox(height: 12),
+                  hero,
+                  const SizedBox(height: 16),
+                  trend,
+                ],
+              );
+            })),
           ],
         ],
       ),
@@ -395,6 +411,8 @@ double _medianEndingAt(List<double> values, int end) {
 }
 
 const double _heroFont = 88;
+// A short window keeps the readout's caption in view under the figure.
+const double _heroFontShort = 64;
 const double _statFont = 24;
 const double _textFont = 14;
 const _tabular = [FontFeature.tabularFigures()];
@@ -442,7 +460,7 @@ class _Hero extends StatelessWidget {
                   child: Text(
                     offset == null ? '—' : formatOffset(offset, signed: true),
                     style: TextStyle(
-                      fontSize: _heroFont,
+                      fontSize: AraBreakpoints.isShort(context) ? _heroFontShort : _heroFont,
                       fontWeight: FontWeight.w300,
                       height: 1.05,
                       color: within ? AraColors.accentConnected : AraColors.textPrimary,

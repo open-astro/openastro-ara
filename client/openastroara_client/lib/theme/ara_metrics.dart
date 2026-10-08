@@ -40,3 +40,14 @@ class AraText {
       color: AraColors.textPrimary,
       fontFeatures: [FontFeature.tabularFigures()]);
 }
+
+/// Window-size tiers, in logical px (what Flutter sees after OS scaling).
+class AraBreakpoints {
+  /// Under this window height a pane goes compact: tighter padding, secondary
+  /// lines dropped. The common 1080p laptop at 150 % scaling leaves ≈ 640 px of
+  /// window; a 1470×956 MacBook Air ≈ 860.
+  static const double shortHeight = 820;
+
+  static bool isShort(BuildContext context) =>
+      MediaQuery.sizeOf(context).height < shortHeight;
+}

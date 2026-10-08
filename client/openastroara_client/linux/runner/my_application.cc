@@ -30,7 +30,7 @@ static void window_mode_method_cb(FlMethodChannel* channel,
   GtkWindow* window = GTK_WINDOW(user_data);
   const gchar* method = fl_method_call_get_name(method_call);
   if (g_strcmp0(method, "workstation") == 0) {
-    gtk_widget_set_size_request(GTK_WIDGET(window), 1100, 700);
+    gtk_widget_set_size_request(GTK_WIDGET(window), 1100, 600);
     gtk_window_maximize(window);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else if (g_strcmp0(method, "launchpad") == 0) {

@@ -8,6 +8,7 @@ import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
@@ -47,6 +48,7 @@ Widget _harness({
   AutofocusLive autofocus = AutofocusLive.idle,
   GuideFocusLive guide = GuideFocusLive.idle,
   bool oag = false,
+  Size pane = const Size(1100, 3200),
 }) =>
     ProviderScope(
       overrides: [
@@ -55,7 +57,7 @@ Widget _harness({
         mainFocusMethodProvider.overrideWith(_PinnedAutofocus.new),
         if (oag) phd2SettingsProvider.overrideWith(_OagPhd2.new),
       ],
-      child: const MaterialApp(home: Scaffold(body: SizedBox(width: 1100, height: 3200, child: FocusingPane()))),
+      child: MaterialApp(home: Scaffold(body: SizedBox.fromSize(size: pane, child: const FocusingPane()))),
     );
 
 const _completed = AutofocusRun(
@@ -90,7 +92,81 @@ const _completed = AutofocusRun(
   ),
 );
 
+/// The shell around the Setup pane: 64 top bar + 40 status bar, an 80 rail
+/// and the 280 checklist (+ dividers).
+Size _setupPane(Size window) => Size(window.width - 362, window.height - 104);
+
+/// A window of [window] logical px, with the Setup pane it leaves.
+Future<Size> _window(WidgetTester t, Size window) async {
+  t.view.physicalSize = window;
+  t.view.devicePixelRatio = 1;
+  addTearDown(t.view.reset);
+  return _setupPane(window);
+}
+
+double _paneScroll(WidgetTester t) => t
+    .state<ScrollableState>(find.descendant(of: find.byType(FitPane), matching: find.byType(Scrollable)).first)
+    .position
+    .maxScrollExtent;
+
+const _guideLive = GuideFocusStatus(
+  active: true,
+  state: GuideFocusStates.running,
+  exposureSec: 2,
+  seq: 14,
+  latest: GuideFocusSample(seq: 14, hfr: 2.31, stars: 6, peakAdu: 21000, fwhm: 3.9),
+  bestHfr: 2.1,
+  bestSeq: 9,
+  recent: [GuideFocusSample(seq: 13, hfr: 2.4, stars: 6, peakAdu: 20000, fwhm: 4.0), GuideFocusSample(seq: 14, hfr: 2.31, stars: 6, peakAdu: 21000, fwhm: 3.9)],
+);
+
 void main() {
+  group('fits the window', () {
+    // A 1080p laptop at 150 % leaves a ≈ 1280×640 window (the compact tier);
+    // a 1470×956 MacBook Air ≈ 1470×860.
+    for (final window in const [Size(1280, 640), Size(1470, 860), Size(2560, 1400)]) {
+      testWidgets('a completed run at ${window.width.toInt()}×${window.height.toInt()} needs no scroll', (t) async {
+        final pane = await _window(t, window);
+        await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: _completed, focusedThisSession: true), pane: pane));
+        await t.pump();
+        expect(_paneScroll(t), 0);
+        expect(t.getSize(find.byType(VCurveChart)).height, greaterThanOrEqualTo(160));
+      });
+
+      testWidgets('a live guide loop at ${window.width.toInt()}×${window.height.toInt()} needs no scroll', (t) async {
+        final pane = await _window(t, window);
+        await t.pumpWidget(_harness(guide: const GuideFocusLive(status: _guideLive), pane: pane));
+        await t.pump();
+        await t.tap(find.text('Guide camera'));
+        for (var i = 0; i < 10; i++) {
+          await t.pump(const Duration(milliseconds: 100));
+        }
+        expect(_paneScroll(t), 0);
+      });
+    }
+
+    testWidgets('the V-curve grows with the window', (t) async {
+      final small = await _window(t, const Size(1280, 640));
+      await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: _completed), pane: small));
+      await t.pump();
+      final laptop = t.getSize(find.byType(VCurveChart)).height;
+      final big = await _window(t, const Size(2560, 1400));
+      await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: _completed), pane: big));
+      await t.pump();
+      expect(t.getSize(find.byType(VCurveChart)).height, greaterThan(laptop * 1.5));
+    });
+
+    testWidgets('opening Details on a short window scrolls rather than overflows', (t) async {
+      final pane = await _window(t, const Size(1280, 640));
+      await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: _completed), pane: pane));
+      await t.pump();
+      await t.tap(find.text('Details'));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
+      expect(_paneScroll(t), greaterThan(0));
+    });
+  });
+
   testWidgets('idle pane shows both cards with the run button disabled without a focuser', (t) async {
     await t.pumpWidget(_harness());
     await t.pump();
