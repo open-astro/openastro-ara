@@ -63,7 +63,7 @@
     border: 0.5px solid rgba(255,120,120,0.4); border-radius: 10px; }
 
   /* Object info card — right */
-  #info { right: 14px; top: 64px; width: 268px; padding: 14px 15px 15px; display: none;
+  #info { right: 14px; top: 64px; width: 268px; max-height: calc(100% - 78px); overflow-y: auto; padding: 14px 15px 15px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
   #info .close { position: absolute; right: 9px; top: 9px; border: none; background: none; padding: 3px 7px;
@@ -86,7 +86,7 @@
   #info .warn { color: #ffb74d; }
 
   /* Left drawer card — Framing sits in the slot under the layer pills */
-  #frame { left: 14px; top: 64px; width: 250px; padding: 13px 15px 15px; display: none;
+  #frame { left: 14px; top: 64px; width: 250px; max-height: calc(100% - 78px); overflow-y: auto; padding: 13px 15px 15px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
   .card-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 11px; display: flex; align-items: center; }
@@ -124,6 +124,17 @@
     background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
   #frame #f-rotcam:hover { background: rgba(255,255,255,0.14); }
   #frame #f-rotcam:disabled { opacity: .4; cursor: default; }
+  /* A short view (a laptop window): tighter rows and a smaller dial so the
+     card fits without scrolling. */
+  @media (max-height: 560px) {
+    #frame { padding: 10px 13px 12px; }
+    #frame .frow { padding: 3px 0; }
+    #frame .frot { padding: 2px 0 4px; }
+    #frame .dial { width: 50px; height: 50px; }
+    #frame .dial-hand { height: 20px; }
+    #frame #f-add { margin-top: 8px; padding: 7px 0; }
+    #frame #f-rotcam { margin-top: 6px; padding: 6px 0; }
+  }
   #frame #f-msg, #frame #f-dss { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
   #frame #f-dss[hidden] { display: none; }
   #frame .warn { color: #ffb74d; }

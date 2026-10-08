@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -73,6 +74,28 @@ class FitBand extends StatelessWidget {
   }
 }
 
+/// Side-by-side columns that share one height: the height their parent's
+/// minimum asks for, or the tallest column's own minimum when that is more.
+/// Each child gets [flex] of the width after [spacing]; make the children
+/// [FitColumn]s so the extra height reaches their [FitFill].
+class FitRow extends MultiChildRenderObjectWidget {
+  final List<int> flex;
+  final double spacing;
+  const FitRow({super.key, required this.flex, this.spacing = 0, super.children})
+      : assert(flex.length == children.length);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderFitRow(flex, spacing);
+
+  @override
+  void updateRenderObject(BuildContext context, RenderObject renderObject) {
+    (renderObject as _RenderFitRow)
+      ..flex = flex
+      ..spacing = spacing;
+  }
+}
+
 class _FitParentData extends ContainerBoxParentData<RenderBox> {
   bool fill = false;
 }
@@ -101,11 +124,17 @@ class _RenderFitColumn extends RenderBox
         used += child.size.height;
       }
     }
+    final target = math.max(0.0, constraints.minHeight - used);
     fill?.layout(
       BoxConstraints(
         minWidth: width,
         maxWidth: width,
-        minHeight: math.max(0.0, constraints.minHeight - used),
+        minHeight: target,
+        // Under a bounded parent (a FitRow lining its columns up) the fill
+        // takes exactly what is left.
+        maxHeight: constraints.hasBoundedHeight
+            ? math.max(target, constraints.maxHeight - used)
+            : double.infinity,
       ),
       parentUsesSize: true,
     );
@@ -120,6 +149,68 @@ class _RenderFitColumn extends RenderBox
   @override
   double? computeDistanceToActualBaseline(TextBaseline baseline) =>
       defaultComputeDistanceToFirstActualBaseline(baseline);
+
+  @override
+  void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
+}
+
+class _RenderFitRow extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _FitParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _FitParentData> {
+  _RenderFitRow(this._flex, this._spacing);
+
+  List<int> _flex;
+  set flex(List<int> value) {
+    if (listEquals(_flex, value)) return;
+    _flex = value;
+    markNeedsLayout();
+  }
+
+  double _spacing;
+  set spacing(double value) {
+    if (_spacing == value) return;
+    _spacing = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _FitParentData) child.parentData = _FitParentData();
+  }
+
+  @override
+  void performLayout() {
+    final children = getChildrenAsList();
+    final total = _flex.fold<int>(0, (a, b) => a + b);
+    final free = math.max(0.0, constraints.maxWidth - _spacing * math.max(0, children.length - 1));
+    final widths = [for (final f in _flex) total == 0 ? 0.0 : free * f / total];
+    // First pass: each column at the parent's minimum, free to grow.
+    var height = constraints.minHeight;
+    for (var i = 0; i < children.length; i++) {
+      children[i].layout(
+        BoxConstraints(minWidth: widths[i], maxWidth: widths[i], minHeight: constraints.minHeight),
+        parentUsesSize: true,
+      );
+      height = math.max(height, children[i].size.height);
+    }
+    height = constraints.constrainHeight(height);
+    // Second pass: every column at the shared height, so the edges line up.
+    var x = 0.0;
+    for (var i = 0; i < children.length; i++) {
+      final child = children[i];
+      if (child.size.height != height) {
+        child.layout(BoxConstraints.tightFor(width: widths[i], height: height), parentUsesSize: true);
+      }
+      (child.parentData! as _FitParentData).offset = Offset(x, 0);
+      x += widths[i] + _spacing;
+    }
+    size = constraints.constrain(Size(constraints.maxWidth, height));
+  }
 
   @override
   void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);

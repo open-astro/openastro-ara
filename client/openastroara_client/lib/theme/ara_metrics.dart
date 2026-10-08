@@ -50,4 +50,15 @@ class AraBreakpoints {
 
   static bool isShort(BuildContext context) =>
       MediaQuery.sizeOf(context).height < shortHeight;
+
+  /// Instruments sit side by side (picture | readout) from this pane width,
+  /// and stack below it (tablet portrait, phone).
+  static const double sideBySideWidth = 760;
+
+  /// A short window keeps them side by side down to this width (a 1100-wide
+  /// laptop window), since stacking them would scroll.
+  static const double sideBySideWidthShort = 600;
+
+  static double sideBySide(BuildContext context) =>
+      isShort(context) ? sideBySideWidthShort : sideBySideWidth;
 }

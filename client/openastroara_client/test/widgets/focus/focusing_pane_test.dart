@@ -124,7 +124,7 @@ void main() {
   group('fits the window', () {
     // A 1080p laptop at 150 % leaves a ≈ 1280×640 window (the compact tier);
     // a 1470×956 MacBook Air ≈ 1470×860.
-    for (final window in const [Size(1280, 640), Size(1470, 860), Size(2560, 1400)]) {
+    for (final window in const [Size(1280, 640), Size(1366, 712), Size(1470, 860), Size(2560, 1400)]) {
       testWidgets('a completed run at ${window.width.toInt()}×${window.height.toInt()} needs no scroll', (t) async {
         final pane = await _window(t, window);
         await t.pumpWidget(_harness(autofocus: const AutofocusLive(run: _completed, focusedThisSession: true), pane: pane));

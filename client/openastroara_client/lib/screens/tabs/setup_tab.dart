@@ -11,6 +11,8 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../../widgets/fit_pane.dart';
 import '../../widgets/focus/focusing_pane.dart';
 import '../../widgets/guider/guider_setup_wizard.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
@@ -416,9 +418,10 @@ class _PolarAlignPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
-      padding: EdgeInsets.all(12),
-      child: PolarAlignPanel(),
+    // Fills the window; scrolls only when it is shorter than the readouts.
+    return FitPane(
+      padding: EdgeInsets.all(AraBreakpoints.isShort(context) ? 8 : 12),
+      child: const PolarAlignPanel(),
     );
   }
 }

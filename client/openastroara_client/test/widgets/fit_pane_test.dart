@@ -55,6 +55,20 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
+  testWidgets('a FitRow shares the pane height and splits the width by flex', (t) async {
+    await t.pumpWidget(_row(500));
+    expect(t.getSize(find.byKey(_leftKey)), const Size(190, 500));
+    expect(t.getSize(find.byKey(_rightKey)), const Size(190, 460));
+    expect(_maxScroll(t), 0);
+  });
+
+  testWidgets('a FitRow grows to its tallest column and lines the others up', (t) async {
+    await t.pumpWidget(_row(200));
+    expect(t.getSize(find.byKey(_leftKey)).height, 300);
+    expect(t.getSize(find.byKey(_rightKey)).height, 260, reason: 'stretched to the shared 300');
+    expect(_maxScroll(t), 100);
+  });
+
   testWidgets('nested columns pass the height down to the innermost fill', (t) async {
     await t.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -86,3 +100,26 @@ void main() {
     expect(_maxScroll(t), 0);
   });
 }
+
+const _leftKey = Key('left');
+const _rightKey = Key('right');
+
+/// A row of a 300-tall column beside a column whose band fills.
+Widget _row(double height) => MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 400,
+          height: height,
+          child: FitPane(
+            child: FitRow(flex: const [1, 1], spacing: 20, children: [
+              const SizedBox(key: _leftKey, height: 300),
+              FitColumn(children: [
+                const SizedBox(height: 40),
+                FitFill(child: FitBand(builder: (context, width, h) => SizedBox(key: _rightKey, height: math.max(h, 60)))),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+

@@ -345,6 +345,13 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  test('the graph takes a fifth of the Live tab: a laptop keeps the stats floor, a big monitor caps it', () {
+    expect(GuidingStrip.graphHeightFor(500), 110, reason: 'a short laptop window keeps the stats floor');
+    expect(GuidingStrip.graphHeightFor(758), closeTo(152, 1), reason: 'MacBook Air');
+    expect(GuidingStrip.graphHeightFor(1268), 220, reason: '2560×1400');
+    expect(GuidingStrip.graphHeightFor(double.infinity), 220);
+  });
+
   test('GuideGraphModel: a settle whose settle_done was lost ends when guiding '
       'restarts', () {
     final t = DateTime.utc(2026);

@@ -302,7 +302,7 @@ class MainFocusCard extends ConsumerWidget {
                     ? 'The first measurable probe appears here.'
                     : 'No frame from this run.',
               );
-              if (width >= 760) {
+              if (width >= AraBreakpoints.sideBySide(context)) {
                 // The band takes the height the window leaves. The frame stays
                 // 4:3 and takes up to half the width; past that the band stops
                 // growing rather than turn into a billboard.

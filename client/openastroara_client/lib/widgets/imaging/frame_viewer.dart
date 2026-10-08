@@ -94,6 +94,11 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
     super.dispose();
   }
 
+  /// The view's zoom. Not getMaxScaleOnAxis(): that counts the z axis, which
+  /// stays 1, so any downscaled (fit) frame read as 1.0 and a resize never
+  /// re-fit it.
+  double get _zoom => _transform.value.entry(0, 0);
+
   double _fitScale(Size viewport, Size image) => math.min(
       viewport.width / image.width, viewport.height / image.height);
 
@@ -109,7 +114,7 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
     final image = _imageSize;
     if (image == null) return;
     final fit = _fitScale(viewport, image);
-    final current = _transform.value.getMaxScaleOnAxis();
+    final current = _zoom;
     if ((current - fit).abs() < 0.01) {
       // At fit → 1:1, keeping the double-clicked spot under the cursor.
       final scenePoint = _transform.toScene(_doubleTapAt);
@@ -132,7 +137,7 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
         // the user was still at fit — a zoomed/panned view they set up
         // deliberately must survive the resize.
         final wasAtFit = _fittedFor == null ||
-            (_transform.value.getMaxScaleOnAxis() -
+            (_zoom -
                         _fitScale(_fittedFor!, image))
                     .abs() <
                 0.01;

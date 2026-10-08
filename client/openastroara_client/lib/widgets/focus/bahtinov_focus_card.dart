@@ -189,10 +189,10 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
                 height: h,
               );
               final hero = _Hero(status: status);
-              if (width >= 760) {
+              if (width >= AraBreakpoints.sideBySide(context)) {
                 // The frame stays 4:3 and takes up to 5/8 of the width; the
                 // readout gets the rest. Past that the band stops growing.
-                final band = math.max(height - trendHeight - 16, short ? 160.0 : 200.0);
+                final band = math.max(height - trendHeight - 16, short ? 136.0 : 200.0);
                 final frameWidth = math.min(band * 4 / 3, (width - 16) * 5 / 8);
                 final h = math.min(band, frameWidth * 0.75);
                 return Column(

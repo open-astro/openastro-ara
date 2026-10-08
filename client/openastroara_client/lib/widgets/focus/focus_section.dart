@@ -218,7 +218,9 @@ class StatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final perRow = c.maxWidth >= 720
+        // One row while each tile still gets ~140 px (a 1100-wide window);
+        // a second row costs the instruments their height.
+        final perRow = c.maxWidth >= tiles.length * 140
             ? tiles.length
             : (c.maxWidth >= 420 ? 2 : 1);
         final width = (c.maxWidth - 12 * (perRow - 1)) / perRow;
@@ -279,7 +281,9 @@ class InlineNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: AraBreakpoints.isShort(context)
+          ? const EdgeInsets.fromLTRB(14, 8, 14, 8)
+          : const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: tint.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
