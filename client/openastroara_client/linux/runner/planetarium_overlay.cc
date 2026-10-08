@@ -112,8 +112,11 @@ void apply_visibility(OverlayState* state) {
     gboolean was_visible = gtk_widget_get_visible(state->webview_widget);
     gtk_widget_show(state->webview_widget);
     if (!was_visible) {
-      // Bounds set while hidden never reached an allocation; re-apply them so
-      // a window that grew behind another tab isn't drawn at the old size.
+      // Bounds that arrived while hidden were only stored (see setBounds):
+      // apply them now, as a real size change, so GTK re-allocates the
+      // webview. A request updated while hidden read as "unchanged" on show
+      // and the webview kept its old allocation (window grown behind another
+      // tab, KDE Wayland 2026-10-08).
       gtk_widget_set_size_request(state->webview_widget, state->rect.width,
                                   state->rect.height);
       gtk_widget_queue_resize(GTK_WIDGET(state->overlay));
@@ -603,10 +606,11 @@ void method_call_cb(FlMethodChannel* channel,
                 state->rect.x, state->rect.y, state->rect.width,
                 state->rect.height, state->visible);
     }
-    if (state->webview_widget != nullptr) {
+    if (state->webview_widget != nullptr && state->visible) {
       // Pin the natural size to the rect so GtkOverlay's alignment path can't
       // clamp the child down to the (empty) webview's 0×0 request, then re-run
-      // get-child-position with the new rect.
+      // get-child-position with the new rect. While hidden the rect is only
+      // stored; apply_visibility applies it on show.
       gtk_widget_set_size_request(state->webview_widget, state->rect.width,
                                   state->rect.height);
       gtk_widget_queue_resize(GTK_WIDGET(state->overlay));
