@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,8 @@ import '../../state/focus/guide_focus_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../fit_pane.dart';
 import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'hfr_trend_chart.dart';
@@ -132,8 +136,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
         onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.first),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: FitColumn(
         children: [
           if (gated) ...[
             InlineNotice.warning(
@@ -154,54 +157,86 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
             const SizedBox(height: 16),
           ],
           if (!hasData)
-            EmptyState(
+            const FitFill(child: EmptyState(
               icon: Icons.filter_center_focus,
               title: 'No live focus yet',
               message: 'Start live focus to see the guide camera, its HFR and the trend while you turn the focuser.',
-            )
+            ))
           else ...[
-            LayoutBuilder(builder: (context, c) {
-              final wide = c.maxWidth >= 760;
-              // The live view keeps the guide camera's 4:3 at the width of its
-              // 5/8 column, bounded for small and very large windows.
-              // …and budgeted against the window height so the live view, the
-              // readout AND the trend fit a 1080-tall window without scrolling
-              // (chrome + card header ≈ 330, trend ≈ 180, paddings ≈ 90).
-              final viewport = MediaQuery.sizeOf(context).height;
-              final budget = (viewport - 600).clamp(200.0, 900.0);
-              final band = (wide
-                      ? ((c.maxWidth - 16) * 5 / 8 * 0.75).clamp(300.0, 900.0)
-                      : (c.maxWidth * 0.75).clamp(220.0, 480.0))
-                  .clamp(200.0, budget);
-              final frame = FocusFrameView(
+            FitFill(child: FitBand(builder: (context, width, height) {
+              // The trend keeps a fixed strip; the picture and the readout
+              // take the rest of the height the window leaves.
+              final short = AraBreakpoints.isShort(context);
+              final trendHeight = short ? 100.0 : (width * 0.12).clamp(150.0, 220.0);
+              final trend = SizedBox(height: trendHeight, child: HfrTrendChart(samples: status.recent, bestHfr: status.bestHfr));
+              Widget frame(double h) => FocusFrameView(
                 frame: live.frame,
                 badge: active ? 'LIVE' : 'LAST',
                 badgeColor: active ? AraColors.accentBusy : AraColors.textSecondary,
                 caption: latest == null ? null : 'frame ${latest.seq}',
                 emptyText: 'Waiting for the first guide frame…',
-                height: band,
+                height: h,
               );
-              final hero = SizedBox(
-                height: wide ? band : null,
-                child: _Hero(status: status),
-              );
-              if (wide) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              final hero = _Hero(status: status);
+              if (short && width >= AraBreakpoints.sideBySide(context)) {
+                // A laptop screen: the readout takes the full height on the
+                // right so its hint and facts stay in view; the picture and
+                // the trend share the left column.
+                final total = math.max(height, 240.0);
+                return SizedBox(
+                  height: total,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: (width - 16) * 5 / 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [frame(total - trendHeight - 12), const SizedBox(height: 12), trend],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: hero),
+                    ],
+                  ),
+                );
+              }
+              if (width >= AraBreakpoints.sideBySide(context)) {
+                // The frame stays 4:3 and takes up to 5/8 of the width; the
+                // readout gets the rest. Past that the band stops growing.
+                final band = math.max(height - trendHeight - 16, short ? 136.0 : 200.0);
+                final frameWidth = math.min(band * 4 / 3, (width - 16) * 5 / 8);
+                final h = math.min(band, frameWidth * 0.75);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(flex: 5, child: frame),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 3, child: hero),
+                    SizedBox(
+                      height: h,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(width: frameWidth, child: frame(h)),
+                          const SizedBox(width: 16),
+                          Expanded(child: hero),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    trend,
                   ],
                 );
               }
-              return Column(children: [frame, const SizedBox(height: 12), hero]);
-            }),
-            const SizedBox(height: 16),
-            LayoutBuilder(builder: (context, c) => SizedBox(
-              height: (c.maxWidth * 0.12).clamp(150.0, 220.0),
-              child: HfrTrendChart(samples: status.recent, bestHfr: status.bestHfr),
-            )),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  frame((width * 0.75).clamp(220.0, 480.0)),
+                  const SizedBox(height: 12),
+                  hero,
+                  const SizedBox(height: 16),
+                  trend,
+                ],
+              );
+            })),
           ],
         ],
       ),
@@ -213,8 +248,11 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
 // Type scale shared with the polar-align panel: read from an arm's length or
 // more while a hand is on the focuser.
 const double _heroFont = 88;
+// A short window keeps the readout's caption in view under the figure.
+const double _heroFontShort = 52;
 const double _hintFont = 28;
 const double _statFont = 24;
+const double _statFontShort = 20;
 const double _textFont = 14;
 const _tabular = [FontFeature.tabularFigures()];
 
@@ -238,8 +276,10 @@ class _Hero extends StatelessWidget {
     final bestLine = best == null ? 'px · best so far —' : 'px · best so far ${f(best)}';
     // Centred when it fits, scrolls when the frame beside it is shorter than the
     // facts need (the stats row overflowed the panel by 18 px on a laptop window).
+    // A short window tightens the spacing so the facts row stays in view.
+    final short = AraBreakpoints.isShort(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, short ? 10 : 16, 20, short ? 10 : 16),
       decoration: BoxDecoration(
         color: AraColors.bgPanelAlt,
         borderRadius: BorderRadius.circular(10),
@@ -260,7 +300,7 @@ class _Hero extends StatelessWidget {
             child: Text(
               f(hfr),
               style: TextStyle(
-                fontSize: _heroFont,
+                fontSize: short ? _heroFontShort : _heroFont,
                 fontWeight: FontWeight.w300,
                 height: 1.05,
                 color: color,
@@ -272,15 +312,15 @@ class _Hero extends StatelessWidget {
           Text(
             target == null ? bestLine : '$bestLine · in focus ≤ ${f(target)}',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: AraColors.textSecondary, fontFeatures: _tabular),
+            style: TextStyle(fontSize: short ? 14 : 16, color: AraColors.textSecondary, fontFeatures: _tabular),
           ),
           if (status.active) ...[
-            const SizedBox(height: 14),
+            SizedBox(height: short ? 8 : 14),
             TurnHint(hint: hint),
           ],
-          const SizedBox(height: 18),
+          SizedBox(height: short ? 10 : 18),
           const Divider(height: 1, color: Color(0x1FFFFFFF)),
-          const SizedBox(height: 14),
+          SizedBox(height: short ? 8 : 14),
           Row(
             children: [
               Expanded(child: _Fact(label: 'Stars', value: latest == null ? '—' : '${latest.stars}')),
@@ -312,7 +352,10 @@ class _Fact extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(value,
-              style: const TextStyle(fontSize: _statFont, fontWeight: FontWeight.w600, fontFeatures: _tabular)),
+              style: TextStyle(
+                  fontSize: AraBreakpoints.isShort(context) ? _statFontShort : _statFont,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: _tabular)),
         ),
       ],
     );
@@ -402,12 +445,14 @@ class TurnHint extends StatelessWidget {
       TurnAdvice.wait => (Icons.hourglass_empty_rounded, AraColors.textSecondary),
       TurnAdvice.hold => (Icons.pause_circle_outline, AraColors.accentInfo),
     };
+    // A short window: a smaller capsule so the facts under it stay in view.
+    final hintFont = AraBreakpoints.isShort(context) ? 22.0 : _hintFont;
     return Column(
       children: [
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: hintFont < _hintFont ? 4 : 8),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(14),
@@ -415,16 +460,16 @@ class TurnHint extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: _hintFont + 4, color: color),
+                Icon(icon, size: hintFont + 4, color: color),
                 const SizedBox(width: 8),
-                Text(hint.title, style: TextStyle(fontSize: _hintFont, fontWeight: FontWeight.w700, color: color)),
+                Text(hint.title, style: TextStyle(fontSize: hintFont, fontWeight: FontWeight.w700, color: color)),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: hintFont < _hintFont ? 4 : 8),
         Text(hint.detail, textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: AraColors.textSecondary, height: 1.3)),
+            style: TextStyle(fontSize: hintFont < _hintFont ? 14 : 16, color: AraColors.textSecondary, height: 1.3)),
       ],
     );
   }

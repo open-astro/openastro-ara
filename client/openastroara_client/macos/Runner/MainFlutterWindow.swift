@@ -28,8 +28,10 @@ class MainFlutterWindow: NSWindow {
       }
       switch call.method {
       case "workstation":
-        // Floor stops resizes below what the shell can lay out.
-        self.minSize = NSSize(width: 1100, height: 700)
+        // Floor stops resizes below what the shell can lay out. 600 tall
+        // so a 1080p laptop at 150 % scaling (≈ 670 px of work area) fits;
+        // the panes go compact below 820.
+        self.minSize = NSSize(width: 1100, height: 600)
         // Normal-app behavior (not forced-maximized): restore the user's last
         // workstation frame when one was saved; first run opens at a
         // comfortable default clamped to the screen. The autosave name keeps

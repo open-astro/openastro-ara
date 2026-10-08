@@ -9,7 +9,9 @@ import '../../models/polar_align.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../fit_pane.dart';
 
 /// §45.10 dynamic bullseye zoom: the outer ring's radius in arcminutes for the
 /// current total error — ~5° while far off, 30′ once under 1°, 5′ once under
@@ -100,8 +102,18 @@ const double _hintFont = 28;
 // The "Alignment quality" headline figure; the axis readout above is larger.
 const double _qualityFont = 56;
 const _tabular = [FontFeature.tabularFigures()];
-// Side-by-side cards from here; stacked below (tablet portrait, phone).
-const double _wideBreakpoint = 760;
+// Side-by-side cards from here; stacked below (tablet portrait, phone). A short
+// window keeps them side by side down to the narrower width.
+const double _wideBreakpoint = AraBreakpoints.sideBySideWidth;
+const double _shortWideBreakpoint = AraBreakpoints.sideBySideWidthShort;
+// A short window (AraBreakpoints.isShort) scales the readout down so the cards
+// fit a laptop screen.
+const double _heroFontShort = 60;
+const double _axisFontShort = 40;
+const double _qualityFontShort = 40;
+const double _hintFontShort = 22;
+// The camera card around its image: padding, the label row, the frame status.
+const double _cameraChrome = 80;
 
 /// RA in degrees as `09h14m40s`. Pure — unit-tested.
 String formatRaHms(double raDeg) {
@@ -159,6 +171,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   // Night mode (red filter) as of the last build: blue accents nearly vanish
   // under it, so the in-routine Abort switches to full-brightness text.
   bool _night = false;
+
+  // A short window as of the last build: the readout figures scale down.
+  bool _short = false;
 
   static String _exposureText(double seconds) =>
       seconds == seconds.roundToDouble() ? seconds.toStringAsFixed(1) : '$seconds';
@@ -322,31 +337,38 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     // brightness instead; the words (Excellent, Raise, …) carry the meaning.
     final color = night ? AraColors.textPrimary : zoneColor(live.totalErrorArcmin);
     _night = night;
+    _short = AraBreakpoints.isShort(context);
 
     // Always-on panel: the live bullseye + Az/Alt/Total readout stay visible
     // on the page (like the equipment chips) instead of hiding behind a
     // collapse — polar alignment is a hands-on, eyes-on process.
+    // The body fills the height the pane leaves (FitPane), so the camera and
+    // the bullseye grow with the window.
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_short ? 12 : 16),
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: FitColumn(
         children: [
-          Row(
-            children: [
-              const SizedBox.square(dimension: 22, child: CustomPaint(painter: PolarScopeIconPainter())),
-              const SizedBox(width: 10),
-              Text('Polar Align', style: Theme.of(context).textTheme.titleLarge),
-              const Spacer(),
-              _statusPill(live),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _body(live, api == null, color),
+          // A short window drops the title while the routine runs (the Setup
+          // checklist names the step) so the camera and bullseye keep the room.
+          if (!(_short &&
+              const {PolarAlignStates.seeding, PolarAlignStates.adjusting, PolarAlignStates.paused}
+                  .contains(live.phase))) ...[
+            Row(
+              children: [
+                const SizedBox.square(dimension: 22, child: CustomPaint(painter: PolarScopeIconPainter())),
+                const SizedBox(width: 10),
+                Text('Polar Align', style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                _statusPill(live),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          FitFill(child: _body(live, api == null, color)),
         ],
       ),
     );
@@ -500,17 +522,31 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         ],
       ),
     );
-    return _split(
-      (wide) => _cameraCard(live, imageHeight: wide ? 360 : 240),
-      measuring,
-    );
+    return FitBand(builder: (context, width, height) {
+      if (width < (_short ? _shortWideBreakpoint : _wideBreakpoint)) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [_cameraCard(live, imageHeight: 240), const SizedBox(height: 12), measuring],
+        );
+      }
+      // Camera card left with ~55% of the width, the measuring card beside it.
+      // The camera takes the height the window leaves, up to a 4:3 frame.
+      final cameraWidth = (width - 12) * 11 / 20;
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: math.min(height, cameraWidth * 0.75 + _cameraChrome)),
+          child: FitRow(flex: const [11, 9], spacing: 12, children: [_cameraCard(live), measuring]),
+        ),
+      );
+    });
   }
 
   Widget _adjustBody(PolarAlignLive live, Color color) {
     final inTolerance = live.totalErrorArcmin != null && live.totalErrorArcmin! <= _toleranceArcmin;
     final single = _settings.loopMode == PolarAlignLoopModes.single;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return FitColumn(
       children: [
         if (live.phase == PolarAlignStates.paused) ...[
           _callout(
@@ -519,7 +555,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             Icons.cloud_outlined,
             key: const Key('polar-align-paused-banner'),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: _short ? 8 : 12),
         ] else if (live.consecutiveSolveFailures > 0) ...[
           _callout(
             'No solve (${live.consecutiveSolveFailures}) — check sky and focus.',
@@ -527,35 +563,47 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             Icons.cloud_outlined,
             key: const Key('polar-align-retry-banner'),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: _short ? 8 : 12),
         ],
-        LayoutBuilder(builder: (context, constraints) {
-          if (constraints.maxWidth >= _wideBreakpoint) {
-            // Both columns share one height so the card edges line up: the
-            // meaning card and the bullseye absorb whatever is left over.
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 11,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _cameraCard(live, imageHeight: 360),
-                        const SizedBox(height: 12),
-                        Expanded(child: _meaningCard(live, color)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 9, child: _alignmentCard(live, color, single, fill: true)),
-                ],
+        FitFill(child: FitBand(builder: (context, width, height) {
+          if (_short && width >= _shortWideBreakpoint) {
+            // A laptop screen: camera and bullseye fill the band, the numbers
+            // run in one strip beneath them.
+            return FitColumn(children: [
+              FitFill(
+                child: FitRow(
+                  flex: const [11, 9],
+                  spacing: 12,
+                  children: [
+                    _cameraCard(live),
+                    _alignmentCard(live, color, single, fill: true, readout: false),
+                  ],
+                ),
               ),
+              const SizedBox(height: 12),
+              _readoutStrip(live, color),
+            ]);
+          }
+          if (width >= _wideBreakpoint) {
+            // Both columns share the height the window leaves, so the card
+            // edges line up: the camera image and the bullseye take what the
+            // readouts don't need.
+            return FitRow(
+              flex: const [11, 9],
+              spacing: 12,
+              children: [
+                FitColumn(children: [
+                  FitFill(child: _cameraCard(live)),
+                  const SizedBox(height: 12),
+                  _meaningCard(live, color),
+                ]),
+                _alignmentCard(live, color, single, fill: true),
+              ],
             );
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
               _cameraCard(live, imageHeight: 240),
               const SizedBox(height: 12),
@@ -564,7 +612,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               _meaningCard(live, color),
             ],
           );
-        }),
+        })),
         if (_status != null) ...[
           const SizedBox(height: 12),
           _callout(_status!, AraColors.accentError, Icons.error_outline),
@@ -622,39 +670,18 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  /// Camera card left, [right] beside it with ~45% of the width on a wide
-  /// pane; stacked on a narrow one (tablet portrait).
-  Widget _split(Widget Function(bool wide) left, Widget right) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final wide = constraints.maxWidth >= _wideBreakpoint;
-      if (wide) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 11, child: left(true)),
-            const SizedBox(width: 12),
-            Expanded(flex: 9, child: right),
-          ],
-        );
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [left(false), const SizedBox(height: 12), right],
-      );
-    });
-  }
-
   /// Bullseye, the total error as the one large figure, then Altitude and
   /// Azimuth side by side, each with the knob direction that closes it.
   /// [fill]: the card is stretched to its row's height and the bullseye
-  /// centers in the spare room (needs a bounded height).
-  Widget _alignmentCard(PolarAlignLive live, Color color, bool single, {bool fill = false}) {
+  /// centers in the spare room. [readout] false leaves the numbers to
+  /// [_readoutStrip].
+  Widget _alignmentCard(PolarAlignLive live, Color color, bool single, {bool fill = false, bool readout = true}) {
     final range = bullseyeRangeArcmin(live.totalErrorArcmin);
     final ring = range >= 60 ? '${(range / 60).toStringAsFixed(0)}°' : '${range.toStringAsFixed(0)}′';
-    // AspectRatio rather than a LayoutBuilder: the wide row sizes itself
-    // with IntrinsicHeight, which LayoutBuilder cannot answer.
+    // Square, as large as the spare room allows up to a size that still reads
+    // as an instrument rather than a poster.
     final bullseye = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 400, maxHeight: 400),
+      constraints: const BoxConstraints(maxWidth: 560, maxHeight: 560),
       child: AspectRatio(
         aspectRatio: 1,
         child: CustomPaint(
@@ -665,9 +692,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         ),
       ),
     );
-    return _card(
-      child: Column(
-        children: [
+    final body = [
           Row(
             children: [
               _sectionLabel('Alignment'),
@@ -677,7 +702,18 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ],
           ),
           const SizedBox(height: 12),
-          if (fill) Expanded(child: Center(child: bullseye)) else bullseye,
+          if (fill)
+            FitFill(
+              child: FitBand(
+                builder: (context, width, height) => SizedBox(
+                  height: math.max(height, _short ? 120.0 : 160.0),
+                  child: Center(child: bullseye),
+                ),
+              ),
+            )
+          else
+            bullseye,
+          if (readout) ...[
           const SizedBox(height: 16),
           Column(
             key: const Key('polar-align-readout'),
@@ -689,7 +725,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                 child: Text(
                   formatArcmin(live.totalErrorArcmin),
                   style: TextStyle(
-                    fontSize: _heroFont,
+                    fontSize: _short ? _heroFontShort : _heroFont,
                     fontWeight: FontWeight.w300,
                     height: 1.05,
                     color: color,
@@ -711,13 +747,59 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               ),
             ],
           ),
+          ],
           if (single) ...[
             const SizedBox(height: 14),
-            const Text(
-              'Turn a knob, then Take Frame.',
-              style: TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+            const Center(
+              child: Text(
+                'Turn a knob, then Take Frame.',
+                style: TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+              ),
             ),
           ],
+    ];
+    // Filling: the bullseye takes the card's spare height (FitRow/FitPane).
+    return _card(child: fill ? FitColumn(children: body) : Column(children: body));
+  }
+
+  /// A short window's readout: the total error with its verdict, then the two
+  /// axes with their knob directions, in one row.
+  Widget _readoutStrip(PolarAlignLive live, Color color) {
+    final total = live.totalErrorArcmin;
+    final rating = total == null ? null : polarErrorRating(total);
+    return _card(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        key: const Key('polar-align-readout'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                _sectionLabel('Total error'),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatArcmin(total),
+                    style: TextStyle(
+                      fontSize: _axisFontShort,
+                      fontWeight: FontWeight.w300,
+                      height: 1.1,
+                      color: color,
+                      fontFeatures: _tabular,
+                    ),
+                  ),
+                ),
+                if (rating != null) ...[
+                  const SizedBox(height: 10),
+                  Text(rating.$1, style: TextStyle(fontSize: _hintFontShort, fontWeight: FontWeight.w700, color: color)),
+                ],
+              ],
+            ),
+          ),
+          Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
+          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, _azHint(live.azErrorArcmin), color)),
         ],
       ),
     );
@@ -750,8 +832,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         offset?.$1 ?? '—',
-                        style: const TextStyle(
-                            fontSize: _qualityFont, fontWeight: FontWeight.w600, height: 1.1, fontFeatures: _tabular),
+                        style: TextStyle(
+                            fontSize: _short ? _qualityFontShort : _qualityFont, fontWeight: FontWeight.w600, height: 1.1, fontFeatures: _tabular),
                       ),
                     ),
                     Text(
@@ -853,8 +935,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           fit: BoxFit.scaleDown,
           child: Text(
             formatArcmin(value),
-            style: const TextStyle(
-                fontSize: _axisFont, fontWeight: FontWeight.w600, height: 1.1, fontFeatures: _tabular),
+            style: TextStyle(
+                fontSize: _short ? _axisFontShort : _axisFont, fontWeight: FontWeight.w600, height: 1.1, fontFeatures: _tabular),
           ),
         ),
         const SizedBox(height: 10),
@@ -863,7 +945,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: _short ? 4 : 8),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(14),
@@ -871,9 +953,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(hint.$1, size: _hintFont + 4, color: color),
+                Icon(hint.$1, size: (_short ? _hintFontShort : _hintFont) + 4, color: color),
                 const SizedBox(width: 8),
-                Text(hint.$2, style: TextStyle(fontSize: _hintFont, fontWeight: FontWeight.w700, color: color)),
+                Text(hint.$2, style: TextStyle(fontSize: _short ? _hintFontShort : _hintFont, fontWeight: FontWeight.w700, color: color)),
               ],
             ),
           ),
@@ -956,13 +1038,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   /// The guide camera's latest frame in a card, with the frame status under
   /// it. Tap the image to open it full size with zoom (focus, star shapes).
-  Widget _cameraCard(PolarAlignLive live, {required double imageHeight}) {
+  /// [imageHeight] null: the image takes the card's spare height (the card
+  /// needs a bounded height).
+  Widget _cameraCard(PolarAlignLive live, {double? imageHeight}) {
     final jpeg = _frameJpeg;
-    return _card(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    final fill = imageHeight == null;
+    final body = [
           Row(
             children: [
               _sectionLabel('Guide camera'),
@@ -973,9 +1054,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ],
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: imageHeight,
-            child: jpeg == null
+          _imageSlot(
+            imageHeight,
+            jpeg == null
                 ? DecoratedBox(
                     decoration: BoxDecoration(
                       color: Colors.black26,
@@ -994,8 +1075,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     ),
                   )
                 // Rounded on the image itself, so a frame narrower than the
-                // card is not boxed in black bars.
-                : Center(
+                // card is not boxed in black bars. FittedBox, not Center: the
+                // frame scales UP to the card too (it sat at its own pixel
+                // size in a big empty card at 4K).
+                : FittedBox(
                     child: GestureDetector(
                       key: const Key('polar-align-live-view'),
                       onTap: () => _showFullFrame(jpeg),
@@ -1007,10 +1090,25 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ),
           ),
           _frameStatus(live),
-        ],
-      ),
+    ];
+    return _card(
+      padding: const EdgeInsets.all(12),
+      child: fill
+          ? FitColumn(children: body)
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
     );
   }
+
+  /// The camera image at [height], or taking the card's spare height (never
+  /// under a size that still shows stars).
+  Widget _imageSlot(double? height, Widget image) => height != null
+      ? SizedBox(height: height, child: image)
+      : FitFill(
+          child: FitBand(
+            builder: (context, width, h) =>
+                SizedBox(height: math.max(h, _short ? 120.0 : 150.0), child: image),
+          ),
+        );
 
   /// The frame in progress (exposing → downloading/solving, with elapsed
   /// time) and the last finished frame's timings + solved pointing.
@@ -1039,7 +1137,19 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       ));
     }
     final last = live.lastFrame;
-    if (last != null) {
+    if (last != null && _short) {
+      // A short window: timings and pointing on one line, so the image keeps
+      // the card's height.
+      children.add(Text(
+        '${last.exposureSeconds.toStringAsFixed(1)} s · capture ${_secondsLabel(last.captureMs)} · '
+        'solve ${last.solveMs == null ? '—' : _secondsLabel(last.solveMs!)} · '
+        '${last.solved && last.raDeg != null && last.decDeg != null ? 'RA ${formatRaHms(last.raDeg!)}  Dec ${formatDecDms(last.decDeg!)}' : 'did not solve'}',
+        key: const Key('polar-align-last-frame'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: last.solved ? style : style.copyWith(color: AraColors.accentBusy),
+      ));
+    } else if (last != null) {
       children.add(Text(
         'Last frame: ${last.exposureSeconds.toStringAsFixed(1)} s exposure · '
         'capture ${_secondsLabel(last.captureMs)} · '

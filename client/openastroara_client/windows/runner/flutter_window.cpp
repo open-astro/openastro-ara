@@ -41,7 +41,7 @@ bool FlutterWindow::OnCreate() {
                  result) {
         HWND hwnd = GetHandle();
         if (call.method_name() == "workstation") {
-          min_size_ = {1100, 700};
+          min_size_ = {1100, 600};
           ShowWindow(hwnd, SW_SHOWMAXIMIZED);
           result->Success();
         } else if (call.method_name() == "launchpad") {

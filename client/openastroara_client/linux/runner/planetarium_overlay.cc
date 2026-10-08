@@ -54,6 +54,23 @@ struct OverlayState {
   bool night = false;
 };
 
+// ARA_OVERLAY_DEBUG=1 logs every bounds/visibility call and the webview's
+// actual allocation, for chasing geometry bugs on a real compositor.
+bool overlay_debug() {
+  static const bool on = g_getenv("ARA_OVERLAY_DEBUG") != nullptr;
+  return on;
+}
+
+void webview_allocated_cb(GtkWidget* widget, GdkRectangle* allocation,
+                          gpointer user_data) {
+  (void)widget;
+  (void)user_data;
+  if (overlay_debug()) {
+    g_message("planetarium_overlay: allocated %d,%d %dx%d", allocation->x,
+              allocation->y, allocation->width, allocation->height);
+  }
+}
+
 // Read a numeric arg that Dart may encode as float or int.
 double lookup_number(FlValue* args, const char* key, double fallback) {
   if (args == nullptr || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
@@ -95,6 +112,14 @@ void apply_visibility(OverlayState* state) {
     gboolean was_visible = gtk_widget_get_visible(state->webview_widget);
     gtk_widget_show(state->webview_widget);
     if (!was_visible) {
+      // Bounds that arrived while hidden were only stored (see setBounds):
+      // apply them now, as a real size change, so GTK re-allocates the
+      // webview. A request updated while hidden read as "unchanged" on show
+      // and the webview kept its old allocation (window grown behind another
+      // tab, KDE Wayland 2026-10-08).
+      gtk_widget_set_size_request(state->webview_widget, state->rect.width,
+                                  state->rect.height);
+      gtk_widget_queue_resize(GTK_WIDGET(state->overlay));
       GdkWindow* window = gtk_widget_get_window(state->webview_widget);
       if (window != nullptr) gdk_window_raise(window);
     }
@@ -502,6 +527,8 @@ void ensure_webview(OverlayState* state) {
                    state);
   gtk_container_add(GTK_CONTAINER(event_box), GTK_WIDGET(state->webview));
   state->webview_widget = event_box;
+  g_signal_connect(event_box, "size-allocate", G_CALLBACK(webview_allocated_cb),
+                   nullptr);
 
   // get-child-position drives the geometry; alignment just keeps GTK from
   // stretching the child before our handler runs.
@@ -574,10 +601,16 @@ void method_call_cb(FlMethodChannel* channel,
     state->rect.height =
         static_cast<int>(lround(lookup_number(args, "height", 0)));
     state->has_rect = state->rect.width > 0 && state->rect.height > 0;
-    if (state->webview_widget != nullptr) {
+    if (overlay_debug()) {
+      g_message("planetarium_overlay: setBounds %d,%d %dx%d (visible %d)",
+                state->rect.x, state->rect.y, state->rect.width,
+                state->rect.height, state->visible);
+    }
+    if (state->webview_widget != nullptr && state->visible) {
       // Pin the natural size to the rect so GtkOverlay's alignment path can't
       // clamp the child down to the (empty) webview's 0×0 request, then re-run
-      // get-child-position with the new rect.
+      // get-child-position with the new rect. While hidden the rect is only
+      // stored; apply_visibility applies it on show.
       gtk_widget_set_size_request(state->webview_widget, state->rect.width,
                                   state->rect.height);
       gtk_widget_queue_resize(GTK_WIDGET(state->overlay));
@@ -592,6 +625,9 @@ void method_call_cb(FlMethodChannel* channel,
     state->visible =
         v != nullptr && fl_value_get_type(v) == FL_VALUE_TYPE_BOOL &&
         fl_value_get_bool(v);
+    if (overlay_debug()) {
+      g_message("planetarium_overlay: setVisible %d", state->visible);
+    }
     apply_visibility(state);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else if (strcmp(method, "setNightMode") == 0) {

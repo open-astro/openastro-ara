@@ -10,6 +10,7 @@ import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/focus/bahtinov_focus_card.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart' show TurnAdvice;
@@ -106,6 +107,7 @@ Widget _harness({
   FocuserStatus? focuser,
   List<String>? calls,
   double width = 1200,
+  double height = 3200,
 }) =>
     ProviderScope(
       overrides: [
@@ -113,7 +115,7 @@ Widget _harness({
         bahtinovFocusProvider.overrideWith(() => _StubBahtinov(bahtinov, calls ?? [])),
         focuserProvider.overrideWith(() => _StubFocuser(focuser)),
       ],
-      child: MaterialApp(home: Scaffold(body: SizedBox(width: width, height: 3200, child: const FocusingPane()))),
+      child: MaterialApp(home: Scaffold(body: SizedBox(width: width, height: height, child: const FocusingPane()))),
     );
 
 void main() {
@@ -259,6 +261,27 @@ void main() {
     expect(find.text('Finish'), findsOneWidget);
     await t.tap(find.widgetWithText(FilledButton, 'Stop'));
     expect(calls, ['stop']);
+  });
+
+  // A 1080p laptop at 150 % leaves a ≈ 1280×640 window; the Setup shell takes
+  // 362 px of width and 104 of height around the pane.
+  testWidgets('a live readout fits a laptop window without scrolling', (t) async {
+    t.view.physicalSize = const Size(1280, 640);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(_harness(
+      width: 1280 - 362,
+      height: 640 - 104,
+      bahtinov: BahtinovFocusLive(
+        status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]),
+        frame: _png,
+        frameSeq: 6,
+      ),
+    ));
+    await t.pump();
+    final scroll = t.state<ScrollableState>(
+        find.descendant(of: find.byType(FitPane), matching: find.byType(Scrollable)).first);
+    expect(scroll.position.maxScrollExtent, 0);
   });
 
   testWidgets('a live readout fits a phone-width card', (t) async {

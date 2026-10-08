@@ -47,12 +47,15 @@ class ImagingTab extends ConsumerWidget {
     // it disabled — Retry covers the failed card, and the user may want to
     // tweak settings and re-shoot immediately after a result.
     final exposing = ref.watch(captureProgressProvider).isCapturing;
-    return Column(
-      children: [
-        Expanded(child: _viewerAndRail(context, ref, liveViewOn, exposing)),
-        // §63.18 — the guide graph strip, full width under viewer + rail.
-        const GuidingStrip(),
-      ],
+    return LayoutBuilder(
+      builder: (context, c) => Column(
+        children: [
+          Expanded(child: _viewerAndRail(context, ref, liveViewOn, exposing)),
+          // §63.18 — the guide graph strip, full width under viewer + rail;
+          // it grows with the window so a tall monitor gets a readable graph.
+          GuidingStrip(graphHeight: GuidingStrip.graphHeightFor(c.maxHeight)),
+        ],
+      ),
     );
   }
 

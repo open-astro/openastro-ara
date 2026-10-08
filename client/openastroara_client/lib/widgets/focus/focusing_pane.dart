@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +12,8 @@ import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../fit_pane.dart';
 import 'bahtinov_focus_card.dart';
 import 'focus_frame_view.dart';
 import 'focus_section.dart';
@@ -54,38 +58,48 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
     final running = ref.watch(autofocusLiveProvider.select((s) => s.run.isRunning));
     final guideLive = ref.watch(guideFocusProvider.select((s) => s.status.active));
     final guideFocused = ref.watch(guideFocusProvider.select((s) => s.status.focusedThisSession));
+    // A short window puts the title beside the tabs, drops the subtitle and
+    // tightens the padding so the instruments keep their height.
+    final short = AraBreakpoints.isShort(context);
+    final title = Text('Smart Focus', style: theme.textTheme.titleLarge);
+    final tabs = TabBar(
+      controller: _tabs,
+      isScrollable: true,
+      tabAlignment: TabAlignment.start,
+      dividerColor: AraColors.border,
+      tabs: [
+        _StepTab(
+          label: 'Main telescope',
+          done: focused,
+          busy: running,
+          height: short ? 40 : null,
+        ),
+        _StepTab(label: 'Guide camera', busy: guideLive, done: guideFocused, height: short ? 40 : null),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Smart Focus', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Main telescope first, then the guide camera.',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: AraColors.textSecondary),
-                  ),
-                  const SizedBox(height: 12),
-                  TabBar(
-                    controller: _tabs,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    dividerColor: AraColors.border,
-                    tabs: [
-                      _StepTab(
-                        label: 'Main telescope',
-                        done: focused,
-                        busy: running,
-                      ),
-                      _StepTab(label: 'Guide camera', busy: guideLive, done: guideFocused),
-                    ],
-                  ),
-                ],
-              ),
+          padding: short
+              ? const EdgeInsets.fromLTRB(20, 4, 20, 0)
+              : const EdgeInsets.fromLTRB(28, 24, 28, 0),
+          child: short
+              ? Row(children: [title, const SizedBox(width: 24), Expanded(child: tabs)])
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Main telescope first, then the guide camera.',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: AraColors.textSecondary),
+                    ),
+                    const SizedBox(height: 12),
+                    tabs,
+                  ],
+                ),
         ),
         Expanded(
           child: TabBarView(
@@ -106,11 +120,13 @@ class _StepTab extends StatelessWidget {
   final String label;
   final bool done;
   final bool busy;
-  const _StepTab({required this.label, this.done = false, this.busy = false});
+  final double? height;
+  const _StepTab({required this.label, this.done = false, this.busy = false, this.height});
 
   @override
   Widget build(BuildContext context) {
     return Tab(
+      height: height,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -141,9 +157,11 @@ class _TabPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // No width cap: the pane fills whatever the window gives it, and the
-    // instruments size their chart / frame bands from that width.
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 32),
+    // instruments take the height the card leaves them.
+    return FitPane(
+      padding: AraBreakpoints.isShort(context)
+          ? const EdgeInsets.fromLTRB(20, 12, 20, 12)
+          : const EdgeInsets.fromLTRB(28, 20, 28, 28),
       child: child,
     );
   }
@@ -220,8 +238,7 @@ class MainFocusCard extends ConsumerWidget {
         onPressed: () => openSettingsPanel(ref, 'img.autofocus'),
         icon: const Icon(Icons.tune, size: 20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: FitColumn(
         children: [
           if (live.error != null) ...[
             InlineNotice.error(live.error!),
@@ -255,7 +272,7 @@ class MainFocusCard extends ConsumerWidget {
             const SizedBox(height: 16),
           ],
           if (!hasData && !run.isRunning) ...[
-            EmptyState(
+            FitFill(child: EmptyState(
               icon: Icons.center_focus_weak,
               title: run.isFailed || run.isCancelled ? 'Nothing measured' : 'No autofocus yet',
               message: run.isFailed || run.isCancelled
@@ -263,33 +280,17 @@ class MainFocusCard extends ConsumerWidget {
                   : focuserConnected
                       ? 'Run autofocus to see the V-curve, the statistics and the focused field.'
                       : 'Connect a focuser, then run autofocus to see the V-curve, the statistics and the focused field.',
-            ),
+            )),
             if (run.state != AutofocusRunStates.idle)
               DetailsDisclosure(rows: detailsFor(run)),
           ] else ...[
             StatRow(tiles: tilesFor(run)),
-            const SizedBox(height: 16),
-            LayoutBuilder(builder: (context, c) {
-              final wide = c.maxWidth >= 760;
-              // The band's height follows the width (the frame is 4:3 in a
-              // 3/8 column), bounded so a small window stays usable and a
-              // huge one does not become a billboard.
-              // Budgeted against the window height (chrome + header + tiles
-              // ≈ 460, Details row + paddings ≈ 110) so the band fits a
-              // 1080-tall window without scrolling.
-              final viewport = MediaQuery.sizeOf(context).height;
-              final budget = (viewport - 570).clamp(220.0, 640.0);
-              final band = (wide
-                      ? ((c.maxWidth - 16) * 3 / 8 * 0.75).clamp(300.0, 640.0)
-                      : (c.maxWidth * 0.75).clamp(220.0, 420.0))
-                  .clamp(220.0, budget);
-              final chart = SizedBox(
-                height: band,
-                child: VCurveChart(run: run),
-              );
-              final frame = FocusFrameView(
+            SizedBox(height: AraBreakpoints.isShort(context) ? 12 : 16),
+            FitFill(child: FitBand(builder: (context, width, height) {
+              final chart = VCurveChart(run: run);
+              Widget frame(double h) => FocusFrameView(
                 frame: live.frame,
-                height: band,
+                height: h,
                 badge: run.isComplete ? 'FOCUSED' : run.isRunning ? 'PROBE' : null,
                 badgeColor: run.isComplete
                     ? AraColors.accentConnected
@@ -301,18 +302,40 @@ class MainFocusCard extends ConsumerWidget {
                     ? 'The first measurable probe appears here.'
                     : 'No frame from this run.',
               );
-              if (wide) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 5, child: chart),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 3, child: frame),
-                  ],
+              if (width >= AraBreakpoints.sideBySide(context)) {
+                // The band takes the height the window leaves. The frame stays
+                // 4:3 and takes up to half the width; past that the band stops
+                // growing rather than turn into a billboard.
+                final band = math.max(height, 160.0);
+                final frameWidth = math.min(band * 4 / 3, (width - 16) / 2);
+                final h = math.min(band, frameWidth * 0.75);
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    height: h,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: chart),
+                        const SizedBox(width: 16),
+                        SizedBox(width: frameWidth, child: frame(h)),
+                      ],
+                    ),
+                  ),
                 );
               }
-              return Column(children: [chart, const SizedBox(height: 12), frame]);
-            }),
+              // Narrow: stacked, each half the band; the frame no taller than
+              // its 4:3 at full width.
+              final each = math.max((height - 12) / 2, 180.0);
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(height: each, child: chart),
+                  const SizedBox(height: 12),
+                  frame(math.min(each, width * 0.75)),
+                ],
+              );
+            })),
             const SizedBox(height: 8),
             DetailsDisclosure(rows: detailsFor(run)),
           ],

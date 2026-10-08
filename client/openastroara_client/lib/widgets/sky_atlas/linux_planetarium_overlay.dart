@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,10 +115,17 @@ class _LinuxPlanetariumOverlayState
   @override
   void didPopNext() => setState(() => _routeOnTop = false);
 
+  // ARA_OVERLAY_DEBUG=1 (with the native side's logging) traces each push.
+  static final bool _debug = Platform.environment.containsKey('ARA_OVERLAY_DEBUG');
+
   void _pushBounds() {
     final box = context.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
+    if (box is! RenderBox || !box.hasSize) {
+      if (_debug) debugPrint('planetarium_overlay: no box to push');
+      return;
+    }
     final rect = box.localToGlobal(Offset.zero) & box.size;
+    if (_debug) debugPrint('planetarium_overlay: push $rect (last $_lastBounds)');
     if (rect == _lastBounds) return;
     _lastBounds = rect;
     _overlay.setBounds(rect);
@@ -134,10 +142,19 @@ class _LinuxPlanetariumOverlayState
     final isPlanning = ref.watch(selectedTabIndexProvider) == _planningTabIndex;
     final visible = isPlanning && !_routeOnTop;
     // Geometry and visibility can only be read/applied after this frame lays the
-    // slot out. Re-push bounds when becoming visible in case the window resized
-    // while Planning was hidden.
+    // slot out. Becoming visible: show first, then push the bounds even when
+    // they match the last push — a resize while Planning was hidden reached
+    // the hidden webview, and WebKit kept drawing at the old size until the
+    // next bounds change (a dead strip right and bottom, KDE Wayland
+    // 2026-10-08).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (visible && _lastVisible != true) {
+        _applyVisibility(true);
+        _lastBounds = null;
+        _pushBounds();
+        return;
+      }
       if (visible) _pushBounds();
       _applyVisibility(visible);
     });

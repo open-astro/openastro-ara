@@ -48,12 +48,20 @@ final guidingStripExpandedProvider =
 /// state comes from the guider status, kept fresh by the 2 s poll
 /// [liveGuidingRmsProvider] runs while the strip is expanded.
 class GuidingStrip extends ConsumerWidget {
-  const GuidingStrip({super.key});
+  /// Height of the open graph area (graph + its control row); the Live tab
+  /// sizes it from its own height.
+  final double graphHeight;
+  const GuidingStrip({super.key, this.graphHeight = defaultGraphHeight});
 
   static const _emDash = '—';
 
-  /// Height of the open graph area (graph + its control row).
-  static const double graphHeight = 164;
+  static const double defaultGraphHeight = 164;
+
+  /// The open graph's height for a Live tab [tabHeight] tall: a fifth of it,
+  /// so the frame being captured keeps most of the tab; never under what the
+  /// stats grid needs, never a billboard.
+  static double graphHeightFor(double tabHeight) =>
+      (tabHeight * 0.2).clamp(110.0, 220.0);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -164,7 +172,7 @@ class GuidingStrip extends ConsumerWidget {
                   ),
                   const VerticalDivider(width: 1, color: AraColors.border),
                   SizedBox(
-                    width: 200,
+                    width: 260,
                     child: _StatsColumn(model: model),
                   ),
                 ],
@@ -558,26 +566,28 @@ class _StatsColumn extends StatelessWidget {
     final theme = Theme.of(context).textTheme;
     final label = theme.labelSmall?.copyWith(color: AraColors.textSecondary);
     final value = theme.bodySmall;
-    Widget row(String name, String v) => Row(
-          children: [
-            SizedBox(width: 66, child: Text(name, maxLines: 1, style: label)),
-            Expanded(
-              child: Text(v, maxLines: 1, style: value, textAlign: TextAlign.right),
-            ),
-          ],
+    Widget cell(String name, String v) => Expanded(
+          child: Row(
+            children: [
+              SizedBox(width: 56, child: Text(name, maxLines: 1, style: label)),
+              Expanded(
+                child: Text(v, maxLines: 1, style: value, textAlign: TextAlign.right),
+              ),
+            ],
+          ),
         );
+    // Two columns of three (RMS beside peak) so the stats fit a short strip.
+    Widget row(Widget a, Widget b) => Row(children: [a, const SizedBox(width: 14), b]);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          row('RMS RA', GuidingStrip.fmt(s.rmsRa, u)),
-          row('RMS Dec', GuidingStrip.fmt(s.rmsDec, u)),
-          row('RMS Tot', GuidingStrip.fmt(s.rmsTotal, u)),
-          row('Peak RA', GuidingStrip.fmt(s.peakRa, u)),
-          row('Peak Dec', GuidingStrip.fmt(s.peakDec, u)),
-          row('RA Osc', s.raOscIndex == null ? '—' : s.raOscIndex!.toStringAsFixed(2)),
+          row(cell('RMS RA', GuidingStrip.fmt(s.rmsRa, u)), cell('Peak RA', GuidingStrip.fmt(s.peakRa, u))),
+          row(cell('RMS Dec', GuidingStrip.fmt(s.rmsDec, u)), cell('Peak Dec', GuidingStrip.fmt(s.peakDec, u))),
+          row(cell('RMS Tot', GuidingStrip.fmt(s.rmsTotal, u)),
+              cell('RA Osc', s.raOscIndex == null ? '—' : s.raOscIndex!.toStringAsFixed(2))),
           Text(
             '${s.samples} of ${model.steps.length} frames · ${model.unitLabel}',
             maxLines: 1,

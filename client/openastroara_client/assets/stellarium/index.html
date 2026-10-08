@@ -25,6 +25,10 @@
     --shadow: 0 10px 34px rgba(0,0,0,0.46);
     --blur: blur(26px) saturate(180%);
   }
+  /* Linux desktop: WebKitGTK's software renderer (the planetarium overlay's
+     shm path) draws no backdrop blur, so the glass cards let sky labels show
+     through. Near-opaque there; the class is set before the body renders. */
+  :root.no-glass { --mat: rgb(28,28,30); --mat-2: rgb(58,58,60); }
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
     font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Roboto, "Segoe UI", sans-serif;
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
@@ -51,6 +55,16 @@
   #timebar button { padding: 5px 11px; font-size: 12px; color: var(--dim); }
   #timebar button:hover { color: var(--txt); background: rgba(255,255,255,0.08); }
   #timebar button.on { background: var(--accent-bg); color: var(--accent); }
+  /* A narrow view (a small window with a side panel open): centred, the time
+     pill slid under the layer pills — right-align it, and below ~640 px drop
+     it to a second row, the object card moving down with it. */
+  @media (max-width: 840px) {
+    #timebar { left: auto; right: 14px; transform: none; }
+  }
+  @media (max-width: 640px) {
+    #timebar { top: 58px; }
+    #info { top: 108px; max-height: calc(100% - 122px); }
+  }
   #clock { font-variant-numeric: tabular-nums; min-width: 126px; text-align: center; font-size: 12px; padding: 0 6px; }
 
   /* Pan + zoom are native (trackpad/mouse) in the webview, so there are no
@@ -63,7 +77,7 @@
     border: 0.5px solid rgba(255,120,120,0.4); border-radius: 10px; }
 
   /* Object info card — right */
-  #info { right: 14px; top: 64px; width: 268px; padding: 14px 15px 15px; display: none;
+  #info { right: 14px; top: 64px; width: 268px; max-height: calc(100% - 78px); overflow-y: auto; padding: 14px 15px 15px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
   #info .close { position: absolute; right: 9px; top: 9px; border: none; background: none; padding: 3px 7px;
@@ -86,7 +100,7 @@
   #info .warn { color: #ffb74d; }
 
   /* Left drawer card — Framing sits in the slot under the layer pills */
-  #frame { left: 14px; top: 64px; width: 250px; padding: 13px 15px 15px; display: none;
+  #frame { left: 14px; top: 64px; width: 250px; max-height: calc(100% - 78px); overflow-y: auto; padding: 13px 15px 15px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
   .card-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 11px; display: flex; align-items: center; }
@@ -124,6 +138,19 @@
     background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
   #frame #f-rotcam:hover { background: rgba(255,255,255,0.14); }
   #frame #f-rotcam:disabled { opacity: .4; cursor: default; }
+  /* A short view (a laptop window): tighter rows and a smaller dial so the
+     card fits without scrolling. */
+  @media (max-height: 560px) {
+    #frame { padding: 10px 13px 12px; }
+    #frame .card-title { margin-bottom: 6px; }
+    #frame .frow { padding: 2px 0; }
+    #frame .frot { padding: 0 0 2px; }
+    #frame .dial { width: 44px; height: 44px; }
+    #frame .dial-hand { height: 17px; }
+    #frame #f-msg, #frame #f-dss { margin-top: 6px; }
+    #frame #f-add { margin-top: 8px; padding: 7px 0; }
+    #frame #f-rotcam { margin-top: 6px; padding: 6px 0; }
+  }
   #frame #f-msg, #frame #f-dss { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
   #frame #f-dss[hidden] { display: none; }
   #frame .warn { color: #ffb74d; }
@@ -154,6 +181,11 @@
   #catalogs #cat-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; line-height: 1.35; }
   #catalogs #cat-msg:empty { display: none; }
 </style>
+<script>
+  if (/Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
+    document.documentElement.classList.add('no-glass');
+  }
+</script>
 </head>
 <body>
 <canvas id="stel-canvas"></canvas>

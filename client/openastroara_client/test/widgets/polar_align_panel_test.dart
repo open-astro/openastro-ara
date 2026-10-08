@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 
 /// Pure fake — records calls; scripted status/settings.
@@ -70,8 +72,9 @@ Widget _harness(_FakePolarAlignClient api, PolarAlignLive live) {
   );
 }
 
+// The panel is always open; the title it once tapped is hidden while a routine
+// runs on a short window, so this only settles.
 Future<void> _expand(WidgetTester tester) async {
-  await tester.tap(find.text('Polar Align'));
   await tester.pumpAndSettle();
 }
 
@@ -169,6 +172,10 @@ void main() {
 
 
     testWidgets('adjusting explains the error in arcseconds and plain English', (tester) async {
+      // A tall window: a short one drops this card for the one-row readout.
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive(
         phase: PolarAlignStates.adjusting,
@@ -185,6 +192,38 @@ void main() {
       expect(inCard('Excellent'), findsOneWidget);
       expect(inCard('up to 1.1″'), findsOneWidget);
       expect(inCard("1/39 of the Moon's width"), findsOneWidget);
+    });
+
+    testWidgets('a laptop window keeps the readout in one row under camera and bullseye', (tester) async {
+      // 1080p at 150 %: a 1280×640 window leaves the Setup pane ≈ 918×536.
+      tester.view.physicalSize = const Size(1280, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          polarAlignApiProvider.overrideWithValue(_FakePolarAlignClient()),
+          polarAlignLiveProvider.overrideWith(() => _StubLiveNotifier(const PolarAlignLive(
+                phase: PolarAlignStates.adjusting,
+                azErrorArcmin: 14.2,
+                altErrorArcmin: -6.5,
+                totalErrorArcmin: 15.6,
+              ))),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 918, height: 536, child: FitPane(padding: EdgeInsets.all(8), child: PolarAlignPanel())),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final readout = find.byKey(const Key('polar-align-readout'));
+      expect(tester.widget(readout), isA<Row>(), reason: 'the one-row strip');
+      expect(find.descendant(of: readout, matching: find.text('Rough')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-meaning')), findsNothing);
+      expect(find.byKey(const Key('polar-align-done')), findsOneWidget);
+      final scroll = tester.state<ScrollableState>(
+          find.descendant(of: find.byType(FitPane), matching: find.byType(Scrollable)).first);
+      expect(scroll.position.maxScrollExtent, 0);
     });
 
     testWidgets('night mode draws the readout at full brightness, not the zone hue', (tester) async {
@@ -342,7 +381,24 @@ void main() {
       expect(find.textContaining('Exposure must be'), findsOneWidget);
     });
 
+    const solvedFrame = PolarAlignLive(
+      phase: PolarAlignStates.adjusting,
+      totalErrorArcmin: 30,
+      lastFrame: PolarAlignFrameInfo(
+        frameId: 'live-4',
+        solved: true,
+        exposureSeconds: 1,
+        captureMs: 1620,
+        solveMs: 480,
+        raDeg: 138.6667,
+        decDeg: 87.1822,
+      ),
+    );
+
     testWidgets('shows the last frame timings and solved pointing', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(
           api,
@@ -364,24 +420,38 @@ void main() {
       expect(find.text('Solved: RA 09h14m40s  Dec +87°10′56″'), findsOneWidget);
     });
 
+    testWidgets('a short window puts the timings and the pointing on one line', (tester) async {
+      await tester.pumpWidget(_harness(_FakePolarAlignClient(), solvedFrame));
+      await tester.pumpAndSettle();
+      expect(find.text('1.0 s · capture 1.6 s · solve 0.5 s · RA 09h14m40s  Dec +87°10′56″'), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-last-solve')), findsNothing);
+    });
+
     testWidgets('an active routine shows the guide camera live view', (tester) async {
-      // 1x1 PNG — any image format Image.memory decodes works for the view.
-      const png = <int>[
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
-      ];
+      // A real 64×48 PNG, so the view decodes and lays out the frame.
+      final png = (await tester.runAsync(() async {
+        final recorder = ui.PictureRecorder();
+        Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 64, 48), Paint()..color = Colors.white);
+        final image = await recorder.endRecording().toImage(64, 48);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data!.buffer.asUint8List();
+      }))!;
       final api = _FakePolarAlignClient()
         ..status = const PolarAlignStatus(state: PolarAlignStates.adjusting, currentErrorArcmin: 30)
-        ..frame = Uint8List.fromList(png);
+        ..frame = png;
       await tester.pumpWidget(_harness(
           api, const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
       await tester.pumpAndSettle();
 
       expect(api.calls, contains('frame'));
       expect(find.byKey(const Key('polar-align-live-view')), findsOneWidget);
+      // The 64-pixel frame scales up to its card instead of sitting at its own
+      // pixel size (it stayed small in a big empty card at 4K).
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+      expect(tester.getRect(find.byKey(const Key('polar-align-live-view'))).width, greaterThan(100));
       // The other controls stay alongside it.
       expect(find.byKey(const Key('polar-align-exposure')), findsOneWidget);
       expect(find.byKey(const Key('polar-align-mode')), findsOneWidget);

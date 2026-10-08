@@ -24,18 +24,27 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // (maximized with a layout floor). Mirrors the macOS MainFlutterWindow
 // channel; the Dart router drives it as the §30 launch flow hands off to the
 // §25 shell and back.
+// The size floor goes on the window's content (the overlay holding FlView),
+// not the GtkWindow: with client-side decorations GTK counts the shadow
+// margins inside a window's size request, so a 1100x600 request on the window
+// let the content shrink to about 1010x510 (KDE Wayland, 2026-10-08).
+static void set_content_min_size(GtkWindow* window, int width, int height) {
+  GtkWidget* content = gtk_bin_get_child(GTK_BIN(window));
+  if (content != nullptr) gtk_widget_set_size_request(content, width, height);
+}
+
 static void window_mode_method_cb(FlMethodChannel* channel,
                                   FlMethodCall* method_call,
                                   gpointer user_data) {
   GtkWindow* window = GTK_WINDOW(user_data);
   const gchar* method = fl_method_call_get_name(method_call);
   if (g_strcmp0(method, "workstation") == 0) {
-    gtk_widget_set_size_request(GTK_WIDGET(window), 1100, 700);
+    set_content_min_size(window, 1100, 600);
     gtk_window_maximize(window);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else if (g_strcmp0(method, "launchpad") == 0) {
     gtk_window_unmaximize(window);
-    gtk_widget_set_size_request(GTK_WIDGET(window), 760, 560);
+    set_content_min_size(window, 760, 560);
     gtk_window_resize(window, 960, 680);
     // No re-centre: Wayland gives clients no window positioning, so the
     // gtk_window_move() the X11 build used here was a no-op (#1201). The
@@ -89,7 +98,6 @@ static void my_application_activate(GApplication* application) {
   // Dart router flips to the maximized "workstation" mode when the §25 shell
   // mounts, via the openastroara/window channel registered below.
   gtk_window_set_default_size(window, 960, 680);
-  gtk_widget_set_size_request(GTK_WIDGET(window), 760, 560);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -117,6 +125,7 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(overlay));
   gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(overlay));
+  set_content_min_size(window, 760, 560);
   // FlView paints every pixel of the window through GL, so GTK's own
   // background fill of the toplevel is wasted work. On Wayland with the
   // client-side planetarium overlay every WebKit frame repaints the window,

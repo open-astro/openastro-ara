@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../fit_pane.dart';
 import '../help_icon.dart';
 
 /// One instrument on the Smart Focus pane: a flat, borderless group (rounded
 /// panel fill, generous padding) with a headline row — title + ⓘ on the left,
 /// the one primary action on the right — and a body. The headline carries the
 /// state in words ("In focus · HFR 1.42"), so there is no separate chip.
+/// The body fills the height the [FitPane] leaves under the headline.
 class FocusSection extends StatelessWidget {
   final String title;
   final String helpKey;
@@ -36,15 +39,16 @@ class FocusSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final short = AraBreakpoints.isShort(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      padding: short
+          ? const EdgeInsets.fromLTRB(16, 12, 16, 16)
+          : const EdgeInsets.fromLTRB(24, 20, 24, 24),
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: FitColumn(
         children: [
           // The trailing widget sits at the right end of the title row, or
           // wraps under the title when the card is too narrow for both. Full
@@ -83,7 +87,7 @@ class FocusSection extends StatelessWidget {
                 children: [
                   Text(
                     headline,
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    style: (short ? theme.textTheme.titleLarge : theme.textTheme.headlineSmall)?.copyWith(
                       color: headlineColor ?? AraColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
@@ -112,18 +116,23 @@ class FocusSection extends StatelessWidget {
                   children: [words, const SizedBox(height: 12), actions],
                 );
               }
+              // The actions take their natural width (up to 60 %) so they stay
+              // on one line at the right; the words wrap in what is left.
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(child: words),
                   const SizedBox(width: 16),
-                  Flexible(child: actions),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: c.maxWidth * 0.6),
+                    child: actions,
+                  ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
-          child,
+          SizedBox(height: short ? 12 : 20),
+          FitFill(child: child),
         ],
       ),
     );
@@ -147,8 +156,11 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final short = AraBreakpoints.isShort(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: short
+          ? const EdgeInsets.fromLTRB(14, 8, 14, 8)
+          : const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: AraColors.bgPanelAlt,
         borderRadius: BorderRadius.circular(10),
@@ -173,7 +185,7 @@ class StatTile extends StatelessWidget {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineSmall?.copyWith(
+                  style: (short ? theme.textTheme.titleLarge : theme.textTheme.headlineSmall)?.copyWith(
                     color: color ?? AraColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -204,9 +216,13 @@ class StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No tiles: nothing to lay out (and no per-row count to divide by).
+    if (tiles.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (context, c) {
-        final perRow = c.maxWidth >= 720
+        // One row while each tile still gets ~140 px (a 1100-wide window);
+        // a second row costs the instruments their height.
+        final perRow = c.maxWidth >= tiles.length * 140
             ? tiles.length
             : (c.maxWidth >= 420 ? 2 : 1);
         final width = (c.maxWidth - 12 * (perRow - 1)) / perRow;
@@ -267,7 +283,9 @@ class InlineNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: AraBreakpoints.isShort(context)
+          ? const EdgeInsets.fromLTRB(14, 8, 14, 8)
+          : const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: tint.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),

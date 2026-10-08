@@ -54,6 +54,7 @@ void main() {
 
     for (final (platform, expected) in [
       (TargetPlatform.android, false),
+      (TargetPlatform.windows, false),
       (TargetPlatform.iOS, true),
       (TargetPlatform.macOS, true),
     ]) {
