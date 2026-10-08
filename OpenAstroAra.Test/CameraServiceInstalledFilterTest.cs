@@ -42,8 +42,9 @@ namespace OpenAstroAra.Test {
             return new CameraService(filterWheel: () => wheel.Object);
         }
 
-        private static FilterWheelInfo Wheel(bool connected, string? selected) => new() {
+        private static FilterWheelInfo Wheel(bool connected, string? selected, bool moving = false) => new() {
             Connected = connected,
+            IsMoving = moving,
             SelectedFilter = selected is null ? null! : new FilterInfo(selected, 0, 2),
         };
 
@@ -68,6 +69,12 @@ namespace OpenAstroAra.Test {
         [TestCase(true, " ")]
         public void No_wheel_filter_leaves_the_frame_unfiltered(bool connected, string? selected) {
             using var svc = WithWheel(Wheel(connected, selected));
+            Assert.That(svc.WithInstalledFilter(new ExposureRequestDto(300, Gain: null)).FilterName, Is.Null);
+        }
+
+        [Test]
+        public void A_moving_wheel_or_pending_manual_swap_leaves_the_frame_unfiltered() {
+            using var svc = WithWheel(Wheel(connected: true, "Ha", moving: true));
             Assert.That(svc.WithInstalledFilter(new ExposureRequestDto(300, Gain: null)).FilterName, Is.Null);
         }
 

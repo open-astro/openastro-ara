@@ -31,6 +31,10 @@ namespace OpenAstroAra.TestHarness.Net;
 /// </remarks>
 public static class LoopbackListener {
     private const int MaxAttempts = 8;
+    // EADDRINUSE as the managed HttpListener reports it (raw errno); any other teardown failure
+    // still fails the test.
+    private const int EaddrinuseMacOs = 48;
+    private const int EaddrinuseLinux = 98;
 
     /// <summary>
     /// Returns a started <see cref="HttpListener"/> bound to <c>http://127.0.0.1:{port}/</c>
@@ -62,7 +66,7 @@ public static class LoopbackListener {
         ArgumentNullException.ThrowIfNull(listener);
         try {
             listener.Close();
-        } catch (HttpListenerException) {
+        } catch (HttpListenerException ex) when (ex.ErrorCode is EaddrinuseMacOs or EaddrinuseLinux) {
             // The port was reused by another fixture; nothing of ours is left bound.
         }
     }

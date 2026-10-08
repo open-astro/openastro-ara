@@ -619,14 +619,16 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// <summary>
     /// The request with its filter filled from the connected wheel when it names none. A named
     /// filter is kept: it is what the caller drove the wheel to. A disconnected wheel or one
-    /// reporting no selected filter leaves the frame unfiltered (a mono rig without a wheel).
+    /// reporting no selected filter leaves the frame unfiltered (a mono rig without a wheel), and
+    /// so does a wheel still moving or a manual swap still pending: the filter in the light path
+    /// is unknown then, and the old slot's name would be wrong.
     /// </summary>
     internal ExposureRequestDto WithInstalledFilter(ExposureRequestDto request) {
         if (!string.IsNullOrWhiteSpace(request.FilterName)) {
             return request;
         }
         var info = _filterWheel?.Invoke()?.GetInfo();
-        var installed = info is { Connected: true } ? info.SelectedFilter?.Name : null;
+        var installed = info is { Connected: true, IsMoving: false } ? info.SelectedFilter?.Name : null;
         return string.IsNullOrWhiteSpace(installed) ? request : request with { FilterName = installed };
     }
 
