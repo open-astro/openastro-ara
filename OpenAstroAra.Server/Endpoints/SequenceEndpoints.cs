@@ -18,6 +18,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -90,6 +93,16 @@ public static class SequenceEndpoints {
             result[i] = idx;
         }
         return result;
+    }
+
+    /// <summary>The body of <c>POST /sequences/{id}/start</c>: 409 while the Bahtinov readout runs (#1299 — never
+    /// image through the mask), else the run starts (202).</summary>
+    internal static async Task<IResult> StartSequenceAsync(Guid id, SequenceStartRequestDto request, string? key,
+            ISequencerService svc, IBahtinovFocusService bahtinov, CancellationToken ct) {
+        if (BahtinovFocusEndpoints.MaskOnConflict(bahtinov, "starting a sequence") is { } refused) {
+            return refused;
+        }
+        return Results.Accepted(value: await svc.StartAsync(id, request, key, ct));
     }
 
     public static IEndpointRouteBuilder MapSequenceEndpoints(this IEndpointRouteBuilder app) {
@@ -176,8 +189,8 @@ public static class SequenceEndpoints {
            .WithName("GetSequenceState");
 
         seq.MapPost("/{id:guid}/start",
-                async (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.StartAsync(id, request, key, ct)))
+                (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, CancellationToken ct) =>
+                    StartSequenceAsync(id, request, key, svc, bahtinov, ct))
            .Accepts<SequenceStartRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)

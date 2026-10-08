@@ -430,6 +430,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BatchJobDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/focuser/reconnect:
     post:
       tags:
@@ -1657,6 +1663,66 @@ paths:
         - Rotation assist
       summary: 'The latest solved frame of the by-hand rotation readout, rendered (204 until one).'
       operationId: GetRotationAssistFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
+  /api/v1/bahtinov-focus/start:
+    post:
+      tags:
+        - Bahtinov focus
+      summary: Start the Bahtinov mask focus readout on the main camera.
+      operationId: StartBahtinovFocus
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BahtinovFocusStartRequestDto'
+        required: true
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/bahtinov-focus/stop:
+    post:
+      tags:
+        - Bahtinov focus
+      summary: Stop the Bahtinov mask focus readout.
+      operationId: StopBahtinovFocus
+      responses:
+        '204':
+          description: No Content
+  /api/v1/bahtinov-focus/state:
+    get:
+      tags:
+        - Bahtinov focus
+      summary: 'The Bahtinov readout: latest spike offset, focus zone, trend.'
+      operationId: GetBahtinovFocus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BahtinovFocusStatusDto'
+  /api/v1/bahtinov-focus/frame:
+    get:
+      tags:
+        - Bahtinov focus
+      summary: 'The latest Bahtinov frame: the star crop the overlay draws on, or the whole frame (204 until one).'
+      operationId: GetBahtinovFocusFrame
       responses:
         '200':
           description: OK
@@ -6316,6 +6382,275 @@ components:
             - integer
             - string
           format: int64
+    BahtinovFocusStartRequestDto:
+      type: object
+      properties:
+        exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 1
+        binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+    BahtinovFocusStatusDto:
+      required:
+        - active
+        - state
+        - exposure_sec
+        - binning
+        - seq
+        - started_utc
+        - latest
+        - recent
+        - best_offset_px
+        - zone_px
+        - zone_from_optics
+        - zone_um
+        - focal_ratio
+        - within_zone
+        - error
+        - consecutive_failures
+        - has_frame
+        - frame_seq
+      type: object
+      properties:
+        active:
+          type: boolean
+        state:
+          type: string
+        exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        binning:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        latest:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/BahtinovSampleDto'
+        recent:
+          type: array
+          items:
+            $ref: '#/components/schemas/BahtinovSampleDto'
+        best_offset_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        zone_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        zone_from_optics:
+          type: boolean
+        zone_um:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        focal_ratio:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        within_zone:
+          type: boolean
+        error:
+          type:
+            - 'null'
+            - string
+        consecutive_failures:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        has_frame:
+          type: boolean
+        frame_seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+    BahtinovLineDto:
+      required:
+        - role
+        - x1
+        - y1
+        - x2
+        - y2
+        - angle_deg
+      type: object
+      properties:
+        role:
+          type: string
+        x1:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y1:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        x2:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y2:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    BahtinovOverlayDto:
+      required:
+        - crop_size
+        - lines
+        - intersection_x
+        - intersection_y
+        - spread_deg
+      type: object
+      properties:
+        crop_size:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BahtinovLineDto'
+        intersection_x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        intersection_y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        spread_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    BahtinovSampleDto:
+      required:
+        - seq
+        - captured_utc
+        - detected
+        - problem
+        - offset_px
+        - defocus_um
+        - within_zone
+        - star_x
+        - star_y
+        - peak_adu
+      type: object
+      properties:
+        seq:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        captured_utc:
+          type: string
+          format: date-time
+        detected:
+          type: boolean
+        problem:
+          type:
+            - 'null'
+            - string
+        offset_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        defocus_um:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        within_zone:
+          type: boolean
+        star_x:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        star_y:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        peak_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        overlay:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/BahtinovOverlayDto'
     BatchJobDto:
       required:
         - job_id
@@ -12117,6 +12452,7 @@ tags:
   - name: Equipment
   - name: Autofocus
   - name: Rotation assist
+  - name: Bahtinov focus
   - name: Sequences
   - name: Calibration
   - name: Mosaics

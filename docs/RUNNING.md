@@ -99,6 +99,9 @@ curl http://localhost:5555/healthz   # → "ok"
   With the synthetic sky on, the by-hand rotation readout (Plan → **Rotate camera**) reads its
   "solved" position angle from `<profile dir>/synthetic-position-angle` (one number, degrees) on
   every solve instead of plate-solving — edit the file to stand in for turning the camera.
+  The Bahtinov mask readout (Setup → Smart Focus → Main telescope → Bahtinov mask) sees one
+  bright mask star whose central spike sits 2.5 px off the X per pixel of HFR growth, zero at
+  `best` — move the simulator focuser to watch the offset follow.
 - The solution builds with `TreatWarningsAsErrors=true` + `AnalysisMode=All`. If your
   local SDK surfaces analyzer warnings that block `dotnet run`, append
   `-p:TreatWarningsAsErrors=false` — a run-time-only relaxation that touches no files.

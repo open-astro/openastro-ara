@@ -104,6 +104,66 @@ public static class SyntheticSky {
         }
         return frame;
     }
+
+    /// <summary>
+    /// Render a frame with one bright star seen through a Bahtinov mask (#1299): a saturated core in a halo,
+    /// two spikes crossing in an X and a third between them. The central spike sits
+    /// <paramref name="offsetPx"/> from the crossing, along its normal (−sin φ, cos φ) with φ =
+    /// <paramref name="rotationDeg"/> — zero is best focus. <paramref name="blurPx"/> widens the core and
+    /// the spikes as defocus would. Field stars (the <see cref="Render"/> field) sit behind it when
+    /// <paramref name="fieldStars"/>. Pure.
+    /// </summary>
+    public static ushort[] RenderBahtinov(int width, int height, int starX, int starY, double offsetPx, double blurPx,
+            double rotationDeg = 23, double halfAngleDeg = 15, int frameSeed = 0, bool fieldStars = true) {
+        var frame = fieldStars
+            ? Render(width, height, Math.Max(1.0, blurPx), seed: 5, stars: 40, frameSeed: frameSeed)
+            : NoiseOnly(width, height, frameSeed);
+        var phi = rotationDeg * Math.PI / 180;
+        var half = halfAngleDeg * Math.PI / 180;
+        var ncx = -Math.Sin(phi);
+        var ncy = Math.Cos(phi);
+        // The crossing sits half the offset one way, the central spike half the other: the star stays put.
+        var ix = starX + 0.5 - ncx * offsetPx / 2;
+        var iy = starY + 0.5 - ncy * offsetPx / 2;
+        var mx = starX + 0.5 + ncx * offsetPx / 2;
+        var my = starY + 0.5 + ncy * offsetPx / 2;
+        var lines = new (double Px, double Py, double Angle, double Amplitude)[] {
+            (mx, my, phi, 3200),
+            (ix, iy, phi - half, 2600),
+            (ix, iy, phi + half, 2600),
+        };
+        var spikeSigma = Math.Sqrt(1.0 + 0.25 * blurPx * blurPx);
+        var coreSigma = Math.Max(1.4, blurPx);
+        const int reach = 170;
+        for (var y = Math.Max(0, starY - reach); y < Math.Min(height, starY + reach); y++) {
+            for (var x = Math.Max(0, starX - reach); x < Math.Min(width, starX + reach); x++) {
+                double px = x + 0.5, py = y + 0.5;
+                var rx = px - (starX + 0.5);
+                var ry = py - (starY + 0.5);
+                var r2 = rx * rx + ry * ry;
+                var v = 90_000 * Math.Exp(-r2 / (2 * coreSigma * coreSigma)) + 1800 * Math.Exp(-Math.Sqrt(r2) / 22);
+                foreach (var (lx, ly, angle, amplitude) in lines) {
+                    var ux = Math.Cos(angle);
+                    var uy = Math.Sin(angle);
+                    var along = (px - lx) * ux + (py - ly) * uy;
+                    var across = -(px - lx) * uy + (py - ly) * ux;
+                    v += amplitude * Math.Exp(-Math.Abs(along) / 70) * Math.Exp(-across * across / (2 * spikeSigma * spikeSigma));
+                }
+                var idx = y * width + x;
+                frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + v);
+            }
+        }
+        return frame;
+    }
+
+    private static ushort[] NoiseOnly(int width, int height, int frameSeed) {
+        var frame = new ushort[width * height];
+        var noise = new Random(unchecked(7 * 31 + frameSeed));
+        for (var i = 0; i < frame.Length; i++) {
+            frame[i] = (ushort)(1200 + noise.Next(-40, 41));
+        }
+        return frame;
+    }
 }
 
 /// <summary>Settings for <see cref="SyntheticSky"/>: best-focus focuser position, the HFR there and how many
@@ -142,6 +202,41 @@ public sealed partial class SyntheticSkyFrameSource : IAnalysisFrameSource {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Synthetic sky: probe at {Position} rendered at HFR {Hfr:0.00}")]
     private static partial void LogProbe(ILogger logger, int position, double hfr);
+}
+
+/// <summary>The Bahtinov readout's frames for the synthetic sky (#1299): one bright star through a mask whose
+/// central spike sits off the X in proportion to the (simulator) focuser's distance from best focus — 2.5 px
+/// per pixel of HFR growth, so it crosses zero at the configured best position and flips sign through it.
+/// Move the simulator focuser to watch the readout follow.</summary>
+public sealed class SyntheticBahtinovFrameSource : IAnalysisFrameSource {
+    private readonly IFocuserMediator _focuser;
+    private readonly SyntheticSkySettings _options;
+    private int _frame;
+
+    public const int Width = 1024;
+    public const int Height = 768;
+    internal const double OffsetPerHfrPixel = 2.5;
+
+    public SyntheticBahtinovFrameSource(IFocuserMediator focuser, SyntheticSkySettings options) {
+        _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    /// <summary>The central spike's offset at a focuser position. Pure.</summary>
+    public static double OffsetAt(int position, SyntheticSkySettings o) =>
+        (position - o.BestPosition) / o.StepsPerPixel * OffsetPerHfrPixel;
+
+    public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
+        var info = _focuser.GetInfo();
+        if (info is not { Connected: true }) {
+            throw new InvalidOperationException("synthetic sky: the focuser is not connected");
+        }
+        await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(exposureSec, 0.05, 1.0)), ct).ConfigureAwait(false);
+        var hfr = SyntheticSky.HfrAt(info.Position, _options);
+        var pixels = SyntheticSky.RenderBahtinov(Width, Height, 610, 380, OffsetAt(info.Position, _options), hfr,
+            frameSeed: Interlocked.Increment(ref _frame));
+        return new AnalysisFrame(pixels, Width, Height, DateTimeOffset.UtcNow);
+    }
 }
 
 /// <summary>Guide-camera frames for the synthetic sky: the field's focus drifts through best focus and

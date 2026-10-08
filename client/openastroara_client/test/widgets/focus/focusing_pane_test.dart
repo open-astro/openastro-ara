@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -30,6 +31,13 @@ class _StubGuideFocus extends GuideFocusNotifier {
   Future<void> refresh() async {}
 }
 
+/// These tests cover the autofocus side; without a focuser the card would
+/// otherwise open on the Bahtinov mask (see bahtinov_focus_card_test).
+class _PinnedAutofocus extends MainFocusMethodNotifier {
+  @override
+  MainFocusMethod? build() => MainFocusMethod.autofocus;
+}
+
 class _OagPhd2 extends Phd2SettingsNotifier {
   @override
   Phd2Settings build() => const Phd2Settings(guiderSetupType: 'oag', guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]');
@@ -44,6 +52,7 @@ Widget _harness({
       overrides: [
         autofocusLiveProvider.overrideWith(() => _StubAutofocus(autofocus)),
         guideFocusProvider.overrideWith(() => _StubGuideFocus(guide)),
+        mainFocusMethodProvider.overrideWith(_PinnedAutofocus.new),
         if (oag) phd2SettingsProvider.overrideWith(_OagPhd2.new),
       ],
       child: const MaterialApp(home: Scaffold(body: SizedBox(width: 1100, height: 3200, child: FocusingPane()))),

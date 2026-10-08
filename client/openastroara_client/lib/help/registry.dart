@@ -1045,6 +1045,20 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['img.autofocus.method', 'img.autofocus.step_size_auto', 'img.autofocus.steps', 'img.autofocus.step_size'],
     keywords: ['autofocus', 'v-curve', 'hfr', 'focus', 'sweep', 'cancel'],
   ),
+  'setup.focusing.bahtinov': Help(
+    key: 'setup.focusing.bahtinov',
+    title: 'Focusing with a Bahtinov mask',
+    body:
+        'For a focuser you turn by hand, or when you would rather see focus than sweep for it. A Bahtinov mask over the front of the telescope turns a bright star into three spikes: two cross in an X, and the third runs between them. It passes through the centre of the X only at best focus.\n\n'
+        '* **Start** takes one frame after another with the main camera. Ara finds the brightest star, fits a line to each spike, and draws them over the star: the X dashed, the middle spike solid.\n'
+        '* **The big number** is how far the middle spike sits from the centre of the X, in pixels. It is zero at focus and changes sign as you pass through, so you can see which side you are on. With the optics set, it also shows roughly how many micrometres of focuser travel that is.\n'
+        '* **The advice follows your last move.** Ara cannot know which way your knob turns the focuser, so it says *Keep going*, *Go back*, or *You passed focus*. The number changes in step with the focuser, so the advice also says how big the next move should be compared with the last one.\n'
+        '* **In focus** means the offset sits inside the critical focus zone. The zone comes from your focal ratio and pixel size (Options → Imaging → Optics). Without them, in focus means within half a pixel.\n'
+        '* **Finish** asks you to take the mask off, and marks the telescope focused when the last reading was in the zone. Autofocus and sequences will not start while the readout runs, so the mask can never end up on your images.\n'
+        '* **Exposure**: well under a second for a bright star; lengthen it if the spikes are faint.',
+    relatedSettings: [],
+    keywords: ['bahtinov', 'mask', 'focus', 'spikes', 'manual focuser', 'critical focus zone'],
+  ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
     title: 'Focusing the guide camera',
