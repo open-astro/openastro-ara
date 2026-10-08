@@ -75,7 +75,9 @@ class ServerDiscoveryService {
 
   /// `multicast_dns` binds with `reusePort: true`, which `dart:io` rejects on
   /// Android, so on Android the browse died in `start()` every pass and logged
-  /// it every tick (#1129). Same client, minus that one option there.
+  /// it every tick (#1129). Windows doesn't support it either: every pass
+  /// logged "reusePort not supported for Windows" (ARM64 VM, 2026-10-08).
+  /// Same client, minus that one option there.
   static MDnsClient _platformMdnsClient() =>
       MDnsClient(rawDatagramSocketFactory: productionDatagramBind());
 
@@ -87,7 +89,11 @@ class ServerDiscoveryService {
   static RawDatagramSocketFactory productionDatagramBind({
     RawDatagramSocketFactory bind = RawDatagramSocket.bind,
   }) =>
-      platformDatagramBind(defaultTargetPlatform == TargetPlatform.android, bind: bind);
+      platformDatagramBind(
+        defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.windows,
+        bind: bind,
+      );
 
   /// The rig's own name from a PTR answer: `openastro._openastroara._tcp.local`
   /// → `openastro` (the list showed the whole service name, #1129).
@@ -99,16 +105,17 @@ class ServerDiscoveryService {
   }
 
   /// The bind `MDnsClient` gets: `RawDatagramSocket.bind`, except that
-  /// `reusePort` is dropped when [isAndroid]. Public for the test.
+  /// `reusePort` is dropped when [noReusePort] (Android, Windows). Public for
+  /// the test.
   static RawDatagramSocketFactory platformDatagramBind(
-    bool isAndroid, {
+    bool noReusePort, {
     RawDatagramSocketFactory bind = RawDatagramSocket.bind,
   }) =>
       (dynamic host, int port,
               {bool reuseAddress = true, bool reusePort = false, int ttl = 1}) =>
           bind(host, port,
               reuseAddress: reuseAddress,
-              reusePort: isAndroid ? false : reusePort,
+              reusePort: noReusePort ? false : reusePort,
               ttl: ttl);
 
   /// Test seam for the local IPv4 enumeration (production uses

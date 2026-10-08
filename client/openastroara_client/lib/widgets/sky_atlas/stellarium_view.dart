@@ -254,11 +254,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // "add to sequence": the page owns the framing geometry but not the daemon's
   // NINA sequence DOM, so it hands the target's coordinates here and we build +
   // create the sequence with the shared Dart builder.
+  String? _lastDebugLine;
+
   Future<void> _onPageEvent(Map<String, Object?> event) async {
     // The page posts its Display-panel toggle state here on every change; persist it
     // so it's restored (via the load URL) next launch.
     if (event['type'] == 'debug') {
-      if (kDebugMode) debugPrint('StellariumView debug: $event');
+      // The page posts its canvas size on every frame it lays out; print only
+      // a change (about 400 identical lines a session otherwise).
+      final line = '$event';
+      if (kDebugMode && line != _lastDebugLine) debugPrint('StellariumView debug: $line');
+      _lastDebugLine = line;
       return;
     }
     if (event['type'] == 'displayPref') {
