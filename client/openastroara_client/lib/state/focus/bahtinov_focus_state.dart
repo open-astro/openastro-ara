@@ -118,7 +118,10 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
       if (!ref.mounted || gen != _generation) return;
       _consecutiveErrors = 0;
       state = state.copyWith(status: status, clearError: true);
-      if (status.hasFrame && status.seq != state.frameSeq) {
+      // Against the frame's own sample, not the latest one: a sample whose
+      // picture failed to render would otherwise re-fetch the same old frame
+      // on every poll until a render succeeded.
+      if (status.hasFrame && status.frameSeq != state.frameSeq) {
         final frame = await api.fetchFrame();
         if (!ref.mounted || gen != _generation) return;
         if (frame != null) {

@@ -11,12 +11,16 @@ import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 class _FakeClient implements BahtinovFocusClient {
   final BahtinovFocusStatus snapshot;
   final int frameSeq;
+  int fetches = 0;
   _FakeClient(this.snapshot, this.frameSeq);
 
   @override
   Future<BahtinovFocusStatus> status() async => snapshot;
   @override
-  Future<GuideFocusFrame?> fetchFrame() async => GuideFocusFrame(Uint8List.fromList([1, 2, 3]), frameSeq);
+  Future<GuideFocusFrame?> fetchFrame() async {
+    fetches++;
+    return GuideFocusFrame(Uint8List.fromList([1, 2, 3]), frameSeq);
+  }
   @override
   Future<void> start({required double exposureSec}) async {}
   @override
@@ -25,11 +29,12 @@ class _FakeClient implements BahtinovFocusClient {
   void close() {}
 }
 
-BahtinovFocusStatus _status(int seq) => BahtinovFocusStatus.fromJson({
+BahtinovFocusStatus _status(int seq, {int? frameSeq}) => BahtinovFocusStatus.fromJson({
       'active': true,
       'state': 'running',
       'seq': seq,
       'has_frame': true,
+      'frame_seq': frameSeq ?? seq,
       'latest': {
         'seq': seq,
         'detected': true,
@@ -61,6 +66,20 @@ void main() {
     final live = await _settle(c);
     expect(live.frameSeq, 5);
     expect(live.overlay, isNotNull);
+  });
+
+  test('a sample whose frame failed to render does not re-fetch the old frame', () async {
+    // The daemon is on sample 7 but its picture is still sample 5's.
+    final client = _FakeClient(_status(7, frameSeq: 5), 5);
+    final c = ProviderContainer(overrides: [bahtinovFocusApiProvider.overrideWithValue(client)]);
+    addTearDown(c.dispose);
+    await _settle(c);
+    final fetched = client.fetches;
+    expect(fetched, greaterThan(0));
+    expect(c.read(bahtinovFocusProvider).frameSeq, 5);
+    await c.read(bahtinovFocusProvider.notifier).refresh();
+    await c.read(bahtinovFocusProvider.notifier).refresh();
+    expect(client.fetches, fetched, reason: 'the same frame is not fetched again');
   });
 
   test('a frame that raced ahead of the status shows without lines', () async {

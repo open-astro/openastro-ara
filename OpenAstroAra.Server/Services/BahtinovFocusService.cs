@@ -441,7 +441,13 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
             return null;
         }
         try {
-            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, bayerPattern: null, annotate: true);
+            // The capture's own buffer when it is a whole array (it is from the camera), so a frame without a
+            // pattern does not cost a full-frame copy every time.
+            var pixels = System.Runtime.InteropServices.MemoryMarshal.TryGetArray(frame.Pixels, out var segment)
+                && segment.Offset == 0 && segment.Array is { } array && array.Length == segment.Count
+                ? array
+                : frame.Pixels.ToArray();
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(pixels, frame.Width, frame.Height, bayerPattern: null, annotate: true);
             return jpeg;
         } catch (Exception ex) {
             LogRenderFailed(ex);

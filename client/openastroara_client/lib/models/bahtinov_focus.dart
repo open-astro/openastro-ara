@@ -136,6 +136,9 @@ class BahtinovFocusStatus {
   final bool withinZone;
   final String? error;
   final bool hasFrame;
+  /// The sample the daemon's current frame belongs to. Behind [seq] when a
+  /// frame failed to render, so the client compares against this, not [seq].
+  final int frameSeq;
 
   const BahtinovFocusStatus({
     this.active = false,
@@ -151,6 +154,7 @@ class BahtinovFocusStatus {
     this.withinZone = false,
     this.error,
     this.hasFrame = false,
+    this.frameSeq = 0,
   });
 
   static const idle = BahtinovFocusStatus();
@@ -179,6 +183,7 @@ class BahtinovFocusStatus {
       withinZone: json['within_zone'] as bool? ?? false,
       error: json['error'] is String ? json['error'] as String : null,
       hasFrame: json['has_frame'] as bool? ?? false,
+      frameSeq: _i(json, 'frame_seq'),
     );
   }
 }
