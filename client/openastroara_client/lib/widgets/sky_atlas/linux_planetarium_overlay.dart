@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,10 +115,17 @@ class _LinuxPlanetariumOverlayState
   @override
   void didPopNext() => setState(() => _routeOnTop = false);
 
+  // ARA_OVERLAY_DEBUG=1 (with the native side's logging) traces each push.
+  static final bool _debug = Platform.environment.containsKey('ARA_OVERLAY_DEBUG');
+
   void _pushBounds() {
     final box = context.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
+    if (box is! RenderBox || !box.hasSize) {
+      if (_debug) debugPrint('planetarium_overlay: no box to push');
+      return;
+    }
     final rect = box.localToGlobal(Offset.zero) & box.size;
+    if (_debug) debugPrint('planetarium_overlay: push $rect (last $_lastBounds)');
     if (rect == _lastBounds) return;
     _lastBounds = rect;
     _overlay.setBounds(rect);
