@@ -77,19 +77,28 @@ public sealed partial class GuiderService {
 
     private void FeedPaResidualStep(PHD2Guider guider, IGuideStep step) {
         PaResidualAction action;
+        long generation;
         lock (_paGate) {
             action = _paTracker.OnStep(PaResidualStepTime(step), step.DECDistanceRaw, step.DECDuration);
+            generation = NewPaRunGenerationLocked(action);
         }
-        HandlePaResidualAction(guider, action);
+        HandlePaResidualAction(guider, action, generation);
     }
 
     private void FeedPaResidualMarker(PHD2Guider guider, string? kind) {
         PaResidualAction action;
+        long generation;
         lock (_paGate) {
             action = _paTracker.OnMarker(kind);
+            generation = NewPaRunGenerationLocked(action);
         }
-        HandlePaResidualAction(guider, action);
+        HandlePaResidualAction(guider, action, generation);
     }
+
+    // A new run's generation is taken under the same lock as the tracker's Begin cleared the
+    // estimator, so a finish still awaiting the previous run's rate can never fit the new, empty one.
+    private long NewPaRunGenerationLocked(PaResidualAction action) =>
+        action == PaResidualAction.Started ? ++_paGeneration : _paGeneration;
 
     // The guider went away: a measurement in flight is dropped (the last result stays shown).
     private void ResetPaResidual() {
@@ -103,10 +112,10 @@ public sealed partial class GuiderService {
         }
     }
 
-    private void HandlePaResidualAction(PHD2Guider guider, PaResidualAction action) {
+    private void HandlePaResidualAction(PHD2Guider guider, PaResidualAction action, long generation) {
         switch (action) {
             case PaResidualAction.Started:
-                BeginPaResidual(guider);
+                BeginPaResidual(guider, generation);
                 break;
             case PaResidualAction.Progress:
                 PublishPaProgress();
@@ -129,13 +138,14 @@ public sealed partial class GuiderService {
         }
     }
 
-    private void BeginPaResidual(PHD2Guider guider) {
+    private void BeginPaResidual(PHD2Guider guider, long generation) {
         // Lock-position shift (comet tracking) drifts the star in Dec on purpose: not a PA signal.
         var unavailable = guider.ShiftEnabled ? "lock_shift" : null;
-        long generation;
         PaResidualDto current;
         lock (_paGate) {
-            generation = ++_paGeneration;
+            if (generation != _paGeneration) {
+                return; // superseded (a disconnect) before it began
+            }
             _paDecRatePxPerSec = null;
             _paUnavailable = unavailable;
             current = new PaResidualDto(
