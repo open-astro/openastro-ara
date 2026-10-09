@@ -1227,6 +1227,34 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/guider/pa-residuals:
+    get:
+      tags:
+        - Equipment
+      operationId: ListPaResiduals
+      parameters:
+        - name: sessionId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaResidualDto'
   /api/v1/equipment/guider/focus/start:
     post:
       tags:
@@ -9742,6 +9770,108 @@ components:
         telescope_name:
           type: string
           default: ''
+    PaResidualDto:
+      required:
+        - id
+        - status
+        - started_utc
+        - completed_utc
+        - sample_seconds
+        - target_seconds
+        - frames
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        started_utc:
+          type: string
+          format: date-time
+        completed_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        sample_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        target_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        drift_arcsec_per_min:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        pa_error_min_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        uncertainty_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        reliable:
+          type:
+            - 'null'
+            - boolean
+        hour_angle_hours:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        align_error_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        align_ended_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        session_id:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        reason:
+          type:
+            - 'null'
+            - string
     ParkRequestDto:
       type: object
       properties:

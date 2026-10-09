@@ -67,6 +67,9 @@ public static class PhdEvents {
     /// <summary>Guiding started (after calibration / on resume).</summary>
     public static JsonObject StartGuiding() => Base("StartGuiding");
 
+    /// <summary>Guiding stopped (PHD2 sends this when a guide session ends).</summary>
+    public static JsonObject GuidingStopped() => Base("GuidingStopped");
+
     /// <summary>Calibration started.</summary>
     public static JsonObject StartCalibration(string mount = "Mount") {
         var e = Base("StartCalibration");
@@ -87,12 +90,20 @@ public static class PhdEvents {
     /// <paramref name="dx"/>/<paramref name="dy"/> are the pixel offsets (default 0 —
     /// pass them when a test needs pixel-vs-arcsec separation).
     /// </summary>
-    public static JsonObject GuideStep(double raDistanceRaw, double decDistanceRaw, double dx = 0, double dy = 0) {
+    public static JsonObject GuideStep(double raDistanceRaw, double decDistanceRaw, double dx = 0, double dy = 0,
+            int? frame = null, double decDurationMs = 0, string? decDirection = null) {
         var e = Base("GuideStep");
         e["dx"] = dx;
         e["dy"] = dy;
         e["RADistanceRaw"] = raDistanceRaw;
         e["DECDistanceRaw"] = decDistanceRaw;
+        if (frame is int f) {
+            e["Frame"] = f;
+        }
+        if (decDirection is not null) {
+            e["DECDuration"] = decDurationMs; // PHD2 sends the length unsigned plus "North"/"South"
+            e["DECDirection"] = decDirection;
+        }
         return e;
     }
 

@@ -4,6 +4,8 @@
 /// via `LowerCaseNamingPolicy`).
 library;
 
+import 'pa_residual.dart';
+
 /// Link state of the guider device itself (mirrors the server
 /// `EquipmentConnectionState`). `unknown` is a client-only fallback for an
 /// unrecognised token so a new server value never throws.
@@ -75,6 +77,9 @@ class GuiderStatus {
   final double? rmsRaArcsec;
   final double? rmsDecArcsec;
   final String? currentProfile;
+  /// #1311 — the polar alignment residual from guiding (`runtime.pa_residual`),
+  /// so a client that (re)connects mid-run shows it before the next WS event.
+  final PaResidual? paResidual;
 
   const GuiderStatus({
     this.deviceId,
@@ -88,6 +93,7 @@ class GuiderStatus {
     this.rmsRaArcsec,
     this.rmsDecArcsec,
     this.currentProfile,
+    this.paResidual,
   });
 
   bool get isConnected => connectionState == GuiderConnectionState.connected;
@@ -114,6 +120,7 @@ class GuiderStatus {
       rmsRaArcsec: _asDouble(runtimeMap['rms_ra_arcsec']),
       rmsDecArcsec: _asDouble(runtimeMap['rms_dec_arcsec']),
       currentProfile: _str(runtimeMap['current_profile']),
+      paResidual: PaResidual.fromJson(runtimeMap['pa_residual']),
     );
   }
 
@@ -156,10 +163,11 @@ class GuiderStatus {
       other.rmsTotalArcsec == rmsTotalArcsec &&
       other.rmsRaArcsec == rmsRaArcsec &&
       other.rmsDecArcsec == rmsDecArcsec &&
-      other.currentProfile == currentProfile;
+      other.currentProfile == currentProfile &&
+      other.paResidual == paResidual;
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
       rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec,
-      currentProfile);
+      currentProfile, paResidual);
 }

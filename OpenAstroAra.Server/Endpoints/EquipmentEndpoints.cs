@@ -433,6 +433,11 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.StopGuidingAsync(key, ct)));
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
+        // #1311 — polar alignment residuals measured from guiding, newest first; ?sessionId= narrows
+        // to one imaging session (the library's session header), ?limit= caps the rows (default 20).
+        guider.MapGet("/pa-residuals", ListPaResidualsAsync)
+            .Produces<IReadOnlyList<PaResidualDto>>(StatusCodes.Status200OK)
+            .WithName("ListPaResiduals");
 
         // Guide-camera focus loop (Setup → Smart Focus): frames borrowed through the guider, measured here.
         // start: 202; 400 bad exposure/binning; 409 not connected / guiding / polar aligning / already running.
@@ -814,6 +819,12 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
+
+    /// <summary>#1311 — the logged polar-alignment residuals, newest first: one session's with
+    /// <paramref name="sessionId"/>, at most <paramref name="limit"/> rows (default 20, 1–500).</summary>
+    public static async Task<Microsoft.AspNetCore.Http.HttpResults.Ok<IReadOnlyList<PaResidualDto>>> ListPaResidualsAsync(
+            Guid? sessionId, int? limit, IPaResidualLog log, CancellationToken ct) =>
+        TypedResults.Ok(await log.ListAsync(sessionId, Math.Clamp(limit ?? 20, 1, 500), ct));
 
     // §45 polar-align start (extracted for the error-mapping tests). The DI swap to the real
     // PolarAlignService made a not-connected Start a live path: RequireConnectedGuider throws plain

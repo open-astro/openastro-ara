@@ -153,6 +153,8 @@ namespace OpenAstroAra.Test {
                 Rows.Enqueue(record);
                 return Task.CompletedTask;
             }
+            public Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct) =>
+                Task.FromResult<PolarAlignmentRecord?>(null);
         }
 
         private static InMemoryProfileStore NewStore() {

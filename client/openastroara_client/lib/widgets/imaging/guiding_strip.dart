@@ -8,16 +8,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
+import '../../models/pa_residual.dart';
 import '../../state/guider/guide_graph_settings.dart';
 import '../../state/guider/guide_replay_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/guider/pa_residual_state.dart';
 import '../../state/guider/live_guiding_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/guide_graph_stats.dart';
 import '../../util/phd2_guide_log.dart';
 import 'guiding_tune_dialog.dart';
+import 'polar_error_rating.dart';
 
 /// Whether the Live tab's guiding strip shows its graph. Root-scoped so a
 /// collapse survives a tab switch (the tab bodies are rebuilt on return).
@@ -88,6 +91,7 @@ class GuidingStrip extends ConsumerWidget {
       fallbackScale: fallbackScale,
     );
     final stats = model.stats;
+    final paResidual = ref.watch(paResidualProvider);
 
     return Container(
       decoration: const BoxDecoration(
@@ -127,6 +131,10 @@ class GuidingStrip extends ConsumerWidget {
                           color: AraColors.textSecondary,
                         ),
                   ),
+                  if (paResidual != null && (status?.isConnected ?? false)) ...[
+                    const SizedBox(width: 12),
+                    Flexible(child: PaResidualChip(residual: paResidual)),
+                  ],
                   const Spacer(),
                   if (replay != null) ...[
                     _ReplayChip(replay: replay),
@@ -511,6 +519,70 @@ class _ReplayChip extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ],
+    );
+  }
+}
+
+/// #1311 — the polar alignment left after Align, measured from the Dec drift
+/// the guider corrects in the first minutes of guiding: "PA ≥ 48″ · Excellent"
+/// with the Polar Align quality card's bands, "measuring 2:00 / 5:00" while
+/// it samples. The figure is a lower bound (one hour angle sees one component
+/// of the error), hence "≥"; the tooltip says so and compares it with Align.
+class PaResidualChip extends StatelessWidget {
+  const PaResidualChip({super.key, required this.residual});
+  final PaResidual residual;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context).textTheme.bodySmall;
+    final r = residual;
+    final IconData icon;
+    final Color color;
+    final String label;
+    final String tooltip;
+    switch (r.status) {
+      case PaResidualStatus.measuring:
+        icon = Icons.timelapse;
+        color = AraColors.textSecondary;
+        label =
+            'PA residual · measuring ${paResidualClock(r.sampleSeconds)} / ${paResidualClock(r.targetSeconds)}';
+        tooltip =
+            'Measuring the polar alignment left after Align from the Dec '
+            'corrections over the first ${paResidualClock(r.targetSeconds)} of clean '
+            'guiding (dithers and settling are left out).';
+      case PaResidualStatus.unavailable:
+        icon = Icons.do_not_disturb_on_outlined;
+        color = AraColors.textSecondary;
+        label = 'PA residual n/a';
+        tooltip = 'No polar alignment residual for this guiding run. '
+            '${PaResidual.reasonText(r.reason)}';
+      case PaResidualStatus.done:
+        final error = r.paErrorMinArcmin!;
+        final rating = polarErrorRating(error);
+        icon = r.reliable ? polarErrorRatingIcon(error) : Icons.blur_on;
+        color = r.reliable ? zoneColor(error) : AraColors.textSecondary;
+        label = r.reliable
+            ? 'PA ≥ ${formatPoleOffset(error).$1} · ${rating.$1}'
+            : 'PA ≥ ${formatPoleOffset(error).$1} · noisy';
+        tooltip = paResidualDetail(r);
+    }
+    return Tooltip(
+      message: tooltip,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: base?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

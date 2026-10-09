@@ -134,7 +134,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 CurrentProfile: _guider.SelectedProfile?.Name,
                 RmsTotalArcsec: RmsArcsec(rmsTotal, pixelScale),
                 RmsRaArcsec: RmsArcsec(rmsRa, pixelScale),
-                RmsDecArcsec: RmsArcsec(rmsDec, pixelScale));
+                RmsDecArcsec: RmsArcsec(rmsDec, pixelScale),
+                PaResidual: PaResidualSnapshot());
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }
@@ -426,6 +427,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             return;
         }
         double pixelScale;
+        PHD2Guider guider;
         lock (_gate) {
             if (!ReferenceEquals(sender, _guider)) {
                 return;
@@ -434,8 +436,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             while (_guideSteps.Count > MaxGuideStepWindow) {
                 _guideSteps.Dequeue();
             }
-            pixelScale = _guider!.PixelScale; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
+            guider = _guider!; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
+            pixelScale = guider.PixelScale;
         }
+        // #1311 — the first minutes of each guided run also measure the polar alignment residual.
+        FeedPaResidualStep(guider, step);
         // §63.18 — the Live tab's guide graph is drawn from these, one point per guide frame
         // (the REST status only carries the windowed RMS). Fire-and-forget off the guider's
         // listener thread; a publish fault is logged, never thrown back into the socket reader.
@@ -451,14 +456,17 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (marker is null) {
             return;
         }
+        PHD2Guider guider;
         lock (_gate) {
             if (!ReferenceEquals(sender, _guider)) {
                 return;
             }
+            guider = _guider!;
         }
         if (_ws is not null) {
             _ = PublishGuiderEventAsync(BuildGuiderEventPayload(marker));
         }
+        FeedPaResidualMarker(guider, marker.Kind);
     }
 
     /// <summary>The <c>guider.event</c> payload: <c>kind</c> plus whichever details the PHD2
@@ -624,6 +632,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;
+            ResetPaResidual();
         }
     }
 

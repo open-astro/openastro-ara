@@ -433,7 +433,37 @@ public sealed record GuiderStateDto(
     string? CurrentProfile,
     double? RmsTotalArcsec = null,
     double? RmsRaArcsec = null,
-    double? RmsDecArcsec = null);
+    double? RmsDecArcsec = null,
+    PaResidualDto? PaResidual = null);
+
+/// <summary>
+/// #1311 — the polar alignment error left after Align, measured from the Dec drift the guider
+/// corrects during the first minutes of each guided run (no extra setup step). Status is
+/// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or
+/// <c>unavailable</c> (<c>Reason</c> says why: <c>lock_shift</c>, <c>ao</c>, <c>no_calibration</c>,
+/// <c>no_pixel_scale</c>, <c>no_fit</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
+/// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
+/// <c>UncertaintyArcmin</c> exceeds max(1′, half the value). <c>AlignErrorArcmin</c> is the last
+/// Polar Align result in the 12 h before, for comparison. Hour angle / Dec are the mount's at the end.
+/// </summary>
+public sealed record PaResidualDto(
+    Guid Id,
+    string Status,
+    DateTimeOffset StartedUtc,
+    DateTimeOffset? CompletedUtc,
+    double SampleSeconds,
+    double TargetSeconds,
+    int Frames,
+    double? DriftArcsecPerMin = null,
+    double? PaErrorMinArcmin = null,
+    double? UncertaintyArcmin = null,
+    bool? Reliable = null,
+    double? HourAngleHours = null,
+    double? DecDeg = null,
+    double? AlignErrorArcmin = null,
+    DateTimeOffset? AlignEndedUtc = null,
+    Guid? SessionId = null,
+    string? Reason = null);
 
 /// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
 /// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at

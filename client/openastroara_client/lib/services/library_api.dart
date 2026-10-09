@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/cursor_page.dart';
 import '../models/library/live_library.dart';
+import '../models/pa_residual.dart';
 import '../models/server.dart';
 
 /// §40 image-library client (`/api/v1/sessions` + `/api/v1/frames`).
@@ -49,6 +50,10 @@ abstract interface class LibraryClient {
   /// §40.6 resume-target: the server persists (or echoes) a runnable §38
   /// sequence seeded from the session and returns its id.
   Future<String> resumeTarget(String sessionId);
+
+  /// #1311 — the polar alignment residuals measured from guiding during
+  /// [sessionId], newest first.
+  Future<List<PaResidual>> sessionPaResiduals(String sessionId);
 
   /// Full frame detail for the viewer (tags + capture settings the list
   /// endpoint doesn't carry).
@@ -268,6 +273,20 @@ class LibraryApi implements LibraryClient {
         int.tryParse(res.headers.value('x-ara-exported-count') ?? '') ??
         frameIds.length;
     return (data, match?.group(1) ?? 'openastroara-frames.tar', count);
+  }
+
+  @override
+  Future<List<PaResidual>> sessionPaResiduals(String sessionId) async {
+    final res = await _dio.get<dynamic>(
+      '/api/v1/equipment/guider/pa-residuals',
+      queryParameters: <String, dynamic>{'sessionId': sessionId, 'limit': 20},
+    );
+    final data = res.data;
+    if (data is! List) return const [];
+    return data
+        .map(PaResidual.fromJson)
+        .whereType<PaResidual>()
+        .toList(growable: false);
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/library/live_library.dart';
+import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/services/library_api.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/models/ws_event.dart';
@@ -84,6 +85,8 @@ class _PagedFake implements LibraryClient {
 
   @override
   Future<String> resumeTarget(String sessionId) async => 'x';
+  @override
+  Future<List<PaResidual>> sessionPaResiduals(String sessionId) async => const [];
 
   @override
   void close() {}

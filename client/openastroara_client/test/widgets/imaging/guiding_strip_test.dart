@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
@@ -12,6 +13,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/guider/pa_residual_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -809,5 +811,77 @@ void main() {
     expect(applyButton(tester).onPressed, isNull);
 
     await _teardownPanel(tester, container);
+  });
+
+  group('#1311 PA residual chip', () {
+    const guiding = GuiderStatus(
+      name: 'OpenAstro Guider',
+      connectionState: GuiderConnectionState.connected,
+      runtimeState: GuiderRuntimeState.guiding,
+    );
+
+    testWidgets('a finished measurement reads as a lower bound with the '
+        'Polar Align band; the tooltip compares it with Align', (tester) async {
+      final container = await _pump(tester,
+          status: const GuiderStatus(
+            name: 'OpenAstro Guider',
+            connectionState: GuiderConnectionState.connected,
+            runtimeState: GuiderRuntimeState.guiding,
+            paResidual: PaResidual(
+              id: 'r1',
+              status: PaResidualStatus.done,
+              sampleSeconds: 300,
+              targetSeconds: 300,
+              frames: 120,
+              driftArcsecPerMin: 0.21,
+              paErrorMinArcmin: 0.8,
+              uncertaintyArcmin: 0.2,
+              alignErrorArcmin: 0.68,
+            ),
+          ));
+      expect(find.text('PA ≥ 48″ · Excellent'), findsOneWidget);
+      final tip = tester.widget<Tooltip>(find.ancestor(
+          of: find.text('PA ≥ 48″ · Excellent'), matching: find.byType(Tooltip)));
+      expect(tip.message, contains('at least 48″'));
+      expect(tip.message, contains('Polar Align measured 41″'));
+      await _teardownPanel(tester, container);
+    });
+
+    testWidgets('measuring shows progress from guider.pa_residual; a noisy '
+        'fit says so instead of a band', (tester) async {
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(() => unawaited(ws.close()));
+      final container = await _pump(tester, status: guiding, ws: ws.stream);
+      expect(find.textContaining('PA'), findsNothing, reason: 'nothing measured yet');
+
+      ws.add(WsEvent(type: 'guider.pa_residual', ts: DateTime.utc(2026, 10, 8), seq: 1, payload: const {
+        'id': 'r2', 'status': 'measuring', 'sample_seconds': 60.0, 'target_seconds': 300.0, 'frames': 24,
+      }));
+      await tester.pump(); // the stream delivers
+      await tester.pump(); // the strip rebuilds
+      expect(container.read(paResidualProvider)?.status, PaResidualStatus.measuring);
+      expect(find.text('PA residual · measuring 1:00 / 5:00'), findsOneWidget);
+
+      ws.add(WsEvent(type: 'guider.pa_residual', ts: DateTime.utc(2026, 10, 8), seq: 2, payload: const {
+        'id': 'r2', 'status': 'done', 'sample_seconds': 300.0, 'target_seconds': 300.0, 'frames': 120,
+        'pa_error_min_arcmin': 1.6, 'uncertainty_arcmin': 1.4, 'reliable': false,
+      }));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('PA ≥ 96″ · noisy'), findsOneWidget);
+      await _teardownPanel(tester, container);
+    });
+
+    testWidgets('hidden while the guider is not connected', (tester) async {
+      final container = await _pump(tester,
+          status: const GuiderStatus(
+            name: 'OpenAstro Guider',
+            connectionState: GuiderConnectionState.disconnected,
+            runtimeState: GuiderRuntimeState.stopped,
+            paResidual: PaResidual(id: 'r3', status: PaResidualStatus.done, paErrorMinArcmin: 2),
+          ));
+      expect(find.textContaining('PA ≥'), findsNothing);
+      await _teardownPanel(tester, container);
+    });
   });
 }

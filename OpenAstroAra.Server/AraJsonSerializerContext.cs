@@ -147,6 +147,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(GuiderConnectRequestDto))]
 [JsonSerializable(typeof(GuiderDto))]
 [JsonSerializable(typeof(GuiderStateDto))]
+[JsonSerializable(typeof(PaResidualDto))]
+[JsonSerializable(typeof(IReadOnlyList<PaResidualDto>))]
 [JsonSerializable(typeof(GuidingRmsPointDto))]
 [JsonSerializable(typeof(HfrAnalysisDto))]
 [JsonSerializable(typeof(HfrTimeSeriesPointDto))]

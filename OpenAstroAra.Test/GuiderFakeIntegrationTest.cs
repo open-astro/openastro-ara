@@ -147,6 +147,193 @@ namespace OpenAstroAra.Test {
             Assert.That(marker.GetProperty("dx_px").GetDouble(), Is.EqualTo(2.0));
         }
 
+        private sealed class RecordingPaResidualLog : IPaResidualLog {
+            public List<PaResidualDto> Rows { get; } = new();
+            public Task InsertAsync(PaResidualDto result, CancellationToken ct) {
+                lock (Rows) {
+                    Rows.Add(result);
+                }
+                return Task.CompletedTask;
+            }
+            public Task<IReadOnlyList<PaResidualDto>> ListAsync(Guid? sessionId, int limit, CancellationToken ct) =>
+                Task.FromResult<IReadOnlyList<PaResidualDto>>(Rows);
+        }
+
+        // #1311 — the fake guider set up for a polar-alignment-residual run: connected with a pixel
+        // scale, the calibration's Dec rate on get_calibration_data unless withCalibration is false.
+        private const double PaRatePxPerSec = 4.0, PaScale = 1.5;
+
+        private sealed class PaRig : IAsyncDisposable {
+            public required FakeGuider Fake { get; init; }
+            public required GuiderService Svc { get; init; }
+            public required RecordingBroadcaster Ws { get; init; }
+            public RecordingPaResidualLog Log { get; } = new();
+
+            public List<System.Text.Json.JsonElement> Events => Ws.Of("guider.pa_residual");
+            public List<string?> Statuses => Events.Select(e => e.GetProperty("status").GetString()).ToList();
+
+            // Guided frames from `firstFrame` on: the guider corrects 70 % of a steady Dec drift, PHD2's
+            // way (a positive offset gets a South pulse). Frames are 2 s apart on the guider's clock.
+            public async Task GuideAsync(int firstFrame, int frames, double driftPxPerSec = 0.05) {
+                var star = 0.0;
+                for (var frame = firstFrame; frame < firstFrame + frames; frame++) {
+                    var pulseMs = 0.7 * Math.Abs(star) / (PaRatePxPerSec / 1000.0);
+                    var direction = star > 0 ? "South" : "North";
+                    await Fake.BroadcastAsync(PhdEvents.GuideStep(0, star, frame: frame, decDurationMs: pulseMs, decDirection: direction))
+                        .ConfigureAwait(false);
+                    star += (direction == "South" ? -pulseMs : pulseMs) * PaRatePxPerSec / 1000.0 + driftPxPerSec * 2.0;
+                }
+            }
+
+            public async ValueTask DisposeAsync() {
+                Svc.Dispose();
+                await Fake.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        private static async Task<PaRig> StartPaRigAsync(bool withCalibration = true, bool lockShift = false, bool aoConnected = false) {
+            var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(PaScale));
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            if (withCalibration) {
+                fake.OnRpc("get_calibration_data", _ => new JsonObject {
+                    ["xAngle"] = -114.5, ["xRate"] = 3.2, ["xParity"] = "+",
+                    ["yAngle"] = -24.5, ["yRate"] = PaRatePxPerSec, ["yParity"] = "+",
+                });
+            }
+            if (lockShift) {
+                fake.OnRpc("get_lock_shift_params", _ => new JsonObject {
+                    ["enabled"] = true, ["rate"] = new JsonArray(12.0, -3.0), ["units"] = "arcsec/hr", ["axes"] = "RA/Dec",
+                });
+            }
+            fake.OnRpc("get_current_equipment", _ => new JsonObject {
+                ["camera"] = new JsonObject { ["name"] = "ZWO ASI120MM Mini", ["connected"] = true },
+                ["mount"] = new JsonObject { ["name"] = "On Camera", ["connected"] = true },
+                ["AO"] = aoConnected ? new JsonObject { ["name"] = "SX AO", ["connected"] = true } : null,
+            });
+            var ws = new RecordingBroadcaster();
+            var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws) {
+                MountPointing = () => (41.5, -0.75),
+                // Frames 2 s apart on the guider's clock, not the test's.
+                PaResidualStepTime = step => step.Frame * 2.0,
+            };
+            var rig = new PaRig { Fake = fake, Svc = svc, Ws = ws };
+            svc.PaResidualLog = rig.Log;
+            svc.UsePaResidualTracker(new PaResidualTracker(targetSeconds: 30, minSeconds: 10, progressEverySeconds: 10));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().PixelScale > 0).ConfigureAwait(false), Is.True,
+                "precondition: the guider's pixel scale was read on connect");
+            return rig;
+        }
+
+        [Test]
+        public async Task A_guided_run_reports_the_polar_alignment_residual_from_its_dec_drift() {
+            // #1311 — end to end through the real PHD2Guider: guiding starts, the guider corrects a steady
+            // Dec drift, and the daemon rebuilds that drift from the offsets plus the pulses (the
+            // calibration's Dec rate from get_calibration_data), publishes it and logs it.
+            // 0.05 px/s × 60 × 1.5″/px = 4.5″/min → 17.1′.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            var session = Guid.NewGuid();
+            rig.Svc.ActiveRunSession = () => session;
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True,
+                "the run's residual was published");
+            Assert.That(rig.Statuses[0], Is.EqualTo("measuring"), "guiding started → measuring");
+            var done = rig.Events.Single(e => e.GetProperty("status").GetString() == "done");
+            Assert.That(done.GetProperty("drift_arcsec_per_min").GetDouble(), Is.EqualTo(4.5).Within(1e-6));
+            Assert.That(done.GetProperty("pa_error_min_arcmin").GetDouble(),
+                Is.EqualTo(4.5 * PaResidualEstimator.ArcminPerArcsecPerMin).Within(1e-5));
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.True);
+            Assert.That(done.GetProperty("hour_angle_hours").GetDouble(), Is.EqualTo(-0.75));
+            Assert.That(done.GetProperty("session_id").GetGuid(), Is.EqualTo(session));
+
+            Assert.That(await WaitUntilAsync(() => rig.Log.Rows.Count == 1).ConfigureAwait(false), Is.True, "logged once");
+            var status = await rig.Svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status!.Runtime.PaResidual?.Status, Is.EqualTo("done"), "a reconnecting client reads it from GET");
+            Assert.That(rig.Fake.ReceivedMethods, Does.Contain("get_calibration_data"));
+        }
+
+        [Test]
+        public async Task Lock_shift_makes_the_run_unavailable_and_it_stays_so_when_guiding_stops_early() {
+            await using var rig = await StartPaRigAsync(lockShift: true).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Svc.RequireConnectedGuider().ShiftEnabled).ConfigureAwait(false), Is.True,
+                "precondition: the connect read the lock-shift parameters");
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 3).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Events.Count >= 1).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Statuses, Has.Count.EqualTo(1).And.All.EqualTo("unavailable"), "no measuring, no idle after the early stop");
+            Assert.That(rig.Events[0].GetProperty("reason").GetString(), Is.EqualTo("lock_shift"));
+            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_calibration_data"));
+            Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task An_adaptive_optics_unit_makes_the_run_unavailable() {
+            await using var rig = await StartPaRigAsync(aoConnected: true).ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+            await Task.Delay(300).ConfigureAwait(false);
+
+            Assert.That(rig.Statuses, Does.Not.Contain("done"), "AO steps are not mount pulses");
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("ao"));
+            Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task Without_calibration_data_the_run_ends_unavailable() {
+            await using var rig = await StartPaRigAsync(withCalibration: false).ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("no_calibration"));
+            Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task Guiding_stopped_early_shows_idle_then_the_previous_result() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            // No earlier result: the dropped measurement clears the readout.
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 2).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("idle")).ConfigureAwait(false), Is.True);
+            Assert.That((await rig.Svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.PaResidual, Is.Null);
+
+            // A full run, then one stopped early: the full run's result is shown again.
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 100, frames: 20).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True);
+            var doneId = rig.Events.Single(e => e.GetProperty("status").GetString() == "done").GetProperty("id").GetGuid();
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 200, frames: 2).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Events.Count(e => e.GetProperty("status").GetString() == "done") == 2)
+                .ConfigureAwait(false), Is.True, "the earlier result is republished");
+            Assert.That(rig.Events.Last().GetProperty("id").GetGuid(), Is.EqualTo(doneId));
+            var runtime = (await rig.Svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
+            Assert.That(runtime.PaResidual?.Id, Is.EqualTo(doneId));
+        }
+
         [Test]
         public async Task A_connect_naming_a_DIFFERENT_target_reconnects_instead_of_no_op() {
             // The wizard's Test connection while the daemon is still linked to the OLD

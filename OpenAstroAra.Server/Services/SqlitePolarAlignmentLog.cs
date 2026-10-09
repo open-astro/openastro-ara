@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,6 +34,10 @@ public sealed record PolarAlignmentRecord(
 /// <summary>§45.13 — append-only log of polar-alignment routines, one row per run.</summary>
 public interface IPolarAlignmentLog {
     Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct);
+
+    /// <summary>#1311 — the newest routine that ended at or after <paramref name="since"/> with a
+    /// measured error (complete, or stopped by the user once adjusting), or null.</summary>
+    Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct);
 }
 
 /// <summary>SQLite-backed <see cref="IPolarAlignmentLog"/> over the <c>polar_alignments</c> table.</summary>
@@ -61,6 +66,35 @@ public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
         cmd.Parameters.AddWithValue("$outcome", record.Outcome);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    public async Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT started_at, ended_at, final_error_arcmin, final_alt_error_arcmin, final_az_error_arcmin,
+                   iterations, outcome
+            FROM polar_alignments
+            WHERE final_error_arcmin IS NOT NULL AND outcome IN ('complete', 'aborted') AND ended_at >= $since
+            ORDER BY ended_at DESC
+            LIMIT 1;
+            """;
+        cmd.Parameters.AddWithValue("$since", since.UtcDateTime.ToString("O", CultureInfo.InvariantCulture));
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) {
+            return null;
+        }
+        return new PolarAlignmentRecord(
+            ParseIso(reader.GetString(0)),
+            ParseIso(reader.GetString(1)),
+            reader.GetDouble(2),
+            await reader.IsDBNullAsync(3, ct) ? null : reader.GetDouble(3),
+            await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
+            reader.GetInt32(5),
+            reader.GetString(6));
+    }
+
+    private static DateTimeOffset ParseIso(string value) =>
+        DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
 
     private static object ToDb(double? value) => value.HasValue ? value.Value : DBNull.Value;
 }

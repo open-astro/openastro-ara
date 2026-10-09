@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/library/live_library.dart';
+import '../../models/pa_residual.dart';
 import '../../models/server.dart';
 import '../../services/library_api.dart';
 import '../saved_server_state.dart';
@@ -165,6 +166,15 @@ final sessionFramesProvider = FutureProvider.autoDispose
       final api = ref.watch(libraryApiProvider);
       if (api == null) return const [];
       return api.sessionFrames(sessionId);
+    });
+
+/// #1311 — the polar alignment residuals measured from guiding during one
+/// session, newest first (the session header's PA badge).
+final sessionPaResidualsProvider = FutureProvider.autoDispose
+    .family<List<PaResidual>, String>((ref, sessionId) async {
+      final api = ref.watch(libraryApiProvider);
+      if (api == null) return const [];
+      return api.sessionPaResiduals(sessionId);
     });
 
 /// §40 header-bar filters (12f.3): narrow the library by filter name, minimum
