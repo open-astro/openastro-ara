@@ -94,6 +94,7 @@ class PaResidual {
   /// What an `unavailable` reason means, in the user's words.
   static String reasonText(String? reason) => switch (reason) {
     'lock_shift' => 'Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.',
+    'ao' => 'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.',
     'no_calibration' => "The guider's calibration data could not be read.",
     'no_pixel_scale' => 'The guider has not reported its pixel scale.',
     _ => 'Not enough clean guiding to fit the drift.',

@@ -60,30 +60,17 @@ internal sealed class PaResidualEstimator {
 
     private readonly List<List<Sample>> _segments = [];
     private List<Sample>? _open;
+    // Running totals over the CLOSED usable segments, so the per-frame progress check is O(1).
+    private double _closedSeconds;
+    private int _closedFrames;
 
     private readonly record struct Sample(double TimeSec, double DecRawPx, double DecDurationMs);
 
     /// <summary>Total guided time across the usable segments, in seconds.</summary>
-    public double SampleSeconds {
-        get {
-            double total = 0;
-            foreach (var segment in Usable()) {
-                total += segment[^1].TimeSec - segment[0].TimeSec;
-            }
-            return total;
-        }
-    }
+    public double SampleSeconds => _closedSeconds + (IsUsable(_open) ? _open![^1].TimeSec - _open[0].TimeSec : 0);
 
     /// <summary>Frames in the usable segments.</summary>
-    public int Frames {
-        get {
-            var n = 0;
-            foreach (var segment in Usable()) {
-                n += segment.Count;
-            }
-            return n;
-        }
-    }
+    public int Frames => _closedFrames + (IsUsable(_open) ? _open!.Count : 0);
 
     /// <summary>One guide frame: the star's Dec offset (px) and the Dec pulse issued on it, signed
     /// as <c>IGuideStep.DECDuration</c> (positive = North). A non-finite offset (lost star) closes
@@ -104,11 +91,19 @@ internal sealed class PaResidualEstimator {
     }
 
     /// <summary>Closes the open segment: the next frame starts a new one with its own intercept.</summary>
-    public void Break() => _open = null;
+    public void Break() {
+        if (IsUsable(_open)) {
+            _closedSeconds += _open![^1].TimeSec - _open[0].TimeSec;
+            _closedFrames += _open.Count;
+        }
+        _open = null;
+    }
 
     public void Clear() {
         _segments.Clear();
         _open = null;
+        _closedSeconds = 0;
+        _closedFrames = 0;
     }
 
     /// <summary>
@@ -185,9 +180,11 @@ internal sealed class PaResidualEstimator {
             SampleSeconds: SampleSeconds);
     }
 
+    private static bool IsUsable(List<Sample>? segment) => segment is { Count: >= MinSegmentFrames };
+
     private IEnumerable<List<Sample>> Usable() {
         foreach (var segment in _segments) {
-            if (segment.Count >= MinSegmentFrames) {
+            if (IsUsable(segment)) {
                 yield return segment;
             }
         }

@@ -67,6 +67,9 @@ public static class PhdEvents {
     /// <summary>Guiding started (after calibration / on resume).</summary>
     public static JsonObject StartGuiding() => Base("StartGuiding");
 
+    /// <summary>Guiding stopped (PHD2 sends this when a guide session ends).</summary>
+    public static JsonObject GuidingStopped() => Base("GuidingStopped");
+
     /// <summary>Calibration started.</summary>
     public static JsonObject StartCalibration(string mount = "Mount") {
         var e = Base("StartCalibration");

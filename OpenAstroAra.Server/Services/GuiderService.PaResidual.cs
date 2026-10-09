@@ -115,8 +115,17 @@ public sealed partial class GuiderService {
                 _ = FinishPaResidualAsync(guider);
                 break;
             case PaResidualAction.Cancelled:
-                ShowLastPaResidual();
+                // A run already shown as unavailable keeps saying why, however long it lasted.
+                if (!PaRunUnavailable()) {
+                    ShowLastPaResidual();
+                }
                 break;
+        }
+    }
+
+    private bool PaRunUnavailable() {
+        lock (_paGate) {
+            return _paUnavailable is not null;
         }
     }
 
@@ -142,16 +151,21 @@ public sealed partial class GuiderService {
         }
         PublishPaResidual(current);
         if (unavailable is null) {
-            _ = FetchDecRateAsync(guider, generation);
+            _ = PrepareRunAsync(guider, generation);
         }
     }
 
-    // The calibration rate is read once per run, off the listener thread; the finish retries once
-    // if this attempt came back empty (a calibration that was still being written, say).
+    // Off the listener thread, once per run: an adaptive-optics unit makes the run unmeasurable
+    // (its Dec corrections are AO steps, not mount pulses), and the calibration's Dec rate is read
+    // for the fit. The finish retries the rate once if this attempt came back empty.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget off the guider's listener thread: a fault is logged and the finish retries.")]
-    private async Task FetchDecRateAsync(PHD2Guider guider, long generation) {
+    private async Task PrepareRunAsync(PHD2Guider guider, long generation) {
         try {
+            if (await guider.HasConnectedAoAsync().ConfigureAwait(false) == true) {
+                MarkPaRunUnavailable(generation, "ao");
+                return;
+            }
             var rate = await guider.GetDecGuideRateAsync().ConfigureAwait(false);
             lock (_paGate) {
                 if (generation == _paGeneration) {
@@ -161,6 +175,18 @@ public sealed partial class GuiderService {
         } catch (Exception ex) {
             LogPaResidualFailed(ex);
         }
+    }
+
+    private void MarkPaRunUnavailable(long generation, string reason) {
+        PaResidualDto? current;
+        lock (_paGate) {
+            if (generation != _paGeneration || _paCurrent is null) {
+                return;
+            }
+            _paUnavailable = reason;
+            current = _paCurrent = _paCurrent with { Status = "unavailable", Reason = reason };
+        }
+        PublishPaResidual(current);
     }
 
     private void PublishPaProgress() {

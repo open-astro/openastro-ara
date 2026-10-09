@@ -22,9 +22,23 @@ class PaResidualNotifier extends Notifier<PaResidual?> {
     ref.listen(guiderStatusProvider, (prev, next) {
       final status = next.asData?.value;
       if (status == null) return;
-      state = status.paResidual;
+      final snapshot = status.paResidual;
+      if (isStale(state, snapshot)) return;
+      state = snapshot;
     });
     return ref.read(guiderStatusProvider).asData?.value?.paResidual;
+  }
+
+  /// A REST poll that left before a WS event can land after it. For the same
+  /// run, never step back from a finished result to `measuring`, nor to less
+  /// progress than already shown.
+  static bool isStale(PaResidual? current, PaResidual? snapshot) {
+    if (current == null || snapshot == null || current.id != snapshot.id) {
+      return false;
+    }
+    if (snapshot.status != PaResidualStatus.measuring) return false;
+    return current.status != PaResidualStatus.measuring ||
+        snapshot.sampleSeconds < current.sampleSeconds;
   }
 }
 

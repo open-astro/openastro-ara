@@ -327,6 +327,23 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return null;
         }
 
+        /// <summary>
+        /// #1311 — whether the guider has an adaptive-optics unit connected (<c>get_current_equipment</c>
+        /// lists it as <c>AO</c>). With an AO the guide step's Dec correction is an AO step, not a mount
+        /// pulse, so mount drift cannot be rebuilt from it. Null when the call fails.
+        /// </summary>
+        public async Task<bool?> HasConnectedAoAsync() {
+            try {
+                var resp = await SendMessage(new Phd2GetCurrentEquipment(), 10000).ConfigureAwait(false);
+                if (resp?.error == null && resp?.result is JObject equipment) {
+                    return equipment["AO"] is JObject ao && ao["connected"]?.Type == JTokenType.Boolean && ao.Value<bool>("connected");
+                }
+            } catch (Exception ex) {
+                Logger.Error(ex);
+            }
+            return null;
+        }
+
         private async Task<bool> ProfileSelectionChanged() {
             if (SelectedProfile == null) {
                 Logger.Error("No profile selected");

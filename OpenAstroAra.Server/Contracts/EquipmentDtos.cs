@@ -440,7 +440,7 @@ public sealed record GuiderStateDto(
 /// #1311 — the polar alignment error left after Align, measured from the Dec drift the guider
 /// corrects during the first minutes of each guided run (no extra setup step). Status is
 /// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or
-/// <c>unavailable</c> (<c>Reason</c> says why: <c>lock_shift</c>, <c>no_calibration</c>,
+/// <c>unavailable</c> (<c>Reason</c> says why: <c>lock_shift</c>, <c>ao</c>, <c>no_calibration</c>,
 /// <c>no_pixel_scale</c>, <c>no_fit</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
 /// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
 /// <c>UncertaintyArcmin</c> exceeds max(1′, half the value). <c>AlignErrorArcmin</c> is the last
