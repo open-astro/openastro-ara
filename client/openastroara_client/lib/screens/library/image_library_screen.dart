@@ -640,10 +640,6 @@ class _SessionHeader extends ConsumerWidget {
   }
 }
 
-/// §42.6 per-session fault badge — hidden while the session has no recorded
-/// faults; otherwise an amber count that opens the session's fault timeline.
-/// Lazily fetched per card (like the frame grid): the sessions endpoint
-/// carries no fault count, so each visible card asks the §42.5 log directly.
 /// #1311 — the polar alignment left after Align during this session, measured
 /// from guiding ("PA ≥ 48″"); the tooltip carries every measurement, newest
 /// first. Nothing while loading, on error, or when the session was unguided.
@@ -678,6 +674,10 @@ class _SessionPaResidualBadge extends ConsumerWidget {
   }
 }
 
+/// §42.6 per-session fault badge — hidden while the session has no recorded
+/// faults; otherwise an amber count that opens the session's fault timeline.
+/// Lazily fetched per card (like the frame grid): the sessions endpoint
+/// carries no fault count, so each visible card asks the §42.5 log directly.
 class _SessionFaultsBadge extends ConsumerWidget {
   final String sessionId;
   final String targetName;
