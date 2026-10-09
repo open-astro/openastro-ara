@@ -165,7 +165,8 @@ public sealed partial class GuiderService {
         }
     }
 
-    // Off the listener thread, once per run: an adaptive-optics unit makes the run unmeasurable
+    // Once per run, fire-and-forget (it runs on the listener thread only up to its first await, the
+    // RPC's connect): an adaptive-optics unit makes the run unmeasurable
     // (its Dec corrections are AO steps, not mount pulses), and the calibration's Dec rate is read
     // for the fit. The finish retries the rate once if this attempt came back empty.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

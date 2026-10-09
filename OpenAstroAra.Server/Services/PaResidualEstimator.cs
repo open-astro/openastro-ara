@@ -109,7 +109,8 @@ internal sealed class PaResidualEstimator {
     /// <summary>
     /// Fits the uncorrected Dec drift. <paramref name="decRatePxPerSec"/> is the calibration's Dec
     /// guide rate (PHD2 <c>get_calibration_data</c> yRate) and <paramref name="pixelScaleArcsec"/>
-    /// the guide camera's scale. Null without at least two usable segments' worth of frames.
+    /// the guide camera's scale. Null without a rate or scale, or when the usable segments leave
+    /// fewer than 3 degrees of freedom (frames − segments − 1; one 5-frame segment is enough).
     /// </summary>
     public PaResidualFit? Fit(double decRatePxPerSec, double pixelScaleArcsec) {
         if (!(decRatePxPerSec > 0) || !(pixelScaleArcsec > 0)) {
