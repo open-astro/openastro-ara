@@ -1,8 +1,8 @@
 // §31.4 — minimal NMEA 0183 parsing for the two sentences a USB GPS dongle on the
 // client computer needs: `$GxRMC` (UTC time + date + position, A/V validity flag)
-// and `$GxGGA` (position + altitude, fix-quality digit). A Dart port of the daemon's
-// `NmeaSentenceParser` (OpenAstroAra.Server/Services/NmeaParser.cs) with the same
-// rules: talker-agnostic, checksum-verified when present, and anything that is not
+// and `$GxGGA` (position + altitude, fix-quality digit). The only NMEA parser in
+// the project: the daemon never reads a receiver (#1305), the client relays the fix.
+// Rules: talker-agnostic, checksum-verified when present, and anything that is not
 // a valid, checksummed RMC/GGA with an active fix parses to null rather than
 // throwing — the serial stream is untrusted line noise until proven otherwise.
 
