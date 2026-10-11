@@ -29,7 +29,7 @@ public sealed record TimeSyncLocationDto(double Lat, double Lng, double? Alt = n
 /// </summary>
 public sealed record TimeSyncStateDto(
     bool Synced,
-    string Source,           // ntp | gps-external | client | manual | none
+    string Source,           // gps-external | client | manual | none ("ntp" is reserved in §31.3; nothing emits it)
     string Trust,            // high | medium | low | none
     DateTimeOffset CurrentTimeUtc,
     double SystemTimeOffsetSeconds,

@@ -3537,9 +3537,8 @@ disciplined with no client attached runs gpsd/chrony themselves (§31.4.1).
 
 | Source | Trust |
 |---|---|
-| Pi NTP (if internet reaches the Pi directly) | high |
 | USB GPS dongle on the WILMA computer (`gps-client`) | high |
-| Pi disciplined by the user's own gpsd/chrony | high (reads as `ntp`) |
+| Pi clock kept right by systemd-timesyncd (internet) or the user's own gpsd/chrony | not a source: the daemon never inspects OS clock discipline and reports `none` until a client pushes (the `ntp` value in the DTO comment is reserved, nothing emits it) |
 | WILMA on Wi-Fi or cellular with internet (NTP-synced device clock) | medium |
 | Mobile GPS (no internet, device geo-fix only) | medium |
 | Manual entry | low |
