@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/client_gps_prefs_service.dart';
 import '../services/serial_gps_source.dart';
-import '../services/time_sync_api.dart';
 import '../util/friendly_error.dart';
 import '../util/nmea_parser.dart';
 import 'time_sync_state.dart';
@@ -27,7 +26,7 @@ final clientGpsBusyRetryProvider = Provider<Duration>((_) => const Duration(seco
 /// under open sky, which the periodic loop covers by retrying.
 const Duration kClientGpsListenWindow = Duration(seconds: 15);
 
-/// Re-sync cadence, mirroring the daemon's own USB-GPS worker: keep trying
+/// Re-sync cadence: keep trying
 /// every couple of minutes until a fix has been pushed, then hourly-ish.
 const Duration kClientGpsUnsyncedInterval = Duration(minutes: 2);
 const Duration kClientGpsSyncedInterval = Duration(minutes: 50);
@@ -186,7 +185,6 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     NmeaFix? fix;
     String? error;
     var pushed = false;
-    var alreadySynced = false;
     try {
       fix = await acquireFix(ref.read(serialGpsSourceProvider), port, ref.read(clientGpsListenWindowProvider));
       if (fix == null) {
@@ -199,14 +197,9 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
         if (api == null) {
           error = 'Fix read; not pushed — connect to your rig first.';
         } else {
-          // Don't step a rig that already has a sync as good as ours (its own
-          // dongle) — a relayed fix is a fallback, not an override.
-          alreadySynced = await _daemonAlreadyHigh(api);
-          if (!alreadySynced) {
-            await api.pushGpsFix(timeUtc: fix.timeUtc!, lat: fix.latitudeDeg, lng: fix.longitudeDeg, alt: fix.altitudeM);
-            pushed = true;
-            ref.invalidate(timeSyncStatusProvider);
-          }
+          await api.pushGpsFix(timeUtc: fix.timeUtc!, lat: fix.latitudeDeg, lng: fix.longitudeDeg, alt: fix.altitudeM);
+          pushed = true;
+          ref.invalidate(timeSyncStatusProvider);
         }
       }
     } catch (e) {
@@ -238,20 +231,9 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       return fix;
     }
     if (_current.enabled) {
-      _schedule(pushed || alreadySynced ? kClientGpsSyncedInterval : kClientGpsUnsyncedInterval);
+      _schedule(pushed ? kClientGpsSyncedInterval : kClientGpsUnsyncedInterval);
     }
     return fix;
-  }
-
-  /// True when the daemon already holds a fresh high-trust sync from its own
-  /// receiver; a state read failure counts as "not synced" so the push proceeds.
-  static Future<bool> _daemonAlreadyHigh(TimeSyncClient api) async {
-    try {
-      final st = await api.getState();
-      return st.synced && st.trust == 'high' && st.source == 'gps-internal';
-    } catch (_) {
-      return false;
-    }
   }
 
   /// Fill-from-GPS on a machine where "GPS on this computer" was never turned

@@ -82,7 +82,7 @@ void main() {
   });
 
   test('a fresh, trustworthy sync is left alone (§31.1 top branch)', () async {
-    final api = _FakeTimeSyncClient(const TimeSyncState(synced: true, source: 'gps-internal', trust: 'high'));
+    final api = _FakeTimeSyncClient(const TimeSyncState(synced: true, source: 'gps-external', trust: 'high'));
     final c = _container(api);
     await c.read(savedServersProvider.future);
 

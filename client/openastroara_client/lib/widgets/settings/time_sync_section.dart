@@ -9,7 +9,7 @@ import 'settings_row.dart';
 import '../../util/friendly_error.dart';
 
 /// §31.1 waterfall steps 4 + 5, surfaced in the Site panel: the daemon's
-/// time-sync status, the "plug a USB GPS into the Pi" guidance with Retry
+/// time-sync status, the "use a GPS dongle on this computer" guidance
 /// when unsynced, a manual push of this device's clock, and the manual
 /// UTC + position entry modal as the last resort.
 class TimeSyncSection extends ConsumerWidget {
@@ -109,10 +109,6 @@ class TimeSyncSection extends ConsumerWidget {
             : '${loc.lat.toStringAsFixed(4)}°, ${loc.lng.toStringAsFixed(4)}°'
                   '${loc.alt == null ? '' : ', ${loc.alt!.toStringAsFixed(0)} m'}',
       ),
-      SettingsRow(
-        label: 'USB GPS on server',
-        value: s.internalGpsAvailable ? 'detected' : 'not detected',
-      ),
       if (s.syncedAtUtc != null)
         SettingsRow(
           label: 'Last sync (UTC)',
@@ -122,9 +118,9 @@ class TimeSyncSection extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
-            'The server has no trustworthy time. Plug a USB GPS into the Pi '
-            'and Retry, push this device’s clock, or set the time '
-            'manually below.',
+            'The rig has no trustworthy time. Turn on GPS on this computer '
+            'with a USB GPS dongle, push this device’s clock, or set the '
+            'time manually below.',
             style: theme.textTheme.bodySmall!.copyWith(
               color: theme.colorScheme.error,
             ),

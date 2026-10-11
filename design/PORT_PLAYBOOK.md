@@ -3508,22 +3508,29 @@ GET /api/v1/server/time-sync  → server reports sync state
      │
      └─ unsynced or stale → walk the waterfall:
 
-         1. WILMA has internet?           push device clock + GPS/location
-                                          POST /api/v1/server/time-sync
-              (modern phones/laptops on Wi-Fi or cellular are NTP-synced)
+         1. USB GPS dongle on the WILMA computer ("GPS on this computer")?
+                                          client reads NMEA, pushes receiver UTC + fix
+                                          POST /api/v1/server/time-sync (gps-client, high)
               │ no
               ↓
-         2. Server detects USB GPS on Pi? server self-syncs from /dev/ttyUSB* or /dev/ttyACM*
-              (gpsd or direct NMEA read; no user action required)
+         2. WILMA has internet?           push device clock + location
+                                          POST /api/v1/server/time-sync
+              (modern phones/laptops on Wi-Fi or cellular are NTP-synced)
               │ no
               ↓
          3. WILMA is mobile (iOS/Android)? push device clock + GPS (Flutter geolocator)
               │ no
               ↓
-         4. Prompt: "Plug a USB GPS into the Pi" + [Retry]
+         4. Prompt: "Turn on GPS on this computer with a USB GPS dongle, or push this device's clock"
               │ user skips
               ↓
          5. Manual entry modal: UTC date/time + lat/long/altitude
+
+The daemon never opens a serial port looking for a receiver (#1305, 2026-10-11): a blind
+probe of /dev/ttyUSB*/ttyACM* collided with the mount's port and latched AlpacaBridge's
+link fault, and the SBC's USB ports are for equipment. The dongle goes on the computer
+the user is already holding next to the mount. A user who wants the Pi's clock
+disciplined with no client attached runs gpsd/chrony themselves (§31.4.1).
 ```
 
 ### 31.2 Trust levels
@@ -3531,7 +3538,8 @@ GET /api/v1/server/time-sync  → server reports sync state
 | Source | Trust |
 |---|---|
 | Pi NTP (if internet reaches the Pi directly) | high |
-| USB GPS via gpsd / NMEA | high |
+| USB GPS dongle on the WILMA computer (`gps-client`) | high |
+| Pi disciplined by the user's own gpsd/chrony | high (reads as `ntp`) |
 | WILMA on Wi-Fi or cellular with internet (NTP-synced device clock) | medium |
 | Mobile GPS (no internet, device geo-fix only) | medium |
 | Manual entry | low |
@@ -3547,13 +3555,12 @@ GET /api/v1/server/time-sync
 Response:
 {
   "synced": true,
-  "source": "ntp|gps-internal|gps-external|client|manual|none",
+  "source": "ntp|gps-external|client|manual|none",
   "trust": "high|medium|low|none",
   "current_time_utc": "2026-05-19T03:14:15.123Z",
   "system_time_offset_seconds": 0.0,
   "location": { "lat": 30.27, "lng": -97.74, "alt": 165.0 },
-  "internet_available_on_pi": false,
-  "internal_gps_available": false
+  "internet_available_on_pi": false
 }
 
 POST /api/v1/server/time-sync
@@ -3573,25 +3580,25 @@ Response: {
 ### 31.4 Implementation notes
 
 - Server sets the system clock via a CAP_SYS_TIME-granted helper. DEPLOY.md adds `sudo setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server` post-install.
-- USB GPS detection: server scans `/dev/ttyUSB*` and `/dev/ttyACM*` on startup for NMEA `$GPRMC` / `$GPGGA` sentences. If detected, server self-syncs without WILMA involvement.
+- USB GPS: the WILMA client reads the dongle (NMEA `$GPRMC` / `$GPGGA`) and relays the fix as `gps-client`. The server does NOT scan serial ports (#1305).
 - WILMA mobile GPS: `geolocator` Flutter plugin, permission-prompts on first use. Cached for the session.
 - All astronomy computations use **UTC internally**; client displays in user's local TZ.
 - Time-sync state is cached per-session; doesn't re-prompt unless the Pi reboots or > 12 hours pass.
 
 ### 31.4.1 Background NTP daemon — ARA does nothing
 
-ARA Core does NOT install, configure, or rely on a local NTP daemon (chrony, ntpd, systemd-timesyncd). The §31 waterfall is sufficient on its own: WILMA pushes time at session start; USB GPS feeds during the session; user can manually re-prime if needed.
+ARA Core does NOT install, configure, or rely on a local NTP daemon (chrony, ntpd, systemd-timesyncd). The §31 waterfall is sufficient on its own: WILMA pushes time at session start and keeps relaying its dongle's fix while open; user can manually re-prime if needed.
 
 systemd-timesyncd ships enabled by default on Trixie and will keep the clock within a second of pool.ntp.org *when the Pi has internet* — ARA neither depends on it nor disables it. If the user has installed chrony or another daemon for their own reasons (observatory automation, multi-Pi sync, gpsd shared-memory ref-clock), ARA's waterfall happily coexists; WILMA push just becomes one more opportunistic time source on top.
 
 **What the user must know** (DEPLOY.md addition):
 
 > ARA's server gets its clock from (in priority order):
-> 1. USB GPS dongle plugged into the Pi (via NMEA `$GPRMC` parsing — always preferred when present)
-> 2. WILMA pushing time on every connect (handles ~95% of typical sessions)
+> 1. A USB GPS dongle plugged into the computer running the client (Settings → Site → GPS on this computer) — the receiver's own UTC and position, relayed while the app is open
+> 2. WILMA pushing its clock on every connect (handles ~95% of typical sessions)
 > 3. Whatever Debian's default NTP setup (systemd-timesyncd) maintains in the background when the Pi has internet
 >
-> For long unattended sessions (mosaic projects spanning days; remote observatory), a USB GPS dongle costs ~$20 and removes all clock-drift concerns. Without one, expect FITS DATE-OBS timestamps to drift by ~1 s/hour if WILMA disconnects mid-session and the Pi has no internet.
+> Never plug the dongle into the Pi: Ara does not read it there, and the port is better spent on equipment. For long unattended sessions with no client attached (mosaic projects spanning days; remote observatory), run gpsd + chrony on the Pi yourself. Without any of these, expect FITS DATE-OBS timestamps to drift by ~1 s/hour if WILMA disconnects mid-session and the Pi has no internet.
 
 **Why not bundle chrony or override timesyncd:**
 - 95% of users image at home with internet → systemd-timesyncd default is fine
@@ -3613,7 +3620,7 @@ The Pi side is timezone-free; the client side handles DST automatically. Detaile
 | Filename template `$$DATE$$` / `$$DATETIME$$` | **UTC** (so file ordering is monotonic across DST transitions; users analyzing data across nights see consistent UTC timestamps) |
 | Filename template `$$DATEMINUS12$$` | UTC minus 12h, then date — already TZ-correct for night-observation use (groups frames captured on either side of midnight UTC into the same observing-night folder for any longitude) |
 | Astronomical twilight calculation | UTC + site lat/lng; **timezone-independent by construction** — dawn / dusk / astronomical-twilight times are computed from solar geometry, not from clock TZ |
-| USB GPS time-sync | UTC (`$GPRMC` / `$GPGGA` sentences carry UTC by spec) |
+| USB GPS time-sync (dongle on the client) | UTC (`$GPRMC` / `$GPGGA` sentences carry UTC by spec) |
 | Manual time entry on WILMA | Client UI accepts local time, converts to UTC before sending |
 | Client display (timestamps, schedules, "next exposure in") | **Local TZ** via Flutter `intl` package — handles DST transitions automatically |
 | Pi system clock during DST transition | Not affected (Pi runs in UTC; OS-level DST is irrelevant) |
@@ -4152,7 +4159,7 @@ sudo apt install openastroara-server
 - Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
 - Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli`, `curl` (the §33 update helper's `/healthz` probe) (authoritative list: `packaging/debian/DEBIAN/control.template`)
 - Recommends: `alpacabridge`, `openastro-guider` (pulled in by default; opt-out with `--no-install-recommends`)
-- Suggests: `gpsd` (for USB GPS time sync per §31)
+- Suggests: `gpsd` (power-user clock discipline with no client attached, §31.4.1 — Ara itself never reads a receiver on the Pi)
 
 ### 34.3 Post-install hooks (handled by .deb's postinst script)
 
@@ -4240,7 +4247,7 @@ DEPLOY.md content:
 2. The 4 commands from §34.1
 3. How to connect WILMA (already covered in §30) — no token needed per §67
 4. USB drive setup for FITS storage (default: automatic via WILMA per §29.7; manual fallback documented for advanced users)
-5. USB GPS plug-in (auto-detected per §31, no config needed)
+5. USB GPS: plug the dongle into the client computer, not the Pi (§31)
 6. Security posture summary (one paragraph linking to §67): trusted-LAN, no auth, matches Alpaca + ASIAir
 7. Recommended hardware sidebar (optional UPS per §28.10, USB SSD per §29)
 
@@ -5637,7 +5644,7 @@ WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the
 | Capability | Notes |
 |---|---|
 | Connect to Pi (mDNS discovery, no auth per §67) | Same flow as desktop (§30) |
-| **GPS + time push to Pi** | Primary value-add when user has no USB GPS dongle (§31) |
+| **GPS + time push to Pi** | Primary value-add when user has no USB GPS dongle on their laptop (§31) |
 | **Dashboard** | Current sequence, target, last frame thumbnail, time-to-next-frame, equipment connection state, sky safety status |
 | **Image library browsing** | Same data as desktop (§40), responsive layout — grouped by session, scrollable thumbnail strips |
 | **Frame viewer with pinch-to-zoom** | Full-resolution JPEG preview, native gestures, HFR + star count + temp displayed |

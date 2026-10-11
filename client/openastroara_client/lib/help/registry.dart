@@ -392,11 +392,10 @@ const Map<String, Help> helpRegistry = {
     key: 'timesync.client_gps.enabled',
     title: 'GPS on this computer',
     body:
-        'Plug a cheap USB GPS dongle into the computer running this app instead '
-        'of into the Pi, and the app reads the satellite fix and sends the '
+        'Plug a cheap USB GPS dongle into the computer running this app (the '
+        'Pi\'s USB ports stay free for equipment), and the app reads the satellite fix and sends the '
         'receiver\'s exact UTC time plus your latitude, longitude and elevation '
-        'to the rig. It counts as a high-trust time sync (the same as a dongle on '
-        'the Pi) and fills the site coordinates that polar alignment and '
+        'to the rig. It counts as a high-trust time sync and fills the site coordinates that polar alignment and '
         'plate solving need. The app keeps re-reading while it is open: every '
         'couple of minutes until the first fix has been sent, then about hourly. '
         'You are next to the mount during setup and polar alignment, so the '

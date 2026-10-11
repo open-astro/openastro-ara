@@ -577,12 +577,6 @@ public partial class Program {
                 clockSetter: null,
                 profiles: sp.GetService<IProfileStore>()));
         builder.Services.AddSingleton<ITimeSyncService>(sp => sp.GetRequiredService<TimeSyncService>());
-        // §31.1 step 2 — the USB-GPS self-sync worker (probe /dev/ttyUSB*/ttyACM*, parse NMEA,
-        // apply gps-internal/high syncs without WILMA involvement).
-        builder.Services.AddHostedService(sp =>
-            new UsbGpsTimeSyncWorker(
-                sp.GetRequiredService<TimeSyncService>(),
-                sp.GetRequiredService<ILogger<UsbGpsTimeSyncWorker>>()));
         // §37.4/§29 — the save-directory picker's server-side directory walk.
         builder.Services.AddSingleton<IStorageBrowseService, StorageBrowseService>();
         builder.Services.AddSingleton<IBackupService>(sp =>

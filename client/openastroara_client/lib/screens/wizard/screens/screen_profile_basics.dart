@@ -33,12 +33,11 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
     _draft = ref.read(wizardControllerProvider).draft;
   }
 
-  /// Fill the observing site from GPS (§31.3) — a USB GPS dongle on the
-  /// server machine preferred, falling back to the client machine's own
-  /// location when the dongle has no fix. Shared logic in
-  /// [fillSiteFromGps], so profile creation behaves like the Safety → Site
-  /// panel. The daemon's USB-GPS worker polls any dongle on the server, so
-  /// this works with no mount connected at all.
+  /// Fill the observing site from GPS (§31.3) — a USB GPS dongle on this
+  /// computer preferred, then the position the rig already holds, then the
+  /// client machine's own location. Shared logic in [fillSiteFromGps], so
+  /// profile creation behaves like the Safety → Site panel. Works with no
+  /// mount connected at all.
   Future<void> _fillFromGps() async {
     if (_gpsBusy) return;
     // A lookup can take up to ~20 s — snapshot the site so a fetched fix can't
@@ -196,9 +195,9 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
               const SizedBox(height: 4),
               Text(
                 _gpsStatus ??
-                    'Tip: plug a USB GPS dongle into the computer running '
-                        'Ara Server — the server polls it automatically. No '
-                        'mount GPS needed.',
+                    'Tip: plug a USB GPS dongle into this computer and turn '
+                        'on Settings → Site → GPS on this computer. No mount '
+                        'GPS needed.',
                 style:
                     const TextStyle(color: AraColors.textSecondary, fontSize: 12),
               ),

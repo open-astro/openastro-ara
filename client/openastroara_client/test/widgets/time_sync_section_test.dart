@@ -121,7 +121,7 @@ void main() {
     expect(find.byKey(const ValueKey('client_gps_read_now')), findsOneWidget);
   });
 
-  testWidgets('an unsynced server renders the plug-a-GPS guidance', (
+  testWidgets('an unsynced server renders the use-a-GPS-dongle guidance', (
     tester,
   ) async {
     final api = _FakeTimeSyncClient(const TimeSyncState(synced: false));
@@ -129,7 +129,7 @@ void main() {
 
     expect(find.text('Not synced'), findsOneWidget);
     expect(
-      find.textContaining('Plug a USB GPS into the Pi'),
+      find.textContaining('Turn on GPS on this computer'),
       findsOneWidget,
       reason: 'the §31.1 step-4 prompt shows only while unsynced',
     );
@@ -141,22 +141,20 @@ void main() {
     final api = _FakeTimeSyncClient(
       TimeSyncState(
         synced: true,
-        source: 'gps-internal',
+        source: 'gps-external',
         trust: 'high',
         systemTimeOffsetSeconds: -0.4,
         location: const TimeSyncLocation(lat: 30.27, lng: -97.74, alt: 165.0),
-        internalGpsAvailable: true,
         syncedAtUtc: DateTime.utc(2026, 7, 11, 7, 15, 30),
       ),
     );
     await _pump(tester, api);
 
-    expect(find.text('Synced (gps-internal, trust high)'), findsOneWidget);
+    expect(find.text('Synced (gps-external, trust high)'), findsOneWidget);
     expect(find.text('-0.4 s'), findsOneWidget);
     expect(find.text('30.2700°, -97.7400°, 165 m'), findsOneWidget);
-    expect(find.text('detected'), findsOneWidget);
     expect(find.text('2026-07-11T07:15:30'), findsOneWidget);
-    expect(find.textContaining('Plug a USB GPS'), findsNothing);
+    expect(find.textContaining('Turn on GPS on this computer'), findsNothing);
   });
 
   testWidgets('push device time calls the client-sync endpoint', (

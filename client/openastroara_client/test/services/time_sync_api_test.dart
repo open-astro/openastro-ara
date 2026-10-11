@@ -63,12 +63,11 @@ void main() {
   test('getState parses the full status fields the settings section renders', () async {
     final adapter = _StubAdapter(const {
       'synced': true,
-      'source': 'gps-internal',
+      'source': 'gps-external',
       'trust': 'high',
       'system_time_offset_seconds': -1.5,
       'location': {'lat': 30.27, 'lng': -97.74, 'alt': 165.0},
       'internet_available_on_pi': false,
-      'internal_gps_available': true,
       'synced_at_utc': '2026-07-11T07:00:00Z',
     });
     final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
@@ -78,7 +77,6 @@ void main() {
     expect(state.location!.lat, 30.27);
     expect(state.location!.lng, -97.74);
     expect(state.location!.alt, 165.0);
-    expect(state.internalGpsAvailable, isTrue);
     expect(state.internetAvailableOnPi, isFalse);
     expect(state.syncedAtUtc, DateTime.utc(2026, 7, 11, 7));
   });

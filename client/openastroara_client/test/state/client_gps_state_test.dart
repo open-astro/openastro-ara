@@ -152,21 +152,6 @@ void main() {
       expect(status.freshFix(DateTime.now().toUtc()), isTrue);
     });
 
-    test('a rig already synced by its own dongle is not stepped', () async {
-      final source = _FakeSource([_rmc, _gga]);
-      final api = _FakeApi()
-        ..state = const TimeSyncState(
-            synced: true, source: 'gps-internal', trust: 'high', systemTimeOffsetSeconds: 0,
-            location: null, internetAvailableOnPi: false, internalGpsAvailable: true, syncedAtUtc: null);
-      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
-      await c.read(clientGpsProvider.future);
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      final fix = await c.read(clientGpsProvider.notifier).syncNow();
-      expect(fix, isNotNull, reason: 'the fix is still read for Fill from GPS');
-      expect(api.pushes, isEmpty, reason: 'a relayed fix is a fallback, not an override');
-      expect(c.read(clientGpsProvider).value!.lastError, isNull);
-    });
-
     test('a second read while one is in flight returns the last fix without opening the port again', () async {
       final source = _FakeSource([]); // never emits: the read stays busy for the whole window
       final api = _FakeApi();

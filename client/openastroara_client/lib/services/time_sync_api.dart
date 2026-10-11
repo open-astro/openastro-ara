@@ -36,7 +36,6 @@ class TimeSyncState {
   final double systemTimeOffsetSeconds;
   final TimeSyncLocation? location;
   final bool internetAvailableOnPi;
-  final bool internalGpsAvailable;
   final DateTime? syncedAtUtc;
 
   const TimeSyncState({
@@ -46,7 +45,6 @@ class TimeSyncState {
     this.systemTimeOffsetSeconds = 0.0,
     this.location,
     this.internetAvailableOnPi = false,
-    this.internalGpsAvailable = false,
     this.syncedAtUtc,
   });
 
@@ -60,9 +58,6 @@ class TimeSyncState {
     location: TimeSyncLocation.fromJson(json['location']),
     internetAvailableOnPi: json['internet_available_on_pi'] is bool
         ? json['internet_available_on_pi'] as bool
-        : false,
-    internalGpsAvailable: json['internal_gps_available'] is bool
-        ? json['internal_gps_available'] as bool
         : false,
     syncedAtUtc: json['synced_at_utc'] is String
         ? DateTime.tryParse(json['synced_at_utc'] as String)

@@ -46,9 +46,7 @@ namespace OpenAstroAra.Test {
 
         private static TimeSyncService NewService(FakeClockSetter? setter = null, IProfileStore? profiles = null,
                 DateTimeOffset? now = null) {
-            var svc = new TimeSyncService(NullLogger<TimeSyncService>.Instance, setter ?? new FakeClockSetter(), profiles) {
-                GpsDeviceProbe = () => false,
-            };
+            var svc = new TimeSyncService(NullLogger<TimeSyncService>.Instance, setter ?? new FakeClockSetter(), profiles);
             svc.Now = () => now ?? T0;
             svc.TickMs = () => 0;
             return svc;
@@ -230,7 +228,7 @@ namespace OpenAstroAra.Test {
             var svc = NewService(profiles: store);
             var raw = new TimeSyncLocationDto(Lat: 34.67111883333333, Lng: -106.7861325, Alt: 1480.1);
 
-            await svc.ApplyGpsSyncAsync(T0, raw, CancellationToken.None);
+            await svc.PushAsync(new TimeSyncPushRequestDto("gps-client", T0, raw, Trust: "high"), CancellationToken.None);
 
             var site = store.GetSiteSettings();
             Assert.That(site.LatitudeDeg, Is.EqualTo(34.67));
@@ -238,24 +236,6 @@ namespace OpenAstroAra.Test {
             var state = await svc.GetStateAsync(CancellationToken.None);
             Assert.That(state.Location!.Lat, Is.EqualTo(34.67), "state and profile must agree");
             Assert.That(state.Location!.Lng, Is.EqualTo(-106.79));
-        }
-
-        [Test]
-        public async Task A_gps_sync_with_an_out_of_range_position_drops_the_location_but_applies_the_time() {
-            // Unlike a wire push (422), the internal GPS path must never fail on a garbled
-            // position — the time is still trustworthy even when the coordinates aren't.
-            var store = new InMemoryProfileStore();
-            var before = store.GetSiteSettings();
-            var svc = NewService(profiles: store);
-
-            var result = await svc.ApplyGpsSyncAsync(T0, new TimeSyncLocationDto(91, 0, 0), CancellationToken.None);
-
-            Assert.That(result.LocationUpdated, Is.False);
-            Assert.That(store.GetSiteSettings(), Is.EqualTo(before), "a bad position must not poison the profile");
-            var state = await svc.GetStateAsync(CancellationToken.None);
-            Assert.That(state.Synced, Is.True, "the time sync still applies");
-            Assert.That(state.Source, Is.EqualTo("gps-internal"));
-            Assert.That(state.Location, Is.Null);
         }
 
         [Test]

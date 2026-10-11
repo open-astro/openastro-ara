@@ -51,7 +51,7 @@ void main() {
       api: _FakeTimeSync(
         const TimeSyncState(
           synced: true,
-          source: 'gps-internal',
+          source: 'gps-external',
           location: TimeSyncLocation(lat: 30.5, lng: -97.75, alt: 240.0),
         ),
       ),
@@ -75,7 +75,7 @@ void main() {
     expect(find.text('-97.75'), findsOneWidget);
     expect(find.text('240.0'), findsOneWidget);
     expect(
-      find.textContaining("Filled from the server's GPS dongle"),
+      find.textContaining("Filled from the rig's last known position"),
       findsOneWidget,
     );
   });
@@ -168,7 +168,7 @@ void main() {
       api: _FakeTimeSync(
         const TimeSyncState(
           synced: true,
-          source: 'gps-internal',
+          source: 'gps-external',
           location: TimeSyncLocation(lat: 1.0, lng: 2.0), // alt null
         ),
       ),

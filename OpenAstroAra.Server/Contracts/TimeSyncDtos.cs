@@ -29,13 +29,12 @@ public sealed record TimeSyncLocationDto(double Lat, double Lng, double? Alt = n
 /// </summary>
 public sealed record TimeSyncStateDto(
     bool Synced,
-    string Source,           // ntp | gps-internal | gps-external | client | manual | none
+    string Source,           // ntp | gps-external | client | manual | none
     string Trust,            // high | medium | low | none
     DateTimeOffset CurrentTimeUtc,
     double SystemTimeOffsetSeconds,
     TimeSyncLocationDto? Location,
     bool InternetAvailableOnPi,
-    bool InternalGpsAvailable,
     DateTimeOffset? SyncedAtUtc);
 
 /// <summary>§31.3 — <c>POST /api/v1/server/time-sync</c>: a client-pushed time (+ optional

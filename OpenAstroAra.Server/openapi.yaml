@@ -12535,7 +12535,6 @@ components:
         - system_time_offset_seconds
         - location
         - internet_available_on_pi
-        - internal_gps_available
         - synced_at_utc
       type: object
       properties:
@@ -12559,8 +12558,6 @@ components:
             - type: 'null'
             - $ref: '#/components/schemas/TimeSyncLocationDto'
         internet_available_on_pi:
-          type: boolean
-        internal_gps_available:
           type: boolean
         synced_at_utc:
           type:

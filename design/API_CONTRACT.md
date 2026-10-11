@@ -406,6 +406,12 @@ The result lives on tmpfs, so after a **reboot** `GET /{id}` is 404: clients tre
 
 ---
 
+### 2026-10-11 — The daemon never reads a GPS receiver; the dongle lives on the client (#1305)
+
+**Problem:** the USB-GPS self-sync worker opened every `/dev/ttyUSB*`/`ttyACM*` at 9600-8N1 every 2 min (unsynced) / 50 min (synced), including the port AlpacaBridge held for a serial mount: the mount link fault latched and the tty was left at the wrong speed. The SBC's USB ports are also the scarce resource on a rig.
+
+**Decision:** the worker, the `gps-internal` source and the `internal_gps_available` field of `GET /server/time-sync` are removed. A USB GPS dongle goes on the computer running the client, which reads NMEA itself and relays the fix as `gps-client` (→ state `gps-external`, trust `high`); phones push `gps-mobile`. The client no longer skips a relay because the rig "already has its own dongle". A user who wants the Pi's clock disciplined with no client attached runs gpsd/chrony (§31.4.1); Ara stays out of serial ports it does not own.
+
 ### 2026-10-03 — Rotate camera by hand: the rotation readout, the run's target name and frame counter
 
 **Endpoint(s) or area:** `POST /api/v1/rotation-assist/start`, `POST …/stop`, `GET …/state`, `GET …/frame`; the sequencer instruction `OpenAstroAra.Sequencer.SequenceItem.Rotator.RotateCameraByHand` (`PositionAngle`); `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `frames_captured`, and `current_target_name` is now populated; frames' `target_name` for client-built runs.

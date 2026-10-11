@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,10 +49,9 @@ public interface ISystemClockSetter {
 /// profile's §37 site settings so every consumer of lat/long (twilight, alt/az, Tonight's Sky)
 /// picks it up through the store it already reads.
 ///
-/// The USB-GPS self-sync (§31.1 step 2 — NMEA scan of /dev/ttyUSB*/ttyACM*) is the follow-up
-/// slice; <see cref="NmeaSentenceParser"/> is already here so that slice is wiring, not parsing. Until it
-/// lands, <c>internal_gps_available</c> reports device-file PRESENCE (a plugged dongle) without
-/// claiming a fix.
+/// The daemon never reads a GPS receiver itself (#1305): a USB dongle belongs on the computer
+/// running the client, which relays the fix as <c>gps-client</c>. A blind serial probe on the SBC
+/// collided with the mount's port, and the SBC's USB ports are for equipment.
 /// </summary>
 public sealed partial class TimeSyncService : ITimeSyncService {
 
@@ -76,14 +74,12 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     // re-reported on GET so a consumer that cares can correct. Zeroed by a successful set.
     private double _trackedOffsetSeconds;
 
-    // Test seams. Now: the clock the state machine reasons with. GpsDeviceProbe: does a serial
-    // device that could carry NMEA exist (presence only — see class remarks). InternetProbe:
+    // Test seams. Now: the clock the state machine reasons with. InternetProbe:
     // deliberately defaults to false — a truthful internet probe needs an outbound request the
     // daemon shouldn't make unprompted, and false only makes the client push time it already has
     // (a harmless extra sync), never skip one.
     internal Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.UtcNow;
     internal Func<long> TickMs { get; set; } = () => Environment.TickCount64;
-    internal Func<bool> GpsDeviceProbe { get; set; } = ProbeGpsDevices;
     internal Func<bool> InternetProbe { get; set; } = () => false;
 
     public TimeSyncService(ILogger<TimeSyncService> logger, ISystemClockSetter? clockSetter = null,
@@ -123,7 +119,6 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             SystemTimeOffsetSeconds: offset,
             Location: location,
             InternetAvailableOnPi: InternetProbe(),
-            InternalGpsAvailable: GpsDeviceProbe(),
             SyncedAtUtc: syncedAt));
     }
 
@@ -161,20 +156,6 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         return Task.FromResult(ApplyCore(stateSource, trust, request.TimeUtc, request.Location));
     }
 
-    /// <summary>§31.1 step 2 — apply a USB-GPS self-sync (source <c>gps-internal</c>, trust
-    /// <c>high</c> per §31.2). Called by the GPS worker, never from the wire; the same plausibility
-    /// window applies (a receiver with a wrong almanac must not set the clock to nonsense).</summary>
-    public Task<TimeSyncPushResultDto> ApplyGpsSyncAsync(DateTimeOffset timeUtc, TimeSyncLocationDto? location, CancellationToken ct) {
-        if (timeUtc < MinPlausibleTime || timeUtc > MaxPlausibleTime) {
-            throw new TimeSyncInvalidRequestException(
-                $"GPS time '{timeUtc:O}' is outside the plausible window — refusing to set the system clock to it.");
-        }
-        if (location is { } l && (l.Lat is < -90 or > 90 || l.Lng is < -180 or > 180)) {
-            location = null; // a bad position must not poison the profile; the time sync still applies
-        }
-        return Task.FromResult(ApplyCore("gps-internal", "high", timeUtc, location));
-    }
-
     private TimeSyncPushResultDto ApplyCore(string stateSource, string trust, DateTimeOffset timeUtc, TimeSyncLocationDto? location) {
         // Normalize the fix to 2-decimal (~1 km) site precision ONCE, so the profile write and the
         // GET-state location (which clients echo into their own fill affordances) agree exactly.
@@ -191,8 +172,8 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         bool locationUpdated;
         lock (_gate) {
             // The site-settings read-modify-write rides inside the same gate as the state update:
-            // there are two independent sync writers now (a wire push and the USB-GPS worker), and
-            // an unserialized RMW would let one clobber fields the other just wrote (#834 r2).
+            // concurrent wire pushes (two clients, or a client's GPS loop racing its connect push)
+            // must not let one clobber fields the other just wrote (#834 r2).
             locationUpdated = location is not null && TryApplyLocation(location);
             _source = stateSource;
             _trust = trust;
@@ -255,22 +236,6 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             return true;
         } catch (Exception ex) {
             LogLocationWriteFailed(ex);
-            return false;
-        }
-    }
-
-    // §31.4 — a plugged USB GPS presents as /dev/ttyUSB* or /dev/ttyACM*. Presence only; the
-    // NMEA fix probe is the follow-up slice.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort probe: any IO fault enumerating /dev (permissions, non-Linux) reads as 'no GPS', never an error surface.")]
-    private static bool ProbeGpsDevices() {
-        try {
-            if (!Directory.Exists("/dev")) {
-                return false;
-            }
-            return Directory.GetFiles("/dev", "ttyUSB*").Length > 0
-                || Directory.GetFiles("/dev", "ttyACM*").Length > 0;
-        } catch (Exception) {
             return false;
         }
     }

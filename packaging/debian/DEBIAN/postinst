@@ -31,10 +31,10 @@ case "$1" in
         chown root:openastroara /etc/openastroara
         chmod 750 /etc/openastroara
 
-        # 4. Set CAP_SYS_TIME on the binary (clock adjustment for §31 GPS time sync).
+        # 4. Set CAP_SYS_TIME on the binary (clock adjustment for §31 client time-sync pushes).
         #    Guard on `command -v setcap` so postinst doesn't abort on a minimal
         #    install without libcap2-bin — the daemon still runs without
-        #    CAP_SYS_TIME, just can't bump the clock from GPS time signals.
+        #    CAP_SYS_TIME, just can't bump the clock from a client's push.
         if [ -x /opt/openastroara/OpenAstroAra.Server ] && command -v setcap > /dev/null 2>&1; then
             setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server
         fi
