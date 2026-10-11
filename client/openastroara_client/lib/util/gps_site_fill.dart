@@ -157,7 +157,7 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
 
   // 1) The position the rig already holds from an earlier push.
   final api = ref.read(timeSyncApiProvider);
-  var dongleReadFailed = false;
+  var rigStateUnavailable = false;
   if (api != null) {
     try {
       final state = await api.getState();
@@ -173,7 +173,7 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
     } catch (_) {
       // The rig can't be asked (unreachable, error) — distinct from "no fix
       // yet", so the user isn't told to wait under open sky.
-      dongleReadFailed = true;
+      rigStateUnavailable = true;
     }
   }
 
@@ -209,9 +209,9 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
   // 3) Fallback: this machine's own location (a fresh fix is required).
   final baseNote = api == null
       ? 'No server connected, '
-      : dongleReadFailed
-      ? "Couldn't read the server's GPS state, "
-      : 'No GPS dongle fix yet, ';
+      : rigStateUnavailable
+      ? "Couldn't read the rig's position, "
+      : 'The rig has no position yet, ';
 
   try {
     // Deterministic test seam first (real platform channels aren't in tests).

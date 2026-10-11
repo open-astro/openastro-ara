@@ -94,7 +94,7 @@ void main() {
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No GPS dongle fix yet'), findsOneWidget);
+    expect(find.textContaining('The rig has no position yet'), findsOneWidget);
     expect(container.read(wizardControllerProvider).draft.latitudeDeg, isNull);
   });
 
