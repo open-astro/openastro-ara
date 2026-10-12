@@ -27,6 +27,7 @@ namespace OpenAstroAra.Test {
     /// <summary>#1194 — the three API hardening gaps: stale-session REST guard, WebSocket connection cap,
     /// frame-file confinement to the capture roots.</summary>
     [TestFixture]
+    [NonParallelizable] // WsConnectionGate is process-wide: no other fixture may open or close sockets meanwhile
     public class ApiHardeningTest {
 
         // ── §27 stale-session guard ──
@@ -62,6 +63,7 @@ namespace OpenAstroAra.Test {
         public void Connect_and_disconnect_are_exempt_and_so_is_everything_outside_the_api() {
             Assert.That(Reject("POST", "/api/v1/server/connect", Other.ToString()), Is.False, "that is how a session becomes current");
             Assert.That(Reject("POST", "/api/v1/server/disconnect", Other.ToString()), Is.False);
+            Assert.That(Reject("POST", "/api/v1/server/emergency-stop", Other.ToString()), Is.False, "§57: a panic stop never waits on a session");
             Assert.That(Reject("POST", "/healthz", Other.ToString()), Is.False);
             Assert.That(Reject("POST", "/api/v2/anything", Other.ToString()), Is.False);
         }
@@ -236,6 +238,24 @@ public class FrameFileConfinementTest {
             Assert.That(File.Exists(stem + ".preview.jpg"), Is.False, "sidecar under a root is swept even though the FITS was already gone");
             Assert.That(File.Exists(stem + ".thumb.jpg"), Is.False);
             Assert.That(File.Exists(outsideStem + ".preview.jpg"), Is.True, "a sidecar outside the roots is never touched");
+        }
+
+        [Test]
+        public async Task Deleting_preview_variants_never_touches_a_directory_outside_the_roots() {
+            var insidePath = Path.Combine(_root, "v.fits");
+            var outsidePath = Path.Combine(_outside, "v.fits");
+            var inside = await InsertAsync(insidePath);
+            var outside = await InsertAsync(outsidePath);
+            var insideVariant = Path.ChangeExtension(insidePath, null) + ".preview.foo.jpg";
+            var outsideVariant = Path.ChangeExtension(outsidePath, null) + ".preview.foo.jpg";
+            await File.WriteAllTextAsync(insideVariant, "v");
+            await File.WriteAllTextAsync(outsideVariant, "v");
+
+            Assert.That(await _repo.DeletePreviewVariantsAsync(inside, CancellationToken.None), Is.True);
+            Assert.That(await _repo.DeletePreviewVariantsAsync(outside, CancellationToken.None), Is.True, "the row exists; there is just nothing of ours to delete");
+
+            Assert.That(File.Exists(insideVariant), Is.False, "our variant goes");
+            Assert.That(File.Exists(outsideVariant), Is.True, "a foreign directory is never enumerated or deleted from");
         }
 
         [Test]

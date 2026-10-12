@@ -1211,8 +1211,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     }
 
     public async Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) {
-        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
-        if (string.IsNullOrEmpty(filePath)) return false;
+        var (catalogued, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(catalogued)) return false;
+        // #1194 — the variants are enumerated from the catalogued path's directory, so that path
+        // must sit under a capture root; the FITS itself may be gone (storage rotated), hence
+        // mustExist: false. A refused row reports "nothing to delete" and logs the refusal.
+        var filePath = ConfinedPath(catalogued, mustExist: false);
+        if (filePath is null) return true;
         // Frame exists in the catalog; missing FITS on disk doesn't make
         // this 404 (user may have rotated storage). Variants live next to
         // the FITS via the §65.4 cache-key pattern.
