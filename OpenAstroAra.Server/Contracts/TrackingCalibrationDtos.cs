@@ -25,7 +25,9 @@ namespace OpenAstroAra.Server.Contracts;
 /// </summary>
 /// <param name="CeilingSeconds">The longest unguided exposure the probe passed (interpolated one step toward the
 /// first failing rung when both exist).</param>
-/// <param name="MeasuredUtc">When the probe ran.</param>
+/// <param name="MeasuredUtc">When the probe ran. The record is written the moment the ladder finishes, so a run
+/// cancelled right after its probe still leaves tonight's measurement as the next night's prior (intended: the
+/// mount's behaviour was measured regardless of what the run did next).</param>
 /// <param name="PolarAlignErrorArcmin">The polar-alignment routine's final error in force that night (the newest
 /// measured §45 run within 24 h), null when none.</param>
 /// <param name="PixelScaleArcsec">The optics' pixel scale at the time (arcsec/px, unbinned), null when the profile

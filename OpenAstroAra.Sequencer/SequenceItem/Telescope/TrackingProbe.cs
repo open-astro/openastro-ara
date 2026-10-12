@@ -121,7 +121,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
                 Logger.Info(string.Create(CultureInfo.InvariantCulture,
                     $"Tracking probe: '{change.LoopName}' {change.OldExposure:0.#} s × {change.OldIterations} → {change.NewExposure:0.#} s × {change.NewIterations} (unguided ceiling {applied:0.#} s)."));
             }
-            var source = result.CeilingSeconds is null ? "spec-sheet prior" : "measured";
+            var source = result.CeilingSeconds is null ? $"prior from {priorSource ?? "the body"}" : "measured";
             progress?.Report(new ApplicationStatus {
                 Status = string.Create(CultureInfo.InvariantCulture,
                     $"Unguided exposure ceiling {applied:0.#} s ({source}); {changes.Count} imaging loop(s) adjusted"),
