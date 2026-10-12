@@ -82,6 +82,8 @@ namespace OpenAstroAra.Test {
             Assert.That(UnattendedSeverity.IsUnattended(site, Window("22:00", ""), midnight), Is.True, "one end only: the sun decides");
             Assert.That(UnattendedSeverity.IsUnattended(site, Window("ten pm", "06:00"), midnight), Is.True);
             Assert.That(UnattendedSeverity.IsUnattended(site, Window("22:00", "22:00"), midnight), Is.True, "an empty window is no window");
+            Assert.That(UnattendedSeverity.TryParseWindow("6:75", "06:00", out _, out _), Is.False, "75 minutes is not a clock");
+            Assert.That(UnattendedSeverity.TryParseWindow("24:00", "06:00", out _, out _), Is.False);
             Assert.That(UnattendedSeverity.TryParseWindow("7:30", "06:00", out var s, out var e), Is.True);
             Assert.That((s, e), Is.EqualTo((new TimeSpan(7, 30, 0), new TimeSpan(6, 0, 0))));
             Assert.That(UnattendedSeverity.InWindow(new TimeSpan(23, 0, 0), new TimeSpan(22, 0, 0), new TimeSpan(6, 0, 0)), Is.True);

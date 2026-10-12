@@ -447,7 +447,7 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: [
       'safety.policies.meridian_pause_min',
       'safety.policies.meridian_recenter',
-      'safety.policies.meridian_recal_guider',
+      'safety.policies.meridian_guider_recal',
     ],
   ),
   'safety.policies.meridian_refocus': Help(
@@ -479,7 +479,7 @@ const Map<String, Help> helpRegistry = {
         '* **Restore calibration** (recommended): the guider reuses its calibration with the reverse-Dec flag — about 30 seconds.\n'
         '* **Full recalibration**: a fresh calibration on the new side — five to ten minutes, for a mount whose Dec backlash differs between sides.\n'
         '* **Do not resume guiding**: the run continues unguided after the flip (an unguided rig, or you will restart guiding by hand).',
-    relatedSettings: ['safety.policies.meridian_recal_guider'],
+    relatedSettings: ['safety.policies.meridian_recenter'],
   ),
   'safety.policies.unattended_window': Help(
     key: 'safety.policies.unattended_window',
@@ -1312,7 +1312,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'OpenAstro Guider caches calibration data (guide-pulse direction, ratio, backlash) and reuses it across sessions by default. Forcing a fresh calibration each session is safer if your guide-scope orientation can shift overnight (loose dovetail, scope swap, etc) but adds 2-5 min to every startup.\n\n'
         'Recommended **off** for permanent setups (observatory rig); **on** for portable setups (grab-and-go scope, traveling kit).',
-    relatedSettings: ['safety.policies.meridian_recal_guider'],
+    relatedSettings: ['safety.policies.meridian_guider_recal'],
   ),
   // §63.5 guider-engine config — pushed to the guider daemon on connect.
   'eq.guider.guide_focal_length': Help(

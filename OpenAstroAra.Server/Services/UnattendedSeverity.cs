@@ -67,7 +67,7 @@ public static class UnattendedSeverity {
         return IsAstronomicalDarkness(site!, atUtc);
     }
 
-    private static readonly string[] ClockFormats = { @"h\:mm", @"hh\:mm" };
+    private static readonly System.Text.RegularExpressions.Regex ClockShape = new(@"^(\d{1,2}):(\d{2})$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>Both ends parse as <c>HH:mm</c> (24 h) and differ.</summary>
     internal static bool TryParseWindow(string? startText, string? endText, out TimeSpan start, out TimeSpan end) {
@@ -80,8 +80,18 @@ public static class UnattendedSeverity {
         if (string.IsNullOrWhiteSpace(text)) {
             return false;
         }
-        return TimeSpan.TryParseExact(text.Trim(), ClockFormats, System.Globalization.CultureInfo.InvariantCulture, out value)
-            && value >= TimeSpan.Zero && value < TimeSpan.FromDays(1);
+        // The same shape the client validates: H:mm / HH:mm, 0–23 hours, 0–59 minutes ("6:75" is not 7:15).
+        var m = ClockShape.Match(text.Trim());
+        if (!m.Success) {
+            return false;
+        }
+        var hours = int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var minutes = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        if (hours > 23 || minutes > 59) {
+            return false;
+        }
+        value = new TimeSpan(hours, minutes, 0);
+        return true;
     }
 
     /// <summary>Inside [start, end), wrapping past midnight when end &lt; start (22:00 → 06:00).</summary>
@@ -101,6 +111,8 @@ public static class UnattendedSeverity {
         } catch (TimeZoneNotFoundException) {
             return atUtc.ToUniversalTime();
         } catch (InvalidTimeZoneException) {
+            return atUtc.ToUniversalTime();
+        } catch (System.Security.SecurityException) {
             return atUtc.ToUniversalTime();
         }
     }
