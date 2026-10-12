@@ -263,6 +263,7 @@ public class FrameFileConfinementTest {
             File.Delete(path); // InsertAsync leaves a text stub; cfitsio must create the file itself
             using var fits = OpenAstroAra.Fits.FitsImage.Create(path, 4, 4, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
             fits.WriteImageData(new ushort[16]);
+            fits.Complete(); // renames the .tmp into place
         }
 
         [Test]
