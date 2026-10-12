@@ -418,7 +418,11 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         port: draft.port,
         guiderCamera: draft.guiderCamera,
         guiderCameraId: draft.guiderCameraId,
-        guiderCameraAlpacaUniqueId: draft.guiderCameraAlpacaUniqueId,
+        // #1308 — re-resolve at Apply: a pick made before the lookup answered
+        // carried no id yet.
+        guiderCameraAlpacaUniqueId: draft.guiderCameraAlpacaUniqueId.isNotEmpty
+            ? draft.guiderCameraAlpacaUniqueId
+            : alpacaCameraUniqueIdFor(draft.guiderCamera, _alpacaUniqueIds),
         guidePixelSize: draft.guidePixelSize,
         guiderSetupType: draft.guiderSetupType,
         guideFocalLength: draft.guideFocalLength,
@@ -440,7 +444,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       n.setPort(draft.port);
       n.setGuiderCamera(draft.guiderCamera);
       n.setGuiderCameraId(draft.guiderCameraId);
-      n.setGuiderCameraAlpacaUniqueId(draft.guiderCameraAlpacaUniqueId);
+      n.setGuiderCameraAlpacaUniqueId(toSave.guiderCameraAlpacaUniqueId);
       n.setGuidePixelSize(draft.guidePixelSize);
       n.setGuiderSetupType(draft.guiderSetupType);
       n.setGuideFocalLength(draft.guideFocalLength);

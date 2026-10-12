@@ -92,6 +92,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_stale_main_camera_number_does_not_refuse_a_camera_the_ids_say_is_different() {
+            // AlpacaBridge renumbered while the daemon kept running: the retained main camera still says
+            // number 0, but the server shows camera/0 is now the Mini. Identity wins.
+            Assert.That(GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [127.0.0.1:6800/0]", Mini), AfterReboot(), MainCamera(0)), Is.Null);
+        }
+
+        [Test]
         public void An_unreachable_server_skips_the_identity_check() {
             // Empty devices = lookup failed; the pinned id cannot be checked, so the push is not blocked on it.
             Assert.That(GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [10.0.0.5:6800/1]", Mini), new Dictionary<string, AlpacaConfiguredDevice>(), MainCamera(0)), Is.Null);

@@ -80,9 +80,14 @@ public static class GuiderCameraPinCheck {
             && (string.Equals(ep.Host, mainCamera.IpAddress, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(ep.Host, mainCamera.HostName, StringComparison.OrdinalIgnoreCase)
                 || (IsLoopback(ep.Host) && (IsLoopback(mainCamera.IpAddress) || IsLoopback(mainCamera.HostName))));
-        var byId = devices.TryGetValue(key, out var picked) && picked.UniqueId.Length > 0
-            && string.Equals(picked.UniqueId, mainCamera.UniqueId, StringComparison.Ordinal);
-        var byNumber = sameServer && ep.Device == mainCamera.AlpacaDeviceNumber;
+        // When the server told us the picked device's id and the main camera has one, identity decides
+        // alone: after a renumber the daemon's retained main-camera NUMBER can be stale (review r1), and
+        // the Mini sitting at that old number is not the imaging camera. The number comparison is the
+        // fallback for an unreachable management API or a serial-less id.
+        var idsKnown = devices.TryGetValue(key, out var picked) && picked.UniqueId.Length > 0
+            && !string.IsNullOrEmpty(mainCamera.UniqueId);
+        var byId = idsKnown && string.Equals(picked!.UniqueId, mainCamera.UniqueId, StringComparison.Ordinal);
+        var byNumber = !idsKnown && sameServer && ep.Device == mainCamera.AlpacaDeviceNumber;
         if (byId || byNumber) {
             return $"The guide camera '{selection}' is the main imaging camera ({mainCamera.Name}). "
                 + "The guider must not open the camera the sequence images with; pick the guide camera instead.";

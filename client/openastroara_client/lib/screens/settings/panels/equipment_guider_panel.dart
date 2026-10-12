@@ -258,6 +258,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       _equipmentStatus = null;
     });
     _syncDerivedFocalLength();
+    _pinCameraUniqueId();
     try {
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
@@ -278,6 +279,18 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   }
 
   ProfileApi? _api() => ref.read(profileApiProvider);
+
+  /// #1308 — a pick made before the name lookup answered stored no UniqueID;
+  /// re-resolve it from what is known now, so the pin reaches the daemon
+  /// whenever the lookup has landed by Apply time.
+  void _pinCameraUniqueId() {
+    final phd2 = ref.read(phd2SettingsProvider);
+    if (phd2.guiderCameraAlpacaUniqueId.isNotEmpty) return;
+    final id = alpacaCameraUniqueIdFor(phd2.guiderCamera, _alpacaUniqueIds);
+    if (id.isNotEmpty) {
+      ref.read(phd2SettingsProvider.notifier).setGuiderCameraAlpacaUniqueId(id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
