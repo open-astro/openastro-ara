@@ -260,6 +260,7 @@ public class FrameFileConfinementTest {
         }
 
         private static void WriteRealFits(string path) {
+            File.Delete(path); // InsertAsync leaves a text stub; cfitsio must create the file itself
             using var fits = OpenAstroAra.Fits.FitsImage.Create(path, 4, 4, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
             fits.WriteImageData(new ushort[16]);
         }
@@ -272,8 +273,8 @@ public class FrameFileConfinementTest {
             var prep = await _repo.PrepareExportAsync(new BulkExportRequestDto(FrameIds: [inside, outside]), CancellationToken.None);
 
             Assert.That(prep, Is.Not.Null);
-            Assert.That(prep!.Entries.Select(e => Path.GetFileName(e.Path)), Is.EqualTo(new[] { "in.fits" }),
-                "a readable file outside the roots must never be pulled into the archive");
+            Assert.That(prep!.Entries, Has.Count.EqualTo(1), "a readable file outside the roots must never be pulled into the archive");
+            Assert.That(Path.GetFileName(prep.Entries[0].Path), Is.EqualTo("in.fits"));
         }
 
         [Test]
