@@ -1470,6 +1470,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         _ => waxing ? "Waxing Gibbous" : "Waning Gibbous",
     };
 
+    /// <summary>#1231 test seam for <see cref="StoreEjected"/>: the store-mount probe. The default
+    /// answers null off Linux (no /proc), which reads as "not ejected" — the same outcome the old
+    /// explicit OS guard produced.</summary>
+    internal Func<bool?> StoreMountedProbe { get; set; } = StoreMountProbe.IsStoreMounted;
+
     /// <summary>
     /// True when the configured save directory sits under the §29 store
     /// mount point but nothing is mounted there — i.e. the drive was
@@ -1477,13 +1482,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// "Mounted" means a filesystem of its own, not merely a line at the
     /// path — systemd binds the empty directory into the service namespace
     /// after a restart with no disk (#1207; see <see cref="StoreMountProbe"/>).
-    /// Best-effort: an unreadable /proc/self/mounts never blocks capture.
+    /// Best-effort: an unreadable mount table (mountinfo, then mounts) never blocks capture.
     /// </summary>
-    /// <summary>#1231 test seam for <see cref="StoreEjected"/>: the store-mount probe. The default
-    /// answers null off Linux (no /proc), which reads as "not ejected" — the same outcome the old
-    /// explicit OS guard produced.</summary>
-    internal Func<bool?> StoreMountedProbe { get; set; } = StoreMountProbe.IsStoreMounted;
-
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-capture probe over profile + /proc reads; a probe fault must degrade to 'capture proceeds'. CA1031's log-and-recover boundary applies.")]
     internal bool StoreEjected(out string saveDirectory) {

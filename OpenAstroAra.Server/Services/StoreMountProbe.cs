@@ -76,6 +76,12 @@ internal static class StoreMountProbe {
             return null;
         }
         try {
+            // Directory.Exists answers false, not an exception, when sysfs is hidden or unreadable
+            // (a container without /sys, a sandbox); without this check every real USB store would
+            // read as ejected there. No /sys/dev/block at all = we cannot tell = alive.
+            if (!Directory.Exists("/sys/dev/block")) {
+                return null;
+            }
             return Directory.Exists("/sys/dev/block/" + majorMinor);
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             return null;

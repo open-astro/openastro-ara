@@ -82,9 +82,11 @@ namespace OpenAstroAra.Test {
             // real directory someone chose. The /proc/self/mounts rule called this ejected (#1231).
             var info = RootFs + "42 22 254:1 /srv/frames /media/openastroara rw,relatime shared:1 - ext4 /dev/vda1 rw\n";
             Assert.That(Mounted(info), Is.True);
-            Assert.That(StoreMountProbe.IsStoreMounted(
-                (RootFs.Replace("254:1 / / ", "x ", StringComparison.Ordinal) + "/dev/vda1 /media/openastroara ext4 rw 0 0").Split('\n')
-                    .Select(l => l.Contains("ext4 /dev/vda1", StringComparison.Ordinal) ? "/dev/vda1 / ext4 rw 0 0" : l)),
+            // The same two mounts as /proc/self/mounts sees them: one device name at both paths.
+            const string mountsView =
+                "/dev/vda1 / ext4 rw,relatime,errors=remount-ro 0 0\n" +
+                "/dev/vda1 /media/openastroara ext4 rw,relatime 0 0\n";
+            Assert.That(StoreMountProbe.IsStoreMounted(mountsView.Split('\n')),
                 Is.False, "the mounts-table fallback cannot tell this bind from the self-bind — mountinfo can");
         }
 
@@ -150,6 +152,7 @@ namespace OpenAstroAra.Test {
         // ── disk space: an ejected store has no numbers ──
 
         [Test]
+        [Platform("Linux,MacOsX")] // POSIX paths: on Windows GetFullPath turns the store path into C:\media\…
         public void Disk_space_under_an_ejected_store_is_not_resolvable() {
             Assert.That(DiskSpaceMonitor.StoreEjectedFor("/media/openastroara/frames", () => false), Is.True);
             Assert.That(DiskSpaceMonitor.StoreEjectedFor("/media/openastroara", () => false), Is.True);
