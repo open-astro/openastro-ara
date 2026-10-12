@@ -284,6 +284,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 var guiderResumed = !guidingStopped;
                 if (guidingStopped) {
                     try {
+                        // Fail-safe, not policy: whatever meridian_guider_recal says, a flip that died
+                        // mid-way hands the mount back guided (the sequence halts anyway).
                         await ResumeAutoguider(forceCalibration: false, progress, CancellationToken.None);
                         guiderResumed = true;
                     } catch (Exception resumeEx) {

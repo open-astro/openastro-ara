@@ -27,6 +27,11 @@ void main() {
       n.setMeridianRefocusTempThresholdC(0);
       expect(c.read(safetyPoliciesProvider).meridianRefocusTempThresholdC, 2.0,
           reason: 'non-positive rejected');
+      n.setMeridianRefocusTempThresholdC(50);
+      expect(c.read(safetyPoliciesProvider).meridianRefocusTempThresholdC, 10.0,
+          reason: 'clamped to the registry range');
+      n.setMeridianRefocusTempThresholdC(0.1);
+      expect(c.read(safetyPoliciesProvider).meridianRefocusTempThresholdC, 0.5);
 
       n.setUnattendedWindowStart('22:00');
       n.setUnattendedWindowEnd('6:00');

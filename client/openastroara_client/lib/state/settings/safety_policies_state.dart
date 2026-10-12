@@ -299,9 +299,10 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
   void setMeridianRefocus(MeridianRefocusMode v) =>
       state = state.copyWith(meridianRefocus: v);
 
+  /// Clamped to the registry's 0.5–10 °C range.
   void setMeridianRefocusTempThresholdC(double v) {
-    if (v <= 0) return;
-    state = state.copyWith(meridianRefocusTempThresholdC: v);
+    if (v <= 0 || v.isNaN) return;
+    state = state.copyWith(meridianRefocusTempThresholdC: v.clamp(0.5, 10.0));
   }
 
   /// The mode drives the legacy bool too, so an older daemon still sees
