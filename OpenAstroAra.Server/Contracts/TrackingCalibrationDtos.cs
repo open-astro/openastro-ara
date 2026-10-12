@@ -20,7 +20,8 @@ namespace OpenAstroAra.Server.Contracts;
 /// #1264 — the unguided tracking ceiling measured by the sequencer's <c>TrackingProbe</c> at run start
 /// (profile JSON <c>tracking_calibration</c>). Daemon-owned derived data like <see cref="FocusCalibrationDto"/>:
 /// written by the probe, never by the client; null on the profile = never measured. The next night's prior is
-/// <see cref="CeilingSeconds"/>, not the mount's spec sheet.
+/// <see cref="CeilingSeconds"/> when the run body carries none of its own (<c>TrackingProbeService.ResolvePriorAsync</c>);
+/// a body prior (the mount's spec sheet) wins over it.
 /// </summary>
 /// <param name="CeilingSeconds">The longest unguided exposure the probe passed (interpolated one step toward the
 /// first failing rung when both exist).</param>
@@ -32,7 +33,8 @@ namespace OpenAstroAra.Server.Contracts;
 /// <param name="SeeingFwhmArcsec">The seeing the tolerance was based on: the first rung's measured FWHM converted
 /// to arcseconds when the pixel scale is known, else the site's typical seeing.</param>
 /// <param name="PriorSeconds">The spec-sheet (or previous night's) prior the probe started from, null for an unknown mount.</param>
-/// <param name="Source">"measured" (the ladder decided) or "prior" (fewer than two usable rungs; the prior stands).</param>
+/// <param name="Source">"measured" (the ladder decided) or "prior" (fewer than two usable rungs and none failed, so the
+/// prior stood and is recorded as what the run used; with no prior nothing is stored).</param>
 /// <param name="Rungs">What each rung measured, in ladder order.</param>
 public sealed record TrackingCalibrationDto(
     double CeilingSeconds,

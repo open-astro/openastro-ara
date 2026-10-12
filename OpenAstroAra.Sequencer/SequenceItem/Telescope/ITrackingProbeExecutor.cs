@@ -42,5 +42,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     public interface ITrackingProbeExecutor {
 
         Task<TrackingProbeResult> ProbeAsync(TrackingProbeRequest request, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>The prior the ladder is capped at and an inconclusive probe falls back to: the body's
+        /// own value when set (the spec sheet, once AlpacaBridge #815 supplies it), else the profile's
+        /// stored <c>tracking_calibration</c> ceiling — last night's measurement is this night's prior.
+        /// Null for an unknown mount that was never probed. Default: the body's value.</summary>
+        Task<double?> ResolvePriorAsync(double? bodyPriorSeconds, CancellationToken token) => Task.FromResult(bodyPriorSeconds);
     }
 }

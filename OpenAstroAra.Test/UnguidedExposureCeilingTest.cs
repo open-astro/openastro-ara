@@ -42,10 +42,13 @@ namespace OpenAstroAra.Test {
         private sealed class ScriptedProbe : ITrackingProbeExecutor {
             public TrackingProbeRequest? Request;
             public TrackingProbeResult Result = new(60, 3, "scripted");
+            public double? StoredPrior;
             public Task<TrackingProbeResult> ProbeAsync(TrackingProbeRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {
                 Request = request;
                 return Task.FromResult(Result);
             }
+            public Task<double?> ResolvePriorAsync(double? bodyPriorSeconds, CancellationToken token) =>
+                Task.FromResult(bodyPriorSeconds ?? StoredPrior);
         }
 
         private sealed class ScriptedFeed : IFrameQualityFeed {
@@ -97,9 +100,9 @@ namespace OpenAstroAra.Test {
         public void The_ladder_is_capped_at_the_planned_exposure_and_twice_the_prior() {
             Assert.That(UnguidedExposureLadder.Build(null, 300, null), Is.EqualTo(new[] { 10.0, 30, 60, 120, 300 }), "a planned sub above the ladder top is the final rung");
             Assert.That(UnguidedExposureLadder.Build(null, 120, null), Is.EqualTo(new[] { 10.0, 30, 60, 120 }));
-            Assert.That(UnguidedExposureLadder.Build(null, 300, 100), Is.EqualTo(new[] { 10.0, 30, 60, 120 }), "the 2 × prior cap (200 s) still keeps the 300 s plan off the ladder");
+            Assert.That(UnguidedExposureLadder.Build(null, 300, 100), Is.EqualTo(new[] { 10.0, 30, 60, 120, 200 }), "the 2 × prior cap (200 s) is the final rung, not the 300 s plan");
             Assert.That(UnguidedExposureLadder.Build(null, 45, null), Is.EqualTo(new[] { 10.0, 30, 45 }), "planned 45 s: the rungs below it, then the plan itself as the final rung");
-            Assert.That(UnguidedExposureLadder.Build(null, 300, 20), Is.EqualTo(new[] { 10.0, 30 }), "2 × a 20 s prior = 40 s cap");
+            Assert.That(UnguidedExposureLadder.Build(null, 300, 20), Is.EqualTo(new[] { 10.0, 30, 40 }), "2 × a 20 s prior = 40 s cap, itself the final rung");
             Assert.That(UnguidedExposureLadder.Build(null, 8, null), Is.EqualTo(OnlyEight), "planned shorter than every rung: measure at the plan itself");
             Assert.That(UnguidedExposureLadder.Build(MessyRungs, 0, null), Is.EqualTo(new[] { 5.0, 60, 120 }), "sorted, distinct, positive");
         }
@@ -212,7 +215,7 @@ namespace OpenAstroAra.Test {
 
             await probe.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
 
-            Assert.That(executor.Request!.RungsSeconds, Is.EqualTo(new[] { 10.0, 30 }), "capped at 2 × the 20 s prior");
+            Assert.That(executor.Request!.RungsSeconds, Is.EqualTo(new[] { 10.0, 30, 40 }), "capped at 2 × the 20 s prior");
             Assert.That(executor.Request.PriorSeconds, Is.EqualTo(20));
             Assert.That(probe.CeilingSeconds, Is.EqualTo(45));
             Assert.That(exposure.ExposureTime, Is.EqualTo(45));
@@ -230,6 +233,35 @@ namespace OpenAstroAra.Test {
             var noPrior = Tree(Factory(executor), exposureSeconds: 300, frames: 10);
             await noPrior.Probe.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(noPrior.Exposure.ExposureTime, Is.EqualTo(300), "unknown mount, inconclusive probe: planned exposure kept");
+        }
+
+        [Test]
+        public async Task A_probe_without_a_body_prior_uses_the_stored_ceiling_as_its_prior() {
+            // Review of #1318: run 1 stored 45 s; run 2 must not climb the whole ladder again.
+            var executor = new ScriptedProbe { StoredPrior = 45, Result = new TrackingProbeResult(null, 1, "inconclusive") };
+            var (_, probe, _, exposure, _) = Tree(Factory(executor), exposureSeconds: 300, frames: 10, maxExposure: 300);
+
+            await probe.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(executor.Request!.PriorSeconds, Is.EqualTo(45));
+            Assert.That(executor.Request.RungsSeconds, Is.EqualTo(new[] { 10.0, 30, 60, 90 }), "capped at 2 × the stored 45 s");
+            Assert.That(exposure.ExposureTime, Is.EqualTo(45), "inconclusive tonight: the stored ceiling stands");
+        }
+
+        [Test]
+        public void The_ceiling_caps_the_loops_guard_and_joins_its_rungs() {
+            // Review of #1318: 60 s passed, 120 s failed → 90 s; the guard must not step back up to 120.
+            var factory = Factory();
+            var (block, probe, loop, _, _) = Tree(factory, exposureSeconds: 300, frames: 10);
+            var guard = (UnguidedExposureGuard)factory.GetTrigger<UnguidedExposureGuard>()!.Clone();
+            guard.MaxExposure = 300;
+            loop.Add(guard);
+
+            UnguidedExposureWriter.ApplyCeiling(block, probe, 90);
+
+            Assert.That(guard.MaxExposure, Is.EqualTo(90));
+            Assert.That(guard.Rungs, Does.Contain(90.0));
+            Assert.That(UnguidedExposureLadder.StepUp(UnguidedExposureLadder.Build(guard.Rungs, guard.MaxExposure, null), 60, guard.MaxExposure), Is.EqualTo(90));
         }
 
         [Test]
