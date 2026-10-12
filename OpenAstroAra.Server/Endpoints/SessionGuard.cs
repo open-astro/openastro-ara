@@ -30,7 +30,8 @@ namespace OpenAstroAra.Server.Endpoints;
 /// re-claims through <c>POST /server/connect</c>. With no holder at all (the slot was released)
 /// nothing is stale and every id passes — that is the free slot, see
 /// <see cref="ClientSessionService.IsStaleSession"/>. The connect/disconnect routes themselves are
-/// exempt — they are how a session becomes current or stops being one.
+/// exempt — they are how a session becomes current or stops being one — and so is the §57
+/// emergency stop: safety never waits on a session handshake.
 /// </summary>
 public static class SessionGuard {
 
@@ -46,7 +47,10 @@ public static class SessionGuard {
             return false;
         }
         if (rest.StartsWithSegments("/server/connect", StringComparison.OrdinalIgnoreCase)
-                || rest.StartsWithSegments("/server/disconnect", StringComparison.OrdinalIgnoreCase)) {
+                || rest.StartsWithSegments("/server/disconnect", StringComparison.OrdinalIgnoreCase)
+                // §57 — a panic stop is never refused for being the wrong client: whoever is at the
+                // rig when something goes wrong must be able to stop it.
+                || rest.StartsWithSegments("/server/emergency-stop", StringComparison.OrdinalIgnoreCase)) {
             return false;
         }
         // No header → advisory path (back-compat, see the class doc). Unparseable → the client sent
