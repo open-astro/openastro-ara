@@ -99,7 +99,8 @@ namespace OpenAstroAra.Test {
             Assert.That(TrackingProbeService.Decide(new[] { R(10, true, true), R(30, true, true), R(60, true, false) }), Is.EqualTo(45), "midpoint between the last pass and the first fail");
             Assert.That(TrackingProbeService.Decide(new[] { R(10, true, true), R(30, true, true) }), Is.EqualTo(30), "every rung passed: the longest");
             Assert.That(TrackingProbeService.Decide(new[] { R(10, true, false), R(30, true, false) }), Is.EqualTo(10), "nothing passed: the lowest rung");
-            Assert.That(TrackingProbeService.Decide(new[] { R(10, true, true), R(30, false, false) }), Is.Null, "one usable rung is no measurement");
+            Assert.That(TrackingProbeService.Decide(new[] { R(10, true, false) }), Is.EqualTo(10), "a trailing first rung IS the ceiling, not an inconclusive probe");
+            Assert.That(TrackingProbeService.Decide(new[] { R(10, true, true), R(30, false, false) }), Is.Null, "one usable passing rung is no measurement");
         }
 
         [Test]
@@ -134,7 +135,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Fewer_than_two_usable_rungs_keep_the_prior_and_store_nothing() {
+        public async Task An_inconclusive_ladder_keeps_the_prior_and_records_it_as_what_the_run_used() {
             var frames = new ScriptedFrames();
             var store = new InMemoryProfileStore();
             var ws = new RecordingWs();
@@ -145,8 +146,46 @@ namespace OpenAstroAra.Test {
             Assert.That(result.CeilingSeconds, Is.Null);
             Assert.That(result.UsableRungs, Is.EqualTo(1));
             Assert.That(result.Summary, Does.Contain("25"));
-            Assert.That(store.GetTrackingCalibration(), Is.Null, "an inconclusive probe never overwrites a stored measurement");
+            var cal = store.GetTrackingCalibration();
+            Assert.That(cal, Is.Not.Null);
+            Assert.That(cal!.Source, Is.EqualTo("prior"));
+            Assert.That(cal.CeilingSeconds, Is.EqualTo(25));
             Assert.That(ws.Events.Last().Payload, Does.Contain("\"source\":\"prior\""));
+
+            // Without a prior there is nothing to record: GET /tracking/calibration stays 404.
+            var bare = new InMemoryProfileStore();
+            var frames2 = new ScriptedFrames();
+            await new TrackingProbeService(bare, frames2, metric: Metric(frames2, s => s == 10 ? (80, 0.95, 3.0) : (3, 0.9, 3.0)))
+                .ProbeAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(bare.GetTrackingCalibration(), Is.Null);
+        }
+
+        [Test]
+        public async Task A_first_rung_that_already_trails_is_the_ceiling_not_an_inconclusive_probe() {
+            // Review of #1318: otherwise a mount trailing at 10 s keeps its planned 300 s subs and the
+            // guard walks down one rung per two trailed frames.
+            var frames = new ScriptedFrames();
+            var store = new InMemoryProfileStore();
+            var svc = new TrackingProbeService(store, frames, metric: Metric(frames, _ => (80, 0.5, 3.0)));
+
+            var result = await svc.ProbeAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(frames.Exposures, Is.EqualTo(OnlyTen), "stopped at the first failing rung");
+            Assert.That(result.CeilingSeconds, Is.EqualTo(10));
+            Assert.That(result.Summary, Does.Contain("shortest rung"));
+            Assert.That(store.GetTrackingCalibration()!.Source, Is.EqualTo("measured"));
+        }
+
+        private static readonly double[] OnlyTen = { 10.0 };
+
+        [Test]
+        public async Task The_stored_ceiling_is_the_prior_unless_the_body_carries_one() {
+            var store = new InMemoryProfileStore();
+            var svc = new TrackingProbeService(store, new ScriptedFrames());
+            Assert.That(await svc.ResolvePriorAsync(null, CancellationToken.None), Is.Null, "never probed, no spec sheet");
+            store.PutTrackingCalibration(Calibration());
+            Assert.That(await svc.ResolvePriorAsync(null, CancellationToken.None), Is.EqualTo(45), "last night's measurement");
+            Assert.That(await svc.ResolvePriorAsync(20, CancellationToken.None), Is.EqualTo(20), "the body's spec-sheet prior wins");
         }
 
         [Test]
@@ -217,6 +256,13 @@ namespace OpenAstroAra.Test {
             } finally {
                 Directory.Delete(dir, recursive: true);
             }
+        }
+
+        [Test]
+        public void A_probe_leaf_costs_its_own_ladder_in_the_run_eta_not_the_nominal_15_s() {
+            var root = new OpenAstroAra.Sequencer.Container.SequentialContainer();
+            root.Add(new TrackingProbe { MaxExposure = 120 });
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(root), Is.EqualTo(10 + 30 + 60 + 120 + 4 * 5));
         }
 
         [Test]

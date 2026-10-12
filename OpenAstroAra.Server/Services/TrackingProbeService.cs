@@ -104,21 +104,34 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
     }
 
     /// <summary>The ceiling the ladder decided: the longest passing rung, moved one half-step toward the first
-    /// failing rung when both exist; null with fewer than two usable rungs. The "every usable rung failed →
-    /// the lowest rung" branch is defensive only: <see cref="ProbeAsync"/> stops at the first usable failing
-    /// rung, so a trailing first rung ends inconclusive (one usable rung) and the prior stands.</summary>
+    /// failing rung when both exist. A ladder whose FIRST usable rung already trails is a measurement too —
+    /// that rung is the ceiling (nothing shorter was tried; the guard may still step down from there) — rather
+    /// than an inconclusive probe that would leave the planned long subs in place (review of #1318). Null
+    /// (inconclusive) only when fewer than two usable rungs exist and none of them failed.</summary>
     internal static double? Decide(IReadOnlyList<TrackingProbeRungDto> rungs) {
         ArgumentNullException.ThrowIfNull(rungs);
         var usable = rungs.Where(r => r.Usable).ToList();
-        if (usable.Count < 2) {
+        if (usable.Count == 0) {
             return null;
         }
         var lastPass = usable.LastOrDefault(r => r.Passed);
         if (lastPass is null) {
             return usable.Min(r => r.ExposureSeconds);
         }
+        if (usable.Count < 2) {
+            return null;
+        }
         var firstFail = usable.FirstOrDefault(r => !r.Passed && r.ExposureSeconds > lastPass.ExposureSeconds);
         return firstFail is null ? lastPass.ExposureSeconds : (lastPass.ExposureSeconds + firstFail.ExposureSeconds) / 2;
+    }
+
+    /// <inheritdoc/>
+    public Task<double?> ResolvePriorAsync(double? bodyPriorSeconds, CancellationToken token) {
+        if (bodyPriorSeconds is double body && body > 0) {
+            return Task.FromResult<double?>(body);
+        }
+        var stored = _profiles.GetTrackingCalibration();
+        return Task.FromResult(stored is { CeilingSeconds: > 0 } ? stored.CeilingSeconds : (double?)null);
     }
 
     public async Task<TrackingProbeResult> ProbeAsync(TrackingProbeRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {
@@ -161,11 +174,20 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
 
         var ceiling = Decide(rungs);
         var usableCount = rungs.Count(r => r.Usable);
+        var optics = _profiles.GetOpticsSettings();
+        var pixelScale = PixelScaleArcsec(optics);
+        double? seeing = referenceFwhm is double fwhm && pixelScale is double scale ? fwhm * scale : _profiles.GetSiteSettings()?.TypicalSeeingArcsec;
         string summary;
         if (ceiling is not double measured) {
-            summary = request.PriorSeconds is double prior
-                ? string.Create(CultureInfo.InvariantCulture, $"only {usableCount} usable rung(s) (need 2) — keeping the {prior:0.#} s prior")
-                : string.Create(CultureInfo.InvariantCulture, $"only {usableCount} usable rung(s) (need 2) and no prior — exposures left as planned");
+            if (request.PriorSeconds is double prior) {
+                // The prior stands — and is recorded as tonight's calibration with source "prior", so the
+                // profile says what the run actually used (and the next night's prior is still it).
+                summary = string.Create(CultureInfo.InvariantCulture, $"only {usableCount} usable rung(s) (need 2) — keeping the {prior:0.#} s prior");
+                var polarAlignForPrior = await LatestPolarAlignErrorAsync(token).ConfigureAwait(false);
+                _profiles.PutTrackingCalibration(new TrackingCalibrationDto(prior, _clock(), polarAlignForPrior, pixelScale, seeing, prior, "prior", rungs));
+            } else {
+                summary = string.Create(CultureInfo.InvariantCulture, $"only {usableCount} usable rung(s) (need 2) and no prior — exposures left as planned");
+            }
             await PublishAsync(WsEventCatalog.TrackingProbeCompleted, new JsonObject {
                 ["ceiling_seconds"] = request.PriorSeconds, ["prior_seconds"] = request.PriorSeconds, ["source"] = "prior",
                 ["usable_rungs"] = usableCount, ["summary"] = summary,
@@ -173,13 +195,12 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
             return new TrackingProbeResult(null, usableCount, summary);
         }
 
-        var optics = _profiles.GetOpticsSettings();
-        var pixelScale = PixelScaleArcsec(optics);
-        double? seeing = referenceFwhm is double fwhm && pixelScale is double scale ? fwhm * scale : _profiles.GetSiteSettings()?.TypicalSeeingArcsec;
         var polarAlign = await LatestPolarAlignErrorAsync(token).ConfigureAwait(false);
         var calibration = new TrackingCalibrationDto(measured, _clock(), polarAlign, pixelScale, seeing, request.PriorSeconds, "measured", rungs);
         _profiles.PutTrackingCalibration(calibration);
-        summary = string.Create(CultureInfo.InvariantCulture, $"unguided ceiling {measured:0.#} s from {usableCount} usable rung(s)");
+        summary = usableCount == 1
+            ? string.Create(CultureInfo.InvariantCulture, $"even the shortest rung ({measured:0.#} s) trailed — unguided ceiling {measured:0.#} s")
+            : string.Create(CultureInfo.InvariantCulture, $"unguided ceiling {measured:0.#} s from {usableCount} usable rung(s)");
         LogDecided(measured, usableCount, request.PriorSeconds ?? double.NaN);
         await PublishAsync(WsEventCatalog.TrackingProbeCompleted, new JsonObject {
             ["ceiling_seconds"] = measured, ["prior_seconds"] = request.PriorSeconds, ["source"] = "measured",
