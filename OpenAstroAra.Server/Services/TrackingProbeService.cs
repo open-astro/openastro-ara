@@ -104,8 +104,9 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
     }
 
     /// <summary>The ceiling the ladder decided: the longest passing rung, moved one half-step toward the first
-    /// failing rung when both exist; the lowest rung when every usable rung failed; null with fewer than two
-    /// usable rungs.</summary>
+    /// failing rung when both exist; null with fewer than two usable rungs. The "every usable rung failed →
+    /// the lowest rung" branch is defensive only: <see cref="ProbeAsync"/> stops at the first usable failing
+    /// rung, so a trailing first rung ends inconclusive (one usable rung) and the prior stands.</summary>
     internal static double? Decide(IReadOnlyList<TrackingProbeRungDto> rungs) {
         ArgumentNullException.ThrowIfNull(rungs);
         var usable = rungs.Where(r => r.Usable).ToList();

@@ -33,7 +33,10 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// ≤ 0) and at twice the spec-sheet prior <paramref name="priorSeconds"/> (ignored when null or
         /// ≤ 0). The lowest rung always survives the caps — a probe needs a first measurement — but
         /// never exceeds the planned exposure itself when that is shorter than every rung (then the
-        /// planned exposure IS the only rung: there is nothing shorter worth measuring against).
+        /// planned exposure IS the only rung: there is nothing shorter worth measuring against). A
+        /// planned exposure ABOVE the ladder's top becomes the final rung (review of #1318): a mount
+        /// that holds the top rung cleanly must get the chance to pass the planned 300 s, not have its
+        /// plan cut to 120 s with nothing to step back up to. The prior's 2× cap still applies to it.
         /// </summary>
         public static IReadOnlyList<double> Build(IReadOnlyList<double>? rungs, double maxExposureSeconds, double? priorSeconds) {
             var source = (rungs is { Count: > 0 } ? rungs : DefaultRungs)
@@ -52,6 +55,9 @@ namespace OpenAstroAra.Sequencer.Utility {
                 cap = Math.Min(cap, 2 * prior);
             }
             var kept = source.Where(r => r <= cap).ToList();
+            if (maxExposureSeconds > 0 && maxExposureSeconds <= cap && kept.Count > 0 && maxExposureSeconds > kept[^1] + 1e-9) {
+                kept.Add(maxExposureSeconds);
+            }
             if (kept.Count == 0) {
                 // Everything is above the cap: measure at the cap itself (the planned exposure, or
                 // twice the prior) rather than at nothing.

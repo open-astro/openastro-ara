@@ -132,6 +132,11 @@ namespace OpenAstroAra.Sequencer.Trigger.Telescope {
             if (double.IsNaN(latest.Eccentricity)) {
                 return false;
             }
+            if (latest.ExposureSeconds > 0 && Math.Abs(latest.ExposureSeconds - exposure.ExposureTime) > 1e-6) {
+                // Analysis lags a frame: right after a step the newest reading is still a frame taken at
+                // the OLD length. It says nothing about the current sub, so it joins neither streak.
+                return false;
+            }
             if (latest.Eccentricity > EccentricityTolerance) {
                 consecutiveBad++;
                 consecutiveGood = 0;
