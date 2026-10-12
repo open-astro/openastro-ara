@@ -932,6 +932,9 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted(value: await svc.PushGuiderProfileAsync(idempotencyKey, ct));
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        } catch (GuiderSelectionInvalidException ex) {
+            // #1306 — nothing was sent: the stored selection cannot work (bare Alpaca choice, no server).
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             // Push landed per-message best-effort, but the post-push equipment reconnect failed — actionable.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);

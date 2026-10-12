@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using System;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -63,6 +64,11 @@ public sealed partial class GuiderService {
         // Capture the selection BEFORE the push so the §63.17 invalidation compare is against what this push
         // actually sent (a concurrent settings edit mid-push shouldn't skew the decision).
         var settings = _profileService.ActiveProfile.GuiderSettings;
+        // #1306 — refuse, saying why, rather than push a selection that can only leave the daemon on
+        // localhost:0 and its equipment disconnected (the 422 reaches the client's Apply button).
+        if (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.DescribeUnservedAlpacaSelection(settings) is { } reason) {
+            throw new GuiderSelectionInvalidException(reason);
+        }
         var camera = settings.GuiderCamera;
         var cameraId = settings.GuiderCameraId;
         var methods = await guider.RepushGuiderEngineConfigAsync(ct).ConfigureAwait(false);
@@ -111,4 +117,13 @@ public sealed partial class GuiderService {
         await EmitCalibrationEventAsync(WsEventCatalog.GuiderDarkLibraryInvalidated,
             new JsonObject { ["reason"] = "guide_camera_changed" }).ConfigureAwait(false);
     }
+}
+
+/// <summary>#1306 — the stored guider equipment selection cannot be pushed as it stands (a bare Alpaca
+/// choice with no server). The endpoint maps it to <c>422 Unprocessable Entity</c>; the message says
+/// which slot and what to set.</summary>
+public class GuiderSelectionInvalidException : Exception {
+    public GuiderSelectionInvalidException() { }
+    public GuiderSelectionInvalidException(string message) : base(message) { }
+    public GuiderSelectionInvalidException(string message, Exception innerException) : base(message, innerException) { }
 }

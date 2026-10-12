@@ -241,6 +241,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Unserved_alpaca_selection_is_described_when_no_host_or_port_is_stored() {
+            // #1306 — the field case: the picker saved the daemon's bare choice strings and nothing else,
+            // so the push left the guider on localhost:0.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera");
+            s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount");
+            s.SetupGet(x => x.GuiderAlpacaHost).Returns("");
+            s.SetupGet(x => x.GuiderAlpacaPort).Returns(0);
+            var reason = PHD2Guider.DescribeUnservedAlpacaSelection(s.Object);
+            Assert.That(reason, Does.Contain("guide camera 'Alpaca Camera'"));
+            Assert.That(reason, Does.Contain("Alpaca host and port"));
+        }
+
+        [Test]
+        public void Unserved_alpaca_selection_names_the_one_missing_half() {
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount");
+            s.SetupGet(x => x.GuiderAlpacaHost).Returns("127.0.0.1");
+            s.SetupGet(x => x.GuiderAlpacaPort).Returns(0);
+            var reason = PHD2Guider.DescribeUnservedAlpacaSelection(s.Object);
+            Assert.That(reason, Does.Contain("guide mount 'Alpaca Mount'"));
+            Assert.That(reason, Does.EndWith("Alpaca port."));
+        }
+
+        [Test]
+        public void Served_or_non_alpaca_selections_are_not_flagged() {
+            // Stored host/port, a suffixed camera (which carries its own server), and non-Alpaca drivers
+            // are all pushable; blank selections never are a problem.
+            Assert.That(PHD2Guider.DescribeUnservedAlpacaSelection(SettingsWithSelections()), Is.Null, "stored host/port");
+            var suffixed = new Mock<IGuiderSettings>();
+            suffixed.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [127.0.0.1:6800/0]");
+            suffixed.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount");
+            Assert.That(PHD2Guider.DescribeUnservedAlpacaSelection(suffixed.Object), Is.Null, "camera endpoint serves the bare mount");
+            var indi = new Mock<IGuiderSettings>();
+            indi.SetupGet(x => x.GuiderCamera).Returns("INDI Camera");
+            indi.SetupGet(x => x.GuiderMount).Returns("On-camera");
+            Assert.That(PHD2Guider.DescribeUnservedAlpacaSelection(indi.Object), Is.Null, "non-Alpaca drivers");
+            Assert.That(PHD2Guider.DescribeUnservedAlpacaSelection(new Mock<IGuiderSettings>().Object), Is.Null, "nothing selected");
+        }
+
+        [Test]
         public void Build_retargets_the_alpaca_server_from_the_camera_selection() {
             // The camera lives on a DIFFERENT server (AlpacaBridge) than the stored alpaca host — the
             // camera's endpoint wins, and only same-server slots contribute device numbers.

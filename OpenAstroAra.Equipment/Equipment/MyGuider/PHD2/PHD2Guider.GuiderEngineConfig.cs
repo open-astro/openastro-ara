@@ -156,6 +156,37 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return (m.Groups[1].Value, port, device);
         }
 
+        /// <summary>§63.20 / #1306 — a BARE Alpaca selection (the daemon's generic <c>"Alpaca Camera"</c>
+        /// with no <c>[host:port/N]</c> suffix) only means something when the stored Alpaca host AND port
+        /// name the server. Without them the push never sends <c>set_alpaca_server</c>, the daemon stays on
+        /// <c>localhost:0</c> and every connect fails with "equipment failed to connect". Returns a
+        /// one-line reason naming the slot, or null when the selections are pushable. Pure.</summary>
+        public static string? DescribeUnservedAlpacaSelection(IGuiderSettings guider) {
+            ArgumentNullException.ThrowIfNull(guider);
+            var cameraEp = ParseAlpacaSelectionEndpoint(guider.GuiderCamera);
+            var hasHost = cameraEp is not null || !string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost);
+            var hasPort = cameraEp is not null || guider.GuiderAlpacaPort > 0;
+            if (hasHost && hasPort) {
+                return null;
+            }
+            foreach (var (slot, selection) in new[] {
+                ("guide camera", guider.GuiderCamera), ("guide mount", guider.GuiderMount),
+                ("aux mount", guider.GuiderAuxMount), ("rotator", guider.GuiderRotator) }) {
+                if (IsBareAlpacaSelection(selection)) {
+                    var missing = !hasHost && !hasPort ? "host and port" : !hasHost ? "host" : "port";
+                    return $"The {slot} '{selection.Trim()}' names an Alpaca driver but no server: pick a device "
+                        + $"such as '{selection.Trim()} [host:port/N]' or set the guider's Alpaca {missing}.";
+                }
+            }
+            return null;
+        }
+
+        /// <summary>True for the daemon's generic <c>"Alpaca …"</c> choice string with no endpoint suffix.</summary>
+        public static bool IsBareAlpacaSelection(string? selection) =>
+            !string.IsNullOrWhiteSpace(selection)
+            && selection.TrimStart().StartsWith("Alpaca ", StringComparison.OrdinalIgnoreCase)
+            && ParseAlpacaSelectionEndpoint(selection) is null;
+
         /// <summary>
         /// Pure mapping from <see cref="IGuiderSettings"/> to the ordered PHD2 setter messages. Focal length /
         /// pixel size are only pushed when configured (&gt; 0). Aggressiveness is sent as the 0..1 fraction

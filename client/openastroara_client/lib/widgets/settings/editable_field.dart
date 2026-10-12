@@ -89,11 +89,16 @@ class _EditableTextRowState extends State<EditableTextRow> {
               padding: EdgeInsets.only(top: widget.maxLines > 1 ? 12 : 0),
               child: Row(
                 children: [
-                  Text(
-                    widget.label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
+                  // Flexible: a long label wraps inside the 280 px column
+                  // instead of overflowing past the help icon (#1306 panel
+                  // tests surfaced it on the guider rows).
+                  Flexible(
+                    child: Text(
+                      widget.label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                    ),
                   ),
                   if (widget.helpKey != null) HelpIcon(helpKey: widget.helpKey!),
                 ],
@@ -173,10 +178,12 @@ class SettingsDropdownRow<T> extends StatelessWidget {
           width: 280,
           child: Row(
             children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
+              Flexible(
+                child: Text(label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AraColors.textSecondary,
+                        )),
+              ),
               if (helpKey != null) HelpIcon(helpKey: helpKey!),
             ],
           ),

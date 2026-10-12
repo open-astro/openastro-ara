@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/guider_equipment_choices.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -42,6 +42,17 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   List<String>? _discoveredServers;
   String? _equipmentStatus;
 
+  // §63.20 / #1306 — real device names behind every Alpaca endpoint we know
+  // of (the daemon's choice strings, the profile's stored host/port, every
+  // discovered server), keyed "host:port|type/N". The pickers synthesize a
+  // daemon-format `Alpaca <Slot> [host:port/N]` option per device, so a pick
+  // always carries its server and the push can retarget the guider. Without
+  // this the panel offered only the bare "Alpaca Camera" the daemon lists,
+  // which pushes nothing about the server and leaves the guider on
+  // localhost:0.
+  final Map<String, String> _alpacaNames = {};
+  final Set<String> _namedEndpoints = {};
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +68,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
+      final phd2 = ref.read(phd2SettingsProvider);
+      if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0) {
+        await _resolveAlpacaNames(
+            ['${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}']);
+      }
     } catch (e) {
       if (mounted) {
         setState(
@@ -127,9 +143,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         _equipmentStatus = servers.isEmpty
             ? 'No Alpaca servers answered on the guider\'s network.'
             : 'Found ${servers.length} Alpaca '
-                  'server${servers.length == 1 ? '' : 's'} — tap one to fill '
-                  'host/port.';
+                  'server${servers.length == 1 ? '' : 's'} — their devices '
+                  'are now in the pickers; tap one to fill host/port.';
       });
+      await _resolveAlpacaNames(servers);
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -143,11 +160,62 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     }
   }
 
+  /// Read the real device names on each "host:port" endpoint not yet
+  /// resolved (parallel; an unreachable server costs only its own timeout)
+  /// and fold them into [_alpacaNames]. Best-effort: the generic labels stay
+  /// when the management API can't be reached.
+  Future<void> _resolveAlpacaNames(Iterable<String> endpoints) async {
+    final namesApi = ref.read(alpacaDeviceNamesApiProvider);
+    final targets = <({String endpoint, String host, int port})>[];
+    for (final endpoint in endpoints) {
+      if (!_namedEndpoints.add(endpoint)) continue;
+      final parsed = parseHostPort(endpoint);
+      if (parsed.host == null || parsed.port == null) continue;
+      targets.add((endpoint: endpoint, host: parsed.host!, port: parsed.port!));
+    }
+    if (targets.isEmpty) return;
+    final fetched = await Future.wait([
+      for (final t in targets)
+        namesApi
+            .fetchNames(t.host, t.port)
+            .then((names) => (endpoint: t.endpoint, names: names)),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      for (final result in fetched) {
+        result.names.forEach((typeSlot, name) {
+          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+        });
+      }
+    });
+  }
+
+  /// Endpoints the daemon's own choice strings mention.
+  static Iterable<String> _choiceEndpoints(GuiderEquipmentChoices choices) sync* {
+    for (final choice in [
+      ...choices.cameras,
+      ...choices.mounts,
+      ...choices.auxMounts,
+      ...choices.rotators,
+    ]) {
+      final e = parseAlpacaChoiceEndpoint(choice);
+      if (e != null) yield '${e.host}:${e.port}';
+    }
+  }
+
   /// Save the panel's OpenAstro Guider settings (so the daemon-side profile carries the
   /// current selections), then ask the daemon to re-push them to the guider.
   Future<void> _applyToGuider() async {
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
+    final unserved = describeUnservedAlpacaSelection(ref.read(phd2SettingsProvider));
+    if (unserved != null) {
+      // #1306 — the daemon would refuse this push with the same reason (422);
+      // say it here before anything is saved or disconnected.
+      setState(() => _equipmentStatus = unserved);
+      messenger.showSnackBar(SnackBar(content: Text(unserved)));
+      return;
+    }
     if (api == null) {
       messenger.showSnackBar(
         const SnackBar(
@@ -180,10 +248,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     }
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
-  }
+  ProfileApi? _api() => ref.read(profileApiProvider);
 
   @override
   Widget build(BuildContext context) {
@@ -438,13 +503,30 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   /// default") plus the current profile value even when the daemon doesn't
   /// list it (disconnected, or a stale selection) — so hydrated state is
   /// always representable and never silently coerced.
-  static Map<String, String> _slotItems(List<String> choices, String current) {
+  Map<String, String> _slotItems(
+      List<String> choices, String current, String alpacaType) {
     final items = <String, String>{'': '(use the guider\'s own setting)'};
     for (final c in choices) {
-      items[c] = c;
+      items[c] = friendlyAlpacaChoiceLabel(c, alpacaType, _alpacaNames);
     }
-    if (current.isNotEmpty) items.putIfAbsent(current, () => current);
+    if (current.isNotEmpty) {
+      items.putIfAbsent(
+          current, () => friendlyAlpacaChoiceLabel(current, alpacaType, _alpacaNames));
+    }
     return items;
+  }
+
+  /// The one Alpaca server the guider can use: the camera's `[host:port/N]`
+  /// when the camera carries one, else the profile's stored host/port. Null
+  /// when neither is known yet, in which case every server's devices are
+  /// offered for every slot.
+  static String? _servingEndpoint(Phd2Settings phd2) {
+    final cam = parseAlpacaChoiceEndpoint(phd2.guiderCamera);
+    if (cam != null) return '${cam.host}:${cam.port}';
+    if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0) {
+      return '${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}';
+    }
+    return null;
   }
 
   // §63.17 — equipment pickers fed by GET /equipment/guider/choices, daemon-
@@ -458,6 +540,23 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final connected = envelope?.connected ?? false;
     final choices = envelope?.choices ?? const GuiderEquipmentChoices();
     final refreshing = equipment.isLoading;
+    ref.listen(guiderEquipmentProvider, (_, next) {
+      final c = next.value?.choices;
+      if (c != null) _resolveAlpacaNames(_choiceEndpoints(c));
+    });
+    final serving = _servingEndpoint(phd2);
+    final cameraOptions =
+        mergedAlpacaOptions(choices.cameras, 'camera', 'Camera', _alpacaNames);
+    final mountOptions = mergedAlpacaOptions(
+        choices.mounts, 'telescope', 'Mount', _alpacaNames,
+        onlyEndpoint: serving);
+    final auxOptions = mergedAlpacaOptions(
+        choices.auxMounts, 'telescope', 'Mount', _alpacaNames,
+        onlyEndpoint: serving);
+    final rotatorOptions = mergedAlpacaOptions(
+        choices.rotators, 'rotator', 'Rotator', _alpacaNames,
+        onlyEndpoint: serving);
+    final unserved = describeUnservedAlpacaSelection(phd2);
 
     return [
       Wrap(
@@ -525,12 +624,22 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           ),
         ),
       SettingsDropdownRow<String>(
+        key: const ValueKey('guider_pick_camera'),
         label: 'Guide camera',
         helpKey: 'eq.guider.guide_camera',
         value: phd2.guiderCamera,
-        items: _slotItems(choices.cameras, phd2.guiderCamera),
+        items: _slotItems(cameraOptions, phd2.guiderCamera, 'camera'),
         onChanged: (v) {
-          if (v != null) phd2N.setGuiderCamera(v);
+          if (v == null) return;
+          phd2N.setGuiderCamera(v);
+          // A camera with an endpoint retargets the guider's Alpaca server
+          // on Apply — keep the stored host/port in step so the mount and
+          // rotator pickers offer that server and the push names it.
+          final e = parseAlpacaChoiceEndpoint(v);
+          if (e != null) {
+            phd2N.setGuiderAlpacaHost(e.host);
+            phd2N.setGuiderAlpacaPort(e.port);
+          }
         },
       ),
       EditableTextRow(
@@ -542,10 +651,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         hint: 'Only needed when two cameras share a name',
       ),
       SettingsDropdownRow<String>(
+        key: const ValueKey('guider_pick_mount'),
         label: 'Guide mount',
         helpKey: 'eq.guider.guide_mount',
         value: phd2.guiderMount,
-        items: _slotItems(choices.mounts, phd2.guiderMount),
+        items: _slotItems(mountOptions, phd2.guiderMount, 'telescope'),
         onChanged: (v) {
           if (v != null) phd2N.setGuiderMount(v);
         },
@@ -554,7 +664,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         label: 'Aux mount',
         helpKey: 'eq.guider.aux_mount',
         value: phd2.guiderAuxMount,
-        items: _slotItems(choices.auxMounts, phd2.guiderAuxMount),
+        items: _slotItems(auxOptions, phd2.guiderAuxMount, 'telescope'),
         onChanged: (v) {
           if (v != null) phd2N.setGuiderAuxMount(v);
         },
@@ -563,11 +673,23 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         label: 'Rotator',
         helpKey: 'eq.guider.rotator',
         value: phd2.guiderRotator,
-        items: _slotItems(choices.rotators, phd2.guiderRotator),
+        items: _slotItems(rotatorOptions, phd2.guiderRotator, 'rotator'),
         onChanged: (v) {
           if (v != null) phd2N.setGuiderRotator(v);
         },
       ),
+      if (unserved != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: Text(
+            unserved,
+            key: const ValueKey('guider_unserved_alpaca'),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall!
+                .copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
       EditableTextRow(
         label: 'Alpaca host',
         helpKey: 'eq.guider.alpaca_host',

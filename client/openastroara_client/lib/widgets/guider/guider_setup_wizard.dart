@@ -75,6 +75,44 @@ List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
   return merged;
 }
 
+/// §63.20 / #1306 — mirror of the daemon's `DescribeUnservedAlpacaSelection`:
+/// a bare "Alpaca …" choice (no `[host:port/N]`) is only pushable when the
+/// stored Alpaca host AND port name the server; otherwise the guider stays on
+/// localhost:0 and its equipment never connects. Returns the reason naming
+/// the slot, or null when the selection is pushable. Pure — unit-tested.
+String? describeUnservedAlpacaSelection(Phd2Settings s) {
+  final cameraEp = parseAlpacaChoiceEndpoint(s.guiderCamera);
+  final hasHost = cameraEp != null || s.guiderAlpacaHost.trim().isNotEmpty;
+  final hasPort = cameraEp != null || s.guiderAlpacaPort > 0;
+  if (hasHost && hasPort) return null;
+  final slots = <(String, String)>[
+    ('guide camera', s.guiderCamera),
+    ('guide mount', s.guiderMount),
+    ('aux mount', s.guiderAuxMount),
+    ('rotator', s.guiderRotator),
+  ];
+  for (final (slot, selection) in slots) {
+    if (!isBareAlpacaChoice(selection)) continue;
+    final missing = !hasHost && !hasPort
+        ? 'host and port'
+        : !hasHost
+            ? 'host'
+            : 'port';
+    final name = selection.trim();
+    return "The $slot '$name' names an Alpaca driver but no server: pick a "
+        "device such as '$name [host:port/N]' from the list (Discover Alpaca "
+        "finds them) or set the guider's Alpaca $missing.";
+  }
+  return null;
+}
+
+/// True for the daemon's generic "Alpaca …" choice string with no endpoint.
+bool isBareAlpacaChoice(String selection) {
+  final t = selection.trim();
+  return t.toLowerCase().startsWith('alpaca ') &&
+      parseAlpacaChoiceEndpoint(t) == null;
+}
+
 ({String host, int port, int device})? parseAlpacaChoiceEndpoint(String choice) {
   final m = RegExp(r'\[([^\[\]:]+):(\d+)/(\d+)\]\s*$').firstMatch(choice);
   if (m == null) return null;

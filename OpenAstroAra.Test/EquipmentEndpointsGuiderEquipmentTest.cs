@@ -104,6 +104,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ProfilePush_maps_an_unserved_alpaca_selection_to_422_with_the_reason() {
+            // #1306 — a bare "Alpaca Camera" with no host/port is refused before anything is sent.
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new GuiderSelectionInvalidException("The guide camera 'Alpaca Camera' names an Alpaca driver but no server"));
+
+            var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+            Assert.That(((ProblemHttpResult)result).ProblemDetails.Detail, Does.Contain("Alpaca Camera"));
+        }
+
+        [Test]
         public async Task ProfilePush_maps_not_connected_InvalidOperation_to_typed_409() {
             var svc = new Mock<IGuiderService>();
             svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
