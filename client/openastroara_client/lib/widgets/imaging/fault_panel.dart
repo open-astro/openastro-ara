@@ -154,8 +154,12 @@ class FaultHistoryTile extends StatelessWidget {
         ? StatusLevel.connected
         : faultKindLevel(row.faultType);
     final device = row.equipmentName ?? row.equipmentType;
+    // A row resolved because the user disconnected the device mid-recovery
+    // (#1307) is not "recovered": say what happened.
     final outcome = row.resolved
-        ? 'recovered'
+        ? (row.actionTaken?.startsWith('released') ?? false)
+            ? 'released — disconnected by hand'
+            : 'recovered'
         : row.actionTaken ?? 'unresolved';
     return ListTile(
       dense: true,

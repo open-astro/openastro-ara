@@ -14,7 +14,8 @@ class FaultRow {
   final String? details;
 
   /// The §42.3 reaction outcome (`notify_only` / `sequence_paused` /
-  /// `reconnecting` / `recovered` / `gave_up:<terminal>`); null while an
+  /// `reconnecting` / `recovered` / `gave_up:<terminal>` /
+  /// `released:user_disconnect`); null while an
   /// episode is still deciding or when no reaction applies.
   final String? actionTaken;
   final DateTime? resolvedUtc;

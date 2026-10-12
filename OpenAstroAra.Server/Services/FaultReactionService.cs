@@ -194,9 +194,22 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                     if (_cts.IsCancellationRequested) {
                         return;
                     }
+                    // #1307 — a user who disconnected the device while the ladder ran has taken it
+                    // back: the rung must not re-dispatch (that connect would overwrite their
+                    // Disconnected with Error and the linger could no longer tell it from a lost
+                    // device). Checked before the attempt AND after a failed one, so a disconnect
+                    // that lands mid-confirm is seen before the next rung.
+                    if (fault.Kind == EquipmentFaultKind.Disconnected
+                            && await ReleasedByUserAsync(fault, label, pausedRuns).ConfigureAwait(false)) {
+                        return;
+                    }
                     var recovered = fault.Kind == EquipmentFaultKind.TrackingLost
                         ? await TryReenableTrackingAsync().ConfigureAwait(false)
                         : await TryReconnectAsync(fault.DeviceType).ConfigureAwait(false);
+                    if (!recovered && fault.Kind == EquipmentFaultKind.Disconnected
+                            && await ReleasedByUserAsync(fault, label, pausedRuns).ConfigureAwait(false)) {
+                        return;
+                    }
                     if (recovered) {
                         var resumed = pausedRuns.Count > 0 ? await ResumeRunsAsync(pausedRuns).ConfigureAwait(false) : 0;
                         var n = attempt;
@@ -213,6 +226,12 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 }
             }
 
+            // #1307 — a plan with no retries reaches here straight from the pause; the same release
+            // check applies before the terminal action parks a mount the user just let go of.
+            if (fault.Kind == EquipmentFaultKind.Disconnected
+                    && await ReleasedByUserAsync(fault, label, pausedRuns).ConfigureAwait(false)) {
+                return;
+            }
             var stillPaused = await ExecuteTerminalAsync(fault, plan, label, pausedRuns).ConfigureAwait(false);
 
             // §42.3 — the ladder is ~2 min end-to-end, but real outages (a USB hub off for ten
@@ -329,6 +348,29 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             .ConfigureAwait(false);
         LogGaveUp(fault.DeviceType, plan.RetrySchedule.Count, terminal);
         return stillPaused;
+    }
+
+    // #1307 — a Disconnected state during a DISCONNECT episode is the shape of a deliberate user (or
+    // API) disconnect: the services only park a LOST device in Error, and only DisconnectAsync /
+    // Forget write Disconnected. The device is no longer ours to chase: the episode ends here with
+    // no further reconnect dispatch and no terminal park. Runs the up-front pause left paused stay
+    // paused — the user chose to take the device away, so resuming would be wrong — and the
+    // outcome is recorded and notified so the sequence state is not a mystery. Same convention
+    // the linger has always used; the ladder and the terminal action now honour it too.
+    private async Task<bool> ReleasedByUserAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> pausedRuns) {
+        var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
+        if (state != EquipmentConnectionState.Disconnected) {
+            return false;
+        }
+        await PublishActionAsync(fault, "released", persistAs: "released:user_disconnect", extra: p => {
+            p["paused_runs"] = pausedRuns.Count;
+        }).ConfigureAwait(false);
+        await NotifyQuietlyAsync(NotificationSeverity.Info, $"{fault.DeviceType} released",
+            $"'{label}' was disconnected by hand while recovery was running; recovery stopped"
+            + $"{(pausedRuns.Count > 0 ? $", {pausedRuns.Count} paused sequence run(s) left paused" : "")}.")
+            .ConfigureAwait(false);
+        LogReleasedByUser(fault.DeviceType);
+        return true;
     }
 
     // §42.3 — the post-give-up linger: poll the device type's state at LingerInterval for up to
@@ -551,7 +593,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private async Task PublishActionAsync(EquipmentFaultEvent fault, string action, Action<JsonObject>? extra = null,
             string? persistAs = null) {
         // §42.5 — every reaction outcome is stamped onto the fault's history row
-        // (last write wins across the episode); 'recovered' also resolves it.
+        // (last write wins across the episode); 'recovered' and 'released:*' also resolve it.
         await RecordActionQuietlyAsync(fault, persistAs ?? action).ConfigureAwait(false);
         if (_ws is null) {
             return;
@@ -582,7 +624,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return;
         }
         try {
-            var resolvedUtc = action == "recovered" ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
+            // 'recovered' resolves the row; so does a #1307 release — the user took the device back,
+            // nothing is pending, and the §42.5 reconnect hook must not later report it as an
+            // unresolved disconnect it "fixed".
+            var resolvedUtc = action == "recovered" || action.StartsWith("released", StringComparison.Ordinal)
+                ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
             await _faultLog.RecordActionAsync(fault, action, resolvedUtc, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed("fault_log", ex);
@@ -645,6 +691,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Fault reaction: {DeviceType} re-adopted on linger attempt {Attempt} (§42.3)")]
     private partial void LogReadopted(DeviceType deviceType, int attempt);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault reaction: {DeviceType} was disconnected by the user during recovery — episode released, no reconnect or park (#1307)")]
+    private partial void LogReleasedByUser(DeviceType deviceType);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Fault reaction: linger for {DeviceType} stopped — state {State} means the device is no longer ours to chase (§42.3)")]
     private partial void LogLingerStopped(DeviceType deviceType, EquipmentConnectionState? state);

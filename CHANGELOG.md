@@ -37,6 +37,8 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
+- **Disconnecting equipment by hand ends its recovery (#1307).** When a mount or camera dropped and the daemon was still trying to bring it back, disconnecting it from the client or the API did not stop the recovery: a later attempt reconnected the mount, sent AbortSlew, and the fault log said it was "re-adopted". Recovery now checks for a deliberate disconnect before every reconnect attempt and before the give-up park, stops with a "released" record and a notification, and leaves paused sequence runs paused. The Faults panel shows such rows as "released — disconnected by hand".
+
 - **Settings → Guider pickers save a device, not a bare driver name (#1306).** The guide camera and mount lists used to offer only the daemon's generic "Alpaca Camera" / "Alpaca Mount"; saved as-is with no Alpaca host or port, the push never told the guider which server to use and it sat on localhost:0 with nothing connected. The pickers now list every real device on the stored server and on any server Discover Alpaca finds as `Name (host:port/N)`, picking a camera fills the Alpaca host and port, and Apply refuses a bare selection with the reason. The daemon refuses the same push with a 422 instead of leaving the guider disconnected. A profile that already held a bare `Alpaca …` selection with no Alpaca host and port needs a re-pick once, even if the guider still had a server configured on its own side.
 
 ### Removed

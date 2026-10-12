@@ -49,6 +49,7 @@ namespace OpenAstroAra.Test {
         private static readonly string[] ReconnectRecover = ["reconnecting", "recovered"];
         private static readonly string[] NotifyOnly = ["notify_only"];
         private static readonly string[] NotifyNotifyEscalated = ["notify_only", "notify_only", "escalated"];
+        private static readonly string[] PauseReconnectReleased = ["sequence_paused", "reconnecting", "released"];
 
         [SetUp]
         public void SetUp() {
@@ -239,20 +240,21 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(new List<Guid> { run });
             sequencer.Setup(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(run)), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(1);
-            // 5 ladder attempts + linger tick 1 all read Error (calls 1-7 include tick 1's
-            // failed re-dispatch); from call 8 the device is back — the user re-seated the hub.
-            var stateCalls = 0;
+            // Every read says Error until the ladder has given up; then the device is back — the
+            // user re-seated the hub — and the first linger tick finds it. Phase-based on the
+            // published actions (synchronously, so the collapsed-delay linger cannot outrun it),
+            // not a read count: #1307 added release checks that read the state too.
             reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => ++stateCalls <= 7 ? EquipmentConnectionState.Error : EquipmentConnectionState.Connected);
+                .ReturnsAsync(() => Actions().Contains("gave_up") ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
             service.LingerMaxAttempts = 10;
 
             service.OnFault(Fault());
             await service.WhenIdleAsync();
 
             Assert.That(Actions(), Does.Contain("gave_up"), "the ladder still gave up first");
-            Assert.That(Actions().Last(), Is.EqualTo("readopted"), "the linger picked the device back up");
+            Assert.That(Actions().Last(), Is.EqualTo("readopted"), $"the linger picked the device back up (actions: {string.Join(",", Actions())})");
             var readopted = ActionPayload("readopted");
             Assert.That(readopted.GetProperty("resumed_runs").GetInt32(), Is.EqualTo(1),
                 "the runs the terminal pause left paused resume on re-adoption");
@@ -284,6 +286,67 @@ namespace OpenAstroAra.Test {
             Assert.That(Actions(), Does.Not.Contain("readopted"),
                 "the daemon must not fight the user for a deliberately disconnected device");
             sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task A_user_disconnect_mid_ladder_releases_the_episode_without_reconnecting_or_parking() {
+            // #1307 — the field case: the ladder was still walking when the user disconnected the
+            // mount. Before the fix the next rung re-dispatched a connect, which overwrote the user's
+            // Disconnected with Error, and the linger later re-adopted the mount (AbortSlew + connect).
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            // Rung 1 fails (Error throughout its confirm window); then the user disconnects, so every
+            // later read says Disconnected.
+            var reconnects = 0;
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => { reconnects++; return new ReconnectOutcome(1, 1); });
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => reconnects == 0 ? EquipmentConnectionState.Error : EquipmentConnectionState.Disconnected);
+            service.LingerMaxAttempts = 10;
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            await service.WhenIdleAsync();
+
+            Assert.That(reconnects, Is.EqualTo(1), "no rung after the user's disconnect may re-dispatch a connect");
+            Assert.That(Actions(), Does.Contain("released"));
+            Assert.That(Actions(), Does.Not.Contain("gave_up").And.Not.Contain("readopted").And.Not.Contain("recovered"));
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
+                "a mount the user let go of is not parked by the terminal action");
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(posted.Any(n => n.Title.Contains("released", StringComparison.Ordinal)), Is.True);
+        }
+
+        [Test]
+        public async Task A_user_disconnect_before_the_first_rung_releases_without_any_dispatch() {
+            // The disconnect landed during the first rung's delay: nothing is dispatched at all and
+            // the paused runs stay paused, which the release record says.
+            var run = Guid.NewGuid();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { run });
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(EquipmentConnectionState.Disconnected);
+
+            service.OnFault(Fault());
+            await service.WhenIdleAsync();
+
+            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(Actions(), Is.EqualTo(PauseReconnectReleased));
+            Assert.That(ActionPayload("released").GetProperty("paused_runs").GetInt32(), Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_user_disconnect_with_no_retries_skips_the_terminal_park() {
+            // Policy "abort_and_park" with hot reconnect off goes straight to the terminal action; a
+            // user disconnect seen there must not park the mount they just released.
+            SetPolicy(hotReconnect: false, onMountLost: "abort_park");
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(EquipmentConnectionState.Disconnected);
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            await service.WhenIdleAsync();
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(Actions(), Does.Contain("released").And.Not.Contain("gave_up"));
         }
 
         [Test]

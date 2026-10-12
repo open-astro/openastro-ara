@@ -50,7 +50,8 @@ public static class WsEventCatalog {
     public const string EquipmentFault = "equipment.fault";
     // §42.3 — what the FaultReactionService DID about a fault; payload { device_type, device_id,
     // device_name, kind, action, … } where action is sequence_paused | reconnecting | recovered
-    // | gave_up | notify_only (gave_up carries the terminal action taken).
+    // | gave_up | readopted | released | escalated | notify_only (gave_up carries the terminal action
+    // taken; released = the user disconnected the device mid-recovery, #1307, so nothing more is done).
     public const string EquipmentFaultActionTaken = "equipment.fault_action_taken";
     // #1298 — the manual filter wheel asked for, or got, a hand swap; payload { pending_slot,
     // pending_name, current_slot, current_name } (pending_* null once the swap is resolved or

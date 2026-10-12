@@ -29,7 +29,7 @@ namespace OpenAstroAra.Server.Contracts;
 /// detected, or null when no sequence run was in flight.</param>
 /// <param name="ActionTaken">The §42.3 reaction outcome for the fault
 /// (<c>notify_only</c>, <c>sequence_paused</c>, <c>reconnecting</c>,
-/// <c>recovered</c>, <c>gave_up:&lt;terminal&gt;</c>); null while an episode
+/// <c>recovered</c>, <c>gave_up:&lt;terminal&gt;</c>, <c>released:user_disconnect</c>); null while an episode
 /// is still deciding, or when no reaction applies.</param>
 /// <param name="ResolvedUtc">When the fault recovered; null if unresolved
 /// (or resolution isn't tracked for the kind, e.g. one-shot advisories).</param>
