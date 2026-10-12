@@ -80,9 +80,6 @@
          build on the patched lib. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-    <!-- §31.4 USB-GPS self-sync: serial NMEA reads from /dev/ttyUSB*/ttyACM*. Microsoft-maintained,
-         Linux support via a bundled native shim; plain P/Invoke so NativeAOT publish stays clean. -->
-    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
     <!-- §29.9.2 daemon log file: a rolling Compact-JSON (CLEF) sink the §29.9
          log endpoints tail/download. Both Apache-2.0 (Serilog), release-safe.
          Tail reads the CLEF lines back with System.Text.Json directly (no
