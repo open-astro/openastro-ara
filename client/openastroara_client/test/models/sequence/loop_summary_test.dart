@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/loop_summary.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/rig_capabilities.dart';
 
 /// The run the planner builds for "Narrowband · Ha / OIII": a target block
 /// (Loop 1 + until above horizon) holding Ha and OIII imaging loops.
@@ -46,6 +47,22 @@ void main() {
     expect(ha.totalFrames, 56);
     expect(ha.loopChip, '× 56 · 5.2 min · ≈ 4.8 h');
     expect(ha.triggerChip, 'AF every 23 · dither every 1');
+  });
+
+  // #1195 — an unguided rig's loop carries the re-centre trigger; the note names
+  // the threshold rather than falling back to the catalog label.
+  test('a Center After Drift trigger summarises as its threshold', () {
+    final run = buildImagingRunBody(
+      raDeg: 83.8,
+      decDeg: -5.4,
+      targetName: 'M42',
+      exposureSeconds: 60,
+      frameCount: 10,
+      rig: const RigCapabilities(focuser: true, filterWheel: true),
+    );
+    final loop = summarizeContainer(_find(run, 'Imaging'));
+    expect(loop.triggerNotes, contains('re-centre past 10′'));
+    expect(loop.triggerNotes, isNot(contains('Center After Drift')));
   });
 
   test('a target block loops once: no × chip, its horizon end is named', () {
