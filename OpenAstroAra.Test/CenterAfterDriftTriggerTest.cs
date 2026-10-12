@@ -251,6 +251,35 @@ namespace OpenAstroAra.Test {
             Assert.That(t.LastDistanceArcMinutes, Is.EqualTo(0));
         }
 
+        [Test]
+        public async Task A_solve_of_the_frame_taken_before_the_recentre_is_discarded() {
+            // AfterExposures = 1: the boundary that fires also starts a solve of the light just saved —
+            // a frame taken BEFORE the re-centre. Landing after Execute it must not re-arm the trigger.
+            var gate = new TaskCompletionSource<Coordinates?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var feed = new Mock<IFrameSolveFeed>();
+            var seq = 0L;
+            var latest = (SavedLight?)null;
+            feed.SetupGet(f => f.LatestLight).Returns(() => latest);
+            var calls = 0;
+            feed.Setup(f => f.SolveFrameAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .Returns(() => ++calls == 1 ? Task.FromResult<Coordinates?>(OffsetBy(15)) : gate.Task);
+            var executor = new Mock<ICenteringExecutor>();
+            executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            var t = Trigger(feed.Object, executor.Object);
+
+            latest = new SavedLight(Guid.NewGuid(), ++seq, DateTimeOffset.UtcNow);
+            t.ShouldTrigger(Light(), Light());
+            await SettleAsync(t);
+            latest = new SavedLight(Guid.NewGuid(), ++seq, DateTimeOffset.UtcNow);
+            Assert.That(t.ShouldTrigger(Light(), Light()), Is.True, "drift measured, and the pre-re-centre frame's solve is now in flight");
+            await t.Execute(new SequentialContainer(), new Progress<ApplicationStatus>(), CancellationToken.None);
+            gate.SetResult(OffsetBy(15)); // the slow solve lands after the re-centre
+            await SettleAsync(t);
+
+            Assert.That(t.LastDistanceArcMinutes, Is.EqualTo(0), "a stale solve must not write the old drift back");
+            Assert.That(t.ShouldTrigger(null, Light()), Is.False);
+        }
+
         // ── factory + import ──
 
         [Test]

@@ -265,7 +265,11 @@ namespace OpenAstroAra.Sequencer.Trigger.Platesolving {
             });
             Logger.Info(string.Create(CultureInfo.InvariantCulture, $"Center after drift: {drift:0.##}′ from {target} — re-centering"));
             var converged = await centeringExecutor.CenterAsync(target, progress ?? new Progress<ApplicationStatus>(), token);
-            // Whatever the outcome the stale measurement is gone: the next solve decides again.
+            // Whatever the outcome the stale measurement is gone: the next solve decides again. The
+            // generation bump also orphans a solve still running for the frame taken BEFORE this
+            // re-centre (AfterExposures = 1 starts one on the same boundary that fired); landing late
+            // it would write the old drift back and buy a second, needless re-centre.
+            Interlocked.Increment(ref blockGeneration);
             ResetSolveState();
             if (!converged) {
                 throw new SequenceEntityFailedException("Center-after-drift: centering did not converge within the profile's threshold/attempts.");
