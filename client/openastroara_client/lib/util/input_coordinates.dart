@@ -38,7 +38,11 @@ Map<String, dynamic> inputCoordinatesFromDeg(double raDeg, double decDeg) {
     'RAMinutes': rm,
     'RASeconds': rs,
     'NegativeDec': negativeDec,
-    'DecDegrees': dd,
+    // NINA's shape, which the daemon's InputCoordinates decodes: DecDegrees
+    // carries the SIGN (-5 for -5°24′); NegativeDec alone marks the -0°xx′
+    // case. An unsigned 5 with the flag decodes as -(5 - 24/60) = -4.6° on
+    // the daemon — every southern target was off by twice its arc-minutes.
+    'DecDegrees': negativeDec ? -dd : dd,
     'DecMinutes': dm,
     'DecSeconds': ds,
   };
@@ -65,10 +69,12 @@ Map<String, dynamic> inputCoordinatesFromDeg(double raDeg, double decDeg) {
   }
   final raHours = rh + rm / 60.0 + rs / 3600.0;
   final raDeg = _normalizeRaDeg(raHours * 15.0);
+  // Both shapes read: NINA's signed DecDegrees (-5, flag true) and the
+  // unsigned-plus-flag shape this client wrote before the sign fix.
   final decMagnitude =
-      (dd + dm / 60.0 + ds / 3600.0).clamp(0.0, 90.0).toDouble();
-  final decDeg =
-      coordinates['NegativeDec'] == true ? -decMagnitude : decMagnitude;
+      (dd.abs() + dm / 60.0 + ds / 3600.0).clamp(0.0, 90.0).toDouble();
+  final negative = coordinates['NegativeDec'] == true || dd < 0;
+  final decDeg = negative ? -decMagnitude : decMagnitude;
   return (raDeg: raDeg, decDeg: decDeg);
 }
 

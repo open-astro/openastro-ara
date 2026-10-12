@@ -177,6 +177,8 @@ String _triggerNote(Map<String, dynamic> t) {
       return 'AF after filter change';
     case 'MeridianFlipTrigger':
       return 'meridian flip';
+    case 'CenterAfterDriftTrigger':
+      return 're-centre past ${_fmtAmount(t['DistanceArcMinutes'])}′';
   }
   final def = type is String ? triggerForType(type) : null;
   return def?.label ?? shortTypeName(type) ?? 'trigger';

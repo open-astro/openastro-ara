@@ -380,6 +380,21 @@ void main() {
       await tester.pump();
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], true);
     });
+
+    testWidgets('a negative declination is written signed (NINA shape) and shown unsigned',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      await tester.enterText(find.byKey(const Key('Coordinates_dec_d')), '5');
+      await tester.pump();
+      await tester.tap(find.text('+'));
+      await tester.pump();
+      final coords = _nodeAt(c, [0])['Coordinates'] as Map;
+      expect(coords['NegativeDec'], true);
+      expect(coords['DecDegrees'], -5, reason: 'the daemon subtracts M/S from a SIGNED DecDegrees');
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_d')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '5', reason: 'the field shows the magnitude; the sign is the toggle');
+    });
   });
 
   testWidgets('binning 0 snaps to 1 in both model and field', (tester) async {

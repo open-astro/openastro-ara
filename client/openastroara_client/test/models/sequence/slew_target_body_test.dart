@@ -23,7 +23,7 @@ void main() {
       expect(coords[r'$type'], inputCoordinatesType);
       expect(coords['RAHours'], 12); // 180° / 15
       expect(coords['NegativeDec'], true);
-      expect(coords['DecDegrees'], 45);
+      expect(coords['DecDegrees'], -45, reason: 'NINA shape: the sign rides on DecDegrees');
     });
 
     test('names the root container when a target name is given', () {

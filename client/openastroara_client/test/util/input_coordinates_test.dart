@@ -48,10 +48,13 @@ void main() {
       expect(c['RASeconds'], closeTo(44.3, 0.2));
     });
 
-    test('negative dec sets the flag and keeps magnitude unsigned', () {
+    test('negative dec sets the flag AND signs the degrees (NINA shape)', () {
+      // The daemon's InputCoordinates computes Dec = DecDegrees - M/60 - S/3600
+      // when NegativeDec is set, so an unsigned 5 would decode as -4.5°, not
+      // -5.5° — the sign has to ride on DecDegrees.
       final c = inputCoordinatesFromDeg(0, -5.5);
       expect(c['NegativeDec'], true);
-      expect(c['DecDegrees'], 5);
+      expect(c['DecDegrees'], -5);
       expect(c['DecMinutes'], 30);
       expect(c['DecSeconds'], closeTo(0, 1e-6));
     });
@@ -64,10 +67,10 @@ void main() {
       expect(c['DecSeconds'], closeTo(8.4, 0.3));
     });
 
-    test('dec clamps to the pole: -90° → 90°/0/0 negative', () {
+    test('dec clamps to the pole: -90° → -90°/0/0 negative', () {
       final c = inputCoordinatesFromDeg(0, -90);
       expect(c['NegativeDec'], true);
-      expect(c['DecDegrees'], 90);
+      expect(c['DecDegrees'], -90);
       expect(c['DecMinutes'], 0);
       expect(c['DecSeconds'], closeTo(0, 1e-6));
     });
@@ -84,15 +87,38 @@ void main() {
     test('round-trips: signed D + M/60 + S/3600 reproduces the Dec degrees', () {
       const decDeg = -27.8664;
       final c = inputCoordinatesFromDeg(0, decDeg);
-      final mag = (c['DecDegrees'] as int) +
-          (c['DecMinutes'] as int) / 60.0 +
+      // The daemon's own rule: signed degrees, minutes/seconds subtracted
+      // when NegativeDec.
+      final dd = (c['DecDegrees'] as int).toDouble();
+      final frac = (c['DecMinutes'] as int) / 60.0 +
           (c['DecSeconds'] as double) / 3600.0;
-      final signed = (c['NegativeDec'] as bool) ? -mag : mag;
-      expect(signed, closeTo(decDeg, 1e-6));
+      final daemonDec = (c['NegativeDec'] as bool) ? dd - frac : dd + frac;
+      expect(daemonDec, closeTo(decDeg, 1e-6));
+    });
+
+    test('a southern target just below the equator keeps -0°xx′ via the flag', () {
+      final c = inputCoordinatesFromDeg(0, -0.5);
+      expect(c['NegativeDec'], true);
+      expect(c['DecDegrees'], 0);
+      expect(c['DecMinutes'], 30);
     });
   });
 
   group('degFromInputCoordinates', () {
+    test('reads both the signed (NINA) and the legacy unsigned-plus-flag shapes', () {
+      const signed = {
+        'RAHours': 5, 'RAMinutes': 30, 'RASeconds': 0.0,
+        'NegativeDec': true, 'DecDegrees': -5, 'DecMinutes': 24, 'DecSeconds': 0.0,
+      };
+      const legacy = {
+        'RAHours': 5, 'RAMinutes': 30, 'RASeconds': 0.0,
+        'NegativeDec': true, 'DecDegrees': 5, 'DecMinutes': 24, 'DecSeconds': 0.0,
+      };
+      expect(degFromInputCoordinates(signed)!.decDeg, closeTo(-5.4, 1e-9));
+      expect(degFromInputCoordinates(legacy)!.decDeg, closeTo(-5.4, 1e-9));
+      expect(degFromInputCoordinates(signed)!.raDeg, closeTo(82.5, 1e-9));
+    });
+
     test('inverts inputCoordinatesFromDeg — RA back in DEGREES, not hours', () {
       // M42: the doubly-important case (negative dec + RA where an hours/degrees
       // mixup would be silent — 83.822° = 5.59 h, both "plausible" numbers).

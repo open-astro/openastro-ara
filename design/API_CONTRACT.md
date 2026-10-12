@@ -476,6 +476,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-12 — Center After Drift trigger re-ported; `InputCoordinates` declination sign (#1195)
+
+**Endpoint(s) or area:** sequence `$type` `OpenAstroAra.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger` (NINA's `NINA.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger` maps to it on import); the `InputCoordinates` JSON shape every sequence body carries (`SlewScopeToRaDec`, `CenterAndRotate`, altitude conditions, this trigger).
+
+**Decision:** the trigger carries NINA's fields unchanged — `Coordinates` (`InputCoordinates`), `DistanceArcMinutes` (default 10), `AfterExposures` (default 1) — and no runner: it re-centres through the daemon's §28 centering seam. Drift is measured from the saved lights themselves (the daemon plate-solves every Nth catalogued LIGHT from disk, seeded with the mount position), never from an extra capture; a frame that does not solve leaves the trigger quiet. The client's run builder attaches it to each imaging loop on a rig without a guider, aimed at the target. `InputCoordinates` follows NINA's shape for a negative declination: `DecDegrees` is SIGNED (`-5` for −5°24′) and `NegativeDec: true` marks the sign, which alone carries the −0°xx′ case. The client wrote an unsigned `DecDegrees` with the flag before this change; the daemon decoded that as `DecDegrees − M/60 − S/3600` (−5°24′ → −4.6°). The client now writes signed degrees and reads both shapes.
+
+**Reasoning:** re-centre decisions belong in the sequence (NINA plans carry the trigger, and it is the unguided rig's only pull back onto the framing), while the solve belongs to the daemon, which owns the files and the solver. Reusing the light avoids a capture per cadence on a Pi that is already analysing every frame. The declination fix changes no daemon code: the daemon was NINA-faithful, the client was not.
+
+**Spec ref:** `OpenAstroAra.Sequencer/Trigger/Platesolving/CenterAfterDriftTrigger.cs`, `OpenAstroAra.Sequencer/Interfaces/IFrameSolveFeed.cs`, `Services/FrameSolveFeed.cs`; client `trigger_catalog.dart`, `imaging_run_body.dart`, `util/input_coordinates.dart`, `sequence_field_editor.dart`.
+
+**Related:** #1195, #1264 (periodic re-centre leftover), #1272 (custom coordinates — southern targets were affected); tests `CenterAfterDriftTriggerTest`, `input_coordinates_test.dart`.
+
+---
+
 ### 2026-10-03 — Smart Focus judges "in focus" against the HFR the sweep measured
 
 **Where:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`.

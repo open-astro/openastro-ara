@@ -126,9 +126,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? legacyProfile = null,
         Func<ITelescopeMediator?>? telescope = null,
         Func<IFilterWheelMediator?>? filterWheel = null,
-        IFrameQualitySink? frameQuality = null) {
+        IFrameQualitySink? frameQuality = null,
+        ISavedLightSink? savedLights = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _frameQuality = frameQuality;
+        _savedLights = savedLights;
         _fan = fan;
         _legacyProfile = legacyProfile;
         _telescope = telescope;
@@ -147,6 +149,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private readonly ImageHistoryService? _imageHistory;
     // #1264 — the latest analysed LIGHT's star shape, for the sequencer's UnguidedExposureGuard.
     private readonly IFrameQualitySink? _frameQuality;
+    // #1195 — every saved LIGHT, for the sequencer's CenterAfterDriftTrigger (solved from disk on demand).
+    private readonly ISavedLightSink? _savedLights;
 
     // §25.5.6 / #1065 — the cooling fan follows the cooler. Lazily resolved (Func<>) to break the
     // CameraService ↔ SwitchService construction cycle. Null = no switch service wired (tests).
@@ -869,6 +873,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         LogCaptureStoreTiming(frameId, writeMs, storeTiming.ElapsedMilliseconds - writeMs);
         PrewarmPreview(frameId);
         if (frameType == FrameType.Light) {
+            _savedLights?.RecordLightSaved(frameId);
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
             // time, and delaying frame.complete (or the next exposure) for a statistic is the
             // wrong trade. The pixels are already in hand; the write-back lands as

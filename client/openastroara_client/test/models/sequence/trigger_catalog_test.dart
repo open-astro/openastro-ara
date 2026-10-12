@@ -104,6 +104,21 @@ void main() {
       expect(reconnectDeviceNames, isNot(contains('Telescope')));
     });
 
+    test('CenterAfterDriftTrigger carries the target, the threshold and the cadence', () {
+      final def = triggerForType(centerAfterDriftType)!;
+      expect(def.fields.map((f) => f.key), ['Coordinates', 'DistanceArcMinutes', 'AfterExposures']);
+      expect(def.runnerItems, isEmpty, reason: 'the daemon re-centres through its own seam');
+      final node = def.build();
+      // C# constructor defaults.
+      expect(node['DistanceArcMinutes'], 10.0);
+      expect(node['AfterExposures'], 1);
+      expect((node['Coordinates'] as Map)[r'$type'], contains('InputCoordinates'));
+      expect(node.keys.toSet(),
+          {r'$type', 'Coordinates', 'DistanceArcMinutes', 'AfterExposures', 'Parent', 'TriggerRunner'});
+      // Each build gets its own coordinates map (deep-cloned default).
+      expect(identical(def.build()['Coordinates'], node['Coordinates']), isFalse);
+    });
+
     test('build() throws if a field key collides with a reserved base key', () {
       const bad = TriggerDef(
         type: 'X.Bad, X',

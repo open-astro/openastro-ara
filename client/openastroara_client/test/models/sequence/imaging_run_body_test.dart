@@ -4,6 +4,7 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/rig_capabilities.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
+import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/models/sequence/slew_target_body.dart';
 
 void main() {
@@ -101,7 +102,7 @@ void main() {
       expect(coords['RAHours'], 5);
       expect(coords['RAMinutes'], 35);
       expect(coords['NegativeDec'], true);
-      expect(coords['DecDegrees'], 5);
+      expect(coords['DecDegrees'], -5, reason: 'NINA shape: the sign rides on DecDegrees');
       expect(coords['DecMinutes'], 24);
     });
 
@@ -369,8 +370,8 @@ void main() {
       // exposure ceiling, so the probe and the guard are the ONLY extras.
       expect(t, [slewScopeToRaDecType, trackingProbeType, sequentialContainerType]);
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop).map((x) => x[r'$type']), [unguidedExposureGuardType],
-          reason: 'no focuser → no AF trigger; no guider → no dither, but the exposure guard');
+      expect(triggersOf(loop).map((x) => x[r'$type']), [unguidedExposureGuardType, centerAfterDriftType],
+          reason: 'no focuser → no AF trigger; no guider → no dither, but the exposure guard and the re-centre');
     });
 
     test('the full rig gets everything the caller asked for', () {
@@ -430,6 +431,20 @@ void main() {
       expect(types(b), isNot(contains(trackingProbeType)));
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
       expect(triggersOf(loop).map((x) => x[r'$type']), isNot(contains(unguidedExposureGuardType)));
+      expect(triggersOf(loop).map((x) => x[r'$type']), isNot(contains(centerAfterDriftType)));
+    });
+
+    // #1195 — unguided, nothing pulls the field back when drift walks it off
+    // the framing: a Center After Drift on each loop, aimed at the target.
+    test('a rig without a guider also gets a Center After Drift aimed at the target', () {
+      final b = block(const RigCapabilities(focuser: true, filterWheel: true), filter: 'Ha');
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      final drift = triggersOf(loop).singleWhere((x) => x[r'$type'] == centerAfterDriftType);
+      final target = degFromInputCoordinates(drift['Coordinates'])!;
+      expect(target.raDeg, closeTo(1, 1e-6));
+      expect(target.decDeg, closeTo(2, 1e-6));
+      expect(drift['DistanceArcMinutes'], 10.0);
+      expect(drift['AfterExposures'], 1);
     });
 
     test('the probe is capped at the longest planned sub of a multi-filter plan; each guard at its own', () {
@@ -612,7 +627,7 @@ void main() {
       // 83.8° RA = 5h 35m 12s; dec −5.4° = −5° 24′ 0″.
       expect(coords['RAHours'], 5);
       expect(coords['NegativeDec'], isTrue);
-      expect(coords['DecDegrees'], 5);
+      expect(coords['DecDegrees'], -5, reason: 'NINA shape: the sign rides on DecDegrees');
       expect(coords['DecMinutes'], 24);
     });
 

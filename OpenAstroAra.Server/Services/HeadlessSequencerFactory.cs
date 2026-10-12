@@ -192,7 +192,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IAutofocusConditionGate? autofocusConditionGate = null,
             IFlatCaptureExecutor? flatCaptureExecutor = null,
             OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor? trackingProbeExecutor = null,
-            OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null) {
+            OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null,
+            OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -388,6 +389,11 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // #1264 — the unguided exposure guard: steps the imaging loop's exposure down/up a rung
                 // from the §59.5 analysis of each light (through IFrameQualityFeed).
                 new OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard(frameQualityFeed),
+                // #1195 — NINA's Center After Drift: solve every Nth saved light from disk, re-centre through the
+                // §28 centering seam when the field has drifted past the threshold. Removed in #242, re-ported
+                // so imported plans no longer load it as UnknownSequenceTrigger.
+                new OpenAstroAra.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger(
+                    frameSolveFeed, centeringExecutor, telescopeMediator, cameraMediator),
                 // §59.5 — the remaining autofocus trigger family: time interval, focuser-temp
                 // delta, HFR drift, first-use-of-a-filter. Each reads the daemon's session
                 // image history (plus the equipment it observes) and consults the §59.9

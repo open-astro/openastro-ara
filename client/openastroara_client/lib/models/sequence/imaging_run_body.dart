@@ -283,6 +283,17 @@ Map<String, dynamic> buildTargetBlock({
       }
       // The planned sub is the longest the guard may step back up to.
       triggers.add(guardDef.build()..['MaxExposure'] = expSeconds);
+      // #1195 — and the periodic re-centre: unguided, nothing else pulls the
+      // field back when polar-alignment drift walks it off the framing.
+      final driftDef = triggerForType(centerAfterDriftType);
+      if (driftDef == null) {
+        throw StateError(
+          'CenterAfterDriftTrigger missing from the trigger catalog',
+        );
+      }
+      triggers.add(
+        driftDef.build()..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg),
+      );
     }
     if (triggers.isNotEmpty) imaging = withTriggers(imaging, triggers);
     return imaging;

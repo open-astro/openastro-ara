@@ -657,7 +657,9 @@ public partial class Program {
                 // none (every sequence TakeExposure). Func<>: registered later in this file.
                 filterWheel: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
                 // #1264 — the latest analysed light's star shape for the unguided exposure guard.
-                frameQuality: sp.GetRequiredService<FrameQualityFeed>()));
+                frameQuality: sp.GetRequiredService<FrameQualityFeed>(),
+                // #1195 — every saved light, for the drift trigger's on-demand solve.
+                savedLights: sp.GetRequiredService<FrameSolveFeed>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -709,6 +711,14 @@ public partial class Program {
                 sp.GetRequiredService<IFrameRepository>(),
                 sp.GetRequiredService<INotificationService>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FrameQualityFeed>>()));
+        // #1195 — the saved-light solve feed the Center After Drift trigger measures pointing drift through.
+        builder.Services.AddSingleton<FrameSolveFeed>(sp =>
+            new FrameSolveFeed(
+                sp.GetRequiredService<IFrameRepository>(),
+                sp.GetRequiredService<IPlateSolveService>(),
+                sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FrameSolveFeed>>()));
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(sp =>
             new TrackingProbeService(
                 sp.GetRequiredService<IProfileStore>(),
@@ -1016,7 +1026,9 @@ public partial class Program {
                 flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(),
                 // #1264 — the unguided tracking probe and the exposure guard's frame-quality feed.
                 trackingProbeExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(),
-                frameQualityFeed: sp.GetRequiredService<FrameQualityFeed>()));
+                frameQualityFeed: sp.GetRequiredService<FrameQualityFeed>(),
+                // #1195 — the saved-light solve feed behind the Center After Drift trigger.
+                frameSolveFeed: sp.GetRequiredService<FrameSolveFeed>()));
         // The by-hand rotation readout (the Plan screen's "Rotate camera" panel on a rig without a rotator):
         // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done",
         // the profile's plate-solve exposure as the default exposure.

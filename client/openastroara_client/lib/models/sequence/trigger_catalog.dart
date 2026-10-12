@@ -26,6 +26,7 @@ import 'instruction_catalog.dart'
         InstructionFieldType,
         checkNoReservedFieldKeys,
         deepCloneJson,
+        defaultCoordinates,
         ditherType,
         instructionForType,
         runAutofocusType,
@@ -140,6 +141,12 @@ const String autofocusAfterExposuresType =
 const String unguidedExposureGuardType =
     'OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard, OpenAstroAra.Sequencer';
 
+/// #1195 — NINA's Center After Drift: solve every Nth saved light, re-centre
+/// when the field has drifted past the threshold. The run builder attaches it
+/// to each imaging loop on a rig without a guider.
+const String centerAfterDriftType =
+    'OpenAstroAra.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger, OpenAstroAra.Sequencer';
+
 const List<TriggerDef> triggerCatalog = [
   // #1264 — unguided exposure guard: two consecutive trailed lights (median
   // eccentricity over the tolerance) step the loop's exposure down one rung
@@ -163,6 +170,37 @@ const List<TriggerDef> triggerCatalog = [
         InstructionFieldType.number,
         defaultValue: 0.5,
         min: 0.05,
+      ),
+    ],
+  ),
+  // #1195 — Center After Drift: every AfterExposures saved lights the newest
+  // one is plate-solved from disk; past DistanceArcMinutes from Coordinates
+  // the next light is preceded by a re-centre (the §28 solve → sync → re-slew
+  // loop). No runner: the daemon re-centres through its centering seam.
+  TriggerDef(
+    type: centerAfterDriftType,
+    label: 'Center After Drift',
+    icon: Icons.my_location_outlined,
+    fields: [
+      InstructionField(
+        'Coordinates',
+        'Target',
+        InstructionFieldType.coordinates,
+        defaultValue: defaultCoordinates,
+      ),
+      InstructionField(
+        'DistanceArcMinutes',
+        'Re-centre past (arc minutes)',
+        InstructionFieldType.number,
+        defaultValue: 10.0,
+        min: 0.1,
+      ),
+      InstructionField(
+        'AfterExposures',
+        'Solve every N lights',
+        InstructionFieldType.integer,
+        defaultValue: 1,
+        min: 1,
       ),
     ],
   ),

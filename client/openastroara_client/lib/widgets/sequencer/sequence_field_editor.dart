@@ -943,7 +943,11 @@ class _CoordinatesEditor extends StatelessWidget {
         : defaultCoordinates[r'$type'];
     int ri(String k) => c[k] is num ? (c[k] as num).toInt() : 0;
     double rd(String k) => c[k] is num ? (c[k] as num).toDouble() : 0.0;
-    final neg = c['NegativeDec'] == true;
+    // NINA's shape: DecDegrees carries the sign, NegativeDec marks -0°xx′ too.
+    // Older client-written nodes carry an unsigned DecDegrees with the flag;
+    // both read, and every write goes out signed.
+    final neg = c['NegativeDec'] == true || ri('DecDegrees') < 0;
+    final decDegMagnitude = ri('DecDegrees').abs();
     Map<String, dynamic> coord({
       int? raH,
       int? raM,
@@ -953,9 +957,10 @@ class _CoordinatesEditor extends StatelessWidget {
       int? decM,
       double? decS,
     }) {
-      var dd = decD ?? ri('DecDegrees');
+      var dd = decD ?? decDegMagnitude;
       var dm = decM ?? ri('DecMinutes');
       var ds = decS ?? rd('DecSeconds');
+      final negative = negDec ?? neg;
       // ±90° is the declination pole — minutes/seconds must be 0 there
       // (90:30:00 is invalid). Enforce the cross-field boundary that the
       // per-component clamps can't.
@@ -969,8 +974,8 @@ class _CoordinatesEditor extends StatelessWidget {
         'RAHours': raH ?? ri('RAHours'),
         'RAMinutes': raM ?? ri('RAMinutes'),
         'RASeconds': raS ?? rd('RASeconds'),
-        'NegativeDec': negDec ?? neg,
-        'DecDegrees': dd,
+        'NegativeDec': negative,
+        'DecDegrees': negative ? -dd : dd,
         'DecMinutes': dm,
         'DecSeconds': ds,
       };
@@ -1016,7 +1021,7 @@ class _CoordinatesEditor extends StatelessWidget {
           ),
           _NumField(
             key: Key('${fieldKey}_dec_d'),
-            value: ri('DecDegrees'),
+            value: decDegMagnitude,
             isInt: true,
             min: 0,
             max: 90,
@@ -1031,7 +1036,7 @@ class _CoordinatesEditor extends StatelessWidget {
             isInt: true,
             min: 0,
             max: 59,
-            enabled: enabled && ri('DecDegrees') < 90,
+            enabled: enabled && decDegMagnitude < 90,
             onChanged: (v) => onChanged(coord(decM: v.toInt())),
           ),
           _NumField(
@@ -1040,7 +1045,7 @@ class _CoordinatesEditor extends StatelessWidget {
             isInt: false,
             min: 0,
             max: 59.999,
-            enabled: enabled && ri('DecDegrees') < 90,
+            enabled: enabled && decDegMagnitude < 90,
             onChanged: (v) => onChanged(coord(decS: v.toDouble())),
           ),
         ]),
