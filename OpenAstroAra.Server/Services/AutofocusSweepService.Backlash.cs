@@ -132,6 +132,10 @@ public sealed partial class AutofocusSweepService {
                 return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);
             }
             var steps = Math.Max(1, (int)Math.Round(offset));
+            if (best + steps > travel.Max) {
+                LogBacklashProbeInconclusive("the compensated return would exceed the focuser's travel");
+                return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);
+            }
             // 3. verify: down again, then up to best + estimate — the counter overshoots by the
             // backlash so the optics land ON best
             await _focuser.MoveFocuser(best - span, token).ConfigureAwait(false);
@@ -141,15 +145,26 @@ public sealed partial class AutofocusSweepService {
             LogBacklashMeasured(steps, verified);
             return await BacklashDoneAsync(settings, best, steps, verified, token).ConfigureAwait(false);
         } catch (OperationCanceledException) {
-            throw;
+            // A cancel during the probe must not throw away the sweep that already succeeded (the
+            // sweep's own catch would restore the pre-sweep position): land on best, record nothing
+            // for backlash, and let the sweep complete — same posture as the confirmation frame.
+            LogBacklashProbeInconclusive("cancelled during the probe");
+            await LandQuietlyAsync(best, settings).ConfigureAwait(false);
+            return new BacklashMeasurement(null, false);
         } catch (Exception ex) {
             LogBacklashProbeFailed(ex);
-            try {
-                await LandFromAboveAsync(best, settings, CancellationToken.None).ConfigureAwait(false);
-            } catch (Exception restore) {
-                LogBacklashProbeFailed(restore);
-            }
+            await LandQuietlyAsync(best, settings).ConfigureAwait(false);
             return new BacklashMeasurement(null, false);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort landing after a failed or cancelled probe; a focuser fault here is logged, the sweep's result stands.")]
+    private async Task LandQuietlyAsync(int best, AutofocusSettingsDto settings) {
+        try {
+            await LandFromAboveAsync(best, settings, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception restore) {
+            LogBacklashProbeFailed(restore);
         }
     }
 
@@ -165,7 +180,9 @@ public sealed partial class AutofocusSweepService {
         var result = _metric(frame, token);
         var hfr = result.AverageHFR;
         var kept = result.DetectedStars >= MinStarsPerProbe && hfr > 0 && double.IsFinite(hfr) && !result.NoiseFlooded;
-        await RecordProbeAsync("backlash", position, hfr, result.DetectedStars, kept, 3, kept ? frame : null).ConfigureAwait(false);
+        // No frame: the run's picture stays the confirmation frame at best focus (review of #1319) —
+        // a defocused control shot must never replace the focused field the Smart Focus pane shows.
+        await RecordProbeAsync("backlash", position, hfr, result.DetectedStars, kept, 3, frame: null).ConfigureAwait(false);
         LogBacklashShot(index, position, hfr, result.DetectedStars);
         return kept ? hfr : null;
     }
