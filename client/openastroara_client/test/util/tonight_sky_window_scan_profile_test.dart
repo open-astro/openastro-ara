@@ -14,8 +14,9 @@ import 'package:openastroara/util/tonight_sky_local.dart';
 /// every recompute (site, optics, filter or clock change). The assertion is a
 /// loose ceiling that only catches a pathological regression (an O(n²) merge,
 /// a per-object sun/moon recompute); the measured number is printed for the
-/// issue record. Dart VM JIT here; AOT on a phone or the Pi-driven desktop is
-/// in the same ballpark for this kind of straight-line arithmetic.
+/// issue record. Dart VM JIT here; a phone or the Pi-driven desktop under AOT
+/// was NOT measured (#1141 leaves that for a rig night) — the Mac number is the
+/// reference, and the ranking runs in an isolate anyway.
 void main() {
   List<PlanningDso> load(String file) =>
       parseOpenNgcCsv(File('assets/catalogs/$file').readAsStringSync());
@@ -38,19 +39,10 @@ void main() {
     apertureMm: 51,
   );
 
-  test('the window scan over the full bundled catalog stays well inside a frame budget', () {
+  test('the window scan over the full bundled catalog stays under a loose 2 s regression ceiling', () {
     final catalog = <PlanningDso>[
-      for (final f in const [
-        'NGC.csv',
-        'sh2.csv',
-        'ldn.csv',
-        'barnard.csv',
-        'vdb.csv',
-        'abell-pn.csv',
-        'arp.csv',
-        'wr.csv',
-      ])
-        ...load(f),
+      // The same list the app ships, so a ninth package is profiled too.
+      for (final asset in bundledCatalogAssets) ...load(asset.split('/').last),
     ];
     expect(
       catalog.length,
