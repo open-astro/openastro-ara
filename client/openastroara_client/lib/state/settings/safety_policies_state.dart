@@ -41,8 +41,11 @@ class SafetyPolicies {
   final double meridianRefocusTempThresholdC;
 
   // §58.6 — auto_restore (the guider's own restore, ~30 s), full (5-10 min
-  // recalibration) or skip (do not resume guiding).
-  final GuiderRecalMode meridianGuiderRecal;
+  // recalibration) or skip (do not resume guiding). Null = the profile predates
+  // the mode: the daemon keeps its old behaviour (guiding restored when a guider
+  // is connected; the legacy bool alone says whether one is required) and the
+  // client leaves the field untouched until the dropdown is used.
+  final GuiderRecalMode? meridianGuiderRecal;
 
   // §58.10 (#1138) — an explicit unattended window, site-local HH:mm start and
   // end (wrapping past midnight). Both blank = computed from the sun.
@@ -304,7 +307,8 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
   }
 
   /// The mode drives the legacy bool too, so an older daemon still sees
-  /// "recalibrate" for anything but skip.
+  /// "recalibrate" for anything but skip. Until the user picks one, a legacy
+  /// profile's null mode (and its bool) are left exactly as stored.
   void setMeridianGuiderRecal(GuiderRecalMode v) => state = state.copyWith(
         meridianGuiderRecal: v,
         meridianRecalGuider: v != GuiderRecalMode.skip,

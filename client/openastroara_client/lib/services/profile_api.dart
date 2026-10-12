@@ -970,12 +970,11 @@ class ProfileApi {
         meridianRefocus: _meridianRefocusFromString(j['meridian_refocus'] as String?),
         meridianRefocusTempThresholdC:
             (j['meridian_refocus_temp_threshold_c'] as num?)?.toDouble() ?? 2.0,
-        // A daemon/profile from before the mode: derive it from the legacy bool (false → skip).
+        // A daemon/profile from before the mode carries null: left null here too, so a save
+        // does not invent a mode (the daemon keeps its legacy behaviour until the user picks one).
         meridianGuiderRecal: j['meridian_guider_recal'] is String
             ? _guiderRecalFromString(j['meridian_guider_recal'] as String)
-            : ((j['meridian_recal_guider'] as bool?) ?? true)
-                ? GuiderRecalMode.autoRestore
-                : GuiderRecalMode.skip,
+            : null,
         unattendedWindowStart: (j['unattended_window_start'] as String?) ?? '',
         unattendedWindowEnd: (j['unattended_window_end'] as String?) ?? '',
         onAltitudeLimit: _altitudeLimitActionFromString(
@@ -1040,7 +1039,9 @@ class ProfileApi {
     'meridian_recal_guider': v.meridianRecalGuider,
     'meridian_refocus': _meridianRefocusToString(v.meridianRefocus),
     'meridian_refocus_temp_threshold_c': v.meridianRefocusTempThresholdC,
-    'meridian_guider_recal': _guiderRecalToString(v.meridianGuiderRecal),
+    'meridian_guider_recal': v.meridianGuiderRecal == null
+        ? null
+        : _guiderRecalToString(v.meridianGuiderRecal!),
     'unattended_window_start':
         v.unattendedWindowStart.isEmpty ? null : v.unattendedWindowStart,
     'unattended_window_end':

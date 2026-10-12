@@ -79,20 +79,22 @@ void main() {
       final old = ProfileApi.safetyPoliciesFromJson({'on_unsafe': 'pause_and_park'});
       expect(old.meridianRefocus, MeridianRefocusMode.ifTempDrifted);
       expect(old.meridianRefocusTempThresholdC, 2.0);
-      expect(old.meridianGuiderRecal, GuiderRecalMode.autoRestore);
+      expect(old.meridianGuiderRecal, isNull, reason: 'no mode on the wire: left for the daemon to decide');
       expect(old.unattendedWindowStart, '');
       expect(ProfileApi.safetyPoliciesFromJson({'meridian_guider_recal': 'bogus'}).meridianGuiderRecal,
           GuiderRecalMode.autoRestore);
-      // A profile from before the mode: the legacy bool decides (false → skip), so a user who had
-      // switched re-calibration off is not shown "Restore calibration".
-      expect(ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': false}).meridianGuiderRecal,
-          GuiderRecalMode.skip);
-      expect(ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': true}).meridianGuiderRecal,
-          GuiderRecalMode.autoRestore);
+      // A profile from before the mode stays null, and a save keeps it null with the legacy bool
+      // untouched: the daemon keeps resuming guiding when a guider is connected, and a user who
+      // had switched the re-calibration off is not silently moved to "skip" (or to "required").
+      final legacy = ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': false});
+      expect(legacy.meridianGuiderRecal, isNull);
+      expect(legacy.meridianRecalGuider, isFalse);
+      final saved = ProfileApi.safetyPoliciesToJson(legacy);
+      expect(saved['meridian_guider_recal'], isNull);
+      expect(saved['meridian_recal_guider'], isFalse);
       expect(
           ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': true, 'meridian_guider_recal': 'skip'}).meridianGuiderRecal,
-          GuiderRecalMode.skip,
-          reason: 'an explicit mode wins over the bool');
+          GuiderRecalMode.skip);
     });
   });
 }

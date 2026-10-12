@@ -245,10 +245,13 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             },
           ),
         // §58.4 step 4 — how guiding comes back.
+        // A legacy profile (null mode) shows the daemon's effective behaviour —
+        // guiding restored when a guider is connected — without writing it back
+        // until the user picks something.
         SettingsDropdownRow<GuiderRecalMode>(
           label: 'Guiding after flip',
           helpKey: 'safety.policies.meridian_guider_recal',
-          value: s.meridianGuiderRecal,
+          value: s.meridianGuiderRecal ?? GuiderRecalMode.autoRestore,
           items: const {
             GuiderRecalMode.autoRestore: 'Restore calibration (fast)',
             GuiderRecalMode.full: 'Full recalibration (5-10 min)',
