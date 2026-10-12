@@ -93,7 +93,7 @@ namespace OpenAstroAra.Test {
         public async Task ProfilePush_returns_202_accepted_on_success() {
             var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, "idem-2");
             var svc = new Mock<IGuiderService>();
-            svc.Setup(s => s.PushGuiderProfileAsync("idem-2", It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.PushGuiderProfileAsync("idem-2", It.IsAny<CancellationToken>(), It.IsAny<bool>()))
                 .ReturnsAsync(accepted);
 
             var result = await EquipmentEndpoints.PushGuiderProfileAsync("idem-2", svc.Object, CancellationToken.None);
@@ -107,7 +107,7 @@ namespace OpenAstroAra.Test {
         public async Task ProfilePush_maps_an_unserved_alpaca_selection_to_422_with_the_reason() {
             // #1306 — a bare "Alpaca Camera" with no host/port is refused before anything is sent.
             var svc = new Mock<IGuiderService>();
-            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
                 .ThrowsAsync(new GuiderSelectionInvalidException("The guide camera 'Alpaca Camera' names an Alpaca driver but no server"));
 
             var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
@@ -119,7 +119,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task ProfilePush_maps_not_connected_InvalidOperation_to_typed_409() {
             var svc = new Mock<IGuiderService>();
-            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
                 .ThrowsAsync(new InvalidOperationException("guider is not connected"));
 
             var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
@@ -165,12 +165,12 @@ namespace OpenAstroAra.Test {
         public async Task Push_without_a_tuning_scope_runs_the_full_push(string? scope) {
             var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, null);
             var svc = new Mock<IGuiderService>(MockBehavior.Strict);
-            svc.Setup(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+            svc.Setup(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>(), It.IsAny<bool>())).ReturnsAsync(accepted);
 
             var result = await EquipmentEndpoints.PushGuiderAsync(scope, null, svc.Object, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
-            svc.Verify(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+            svc.Verify(s => s.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
         }
 
         [Test]
@@ -199,7 +199,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task ProfilePush_maps_reconnect_failure_GuiderRpcException_to_422() {
             var svc = new Mock<IGuiderService>();
-            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
                 .ThrowsAsync(new GuiderRpcException("set_connected", -1, "profile pushed, but the daemon could not reconnect its equipment"));
 
             var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
