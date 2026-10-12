@@ -1535,8 +1535,11 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.guider.guide_camera',
     title: 'Guide camera',
     body:
-        'Which camera the guider uses to watch a guide star. This list comes from the guider\'s own equipment '
-        'detection — pick your small guide camera here, never the main imaging camera.',
+        'Which camera the guider uses to watch a guide star — pick your small guide camera here, never the main '
+        'imaging camera. The list holds the guider\'s own detected drivers plus every camera found on an Alpaca '
+        'server: the one in Alpaca host/port below and any that Discover Alpaca turns up, read through the rig. '
+        'An Alpaca entry reads "Name (host:port/N)"; picking one also fills the Alpaca host and port so the guider '
+        'is pointed at that server when you Apply. A plain "Alpaca Camera" with no host and port cannot be applied.',
   ),
   'eq.guider.guide_camera_id': Help(
     key: 'eq.guider.guide_camera_id',
@@ -1551,8 +1554,10 @@ const Map<String, Help> helpRegistry = {
     title: 'Guide mount',
     body:
         'The connection the guider uses to send correction pulses to the mount. "On-camera" means pulses travel through '
-        'the ST-4 cable from guide camera to mount; an ASCOM/INDI mount entry means pulses go over the mount\'s own '
-        'driver connection (generally more reliable and lets the guider know the pointing position).',
+        'the ST-4 cable from guide camera to mount; an ASCOM/INDI/Alpaca mount entry means pulses go over the mount\'s own '
+        'driver connection (generally more reliable and lets the guider know the pointing position). Alpaca mounts are '
+        'listed only from the guide camera\'s server (or the Alpaca host/port below), because the guider talks to one '
+        'Alpaca server per profile.',
   ),
   'eq.guider.aux_mount': Help(
     key: 'eq.guider.aux_mount',
@@ -1575,8 +1580,8 @@ const Map<String, Help> helpRegistry = {
     title: 'Alpaca host',
     body:
         'The address of the Alpaca bridge the guider uses to reach cameras and mounts over the network. '
-        'On a standard rig this is the rig computer itself (localhost). Only change it if your devices are served '
-        'by an Alpaca server on a different machine.',
+        'On a standard rig this is the rig computer itself (127.0.0.1). Filled for you when you pick an Alpaca guide '
+        'camera from the list; type it only when your devices are served by an Alpaca server the list does not show.',
   ),
   'eq.guider.alpaca_port': Help(
     key: 'eq.guider.alpaca_port',
