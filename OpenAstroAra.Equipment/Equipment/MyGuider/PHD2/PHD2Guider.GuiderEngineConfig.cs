@@ -156,11 +156,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return (m.Groups[1].Value, port, device);
         }
 
-        /// <summary>§63.20 / #1306 — a BARE Alpaca selection (the daemon's generic <c>"Alpaca Camera"</c>
-        /// with no <c>[host:port/N]</c> suffix) only means something when the stored Alpaca host AND port
-        /// name the server. Without them the push never sends <c>set_alpaca_server</c>, the daemon stays on
-        /// <c>localhost:0</c> and every connect fails with "equipment failed to connect". Returns a
-        /// one-line reason naming the slot, or null when the selections are pushable. Pure.</summary>
+        /// <summary>§63.20 / #1306 — an Alpaca selection is only pushable when a server is known: the guide
+        /// camera's <c>[host:port/N]</c> suffix, or the stored Alpaca host AND port. Without one the push never
+        /// sends <c>set_alpaca_server</c>, the daemon stays on <c>localhost:0</c> and every connect fails with
+        /// "equipment failed to connect". That covers the daemon's bare generic <c>"Alpaca Camera"</c> as well
+        /// as a suffixed mount/rotator beside a non-Alpaca camera (review r4: the camera alone carries the
+        /// server). Returns a one-line reason naming the slot, or null when pushable. Pure.</summary>
         public static string? DescribeUnservedAlpacaSelection(IGuiderSettings guider) {
             ArgumentNullException.ThrowIfNull(guider);
             var cameraEp = ParseAlpacaSelectionEndpoint(guider.GuiderCamera);
@@ -169,23 +170,32 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (hasHost && hasPort) {
                 return null;
             }
+            var missing = !hasHost && !hasPort ? "host and port" : !hasHost ? "host" : "port";
             foreach (var (slot, selection) in new[] {
                 ("guide camera", guider.GuiderCamera), ("guide mount", guider.GuiderMount),
                 ("aux mount", guider.GuiderAuxMount), ("rotator", guider.GuiderRotator) }) {
-                if (IsBareAlpacaSelection(selection)) {
-                    var missing = !hasHost && !hasPort ? "host and port" : !hasHost ? "host" : "port";
-                    return $"The {slot} '{selection.Trim()}' names an Alpaca driver but no server: pick a device "
-                        + $"such as '{selection.Trim()} [host:port/N]' or set the guider's Alpaca {missing}.";
+                if (!IsAlpacaSelection(selection)) {
+                    continue;
                 }
+                var name = selection!.Trim();
+                if (ParseAlpacaSelectionEndpoint(name) is { } ep) {
+                    return $"The {slot} '{name}' is on Alpaca server {ep.Host}:{ep.Port} but the guider's Alpaca {missing} "
+                        + $"{(missing.Contains(' ', StringComparison.Ordinal) ? "are" : "is")} unset: pick the guide camera on that server or set the Alpaca host and port to it.";
+                }
+                return $"The {slot} '{name}' names an Alpaca driver but no server: pick a device "
+                    + $"such as '{name} [host:port/N]' or set the guider's Alpaca {missing}.";
             }
             return null;
         }
 
+        /// <summary>True for the daemon's <c>"Alpaca …"</c> choice strings, bare or suffixed.</summary>
+        public static bool IsAlpacaSelection(string? selection) =>
+            !string.IsNullOrWhiteSpace(selection)
+            && selection.TrimStart().StartsWith("Alpaca ", StringComparison.OrdinalIgnoreCase);
+
         /// <summary>True for the daemon's generic <c>"Alpaca …"</c> choice string with no endpoint suffix.</summary>
         public static bool IsBareAlpacaSelection(string? selection) =>
-            !string.IsNullOrWhiteSpace(selection)
-            && selection.TrimStart().StartsWith("Alpaca ", StringComparison.OrdinalIgnoreCase)
-            && ParseAlpacaSelectionEndpoint(selection) is null;
+            IsAlpacaSelection(selection) && ParseAlpacaSelectionEndpoint(selection) is null;
 
         /// <summary>
         /// Pure mapping from <see cref="IGuiderSettings"/> to the ordered PHD2 setter messages. Focal length /

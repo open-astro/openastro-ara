@@ -76,10 +76,12 @@ List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
 }
 
 /// §63.20 / #1306 — mirror of the daemon's `DescribeUnservedAlpacaSelection`:
-/// a bare "Alpaca …" choice (no `[host:port/N]`) is only pushable when the
-/// stored Alpaca host AND port name the server; otherwise the guider stays on
-/// localhost:0 and its equipment never connects. Returns the reason naming
-/// the slot, or null when the selection is pushable. Pure — unit-tested.
+/// an "Alpaca …" choice is only pushable when a server is known, from the
+/// guide camera's `[host:port/N]` or the stored Alpaca host AND port;
+/// otherwise the guider stays on localhost:0 and its equipment never
+/// connects. Covers the bare generic choice and a suffixed mount/rotator
+/// beside a non-Alpaca camera. Returns the reason naming the slot, or null
+/// when pushable. Pure — unit-tested; keep in step with the C# rule.
 String? describeUnservedAlpacaSelection(Phd2Settings s) {
   final cameraEp = parseAlpacaChoiceEndpoint(s.guiderCamera);
   final hasHost = cameraEp != null || s.guiderAlpacaHost.trim().isNotEmpty;
@@ -91,14 +93,21 @@ String? describeUnservedAlpacaSelection(Phd2Settings s) {
     ('aux mount', s.guiderAuxMount),
     ('rotator', s.guiderRotator),
   ];
+  final missing = !hasHost && !hasPort
+      ? 'host and port'
+      : !hasHost
+          ? 'host'
+          : 'port';
   for (final (slot, selection) in slots) {
-    if (!isBareAlpacaChoice(selection)) continue;
-    final missing = !hasHost && !hasPort
-        ? 'host and port'
-        : !hasHost
-            ? 'host'
-            : 'port';
+    if (!isAlpacaChoice(selection)) continue;
     final name = selection.trim();
+    final ep = parseAlpacaChoiceEndpoint(name);
+    if (ep != null) {
+      final verb = missing.contains(' ') ? 'are' : 'is';
+      return "The $slot '$name' is on Alpaca server ${ep.host}:${ep.port} but "
+          "the guider's Alpaca $missing $verb unset: pick the guide camera on "
+          'that server or set the Alpaca host and port to it.';
+    }
     return "The $slot '$name' names an Alpaca driver but no server: pick a "
         "device such as '$name [host:port/N]' from the list (Discover Alpaca "
         "finds them) or set the guider's Alpaca $missing.";
@@ -106,12 +115,13 @@ String? describeUnservedAlpacaSelection(Phd2Settings s) {
   return null;
 }
 
+/// True for the daemon's "Alpaca …" choice strings, bare or suffixed.
+bool isAlpacaChoice(String selection) =>
+    selection.trim().toLowerCase().startsWith('alpaca ');
+
 /// True for the daemon's generic "Alpaca …" choice string with no endpoint.
-bool isBareAlpacaChoice(String selection) {
-  final t = selection.trim();
-  return t.toLowerCase().startsWith('alpaca ') &&
-      parseAlpacaChoiceEndpoint(t) == null;
-}
+bool isBareAlpacaChoice(String selection) =>
+    isAlpacaChoice(selection) && parseAlpacaChoiceEndpoint(selection.trim()) == null;
 
 ({String host, int port, int device})? parseAlpacaChoiceEndpoint(String choice) {
   final m = RegExp(r'\[([^\[\]:]+):(\d+)/(\d+)\]\s*$').firstMatch(choice);

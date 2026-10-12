@@ -164,6 +164,15 @@ void main() {
       expect(describeUnservedAlpacaSelection(s), endsWith('Alpaca port.'));
     });
 
+    test('flags a suffixed mount beside a non-Alpaca camera with no stored server', () {
+      const s = Phd2Settings(
+          guiderCamera: 'Simulator', guiderMount: 'Alpaca Mount [10.0.0.5:6800/1]');
+      final reason = describeUnservedAlpacaSelection(s)!;
+      expect(reason, contains("guide mount 'Alpaca Mount [10.0.0.5:6800/1]'"));
+      expect(reason, contains('10.0.0.5:6800'));
+      expect(reason, contains('set the Alpaca host and port to it'));
+    });
+
     test('passes served, suffixed and non-Alpaca selections', () {
       expect(
           describeUnservedAlpacaSelection(const Phd2Settings(
@@ -183,6 +192,17 @@ void main() {
           isNull);
       expect(describeUnservedAlpacaSelection(const Phd2Settings()), isNull);
     });
+  });
+
+  testWidgets('a mount on another server than the camera gets a cross-server warning',
+      (tester) async {
+    await _pump(
+        tester,
+        const Phd2Settings(
+            guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
+            guiderMount: 'Alpaca Mount [10.0.0.5:6800/1]'));
+    expect(find.byKey(const ValueKey('guider_cross_server')), findsOneWidget);
+    expect(find.textContaining('different Alpaca server'), findsOneWidget);
   });
 
   testWidgets('a bare Alpaca selection shows the reason and Apply refuses to push',

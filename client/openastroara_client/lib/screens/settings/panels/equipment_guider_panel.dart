@@ -187,13 +187,19 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     }
     if (targets.isEmpty) return;
     _resolving.addAll(targets.map((t) => t.endpoint));
-    final fetched = await Future.wait([
-      for (final t in targets)
-        namesApi
-            .fetchNames(t.host, t.port)
-            .then((names) => (endpoint: t.endpoint, names: names)),
-    ]);
-    _resolving.removeAll(targets.map((t) => t.endpoint));
+    final List<({String endpoint, Map<String, String> names})> fetched;
+    try {
+      fetched = await Future.wait([
+        for (final t in targets)
+          namesApi
+              .fetchNames(t.host, t.port)
+              .then((names) => (endpoint: t.endpoint, names: names)),
+      ]);
+    } finally {
+      // fetchNames never throws today; if it ever does, the endpoint must
+      // not stay marked in flight forever.
+      _resolving.removeAll(targets.map((t) => t.endpoint));
+    }
     if (!mounted) return;
     setState(() {
       for (final result in fetched) {
@@ -573,6 +579,24 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         choices.rotators, 'rotator', 'Rotator', _alpacaNames,
         onlyEndpoint: serving);
     final unserved = describeUnservedAlpacaSelection(phd2);
+    // A hydrated mount/aux/rotator on a server other than the camera's: the
+    // push keeps the camera's server and drops that device number (the
+    // wizard's _isCrossServerPick, surfaced here too).
+    final crossServer = <String>[];
+    if (serving != null) {
+      for (final (slot, sel) in [
+        ('Guide mount', phd2.guiderMount),
+        ('Aux mount', phd2.guiderAuxMount),
+        ('Rotator', phd2.guiderRotator),
+      ]) {
+        final e = parseAlpacaChoiceEndpoint(sel);
+        if (e == null || '${e.host}:${e.port}' == serving) continue;
+        crossServer.add(
+            '$slot is on ${e.host}:${e.port}, a different Alpaca server than the '
+            'guide camera ($serving); the guider uses one server, so pick it '
+            'from the camera\'s server.');
+      }
+    }
 
     return [
       Wrap(
@@ -694,6 +718,18 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           if (v != null) phd2N.setGuiderRotator(v);
         },
       ),
+      for (final warning in crossServer)
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: Text(
+            warning,
+            key: const ValueKey('guider_cross_server'),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall!
+                .copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
       if (unserved != null)
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),

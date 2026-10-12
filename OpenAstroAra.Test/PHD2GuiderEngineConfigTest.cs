@@ -266,6 +266,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Suffixed_mount_beside_a_non_alpaca_camera_with_no_stored_server_is_flagged() {
+            // Review r4: the camera alone carries the server into set_alpaca_server, so a suffixed mount
+            // with a non-Alpaca camera and no host/port would also leave the guider on localhost:0.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Simulator");
+            s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount [10.0.0.5:6800/1]");
+            var reason = PHD2Guider.DescribeUnservedAlpacaSelection(s.Object);
+            Assert.That(reason, Does.Contain("guide mount 'Alpaca Mount [10.0.0.5:6800/1]'"));
+            Assert.That(reason, Does.Contain("10.0.0.5:6800"));
+            Assert.That(reason, Does.Contain("set the Alpaca host and port to it"));
+        }
+
+        [Test]
         public void Served_or_non_alpaca_selections_are_not_flagged() {
             // Stored host/port, a suffixed camera (which carries its own server), and non-Alpaca drivers
             // are all pushable; blank selections never are a problem.
