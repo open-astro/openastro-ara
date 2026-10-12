@@ -99,6 +99,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_same_serial_less_id_on_another_server_is_a_different_camera() {
+            var other = new Dictionary<string, AlpacaConfiguredDevice> { ["camera/0"] = new("ZWO ASI120MM Mini", Pro) };
+            Assert.That(GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [10.0.0.5:6800/0]", Pro), other, MainCamera(0)), Is.Null,
+                "ids are per server; 10.0.0.5 is not where the imaging camera lives");
+        }
+
+        [Test]
         public void An_unreachable_server_skips_the_identity_check() {
             // Empty devices = lookup failed; the pinned id cannot be checked, so the push is not blocked on it.
             Assert.That(GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [10.0.0.5:6800/1]", Mini), new Dictionary<string, AlpacaConfiguredDevice>(), MainCamera(0)), Is.Null);

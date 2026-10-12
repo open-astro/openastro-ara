@@ -86,7 +86,9 @@ public static class GuiderCameraPinCheck {
         // fallback for an unreachable management API or a serial-less id.
         var idsKnown = devices.TryGetValue(key, out var picked) && picked.UniqueId.Length > 0
             && !string.IsNullOrEmpty(mainCamera.UniqueId);
-        var byId = idsKnown && string.Equals(picked!.UniqueId, mainCamera.UniqueId, StringComparison.Ordinal);
+        // sameServer on the id path too: a serial-less id such as "ZWO_0" is per server, not global
+        // (review r2), so the same string on another AlpacaBridge host is a different camera.
+        var byId = idsKnown && sameServer && string.Equals(picked!.UniqueId, mainCamera.UniqueId, StringComparison.Ordinal);
         var byNumber = !idsKnown && sameServer && ep.Device == mainCamera.AlpacaDeviceNumber;
         if (byId || byNumber) {
             return $"The guide camera '{selection}' is the main imaging camera ({mainCamera.Name}). "
