@@ -17,7 +17,10 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
@@ -147,6 +150,32 @@ namespace OpenAstroAra.Test {
             var mounted = StorageDeviceService.ParseDevices(LsblkRootAtStorePath, systemDisks, storeMounted: true);
             Assert.That(mounted.Where(d => d.IsAraStore).Select(d => d.Path), Is.EquivalentTo(BothStores),
                 "with a disk mounted, lsblk's mountpoint column is believed (the stale bind line only ever shows one of them live)");
+        }
+
+        [Test]
+        [Platform("Linux")] // ListAsync is Linux-only by design (lsblk/findmnt); the parser is tested above on every OS
+        public async Task ListAsync_routes_is_ara_store_through_the_probe() {
+            // The real entry point with canned lsblk/findmnt answers: proves the seam is WIRED, not just
+            // that ParseDevices honours its flag (the bot's two mutations: `true` undoes the fix,
+            // `== true` makes nothing the store when the probe is unknown).
+            Task<(int, string)> Run(string file, string[] args, CancellationToken ct) => Task.FromResult(
+                (file, args.Length > 0 ? args[0] : "") switch {
+                    ("lsblk", "-J") => (0, LsblkRootAtStorePath),
+                    ("findmnt", _) => args[^1] == "/" ? (0, "/dev/mmcblk0p2\n") : (1, ""),
+                    ("lsblk", "-no") => args[^1] == "/dev/mmcblk0p2" ? (0, "mmcblk0\n") : (0, ""),
+                    _ => (1, ""),
+                });
+            var paths = new StorageHelperPaths("/nonexistent/helper", "/nonexistent/unit", Path.Combine(Path.GetTempPath(), $"oara-list-{Guid.NewGuid():N}"));
+            var svc = new StorageDeviceService(Microsoft.Extensions.Logging.Abstractions.NullLogger<StorageDeviceService>.Instance, paths, Run);
+
+            svc.StoreMounted = () => false;
+            Assert.That((await svc.ListAsync(CancellationToken.None)).Select(d => d.IsAraStore), Is.All.False, "ejected: nothing is the store");
+
+            svc.StoreMounted = () => null;
+            Assert.That((await svc.ListAsync(CancellationToken.None)).Where(d => d.IsAraStore).Select(d => d.Path), Is.EquivalentTo(BothStores), "unknown: lsblk's column stands");
+
+            svc.StoreMounted = () => true;
+            Assert.That((await svc.ListAsync(CancellationToken.None)).Where(d => d.IsAraStore).Select(d => d.Path), Is.EquivalentTo(BothStores));
         }
 
         // ── disk space: an ejected store has no numbers ──
