@@ -431,6 +431,7 @@ class MainFocusCard extends ConsumerWidget {
           'fitting' => 'Fitting the curve…',
           'moving' => 'Moving to best focus…',
           'confirming' => 'Confirming focus…',
+          'backlash' => 'Measuring focuser backlash…',
           _ => 'Autofocus running…',
         };
       case AutofocusRunStates.complete:

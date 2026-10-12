@@ -293,6 +293,7 @@ void main() {
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'fitting')), 'Fitting the curve…');
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'moving')), 'Moving to best focus…');
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'confirming')), 'Confirming focus…');
+    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'backlash')), 'Measuring focuser backlash…');
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'complete', finalPosition: 1, finalHfr: 1.5, durationSeconds: 120)), 'In focus at 1 — HFR 1.50 in 2m 00s');
     expect(MainFocusCard.phaseText(const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
   });

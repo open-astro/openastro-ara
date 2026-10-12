@@ -17,6 +17,11 @@ abstract final class AutofocusProbePhases {
   static const coarse = 'coarse';
   static const fine = 'fine';
   static const smart = 'smart';
+
+  /// §59.7 — the backlash probe's control/return shots after the sweep. Not
+  /// V-curve points: the return shot sits at best focus with an inflated HFR
+  /// by design, and would draw as an outlier.
+  static const backlash = 'backlash';
 }
 
 double? _num(Map<String, dynamic> json, String key) =>
@@ -180,7 +185,14 @@ class AutofocusRun {
 
   /// Probes that feed the V-curve (fine + smart), kept or not.
   List<AutofocusProbe> get sweepProbes => probes
-      .where((p) => p.phase != AutofocusProbePhases.coarse)
+      .where((p) =>
+          p.phase != AutofocusProbePhases.coarse &&
+          p.phase != AutofocusProbePhases.backlash)
+      .toList(growable: false);
+
+  /// §59.7 — the backlash probe's shots, shown on their own, never on the curve.
+  List<AutofocusProbe> get backlashProbes => probes
+      .where((p) => p.phase == AutofocusProbePhases.backlash)
       .toList(growable: false);
 
   List<AutofocusProbe> get coarseProbes => probes
