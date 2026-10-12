@@ -1525,7 +1525,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             if (string.IsNullOrWhiteSpace(storage.SaveDirectory)) {
                 return false; // fallback-dir captures are dev-box territory — the monitor doesn't watch it either
             }
-            var free = DiskSpaceMonitor.TryGetFreeBytes(storage.SaveDirectory);
+            // #1231 — the same probe StoreEjected uses (one seam for tests): under an ejected store
+            // there is no volume to measure, so the gate stays open and StoreEjected refuses the frame.
+            var free = DiskSpaceMonitor.TryGetFreeBytes(storage.SaveDirectory, StoreMountedProbe);
             if (free is null) {
                 return false;
             }

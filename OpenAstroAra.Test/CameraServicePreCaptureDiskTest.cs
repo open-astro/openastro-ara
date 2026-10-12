@@ -56,9 +56,11 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void A_critical_volume_blocks_under_abort_and_reports_the_free_bytes() {
-            // ~1 EiB critical threshold: every real volume reads critical.
+            // ~1 EiB critical threshold: every real volume reads critical. The store probe is pinned to
+            // "unknown" (#1231): on a Linux runner nothing is mounted at /media/openastroara, and a real
+            // probe would rightly say "ejected" — which is StoreEjected's job to refuse, not this gate's.
             using var svc = new CameraService(
-                profileStore: StoreWith(2_000_000, 1_000_000, "abort"));
+                profileStore: StoreWith(2_000_000, 1_000_000, "abort")) { StoreMountedProbe = () => null };
             Assert.That(svc.PreCaptureDiskBlocked(out var freeBytes), Is.True);
             Assert.That(freeBytes, Is.GreaterThan(0), "the log figure carries the actual free space");
         }
@@ -66,9 +68,19 @@ namespace OpenAstroAra.Test {
         [Test]
         public void The_warn_default_never_blocks_even_when_critical() {
             using var svc = new CameraService(
-                profileStore: StoreWith(2_000_000, 1_000_000, "warn"));
+                profileStore: StoreWith(2_000_000, 1_000_000, "warn")) { StoreMountedProbe = () => null };
             Assert.That(svc.PreCaptureDiskBlocked(out _), Is.False,
                 "warn-only posture: the monitor's notification path owns reporting");
+        }
+
+        [Test]
+        public void An_ejected_store_leaves_this_gate_open() {
+            // #1231 — no volume to measure under an ejected store: the free-space gate reports nothing
+            // (it would otherwise be the ROOT disk's figure) and StoreEjected is what refuses the frame.
+            using var svc = new CameraService(
+                profileStore: StoreWith(2_000_000, 1_000_000, "abort")) { StoreMountedProbe = () => false };
+            Assert.That(svc.PreCaptureDiskBlocked(out _), Is.False);
+            Assert.That(svc.StoreEjected(out _), Is.True);
         }
 
         [Test]
