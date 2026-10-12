@@ -83,6 +83,16 @@ void main() {
       expect(old.unattendedWindowStart, '');
       expect(ProfileApi.safetyPoliciesFromJson({'meridian_guider_recal': 'bogus'}).meridianGuiderRecal,
           GuiderRecalMode.autoRestore);
+      // A profile from before the mode: the legacy bool decides (false → skip), so a user who had
+      // switched re-calibration off is not shown "Restore calibration".
+      expect(ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': false}).meridianGuiderRecal,
+          GuiderRecalMode.skip);
+      expect(ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': true}).meridianGuiderRecal,
+          GuiderRecalMode.autoRestore);
+      expect(
+          ProfileApi.safetyPoliciesFromJson({'meridian_recal_guider': true, 'meridian_guider_recal': 'skip'}).meridianGuiderRecal,
+          GuiderRecalMode.skip,
+          reason: 'an explicit mode wins over the bool');
     });
   });
 }

@@ -875,7 +875,7 @@ namespace OpenAstroAra.Test {
         private MeridianFlipExecutor PolicySUT(SafetyPoliciesDto safety, Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor> autofocus,
                 double? lastAutofocusTemperature, double focuserTemperature) {
             SetupProfile(recenter: true, autoFocus: false);
-            SetupSafety(safety with { FlipSafetyEnabled = false });
+            SetupSafety(safety with { FlipSafetyEnabled = false, MeridianGuiderRecal = safety.MeridianGuiderRecal ?? "auto_restore" });
             focuser.Setup(f => f.GetInfo()).Returns(new FocuserInfo { Connected = true, Temperature = focuserTemperature });
             return new MeridianFlipExecutor(profileService.Object, telescope.Object, guider.Object,
                 centering.Object, dome.Object, domeFollower.Object, profileStore.Object,
@@ -979,6 +979,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_profile_from_before_the_guider_mode_keeps_its_switched_off_recalibration() {
+            // Review of #1320: an unguided rig had meridian_recal_guider = false and no meridian_guider_recal
+            // (an older profile.json / client). It must still flip without a guider, and not resume one.
+            SetupProfile(recenter: false, autoFocus: false);
+            SetupSafety(Safety(enabled: true, recalGuider: false, firstFlipConfirmed: true) with { MeridianRefocus = "never", MeridianGuiderRecal = null });
+            SetupHealthyTrackingMount();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = false });
+            var sut = CreateSafetySUT();
+
+            Assert.That(await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.True,
+                "no guider required: " + string.Join(" | ", published.Select(n => n.Title)));
+            Assert.That(callLog, Does.Not.Contain("StartGuiding"), "no guider connected: nothing to resume");
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Guider, It.IsAny<CancellationToken>()), Times.Never);
+
+            // The same legacy profile WITH a guider connected still gets guiding back (the pre-field behaviour).
+            callLog.Clear(); published.Clear();
+            SetupHealthyTrackingMount(); // re-arm: the mock's pier side already flipped once
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            Assert.That(await CreateSafetySUT().MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.True,
+                string.Join(" | ", published.Select(n => n.Title)));
+            Assert.That(callLog, Does.Contain("AutoSelectGuideStar"));
+
+            Assert.That(MeridianFlipPolicy.GuiderPlan(Safety(recalGuider: false) with { MeridianGuiderRecal = null }), Is.EqualTo(("auto_restore", false)));
+            Assert.That(MeridianFlipPolicy.GuiderPlan(Safety(recalGuider: true) with { MeridianGuiderRecal = null }), Is.EqualTo(("auto_restore", true)));
+            Assert.That(MeridianFlipPolicy.GuiderPlan(Safety(recalGuider: true) with { MeridianGuiderRecal = "skip" }), Is.EqualTo(("skip", false)), "an explicit mode decides both");
+            Assert.That(MeridianFlipPolicy.GuiderPlan(Safety(recalGuider: false) with { MeridianGuiderRecal = "full" }), Is.EqualTo(("full", true)));
+        }
+
+        [Test]
         public async Task A_probe_less_focuser_keeps_its_focus_even_after_an_earlier_autofocus() {
             // Review of #1320: ImageHistoryService records NaN when the focuser has no temperature.
             var autofocus = AutofocusLogging();
@@ -1000,6 +1029,7 @@ namespace OpenAstroAra.Test {
             Assert.That(MeridianFlipPolicy.RefocusDecision("always", 2, double.NaN, double.NaN).Refocus, Is.True, "always is always");
             Assert.That(MeridianFlipPolicy.RefocusDecision("garbage", 0, 10, 13).Refocus, Is.True, "unknown mode and threshold read as the spec defaults (if_temp_drifted, 2 °C)");
             Assert.That(MeridianFlipPolicy.GuiderMode(" FULL "), Is.EqualTo("full"));
+            Assert.That(MeridianFlipPolicy.GuiderPlan(null), Is.EqualTo(("auto_restore", false)));
             Assert.That(MeridianFlipPolicy.GuiderMode(null), Is.EqualTo("auto_restore"));
         }
 

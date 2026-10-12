@@ -232,7 +232,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
             // §58.4 step 4 — the guider comes back per meridian_guider_recal: auto_restore (the guider's
             // own restore, reverse-Dec), full (a full recalibration), or skip.
-            var guiderMode = MeridianFlipPolicy.GuiderMode(safety?.MeridianGuiderRecal);
+            var guiderMode = MeridianFlipPolicy.GuiderPlan(safety).Mode;
             if (guiderConnected && guiderMode != MeridianFlipPolicy.GuiderSkip) {
                 await SelectNewGuideStar(token);
                 await ResumeAutoguider(guiderMode == MeridianFlipPolicy.GuiderFull, progress, token);
@@ -531,7 +531,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     /// reason when the flip must not start. Checks, per the §58.9 spec: the predicted post-flip
     /// target altitude clears the site horizon floor; the mount is healthy (connected, not parked,
     /// tracking, not already slewing); and the required equipment is connected (camera always;
-    /// guider when re-cal after flip is configured; focuser when AutoFocusAfterFlip is set) — with
+    /// guider for any meridian_guider_recal but "skip" — the legacy bool decides when the mode is
+    /// absent; focuser only when meridian_refocus is "always", #1138) — with
     /// one §42.3 hot-reconnect attempt before giving up on a disconnected device. The spec's
     /// "predicted slew duration sane" gate has no Alpaca API to read an estimate from, so the
     /// profile's ExpectedFlipSlewSeconds stands in for it in the Layer-2 watchdog instead.</summary>
@@ -569,7 +570,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         // The guider is required whenever the recovery will bring it back (any mode but "skip" —
         // the #1138 mode alone decides; the legacy bool is only its wire mirror); the focuser only when
         // the policy insists on a re-focus.
-        var recalGuider = MeridianFlipPolicy.GuiderMode(safety.MeridianGuiderRecal) != MeridianFlipPolicy.GuiderSkip;
+        var recalGuider = MeridianFlipPolicy.GuiderPlan(safety).Required;
         if (await EnsureConnected(DeviceType.Camera, () => cameraMediator?.GetInfo().Connected ?? false, token) is { } cameraFail) {
             return cameraFail;
         }

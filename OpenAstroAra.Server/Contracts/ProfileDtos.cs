@@ -315,8 +315,11 @@ public sealed record SafetyPoliciesDto(
     // §58.4 step 4 / §58.6 — how guiding comes back after the flip: "auto_restore" (default — the
     // guider's own restore with the reverse-Dec flag, ~30 s) | "full" (a full recalibration, 5–10 min)
     // | "skip" (do not resume guiding). Supersedes the MeridianRecalGuider bool, which stays for the
-    // wire's sake (true ≡ not "skip").
-    string MeridianGuiderRecal = "auto_restore",
+    // wire's sake (true ≡ not "skip"). NULL (a profile.json or a client from before this field) keeps
+    // the pre-field behaviour exactly: guiding is restored when a guider is connected, and the bool
+    // alone says whether the flight check requires one — so a rig that had switched the
+    // re-calibration off keeps flipping without a guider (review of #1320).
+    string? MeridianGuiderRecal = null,
     // §58.10 — an explicit unattended window, site-local "HH:mm" start and end (wrapping past
     // midnight), for a schedule the sun does not describe (a remote observatory in another time
     // zone, a daytime-sleeping operator). Both null/blank (default) = computed from the sun

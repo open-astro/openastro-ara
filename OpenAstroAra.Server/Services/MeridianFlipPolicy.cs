@@ -49,6 +49,25 @@ public static class MeridianFlipPolicy {
     };
 
     /// <summary>
+    /// What the flip does with the guider: <c>Mode</c> (how guiding comes back when a guider is
+    /// connected) and <c>Required</c> (whether the pre-flip flight check demands a connected guider).
+    /// An explicit <c>meridian_guider_recal</c> decides both (required unless skip). A profile from
+    /// before the mode existed keeps its old behaviour exactly: guiding is restored when a guider is
+    /// connected, and the legacy <c>meridian_recal_guider</c> bool alone says whether one is required
+    /// — so an unguided rig that had switched it off keeps flipping without a guider.
+    /// </summary>
+    public static (string Mode, bool Required) GuiderPlan(SafetyPoliciesDto? safety) {
+        if (safety is null) {
+            return (GuiderAutoRestore, false);
+        }
+        if (!string.IsNullOrWhiteSpace(safety.MeridianGuiderRecal)) {
+            var mode = GuiderMode(safety.MeridianGuiderRecal);
+            return (mode, mode != GuiderSkip);
+        }
+        return (GuiderAutoRestore, safety.MeridianRecalGuider);
+    }
+
+    /// <summary>
     /// Whether the flip recovery re-focuses, and why. <paramref name="lastAutofocusTemperatureC"/> is the
     /// focuser temperature at the session's last completed autofocus (null = none this session);
     /// <paramref name="focuserTemperatureC"/> the focuser's reading now (NaN/null = no probe).

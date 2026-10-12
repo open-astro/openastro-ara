@@ -11103,8 +11103,9 @@ components:
           format: double
           default: 2
         meridian_guider_recal:
-          type: string
-          default: auto_restore
+          type:
+            - 'null'
+            - string
         unattended_window_start:
           type:
             - 'null'

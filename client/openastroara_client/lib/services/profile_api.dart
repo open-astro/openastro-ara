@@ -970,8 +970,12 @@ class ProfileApi {
         meridianRefocus: _meridianRefocusFromString(j['meridian_refocus'] as String?),
         meridianRefocusTempThresholdC:
             (j['meridian_refocus_temp_threshold_c'] as num?)?.toDouble() ?? 2.0,
-        meridianGuiderRecal:
-            _guiderRecalFromString(j['meridian_guider_recal'] as String?),
+        // A daemon/profile from before the mode: derive it from the legacy bool (false → skip).
+        meridianGuiderRecal: j['meridian_guider_recal'] is String
+            ? _guiderRecalFromString(j['meridian_guider_recal'] as String)
+            : ((j['meridian_recal_guider'] as bool?) ?? true)
+                ? GuiderRecalMode.autoRestore
+                : GuiderRecalMode.skip,
         unattendedWindowStart: (j['unattended_window_start'] as String?) ?? '',
         unattendedWindowEnd: (j['unattended_window_end'] as String?) ?? '',
         onAltitudeLimit: _altitudeLimitActionFromString(
