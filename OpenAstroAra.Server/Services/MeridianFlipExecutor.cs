@@ -471,11 +471,19 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             var last = points[points.Count - 1];
             lastAutofocusTemperature = double.IsFinite(last.Temperature) ? last.Temperature : double.NaN;
         }
+        // No focuser (a manual-focus refractor, or one that is not connected): nothing to re-focus
+        // with — whatever the policy says, the flip must not fail or run a sweep (review of #1320).
+        bool focuserConnected;
         double? focuserTemperature = null;
         try {
-            focuserTemperature = focuserMediator?.GetInfo()?.Temperature;
+            var info = focuserMediator?.GetInfo();
+            focuserConnected = info?.Connected == true;
+            focuserTemperature = info?.Temperature;
         } catch (Exception) {
-            focuserTemperature = null;
+            focuserConnected = false;
+        }
+        if (!focuserConnected) {
+            return (false, "no focuser is connected");
         }
         return MeridianFlipPolicy.RefocusDecision(safety.MeridianRefocus, safety.MeridianRefocusTempThresholdC, lastAutofocusTemperature, focuserTemperature);
     }
@@ -565,8 +573,11 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         if (recalGuider && await EnsureConnected(DeviceType.Guider, () => guiderMediator.GetInfo().Connected, token) is { } guiderFail) {
             return guiderFail;
         }
-        var mayRefocus = MeridianFlipPolicy.RefocusMode(safety.MeridianRefocus) != MeridianFlipPolicy.RefocusNever;
-        if (mayRefocus && await EnsureConnected(DeviceType.Focuser, () => focuserMediator?.GetInfo().Connected ?? false, token) is { } focuserFail) {
+        // The focuser is REQUIRED only when the policy insists on a re-focus ("always"); the default
+        // if_temp_drifted re-focuses when it can and a rig with no focuser simply keeps its focus, so a
+        // manual-focus refractor must not fail every flip (review of #1320).
+        var mustRefocus = MeridianFlipPolicy.RefocusMode(safety.MeridianRefocus) == MeridianFlipPolicy.RefocusAlways;
+        if (mustRefocus && await EnsureConnected(DeviceType.Focuser, () => focuserMediator?.GetInfo().Connected ?? false, token) is { } focuserFail) {
             return focuserFail;
         }
 

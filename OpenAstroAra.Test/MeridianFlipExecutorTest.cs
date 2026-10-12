@@ -833,7 +833,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_failed_post_flip_autofocus_notifies_a_warning_and_continues() {
             SetupProfile(recenter: false, autoFocus: true);
-            SetupSafety(Safety(enabled: false));
+            // #1138: the store's policy decides now; "always" is the one that re-focuses regardless of
+            // the (absent) history and focuser temperature this fixture carries.
+            SetupSafety(Safety(enabled: false) with { MeridianRefocus = "always" });
             var autofocus = new Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>();
             autofocus.Setup(a => a.RunAutofocusAsync(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
@@ -942,6 +944,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rig_without_a_focuser_flips_with_the_default_policies_and_never_refocuses() {
+            // Review of #1320: a manual-focus refractor has no focuser; the default if_temp_drifted must
+            // neither fail the pre-flip check nor run a sweep. Flip safety ON (the default) here; re-centre
+            // off because this fixture's mount sits nowhere near the target and the §58.9 pointing check
+            // is not what is under test.
+            SetupProfile(recenter: false, autoFocus: false);
+            SetupSafety(Safety(enabled: true, firstFlipConfirmed: true));
+            SetupHealthyTrackingMount();
+            focuser.Setup(f => f.GetInfo()).Returns(new FocuserInfo { Connected = false });
+            var autofocus = AutofocusLogging();
+            var sut = new MeridianFlipExecutor(profileService.Object, telescope.Object, guider.Object,
+                centering.Object, dome.Object, domeFollower.Object, profileStore.Object,
+                notifications.Object, reconnector.Object, camera.Object, focuser.Object, autofocus.Object, History(null)) {
+                WatchdogSampleInterval = TimeSpan.FromMilliseconds(20), WatchdogStallWindow = TimeSpan.FromMilliseconds(60),
+                WatchdogHardCap = TimeSpan.FromSeconds(30), ReconnectPollInterval = TimeSpan.FromMilliseconds(10),
+                ReconnectWait = TimeSpan.FromMilliseconds(60), FirstFlipConfirmWait = TimeSpan.FromMilliseconds(30),
+            };
+
+            var flipped = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+            Assert.That(flipped, Is.True, "no focuser is not a pre-flip failure: " + string.Join(" | ", published.Select(n => n.Title)));
+            Assert.That(callLog, Does.Contain("Flip"));
+            Assert.That(callLog, Does.Not.Contain("Autofocus"));
+            Assert.That(published.Where(n => n.Severity == NotificationSeverity.Critical), Is.Empty);
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Focuser, It.IsAny<CancellationToken>()), Times.Never, "nothing to reconnect: no focuser is configured");
+
+            // "always" is the one policy that insists — then the focuser IS required.
+            callLog.Clear(); published.Clear();
+            SetupSafety(Safety(enabled: true, firstFlipConfirmed: true) with { MeridianRefocus = "always" });
+            focuser.Setup(f => f.GetInfo()).Returns(new FocuserInfo { Connected = false });
+            var insisting = CreateSafetySUT();
+            Assert.That(await insisting.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.False);
+            Assert.That(published.Any(n => n.Severity == NotificationSeverity.Critical), Is.True, "aborted before it started: the focuser the policy needs is missing");
+        }
+
+        [Test]
+        public async Task A_probe_less_focuser_keeps_its_focus_even_after_an_earlier_autofocus() {
+            // Review of #1320: ImageHistoryService records NaN when the focuser has no temperature.
+            var autofocus = AutofocusLogging();
+            var sut = PolicySUT(Safety() with { MeridianRefocus = "if_temp_drifted" }, autofocus, lastAutofocusTemperature: double.NaN, focuserTemperature: double.NaN);
+            Assert.That(await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(callLog, Does.Not.Contain("Autofocus"));
+        }
+
+        [Test]
         public void The_refocus_decision_is_pure() {
             Assert.That(MeridianFlipPolicy.RefocusDecision("always", 2, 10, 10).Refocus, Is.True);
             Assert.That(MeridianFlipPolicy.RefocusDecision("never", 2, 10, 40).Refocus, Is.False);
@@ -949,6 +995,9 @@ namespace OpenAstroAra.Test {
             Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, 10, 11.9).Refocus, Is.False);
             Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, null, 11.9).Refocus, Is.True, "no autofocus this session");
             Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, 10, double.NaN).Refocus, Is.False, "no temperature probe: keep the focus");
+            Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, double.NaN, double.NaN).Refocus, Is.False, "a probe-less focuser's earlier autofocus recorded NaN: still keep the focus");
+            Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, double.NaN, 12).Refocus, Is.False, "the last autofocus had no temperature: nothing to compare");
+            Assert.That(MeridianFlipPolicy.RefocusDecision("always", 2, double.NaN, double.NaN).Refocus, Is.True, "always is always");
             Assert.That(MeridianFlipPolicy.RefocusDecision("garbage", 0, 10, 13).Refocus, Is.True, "unknown mode and threshold read as the spec defaults (if_temp_drifted, 2 °C)");
             Assert.That(MeridianFlipPolicy.GuiderMode(" FULL "), Is.EqualTo("full"));
             Assert.That(MeridianFlipPolicy.GuiderMode(null), Is.EqualTo("auto_restore"));
