@@ -84,6 +84,10 @@ namespace OpenAstroAra.Profile.Interfaces {
         string GuiderCamera { get; set; }
         /// <summary>Driver-specific camera id disambiguating multiple cameras of the same model ("" = unset).</summary>
         string GuiderCameraId { get; set; }
+        /// <summary>#1308 — the Alpaca <c>UniqueID</c> of the guide camera behind an <c>Alpaca Camera [host:port/N]</c>
+        /// selection ("" = unset / pre-#1308). The device NUMBER can change across an AlpacaBridge restart; the
+        /// push re-resolves N from this before sending and refuses when the camera has moved.</summary>
+        string GuiderCameraAlpacaUniqueId { get; set; }
         /// <summary>Guide-output mount choice string ("" = unset).</summary>
         string GuiderMount { get; set; }
         /// <summary>Aux (pointing) mount choice string ("" = unset).</summary>

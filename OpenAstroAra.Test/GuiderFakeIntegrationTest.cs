@@ -747,6 +747,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_push_refuses_a_guide_camera_that_moved_to_another_number() {
+            // #1308 — the stored "Alpaca Camera [127.0.0.1:6800/1]" is pinned to the Mini's UniqueID; after
+            // an AlpacaBridge restart camera/1 is the imaging camera. The push must refuse before any RPC.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var alpaca = new Mock<IAlpacaManagementClient>();
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("127.0.0.1", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Dictionary<string, AlpacaConfiguredDevice> {
+                    ["camera/0"] = new("ZWO ASI120MM Mini", "ZWO_0"),
+                    ["camera/1"] = new("ZWO ASI533MC Pro", "ZWO_SN_0c190e111d020900"),
+                });
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), alpaca: alpaca.Object);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera [127.0.0.1:6800/1]";
+            settings.GuiderCameraAlpacaUniqueId = "ZWO_0";
+            var before = fake.ReceivedMethods.Count;
+
+            var ex = await Assert.ThrowsAsync<GuiderSelectionInvalidException>(
+                () => svc.PushGuiderProfileAsync("push-moved", CancellationToken.None)).ConfigureAwait(false);
+
+            Assert.That(ex!.Message, Does.Contain("has moved").And.Contain("now camera/0"));
+            Assert.That(fake.ReceivedMethods.Count, Is.EqualTo(before), "nothing may reach the guider");
+
+            // Same server, camera still where it was → the push goes through.
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("127.0.0.1", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Dictionary<string, AlpacaConfiguredDevice> {
+                    ["camera/0"] = new("ZWO ASI533MC Pro", "ZWO_SN_0c190e111d020900"),
+                    ["camera/1"] = new("ZWO ASI120MM Mini", "ZWO_0"),
+                });
+            var accepted = await svc.PushGuiderProfileAsync("push-ok", CancellationToken.None).ConfigureAwait(false);
+            Assert.That(accepted.OperationType, Is.EqualTo("guider.profile.push"));
+            Assert.That(fake.ReceivedMethods.Skip(before), Does.Contain("set_selected_camera"));
+        }
+
+        [Test]
         public async Task Profile_switch_follow_still_pushes_a_bare_alpaca_selection() {
             // #1306 review r2 — the §63.4 profile-switch follow passes refuseUnservedSelection: false, so a
             // profile saved before the rule (bare "Alpaca Camera", no host/port) still gets its twin and

@@ -65,6 +65,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Parse_carries_the_unique_id_and_reads_a_missing_one_as_empty() {
+            // #1308 — the UniqueID is what survives an AlpacaBridge renumber.
+            var devices = AlpacaManagementClient.ParseConfiguredDevices(Sample);
+            Assert.That(devices["camera/1"], Is.EqualTo(new AlpacaConfiguredDevice("ZWO ASI290MM Mini", "a")));
+            var noId = AlpacaManagementClient.ParseConfiguredDevices(
+                """{"Value":[{"DeviceName":"Cam","DeviceType":"Camera","DeviceNumber":0}]}""");
+            Assert.That(noId["camera/0"].UniqueId, Is.Empty);
+            Assert.That(AlpacaManagementClient.UniqueIdsOf(noId), Is.Empty, "entries without an id are left out of the id view");
+            Assert.That(AlpacaManagementClient.UniqueIdsOf(devices)["telescope/0"], Is.EqualTo("b"));
+        }
+
+        [Test]
         public void Parse_of_malformed_or_unexpected_json_is_empty() {
             Assert.That(AlpacaManagementClient.ParseConfiguredDeviceNames("not json"), Is.Empty);
             Assert.That(AlpacaManagementClient.ParseConfiguredDeviceNames("[]"), Is.Empty);
@@ -115,6 +127,7 @@ namespace OpenAstroAra.Test {
             var ok = await EquipmentEndpoints.GetAlpacaDeviceNamesAsync("rig", 6800, client, CancellationToken.None);
             var body = ((Ok<AlpacaDeviceNamesResponseDto>)ok).Value!;
             Assert.That(body.Names["telescope/0"], Is.EqualTo("AM5N"));
+            Assert.That(body.UniqueIds!["camera/1"], Is.EqualTo("a"), "#1308 — the picker pins by this");
         }
     }
 }

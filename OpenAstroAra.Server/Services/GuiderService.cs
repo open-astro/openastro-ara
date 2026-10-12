@@ -90,7 +90,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             INotificationService? notifications = null, IFaultLogService? faultLog = null,
             Func<Guid?>? activeProfileIdResolver = null,
             Func<(Guid Id, string? Name)?>? araProfileResolver = null,
-            IDiagnosticsService? diagnostics = null) {
+            IDiagnosticsService? diagnostics = null,
+            IAlpacaManagementClient? alpaca = null,
+            Func<DiscoveredDeviceDto?>? mainCameraResolver = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -103,7 +105,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _activeProfileIdResolver = activeProfileIdResolver;
         _araProfileResolver = araProfileResolver;
         _diagnostics = diagnostics;
+        _alpaca = alpaca;
+        _mainCameraResolver = mainCameraResolver;
     }
+
+    // #1308 — the Alpaca management reader and the imaging camera the daemon holds, for the guide-camera
+    // pin check before a full profile push. Null in benches/tests → the check is skipped.
+    private readonly IAlpacaManagementClient? _alpaca;
+    private readonly Func<DiscoveredDeviceDto?>? _mainCameraResolver;
 
     // #1234 — §29 diagnostics sink for a remote guider that never returns (the coordinator records
     // the local case itself). Null in benches.

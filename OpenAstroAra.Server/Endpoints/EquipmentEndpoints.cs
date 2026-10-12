@@ -877,8 +877,9 @@ public static partial class EquipmentEndpoints {
         } catch (System.ArgumentException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         }
-        var names = await alpaca.GetConfiguredDeviceNamesAsync(host!, port!.Value, ct).ConfigureAwait(false);
-        return Results.Ok(new AlpacaDeviceNamesResponseDto(names));
+        var devices = await alpaca.GetConfiguredDevicesAsync(host!, port!.Value, ct).ConfigureAwait(false);
+        return Results.Ok(new AlpacaDeviceNamesResponseDto(
+            AlpacaManagementClient.NamesOf(devices), AlpacaManagementClient.UniqueIdsOf(devices)));
     }
 
     // Manual nudge (extracted for the error-mapping tests). ASCOM axes: 0 = Primary, 1 = Secondary —

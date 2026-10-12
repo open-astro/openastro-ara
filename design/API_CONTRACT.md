@@ -406,6 +406,12 @@ The result lives on tmpfs, so after a **reboot** `GET /{id}` is 404: clients tre
 
 ---
 
+### 2026-10-11 — Guide camera pinned by Alpaca UniqueID; the push re-resolves the device number (#1308)
+
+**Problem:** the §63.17 guide-camera selection is the daemon choice string `Alpaca Camera [host:port/N]`, and AlpacaBridge numbers ZWO cameras in SDK enumeration order, which can change across a restart; after a flip the guider would open the imaging camera.
+
+**Decision:** `Phd2SettingsDto` gains `guider_camera_alpaca_unique_id` ("" = unset / pre-#1308), filled by the client from `GET /equipment/guider/alpacadevicenames`, whose response gains `unique_ids` (`"type/N"` → UniqueID, additive; entries the server reports no id for are left out). Before a full `POST /guider/profile/push` the daemon reads that server's `configureddevices`: a pinned camera at another number or missing is refused (422, message names where it went); a guide camera that resolves to the daemon's main imaging camera, by UniqueID or by same server + number, is refused too. An unreachable management API skips the identity check (logged) and the number is pushed as stored. The §63.4 profile-switch follow is exempt like #1306. Tuning pushes are unaffected.
+
 ### 2026-10-11 — The daemon never reads a GPS receiver; the dongle lives on the client (#1305)
 
 **Problem:** the USB-GPS self-sync worker opened every `/dev/ttyUSB*`/`ttyACM*` at 9600-8N1 every 2 min (unsynced) / 50 min (synced), including the port AlpacaBridge held for a serial mount: the mount link fault latched and the tty was left at the wrong speed. The SBC's USB ports are also the scarce resource on a rig.

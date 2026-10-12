@@ -366,7 +366,11 @@ public partial class Program {
                     return (id.Value, name);
                 },
                 // #1234 — §29 diagnostics for a remote guider that never returns.
-                sp.GetService<IDiagnosticsService>());
+                sp.GetService<IDiagnosticsService>(),
+                // #1308 — the guide-camera pin check: re-resolve the stored UniqueID against the
+                // Alpaca server before a full push, and never hand the guider the imaging camera.
+                sp.GetService<IAlpacaManagementClient>(),
+                () => (sp.GetService<ICameraService>() as IRetainedDeviceSource)?.RetainedDevice);
             // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
             // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
             // and the guider refuses to guide under it. Resolved lazily: the focus service needs

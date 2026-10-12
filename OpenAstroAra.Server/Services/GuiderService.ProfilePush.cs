@@ -12,9 +12,12 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -69,9 +72,15 @@ public sealed partial class GuiderService {
         // the daemon on localhost:0 with its equipment disconnected (the 422 reaches the client's Apply
         // button). The §63.4 profile-switch follow is exempt (review r2): a profile saved before this rule
         // must still get its guider twin and tuning, with the guider's own Alpaca server left as it is.
-        if (refuseUnservedSelection
-                && OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.DescribeUnservedAlpacaSelection(settings) is { } reason) {
-            throw new GuiderSelectionInvalidException(reason);
+        if (refuseUnservedSelection) {
+            if (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.DescribeUnservedAlpacaSelection(settings) is { } reason) {
+                throw new GuiderSelectionInvalidException(reason);
+            }
+            // #1308 — re-resolve the pinned guide camera against the server's configureddevices: a
+            // renumbered or vanished camera, or one that is the main imaging camera, is refused.
+            if (await DescribeCameraPinProblemAsync(settings, ct).ConfigureAwait(false) is { } pin) {
+                throw new GuiderSelectionInvalidException(pin);
+            }
         }
         var camera = settings.GuiderCamera;
         var cameraId = settings.GuiderCameraId;
@@ -84,6 +93,23 @@ public sealed partial class GuiderService {
         await EmitDarkLibraryInvalidationIfCameraChangedAsync(guider, camera, cameraId, ct).ConfigureAwait(false);
         return Accepted("guider.profile.push", idempotencyKey);
     }
+
+    private async Task<string?> DescribeCameraPinProblemAsync(IGuiderSettings settings, CancellationToken ct) {
+        if (GuiderCameraPinCheck.CameraEndpoint(settings) is not { } ep) {
+            return null;
+        }
+        var devices = _alpaca is null
+            ? new Dictionary<string, AlpacaConfiguredDevice>()
+            : await _alpaca.GetConfiguredDevicesAsync(ep.Host, ep.Port, ct).ConfigureAwait(false);
+        if (devices.Count == 0) {
+            LogPinCheckSkipped(ep.Host, ep.Port);
+        }
+        return GuiderCameraPinCheck.Describe(settings, devices, _mainCameraResolver?.Invoke());
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Guide-camera pin check skipped: {Host}:{Port} answered no configured devices, so the stored device number is pushed as is (#1308)")]
+    private partial void LogPinCheckSkipped(string host, int port);
 
     // §63.17 invalidation — the guide camera the last push (this daemon session) selected. Null = unknown
     // (no push observed yet), which never triggers an invalidation: the first push after boot has no baseline

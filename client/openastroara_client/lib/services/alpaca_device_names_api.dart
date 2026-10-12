@@ -11,12 +11,31 @@ import '../models/server.dart';
 /// Returns a map keyed `"<devicetype>/<devicenumber>"` (type lowercased, e.g.
 /// `"camera/1"`) → device name. Best-effort: any failure returns an empty map —
 /// callers fall back to the generic labels.
-abstract interface class AlpacaDeviceNamesClient {
-  Future<Map<String, String>> fetchNames(String host, int port);
+abstract class AlpacaDeviceNamesClient {
+  const AlpacaDeviceNamesClient();
+
+  /// `"<devicetype>/<devicenumber>"` → the device's name and Alpaca UniqueID
+  /// (#1308: the id is what survives an AlpacaBridge renumber; "" when the
+  /// server reports none). Best-effort: any failure returns an empty map.
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port);
+
+  /// The names view of [fetchDevices].
+  Future<Map<String, String>> fetchNames(String host, int port) async {
+    final devices = await fetchDevices(host, port);
+    return {for (final e in devices.entries) e.key: e.value.name};
+  }
+
   void close();
 }
 
-class AlpacaDeviceNamesApi implements AlpacaDeviceNamesClient {
+/// One configured Alpaca device: its name and UniqueID ("" when unknown).
+class AlpacaDeviceInfo {
+  final String name;
+  final String uniqueId;
+  const AlpacaDeviceInfo({required this.name, this.uniqueId = ''});
+}
+
+class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
   final Dio _dio;
 
   /// [dio] is the test seam (a stubbed transport); production builds one
@@ -36,13 +55,13 @@ class AlpacaDeviceNamesApi implements AlpacaDeviceNamesClient {
   static const String route = '/api/v1/equipment/guider/alpacadevicenames';
 
   @override
-  Future<Map<String, String>> fetchNames(String host, int port) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     try {
       final res = await _dio.get<dynamic>(
         route,
         queryParameters: <String, dynamic>{'host': host, 'port': port},
       );
-      return parseNames(res.data);
+      return parseDevices(res.data);
     } catch (_) {
       return const {};
     }
@@ -50,16 +69,28 @@ class AlpacaDeviceNamesApi implements AlpacaDeviceNamesClient {
 
   /// Parse the daemon's `{names: {"camera/1": "…"}}` envelope. Pure —
   /// unit-tested. Anything malformed yields an empty map.
-  static Map<String, String> parseNames(Object? data) {
+  static Map<String, String> parseNames(Object? data) =>
+      {for (final e in parseDevices(data).entries) e.key: e.value.name};
+
+  /// Parse `{names: {"camera/1": "…"}, unique_ids: {"camera/1": "…"}}`
+  /// (`unique_ids` is additive, #1308; absent on an older daemon). Pure —
+  /// unit-tested. Anything malformed yields an empty map.
+  static Map<String, AlpacaDeviceInfo> parseDevices(Object? data) {
     if (data is! Map<String, dynamic>) return const {};
     final names = data['names'];
     if (names is! Map) return const {};
+    final ids = data['unique_ids'];
     return {
       for (final entry in names.entries)
         if (entry.key is String &&
             entry.value is String &&
             (entry.value as String).isNotEmpty)
-          entry.key as String: entry.value as String,
+          entry.key as String: AlpacaDeviceInfo(
+            name: entry.value as String,
+            uniqueId: ids is Map && ids[entry.key] is String
+                ? ids[entry.key] as String
+                : '',
+          ),
     };
   }
 
@@ -69,10 +100,10 @@ class AlpacaDeviceNamesApi implements AlpacaDeviceNamesClient {
 
 /// The no-active-server stand-in: every lookup is empty, so the wizard keeps
 /// the daemon's generic labels.
-class NoServerAlpacaDeviceNames implements AlpacaDeviceNamesClient {
+class NoServerAlpacaDeviceNames extends AlpacaDeviceNamesClient {
   const NoServerAlpacaDeviceNames();
   @override
-  Future<Map<String, String>> fetchNames(String host, int port) async =>
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async =>
       const {};
   @override
   void close() {}

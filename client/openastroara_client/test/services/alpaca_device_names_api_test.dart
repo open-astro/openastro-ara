@@ -88,6 +88,20 @@ void main() {
         isA<AlpacaDeviceNamesApi>());
   });
 
+  group('AlpacaDeviceNamesApi.parseDevices (#1308 unique ids)', () {
+    test('carries unique_ids beside the names and tolerates an older daemon', () {
+      final devices = AlpacaDeviceNamesApi.parseDevices({
+        'names': {'camera/0': 'ZWO ASI120MM Mini', 'camera/1': 'ZWO ASI533MC Pro'},
+        'unique_ids': {'camera/1': 'ZWO_SN_0c190e111d020900'},
+      });
+      expect(devices['camera/1']!.uniqueId, 'ZWO_SN_0c190e111d020900');
+      expect(devices['camera/0']!.uniqueId, '', reason: 'serial-less: no id reported');
+      final old = AlpacaDeviceNamesApi.parseDevices({'names': {'camera/0': 'Cam'}});
+      expect(old['camera/0']!.name, 'Cam');
+      expect(old['camera/0']!.uniqueId, '');
+    });
+  });
+
   group('AlpacaDeviceNamesApi.parseNames (#1067 daemon envelope)', () {
     test('maps the names object verbatim', () {
       expect(

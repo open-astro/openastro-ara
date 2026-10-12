@@ -718,6 +718,18 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        private string guiderCameraAlpacaUniqueId = string.Empty;
+        [DataMember]
+        public string GuiderCameraAlpacaUniqueId {
+            get => guiderCameraAlpacaUniqueId;
+            set {
+                if (guiderCameraAlpacaUniqueId != value) {
+                    guiderCameraAlpacaUniqueId = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
         private string guiderMount = string.Empty;
         [DataMember]
         public string GuiderMount {

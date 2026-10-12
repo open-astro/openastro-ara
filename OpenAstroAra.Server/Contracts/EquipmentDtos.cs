@@ -544,7 +544,11 @@ public sealed record GuiderCameraPixelSizeResponseDto(
 /// daemon, keyed <c>"&lt;devicetype&gt;/&lt;devicenumber&gt;"</c> (type lowercased, e.g. <c>"camera/1"</c>).
 /// Empty when the host could not be reached or answered nothing usable — a best-effort labelling
 /// assist, never an error status.</summary>
-public sealed record AlpacaDeviceNamesResponseDto(IReadOnlyDictionary<string, string> Names);
+public sealed record AlpacaDeviceNamesResponseDto(
+    IReadOnlyDictionary<string, string> Names,
+    // #1308 — "type/number" → the server's UniqueID, so a picker can pin the guide camera by identity;
+    // entries the server reports no UniqueID for are left out. Additive; older clients ignore it.
+    IReadOnlyDictionary<string, string>? UniqueIds = null);
 
 /// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
 /// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for

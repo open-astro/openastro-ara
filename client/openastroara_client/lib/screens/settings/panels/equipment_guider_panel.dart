@@ -3,6 +3,7 @@ import '../../../util/friendly_error.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/guider_equipment_choices.dart';
+import '../../../services/alpaca_device_names_api.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/profile_management_state.dart';
@@ -51,6 +52,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   // which pushes nothing about the server and leaves the guider on
   // localhost:0.
   final Map<String, String> _alpacaNames = {};
+  // #1308 — "host:port|type/N" → Alpaca UniqueID, stored with a camera pick
+  // so the daemon can re-resolve the number after an AlpacaBridge renumber.
+  final Map<String, String> _alpacaUniqueIds = {};
   final Set<String> _namedEndpoints = {};
   // Endpoints with a lookup in flight: two triggers landing together (hydrate
   // plus a choices refresh) must not fetch the same server twice.
@@ -187,13 +191,13 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     }
     if (targets.isEmpty) return;
     _resolving.addAll(targets.map((t) => t.endpoint));
-    final List<({String endpoint, Map<String, String> names})> fetched;
+    final List<({String endpoint, Map<String, AlpacaDeviceInfo> devices})> fetched;
     try {
       fetched = await Future.wait([
         for (final t in targets)
           namesApi
-              .fetchNames(t.host, t.port)
-              .then((names) => (endpoint: t.endpoint, names: names)),
+              .fetchDevices(t.host, t.port)
+              .then((devices) => (endpoint: t.endpoint, devices: devices)),
       ]);
     } finally {
       // fetchNames never throws today; if it ever does, the endpoint must
@@ -203,10 +207,13 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     if (!mounted) return;
     setState(() {
       for (final result in fetched) {
-        if (result.names.isEmpty) continue; // retry next time
+        if (result.devices.isEmpty) continue; // retry next time
         _namedEndpoints.add(result.endpoint);
-        result.names.forEach((typeSlot, name) {
-          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+        result.devices.forEach((typeSlot, device) {
+          _alpacaNames['${result.endpoint}|$typeSlot'] = device.name;
+          if (device.uniqueId.isNotEmpty) {
+            _alpacaUniqueIds['${result.endpoint}|$typeSlot'] = device.uniqueId;
+          }
         });
       }
     });
@@ -672,6 +679,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         onChanged: (v) {
           if (v == null) return;
           phd2N.setGuiderCamera(v);
+          phd2N.setGuiderCameraAlpacaUniqueId(
+              alpacaCameraUniqueIdFor(v, _alpacaUniqueIds));
           // A camera with an endpoint retargets the guider's Alpaca server
           // on Apply — keep the stored host/port in step so the mount and
           // rotator pickers offer that server and the push names it.

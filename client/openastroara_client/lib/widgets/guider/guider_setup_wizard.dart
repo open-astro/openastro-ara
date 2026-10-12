@@ -115,6 +115,14 @@ String? describeUnservedAlpacaSelection(Phd2Settings s) {
   return null;
 }
 
+/// #1308 — the Alpaca UniqueID behind a camera choice, from the resolved
+/// `"host:port|camera/N"` ids; "" for a non-Alpaca choice or an unknown id.
+String alpacaCameraUniqueIdFor(String choice, Map<String, String> uniqueIds) {
+  final e = parseAlpacaChoiceEndpoint(choice);
+  if (e == null) return '';
+  return uniqueIds['${e.host}:${e.port}|camera/${e.device}'] ?? '';
+}
+
 /// True for the daemon's "Alpaca …" choice strings, bare or suffixed.
 bool isAlpacaChoice(String selection) =>
     selection.trim().toLowerCase().startsWith('alpaca ');
@@ -215,6 +223,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   // Real device names from the Alpaca management API, keyed
   // "host:port|type/N" — overlays the daemon's generic choice labels.
   final Map<String, String> _alpacaNames = {};
+  // #1308 — "host:port|type/N" → Alpaca UniqueID, stored with a camera pick
+  // so the daemon can re-resolve the number after an AlpacaBridge renumber.
+  final Map<String, String> _alpacaUniqueIds = {};
 
   Future<void> _refreshChoices() async {
     final api = ref.read(guiderEquipmentApiProvider);
@@ -249,14 +260,17 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     final fetched = await Future.wait([
       for (final entry in endpoints.entries)
         namesApi
-            .fetchNames(entry.value.host, entry.value.port)
-            .then((names) => (endpoint: entry.key, names: names)),
+            .fetchDevices(entry.value.host, entry.value.port)
+            .then((devices) => (endpoint: entry.key, devices: devices)),
     ]);
     if (!mounted) return;
     setState(() {
       for (final result in fetched) {
-        result.names.forEach((typeSlot, name) {
-          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+        result.devices.forEach((typeSlot, device) {
+          _alpacaNames['${result.endpoint}|$typeSlot'] = device.name;
+          if (device.uniqueId.isNotEmpty) {
+            _alpacaUniqueIds['${result.endpoint}|$typeSlot'] = device.uniqueId;
+          }
         });
       }
     });
@@ -318,16 +332,19 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       final fetched = await Future.wait([
         for (final t in targets)
           namesApi
-              .fetchNames(t.host, t.port)
-              .then((names) => (endpoint: '${t.host}:${t.port}', names: names)),
+              .fetchDevices(t.host, t.port)
+              .then((devices) => (endpoint: '${t.host}:${t.port}', devices: devices)),
       ]);
       if (!mounted) return;
       var found = 0;
       setState(() {
         for (final result in fetched) {
-          found += result.names.length;
-          result.names.forEach((typeSlot, name) {
-            _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+          found += result.devices.length;
+          result.devices.forEach((typeSlot, device) {
+            _alpacaNames['${result.endpoint}|$typeSlot'] = device.name;
+            if (device.uniqueId.isNotEmpty) {
+              _alpacaUniqueIds['${result.endpoint}|$typeSlot'] = device.uniqueId;
+            }
           });
         }
       });
@@ -401,6 +418,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         port: draft.port,
         guiderCamera: draft.guiderCamera,
         guiderCameraId: draft.guiderCameraId,
+        guiderCameraAlpacaUniqueId: draft.guiderCameraAlpacaUniqueId,
         guidePixelSize: draft.guidePixelSize,
         guiderSetupType: draft.guiderSetupType,
         guideFocalLength: draft.guideFocalLength,
@@ -422,6 +440,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       n.setPort(draft.port);
       n.setGuiderCamera(draft.guiderCamera);
       n.setGuiderCameraId(draft.guiderCameraId);
+      n.setGuiderCameraAlpacaUniqueId(draft.guiderCameraAlpacaUniqueId);
       n.setGuidePixelSize(draft.guidePixelSize);
       n.setGuiderSetupType(draft.guiderSetupType);
       n.setGuideFocalLength(draft.guideFocalLength);
@@ -655,7 +674,10 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             options: cameraOptions,
             labels: _labelsFor(cameraOptions, 'camera'),
             onChanged: (v) {
-              _edit((d) => d.copyWith(guiderCamera: v));
+              _edit((d) => d.copyWith(
+                  guiderCamera: v,
+                  guiderCameraAlpacaUniqueId:
+                      alpacaCameraUniqueIdFor(v, _alpacaUniqueIds)));
               // A camera on another Alpaca server retargets the daemon's
               // Alpaca config on Apply — keep the profile's host/port in step.
               final e = parseAlpacaChoiceEndpoint(v);

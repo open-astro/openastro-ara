@@ -193,6 +193,7 @@ internal static class ProfileStoreMapper {
         // the valid range with 0 = unset.
         guider.GuiderCamera = (phd2.GuiderCamera ?? string.Empty).Trim();
         guider.GuiderCameraId = (phd2.GuiderCameraId ?? string.Empty).Trim();
+        guider.GuiderCameraAlpacaUniqueId = (phd2.GuiderCameraAlpacaUniqueId ?? string.Empty).Trim();
         guider.GuiderMount = (phd2.GuiderMount ?? string.Empty).Trim();
         guider.GuiderAuxMount = (phd2.GuiderAuxMount ?? string.Empty).Trim();
         guider.GuiderRotator = (phd2.GuiderRotator ?? string.Empty).Trim();

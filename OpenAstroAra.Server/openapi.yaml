@@ -10001,6 +10001,9 @@ components:
         guider_camera_id:
           type: string
           default: ''
+        guider_camera_alpaca_unique_id:
+          type: string
+          default: ''
         guider_mount:
           type: string
           default: ''

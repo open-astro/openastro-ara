@@ -762,6 +762,8 @@ class ProfileApi {
     // §63.17 guider equipment selection ("" / 0 = unset).
     guiderCamera: (j['guider_camera'] as String?) ?? '',
     guiderCameraId: (j['guider_camera_id'] as String?) ?? '',
+    guiderCameraAlpacaUniqueId:
+        (j['guider_camera_alpaca_unique_id'] as String?) ?? '',
     guiderMount: (j['guider_mount'] as String?) ?? '',
     guiderAuxMount: (j['guider_aux_mount'] as String?) ?? '',
     guiderRotator: (j['guider_rotator'] as String?) ?? '',
@@ -793,6 +795,7 @@ class ProfileApi {
     'dec_guide_mode': v.decGuideMode,
     'guider_camera': v.guiderCamera,
     'guider_camera_id': v.guiderCameraId,
+    'guider_camera_alpaca_unique_id': v.guiderCameraAlpacaUniqueId,
     'guider_mount': v.guiderMount,
     'guider_aux_mount': v.guiderAuxMount,
     'guider_rotator': v.guiderRotator,

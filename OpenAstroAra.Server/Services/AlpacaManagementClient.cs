@@ -36,7 +36,15 @@ public interface IAlpacaManagementClient {
     /// e.g. <c>"camera/1"</c>). Best-effort: any transport/parse failure yields an empty map — the
     /// caller falls back to the generic labels.</summary>
     Task<IReadOnlyDictionary<string, string>> GetConfiguredDeviceNamesAsync(string host, int port, CancellationToken ct);
+
+    /// <summary>#1308 — the configured devices with their <c>UniqueID</c>, same keys as the names map.
+    /// The UniqueID is what survives an AlpacaBridge renumber (ZWO cameras are numbered in SDK
+    /// enumeration order); it is empty when the server reports none. Best-effort like the names.</summary>
+    Task<IReadOnlyDictionary<string, AlpacaConfiguredDevice>> GetConfiguredDevicesAsync(string host, int port, CancellationToken ct);
 }
+
+/// <summary>One <c>configureddevices</c> entry: the name and the server's <c>UniqueID</c> ("" when absent).</summary>
+public sealed record AlpacaConfiguredDevice(string Name, string UniqueId);
 
 public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, IDisposable {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
@@ -68,22 +76,49 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort lookup boundary: an unreachable/slow/malformed Alpaca host must yield an empty name map (the generic labels stay), never an error toward the wizard. CA1031's log-and-recover boundary applies.")]
     public async Task<IReadOnlyDictionary<string, string>> GetConfiguredDeviceNamesAsync(string host, int port, CancellationToken ct) {
+        var devices = await GetConfiguredDevicesAsync(host, port, ct).ConfigureAwait(false);
+        return NamesOf(devices);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lookup boundary: an unreachable/slow/malformed Alpaca host must yield an empty map (the generic labels stay, the pin check is skipped), never an error toward the caller. CA1031's log-and-recover boundary applies.")]
+    public async Task<IReadOnlyDictionary<string, AlpacaConfiguredDevice>> GetConfiguredDevicesAsync(string host, int port, CancellationToken ct) {
         var uri = ManagementUri(host, port);
         try {
             using var response = await _http.GetAsync(uri, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) {
                 LogLookupFailed(_logger, host, port, (int)response.StatusCode);
-                return EmptyNames;
+                return EmptyDevices;
             }
             var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            return ParseConfiguredDeviceNames(json);
+            return ParseConfiguredDevices(json);
         } catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) {
             LogLookupThrew(_logger, host, port, ex);
-            return EmptyNames;
+            return EmptyDevices;
         }
     }
 
-    private static readonly IReadOnlyDictionary<string, string> EmptyNames = new Dictionary<string, string>();
+    private static readonly IReadOnlyDictionary<string, AlpacaConfiguredDevice> EmptyDevices = new Dictionary<string, AlpacaConfiguredDevice>();
+
+    /// <summary>The <c>"type/number" → name</c> view of a devices map.</summary>
+    internal static IReadOnlyDictionary<string, string> NamesOf(IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices) {
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, device) in devices) {
+            names[key] = device.Name;
+        }
+        return names;
+    }
+
+    /// <summary>The <c>"type/number" → UniqueID</c> view of a devices map (entries without one are left out).</summary>
+    internal static IReadOnlyDictionary<string, string> UniqueIdsOf(IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices) {
+        var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, device) in devices) {
+            if (!string.IsNullOrEmpty(device.UniqueId)) {
+                ids[key] = device.UniqueId;
+            }
+        }
+        return ids;
+    }
 
     /// <summary>The management URL for one Alpaca server. Throws <see cref="ArgumentException"/> (→ 400)
     /// for an empty host or a port outside 1..65535 — validated at the edge so a bad request never
@@ -109,12 +144,15 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         return uri;
     }
 
+    /// <summary>The <c>"type/number" → name</c> parse. Internal for direct unit testing.</summary>
+    internal static IReadOnlyDictionary<string, string> ParseConfiguredDeviceNames(string json) => NamesOf(ParseConfiguredDevices(json));
+
     /// <summary>Parse the Alpaca <c>configureddevices</c> envelope (<c>{"Value":[{DeviceType,
-    /// DeviceNumber, DeviceName, UniqueID}, …]}</c>) into the <c>"type/number" → name</c> map. Entries
-    /// missing any of the three fields, or with an empty name, are skipped; malformed JSON yields an
-    /// empty map. Internal for direct unit testing (the same rule the client applied).</summary>
-    internal static IReadOnlyDictionary<string, string> ParseConfiguredDeviceNames(string json) {
-        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+    /// DeviceNumber, DeviceName, UniqueID}, …]}</c>) into the <c>"type/number" → (name, UniqueID)</c>
+    /// map. Entries missing type/number/name, or with an empty name, are skipped; a missing UniqueID
+    /// reads as ""; malformed JSON yields an empty map. Internal for direct unit testing.</summary>
+    internal static IReadOnlyDictionary<string, AlpacaConfiguredDevice> ParseConfiguredDevices(string json) {
+        var names = new Dictionary<string, AlpacaConfiguredDevice>(StringComparer.Ordinal);
         JsonDocument doc;
         try {
             doc = JsonDocument.Parse(json);
@@ -139,7 +177,10 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
                 if (string.IsNullOrEmpty(deviceName)) {
                     continue;
                 }
-                names[$"{type.GetString()!.ToLowerInvariant()}/{deviceNumber.ToString(CultureInfo.InvariantCulture)}"] = deviceName;
+                var uniqueId = entry.TryGetProperty("UniqueID", out var uid) && uid.ValueKind == JsonValueKind.String
+                    ? uid.GetString() ?? string.Empty : string.Empty;
+                names[$"{type.GetString()!.ToLowerInvariant()}/{deviceNumber.ToString(CultureInfo.InvariantCulture)}"] =
+                    new AlpacaConfiguredDevice(deviceName, uniqueId);
             }
         }
         return names;

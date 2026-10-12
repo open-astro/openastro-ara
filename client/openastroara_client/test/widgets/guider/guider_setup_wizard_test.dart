@@ -113,19 +113,22 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
   void close() {}
 }
 
-class _FakeAlpacaNames implements AlpacaDeviceNamesClient {
+class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
   final calls = <String>[];
   @override
-  Future<Map<String, String>> fetchNames(String host, int port) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     calls.add('$host:$port');
     if (host == 'bridge.local') {
       // The AlpacaBridge server — only reachable once discovery names it.
-      return {'camera/2': 'QHY5III-200M', 'telescope/5': 'Bridge Mount'};
+      return const {
+        'camera/2': AlpacaDeviceInfo(name: 'QHY5III-200M', uniqueId: 'QHY_2'),
+        'telescope/5': AlpacaDeviceInfo(name: 'Bridge Mount'),
+      };
     }
-    return {
-      'camera/0': 'ZWO ASI290MM Mini',
-      'telescope/0': 'iOptron HAE29C EQ',
-      'rotator/0': 'CAA',
+    return const {
+      'camera/0': AlpacaDeviceInfo(name: 'ZWO ASI290MM Mini', uniqueId: 'ZWO_SN_290'),
+      'telescope/0': AlpacaDeviceInfo(name: 'iOptron HAE29C EQ'),
+      'rotator/0': AlpacaDeviceInfo(name: 'CAA'),
     };
   }
 
@@ -264,6 +267,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(h.profile.lastPut?.guiderCamera,
         'Alpaca Camera [rc91.lan:6800/0]');
+    expect(h.profile.lastPut?.guiderCameraAlpacaUniqueId, 'ZWO_SN_290',
+        reason: '#1308 — the pick is pinned by UniqueID too');
     // Untouched fields ride the server copy, not client defaults.
     expect(h.profile.lastPut?.host, 'rc91.lan');
     expect(h.equipment.calls, contains('push'));

@@ -25,6 +25,7 @@ void main() {
       // §63.17 guider equipment selection — "" / 0 = unset.
       expect(s.guiderCamera, '');
       expect(s.guiderCameraId, '');
+      expect(s.guiderCameraAlpacaUniqueId, '');
       expect(s.guiderMount, '');
       expect(s.guiderAuxMount, '');
       expect(s.guiderRotator, '');

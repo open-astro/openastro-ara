@@ -62,6 +62,10 @@ class Phd2Settings {
   // keeps its own selection).
   final String guiderCamera;
   final String guiderCameraId;
+  // #1308 — the Alpaca UniqueID behind an "Alpaca Camera [host:port/N]" pick
+  // ("" = unset). The daemon re-resolves N from it before a push, so an
+  // AlpacaBridge renumber cannot hand the guider the imaging camera.
+  final String guiderCameraAlpacaUniqueId;
   final String guiderMount;
   final String guiderAuxMount;
   final String guiderRotator;
@@ -100,6 +104,7 @@ class Phd2Settings {
     this.decGuideMode = 'auto',
     this.guiderCamera = '',
     this.guiderCameraId = '',
+    this.guiderCameraAlpacaUniqueId = '',
     this.guiderMount = '',
     this.guiderAuxMount = '',
     this.guiderRotator = '',
@@ -130,6 +135,7 @@ class Phd2Settings {
     String? decGuideMode,
     String? guiderCamera,
     String? guiderCameraId,
+    String? guiderCameraAlpacaUniqueId,
     String? guiderMount,
     String? guiderAuxMount,
     String? guiderRotator,
@@ -160,6 +166,8 @@ class Phd2Settings {
         decGuideMode: decGuideMode ?? this.decGuideMode,
         guiderCamera: guiderCamera ?? this.guiderCamera,
         guiderCameraId: guiderCameraId ?? this.guiderCameraId,
+        guiderCameraAlpacaUniqueId:
+            guiderCameraAlpacaUniqueId ?? this.guiderCameraAlpacaUniqueId,
         guiderMount: guiderMount ?? this.guiderMount,
         guiderAuxMount: guiderAuxMount ?? this.guiderAuxMount,
         guiderRotator: guiderRotator ?? this.guiderRotator,
@@ -289,6 +297,9 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
 
   void setGuiderCameraId(String s) =>
       state = state.copyWith(guiderCameraId: s.trim());
+
+  void setGuiderCameraAlpacaUniqueId(String s) =>
+      state = state.copyWith(guiderCameraAlpacaUniqueId: s.trim());
 
   void setGuiderMount(String s) => state = state.copyWith(guiderMount: s.trim());
 

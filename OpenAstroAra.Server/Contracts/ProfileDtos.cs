@@ -396,6 +396,9 @@ public sealed record Phd2SettingsDto(
     // keeps its own selection). Optional ctor defaults keep a pre-§63.17 profile.json deserializing.
     string GuiderCamera = "",
     string GuiderCameraId = "",
+    // #1308 — the Alpaca UniqueID behind an "Alpaca Camera [host:port/N]" pick ("" = unset); the push
+    // re-resolves N from it so an AlpacaBridge renumber cannot hand the guider the imaging camera.
+    string GuiderCameraAlpacaUniqueId = "",
     string GuiderMount = "",
     string GuiderAuxMount = "",
     string GuiderRotator = "",

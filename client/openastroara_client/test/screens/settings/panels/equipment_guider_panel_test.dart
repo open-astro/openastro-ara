@@ -88,21 +88,21 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
   void close() {}
 }
 
-class _FakeAlpacaNames implements AlpacaDeviceNamesClient {
+class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
   final calls = <String>[];
   /// While > 0, every lookup answers empty (an unreachable management API).
   int failuresLeft = 0;
   @override
-  Future<Map<String, String>> fetchNames(String host, int port) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     calls.add('$host:$port');
     if (failuresLeft > 0) {
       failuresLeft--;
       return const {};
     }
     if (host == '127.0.0.1' && port == 6800) {
-      return {
-        'camera/0': 'ZWO ASI120MM Mini',
-        'telescope/1': 'Sky-Watcher EQM-35 Pro (EQMOD)',
+      return const {
+        'camera/0': AlpacaDeviceInfo(name: 'ZWO ASI120MM Mini', uniqueId: 'ZWO_0'),
+        'telescope/1': AlpacaDeviceInfo(name: 'Sky-Watcher EQM-35 Pro (EQMOD)'),
       };
     }
     return const {};
@@ -241,6 +241,8 @@ void main() {
     final element = tester.element(find.byType(EquipmentGuiderPanel));
     final phd2 = ProviderScope.containerOf(element).read(phd2SettingsProvider);
     expect(phd2.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
+    expect(phd2.guiderCameraAlpacaUniqueId, 'ZWO_0',
+        reason: '#1308 — pinned by UniqueID so a renumber is caught at push');
     expect(phd2.guiderMount, 'Alpaca Mount [127.0.0.1:6800/1]');
     expect(phd2.guiderAlpacaHost, '127.0.0.1');
     expect(phd2.guiderAlpacaPort, 6800);
