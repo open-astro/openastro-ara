@@ -195,6 +195,8 @@ public sealed class ProfileShareService : IProfileShareService {
         // focuser + optical train; on the recipient's rig it would feed the one-frame runner a
         // wrong map (the fallback ladder would catch it, but a share must not plant bad state).
         FocusCalibration = null,
+        // Strip the #1264 tracking calibration — it was measured on the donor's mount.
+        TrackingCalibration = null,
         // Strip the §30.7.4 calibration-state stamps — the donor's dark library / defect map live
         // on the donor's guider host; "valid" on the recipient's rig would be a lie.
         CalibrationState = CalibrationStateDto.Empty,

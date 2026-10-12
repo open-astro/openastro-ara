@@ -655,7 +655,9 @@ public partial class Program {
                 telescope: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
                 // The installed filter for FILTER / the catalog row / {filter} when a capture names
                 // none (every sequence TakeExposure). Func<>: registered later in this file.
-                filterWheel: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>()));
+                filterWheel: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
+                // #1264 — the latest analysed light's star shape for the unguided exposure guard.
+                frameQuality: sp.GetRequiredService<FrameQualityFeed>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -700,6 +702,21 @@ public partial class Program {
                 travelRange: ct => AutofocusSweepService.FocuserTravelAsync(sp.GetRequiredService<IFocuserService>(), ct),
                 tracker: sp.GetRequiredService<AutofocusRunTracker>(),
                 focuserStepUm: ct => AutofocusSweepService.FocuserStepUmAsync(sp.GetRequiredService<IFocuserService>(), ct)));
+        // #1264 — the unguided tracking probe (ladder of analysis frames → eccentricity/FWHM → ceiling →
+        // tracking_calibration) and the latest-frame-quality feed the exposure guard reads.
+        builder.Services.AddSingleton<FrameQualityFeed>(sp =>
+            new FrameQualityFeed(
+                sp.GetRequiredService<IFrameRepository>(),
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FrameQualityFeed>>()));
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(sp =>
+            new TrackingProbeService(
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetRequiredService<IAnalysisFrameSource>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TrackingProbeService>>(),
+                ws: sp.GetRequiredService<IWsBroadcaster>(),
+                notifications: sp.GetRequiredService<INotificationService>(),
+                polarAlignLog: sp.GetService<IPolarAlignmentLog>()));
         // §48.3 — the auto-exposure flat set (panel light → probe-to-ADU → saved FLAT frames).
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(sp =>
             new FlatCaptureService(
@@ -996,7 +1013,10 @@ public partial class Program {
                 // §59.9 — autofocus defers while §51 diagnostics carries an open sky-condition issue.
                 autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>(),
                 // §48.3 — the auto-exposure flat set, so FlatPanelFlats executes for real.
-                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>()));
+                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(),
+                // #1264 — the unguided tracking probe and the exposure guard's frame-quality feed.
+                trackingProbeExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(),
+                frameQualityFeed: sp.GetRequiredService<FrameQualityFeed>()));
         // The by-hand rotation readout (the Plan screen's "Rotate camera" panel on a rig without a rotator):
         // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done",
         // the profile's plate-solve exposure as the default exposure.
@@ -1067,6 +1087,7 @@ public partial class Program {
 
         // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
         app.MapAutofocusEndpoints();
+        app.MapTrackingEndpoints();
         app.MapRotationAssistEndpoints();
         app.MapBahtinovFocusEndpoints();
 

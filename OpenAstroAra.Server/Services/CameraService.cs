@@ -125,8 +125,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Func<ICoolingFanActuator?>? fan = null,
         Func<OpenAstroAra.Profile.Interfaces.IProfileService?>? legacyProfile = null,
         Func<ITelescopeMediator?>? telescope = null,
-        Func<IFilterWheelMediator?>? filterWheel = null) {
+        Func<IFilterWheelMediator?>? filterWheel = null,
+        IFrameQualitySink? frameQuality = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
+        _frameQuality = frameQuality;
         _fan = fan;
         _legacyProfile = legacyProfile;
         _telescope = telescope;
@@ -143,6 +145,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     }
 
     private readonly ImageHistoryService? _imageHistory;
+    // #1264 — the latest analysed LIGHT's star shape, for the sequencer's UnguidedExposureGuard.
+    private readonly IFrameQualitySink? _frameQuality;
 
     // §25.5.6 / #1065 — the cooling fan follows the cooler. Lazily resolved (Func<>) to break the
     // CameraService ↔ SwitchService construction cycle. Null = no switch service wired (tests).
@@ -870,7 +874,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // wrong trade. The pixels are already in hand; the write-back lands as
             // frame.analyzed when done.
             QueueFrameAnalysis(frameId, pixels, width, height,
-                string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName);
+                string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName, request.ExposureSec);
         }
         return true;
     }
@@ -884,7 +888,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // Test seam: frame analysis without synthesizing a detectable star field.
     internal Func<ReadOnlyMemory<ushort>, int, int, (double Hfr, int Stars)>? AnalysisMetricOverride { get; set; }
 
-    private sealed record AnalysisJob(Guid FrameId, ushort[] Pixels, int Width, int Height, string? FilterName);
+    private sealed record AnalysisJob(Guid FrameId, ushort[] Pixels, int Width, int Height, string? FilterName, double ExposureSec);
 
     // Single-reader worker, NOT Task.Run-per-frame (#747 review): the HFR-drift trigger's
     // least-squares trend trusts ImageHistoryService's list order as capture chronology, and
@@ -907,14 +911,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     /// <summary>True when the frame's analysis was queued; false when the backlog was full
     /// and this frame's analysis is skipped (logged — its HFR stays unrecorded).</summary>
-    internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+    internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName, double exposureSec = 0) {
         lock (_gate) {
             if (_disposed) {
                 return false;
             }
             _analysisWorker ??= Task.Run(RunAnalysisWorkerAsync);
         }
-        if (!_analysisQueue.Writer.TryWrite(new AnalysisJob(frameId, pixels, width, height, filterName))) {
+        if (!_analysisQueue.Writer.TryWrite(new AnalysisJob(frameId, pixels, width, height, filterName, exposureSec))) {
             LogFrameAnalysisBacklogged(frameId);
             return false;
         }
@@ -925,23 +929,38 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // Per-job faults are absorbed inside AnalyzeFrameAsync; the loop ends only when
         // Dispose completes the writer, so the worker can never fault-and-strand the queue.
         await foreach (var job in _analysisQueue.Reader.ReadAllAsync().ConfigureAwait(false)) {
-            await AnalyzeFrameAsync(job.FrameId, job.Pixels, job.Width, job.Height, job.FilterName).ConfigureAwait(false);
+            await AnalyzeFrameAsync(job.FrameId, job.Pixels, job.Width, job.Height, job.FilterName, job.ExposureSec).ConfigureAwait(false);
         }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget analysis boundary: detector/DB/WS faults must degrade to a logged skip — the frame is already captured, registered, and safe; analysis is enrichment. CA1031's log-and-recover boundary applies.")]
-    internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+    internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height, string? filterName, double exposureSec = 0) {
         try {
-            var (hfr, stars) = AnalysisMetricOverride is { } metric
-                ? metric(pixels, width, height)
-                : DefaultAnalysisMetric(pixels, width, height);
+            // The test seam yields HFR + stars only (shape unknown); the real detector also gives the
+            // #1264 star shape (median FWHM and roundness → eccentricity) the unguided guard reads.
+            double hfr, fwhm = double.NaN, eccentricity = double.NaN;
+            int stars;
+            if (AnalysisMetricOverride is { } metric) {
+                (hfr, stars) = metric(pixels, width, height);
+            } else {
+                (hfr, stars, fwhm, eccentricity) = DefaultAnalysisMetric(pixels, width, height);
+            }
             if (stars < MinStarsForAnalysis || double.IsNaN(hfr) || hfr <= 0) {
                 LogFrameAnalysisSkipped(frameId, stars);
                 return;
             }
             if (_frames is not null) {
-                await _frames.UpdateAnalysisAsync(frameId, hfr, stars, CancellationToken.None).ConfigureAwait(false);
+                // The shape-carrying overload only when a shape was measured: the plain write stays the
+                // contract for the HFR-only path (and the test seam).
+                if (double.IsNaN(eccentricity)) {
+                    await _frames.UpdateAnalysisAsync(frameId, hfr, stars, CancellationToken.None).ConfigureAwait(false);
+                } else {
+                    await _frames.UpdateAnalysisAsync(frameId, hfr, stars, eccentricity, CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+            if (!double.IsNaN(eccentricity)) {
+                _frameQuality?.Record(frameId, eccentricity, fwhm, exposureSec);
             }
             // The §59.5 HFR-drift trigger's data feed. The filter is the REQUESTED name — the
             // same name SwitchFilter drives the wheel by, so it matches the trigger's
@@ -988,13 +1007,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // at each call site would silently desync them. maxStars = 0 leaves the count uncapped (full-frame stats);
     // the overlay passes its draw cap. IsAutoFocus = false: full-frame statistics, not the sweep's
     // center-weighted probe posture.
-    private static StarDetectionParams AnalysisDetectionParams(int maxStars = 0) =>
+    internal static StarDetectionParams AnalysisDetectionParams(int maxStars = 0) =>
         new() { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = maxStars };
 
-    private static (double Hfr, int Stars) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
+    private static (double Hfr, int Stars, double FwhmPx, double Eccentricity) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
         var result = StarDetector.Detect(
             pixels, width, height, AnalysisDetectionParams(), CancellationToken.None);
-        return (result.AverageHFR, result.DetectedStars);
+        var features = FocusFeatureExtractor.Extract(result);
+        return (result.AverageHFR, result.DetectedStars, features.MedianFWHM, TrackingProbeService.Eccentricity(features.MedianRoundness));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

@@ -434,6 +434,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-11 — Unguided exposure ceiling: `tracking_calibration`, `/api/v1/tracking/*`, `tracking_probe.*` (#1264)
+
+**Endpoint(s) or area:** `GET /api/v1/tracking/calibration` (`TrackingCalibrationDto`, 404 = never measured), `POST /api/v1/tracking/recalibrate` (204, clears), profile JSON `tracking_calibration`; WS `tracking_probe.started` / `tracking_probe.rung_complete` / `tracking_probe.completed`; sequence `$type`s `OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe` and `OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard`.
+
+**Decision:** the unguided tracking ceiling is daemon-owned derived data on the profile, shaped like `focus_calibration`: `{ceiling_seconds, measured_utc, polar_align_error_arcmin?, pixel_scale_arcsec?, seeing_fwhm_arcsec?, prior_seconds?, source: "measured"|"prior", rungs: [{exposure_seconds, eccentricity?, fwhm_px?, stars, usable, passed}]}`. The sequencer's `TrackingProbe` writes it; the client only reads it (readiness fact, advisor line) and may clear it. The probe's live stream mirrors the autofocus lifecycle: `started {target, rungs, prior_seconds?}`, `rung_complete {rung_index, exposure_seconds, eccentricity?, fwhm_px?, stars, usable, passed}`, `completed {ceiling_seconds?, prior_seconds?, source, usable_rungs, summary}`. The instruction carries `Rungs`, `MaxExposure`, `PriorSeconds` and, after it ran, `CeilingSeconds`; the trigger carries `Rungs`, `MaxExposure`, `EccentricityTolerance`, `GoodEccentricity`, `StepDownAfter`, `StepUpAfter`. Light frames' `eccentricity` column is now written by the §59.5 post-capture analysis (median star eccentricity, e = √(1 − roundness²)).
+
+**Reasoning:** the run is cooked from the rig on the client, so the probe and guard are ordinary sequence nodes the client emits when `RigCapabilities.guider == false` rather than server-side injection — a saved or imported body stays self-describing, and a guided rig's body is byte-for-byte unchanged. Storing the measurement on the profile (not in the run) makes the next night's prior the measured one. The ceiling is applied by rewriting the imaging loops' `TakeExposure.ExposureTime` and `LoopCondition.Iterations` in the live tree, which the #1068 ETA estimator and the live status already read, so no new progress wire shape was needed. `usable`/`passed` ride on every rung so the client can draw the ladder like the autofocus probes. A separate `tracking` route group (not `autofocus`) keeps the two calibrations independently clearable.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1tracking~1calibration` (…`~1recalibrate`); `Contracts/TrackingCalibrationDtos.cs`, `Services/TrackingProbeService.cs`, `Services/FrameQualityFeed.cs`, `OpenAstroAra.Sequencer/SequenceItem/Telescope/TrackingProbe.cs`, `OpenAstroAra.Sequencer/Trigger/Telescope/UnguidedExposureGuard.cs`, `OpenAstroAra.Sequencer/Utility/UnguidedExposureWriter.cs`; client `imaging_run_body.dart`.
+
+**Related:** #1264 (prior from the bridge's mount spec sheet is AlpacaBridge #815), §59.5 frame analysis, #1068 ETA, §45.13 polar-alignment log (the record's `polar_align_error_arcmin`); tests `UnguidedExposureCeilingTest`, `TrackingProbeServiceTest`.
+
+---
+
 ### 2026-10-03 — Smart Focus judges "in focus" against the HFR the sweep measured
 
 **Where:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`.

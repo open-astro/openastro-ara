@@ -190,7 +190,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IAutofocusExecutor? autofocusExecutor = null,
             IImageHistory? imageHistory = null,
             IAutofocusConditionGate? autofocusConditionGate = null,
-            IFlatCaptureExecutor? flatCaptureExecutor = null) {
+            IFlatCaptureExecutor? flatCaptureExecutor = null,
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor? trackingProbeExecutor = null,
+            OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -318,6 +320,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // JSON-resolvable and its Execute fails loudly rather than skipping focus/centering.
                 new RunAutofocus(autofocusExecutor),
                 new CenterAndRotate(centeringExecutor, rotatorMediator),
+                // #1264 — the unguided tracking probe (run builder emits it only without a guider).
+                // Executes through ITrackingProbeExecutor (TrackingProbeService in Program.cs DI); a
+                // null executor keeps the prototype JSON-resolvable and its Execute fails loudly.
+                new OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe(trackingProbeExecutor),
                 // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
                 // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
                 // JSON-resolvable and its Execute fails loudly rather than skipping flats.
@@ -379,6 +385,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new DitherAfterExposures(),
                 // §38 NINA import fidelity — the autofocus sibling: run autofocus every N exposures.
                 new AutofocusAfterExposures(autofocusConditionGate),
+                // #1264 — the unguided exposure guard: steps the imaging loop's exposure down/up a rung
+                // from the §59.5 analysis of each light (through IFrameQualityFeed).
+                new OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard(frameQualityFeed),
                 // §59.5 — the remaining autofocus trigger family: time interval, focuser-temp
                 // delta, HFR drift, first-use-of-a-filter. Each reads the daemon's session
                 // image history (plus the equipment it observes) and consults the §59.9

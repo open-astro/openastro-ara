@@ -135,7 +135,37 @@ const String ditherAfterExposuresType =
 const String autofocusAfterExposuresType =
     'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer';
 
+/// #1264 — the unguided exposure guard the run builder attaches to each
+/// imaging loop on a rig without a guider.
+const String unguidedExposureGuardType =
+    'OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard, OpenAstroAra.Sequencer';
+
 const List<TriggerDef> triggerCatalog = [
+  // #1264 — unguided exposure guard: two consecutive trailed lights (median
+  // eccentricity over the tolerance) step the loop's exposure down one rung
+  // and tag them 'trailed'; ten round ones step it back up, never past
+  // MaxExposure. No runner: the guard edits the loop in place.
+  TriggerDef(
+    type: unguidedExposureGuardType,
+    label: 'Unguided Exposure Guard',
+    icon: Icons.straighten_outlined,
+    fields: [
+      InstructionField(
+        'MaxExposure',
+        'Planned exposure the guard never exceeds (s)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
+        min: 0,
+      ),
+      InstructionField(
+        'EccentricityTolerance',
+        'Trailed above this median eccentricity',
+        InstructionFieldType.number,
+        defaultValue: 0.5,
+        min: 0.05,
+      ),
+    ],
+  ),
   // The meridian flip — the canonical trigger. No serialized fields: the flip
   // timing/side-of-pier parameters live in the profile, not the sequence.
   TriggerDef(

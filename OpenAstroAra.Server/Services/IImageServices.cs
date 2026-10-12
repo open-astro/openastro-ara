@@ -57,6 +57,11 @@ public interface IFrameRepository {
     /// </summary>
     Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct);
 
+    /// <summary>#1264 — the same write-back carrying the frame's median star eccentricity (0 round … 1 line)
+    /// into the <c>eccentricity</c> column. Default: the HFR/star-count write without it.</summary>
+    Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, double? eccentricity, CancellationToken ct) =>
+        UpdateAnalysisAsync(frameId, hfr, starCount, ct);
+
     /// <summary>
     /// §14e — id of the lazily-created "manual capture" session that REST-initiated exposures
     /// attach to. Idempotent per daemon lifetime. Sequence runs do NOT use this — they open

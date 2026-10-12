@@ -136,7 +136,7 @@ public static class RunEtaEstimator {
     // The instructions whose GetEstimatedDuration is a real figure (so zero means zero) rather
     // than the base class's TimeSpan.Zero placeholder (so zero means "no estimate").
     private static bool HasOwnDurationModel(ISequenceItem leaf) =>
-        leaf is TakeExposure or WaitForTime or WaitForTimeSpan;
+        leaf is TakeExposure or WaitForTime or WaitForTimeSpan or OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe;
 
     private static bool IsTerminal(SequenceEntityStatus status) =>
         status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED

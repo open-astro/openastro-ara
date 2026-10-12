@@ -358,15 +358,19 @@ void main() {
           rig: rig,
         );
 
-    test('a bare rig gets slew + loop only: no AF, no guiding, no filter', () {
+    test('a bare rig gets slew + tracking probe + loop: no AF, no guiding, no filter', () {
       final b = block(RigCapabilities.nothing, filter: 'Ha');
       final t = types(b);
       expect(t, isNot(contains(runAutofocusType)));
       expect(t, isNot(contains(startGuidingType)));
       expect(t, isNot(contains(switchFilterType)));
       expect(t, isNot(contains(waitForUserType)));
+      // #1264 — no guider is a real branch now: the mount's tracking is the
+      // exposure ceiling, so the probe and the guard are the ONLY extras.
+      expect(t, [slewScopeToRaDecType, trackingProbeType, sequentialContainerType]);
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop), isEmpty, reason: 'no focuser → no AF trigger; no guider → no dither');
+      expect(triggersOf(loop).map((x) => x[r'$type']), [unguidedExposureGuardType],
+          reason: 'no focuser → no AF trigger; no guider → no dither, but the exposure guard');
     });
 
     test('the full rig gets everything the caller asked for', () {
@@ -401,6 +405,45 @@ void main() {
       expect(t.indexOf(centerAndRotateType), 0);
       expect(childrenOf(b)[0]['PositionAngle'], 299.0);
       expect(types(b), isNot(contains(slewScopeToRaDecType)));
+    });
+
+    // #1264 — no guider → the mount's tracking is the exposure ceiling: a
+    // Tracking Probe before the first loop and an Unguided Exposure Guard on
+    // every loop. A guider makes both disappear.
+    test('a rig without a guider gets a tracking probe and an exposure guard', () {
+      final b = block(const RigCapabilities(focuser: true, filterWheel: true), filter: 'Ha');
+      final t = types(b);
+      expect(t, contains(trackingProbeType));
+      expect(t.indexOf(trackingProbeType), greaterThan(t.indexOf(runAutofocusType)),
+          reason: 'the probe judges FWHM growth, so it runs after focus');
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(t.indexOf(trackingProbeType), lessThan(childrenOf(b).indexOf(loop)));
+      final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
+      expect(probe['MaxExposure'], 60.0, reason: 'capped at the planned sub');
+      final guard = triggersOf(loop).singleWhere((x) => x[r'$type'] == unguidedExposureGuardType);
+      expect(guard['MaxExposure'], 60.0);
+      expect(guard['TriggerRunner'], isNotNull);
+    });
+
+    test('a rig with a guider gets neither the probe nor the guard', () {
+      final b = block(RigCapabilities.everything, filter: 'Ha');
+      expect(types(b), isNot(contains(trackingProbeType)));
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(triggersOf(loop).map((x) => x[r'$type']), isNot(contains(unguidedExposureGuardType)));
+    });
+
+    test('the probe is capped at the longest planned sub of a multi-filter plan; each guard at its own', () {
+      const plan = [
+        FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 2),
+        FilterPlanStep(filterName: 'OIII', exposureSeconds: 180, frameCount: 2),
+      ];
+      final b = block(const RigCapabilities(focuser: true, filterWheel: true), plan: plan);
+      final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
+      expect(probe['MaxExposure'], 300.0);
+      final oiii = childrenOf(b).singleWhere((c) => c['Name'] == 'OIII Imaging');
+      final guard = triggersOf(oiii).singleWhere((x) => x[r'$type'] == unguidedExposureGuardType);
+      expect(guard['MaxExposure'], 180.0);
+      expect(types(b).where((x) => x == trackingProbeType), hasLength(1), reason: 'one probe per block');
     });
 
     test('a multi-filter plan on a rig without a wheel swaps by hand', () {

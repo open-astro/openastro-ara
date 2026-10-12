@@ -1621,6 +1621,32 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/tracking/calibration:
+    get:
+      tags:
+        - Tracking
+      operationId: GetTrackingCalibration
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackingCalibrationDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/tracking/recalibrate:
+    post:
+      tags:
+        - Tracking
+      operationId: RecalibrateTracking
+      responses:
+        '204':
+          description: No Content
   /api/v1/rotation-assist/start:
     post:
       tags:
@@ -10455,6 +10481,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/FilterWheelPolicyDto'
+        tracking_calibration:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TrackingCalibrationDto'
     QualityScoreBreakdownDto:
       required:
         - composite
@@ -12567,6 +12597,101 @@ components:
             - 'null'
             - string
           format: date-time
+    TrackingCalibrationDto:
+      required:
+        - ceiling_seconds
+        - measured_utc
+        - polar_align_error_arcmin
+        - pixel_scale_arcsec
+        - seeing_fwhm_arcsec
+        - prior_seconds
+        - source
+        - rungs
+      type: object
+      properties:
+        ceiling_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        measured_utc:
+          type: string
+          format: date-time
+        polar_align_error_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        pixel_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        seeing_fwhm_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        prior_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        source:
+          type: string
+        rungs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingProbeRungDto'
+    TrackingProbeRungDto:
+      required:
+        - exposure_seconds
+        - eccentricity
+        - fwhm_px
+        - stars
+        - usable
+        - passed
+      type: object
+      properties:
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        eccentricity:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        fwhm_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        stars:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        usable:
+          type: boolean
+        passed:
+          type: boolean
     WsCatalogResponse:
       required:
         - events
@@ -12581,6 +12706,7 @@ tags:
   - name: Health
   - name: Equipment
   - name: Autofocus
+  - name: Tracking
   - name: Rotation assist
   - name: Bahtinov focus
   - name: Sequences

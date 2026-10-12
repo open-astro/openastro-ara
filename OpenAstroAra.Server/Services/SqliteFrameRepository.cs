@@ -222,12 +222,18 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     }
 
     /// <inheritdoc />
-    public async Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct) {
+    public Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct) =>
+        UpdateAnalysisAsync(frameId, hfr, starCount, eccentricity: null, ct);
+
+    /// <inheritdoc />
+    public async Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, double? eccentricity, CancellationToken ct) {
         await using var conn = _db.OpenConnection();
         var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE frames SET hfr = $hfr, star_count = $star_count WHERE id = $id";
+        // #1264 — eccentricity is written only when measured; a null keeps whatever the row holds.
+        cmd.CommandText = "UPDATE frames SET hfr = $hfr, star_count = $star_count, eccentricity = COALESCE($ecc, eccentricity) WHERE id = $id";
         cmd.Parameters.AddWithValue("$hfr", hfr);
         cmd.Parameters.AddWithValue("$star_count", starCount);
+        cmd.Parameters.AddWithValue("$ecc", eccentricity is double e && !double.IsNaN(e) ? e : DBNull.Value);
         cmd.Parameters.AddWithValue("$id", frameId.ToString("D"));
         var updated = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         if (updated == 0) {

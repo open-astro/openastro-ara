@@ -440,6 +440,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1264 unguided tracking calibration — null until a TrackingProbe records one.
+    private TrackingCalibrationDto? _trackingCalibration;
+
+    public TrackingCalibrationDto? GetTrackingCalibration() {
+        lock (_lock) { return _trackingCalibration; }
+    }
+
+    public void PutTrackingCalibration(TrackingCalibrationDto? value) {
+        lock (_lock) { _trackingCalibration = value; }
+        RaiseChanged();
+    }
+
     // §30.7.4 calibration state (e-4b-2) — everything-invalid until a build stamps it.
     private CalibrationStateDto _calibrationState = CalibrationStateDto.Empty;
 

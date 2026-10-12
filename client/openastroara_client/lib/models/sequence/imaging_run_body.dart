@@ -169,6 +169,11 @@ Map<String, dynamic> buildTargetBlock({
   // filter (it is already in the train).
   final hasFocuser = rig.focuser;
   final guide = startGuiding && rig.guider;
+  // #1264 — no guider: the mount's tracking is the exposure ceiling. A
+  // Tracking Probe measures it at the target before the first imaging loop
+  // and an Unguided Exposure Guard adapts each loop during the run. Both are
+  // cooked from the rig like everything else; with a guider they never appear.
+  final unguided = !rig.guider;
   final dither = guide ? ditherEveryNExposures : null;
   final afAtStart = autofocusAtStart && hasFocuser;
   final afEvery = hasFocuser ? autofocusEveryNExposures : null;
@@ -269,8 +274,28 @@ Map<String, dynamic> buildTargetBlock({
       }
       triggers.add(ditherDef.build()..['AfterExposures'] = dither);
     }
+    if (unguided) {
+      final guardDef = triggerForType(unguidedExposureGuardType);
+      if (guardDef == null) {
+        throw StateError(
+          'UnguidedExposureGuard missing from the trigger catalog',
+        );
+      }
+      // The planned sub is the longest the guard may step back up to.
+      triggers.add(guardDef.build()..['MaxExposure'] = expSeconds);
+    }
     if (triggers.isNotEmpty) imaging = withTriggers(imaging, triggers);
     return imaging;
+  }
+
+  // #1264 — the probe's ladder is capped at the longest planned sub of this
+  // block (a multi-filter plan may differ per filter; the probe measures once
+  // for the whole block and every loop is shortened to the same ceiling).
+  Map<String, dynamic> trackingProbe() {
+    final longest = plan == null
+        ? exposureSeconds
+        : plan.map((s) => s.exposureSeconds).reduce(math.max);
+    return _item(trackingProbeType)..['MaxExposure'] = longest;
   }
 
   // §36/§38 — a dialed framing position angle upgrades the plain slew to a
@@ -301,6 +326,9 @@ Map<String, dynamic> buildTargetBlock({
       switchTo(filterName),
     if (afAtStart) _item(runAutofocusType),
     if (guide) _item(startGuidingType),
+    // After focus (the probe judges FWHM growth against its first rung, so it
+    // must see focused stars) and before the first imaging loop.
+    if (unguided) trackingProbe(),
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) switchTo(plan[i].filterName),

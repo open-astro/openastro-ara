@@ -79,4 +79,7 @@ public sealed record ProfileSnapshotDto(
     PolarAlignSettingsDto? PolarAlign = null,
     // #1075 filter-wheel policy (home on first connect). Optional so older profile.json keeps
     // deserializing; the normalizer back-fills null to the default (home on).
-    FilterWheelPolicyDto? FilterWheelPolicy = null);
+    FilterWheelPolicyDto? FilterWheelPolicy = null,
+    // #1264 unguided tracking calibration — daemon-owned derived data written by the sequencer's
+    // TrackingProbe. Like FocusCalibration, null is MEANINGFUL ("never measured") and passes through.
+    TrackingCalibrationDto? TrackingCalibration = null);

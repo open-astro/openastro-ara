@@ -129,6 +129,12 @@ public interface IProfileStore {
     FocusCalibrationDto? GetFocusCalibration();
     void PutFocusCalibration(FocusCalibrationDto? value);
 
+    /// <summary>#1264 unguided tracking calibration — daemon-owned derived data written by the sequencer's
+    /// TrackingProbe, never by the client. Null means "never measured"; Put(null) clears. Single-writer
+    /// (one sequencer run at a time), so plain Get/Put.</summary>
+    TrackingCalibrationDto? GetTrackingCalibration();
+    void PutTrackingCalibration(TrackingCalibrationDto? value);
+
     /// <summary>§30.7.4 calibration-state block (guider slice, e-4b-2) — daemon-owned validity
     /// records stamped by the §63.6 dark-library / defect-map builds on completion. Writers are
     /// the guider build tasks (serialized by their own calibration-build gate), so plain Get/Put.</summary>

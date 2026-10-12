@@ -160,6 +160,16 @@ public static class WsEventCatalog {
     public const string AutofocusCompleted = "autofocus.completed";
     public const string AutofocusFailed = "autofocus.failed";
 
+    // #1264 — the unguided tracking probe's live stream (the Run tab shows it like an autofocus run).
+    // `started` once per probe: { target, rungs: [s…], prior_seconds? }. `rung_complete` per rung:
+    // { rung_index, exposure_seconds, eccentricity?, fwhm_px?, stars, usable, passed }. `completed`
+    // once: { ceiling_seconds?, prior_seconds?, source: "measured"|"prior", usable_rungs, summary } —
+    // source "prior" means fewer than two usable rungs, so the prior (possibly null) stands. The stored
+    // record rehydrates from GET /api/v1/tracking/calibration.
+    public const string TrackingProbeStarted = "tracking_probe.started";
+    public const string TrackingProbeRungComplete = "tracking_probe.rung_complete";
+    public const string TrackingProbeCompleted = "tracking_probe.completed";
+
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
     public const string SequenceUpdated = "sequence.updated";
@@ -298,6 +308,7 @@ public static class WsEventCatalog {
         AutofocusShotComplete,
         AutofocusFallbackClassic,
         AutofocusStepComplete, AutofocusCurveFit, AutofocusCompleted, AutofocusFailed,
+        TrackingProbeStarted, TrackingProbeRungComplete, TrackingProbeCompleted,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
         SequenceStarted, SequencePaused, SequenceResumed, SequenceResumeRecentering, SequenceAborted,
