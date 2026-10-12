@@ -52,6 +52,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   // localhost:0.
   final Map<String, String> _alpacaNames = {};
   final Set<String> _namedEndpoints = {};
+  // Endpoints with a lookup in flight: two triggers landing together (hydrate
+  // plus a choices refresh) must not fetch the same server twice.
+  final Set<String> _resolving = {};
 
   @override
   void initState() {
@@ -175,18 +178,22 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final namesApi = ref.read(alpacaDeviceNamesApiProvider);
     final targets = <({String endpoint, String host, int port})>[];
     for (final endpoint in endpoints.toSet()) {
-      if (_namedEndpoints.contains(endpoint)) continue;
+      if (_namedEndpoints.contains(endpoint) || _resolving.contains(endpoint)) {
+        continue;
+      }
       final parsed = parseHostPort(endpoint);
       if (parsed.host == null || parsed.port == null) continue;
       targets.add((endpoint: endpoint, host: parsed.host!, port: parsed.port!));
     }
     if (targets.isEmpty) return;
+    _resolving.addAll(targets.map((t) => t.endpoint));
     final fetched = await Future.wait([
       for (final t in targets)
         namesApi
             .fetchNames(t.host, t.port)
             .then((names) => (endpoint: t.endpoint, names: names)),
     ]);
+    _resolving.removeAll(targets.map((t) => t.endpoint));
     if (!mounted) return;
     setState(() {
       for (final result in fetched) {
