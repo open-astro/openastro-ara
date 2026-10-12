@@ -52,9 +52,11 @@ public static class MeridianFlipPolicy {
     /// Whether the flip recovery re-focuses, and why. <paramref name="lastAutofocusTemperatureC"/> is the
     /// focuser temperature at the session's last completed autofocus (null = none this session);
     /// <paramref name="focuserTemperatureC"/> the focuser's reading now (NaN/null = no probe).
-    /// <c>if_temp_drifted</c>: re-focus when the drift exceeds the threshold, or when there has been no
-    /// autofocus this session at all (nothing to compare against — hours of imaging have passed); a
-    /// focuser without a temperature probe cannot report drift, so it keeps the focus it has.
+    /// <c>if_temp_drifted</c>: a focuser without a temperature probe (now, or at the last autofocus —
+    /// the history records NaN then) cannot report drift, so it keeps the focus it has; otherwise re-focus
+    /// when the drift exceeds the threshold, or when there has been no autofocus this session at all
+    /// (nothing to compare against — hours of imaging have passed). <paramref name="lastAutofocusTemperatureC"/>
+    /// null = no autofocus this session, NaN = one without a temperature.
     /// </summary>
     public static (bool Refocus, string Reason) RefocusDecision(string? mode, double thresholdC, double? lastAutofocusTemperatureC, double? focuserTemperatureC) {
         switch (RefocusMode(mode)) {
@@ -63,11 +65,14 @@ public static class MeridianFlipPolicy {
             case RefocusNever:
                 return (false, "policy: never re-focus after a flip");
         }
-        if (lastAutofocusTemperatureC is not double last || !double.IsFinite(last)) {
-            return (true, "no autofocus this session to compare against");
-        }
         if (focuserTemperatureC is not double now || !double.IsFinite(now)) {
             return (false, "the focuser reports no temperature, so drift cannot be judged");
+        }
+        if (lastAutofocusTemperatureC is null) {
+            return (true, "no autofocus this session to compare against");
+        }
+        if (lastAutofocusTemperatureC is not double last || !double.IsFinite(last)) {
+            return (false, "the last autofocus recorded no focuser temperature, so drift cannot be judged");
         }
         var drift = Math.Abs(now - last);
         var threshold = thresholdC > 0 ? thresholdC : 2.0;
