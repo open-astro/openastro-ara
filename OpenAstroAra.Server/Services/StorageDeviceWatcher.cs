@@ -24,8 +24,9 @@ namespace OpenAstroAra.Server.Services;
 /// §29 — notices a storage drive being plugged or pulled and tells live
 /// clients. Polls two cheap kernel views every 5 s (no exec, no privilege):
 /// the block-device names under <c>/sys/block</c> and whether a disk of its
-/// own is mounted at the ARA store path per <c>/proc/self/mounts</c> (a line
-/// alone is not enough — see <see cref="StoreMountProbe"/>). On any change it broadcasts
+/// own is mounted at the ARA store path per the daemon's mount table
+/// (<see cref="StoreMountProbe"/>: mountinfo device numbers and bind roots,
+/// with a sysfs liveness check; a line at the path alone is not enough). On any change it broadcasts
 /// <c>storage.devices_changed</c> — clients re-fetch their device/space
 /// state, so an unplugged drive shows as gone within seconds instead of
 /// whenever something happened to refresh.

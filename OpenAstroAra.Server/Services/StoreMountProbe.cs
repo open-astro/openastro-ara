@@ -160,7 +160,12 @@ internal static class StoreMountProbe {
             return s.Root != selfBindRoot;
         }
         // Its own filesystem — unless the disk behind it is gone (unplugged
-        // under a namespace-private bind: the table still lists it).
+        // under a namespace-private bind: the table still lists it). Liveness is
+        // "does this device number still exist", not "is it the same disk": a
+        // replug that is handed the SAME major:minor while the stale entry is
+        // still the last one at the path reads as mounted. Unlikely in practice
+        // (the stale entry keeps the old device name, and a replug stacks a new
+        // entry over it, which then wins as the last one), noted here on purpose.
         return deviceExists?.Invoke(s.MajorMinor) != false;
     }
 
