@@ -111,7 +111,19 @@ public class ProfileShareServiceTest {
         FilterWheelLabels: new(["L", "Ha", "", "OIII"]),
         // §36 custom terrain horizon — a distinctive skyline (a terrain
         // fingerprint identifies the site) that must be stripped whole.
-        CustomHorizon: new([new CustomHorizonPointDto(123.75, 41.5)]));
+        CustomHorizon: new([new CustomHorizonPointDto(123.75, 41.5)]),
+        // #1264 — measured on the donor's mount; must be stripped.
+        TrackingCalibration: new(CeilingSeconds: 45, MeasuredUtc: DateTimeOffset.UtcNow, PolarAlignErrorArcmin: 3,
+            PixelScaleArcsec: 1.2, SeeingFwhmArcsec: 2.5, PriorSeconds: null, Source: "measured", Rungs: []));
+
+    [Test]
+    public async Task Export_strips_the_donors_tracking_calibration() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
+        var settings = share!.Manifest.GetProperty("settings");
+        settings.TryGetProperty("tracking_calibration", out var tracking).Should().BeTrue();
+        tracking.ValueKind.Should().Be(JsonValueKind.Null);
+    }
 
     [Test]
     public async Task Export_strips_paths_secrets_location_and_network() {
