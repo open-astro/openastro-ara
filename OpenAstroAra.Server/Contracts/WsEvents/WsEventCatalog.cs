@@ -152,7 +152,7 @@ public static class WsEventCatalog {
     // within_range }. `completed` closes a successful run of either mode: { mode, final_position, final_hfr
     // (measured at best focus when the confirmation frame read, else the fit's prediction), final_stars?,
     // duration_seconds, probes } — probes = Smart shots taken, or for Classic the probes on the run record
-    // (coarse and dropped included; a re-centred sweep's earlier attempts are not), backlash_up_steps? +
+    // (coarse, dropped and the §59.7 backlash shots included; a re-centred sweep's earlier attempts are not), backlash_up_steps? +
     // backlash_verified? (§59.7, a Classic sweep whose backlash probe measured). `failed` closes an unsuccessful one: { reason, restored_position? } —
     // reason "cancelled" is the user's Cancel (POST /api/v1/autofocus/cancel). The full run (every probe,
     // the sampled fit curve, the rendered frame) rehydrates from GET /api/v1/autofocus/state.
