@@ -308,6 +308,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task On_the_lowest_rung_two_trailed_frames_still_flag_and_notify_but_cannot_step_down() {
+            var feed = new ScriptedFeed();
+            var factory = Factory(feed: feed);
+            var (_, _, loop, exposure, count) = Tree(factory, exposureSeconds: 10, frames: 10);
+            var guard = (UnguidedExposureGuard)factory.GetTrigger<UnguidedExposureGuard>()!.Clone();
+            guard.MaxExposure = 10;
+            guard.SequenceBlockInitialize();
+            var log = new List<string>();
+            var progress = new Progress<ApplicationStatus>();
+            var statuses = new SyncProgress(s => log.Add(s.Status ?? string.Empty));
+
+            var first = feed.Push(0.7, exposure: 10);
+            Assert.That(guard.ShouldTrigger(exposure, exposure), Is.False);
+            var second = feed.Push(0.7, exposure: 10);
+            Assert.That(guard.ShouldTrigger(exposure, exposure), Is.True, "the trend still fires on the lowest rung");
+            await guard.Execute(loop, statuses, CancellationToken.None);
+
+            Assert.That(exposure.ExposureTime, Is.EqualTo(10), "nothing shorter to step to");
+            Assert.That(count.Iterations, Is.EqualTo(10));
+            Assert.That(feed.Flags.Select(f => f.Item1), Is.EquivalentTo(new[] { first, second }));
+            Assert.That(feed.Notifications, Has.Count.EqualTo(1));
+            Assert.That(log, Has.Some.Contains("shortest exposure"));
+            _ = progress;
+        }
+
+        private sealed class SyncProgress : IProgress<ApplicationStatus> {
+            private readonly Action<ApplicationStatus> _report;
+            public SyncProgress(Action<ApplicationStatus> report) => _report = report;
+            public void Report(ApplicationStatus value) => _report(value);
+        }
+
+        [Test]
         public async Task Ten_round_frames_step_up_but_never_past_the_planned_exposure() {
             var feed = new ScriptedFeed();
             var factory = Factory(feed: feed);
