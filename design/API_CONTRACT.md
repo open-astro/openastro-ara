@@ -434,6 +434,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-11 — `focus_calibration` carries the measured focuser backlash (#1139, §59.7)
+
+**Endpoint(s) or area:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`; WS `autofocus.completed`.
+
+**Decision:** two nullable fields, `backlash_up_steps` and `backlash_verified`, written by the §59.7 layer-1 probe the Classic sweep appends (three analysis frames at best focus: control below, straight return, compensated return). Only the UPWARD direction is measured and stored: the sweep and Smart Focus approach every position from above, so upward backlash is the only one that ever bites (the Smart bracket's + side). `autofocus.completed` carries the same pair when the probe measured; the probe's frames appear on the run record with phase `backlash`. A calibration written before the fields existed, or a probe that could not measure, reads null.
+
+**Reasoning:** the playbook's layer 1 steps up through OUT corrections until HFR snaps back; inverting the sweep's own fitted V turns the one return shot into the distance directly, so the probe costs two or three frames instead of eight to ten. Backlash lives on `focus_calibration` rather than in the autofocus settings because it is derived data tied to the calibration's rig, invalidated by the same recalibrate. Layers 2 (passive refinement) and 3 (device-signature invalidation) are not in this change.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/FocusCalibrationDto`; `Services/AutofocusSweepService.Backlash.cs`, `Services/AutofocusSweepService.Smart.cs` (`BacklashCompensation`).
+
+**Related:** #1139, §59.7, §59.2; tests `AutofocusBacklashProbeTest`, `SmartFocusRunnerTest`.
+
+---
+
 ### 2026-10-11 — Unguided exposure ceiling: `tracking_calibration`, `/api/v1/tracking/*`, `tracking_probe.*` (#1264)
 
 **Endpoint(s) or area:** `GET /api/v1/tracking/calibration` (`TrackingCalibrationDto`, 404 = never measured), `POST /api/v1/tracking/recalibrate` (204, clears), profile JSON `tracking_calibration`; WS `tracking_probe.started` / `tracking_probe.rung_complete` / `tracking_probe.completed`; sequence `$type`s `OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe` and `OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard`.

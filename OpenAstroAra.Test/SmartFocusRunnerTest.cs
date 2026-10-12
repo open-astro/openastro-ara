@@ -216,7 +216,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(9 + 1), "no calibration → the full Classic sweep, plus its confirmation frame at best focus");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(9 + 1 + 2), "no calibration → the full Classic sweep, plus its confirmation frame at best focus (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
             var started = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusStarted).ToList();
             Assert.That(started, Has.Count.EqualTo(1));
             Assert.That(started[0].Payload.GetProperty("mode").GetString(), Is.EqualTo("classic"));
@@ -234,7 +234,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(9 + 1), "stale calibration must not be trusted for a one-frame move (Classic sweep + confirmation frame)");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(9 + 1 + 2), "stale calibration must not be trusted for a one-frame move (Classic sweep + confirmation frame) (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
         }
 
         [Test]
@@ -259,7 +259,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True, "the sky cleared for the classic sweep");
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one refused Smart shot, then the sweep and its confirmation");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1 + 2), "one refused Smart shot, then the sweep and its confirmation (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
@@ -274,7 +274,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True, "Classic tolerates 12 stars (its per-probe gate is 3)");
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one Smart shot, then the full sweep and its confirmation frame");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1 + 2), "one Smart shot, then the full sweep and its confirmation frame (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
@@ -297,7 +297,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1), "one refused Smart shot, then the full sweep and its confirmation frame");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(1 + 9 + 1 + 2), "one refused Smart shot, then the full sweep and its confirmation frame (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("outside_calibrated_range"));
@@ -325,6 +325,31 @@ namespace OpenAstroAra.Test {
             Assert.That(record.Fit!.Algorithm, Is.Not.EqualTo("calibration"), "a real fit, not the calibration's model curve");
             Assert.That(record.Fit.BestPosition, Is.EqualTo(StartPosition).Within(1));
             Assert.That(record.Fit.PredictedHfr, Is.EqualTo(1.5).Within(0.05), "the curve bottoms on the measured dots");
+        }
+
+        [Test]
+        public async Task The_bracket_plus_side_overshoots_by_the_calibrations_verified_backlash() {
+            // §59.7 (#1139) — the + side is the bracket's one upward move. With a verified 30-step upward
+            // backlash on the calibration, the COUNTER is commanded 30 past +bracket so the optics land on it;
+            // the vertex math still sees the physical +200. Unverified backlash is ignored.
+            var calibration = Calibration(bestPosition: StartPosition) with { BacklashUpSteps = 30, BacklashVerified = true };
+            // The sky answers from the PHYSICAL position: the compensated command lands the optics at +200.
+            var rig = Build(realBest: StartPosition, calibration: calibration,
+                skyHfr: (_, position) => VCurveHfr(position == StartPosition + 230 ? StartPosition + 200 : position, StartPosition));
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 230, StartPosition + 100, StartPosition }));
+            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "a symmetric V: no vertex shot");
+
+            var unverified = Build(realBest: StartPosition, calibration: calibration with { BacklashVerified = false });
+            using var __ = unverified.Service;
+            Assert.That(await unverified.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+            Assert.That(unverified.Moves[1], Is.EqualTo(StartPosition + 200), "an unverified backlash is never applied");
+            Assert.That(AutofocusSweepService.BacklashCompensation(calibration), Is.EqualTo(30));
+            Assert.That(AutofocusSweepService.BacklashCompensation(calibration with { BacklashUpSteps = null }), Is.EqualTo(0));
         }
 
         [Test]
@@ -473,7 +498,7 @@ namespace OpenAstroAra.Test {
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True, "the Classic fallback completes the run");
-            Assert.That(rig.CaptureCount(), Is.EqualTo(3 + 9 + 1), "3 Smart shots, then the full sweep and its confirmation frame");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3 + 9 + 1 + 2), "3 Smart shots, then the full sweep and its confirmation frame (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_diverged"));
@@ -565,7 +590,7 @@ namespace OpenAstroAra.Test {
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
-            Assert.That(rig.CaptureCount(), Is.EqualTo(2 + 9 + 1), "two Smart shots, then the full sweep and its confirmation frame");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(2 + 9 + 1 + 2), "two Smart shots, then the full sweep and its confirmation frame (+2: the §59.7 backlash probe's control and return shots on this zero-backlash focuser)");
         }
 
         [Test]

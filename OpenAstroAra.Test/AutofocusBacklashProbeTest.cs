@@ -1,0 +1,169 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Image.ImageAnalysis;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>§59.7 layer 1 (#1139) — the backlash probe appended to a Classic sweep, on a mocked focuser
+    /// whose optics stop short of the counter by a fixed number of steps after every UPWARD move.</summary>
+    [TestFixture]
+    public class AutofocusBacklashProbeTest {
+
+        private const int Start = 10_000;
+        private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
+
+        private static AutofocusSettingsDto Settings() => new(
+            Method: "hfr_v_curve", Steps: 4, StepSize: 100, ExposureSeconds: 2, Binning: 1,
+            AfFilter: "L", RunAfterFilterChange: false, TriggerTempDeltaC: 1.0, TriggerHfrDriftPct: 10,
+            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: true, StepSizeAuto: false);
+
+        /// <summary>A focuser with <paramref name="backlashUp"/> steps of upward backlash: the COUNTER reads the
+        /// commanded position, the OPTICS sit that many steps below it after an upward move (and exactly on
+        /// it after a downward one). The metric reads the optics.</summary>
+        private static (AutofocusSweepService Svc, InMemoryProfileStore Store, List<int> Moves, Func<int> Captures, AutofocusRunTracker Tracker) Build(
+                int backlashUp, double bestPhysical = Start - 150, Func<int, int>? starsAt = null, int travelMin = 0) {
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(Settings());
+            var moves = new List<int>();
+            var counter = Start;
+            var optics = Start;
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = counter, Temperature = 10 });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => {
+                    optics = p > counter ? p - backlashUp : p;
+                    counter = p;
+                    moves.Add(p);
+                    return Task.FromResult(p);
+                });
+            var frames = new Mock<IAnalysisFrameSource>();
+            frames.Setup(f => f.CaptureForAnalysisAsync(It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new AnalysisFrame(new ushort[16], 4, 4, DateTimeOffset.UnixEpoch));
+            var captures = 0;
+            var tracker = new AutofocusRunTracker();
+            var svc = new AutofocusSweepService(store, focuser.Object, frames.Object, tracker: tracker,
+                travelRange: _ => Task.FromResult<(int, int)?>((travelMin, int.MaxValue)),
+                metric: (_, _) => {
+                    captures++;
+                    var delta = (optics - bestPhysical) / 100.0;
+                    var hfr = 1.5 + 0.2 * delta * delta;
+                    var stars = starsAt?.Invoke(captures) ?? 42;
+                    return new StarDetectionResult { AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr) };
+                });
+            return (svc, store, moves, () => captures, tracker);
+        }
+
+        /// <summary>A star list consistent with the HFR, so the calibration's feature samples are usable.</summary>
+        private static List<DetectedStar> Stars(int count, double hfr) {
+            var stars = new List<DetectedStar>(count);
+            for (var i = 0; i < count; i++) {
+                stars.Add(new DetectedStar { HFR = hfr, FWHM = hfr * 2.0, Roundness = 0.9, PeakToBackground = 8.0, DonutOuterDiameter = hfr * 2.0 });
+            }
+            return stars;
+        }
+
+        [Test]
+        public void Inverting_the_fitted_V_turns_a_return_HFR_back_into_a_distance() {
+            static double V(double p) => 1.5 + 0.2 * Math.Pow((p - 1000) / 100.0, 2);
+            Assert.That(AutofocusSweepService.InvertBelowBest(V, 1000, V(970), 400), Is.EqualTo(30).Within(0.01));
+            Assert.That(AutofocusSweepService.InvertBelowBest(V, 1000, 1.5, 400), Is.EqualTo(0), "at the baseline: no backlash");
+            Assert.That(AutofocusSweepService.InvertBelowBest(V, 1000, 99, 400), Is.EqualTo(400), "beyond the control: clamped");
+            Assert.That(AutofocusSweepService.InvertBelowBest(null, 1000, 2, 400), Is.Null);
+            Assert.That(AutofocusSweepService.InvertBelowBest(_ => 1.5, 1000, 2, 400), Is.Null, "a flat model places nothing");
+        }
+
+        [Test]
+        public void The_return_tolerance_is_the_curves_rise_over_a_quarter_step_above_the_baseline() {
+            static double V(double p) => 1.5 + 0.2 * Math.Pow((p - 1000) / 100.0, 2);
+            // model(975) − model(1000) = 0.2 × 0.0625 = 0.0125 above the MEASURED 1.52 baseline.
+            Assert.That(AutofocusSweepService.ReturnTolerance(V, 1000, 1.52, 100), Is.EqualTo(1.5325).Within(1e-9));
+            Assert.That(AutofocusSweepService.ReturnTolerance(_ => 1.5, 1000, 1.5, 100), Is.Null, "a flat curve resolves nothing");
+            Assert.That(AutofocusSweepService.ReturnTolerance(null, 1000, 1.5, 100), Is.Null);
+        }
+
+        [Test]
+        public async Task A_focuser_with_30_steps_of_upward_backlash_is_measured_verified_and_left_on_best_from_above() {
+            var (svc, store, moves, captures, tracker) = Build(backlashUp: 30);
+            using var _ = svc;
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var cal = store.GetFocusCalibration();
+            Assert.That(cal, Is.Not.Null);
+            Assert.That(cal!.BacklashUpSteps, Is.EqualTo(30).Within(2), "read off the fitted V from the return shot");
+            Assert.That(cal.BacklashVerified, Is.True, "the compensated upward move landed back on the baseline");
+            Assert.That(captures(), Is.EqualTo(9 + 1 + 3), "sweep, confirmation, control + return + verification");
+            // The run record shows the three probe frames, and the focuser ends on best, landed from above.
+            Assert.That(tracker.Snapshot().Probes.Count(p => p.Phase == "backlash"), Is.EqualTo(3));
+            var best = moves[^1];
+            Assert.That(moves[^2], Is.EqualTo(best + 100), "re-entered from above");
+            Assert.That(moves.Skip(moves.Count - 6).Take(4), Is.EqualTo(new[] { best - 400, best, best - 400, best + 30 }).Within(2),
+                "control, straight return, control again, compensated return");
+        }
+
+        [Test]
+        public async Task A_backlash_free_focuser_records_zero_in_two_frames() {
+            var (svc, store, _, captures, _) = Build(backlashUp: 0);
+            using var _ = svc;
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var cal = store.GetFocusCalibration()!;
+            Assert.That(cal.BacklashUpSteps, Is.EqualTo(0));
+            Assert.That(cal.BacklashVerified, Is.True);
+            Assert.That(captures(), Is.EqualTo(9 + 1 + 2), "the return shot already reads the baseline: no verification shot");
+        }
+
+        [Test]
+        public async Task A_starless_probe_shot_records_nothing_and_still_leaves_focus_on_best() {
+            // Captures 1–9 sweep, 10 confirmation, 11 control (fine), 12 return: clouds.
+            var (svc, store, moves, _, _) = Build(backlashUp: 30, starsAt: n => n == 12 ? 2 : 42);
+            using var _ = svc;
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True, "the sweep itself succeeded");
+
+            var cal = store.GetFocusCalibration()!;
+            Assert.That(cal.BacklashUpSteps, Is.Null);
+            Assert.That(cal.BacklashVerified, Is.Null);
+            Assert.That(moves[^2], Is.EqualTo(moves[^1] + 100), "still landed on best from above");
+        }
+
+        [Test]
+        public async Task The_control_shot_stays_inside_the_focusers_travel() {
+            // The travel stops 250 below best: the probe's 4-step (400) control is shortened to 250, never past it.
+            var best = Start - 150;
+            var (svc, store, moves, _, _) = Build(backlashUp: 30, bestPhysical: best, travelMin: best - 250);
+            using var _ = svc;
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            Assert.That(moves.Min(), Is.GreaterThanOrEqualTo(best - 250), "never below the travel");
+            Assert.That(moves, Does.Contain(best - 250), "the control shot at the shortened span");
+            Assert.That(store.GetFocusCalibration()!.BacklashUpSteps, Is.EqualTo(30).Within(2));
+        }
+    }
+}

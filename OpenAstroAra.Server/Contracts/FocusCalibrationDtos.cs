@@ -90,10 +90,18 @@ public sealed record FocusCalibrationSampleDto(
 /// against this, not against a minimum re-fitted from the samples: on 2026-10-03 a lumpy 15-point curve
 /// re-fitted to 1.62 px while the sweep had measured 0.96, so every shot under 1.70 passed as focused.
 /// Null on a calibration recorded before this field existed.</param>
+/// <param name="BacklashUpSteps">§59.7 (#1139) — the focuser's UPWARD backlash in steps, measured by the probe the
+/// calibrating sweep appends (how far short of best the focuser stops after an upward move, read off the fitted V).
+/// 0 = none detected. Null when the probe could not measure (too few stars, no usable model) or on a calibration
+/// recorded before this field existed. Only the upward direction matters: every other move approaches from above.</param>
+/// <param name="BacklashVerified">True when a compensated upward move (best + <see cref="BacklashUpSteps"/>) landed back
+/// at the baseline HFR; Smart Focus compensates its upward shot only then.</param>
 public sealed record FocusCalibrationDto(
     IReadOnlyList<FocusCalibrationSampleDto> Samples,
     DateTimeOffset CalibratedUtc,
     double? FocuserTemperatureC,
     string? Filter,
     double? CurveHalfWidthSteps = null,
-    double? InFocusHfr = null);
+    double? InFocusHfr = null,
+    double? BacklashUpSteps = null,
+    bool? BacklashVerified = null);

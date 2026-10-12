@@ -346,10 +346,15 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // §59.12 — one confirmation frame AT best focus: the measured in-focus HFR (not the fit's
             // prediction) and the picture of the focused field the Smart Focus pane shows. Best-effort.
             var (finalHfr, finalStars) = await ConfirmFocusQuietlyAsync(settings, final, token).ConfigureAwait(false);
+            // §59.7 (#1139) — the backlash probe rides on the calibrating sweep: three more frames, ending
+            // back on best from above. Needs the measured baseline; without one there is nothing to compare to.
+            var backlash = finalHfr is double baseline
+                ? await MeasureBacklashQuietlyAsync(settings, fit, final, baseline, travel, token).ConfigureAwait(false)
+                : new BacklashMeasurement(null, false);
             await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
-            RecordCalibrationQuietly(probeFeatures, fit, points, finalHfr);
-            await RecordCompletedAsync("classic", final, finalHfr ?? fit.PredictedHfr, finalStars, started, _tracker?.Snapshot().Probes.Count ?? points.Count).ConfigureAwait(false);
+            RecordCalibrationQuietly(probeFeatures, fit, points, finalHfr, backlash);
+            await RecordCompletedAsync("classic", final, finalHfr ?? fit.PredictedHfr, finalStars, started, _tracker?.Snapshot().Probes.Count ?? points.Count, backlash).ConfigureAwait(false);
             return true;
         } catch (OperationCanceledException) {
             // A cancelled sweep (abort/stop/shutdown) restores best-effort and propagates — the
@@ -450,7 +455,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         await PublishAutofocusEventAsync(WsEventCatalog.AutofocusCurveFit, payload).ConfigureAwait(false);
     }
 
-    private async Task RecordCompletedAsync(string mode, int finalPosition, double finalHfr, int? finalStars, DateTimeOffset started, int probes) {
+    private async Task RecordCompletedAsync(string mode, int finalPosition, double finalHfr, int? finalStars, DateTimeOffset started, int probes, BacklashMeasurement? backlash = null) {
         _tracker?.Complete(finalPosition, finalHfr, finalStars);
         var payload = new JsonObject {
             ["mode"] = mode,
@@ -461,6 +466,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         };
         if (finalStars is { } s) {
             payload["final_stars"] = s;
+        }
+        if (backlash is { UpSteps: double steps }) {
+            payload["backlash_up_steps"] = steps;
+            payload["backlash_verified"] = backlash.Value.Verified;
         }
         await PublishAutofocusEventAsync(WsEventCatalog.AutofocusCompleted, payload).ConfigureAwait(false);
     }
@@ -531,7 +540,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Post-success bookkeeping boundary: the calibration write touches device info + the profile store; the sweep already succeeded and must be reported as such. CA1031's log-and-recover boundary applies.")]
     private void RecordCalibrationQuietly(List<(int Position, FocusFeatureVector Features)> probeFeatures,
-            FocusCurveFitResult fit, IReadOnlyList<FocusPoint> points, double? measuredInFocusHfr = null) {
+            FocusCurveFitResult fit, IReadOnlyList<FocusPoint> points, double? measuredInFocusHfr = null, BacklashMeasurement? backlash = null) {
         try {
             // Gate on the ROUND-TRIPPED wire shape — Build validates exactly what a later session will
             // reload, so a DTO-bridge regression can never store samples the load path can't use.
@@ -574,7 +583,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // judges "already in focus" against it.
                 InFocusHfr: measuredInFocusHfr is { } measured && double.IsFinite(measured) && measured > 0
                     ? Math.Round(measured, 4)
-                    : Math.Round(fit.PredictedHfr, 4)));
+                    : Math.Round(fit.PredictedHfr, 4),
+                // §59.7 — the probe's upward backlash (null when it could not measure).
+                BacklashUpSteps: backlash?.UpSteps,
+                BacklashVerified: backlash is { UpSteps: not null } b ? b.Verified : null));
             LogCalibrationRecorded(dtos.Count);
         } catch (Exception ex) {
             LogCalibrationRecordFailed(ex);

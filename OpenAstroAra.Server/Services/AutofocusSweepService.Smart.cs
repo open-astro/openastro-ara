@@ -149,7 +149,10 @@ public sealed partial class AutofocusSweepService {
                 // optics a backlash short of 29463 while the counter said 29463 (2026-10-03).
                 var minusPosition = await _focuser.MoveFocuser(startPosition - bracket, token).ConfigureAwait(false);
                 var minus = await TakeSmartShotAsync(2, minusPosition, settings, progress, token).ConfigureAwait(false);
-                var plusPosition = await _focuser.MoveFocuser(startPosition + bracket, token).ConfigureAwait(false);
+                // §59.7 (#1139) — the + side is the one UPWARD move: a verified backlash from the calibrating
+                // sweep's probe is added to the command so the optics (not just the counter) land at +bracket.
+                var compensation = BacklashCompensation(calibration);
+                var plusPosition = await _focuser.MoveFocuser(startPosition + bracket + compensation, token).ConfigureAwait(false) - compensation;
                 var plus = await TakeSmartShotAsync(3, plusPosition, settings, progress, token).ConfigureAwait(false);
                 var verdict = BracketVerdict(shot1.Hfr, plus, minus);
                 LogSmartBracket(bracket, shot1.Hfr, plus.Hfr, minus.Hfr, verdict ?? "confirmed");
@@ -363,6 +366,11 @@ public sealed partial class AutofocusSweepService {
             LogCalibrationRecordFailed(ex);
         }
     }
+
+    /// <summary>The steps a command must overshoot an UPWARD move by so the optics land where the counter
+    /// says: the calibration's verified backlash, else 0 (§59.7).</summary>
+    internal static int BacklashCompensation(FocusCalibrationDto calibration) =>
+        calibration is { BacklashVerified: true, BacklashUpSteps: double steps } && steps > 0 ? (int)Math.Round(steps) : 0;
 
     /// <summary>Every landing in the bracket is made from above — the direction the calibration's
     /// samples were approached from — through the sweep's one-step overshoot, so the focuser rests on

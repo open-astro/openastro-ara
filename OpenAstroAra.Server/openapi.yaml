@@ -8276,6 +8276,17 @@ components:
             - number
             - string
           format: double
+        backlash_up_steps:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        backlash_verified:
+          type:
+            - 'null'
+            - boolean
     FocusCalibrationSampleDto:
       required:
         - focuser_position
