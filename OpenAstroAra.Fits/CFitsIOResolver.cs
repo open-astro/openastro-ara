@@ -58,6 +58,16 @@ internal static class CFitsIOResolver {
 
     internal delegate bool TryLoadLibrary(string name, out IntPtr handle);
 
+    /// <summary>The export every candidate must carry to count as CFITSIO (#1214): a loadable but
+    /// wrong library (an <c>OPENASTROARA_CFITSIO_PATH</c> pointing at <c>libm.so.6</c>) used to be
+    /// cached and win over a good <c>libcfitsio.so.10</c>, so every FITS call threw
+    /// <c>EntryPointNotFoundException</c>. <c>ffgerr</c> is the status-to-text routine every CFITSIO
+    /// build exports and the boot probe already calls.</summary>
+    internal const string RequiredExport = "ffgerr";
+
+    /// <summary>Suffix a rejected candidate carries in <see cref="CFitsIOResolution.Tried"/>.</summary>
+    internal const string WrongLibrarySuffix = " (loaded, but no " + RequiredExport + " export — not CFITSIO)";
+
     private static readonly Lock s_gate = new();
     private static IntPtr s_handle;
     private static CFitsIOResolution? s_last;
@@ -99,10 +109,22 @@ internal static class CFitsIOResolver {
                 ReadExplicitPath(Environment.GetEnvironmentVariable),
                 (string name, out IntPtr h) => NativeLibrary.TryLoad(name, assembly, searchPath, out h),
                 NativeLibrary.TryLoad,
-                sonames);
+                sonames,
+                h => NativeLibrary.TryGetExport(h, RequiredExport, out _));
             s_handle = handle;
             s_last = report;
             return handle;
+        }
+    }
+
+    /// <summary>Test seam: forget the cached handle and report so the next
+    /// <see cref="ResolveForRuntime"/> walks the candidates again (reads the
+    /// environment variable afresh). Bound P/Invokes keep the handle they
+    /// already have; only future resolutions are affected.</summary>
+    internal static void ResetForTests() {
+        lock (s_gate) {
+            s_handle = IntPtr.Zero;
+            s_last = null;
         }
     }
 
@@ -112,25 +134,48 @@ internal static class CFitsIOResolver {
     /// <paramref name="versionedSonames"/> through <paramref name="tryLoad"/>. Stops at the first load.
     /// </summary>
     internal static (IntPtr Handle, CFitsIOResolution Report) Resolve(
-        string? explicitPath, TryLoadLibrary tryDefault, TryLoadLibrary tryLoad, IReadOnlyList<string> versionedSonames) {
+        string? explicitPath, TryLoadLibrary tryDefault, TryLoadLibrary tryLoad, IReadOnlyList<string> versionedSonames,
+        Func<IntPtr, bool>? hasRequiredExport = null) {
         var tried = new List<string>();
-        IntPtr handle;
-        if (explicitPath is not null) {
-            tried.Add(explicitPath);
-            if (tryLoad(explicitPath, out handle)) {
-                return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), explicitPath));
+        // One candidate: load it, then (#1214) make sure it is CFITSIO. A library that loads but
+        // lacks the required export is released, recorded with the suffix, and the walk goes on —
+        // the next candidate may be the real thing. Null = accept any load (pure-order tests).
+        bool Candidate(string label, string name, TryLoadLibrary loader, out IntPtr h) {
+            if (!loader(name, out h)) {
+                tried.Add(label);
+                return false;
             }
+            if (hasRequiredExport is null || hasRequiredExport(h)) {
+                tried.Add(label);
+                return true;
+            }
+            tried.Add(label + WrongLibrarySuffix);
+            TryFree(h);
+            h = IntPtr.Zero;
+            return false;
         }
-        tried.Add(DefaultProbeLabel);
-        if (tryDefault(LibraryName, out handle)) {
+        IntPtr handle;
+        if (explicitPath is not null && Candidate(explicitPath, explicitPath, tryLoad, out handle)) {
+            return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), explicitPath));
+        }
+        if (Candidate(DefaultProbeLabel, LibraryName, tryDefault, out handle)) {
             return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), DefaultProbeLabel));
         }
         foreach (var soname in versionedSonames) {
-            tried.Add(soname);
-            if (tryLoad(soname, out handle)) {
+            if (Candidate(soname, soname, tryLoad, out handle)) {
                 return (handle, new CFitsIOResolution(explicitPath, tried.ToArray(), soname));
             }
         }
         return (IntPtr.Zero, new CFitsIOResolution(explicitPath, tried.ToArray(), null));
+    }
+
+    private static void TryFree(IntPtr handle) {
+        try {
+            if (handle != IntPtr.Zero) {
+                NativeLibrary.Free(handle);
+            }
+        } catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) {
+            // A fake handle in tests or an already-released one: nothing to free.
+        }
     }
 }

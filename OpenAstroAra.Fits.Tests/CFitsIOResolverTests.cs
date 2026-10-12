@@ -29,9 +29,12 @@ public class CFitsIOResolverTests {
     private sealed class FakeLoader(params string[] loadable) {
         public List<string> Calls { get; } = [];
 
+        /// <summary>Per-name handle, so a test can tell a decoy library from the real one.</summary>
+        public Func<string, IntPtr> HandleFor { get; set; } = _ => Fake;
+
         public bool TryLoad(string name, out IntPtr handle) {
             Calls.Add(name);
-            handle = loadable.Contains(name) ? Fake : IntPtr.Zero;
+            handle = loadable.Contains(name) ? HandleFor(name) : IntPtr.Zero;
             return handle != IntPtr.Zero;
         }
     }
@@ -128,6 +131,82 @@ public class CFitsIOResolverTests {
         Assert.True(NativeLibrary.TryLoad("libcfitsio.so.10", out var handle),
             "libcfitsio.so.10 did not load; install the runtime package: sudo apt-get install libcfitsio10");
         NativeLibrary.Free(handle);
+    }
+
+    [Fact]
+    public void A_loadable_library_without_the_cfitsio_export_is_rejected_and_the_walk_continues() {
+        // #1214: OPENASTROARA_CFITSIO_PATH=libm.so.6 loads fine but is not CFITSIO. It used to be
+        // cached and win over a good libcfitsio.so.10; now it is released and the real one is used.
+        var wrong = new IntPtr(0x999);
+        var plain = new FakeLoader("/usr/lib/libm.so.6", "libcfitsio.so.10") {
+            HandleFor = name => name == "/usr/lib/libm.so.6" ? wrong : Fake,
+        };
+        var dflt = new FakeLoader();
+        var (handle, report) = CFitsIOResolver.Resolve(
+            "/usr/lib/libm.so.6", dflt.TryLoad, plain.TryLoad, ["libcfitsio.so.10"],
+            hasRequiredExport: h => h == Fake);
+        Assert.Equal(Fake, handle);
+        Assert.Equal("libcfitsio.so.10", report.LoadedFrom);
+        Assert.False(report.ExplicitPathLoaded);
+        Assert.Equal(
+            ["/usr/lib/libm.so.6" + CFitsIOResolver.WrongLibrarySuffix, CFitsIOResolver.DefaultProbeLabel, "libcfitsio.so.10"],
+            report.Tried);
+    }
+
+    [Fact]
+    public void Every_candidate_wrong_reports_each_as_not_cfitsio() {
+        var plain = new FakeLoader("libcfitsio.so.10");
+        var dflt = new FakeLoader("cfitsio");
+        var (handle, report) = CFitsIOResolver.Resolve(
+            null, dflt.TryLoad, plain.TryLoad, ["libcfitsio.so.10"], hasRequiredExport: _ => false);
+        Assert.Equal(IntPtr.Zero, handle);
+        Assert.False(report.Loaded);
+        Assert.Equal(
+            [CFitsIOResolver.DefaultProbeLabel + CFitsIOResolver.WrongLibrarySuffix, "libcfitsio.so.10" + CFitsIOResolver.WrongLibrarySuffix],
+            report.Tried);
+    }
+
+    [Fact]
+    public void The_real_entry_point_reads_OPENASTROARA_CFITSIO_PATH_from_the_environment() {
+        // #1214: the pure tests inject getEnv; this one goes through ResolveForRuntime, so swapping
+        // Environment.GetEnvironmentVariable for `_ => null` in the resolver fails here.
+        const string bogus = "/nonexistent/openastroara-cfitsio-probe/libcfitsio.so.10";
+        var previous = Environment.GetEnvironmentVariable(CFitsIOResolver.PathEnvVar);
+        try {
+            Environment.SetEnvironmentVariable(CFitsIOResolver.PathEnvVar, bogus);
+            CFitsIOResolver.ResetForTests();
+            CFitsIOResolver.ResolveForRuntime(CFitsIOResolver.LibraryName, typeof(CFitsIO).Assembly, null);
+            var report = CFitsIOResolver.LastResolution;
+            Assert.NotNull(report);
+            Assert.Equal(bogus, report!.ExplicitPath);
+            Assert.Equal(bogus, report.Tried[0]);
+            Assert.False(report.ExplicitPathLoaded);
+            // Unrelated library names are not ours to resolve.
+            Assert.Equal(IntPtr.Zero, CFitsIOResolver.ResolveForRuntime("something-else", typeof(CFitsIO).Assembly, null));
+        } finally {
+            Environment.SetEnvironmentVariable(CFitsIOResolver.PathEnvVar, previous);
+            CFitsIOResolver.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void The_real_entry_point_rejects_a_loadable_non_cfitsio_library() {
+        // libm (Linux) / libSystem (macOS) load anywhere, carry no ffgerr, and must not be cached as CFITSIO.
+        string? decoy = OperatingSystem.IsLinux() ? "libm.so.6" : OperatingSystem.IsMacOS() ? "/usr/lib/libSystem.B.dylib" : null;
+        if (decoy is null) return;
+        var previous = Environment.GetEnvironmentVariable(CFitsIOResolver.PathEnvVar);
+        try {
+            Environment.SetEnvironmentVariable(CFitsIOResolver.PathEnvVar, decoy);
+            CFitsIOResolver.ResetForTests();
+            CFitsIOResolver.ResolveForRuntime(CFitsIOResolver.LibraryName, typeof(CFitsIO).Assembly, null);
+            var report = CFitsIOResolver.LastResolution;
+            Assert.NotNull(report);
+            Assert.Equal(decoy + CFitsIOResolver.WrongLibrarySuffix, report!.Tried[0]);
+            Assert.NotEqual(decoy, report.LoadedFrom);
+        } finally {
+            Environment.SetEnvironmentVariable(CFitsIOResolver.PathEnvVar, previous);
+            CFitsIOResolver.ResetForTests();
+        }
     }
 
     [Fact]

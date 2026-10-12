@@ -777,6 +777,18 @@ jobs:
             exit 1
           fi
           echo "✓ astrometry natives loaded in the arm64 container"
+          # #1214 — the CFITSIO boot probe is wired the same way (Program.cs → LogCfitsioProbe) and
+          # logs one fixed line either way. The chiseled image ships no libcfitsio (the .deb's
+          # Depends does), so in THIS container the expected line is the missing one, asserted on
+          # purpose: it proves the probe ran and that the e2e log noise is the known, documented
+          # shape rather than a regression. Shipping libcfitsio in the image would drag libcurl's
+          # dependency chain into a smoke-test image nobody deploys.
+          if ! grep -qm1 -E 'Cannot load libcfitsio\. Install via: |CFITSIO loaded from ' <<<"$E2E_LOG"; then
+            echo "✗ the CFITSIO boot probe did not log in the arm64 container (Program.cs wiring?):"
+            grep -i 'cfitsio' <<<"$E2E_LOG" || true
+            exit 1
+          fi
+          echo "✓ CFITSIO boot probe logged in the arm64 container"
           echo "✓ arm64 end-to-end clean"
 
       - name: Tear down container
