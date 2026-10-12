@@ -433,10 +433,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         SetCoolerAsync(enabled, targetTemperatureC, syncFan: true, ct);
 
     /// <summary><paramref name="syncFan"/> false skips the cooling-fan sync on an ENABLE: only for a
-    /// set-point step inside a ramp whose previous step already ran the interlock (#1210 — the
+    /// set-point step inside a ramp while the cache knows the cooler is already on and the ramp
+    /// ran the interlock within the last <see cref="CoolingFanSyncInterval"/> (#1210 — the
     /// sequencer ramp writes every 15 s; a full switch-list read plus a fan write each time is
-    /// 4×/min for an hour-long imported cool). The first write of any ramp, and every cooler-off,
-    /// always sync.</summary>
+    /// 4×/min for an hour-long imported cool). The first write of any ramp, any step whose cooler
+    /// is not known to be on, and every cooler-off always sync.</summary>
     internal async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, bool syncFan, CancellationToken ct) {
         var client = RequireConnectedClient();
         // §25.5.5 — capability gates BEFORE any device write: a camera without a

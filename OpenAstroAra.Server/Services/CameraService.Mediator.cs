@@ -476,7 +476,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 if (canSetTemperature && !double.IsNaN(temperature)
                         && temperature < WarmCameraTargetC - CoolingReachedToleranceC) {
                     SetCoolingTarget(WarmCameraTargetC);
-                    var shortfall = await RegulateTemperatureAsync(WarmCameraTargetC, duration, cooling: false, progress, ct).ConfigureAwait(false);
+                    var shortfall = await RegulateTemperatureAsync(WarmCameraTargetC, duration, cooling: false, progress, ct, temperature).ConfigureAwait(false);
                     if (shortfall is not null) {
                         LogSequencerWarmShort(shortfall);
                     }
@@ -498,16 +498,27 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// reached, else why not. Throws <see cref="InvalidOperationException"/> on a refused write or
     /// a lost camera, and rethrows cancellation after holding the set-point where the sensor is.</summary>
     private async Task<string?> RegulateTemperatureAsync(double target, TimeSpan duration, bool cooling,
-            IProgress<ApplicationStatus>? progress, CancellationToken ct) {
+            IProgress<ApplicationStatus>? progress, CancellationToken ct, double startTemperature = double.NaN) {
         var label = cooling ? "Cooling camera" : "Warming camera";
-        var start = (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN;
+        // The caller's already-resolved start (WarmCamera: direct read with the cache behind it)
+        // wins; a second direct read here could fail where the first did not and skip the ramp.
+        var start = double.IsNaN(startTemperature)
+            ? (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN
+            : startTemperature;
         var wrote = false;
         // #1210 — the fan interlock runs on the first write and then once per
-        // CoolingFanSyncInterval of ramp time, not on every 15 s set-point step.
+        // CoolingFanSyncInterval of ramp time, not on every 15 s set-point step — but ONLY while
+        // the cache knows the cooler is still on. A cooler switched off mid-ramp (the REST control,
+        // which also stopped the fan; a driver that dropped CoolerOn) makes the next step an
+        // off→on edge again, and that edge always runs the #1076 interlock (review of #1317).
         var sinceFanSync = TimeSpan.Zero;
         async Task WriteStepAsync(double step) {
             ct.ThrowIfCancellationRequested();
-            var syncFan = !wrote || sinceFanSync >= CoolingFanSyncInterval;
+            bool coolerKnownOn;
+            lock (_gate) {
+                coolerKnownOn = _state == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
+            }
+            var syncFan = !wrote || !coolerKnownOn || sinceFanSync >= CoolingFanSyncInterval;
             await SetCoolerAsync(enabled: true, step, syncFan, ct).ConfigureAwait(false);
             wrote = true;
             if (syncFan) {
@@ -558,8 +569,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 pinned = Saturated(telemetry.CoolerPowerPct, cooling) ? pinned + CoolingPollInterval : TimeSpan.Zero;
                 if (pinned >= CoolingStallTimeout || idle >= CoolingRegulatingTimeout) {
                     var power = telemetry.CoolerPowerPct is double p ? p.ToString("0", CultureInfo.InvariantCulture) + " %" : "unknown";
+                    var bound = pinned >= CoolingStallTimeout
+                        ? string.Create(CultureInfo.InvariantCulture, $"pinned at that power for {pinned.TotalMinutes:0} min")
+                        : string.Create(CultureInfo.InvariantCulture, $"still regulating after {idle.TotalMinutes:0} min");
                     return string.Create(CultureInfo.InvariantCulture,
-                        $"could not reach {target:0.#} °C (sensor at {telemetry.Temperature:0.#} °C, cooler power {power}, no progress for {idle.TotalMinutes:0} min)");
+                        $"could not reach {target:0.#} °C (sensor at {telemetry.Temperature:0.#} °C, cooler power {power}, no progress for {idle.TotalMinutes:0} min, {bound})");
                 }
             }
             return null;
@@ -598,7 +612,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     }
 
     /// <summary>Why a sequencer cooling call cannot start, or null — in which case the call now
-    /// OWNS the sequencer cooling slot and must <see cref="EndSequencerCooling"/>. Reads the
+    /// OWNS the sequencer cooling slot and must ALWAYS reach <see cref="EndSequencerCooling"/>
+    /// (CoolCamera/WarmCamera do so from a <c>finally</c>; a new caller must too, or the slot
+    /// stays taken and every later cooling step is refused). Reads the
     /// capabilities first if the refresh has not yet; unknown capabilities let the write be
     /// attempted. A second call while one is in flight is refused (#1210).</summary>
     private string? BeginSequencerCooling(bool needsSetpoint) {

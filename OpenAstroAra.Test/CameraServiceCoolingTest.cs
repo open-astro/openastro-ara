@@ -51,6 +51,9 @@ namespace OpenAstroAra.Test {
             public bool CoolerPowerUnreadable { get; init; }
             /// <summary>While true every CoolerOn GET answers an Alpaca driver error (#1210).</summary>
             public volatile bool CoolerOnReadFails;
+            /// <summary>While true the camera reports its cooler OFF whatever was written (an operator
+            /// or the driver switched it off under a running ramp, #1317 review).</summary>
+            public volatile bool ReportsCoolerOff;
             public bool CanSetTemperature { get; init; } = true;
             public bool InitialCoolerOn { get; init; }
             public double? InitialSetpoint { get; init; }
@@ -67,7 +70,7 @@ namespace OpenAstroAra.Test {
                     return Num(Setpoint ?? Ambient);
                 }
                 if (path.EndsWith("/cooleron", StringComparison.Ordinal)) {
-                    return CoolerOnReadFails ? ScriptedAlpacaDevice.Error("transient read failure") : CoolerOn ? "true" : "false";
+                    return CoolerOnReadFails ? ScriptedAlpacaDevice.Error("transient read failure") : CoolerOn && !ReportsCoolerOff ? "true" : "false";
                 }
                 if (path.EndsWith("/coolerpower", StringComparison.Ordinal)) {
                     return CoolerPowerUnreadable ? "\"n/a\"" : Num(CoolerPowerScript?.Invoke() ?? CoolerPower);
@@ -397,6 +400,36 @@ namespace OpenAstroAra.Test {
             Assert.That(cam.Setpoints, Has.Count.GreaterThanOrEqualTo(7), "the ramp did step every 15 s");
             actuator.Verify(a => a.GetAllAsync(It.IsAny<CancellationToken>()), Times.Exactly(2), "first write + the one-minute mark");
             actuator.Verify(a => a.SetFanValueAsync("sw-5", It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
+
+        [Test]
+        public async Task A_cooler_switched_off_mid_ramp_makes_the_next_step_run_the_fan_interlock_again() {
+            // #1317 review — the once-a-minute fan sync only holds while the cooler is KNOWN on; a
+            // cooler that went off under the ramp (REST control, driver) is an off→on edge again.
+            await using var cam = new SimCamera { FixedTemperature = 20 };
+            var actuator = new Mock<ICoolingFanActuator>();
+            actuator.Setup(a => a.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => new List<SwitchDto> {
+                new("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
+                    [new SwitchPortDto(1, "Fan", Value: 0, Min: 0, Max: 1, CanWrite: true)]),
+            });
+            actuator.Setup(a => a.SetFanValueAsync(It.IsAny<string>(), It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            CameraService? service = null;
+            var (svc, _) = await ConnectedAsync(cam, fan: () => actuator.Object, delayGate: async n => {
+                if (n == 2) {
+                    // Between the second and third ramp steps the cooler reads OFF, and the cache sees it.
+                    cam.ReportsCoolerOff = true;
+                    await WaitForAsync(() => Task.FromResult(!service!.GetInfo().CoolerOn), "the cache never saw the cooler go off");
+                }
+            });
+            service = svc;
+            using var __ = svc;
+
+            // 1-minute ramp = 4 steps; the pinned sensor then stalls the wait, so the call returns false.
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.FromMinutes(1), new StatusLog(), CancellationToken.None), Is.False);
+            Assert.That(cam.Setpoints, Has.Count.GreaterThanOrEqualTo(4), "the ramp wrote every step");
+
+            // Step 1 syncs (first write); steps 3 and 4 sync because the cooler is no longer known on.
+            actuator.Verify(a => a.GetAllAsync(It.IsAny<CancellationToken>()), Times.AtLeast(3), "the off→on edge must re-run the interlock");
         }
 
         [Test]
