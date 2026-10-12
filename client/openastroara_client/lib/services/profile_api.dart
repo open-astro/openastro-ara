@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
@@ -367,7 +368,7 @@ class ProfileApi {
   /// GET the active profile's safety policies.
   Future<SafetyPolicies> getSafetyPolicies() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/safety');
-    return _safetyPoliciesFromJson(res.data ?? const {});
+    return safetyPoliciesFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's safety policies. `first_flip_confirmed` is
@@ -378,9 +379,9 @@ class ProfileApi {
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
-      data: _safetyPoliciesToJson(value),
+      data: safetyPoliciesToJson(value),
     );
-    return _safetyPoliciesFromJson(res.data ?? const {});
+    return safetyPoliciesFromJson(res.data ?? const {});
   }
 
   /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
@@ -390,7 +391,7 @@ class ProfileApi {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/profile/safety/first-flip/rearm',
     );
-    return _safetyPoliciesFromJson(res.data ?? const {});
+    return safetyPoliciesFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's autofocus settings.
@@ -955,7 +956,9 @@ class ProfileApi {
 
   // ── Safety policies JSON mapping ───────────────────────────────────────
 
-  static SafetyPolicies _safetyPoliciesFromJson(Map<String, dynamic> j) =>
+  /// The safety-policies wire mapping, exposed for the round-trip test (#1138).
+  @visibleForTesting
+  static SafetyPolicies safetyPoliciesFromJson(Map<String, dynamic> j) =>
       SafetyPolicies(
         onUnsafe: _unsafeActionFromString(j['on_unsafe'] as String?),
         autoResumeWhenSafe: (j['auto_resume_when_safe'] as bool?) ?? true,
@@ -1022,7 +1025,8 @@ class ProfileApi {
             (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
       );
 
-  static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
+  @visibleForTesting
+  static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
     'on_unsafe': _unsafeActionToString(v.onUnsafe),
     'auto_resume_when_safe': v.autoResumeWhenSafe,
     'resume_delay_min': v.resumeDelayMin,
