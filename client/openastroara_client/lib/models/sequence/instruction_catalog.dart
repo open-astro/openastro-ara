@@ -779,10 +779,11 @@ const List<InstructionDef> instructionCatalog = [
       ),
     ],
   ),
-  // #1264 — unguided tracking probe: ladder (10/30/60/120 s, capped at the
-  // planned exposure and twice the mount's spec-sheet prior), pass rule
-  // eccentricity ≤ 0.5 and FWHM within 1.2× the first rung, then the imaging
-  // loops after it are shortened to the measured ceiling.
+  // #1264 — unguided tracking probe: ladder (10/30/60/120 s, then the planned
+  // exposure or twice the prior as a final rung, whichever is lower), pass rule
+  // eccentricity ≤ 0.5 and FWHM within 1.2× the first rung; the ceiling is the
+  // longest passing rung moved halfway toward the first failing one, and the
+  // imaging loops after the probe are shortened to it.
   InstructionDef(
     type: trackingProbeType,
     label: 'Tracking Probe',
