@@ -17,6 +17,7 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Trigger.Autofocus;
+using OpenAstroAra.Sequencer.Trigger.Telescope;
 using OpenAstroAra.Sequencer.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -69,6 +70,19 @@ namespace OpenAstroAra.Sequencer.Utility {
                 var change = Rewrite(loop, lights, ceilingSeconds);
                 if (change is not null) {
                     changes.Add(change);
+                }
+            }
+            if (lights.Count > 0 && loop is ITriggerable triggerable) {
+                // The loop's guard must not step back up past what the probe just measured (review of
+                // #1318): its MaxExposure is capped at the ceiling and the ceiling joins its rungs so a
+                // step lands on it rather than on the rung the probe saw fail.
+                foreach (var guard in triggerable.GetTriggersSnapshot().OfType<UnguidedExposureGuard>()) {
+                    if (guard.MaxExposure <= 0 || guard.MaxExposure > ceilingSeconds + 1e-9) {
+                        guard.MaxExposure = ceilingSeconds;
+                    }
+                    if (!guard.Rungs.Any(r => Math.Abs(r - ceilingSeconds) < 1e-9)) {
+                        guard.Rungs.Add(ceilingSeconds);
+                    }
                 }
             }
             foreach (var nested in loop.GetItemsSnapshot().OfType<ISequenceContainer>()) {
