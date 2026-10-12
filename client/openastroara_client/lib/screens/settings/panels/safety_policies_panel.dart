@@ -282,7 +282,8 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
         SettingsSwitchRow(
           label: 'Louder alerts overnight',
           hint:
-              'While the site sits in astronomical darkness, '
+              'During the unattended window — astronomical darkness at the '
+              'site unless you set the from/until times below — '
               'equipment-impacting warnings ride one severity level higher so '
               'the alarm behaviour engages earlier for a sleeping user.',
           value: s.unattendedEscalation,

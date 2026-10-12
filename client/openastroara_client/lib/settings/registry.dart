@@ -266,13 +266,13 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.unattended_escalation',
     label: 'Louder alerts overnight',
-    description: 'While the site sits in astronomical darkness (sun below −18°), equipment-impacting warnings are raised one severity level (warning→error, error→critical) so the bedside alarm behaviour engages earlier for a sleeping user. Escalated messages say why; daytime severities are untouched.',
+    description: 'During the unattended window — astronomical darkness at the site (sun below −18°) unless an explicit from/until window is set — equipment-impacting warnings are raised one severity level (warning→error, error→critical) so the bedside alarm behaviour engages earlier for a sleeping user. Escalated messages say why; outside the window severities are untouched.',
     keywords: ['unattended', 'night', 'severity', 'escalation', 'alarm', 'overnight', 'dark', 'notification', 'sleeping'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
     defaultValue: true,
     profilePath: 'safety.unattended_escalation',
-    relatedSettings: ['safety.policies.flip_safety_enabled'],
+    relatedSettings: ['safety.policies.unattended_window_start', 'safety.policies.unattended_window_end'],
   ),
   Setting(
     id: 'safety.policies.unattended_shutdown_enabled',
