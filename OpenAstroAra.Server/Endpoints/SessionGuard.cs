@@ -24,11 +24,13 @@ namespace OpenAstroAra.Server.Endpoints;
 /// a request that carries no <c>X-Ara-Session</c> header: a pre-§27 client, a script, or a WILMA
 /// whose connect was refused keeps full REST access, exactly as <see cref="ClientSessionService"/>
 /// documents. What this guard closes is the stale-holder hole: a client that WAS the holder, was
-/// taken over (or released), and keeps driving the rig with its old session id. A mutating request
-/// (anything but GET/HEAD/OPTIONS under <c>/api/v1</c>) that presents a session id other than the
-/// current holder's is refused with 409 <c>stale-session</c>; the client re-claims through
-/// <c>POST /server/connect</c>. The connect/disconnect routes themselves are exempt — they are how
-/// a session becomes current or stops being one.
+/// taken over, and keeps driving the rig with its old session id while someone else holds the
+/// slot. A mutating request (anything but GET/HEAD/OPTIONS under <c>/api/v1</c>) that presents a
+/// session id other than the current holder's is refused with 409 <c>stale-session</c>; the client
+/// re-claims through <c>POST /server/connect</c>. With no holder at all (the slot was released)
+/// nothing is stale and every id passes — that is the free slot, see
+/// <see cref="ClientSessionService.IsStaleSession"/>. The connect/disconnect routes themselves are
+/// exempt — they are how a session becomes current or stops being one.
 /// </summary>
 public static class SessionGuard {
 
