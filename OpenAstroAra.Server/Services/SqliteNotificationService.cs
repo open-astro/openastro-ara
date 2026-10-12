@@ -232,8 +232,9 @@ public sealed partial class SqliteNotificationService : INotificationService {
             if (_profiles is null || !UnattendedSeverity.IsEquipmentImpacting(notification.Category)) {
                 return notification;
             }
-            if (!_profiles.GetSafetyPolicies().UnattendedEscalation
-                || !UnattendedSeverity.IsUnattended(_profiles.GetSiteSettings(), UtcNow())) {
+            var safety = _profiles.GetSafetyPolicies();
+            if (!safety.UnattendedEscalation
+                || !UnattendedSeverity.IsUnattended(_profiles.GetSiteSettings(), safety, UtcNow())) {
                 return notification;
             }
             var bumped = UnattendedSeverity.Escalate(notification.Severity);

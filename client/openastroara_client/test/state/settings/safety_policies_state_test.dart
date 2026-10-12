@@ -8,6 +8,40 @@ void main() {
     setUp(() => container = ProviderContainer());
     tearDown(() => container.dispose());
 
+    test('#1138 flip recovery policies and the unattended window', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(safetyPoliciesProvider.notifier);
+      final d = c.read(safetyPoliciesProvider);
+      expect(d.meridianRefocus, MeridianRefocusMode.ifTempDrifted);
+      expect(d.meridianRefocusTempThresholdC, 2.0);
+      expect(d.meridianGuiderRecal, GuiderRecalMode.autoRestore);
+      expect(d.unattendedWindowStart, '');
+
+      n.setMeridianGuiderRecal(GuiderRecalMode.skip);
+      expect(c.read(safetyPoliciesProvider).meridianRecalGuider, isFalse,
+          reason: 'the legacy bool follows the mode');
+      n.setMeridianGuiderRecal(GuiderRecalMode.full);
+      expect(c.read(safetyPoliciesProvider).meridianRecalGuider, isTrue);
+
+      n.setMeridianRefocusTempThresholdC(0);
+      expect(c.read(safetyPoliciesProvider).meridianRefocusTempThresholdC, 2.0,
+          reason: 'non-positive rejected');
+
+      n.setUnattendedWindowStart('22:00');
+      n.setUnattendedWindowEnd('6:00');
+      expect(c.read(safetyPoliciesProvider).unattendedWindowStart, '22:00');
+      expect(c.read(safetyPoliciesProvider).unattendedWindowEnd, '6:00');
+      n.setUnattendedWindowEnd('ten pm');
+      expect(c.read(safetyPoliciesProvider).unattendedWindowEnd, '6:00',
+          reason: 'malformed clock text rejected');
+      n.setUnattendedWindowEnd('');
+      expect(c.read(safetyPoliciesProvider).unattendedWindowEnd, '',
+          reason: 'blank clears back to the sun');
+      expect(isClockText('24:00'), isFalse);
+      expect(isClockText('23:59'), isTrue);
+    });
+
     test('defaults match playbook §35', () {
       final s = container.read(safetyPoliciesProvider);
       expect(s.onUnsafe, UnsafeAction.pauseAndPark);

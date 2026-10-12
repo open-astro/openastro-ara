@@ -849,6 +849,111 @@ namespace OpenAstroAra.Test {
             Assert.That(n.Message, Does.Contain("focus may have drifted"));
         }
 
+        // ── #1138 — the §58.6 recovery policies: meridian_refocus / meridian_guider_recal ──
+
+        private static readonly bool[] OnlyFalse = { false };
+        private static readonly bool[] OnlyTrue = { true };
+
+        private Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor> AutofocusLogging() {
+            var autofocus = new Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>();
+            autofocus.Setup(a => a.RunAutofocusAsync(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback(() => callLog.Add("Autofocus")).ReturnsAsync(true);
+            return autofocus;
+        }
+
+        private static OpenAstroAra.Sequencer.Interfaces.IImageHistory History(double? lastAutofocusTemperature) {
+            var history = new Mock<OpenAstroAra.Sequencer.Interfaces.IImageHistory>();
+            history.SetupGet(h => h.ImagePoints).Returns(Array.Empty<OpenAstroAra.Sequencer.Interfaces.ImageHistoryEntry>());
+            history.SetupGet(h => h.AutofocusPoints).Returns(lastAutofocusTemperature is double t
+                ? new[] { new OpenAstroAra.Sequencer.Interfaces.AutofocusHistoryEntry(1, DateTimeOffset.UtcNow, t, "L") }
+                : Array.Empty<OpenAstroAra.Sequencer.Interfaces.AutofocusHistoryEntry>());
+            return history.Object;
+        }
+
+        private MeridianFlipExecutor PolicySUT(SafetyPoliciesDto safety, Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor> autofocus,
+                double? lastAutofocusTemperature, double focuserTemperature) {
+            SetupProfile(recenter: true, autoFocus: false);
+            SetupSafety(safety with { FlipSafetyEnabled = false });
+            focuser.Setup(f => f.GetInfo()).Returns(new FocuserInfo { Connected = true, Temperature = focuserTemperature });
+            return new MeridianFlipExecutor(profileService.Object, telescope.Object, guider.Object,
+                centering.Object, dome.Object, domeFollower.Object, profileStore.Object,
+                notifications.Object, reconnector.Object, camera.Object, focuser.Object, autofocus.Object,
+                History(lastAutofocusTemperature));
+        }
+
+        [Test]
+        public async Task If_temp_drifted_refocuses_after_the_recentre_only_when_the_focuser_moved_past_the_threshold() {
+            var autofocus = AutofocusLogging();
+            var sut = PolicySUT(Safety() with { MeridianRefocus = "if_temp_drifted", MeridianRefocusTempThresholdC = 2.0 }, autofocus,
+                lastAutofocusTemperature: 10.0, focuserTemperature: 13.5);
+
+            Assert.That(await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+
+            Assert.That(callLog, Does.Contain("Autofocus"));
+            Assert.That(callLog.IndexOf("Autofocus"), Is.GreaterThan(callLog.IndexOf("Recenter")), "§58.4: re-centre first, then re-focus");
+            Assert.That(callLog.IndexOf("Autofocus"), Is.LessThan(callLog.IndexOf("AutoSelectGuideStar")), "…then the guider");
+
+            callLog.Clear();
+            var steady = PolicySUT(Safety() with { MeridianRefocus = "if_temp_drifted" }, autofocus, lastAutofocusTemperature: 10.0, focuserTemperature: 11.0);
+            Assert.That(await steady.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(callLog, Does.Not.Contain("Autofocus"), "1 °C of drift is under the 2 °C threshold");
+        }
+
+        [Test]
+        public async Task Always_and_never_override_the_drift_and_no_autofocus_this_session_refocuses() {
+            var autofocus = AutofocusLogging();
+            var always = PolicySUT(Safety() with { MeridianRefocus = "always" }, autofocus, lastAutofocusTemperature: 10.0, focuserTemperature: 10.0);
+            Assert.That(await always.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(callLog, Does.Contain("Autofocus"));
+
+            callLog.Clear();
+            var never = PolicySUT(Safety() with { MeridianRefocus = "never" }, autofocus, lastAutofocusTemperature: 10.0, focuserTemperature: 30.0);
+            Assert.That(await never.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(callLog, Does.Not.Contain("Autofocus"));
+
+            callLog.Clear();
+            var fresh = PolicySUT(Safety() with { MeridianRefocus = "if_temp_drifted" }, autofocus, lastAutofocusTemperature: null, focuserTemperature: 10.0);
+            Assert.That(await fresh.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(callLog, Does.Contain("Autofocus"), "nothing to compare against: hours of imaging have passed");
+        }
+
+        [Test]
+        public async Task The_guider_comes_back_per_meridian_guider_recal() {
+            var autofocus = AutofocusLogging();
+            var calibrations = new List<bool>();
+            guider.Setup(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<bool, IProgress<ApplicationStatus>, CancellationToken>((force, _, _) => { calibrations.Add(force); callLog.Add("StartGuiding"); })
+                .ReturnsAsync(true);
+
+            var restore = PolicySUT(Safety() with { MeridianRefocus = "never", MeridianGuiderRecal = "auto_restore" }, autofocus, null, 10);
+            Assert.That(await restore.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(calibrations, Is.EqualTo(OnlyFalse), "auto_restore: the guider's own restore, no recalibration");
+
+            calibrations.Clear(); callLog.Clear();
+            var full = PolicySUT(Safety() with { MeridianRefocus = "never", MeridianGuiderRecal = "full" }, autofocus, null, 10);
+            Assert.That(await full.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(calibrations, Is.EqualTo(OnlyTrue), "full: a forced recalibration");
+
+            calibrations.Clear(); callLog.Clear();
+            var skip = PolicySUT(Safety() with { MeridianRefocus = "never", MeridianGuiderRecal = "skip" }, autofocus, null, 10);
+            Assert.That(await skip.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+            Assert.That(calibrations, Is.Empty, "skip: guiding is not resumed");
+            Assert.That(callLog, Does.Not.Contain("AutoSelectGuideStar"));
+        }
+
+        [Test]
+        public void The_refocus_decision_is_pure() {
+            Assert.That(MeridianFlipPolicy.RefocusDecision("always", 2, 10, 10).Refocus, Is.True);
+            Assert.That(MeridianFlipPolicy.RefocusDecision("never", 2, 10, 40).Refocus, Is.False);
+            Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, 10, 12.5).Refocus, Is.True);
+            Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, 10, 11.9).Refocus, Is.False);
+            Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, null, 11.9).Refocus, Is.True, "no autofocus this session");
+            Assert.That(MeridianFlipPolicy.RefocusDecision("if_temp_drifted", 2, 10, double.NaN).Refocus, Is.False, "no temperature probe: keep the focus");
+            Assert.That(MeridianFlipPolicy.RefocusDecision("garbage", 0, 10, 13).Refocus, Is.True, "unknown mode and threshold read as the spec defaults (if_temp_drifted, 2 °C)");
+            Assert.That(MeridianFlipPolicy.GuiderMode(" FULL "), Is.EqualTo("full"));
+            Assert.That(MeridianFlipPolicy.GuiderMode(null), Is.EqualTo("auto_restore"));
+        }
+
         /// <summary>A healthy tracking mount whose pier side flips east→west when MeridianFlip is
         /// called — so safety tests that should PASS the pier-side gate do.</summary>
         private void SetupHealthyTrackingMount() {

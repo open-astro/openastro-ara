@@ -13,6 +13,12 @@ enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
 enum GuiderLostAction { pauseAndRetry, skipTarget, abortSequence }
 enum DiskSpaceCriticalAction { warn, abort }
 
+/// §58.4 step 3 / §58.6 (#1138) — re-focus after a meridian flip.
+enum MeridianRefocusMode { always, ifTempDrifted, never }
+
+/// §58.4 step 4 / §58.6 — how guiding comes back after a meridian flip.
+enum GuiderRecalMode { autoRestore, full, skip }
+
 /// §48.2 — the sequence-start "capture calibration tonight?" behaviour.
 enum CalibrationCaptureDefault { ask, panelAtEnd, skyAtTwilight, never }
 
@@ -26,7 +32,22 @@ class SafetyPolicies {
   final bool meridianFlipAuto;
   final int meridianPauseMin;
   final bool meridianRecenter;
+  // Legacy bool the wire still carries (true ≡ meridianGuiderRecal != skip).
   final bool meridianRecalGuider;
+
+  // §58.6 (#1138) — re-focus after the flip, and the drift that triggers it in
+  // if_temp_drifted mode (focuser temperature vs the session's last autofocus).
+  final MeridianRefocusMode meridianRefocus;
+  final double meridianRefocusTempThresholdC;
+
+  // §58.6 — auto_restore (the guider's own restore, ~30 s), full (5-10 min
+  // recalibration) or skip (do not resume guiding).
+  final GuiderRecalMode meridianGuiderRecal;
+
+  // §58.10 (#1138) — an explicit unattended window, site-local HH:mm start and
+  // end (wrapping past midnight). Both blank = computed from the sun.
+  final String unattendedWindowStart;
+  final String unattendedWindowEnd;
 
   // On altitude limit.
   final AltitudeLimitAction onAltitudeLimit;
@@ -111,6 +132,11 @@ class SafetyPolicies {
     this.meridianPauseMin = 5,
     this.meridianRecenter = true,
     this.meridianRecalGuider = true,
+    this.meridianRefocus = MeridianRefocusMode.ifTempDrifted,
+    this.meridianRefocusTempThresholdC = 2.0,
+    this.meridianGuiderRecal = GuiderRecalMode.autoRestore,
+    this.unattendedWindowStart = '',
+    this.unattendedWindowEnd = '',
     this.onAltitudeLimit = AltitudeLimitAction.skipTarget,
     this.parkIfNoMoreTargets = true,
     this.onGuiderLost = GuiderLostAction.pauseAndRetry,
@@ -149,6 +175,11 @@ class SafetyPolicies {
     int? meridianPauseMin,
     bool? meridianRecenter,
     bool? meridianRecalGuider,
+    MeridianRefocusMode? meridianRefocus,
+    double? meridianRefocusTempThresholdC,
+    GuiderRecalMode? meridianGuiderRecal,
+    String? unattendedWindowStart,
+    String? unattendedWindowEnd,
     AltitudeLimitAction? onAltitudeLimit,
     bool? parkIfNoMoreTargets,
     GuiderLostAction? onGuiderLost,
@@ -186,6 +217,13 @@ class SafetyPolicies {
         meridianPauseMin: meridianPauseMin ?? this.meridianPauseMin,
         meridianRecenter: meridianRecenter ?? this.meridianRecenter,
         meridianRecalGuider: meridianRecalGuider ?? this.meridianRecalGuider,
+        meridianRefocus: meridianRefocus ?? this.meridianRefocus,
+        meridianRefocusTempThresholdC:
+            meridianRefocusTempThresholdC ?? this.meridianRefocusTempThresholdC,
+        meridianGuiderRecal: meridianGuiderRecal ?? this.meridianGuiderRecal,
+        unattendedWindowStart:
+            unattendedWindowStart ?? this.unattendedWindowStart,
+        unattendedWindowEnd: unattendedWindowEnd ?? this.unattendedWindowEnd,
         onAltitudeLimit: onAltitudeLimit ?? this.onAltitudeLimit,
         parkIfNoMoreTargets:
             parkIfNoMoreTargets ?? this.parkIfNoMoreTargets,
@@ -257,6 +295,34 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
       state = state.copyWith(meridianRecenter: v);
   void setMeridianRecalGuider(bool v) =>
       state = state.copyWith(meridianRecalGuider: v);
+
+  void setMeridianRefocus(MeridianRefocusMode v) =>
+      state = state.copyWith(meridianRefocus: v);
+
+  void setMeridianRefocusTempThresholdC(double v) {
+    if (v <= 0) return;
+    state = state.copyWith(meridianRefocusTempThresholdC: v);
+  }
+
+  /// The mode drives the legacy bool too, so an older daemon still sees
+  /// "recalibrate" for anything but skip.
+  void setMeridianGuiderRecal(GuiderRecalMode v) => state = state.copyWith(
+        meridianGuiderRecal: v,
+        meridianRecalGuider: v != GuiderRecalMode.skip,
+      );
+
+  /// Blank clears (back to the sun-computed window); otherwise HH:mm only.
+  void setUnattendedWindowStart(String v) {
+    final t = v.trim();
+    if (t.isNotEmpty && !isClockText(t)) return;
+    state = state.copyWith(unattendedWindowStart: t);
+  }
+
+  void setUnattendedWindowEnd(String v) {
+    final t = v.trim();
+    if (t.isNotEmpty && !isClockText(t)) return;
+    state = state.copyWith(unattendedWindowEnd: t);
+  }
 
   void setFlipSafetyEnabled(bool v) =>
       state = state.copyWith(flipSafetyEnabled: v);
@@ -393,3 +459,12 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
 final safetyPoliciesProvider =
     NotifierProvider<SafetyPoliciesNotifier, SafetyPolicies>(
         SafetyPoliciesNotifier.new);
+
+/// `H:mm` / `HH:mm`, 24-hour — what the daemon's unattended window parses.
+bool isClockText(String s) {
+  final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(s.trim());
+  if (m == null) return false;
+  final h = int.parse(m.group(1)!);
+  final mi = int.parse(m.group(2)!);
+  return h >= 0 && h < 24 && mi >= 0 && mi < 60;
+}

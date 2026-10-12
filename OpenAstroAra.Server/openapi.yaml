@@ -11092,6 +11092,27 @@ components:
             - string
           format: double
           default: 5
+        meridian_refocus:
+          type: string
+          default: if_temp_drifted
+        meridian_refocus_temp_threshold_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 2
+        meridian_guider_recal:
+          type: string
+          default: auto_restore
+        unattended_window_start:
+          type:
+            - 'null'
+            - string
+        unattended_window_end:
+          type:
+            - 'null'
+            - string
     SequenceCreateRequestDto:
       required:
         - name

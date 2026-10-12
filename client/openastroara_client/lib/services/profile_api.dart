@@ -964,6 +964,13 @@ class ProfileApi {
         meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
         meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
         meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
+        meridianRefocus: _meridianRefocusFromString(j['meridian_refocus'] as String?),
+        meridianRefocusTempThresholdC:
+            (j['meridian_refocus_temp_threshold_c'] as num?)?.toDouble() ?? 2.0,
+        meridianGuiderRecal:
+            _guiderRecalFromString(j['meridian_guider_recal'] as String?),
+        unattendedWindowStart: (j['unattended_window_start'] as String?) ?? '',
+        unattendedWindowEnd: (j['unattended_window_end'] as String?) ?? '',
         onAltitudeLimit: _altitudeLimitActionFromString(
           j['on_altitude_limit'] as String?,
         ),
@@ -1023,6 +1030,13 @@ class ProfileApi {
     'meridian_pause_min': v.meridianPauseMin,
     'meridian_recenter': v.meridianRecenter,
     'meridian_recal_guider': v.meridianRecalGuider,
+    'meridian_refocus': _meridianRefocusToString(v.meridianRefocus),
+    'meridian_refocus_temp_threshold_c': v.meridianRefocusTempThresholdC,
+    'meridian_guider_recal': _guiderRecalToString(v.meridianGuiderRecal),
+    'unattended_window_start':
+        v.unattendedWindowStart.isEmpty ? null : v.unattendedWindowStart,
+    'unattended_window_end':
+        v.unattendedWindowEnd.isEmpty ? null : v.unattendedWindowEnd,
     'on_altitude_limit': _altitudeLimitActionToString(v.onAltitudeLimit),
     'park_if_no_more_targets': v.parkIfNoMoreTargets,
     'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
@@ -1085,6 +1099,43 @@ class ProfileApi {
         return 'never';
     }
   }
+
+  static MeridianRefocusMode _meridianRefocusFromString(String? s) {
+    switch (s) {
+      case 'always':
+        return MeridianRefocusMode.always;
+      case 'never':
+        return MeridianRefocusMode.never;
+      case 'if_temp_drifted':
+      default:
+        return MeridianRefocusMode.ifTempDrifted;
+    }
+  }
+
+  static String _meridianRefocusToString(MeridianRefocusMode m) =>
+      switch (m) {
+        MeridianRefocusMode.always => 'always',
+        MeridianRefocusMode.never => 'never',
+        MeridianRefocusMode.ifTempDrifted => 'if_temp_drifted',
+      };
+
+  static GuiderRecalMode _guiderRecalFromString(String? s) {
+    switch (s) {
+      case 'full':
+        return GuiderRecalMode.full;
+      case 'skip':
+        return GuiderRecalMode.skip;
+      case 'auto_restore':
+      default:
+        return GuiderRecalMode.autoRestore;
+    }
+  }
+
+  static String _guiderRecalToString(GuiderRecalMode m) => switch (m) {
+        GuiderRecalMode.full => 'full',
+        GuiderRecalMode.skip => 'skip',
+        GuiderRecalMode.autoRestore => 'auto_restore',
+      };
 
   static UnsafeAction _unsafeActionFromString(String? s) {
     switch (s) {

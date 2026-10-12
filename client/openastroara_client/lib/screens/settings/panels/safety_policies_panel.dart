@@ -215,10 +215,48 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           value: s.meridianRecenter,
           onChanged: n.setMeridianRecenter,
         ),
-        SettingsSwitchRow(
-          label: 'Re-calibrate guider after flip',
-          value: s.meridianRecalGuider,
-          onChanged: n.setMeridianRecalGuider,
+        // §58.4 step 3 (#1138) — re-focus policy and its drift threshold.
+        SettingsDropdownRow<MeridianRefocusMode>(
+          label: 'Re-focus after flip',
+          helpKey: 'safety.policies.meridian_refocus',
+          value: s.meridianRefocus,
+          items: const {
+            MeridianRefocusMode.ifTempDrifted:
+                'Only if the focuser temperature drifted',
+            MeridianRefocusMode.always: 'Always',
+            MeridianRefocusMode.never: 'Never',
+          },
+          onChanged: (v) {
+            if (v != null) n.setMeridianRefocus(v);
+          },
+        ),
+        if (s.meridianRefocus == MeridianRefocusMode.ifTempDrifted)
+          EditableNumberRow(
+            label: 'Re-focus when drift exceeds (°C)',
+            helpKey: 'safety.policies.meridian_refocus_temp_threshold_c',
+            currentValue: s.meridianRefocusTempThresholdC.toString(),
+            getCanonical: () => ref
+                .read(safetyPoliciesProvider)
+                .meridianRefocusTempThresholdC
+                .toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setMeridianRefocusTempThresholdC(v);
+            },
+          ),
+        // §58.4 step 4 — how guiding comes back.
+        SettingsDropdownRow<GuiderRecalMode>(
+          label: 'Guiding after flip',
+          helpKey: 'safety.policies.meridian_guider_recal',
+          value: s.meridianGuiderRecal,
+          items: const {
+            GuiderRecalMode.autoRestore: 'Restore calibration (fast)',
+            GuiderRecalMode.full: 'Full recalibration (5-10 min)',
+            GuiderRecalMode.skip: 'Do not resume guiding',
+          },
+          onChanged: (v) {
+            if (v != null) n.setMeridianGuiderRecal(v);
+          },
         ),
         SettingsSwitchRow(
           label: 'Extra care on flips when you are away',
@@ -249,6 +287,23 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
               'the alarm behaviour engages earlier for a sleeping user.',
           value: s.unattendedEscalation,
           onChanged: n.setUnattendedEscalation,
+        ),
+        // §58.10 (#1138) — an explicit unattended window; blank = the sun decides.
+        EditableNumberRow(
+          label: 'Unattended from (HH:mm, blank = dusk)',
+          helpKey: 'safety.policies.unattended_window',
+          currentValue: s.unattendedWindowStart,
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).unattendedWindowStart,
+          parse: n.setUnattendedWindowStart,
+        ),
+        EditableNumberRow(
+          label: 'Unattended until (HH:mm, blank = dawn)',
+          helpKey: 'safety.policies.unattended_window',
+          currentValue: s.unattendedWindowEnd,
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).unattendedWindowEnd,
+          parse: n.setUnattendedWindowEnd,
         ),
         SettingsSwitchRow(
           label: 'Put the rig to bed if nobody responds',

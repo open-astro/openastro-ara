@@ -434,6 +434,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-12 — Safety policies: `meridian_refocus`, `meridian_guider_recal`, `unattended_window_*` (#1138)
+
+**Endpoint(s) or area:** profile JSON `safety` (`SafetyPoliciesDto`): `meridian_refocus` ("always" | "if_temp_drifted" | "never", default if_temp_drifted), `meridian_refocus_temp_threshold_c` (default 2.0), `meridian_guider_recal` ("auto_restore" | "full" | "skip", default auto_restore), `unattended_window_start` / `unattended_window_end` (site-local "HH:mm", nullable, default null).
+
+**Decision:** three §58.6 fields land as optional trailing constructor parameters, so an older `profile.json` keeps deserializing. `meridian_recal_guider` (bool) stays on the wire for older clients; the client writes it as `meridian_guider_recal != "skip"`. The executor decides from the store's policy, not the NINA profile's `AutoFocusAfterFlip` (which the store now mirrors for legacy readers). An unknown enum string reads as the default (same posture as `on_disk_space_critical`). The unattended window is two clock strings rather than minutes-from-midnight because that is what a user types and what the spec's example shows; both must parse and differ for the window to apply, otherwise the sun decides as before.
+
+**Reasoning:** the refocus step already existed in `MeridianFlipExecutor` but was unreachable from the server profile; the spec's three-way policy (and its re-centre-before-re-focus order) replaces a flag nothing set. `if_temp_drifted` compares the focuser's temperature with the session's last completed autofocus (`IImageHistory.AutofocusPoints`); with no autofocus this session it re-focuses, with no temperature probe it keeps the focus. The §58.13 morning summary and the §58.12 per-action shutdown list are not in this change (the ladder stays fixed by design, see `UnattendedShutdownService`).
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/SafetyPoliciesDto`; `Services/MeridianFlipPolicy.cs`, `Services/MeridianFlipExecutor.cs`, `Services/UnattendedSeverity.cs`; client `safety_policies_state.dart`, `safety_policies_panel.dart`.
+
+**Related:** #1138, §58.4 steps 3–4, §58.6, §58.10; tests `MeridianFlipExecutorTest` (policy cases), `UnattendedSeverityTest`.
+
+---
+
 ### 2026-10-11 — `focus_calibration` carries the measured focuser backlash (#1139, §59.7)
 
 **Endpoint(s) or area:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`; WS `autofocus.completed`.

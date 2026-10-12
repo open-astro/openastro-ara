@@ -306,7 +306,23 @@ public sealed record SafetyPoliciesDto(
     // (a boolean port's range is 1, so 5% catches a commanded-ON/read-OFF flip). A written
     // port whose read-back stays outside this band past the settle window publishes a
     // value_mismatch fault. Optional ctor default keeps an older profile.json deserializing.
-    double SwitchValueTolerancePct = 5.0);
+    double SwitchValueTolerancePct = 5.0,
+    // §58.4 step 3 / §58.6 (#1138) — re-focus after the flip: "always" | "if_temp_drifted" (default:
+    // only when the focuser temperature moved more than the threshold since the session's last
+    // autofocus, or there was none) | "never". Optional so an older profile.json keeps deserializing.
+    string MeridianRefocus = "if_temp_drifted",
+    double MeridianRefocusTempThresholdC = 2.0,
+    // §58.4 step 4 / §58.6 — how guiding comes back after the flip: "auto_restore" (default — the
+    // guider's own restore with the reverse-Dec flag, ~30 s) | "full" (a full recalibration, 5–10 min)
+    // | "skip" (do not resume guiding). Supersedes the MeridianRecalGuider bool, which stays for the
+    // wire's sake (true ≡ not "skip").
+    string MeridianGuiderRecal = "auto_restore",
+    // §58.10 — an explicit unattended window, site-local "HH:mm" start and end (wrapping past
+    // midnight), for a schedule the sun does not describe (a remote observatory in another time
+    // zone, a daytime-sleeping operator). Both null/blank (default) = computed from the sun
+    // (astronomical darkness, see UnattendedSeverity).
+    string? UnattendedWindowStart = null,
+    string? UnattendedWindowEnd = null);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

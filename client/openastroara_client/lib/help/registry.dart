@@ -450,6 +450,46 @@ const Map<String, Help> helpRegistry = {
       'safety.policies.meridian_recal_guider',
     ],
   ),
+  'safety.policies.meridian_refocus': Help(
+    key: 'safety.policies.meridian_refocus',
+    title: 'Re-focus after the flip',
+    body:
+        'After the pier-side swap and the re-centre, Ara can run autofocus before imaging resumes.\n\n'
+        '* **Only if the focuser temperature drifted** (recommended): re-focus when the focuser\'s temperature moved more than the threshold since this session\'s last autofocus — or when there has been none. A focuser without a temperature probe keeps its focus.\n'
+        '* **Always**: every flip costs one autofocus run (one to five minutes).\n'
+        '* **Never**: the focus set before the flip stands.\n\n'
+        'A failed re-focus never aborts the night: the focuser is put back where it was and imaging continues with a warning.',
+    relatedSettings: [
+      'safety.policies.meridian_refocus_temp_threshold_c',
+      'safety.policies.meridian_recenter',
+    ],
+  ),
+  'safety.policies.meridian_refocus_temp_threshold_c': Help(
+    key: 'safety.policies.meridian_refocus_temp_threshold_c',
+    title: 'Re-focus drift threshold',
+    body:
+        'How much the focuser temperature may move since the last autofocus before the flip re-focuses. 2 °C suits most refractors; a fast Newtonian or a carbon tube can go tighter, a long aluminium tube looser.',
+    relatedSettings: ['safety.policies.meridian_refocus'],
+  ),
+  'safety.policies.meridian_guider_recal': Help(
+    key: 'safety.policies.meridian_guider_recal',
+    title: 'Guiding after the flip',
+    body:
+        'Guide directions reverse on the new pier side.\n\n'
+        '* **Restore calibration** (recommended): the guider reuses its calibration with the reverse-Dec flag — about 30 seconds.\n'
+        '* **Full recalibration**: a fresh calibration on the new side — five to ten minutes, for a mount whose Dec backlash differs between sides.\n'
+        '* **Do not resume guiding**: the run continues unguided after the flip (an unguided rig, or you will restart guiding by hand).',
+    relatedSettings: ['safety.policies.meridian_recal_guider'],
+  ),
+  'safety.policies.unattended_window': Help(
+    key: 'safety.policies.unattended_window',
+    title: 'Unattended hours',
+    body:
+        'When "Louder alerts overnight" is on, equipment-impacting alerts ride one severity higher during the unattended window.\n\n'
+        'Blank (default): the window is astronomical darkness at the site, computed from the sun.\n\n'
+        'Set both times (site-local, 24-hour HH:mm; the window may wrap past midnight, e.g. 22:00 to 06:00) when the sun does not describe your schedule — a remote observatory in another time zone, or an operator who sleeps by day.',
+    relatedSettings: ['safety.policies.unattended_escalation'],
+  ),
   'safety.policies.meridian_pause_min': Help(
     key: 'safety.policies.meridian_pause_min',
     title: 'Pause after meridian flip',
