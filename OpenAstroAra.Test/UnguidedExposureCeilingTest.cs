@@ -20,6 +20,7 @@ using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
+using OpenAstroAra.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Sequencer.Trigger.Telescope;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Server.Services;
@@ -94,8 +95,10 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void The_ladder_is_capped_at_the_planned_exposure_and_twice_the_prior() {
-            Assert.That(UnguidedExposureLadder.Build(null, 300, null), Is.EqualTo(new[] { 10.0, 30, 60, 120 }));
-            Assert.That(UnguidedExposureLadder.Build(null, 45, null), Is.EqualTo(new[] { 10.0, 30 }), "planned 45 s: nothing longer is worth measuring");
+            Assert.That(UnguidedExposureLadder.Build(null, 300, null), Is.EqualTo(new[] { 10.0, 30, 60, 120, 300 }), "a planned sub above the ladder top is the final rung");
+            Assert.That(UnguidedExposureLadder.Build(null, 120, null), Is.EqualTo(new[] { 10.0, 30, 60, 120 }));
+            Assert.That(UnguidedExposureLadder.Build(null, 300, 100), Is.EqualTo(new[] { 10.0, 30, 60, 120 }), "the 2 × prior cap (200 s) still keeps the 300 s plan off the ladder");
+            Assert.That(UnguidedExposureLadder.Build(null, 45, null), Is.EqualTo(new[] { 10.0, 30, 45 }), "planned 45 s: the rungs below it, then the plan itself as the final rung");
             Assert.That(UnguidedExposureLadder.Build(null, 300, 20), Is.EqualTo(new[] { 10.0, 30 }), "2 × a 20 s prior = 40 s cap");
             Assert.That(UnguidedExposureLadder.Build(null, 8, null), Is.EqualTo(OnlyEight), "planned shorter than every rung: measure at the plan itself");
             Assert.That(UnguidedExposureLadder.Build(MessyRungs, 0, null), Is.EqualTo(new[] { 5.0, 60, 120 }), "sorted, distinct, positive");
@@ -151,6 +154,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_rewrite_rescales_the_loops_autofocus_cadence_so_the_time_cadence_holds() {
+            // Review of #1318: the builder derives AfterExposures for the PLANNED sub (AF every 30 min =
+            // every 6 × 300 s). Shortened to 45 s subs, the same 6 would refocus every 4.5 minutes.
+            var factory = Factory();
+            var (block, probe, loop, _, _) = Tree(factory, exposureSeconds: 300, frames: 10);
+            var af = (AutofocusAfterExposures)factory.GetTrigger<AutofocusAfterExposures>()!.Clone();
+            af.AfterExposures = 6;
+            loop.Add(af);
+
+            UnguidedExposureWriter.ApplyCeiling(block, probe, 45);
+            Assert.That(af.AfterExposures, Is.EqualTo(40), "6 × 300 / 45");
+
+            // …and a guard step back up rescales it the other way.
+            UnguidedExposureWriter.SetLoopExposure(loop, 90);
+            Assert.That(af.AfterExposures, Is.EqualTo(20), "40 × 45 / 90");
+        }
+
+        [Test]
+        public void A_loop_with_two_light_exposures_has_its_count_scaled_once() {
+            var factory = Factory();
+            var (_, _, loop, exposure, count) = Tree(factory, exposureSeconds: 300, frames: 10);
+            var second = (TakeExposure)factory.GetItem<TakeExposure>()!.Clone();
+            second.ExposureTime = 300;
+            second.ImageType = "LIGHT";
+            loop.Add(second);
+
+            var changes = UnguidedExposureWriter.CapLoop(loop, 60);
+
+            Assert.That(changes, Has.Count.EqualTo(1), "one rewrite per loop");
+            Assert.That(exposure.ExposureTime, Is.EqualTo(60));
+            Assert.That(second.ExposureTime, Is.EqualTo(60));
+            Assert.That(count.Iterations, Is.EqualTo(50), "not 250");
+        }
+
+        [Test]
         public void Only_light_exposures_are_rewritten() {
             var factory = Factory();
             var (_, _, loop, exposure, _) = Tree(factory, exposureSeconds: 300, frames: 4);
@@ -202,7 +240,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void The_probe_estimates_its_own_duration_from_the_ladder() {
-            var probe = new TrackingProbe { MaxExposure = 300 };
+            var probe = new TrackingProbe { MaxExposure = 120 };
             Assert.That(probe.GetEstimatedDuration(), Is.EqualTo(TimeSpan.FromSeconds(10 + 30 + 60 + 120 + 4 * 5)));
         }
 
@@ -230,8 +268,8 @@ namespace OpenAstroAra.Test {
             Assert.That(feed.Notifications, Has.Count.EqualTo(1));
 
             // A second step-down does not notify again.
-            feed.Push(0.8); guard.ShouldTrigger(exposure, exposure);
-            feed.Push(0.8); Assert.That(guard.ShouldTrigger(exposure, exposure), Is.True);
+            feed.Push(0.8, exposure: 60); guard.ShouldTrigger(exposure, exposure);
+            feed.Push(0.8, exposure: 60); Assert.That(guard.ShouldTrigger(exposure, exposure), Is.True);
             await guard.Execute(loop, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(exposure.ExposureTime, Is.EqualTo(30));
             Assert.That(feed.Notifications, Has.Count.EqualTo(1));
@@ -247,18 +285,40 @@ namespace OpenAstroAra.Test {
             guard.SequenceBlockInitialize();
 
             for (var i = 0; i < 9; i++) {
-                feed.Push(0.2);
+                feed.Push(0.2, exposure: 30);
                 Assert.That(guard.ShouldTrigger(exposure, exposure), Is.False, $"frame {i + 1}");
             }
-            feed.Push(0.2);
+            feed.Push(0.2, exposure: 30);
             Assert.That(guard.ShouldTrigger(exposure, exposure), Is.True);
             await guard.Execute(loop, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(exposure.ExposureTime, Is.EqualTo(60));
 
             for (var i = 0; i < 10; i++) {
-                feed.Push(0.1);
+                feed.Push(0.1, exposure: 60);
                 Assert.That(guard.ShouldTrigger(exposure, exposure), Is.False, "already at the planned 60 s: no step past it");
             }
+        }
+
+        [Test]
+        public async Task A_reading_taken_at_the_previous_exposure_length_joins_no_streak() {
+            // Analysis lags a frame: right after a step-down the newest reading is still a 120 s frame.
+            var feed = new ScriptedFeed();
+            var factory = Factory(feed: feed);
+            var (_, _, loop, exposure, _) = Tree(factory, exposureSeconds: 120, frames: 10);
+            var guard = (UnguidedExposureGuard)factory.GetTrigger<UnguidedExposureGuard>()!.Clone();
+            guard.MaxExposure = 120;
+            guard.SequenceBlockInitialize();
+            feed.Push(0.7, exposure: 120); guard.ShouldTrigger(exposure, exposure);
+            feed.Push(0.7, exposure: 120); Assert.That(guard.ShouldTrigger(exposure, exposure), Is.True);
+            await guard.Execute(loop, new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(exposure.ExposureTime, Is.EqualTo(60));
+
+            feed.Push(0.7, exposure: 120); // the straggler from the old length
+            Assert.That(guard.ShouldTrigger(exposure, exposure), Is.False);
+            feed.Push(0.7, exposure: 60);
+            Assert.That(guard.ShouldTrigger(exposure, exposure), Is.False, "first trailed frame at the NEW length — the straggler did not count");
+            feed.Push(0.7, exposure: 60);
+            Assert.That(guard.ShouldTrigger(exposure, exposure), Is.True);
         }
 
         [Test]
