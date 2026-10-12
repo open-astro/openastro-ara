@@ -19,9 +19,12 @@ const String inputCoordinatesType =
 ///
 /// RA is normalized into `[0, 360)` first (so a wrapped 360°, or a small
 /// negative from rounding, lands cleanly), then expressed as hours = deg / 15.
-/// Dec is clamped to `[-90, 90]`; its sign is carried by `NegativeDec` and the
-/// degree/minute/second fields hold the magnitude (matching NINA, which keeps
-/// the components unsigned).
+/// Dec is clamped to `[-90, 90]` and written in NINA's shape: `DecDegrees`
+/// is SIGNED (`-5` for -5°24′) and `NegativeDec` marks the sign, which alone
+/// carries the -0°xx′ case; minutes and seconds hold the unsigned remainder.
+/// The daemon's `InputCoordinates` decodes `DecDegrees - M/60 - S/3600` when
+/// the flag is set, so an unsigned degree field would land the wrong side of
+/// the whole degree.
 ///
 /// Seconds stay fractional (`double`) so no precision is lost — H + M/60 + S/3600
 /// reproduces the input to within floating-point error.
