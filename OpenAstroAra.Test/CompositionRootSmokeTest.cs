@@ -86,6 +86,25 @@ namespace OpenAstroAra.Test {
             Assert.That(a, Is.SameAs(b), $"{typeof(TA).Name} and {typeof(TB).Name} must resolve to one singleton");
         }
 
+        // #1194 — the production capture roots include the profile-dir frames fallback that
+        // CameraService.ResolveFramesDir writes to when the save directory is unavailable. Only the
+        // real composition root adds it (the constructor default has the save directory and the
+        // store mount), so it is asserted here, against the app Program.cs builds.
+        [Test]
+        public void Frame_repository_serves_the_profile_dir_frames_fallback() {
+            var repo = app.Services.GetRequiredService<IFrameRepository>() as SqliteFrameRepository;
+            Assert.That(repo, Is.Not.Null, "the production IFrameRepository is the SQLite repository");
+            var fallback = Path.Combine(profileDir, "frames", "manual");
+            Directory.CreateDirectory(fallback);
+            var fits = Path.Combine(fallback, "a.fits");
+            File.WriteAllText(fits, "x");
+            Assert.That(repo!.ConfinedExistingPath(fits), Is.EqualTo(Path.GetFullPath(fits)), "a frame written to the fallback root stays servable");
+            var elsewhere = Path.Combine(profileDir, "not-frames", "b.fits");
+            Directory.CreateDirectory(Path.GetDirectoryName(elsewhere)!);
+            File.WriteAllText(elsewhere, "x");
+            Assert.That(repo.ConfinedExistingPath(elsewhere), Is.Null, "the profile dir itself is not a root, only its frames/ child");
+        }
+
         [Test] public void SafetyMonitor_mediator_is_the_live_service() => AssertLive<ISafetyMonitorMediator, SafetyMonitorService>();
         [Test] public void Telescope_mediator_is_the_live_service() => AssertLive<ITelescopeMediator, TelescopeService>();
         [Test] public void Guider_mediator_is_the_live_service() => AssertLive<IGuiderMediator, GuiderService>();

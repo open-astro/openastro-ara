@@ -149,6 +149,8 @@ public partial class Program {
         // #1194 — frame files are served/deleted only from the capture roots the daemon itself
         // writes to: the profile's save directory (read live, so a changed setting follows), the
         // §29 store mount and the profile-dir fallback. A catalog row pointing elsewhere is refused.
+        // The fallback root does not change at runtime: resolved once, not per frame read.
+        var framesFallbackDir = System.IO.Path.Combine(ResolveProfileDir(), "frames");
         builder.Services.AddSingleton<IFrameRepository>(sp => new SqliteFrameRepository(
             sp.GetRequiredService<IAraDatabase>(),
             sp.GetRequiredService<IProfileStore>(),
@@ -157,7 +159,7 @@ public partial class Program {
             captureRoots: () => new[] {
                 sp.GetRequiredService<IProfileStore>().GetStorageSettings().SaveDirectory,
                 StoreMountProbe.MountPoint,
-                System.IO.Path.Combine(ResolveProfileDir(), "frames"),
+                framesFallbackDir,
             }));
         // §28 SqliteSessionService — sessions from the catalog with derived
         // fields (target name, frame counts, filters) aggregated from the
