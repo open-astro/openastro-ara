@@ -747,6 +747,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_switch_follow_still_pushes_a_bare_alpaca_selection() {
+            // #1306 review r2 — the §63.4 profile-switch follow passes refuseUnservedSelection: false, so a
+            // profile saved before the rule (bare "Alpaca Camera", no host/port) still gets its twin and
+            // tuning; the guider's own Alpaca server is left as it is.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera";
+            settings.GuiderAlpacaHost = "";
+            settings.GuiderAlpacaPort = 0;
+            var before = fake.ReceivedMethods.Count(m => m == "set_selected_camera");
+
+            var accepted = await svc.PushGuiderProfileAsync(null, CancellationToken.None, refuseUnservedSelection: false).ConfigureAwait(false);
+
+            Assert.That(accepted.OperationType, Is.EqualTo("guider.profile.push"));
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_selected_camera"), Is.GreaterThan(before),
+                "the follow path still pushes the selection");
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("set_alpaca_server"),
+                "no server is known, so the guider's own stays");
+        }
+
+        [Test]
         public async Task Profile_push_surfaces_a_failed_equipment_reconnect_as_a_typed_rpc_error() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));

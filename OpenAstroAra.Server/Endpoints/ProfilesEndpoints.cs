@@ -125,7 +125,9 @@ public static partial class ProfilesEndpoints {
         Justification = "Fire-and-forget boundary: any escape would be an unobserved task exception with no log — the catch-all exists precisely to record unexpected faults.")]
     private static async Task PushGuiderAfterProfileSwitchAsync(IGuiderService guider, ILogger logger) {
         try {
-            await guider.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None)
+            // refuseUnservedSelection: false — a pre-#1306 profile with a bare Alpaca selection still gets
+            // its twin and tuning on a switch; only the explicit Apply refuses it.
+            await guider.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None, refuseUnservedSelection: false)
                 .ConfigureAwait(false);
         } catch (InvalidOperationException) {
             // Guider not connected — nothing to flip; the §63.4 connect-path ensure maps the twin

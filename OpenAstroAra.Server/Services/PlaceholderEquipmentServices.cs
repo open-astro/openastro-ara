@@ -225,7 +225,7 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.restart", idempotencyKey));
     public Task<CalibrationFilesStatusDto> DeleteCalibrationFilesAsync(bool deleteDarkLibrary, bool deleteDefectMap, CancellationToken ct) =>
         Task.FromException<CalibrationFilesStatusDto>(new InvalidOperationException("guider is not connected"));
-    public Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct) =>
+    public Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct, bool refuseUnservedSelection = true) =>
         Task.FromException<OperationAcceptedDto>(new InvalidOperationException("guider is not connected"));
     public Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromException<OperationAcceptedDto>(new InvalidOperationException("guider is not connected"));

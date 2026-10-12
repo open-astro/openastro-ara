@@ -289,8 +289,11 @@ public interface IGuiderService {
 
     /// <summary>§63.17 — on-demand re-push of the §63.5 engine config + equipment selections to the daemon
     /// (runs to completion before the accept returns, then emits <c>guider.profile_pushed</c>). Throws
-    /// InvalidOperationException when disconnected (→ 409, typed).</summary>
-    Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct);
+    /// InvalidOperationException when disconnected (→ 409, typed). With <paramref name="refuseUnservedSelection"/>
+    /// (the explicit <c>POST /guider/profile/push</c>), a bare Alpaca selection with no server throws
+    /// <see cref="GuiderSelectionInvalidException"/> before anything is sent (→ 422, #1306); the §63.4
+    /// profile-switch follow passes false so the twin ensure and tuning still land on such a profile.</summary>
+    Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct, bool refuseUnservedSelection = true);
 
     /// <summary>Tuning-only push (<c>POST /guider/profile/push?scope=tuning</c>): just the runtime-safe
     /// messages (aggressiveness, minimum move, dec guide mode, guide exposure) — no equipment disconnect, so
