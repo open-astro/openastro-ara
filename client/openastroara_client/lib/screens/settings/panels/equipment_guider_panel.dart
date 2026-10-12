@@ -69,10 +69,15 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
       final phd2 = ref.read(phd2SettingsProvider);
-      if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0) {
-        await _resolveAlpacaNames(
-            ['${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}']);
-      }
+      // Choices already loaded before this panel built: ref.listen only
+      // fires on a later change, so resolve their servers here too.
+      final loaded = ref.read(guiderEquipmentProvider).value?.choices;
+      final endpoints = <String>[
+        if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0)
+          '${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}',
+        if (loaded != null) ..._choiceEndpoints(loaded),
+      ];
+      await _resolveAlpacaNames(endpoints);
     } catch (e) {
       if (mounted) {
         setState(
