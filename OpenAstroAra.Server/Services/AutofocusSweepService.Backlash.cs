@@ -60,8 +60,9 @@ public sealed partial class AutofocusSweepService {
 
     /// <summary>The distance below <paramref name="best"/> at which the fitted model predicts
     /// <paramref name="hfr"/> — i.e. how far short of best a focuser that reads <paramref name="hfr"/>
-    /// after an upward move actually stopped. Clamped to [0, <paramref name="maxOffset"/>]; null when the
-    /// model is missing or not rising below best.</summary>
+    /// after an upward move actually stopped. <paramref name="hfr"/> must be expressed on the MODEL's
+    /// scale (the caller shifts a measured excess onto <c>model(best)</c>). Clamped to
+    /// [0, <paramref name="maxOffset"/>]; null when the model is missing or not rising below best.</summary>
     internal static double? InvertBelowBest(Func<double, double>? model, double best, double hfr, double maxOffset) {
         if (model is null || maxOffset <= 0 || !double.IsFinite(hfr)) {
             return null;
@@ -126,7 +127,11 @@ public sealed partial class AutofocusSweepService {
                 LogBacklashMeasured(0, true);
                 return await BacklashDoneAsync(settings, best, 0, true, token).ConfigureAwait(false);
             }
-            var estimate = InvertBelowBest(fit.Model, best, backHfr, span);
+            // Invert the return shot's EXCESS over the measured baseline on the model's own minimum
+            // (review of #1319): the confirmation frame routinely reads off the fit's predicted minimum
+            // (0.96 measured vs 1.62 re-fitted on 2026-10-03), so inverting the absolute HFR against
+            // model(best) would misplace the shortfall by that whole gap.
+            var estimate = InvertBelowBest(fit.Model, best, fit.Model(best) + (backHfr - baselineHfr), span);
             if (estimate is not double offset || offset <= 0) {
                 LogBacklashProbeInconclusive("the fitted curve could not place the return shot");
                 return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);

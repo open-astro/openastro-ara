@@ -46,7 +46,8 @@ namespace OpenAstroAra.Test {
         /// commanded position, the OPTICS sit that many steps below it after an upward move (and exactly on
         /// it after a downward one). The metric reads the optics.</summary>
         private static (AutofocusSweepService Svc, InMemoryProfileStore Store, List<int> Moves, Func<int> Captures, AutofocusRunTracker Tracker, List<(string Type, JsonElement Payload)> Events) Build(
-                int backlashUp, double bestPhysical = Start - 150, Func<int, int>? starsAt = null, int travelMin = 0, int travelMax = int.MaxValue, Action<int>? onCapture = null) {
+                int backlashUp, double bestPhysical = Start - 150, Func<int, int>? starsAt = null, int travelMin = 0, int travelMax = int.MaxValue, Action<int>? onCapture = null,
+                double hfrShiftAfterSweep = 0) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings());
             var moves = new List<int>();
@@ -80,7 +81,9 @@ namespace OpenAstroAra.Test {
                 metric: (_, _) => {
                     captures++;
                     var delta = (optics - bestPhysical) / 100.0;
-                    var hfr = 1.5 + 0.2 * delta * delta;
+                    // Captures after the 9-probe sweep (confirmation + probe shots) may read off the fit's
+                    // minimum, as a real confirmation frame does — the probe must work on the excess.
+                    var hfr = 1.5 + 0.2 * delta * delta + (captures > 9 ? hfrShiftAfterSweep : 0);
                     var stars = starsAt?.Invoke(captures) ?? 42;
                     return new StarDetectionResult { AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr) };
                 });
@@ -138,6 +141,28 @@ namespace OpenAstroAra.Test {
             Assert.That(moves[^2], Is.EqualTo(best + 100), "re-entered from above");
             Assert.That(moves.Skip(moves.Count - 6).Take(4), Is.EqualTo(new[] { best - 400, best, best - 400, best + 30 }).Within(2),
                 "control, straight return, control again, compensated return");
+        }
+
+        [Test]
+        public async Task A_confirmation_frame_that_reads_above_the_fits_minimum_still_measures_the_backlash_right() {
+            // Review of #1319: the measured baseline is 0.1 px above model(best). Inverting the return shot's
+            // absolute HFR against the model would place a 30-step shortfall at ~77 steps and fail to verify.
+            var (svc, store, _, captures, _, _) = Build(backlashUp: 30, hfrShiftAfterSweep: 0.1);
+            using var _ = svc;
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var cal = store.GetFocusCalibration()!;
+            Assert.That(cal.BacklashUpSteps, Is.EqualTo(30).Within(2));
+            Assert.That(cal.BacklashVerified, Is.True);
+            Assert.That(captures(), Is.EqualTo(9 + 1 + 3));
+
+            // …and the other sign: a baseline BELOW the fit's minimum must not read as "no backlash".
+            var (svc2, store2, _, _, _, _) = Build(backlashUp: 30, hfrShiftAfterSweep: -0.1);
+            using var __ = svc2;
+            Assert.That(await svc2.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+            Assert.That(store2.GetFocusCalibration()!.BacklashUpSteps, Is.EqualTo(30).Within(2));
+            Assert.That(store2.GetFocusCalibration()!.BacklashVerified, Is.True);
         }
 
         [Test]
