@@ -27,10 +27,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         IReadOnlyList<double> RungsSeconds,
         double MaxExposureSeconds,
         double? PriorSeconds,
-        string? TargetName);
+        string? TargetName,
+        string? PriorSource = null);
 
-    /// <summary>The probe's answer. <see cref="CeilingSeconds"/> null = fewer than two usable rungs, so
-    /// the prior (if any) stands; <see cref="Summary"/> is the one-line explanation for the run log.</summary>
+    /// <summary>The probe's answer. <see cref="CeilingSeconds"/> null = inconclusive (fewer than two usable
+    /// rungs and none of them failed), so the prior (if any) stands; a first rung that already trails IS a
+    /// ceiling. <see cref="Summary"/> is the one-line explanation for the run log.</summary>
     public sealed record TrackingProbeResult(double? CeilingSeconds, int UsableRungs, string Summary);
 
     /// <summary>

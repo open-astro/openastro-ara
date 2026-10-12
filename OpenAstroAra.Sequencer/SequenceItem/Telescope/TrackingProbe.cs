@@ -35,8 +35,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     /// target, through <see cref="ITrackingProbeExecutor"/>, and writes the measured ceiling into the
     /// imaging loops that follow it in the same block: their LIGHT exposures become
     /// <c>min(planned, ceiling)</c> and their frame counts are re-derived so the planned integration
-    /// holds. Fewer than two usable rungs keep the prior (applied as the ceiling when known) and say
-    /// so. The run builder emits this only when the rig has no guider; with a guider it never appears.
+    /// holds. An inconclusive ladder (fewer than two usable rungs, none failing) keeps the prior
+    /// (applied as the ceiling when known) and says so; a first rung that already trails is itself the
+    /// ceiling. The run builder emits this only when the rig has no guider; with a guider it never appears.
     /// </summary>
     [ExportMetadata("Name", "Lbl_SequenceItem_Telescope_TrackingProbe_Name")]
     [ExportMetadata("Description", "Lbl_SequenceItem_Telescope_TrackingProbe_Description")]
@@ -103,7 +104,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             // last probe is the prior, so run 2 does not climb the whole ladder again (review of #1318).
             var prior = await executor.ResolvePriorAsync(PriorSeconds, token);
             var ladder = UnguidedExposureLadder.Build(Rungs, MaxExposure, prior);
-            var request = new TrackingProbeRequest(ladder, MaxExposure, prior, ItemUtility.ResolveTargetName(Parent));
+            var priorSource = PriorSeconds is not null ? "the mount's spec sheet" : prior is not null ? "the last probe" : null;
+            var request = new TrackingProbeRequest(ladder, MaxExposure, prior, ItemUtility.ResolveTargetName(Parent), priorSource);
             var result = await executor.ProbeAsync(request, progress, token);
             var ceiling = result.CeilingSeconds ?? prior;
             CeilingSeconds = result.CeilingSeconds;

@@ -212,6 +212,14 @@ namespace OpenAstroAra.Test {
             await svc3.ProbeAsync(Request(prior: 120), new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(posted, Has.Count.EqualTo(2));
             Assert.That(posted[1].Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(posted[1].Message, Does.Contain("from the prior"), "no source named: the generic wording");
+
+            // The wording names where the prior came from when the instruction says.
+            var frames4 = new ScriptedFrames();
+            var svc4 = new TrackingProbeService(new InMemoryProfileStore(), frames4, metric: Metric(frames4, s => s <= 10 ? (80, 0.95, 3.0) : (80, 0.5, 3.0)), notifications: notifications);
+            await svc4.ProbeAsync(new TrackingProbeRequest(DefaultLadder, 300, 120, "Veil", "the last probe"), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(posted[2].Message, Does.Contain("from the last probe"));
+            Assert.That(posted[2].Title, Does.Not.Contain("spec"));
         }
 
         [Test]

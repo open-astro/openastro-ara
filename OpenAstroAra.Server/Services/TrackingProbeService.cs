@@ -207,9 +207,11 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
             ["usable_rungs"] = usableCount, ["summary"] = summary,
         }).ConfigureAwait(false);
         if (request.PriorSeconds is double p && p > 0) {
+            // The ladder is capped at 2 × the prior, so only the "far below" side can fire today; the
+            // "far above" side waits for a ladder that may exceed the prior.
             var ratio = measured / p;
             if (ratio > DivergenceRatio || ratio < 1 / DivergenceRatio) {
-                await NotifyDivergenceAsync(measured, p).ConfigureAwait(false);
+                await NotifyDivergenceAsync(measured, p, request.PriorSource ?? "the prior").ConfigureAwait(false);
             }
         }
         return new TrackingProbeResult(measured, usableCount, summary);
@@ -232,7 +234,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Notification store faults must never fail the probe. Log-and-recover boundary.")]
-    private async Task NotifyDivergenceAsync(double measured, double prior) {
+    private async Task NotifyDivergenceAsync(double measured, double prior, string priorSource) {
         if (_notifications is null) {
             return;
         }
@@ -240,11 +242,11 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
             var worse = measured < prior;
             var factor = worse ? prior / measured : measured / prior;
             var message = worse
-                ? string.Create(CultureInfo.InvariantCulture, $"Tracking held {measured:0.#} s unguided, {factor:0.#}× worse than this mount's {prior:0.#} s spec — check balance, clutch and the worm; or the sheet is wrong.")
-                : string.Create(CultureInfo.InvariantCulture, $"Tracking held {measured:0.#} s unguided, {factor:0.#}× better than this mount's {prior:0.#} s spec — the sheet is pessimistic for this rig; tonight's measurement is now the prior.");
+                ? string.Create(CultureInfo.InvariantCulture, $"Tracking held {measured:0.#} s unguided, {factor:0.#}× worse than the {prior:0.#} s prior from {priorSource} — check balance, clutch, polar alignment and the worm; or the prior is wrong. Tonight's measurement is now the prior.")
+                : string.Create(CultureInfo.InvariantCulture, $"Tracking held {measured:0.#} s unguided, {factor:0.#}× better than the {prior:0.#} s prior from {priorSource} — tonight's measurement is now the prior.");
             await _notifications.CreateAsync(new NotificationDto(
                 Id: Guid.NewGuid(), PostedUtc: _clock(), Severity: worse ? NotificationSeverity.Warning : NotificationSeverity.Info,
-                Category: NotificationCategory.Equipment, Title: worse ? "Tracking far below the mount's spec" : "Tracking far above the mount's spec",
+                Category: NotificationCategory.Equipment, Title: worse ? "Tracking far below its prior" : "Tracking far above its prior",
                 Message: message, Read: false, Dismissed: false, DismissedUtc: null, Payload: null,
                 RelatedEntityType: null, RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
