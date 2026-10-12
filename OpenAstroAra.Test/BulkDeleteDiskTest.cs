@@ -44,7 +44,8 @@ namespace OpenAstroAra.Test {
             Directory.CreateDirectory(_dir);
             _db = new SqliteAraDatabase(_dir, logger: null);
             await _db.InitializeAsync(CancellationToken.None);
-            _repo = new SqliteFrameRepository(_db, new InMemoryProfileStore());
+            // #1194 — files live in the fixture's temp dir, so it is the capture root here.
+            _repo = new SqliteFrameRepository(_db, new InMemoryProfileStore(), captureRoots: () => new[] { _dir });
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT INTO sessions (id, started_at) VALUES ($id, $t);";

@@ -69,7 +69,11 @@ public sealed record ConnectOutcome(
 ///
 /// <para><b>Back-compat</b>: the policy engages only between clients that call
 /// <c>POST /server/connect</c>. A pre-§27 WILMA that never connects/binds is invisible
-/// to the slot — REST and the WS event stream keep working for it unchanged.</para>
+/// to the slot — REST and the WS event stream keep working for it unchanged. The REST
+/// surface is therefore <b>advisory</b> for a request without <c>X-Ara-Session</c> (#1194,
+/// documented in API_CONTRACT); what is enforced is the stale holder: a mutating request
+/// presenting a session id that is not the current one is refused with 409 by
+/// <c>SessionGuard</c> (see <see cref="IsStaleSession"/>).</para>
 ///
 /// <para><b>Liveness</b> (§27.2): a session is dead when the daemon has heard nothing
 /// for <see cref="DeadAfter"/> (60 s) — no WS frame from its bound socket, or the
@@ -126,6 +130,18 @@ public sealed partial class ClientSessionService {
         /// re-claim guard (reading Tcs.Task.Result would trip CA1849 and isn't
         /// needed).</summary>
         public string? Answer { get; set; }
+    }
+
+    /// <summary>#1194 — true when a session slot is held by someone OTHER than
+    /// <paramref name="sessionId"/>: that id was taken over, or released and re-issued. With no
+    /// holder at all nothing is stale (the slot is free; whoever asks may drive — the advisory
+    /// back-compat path). Liveness is deliberately not consulted: a dead holder is still the
+    /// holder until a connect takes the slot, and a stale client's remedy is the same either
+    /// way (re-claim through POST /server/connect).</summary>
+    public bool IsStaleSession(Guid sessionId) {
+        lock (_lock) {
+            return _current is not null && _current.Id != sessionId;
+        }
     }
 
     /// <summary>§27.1 connect flow. A matching <paramref name="existingSessionId"/> is

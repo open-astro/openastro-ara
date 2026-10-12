@@ -82,7 +82,12 @@ public partial class Program {
 
         // Kestrel port: env var > appsettings > default 5555 (per §2.1).
         var port = ResolvePort(builder.Configuration);
-        builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
+        builder.WebHost.ConfigureKestrel(opts => {
+            opts.ListenAnyIP(port);
+            // #1194 — hard belt above the endpoint's WsConnectionGate: Kestrel refuses further
+            // upgrades (503) once this many are open, whatever path they took.
+            opts.Limits.MaxConcurrentUpgradedConnections = WsConnectionGate.MaxConcurrentConnections * 2;
+        });
 
         // CORS for WILMA clients (per §60.7.1). Trusted LAN; permissive by design.
         builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -141,7 +146,19 @@ public partial class Program {
         // Accepted responses; next sub-PR makes them actually mutate. Preview
         // + thumbnail still serve the 1×1 JPEG placeholder until §65 lands;
         // OpenDownloadAsync returns null until §72 FITS storage lands.
-        builder.Services.AddSingleton<IFrameRepository, SqliteFrameRepository>();
+        // #1194 — frame files are served/deleted only from the capture roots the daemon itself
+        // writes to: the profile's save directory (read live, so a changed setting follows), the
+        // §29 store mount and the profile-dir fallback. A catalog row pointing elsewhere is refused.
+        builder.Services.AddSingleton<IFrameRepository>(sp => new SqliteFrameRepository(
+            sp.GetRequiredService<IAraDatabase>(),
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetRequiredService<ILogger<SqliteFrameRepository>>(),
+            captureRoots: () => new[] {
+                sp.GetRequiredService<IProfileStore>().GetStorageSettings().SaveDirectory,
+                StoreMountProbe.MountPoint,
+                System.IO.Path.Combine(ResolveProfileDir(), "frames"),
+            }));
         // §28 SqliteSessionService — sessions from the catalog with derived
         // fields (target name, frame counts, filters) aggregated from the
         // frames table at read time per §28.1's schema. Composes on
@@ -1081,6 +1098,9 @@ public partial class Program {
             KeepAliveInterval = TimeSpan.FromSeconds(30),
             KeepAliveTimeout = TimeSpan.FromSeconds(60),
         });
+        // #1194 — §27 on REST: a mutating request carrying a stale X-Ara-Session is refused (409);
+        // header-less requests stay on the documented advisory path.
+        app.Use(SessionGuard.Middleware);
 
         // §49 API docs: Scalar UI (AOT-friendly Swagger replacement per §71.3).
         app.MapOpenApi();

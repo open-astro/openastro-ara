@@ -91,8 +91,22 @@ public static partial class WebSocketEndpoints {
                             statusCode: StatusCodes.Status426UpgradeRequired,
                             detail: $"X-Ara-WS-Version header (or ws_version query parameter) is required and must equal \"{ProtocolVersion}\". Got: \"{requested}\".");
                     }
+                    // #1194 — refuse past the concurrent-socket cap BEFORE the upgrade, so the client
+                    // sees a 503 problem (and Retry-After) instead of a dropped handshake.
+                    if (!WsConnectionGate.TryEnter()) {
+                        http.Response.Headers.RetryAfter = "30";
+                        return Results.Problem(
+                            type: "https://openastro.net/errors/ws-too-many-connections",
+                            title: "Too many WebSocket connections",
+                            statusCode: StatusCodes.Status503ServiceUnavailable,
+                            detail: $"The daemon already serves {WsConnectionGate.MaxConcurrentConnections} WebSocket subscribers. Close an idle client (or wait for a stale one to time out) and retry.");
+                    }
                     var logger = loggerFactory.CreateLogger("OpenAstroAra.Server.Endpoints.WebSocket");
-                    await HandleWebSocketAsync(http, channel, broadcaster, sessions, logger);
+                    try {
+                        await HandleWebSocketAsync(http, channel, broadcaster, sessions, logger);
+                    } finally {
+                        WsConnectionGate.Exit();
+                    }
                     return Results.Empty;
                 }
                 // Per RFC 7231 §6.5.15, 426 responses must include hop-by-hop Upgrade
@@ -106,6 +120,7 @@ public static partial class WebSocketEndpoints {
                     detail: "This endpoint serves WebSocket connections only. See §60.9 for the connection protocol (X-Ara-WS-Version: 1, 30s ping / 60s pong, resume protocol with last-seen seq).");
             })
             .ProducesProblem(StatusCodes.Status426UpgradeRequired)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithName("UpgradeToWebSocket");
 
         return app;

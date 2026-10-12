@@ -490,6 +490,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-12 — API hardening: stale-session 409, WebSocket connection cap, frame files confined to the capture roots (#1194)
+
+**Endpoint(s) or area:** every mutating `/api/v1/*` route (`X-Ara-Session` header), `GET /api/v1/ws` (503), `GET /frames/{id}/download|preview|thumbnail|histogram`, `POST /frames/bulk-delete|bulk-export`, the plate-solve frame loader.
+
+**Decision:** (1) The §27 single-client policy is **advisory on REST for a request without `X-Ara-Session`**: a pre-§27 client, a script or a WILMA whose connect was refused keeps full REST access, as `ClientSessionService` has always documented. What is enforced is the stale holder: a non-GET/HEAD/OPTIONS request under `/api/v1` that presents a session id other than the current holder's is refused with **409 `https://openastro.net/errors/stale-session`**; `POST /server/connect` and `/server/disconnect` are exempt. With no holder at all nothing is stale. The client sends the header on its WebSocket upgrade today and not yet on REST; when it does, a taken-over client's commands are refused instead of racing the new holder. (2) The WebSocket endpoint admits at most **16** concurrent sockets (`WsConnectionGate`); the 17th gets **503 `ws-too-many-connections`** with `Retry-After: 30` before the upgrade, and Kestrel's `MaxConcurrentUpgradedConnections` (32) is the hard belt. (3) A catalogued `file_path` is served, exported or deleted only when it sits under a **capture root**: the profile's save directory (read live), the §29 store mount `/media/openastroara`, or the profile-dir `frames/` fallback the camera writes to when the save directory is unavailable. Paths are normalised first and a symlink inside a root that resolves outside it is refused. A refused row reads exactly like a missing file (placeholder preview, `null` download, skipped in an export, deleted from the catalog but left on disk by a bulk delete) and logs one warning naming the path.
+
+**Reasoning:** enforcing the session on header-less requests would break every pre-§27 client and the daemon's own scripts for no gain against the realistic failure, which is a client that WAS the holder and keeps driving after a takeover. The cap exists because each socket costs a per-subscriber channel and a send loop on a Pi and nothing bounded a reconnect storm. Frame paths come from the daemon's own writes, so confining reads to where the daemon writes costs nothing in the normal case and stops a corrupt or edited row from turning `/download` into a file server. The roots are read live so a changed save directory is honoured; frames captured under an earlier, hand-set save directory outside the store are the one case that stops being servable until that directory is configured again.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1ws` (503); `Endpoints/SessionGuard.cs`, `Endpoints/WebSocketEndpoints.Gate.cs`, `Services/ClientSessionService.cs` (`IsStaleSession`), `Services/SqliteFrameRepository.cs` (`ConfinedExistingPath`).
+
+**Related:** #1194, §27, §28, §29, §60.9; tests `ApiHardeningTest`, `FrameFileConfinementTest`.
+
+---
+
 ### 2026-10-03 — Smart Focus judges "in focus" against the HFR the sweep measured
 
 **Where:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`.
