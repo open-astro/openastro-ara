@@ -46,7 +46,11 @@ public enum CoolingDriftVerdict {
 /// armed state (cooler on + set-point + readable temp) accumulates — a driver that stops
 /// reporting temperature clears the accumulation rather than drifting toward a false fault,
 /// though a transient unreadable tick never clears a FIRED episode (that would re-fire on
-/// a flapping sensor).
+/// a flapping sensor). An ACTIVE DESCENT is expected, not drift (#1210): while the deviation
+/// keeps closing by <see cref="DefaultApproachC"/> the window restarts, so a +20 → −20 cool
+/// commanded in one write (the dark-library CoolCamera with Duration 0, or the REST control)
+/// that legitimately spends 8 minutes more than 5 °C off its set-point never fires; a TEC
+/// that has stopped closing on the set-point still does.
 ///
 /// Not internally synchronized — the owning CameraService mutates it only under its
 /// connection gate.
@@ -63,10 +67,15 @@ public sealed class CoolingDriftMonitor {
     /// firing threshold itself.</summary>
     public const double DefaultClearHysteresisC = 1.0;
 
+    /// <summary>#1210 — a deviation that has closed by this much since the window started (or
+    /// was last restarted) is a TEC still on its way, and restarts the window.</summary>
+    public const double DefaultApproachC = 0.5;
+
     private readonly double _thresholdC;
     private readonly TimeSpan _window;
     private readonly double _hysteresisC;
     private DateTimeOffset? _outOfBandSinceUtc;
+    private double _windowDeviationC;
     private bool _episodeFired;
 
     public CoolingDriftMonitor(double thresholdC = DefaultDriftThresholdC,
@@ -103,7 +112,12 @@ public sealed class CoolingDriftMonitor {
             return CoolingDriftVerdict.Idle; // still drifted, already reported
         }
         if (deviation > _thresholdC) {
-            _outOfBandSinceUtc ??= nowUtc;
+            if (_outOfBandSinceUtc is null || _windowDeviationC - deviation >= DefaultApproachC) {
+                // First out-of-band tick, or the TEC has closed on the set-point since the
+                // window opened: an active descent, so the sustained-drift clock restarts here.
+                _outOfBandSinceUtc = nowUtc;
+                _windowDeviationC = deviation;
+            }
             if (nowUtc - _outOfBandSinceUtc.Value >= _window) {
                 _episodeFired = true;
                 return CoolingDriftVerdict.Drifted;

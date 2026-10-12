@@ -429,7 +429,15 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         RefreshCacheOnce();
     }
 
-    public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
+    public Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) =>
+        SetCoolerAsync(enabled, targetTemperatureC, syncFan: true, ct);
+
+    /// <summary><paramref name="syncFan"/> false skips the cooling-fan sync on an ENABLE: only for a
+    /// set-point step inside a ramp whose previous step already ran the interlock (#1210 — the
+    /// sequencer ramp writes every 15 s; a full switch-list read plus a fan write each time is
+    /// 4×/min for an hour-long imported cool). The first write of any ramp, and every cooler-off,
+    /// always sync.</summary>
+    internal async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, bool syncFan, CancellationToken ct) {
         var client = RequireConnectedClient();
         // §25.5.5 — capability gates BEFORE any device write: a camera without a
         // cooler (CoolerOn not implemented) or without TEC set-point regulation
@@ -451,7 +459,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // a failed fan write is a fault + log, never a throw — the ramp must always reach that
         // final cooler-off (review of #1070/#1084), and refusing would leave the TEC where it is.
         // Disabling keeps the old order: cooler off, then fan off.
-        if (enabled) {
+        if (enabled && syncFan) {
             bool alreadyCooling;
             lock (_gate) {
                 // Only a cooler KNOWN to be on skips the refusal. Unknown (the CoolerOn read

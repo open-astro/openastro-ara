@@ -248,6 +248,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_active_descent_restarts_the_window_and_never_fires() {
+            // #1210 — a +20 → −20 cool commanded in one write (dark-library CoolCamera, Duration 0)
+            // sits more than 5 °C off its set-point for well over 5 minutes while the TEC pulls it down.
+            var m = new CoolingDriftMonitor();
+            Assert.That(m.Observe(true, -20, 20, T0), Is.EqualTo(CoolingDriftVerdict.Drifting));
+            Assert.That(m.Observe(true, -20, 12, T0 + TimeSpan.FromMinutes(2)), Is.EqualTo(CoolingDriftVerdict.Drifting));
+            Assert.That(m.Observe(true, -20, 4, T0 + TimeSpan.FromMinutes(4)), Is.EqualTo(CoolingDriftVerdict.Drifting));
+            Assert.That(m.Observe(true, -20, -4, T0 + TimeSpan.FromMinutes(6)), Is.EqualTo(CoolingDriftVerdict.Drifting), "still closing: no fault at 6 min");
+            Assert.That(m.Observe(true, -20, -11, T0 + TimeSpan.FromMinutes(8)), Is.EqualTo(CoolingDriftVerdict.Drifting));
+            Assert.That(m.Observe(true, -20, -16, T0 + TimeSpan.FromMinutes(10)), Is.EqualTo(CoolingDriftVerdict.Idle), "in band");
+        }
+
+        [Test]
+        public void A_descent_that_stops_closing_fires_from_where_it_stalled() {
+            var m = new CoolingDriftMonitor();
+            m.Observe(true, -20, 20, T0);
+            m.Observe(true, -20, 10, T0 + TimeSpan.FromMinutes(2)); // closing: window restarts here
+            Assert.That(m.Observe(true, -20, 10.2, T0 + TimeSpan.FromMinutes(5)), Is.EqualTo(CoolingDriftVerdict.Drifting), "3 min into the restarted window; noise under 0.5 °C is not progress");
+            Assert.That(m.Observe(true, -20, 10, T0 + TimeSpan.FromMinutes(7)), Is.EqualTo(CoolingDriftVerdict.Drifted), "stalled 5 min after it last closed");
+        }
+
+        [Test]
         public void Reset_clears_the_latch_and_the_accumulation() {
             var m = new CoolingDriftMonitor();
             m.Observe(true, -10, -2, T0);

@@ -46,7 +46,11 @@ namespace OpenAstroAra.Test {
             public double Ambient { get; init; } = 20;
             public double? FixedTemperature { get; init; }
             public double CoolerPower { get; init; } = 50;
+            /// <summary>Per-read cooler power, when set (#1210 stall tests); wins over <see cref="CoolerPower"/>.</summary>
+            public Func<double>? CoolerPowerScript { get; init; }
             public bool CoolerPowerUnreadable { get; init; }
+            /// <summary>While true every CoolerOn GET answers an Alpaca driver error (#1210).</summary>
+            public volatile bool CoolerOnReadFails;
             public bool CanSetTemperature { get; init; } = true;
             public bool InitialCoolerOn { get; init; }
             public double? InitialSetpoint { get; init; }
@@ -63,10 +67,10 @@ namespace OpenAstroAra.Test {
                     return Num(Setpoint ?? Ambient);
                 }
                 if (path.EndsWith("/cooleron", StringComparison.Ordinal)) {
-                    return CoolerOn ? "true" : "false";
+                    return CoolerOnReadFails ? ScriptedAlpacaDevice.Error("transient read failure") : CoolerOn ? "true" : "false";
                 }
                 if (path.EndsWith("/coolerpower", StringComparison.Ordinal)) {
-                    return CoolerPowerUnreadable ? "\"n/a\"" : Num(CoolerPower);
+                    return CoolerPowerUnreadable ? "\"n/a\"" : Num(CoolerPowerScript?.Invoke() ?? CoolerPower);
                 }
                 if (path.EndsWith("/cansetccdtemperature", StringComparison.Ordinal)) {
                     return CanSetTemperature ? "true" : "false";
@@ -138,13 +142,17 @@ namespace OpenAstroAra.Test {
         /// <summary>A connected service (capabilities read) whose cooling waits are recorded and
         /// return at once.</summary>
         private static async Task<(CameraService Svc, ConcurrentQueue<TimeSpan> Delays)> ConnectedAsync(
-                SimCamera cam, Func<ICoolingFanActuator?>? fan = null, Action<int>? onDelay = null) {
-            var svc = new CameraService(fan: fan);
+                SimCamera cam, Func<ICoolingFanActuator?>? fan = null, Action<int>? onDelay = null,
+                Func<int, Task>? delayGate = null, TimeSpan? refreshPeriod = null) {
+            var svc = refreshPeriod is TimeSpan period ? new CameraService(fan: fan) { RefreshPeriod = period } : new CameraService(fan: fan);
             var delays = new ConcurrentQueue<TimeSpan>();
             svc.CoolingDelay = (d, ct) => {
                 delays.Enqueue(d);
                 onDelay?.Invoke(delays.Count);
-                return ct.IsCancellationRequested ? Task.FromCanceled(ct) : Task.CompletedTask;
+                if (ct.IsCancellationRequested) {
+                    return Task.FromCanceled(ct);
+                }
+                return delayGate?.Invoke(delays.Count) ?? Task.CompletedTask;
             };
             await svc.ConnectAsync(new ConnectRequestDto(Device(cam.Box)), null, CancellationToken.None);
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None)) is { State: EquipmentConnectionState.Connected, Capabilities: not null },
@@ -224,6 +232,74 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task One_saturated_power_sample_no_longer_shortens_the_stall_timeout() {
+            // #1210 — a driver that reports 100 % for a sample while it is still regulating: the
+            // 2-minute bound needs the saturation to PERSIST for the whole stall, else it is 10 min.
+            var reads = 0;
+            await using var cam = new SimCamera { FixedTemperature = 5, CoolerPowerScript = () => Interlocked.Increment(ref reads) % 4 == 1 ? 100 : 50 };
+            var (svc, delays) = await ConnectedAsync(cam);
+            using var _ = svc;
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.False);
+            var waited = TimeSpan.FromTicks(delays.Sum(d => d.Ticks));
+            Assert.That(waited, Is.GreaterThanOrEqualTo(TimeSpan.FromMinutes(10)), "intermittent 100 % is regulating, not pinned");
+        }
+
+        [Test]
+        public async Task An_idle_TEC_during_a_cool_is_headroom_not_saturation() {
+            // #1210 — ≤1 % while COOLING means the TEC is not even trying yet: the regulating bound.
+            await using var cam = new SimCamera { FixedTemperature = 5, CoolerPower = 0 };
+            var (svc, delays) = await ConnectedAsync(cam);
+            using var _ = svc;
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.False);
+            Assert.That(TimeSpan.FromTicks(delays.Sum(d => d.Ticks)), Is.GreaterThanOrEqualTo(TimeSpan.FromMinutes(10)));
+        }
+
+        [Test]
+        public void Saturation_is_split_by_direction() {
+            Assert.Multiple(() => {
+                Assert.That(CameraService.Saturated(100, cooling: true), Is.True);
+                Assert.That(CameraService.Saturated(0, cooling: true), Is.False, "idle while cooling is headroom");
+                Assert.That(CameraService.Saturated(0, cooling: false), Is.True, "idle while warming: nothing left to give");
+                Assert.That(CameraService.Saturated(100, cooling: false), Is.False);
+                Assert.That(CameraService.Saturated(50, cooling: true), Is.False);
+                Assert.That(CameraService.Saturated(null, cooling: true), Is.True, "unreadable keeps the short bound");
+            });
+        }
+
+        [Test]
+        public async Task A_second_cooling_call_while_one_is_running_is_refused() {
+            // #1210 — _coolingTargetC is one field; a concurrent call is refused, never raced.
+            await using var cam = new SimCamera { FixedTemperature = 5, CoolerPower = 100 };
+            var firstWaiting = new TaskCompletionSource();
+            var release = new TaskCompletionSource();
+            var (svc, _) = await ConnectedAsync(cam, delayGate: n => {
+                if (n == 1) {
+                    firstWaiting.TrySetResult();
+                    return release.Task;
+                }
+                return Task.CompletedTask;
+            });
+            using var __ = svc;
+
+            var first = svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None);
+            await firstWaiting.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            var log = new StatusLog();
+
+            Assert.That(await svc.CoolCamera(-15, TimeSpan.Zero, log, CancellationToken.None), Is.False);
+            Assert.That(log.Statuses, Has.Some.Contains("still running"));
+            Assert.That(await svc.WarmCamera(TimeSpan.Zero, log, CancellationToken.None), Is.False);
+            Assert.That(cam.Setpoints, Is.EqualTo(new[] { -10.0 }), "the second call wrote nothing");
+
+            release.SetResult();
+            Assert.That(await first, Is.False, "the first stalls on the fixed sensor and gives up");
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.False,
+                "the slot is free again (this one stalls too, but it got to run)");
+            Assert.That(cam.Setpoints, Has.Count.EqualTo(2));
+        }
+
+        [Test]
         public async Task A_cool_whose_sensor_never_moves_with_unknown_cooler_power_still_gives_up() {
             // No readable CoolerPower (unparseable) — must not hang waiting for a power reading.
             await using var cam = new SimCamera { FixedTemperature = 5, CoolerPowerUnreadable = true };
@@ -284,6 +360,43 @@ namespace OpenAstroAra.Test {
             Assert.That(cam.Setpoints[^1], Is.EqualTo(20.0), "warms to NINA's 20 °C");
             Assert.That(cam.CoolerWrites[^1], Is.False, "the cooler is switched off last");
             Assert.That(delays, Does.Contain(TimeSpan.FromSeconds(20)), "settles before the cooler-off");
+        }
+
+        [Test]
+        public async Task A_warm_whose_CoolerOn_read_fails_still_ramps_from_the_cached_state() {
+            // #1210 — one transient Alpaca failure on CoolerOn must not cut the TEC straight from -10.
+            await using var cam = new SimCamera { InitialCoolerOn = true, InitialSetpoint = -10 };
+            var (svc, _) = await ConnectedAsync(cam, refreshPeriod: TimeSpan.FromHours(1));
+            using var __ = svc;
+            Assert.That(svc.GetInfo().CoolerOn, Is.True, "the cache knows the cooler is on");
+            cam.CoolerOnReadFails = true;
+
+            Assert.That(await svc.WarmCamera(TimeSpan.FromMinutes(1), new StatusLog(), CancellationToken.None), Is.True);
+
+            Assert.That(cam.Setpoints, Is.Not.Empty.And.Ordered.Ascending, "ramped");
+            Assert.That(cam.Setpoints[^1], Is.EqualTo(20.0));
+            Assert.That(cam.CoolerWrites[^1], Is.False, "the cooler-off still comes last");
+        }
+
+        [Test]
+        public async Task A_ramp_runs_the_fan_interlock_once_a_minute_not_every_step() {
+            // #1210 — 2-minute cool = 8 set-point steps; the fan sync (switch-list read + fan write)
+            // runs on the first write and once per minute after, not 8 times.
+            await using var cam = new SimCamera();
+            var actuator = new Mock<ICoolingFanActuator>();
+            actuator.Setup(a => a.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => new List<SwitchDto> {
+                new("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected,
+                    [new SwitchPortDto(1, "Fan", Value: 0, Min: 0, Max: 1, CanWrite: true)]),
+            });
+            actuator.Setup(a => a.SetFanValueAsync(It.IsAny<string>(), It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var (svc, _) = await ConnectedAsync(cam, fan: () => actuator.Object);
+            using var __ = svc;
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.FromMinutes(2), new StatusLog(), CancellationToken.None), Is.True);
+
+            Assert.That(cam.Setpoints, Has.Count.GreaterThanOrEqualTo(7), "the ramp did step every 15 s");
+            actuator.Verify(a => a.GetAllAsync(It.IsAny<CancellationToken>()), Times.Exactly(2), "first write + the one-minute mark");
+            actuator.Verify(a => a.SetFanValueAsync("sw-5", It.IsAny<SwitchValueRequestDto>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
         [Test]

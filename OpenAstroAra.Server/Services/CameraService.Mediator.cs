@@ -339,12 +339,19 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// <summary>Sensor poll spacing while waiting for the final set-point (NINA: 5 s).</summary>
     internal static readonly TimeSpan CoolingPollInterval = TimeSpan.FromSeconds(5);
     /// <summary>Give up after this long without the sensor closing on the target by
-    /// <see cref="CoolingProgressC"/> while the TEC is pinned (≥99 % or ≤1 %) or its power is
-    /// unreadable (NINA: 2 min at saturated power).</summary>
+    /// <see cref="CoolingProgressC"/> while the TEC has been pinned for the WHOLE of it — ≥99 % on a
+    /// cool, ≤1 % on a warm — or its power is unreadable (NINA: 2 min at saturated power). #1210:
+    /// the saturated reading must persist for the full stall; one 100 % sample from a driver that
+    /// regulates at full power for a while no longer puts the whole descent under this bound, and
+    /// ≤1 % during a cool is headroom (the TEC is idling), never saturation.</summary>
     internal static readonly TimeSpan CoolingStallTimeout = TimeSpan.FromMinutes(2);
-    /// <summary>The same, while the TEC still reports headroom (1–99 %). NINA waited forever here;
+    /// <summary>The same, while the TEC still reports headroom. NINA waited forever here;
     /// a bound keeps a regulator that settles just outside tolerance from hanging the sequence.</summary>
     internal static readonly TimeSpan CoolingRegulatingTimeout = TimeSpan.FromMinutes(10);
+    /// <summary>#1210 — how often a ramp re-runs the cooling-fan interlock (switch-list read + fan
+    /// write) while it steps the set-point: the §58 warm ramp's once a minute, not every 15 s step.
+    /// The first write of a ramp always syncs (that is the hazardous off→on edge).</summary>
+    internal static readonly TimeSpan CoolingFanSyncInterval = TimeSpan.FromMinutes(1);
     /// <summary>Pause at the warm target before the cooler-off (NINA: 20 s).</summary>
     internal static readonly TimeSpan WarmCoolerOffSettle = TimeSpan.FromSeconds(20);
     /// <summary>Cooling is done at target + 1 °C, warming at target − 1 °C (NINA).</summary>
@@ -353,7 +360,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// <summary><see cref="AtTargetTemp"/> tolerance (NINA's CameraVM.AtTargetTemp: ±2 °C).</summary>
     internal const double AtTargetToleranceC = 2.0;
     /// <summary>WarmCamera's set-point target (NINA): a TEC cannot warm past ambient, so on a
-    /// colder night the warm stalls short of it and still switches the cooler off.</summary>
+    /// colder night the warm stalls short of it and still switches the cooler off. Deliberately
+    /// NOT <see cref="UnattendedShutdownService.WarmTargetC"/> (10 °C), decided in #1210: this is an
+    /// operator-authored step (imported NINA plans expect NINA's 20 °C and may give it an hour),
+    /// whereas the §58 unattended warm-up is a time-capped safety ramp that only needs the sensor
+    /// off the deep-cold shock before the daemon switches the TEC off on its own.</summary>
     internal const double WarmCameraTargetC = 20.0;
 
     /// <summary>Test seam for the cooling ramp's waits (ramps run minutes; tests run them instantly).</summary>
@@ -362,6 +373,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     // The final target of an in-flight CoolCamera/WarmCamera (the device set-point read-back is only
     // the current ramp step). NaN when no sequencer cooling is running. Guarded by _gate.
     private double _coolingTargetC = double.NaN;
+    // #1210 — one sequencer cooling call at a time: a second CoolCamera/WarmCamera while one is in
+    // flight would clobber _coolingTargetC and fight the ramp for the set-point. Not reachable
+    // from the single sequencer executor today; refused with a clear reason rather than raced.
+    // Guarded by _gate.
+    private bool _sequencerCoolingActive;
 
     /// <summary>The in-flight sequencer cooling target, else the cooler's set-point read-back while
     /// the cooler is on; NaN when disconnected or the cooler is off.</summary>
@@ -400,7 +416,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     public async Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         const string operation = "Cooling";
-        var refusal = CoolingRefusal(needsSetpoint: true);
+        var refusal = BeginSequencerCooling(needsSetpoint: true);
         if (refusal is not null) {
             return CoolingFailed(operation, refusal, progress);
         }
@@ -418,7 +434,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // camera that disconnected mid-ramp.
             return CoolingFailed(operation, ex.Message, progress);
         } finally {
-            SetCoolingTarget(double.NaN);
+            EndSequencerCooling();
         }
     }
 
@@ -429,10 +445,12 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// off (or whose state cannot be read) is never switched on; it only gets the cooler-off.
     /// Cancellation (an operator stopping the sequence) skips the cooler-off and leaves the TEC
     /// holding, unlike the §58 unattended warm ramp, which must always reach its cooler-off.
+    /// #1210: the on/off decision is one direct read backed by the §32.4 cache — a single transient
+    /// Alpaca failure on <c>CoolerOn</c> must not skip the ramp and cut a TEC straight from −20 °C.
     /// </summary>
     public async Task<bool> WarmCamera(TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         const string operation = "Warming";
-        var refusal = CoolingRefusal(needsSetpoint: false);
+        var refusal = BeginSequencerCooling(needsSetpoint: false);
         if (refusal is not null) {
             return CoolingFailed(operation, refusal, progress);
         }
@@ -441,12 +459,22 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             var telemetry = await ReadCoolingTelemetryAsync().ConfigureAwait(false)
                 ?? throw new InvalidOperationException("camera is not connected");
             bool canSetTemperature;
+            bool? coolerOn;
+            double temperature;
             lock (_gate) {
                 canSetTemperature = _capabilities?.CanSetTemperature != false;
+                // The direct read decides; a read that threw this pass falls back to the cached
+                // state when the refresh pass knows it (SetCoolerAsync's interlock reads the same
+                // cache). Unknown both ways still only gets the cooler-off below.
+                coolerOn = telemetry.CoolerOn ?? (_runtime.CoolerStateKnown ? _runtime.CoolerOn : null);
+                temperature = double.IsNaN(telemetry.Temperature) ? _runtime.CcdTemperature ?? double.NaN : telemetry.Temperature;
             }
-            if (telemetry.CoolerOn == true) {
-                if (canSetTemperature && !double.IsNaN(telemetry.Temperature)
-                        && telemetry.Temperature < WarmCameraTargetC - CoolingReachedToleranceC) {
+            if (coolerOn is null) {
+                LogSequencerWarmCoolerUnknown();
+            }
+            if (coolerOn == true) {
+                if (canSetTemperature && !double.IsNaN(temperature)
+                        && temperature < WarmCameraTargetC - CoolingReachedToleranceC) {
                     SetCoolingTarget(WarmCameraTargetC);
                     var shortfall = await RegulateTemperatureAsync(WarmCameraTargetC, duration, cooling: false, progress, ct).ConfigureAwait(false);
                     if (shortfall is not null) {
@@ -462,7 +490,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         } catch (InvalidOperationException ex) {
             return CoolingFailed(operation, ex.Message, progress);
         } finally {
-            SetCoolingTarget(double.NaN);
+            EndSequencerCooling();
         }
     }
 
@@ -474,6 +502,18 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         var label = cooling ? "Cooling camera" : "Warming camera";
         var start = (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN;
         var wrote = false;
+        // #1210 — the fan interlock runs on the first write and then once per
+        // CoolingFanSyncInterval of ramp time, not on every 15 s set-point step.
+        var sinceFanSync = TimeSpan.Zero;
+        async Task WriteStepAsync(double step) {
+            ct.ThrowIfCancellationRequested();
+            var syncFan = !wrote || sinceFanSync >= CoolingFanSyncInterval;
+            await SetCoolerAsync(enabled: true, step, syncFan, ct).ConfigureAwait(false);
+            wrote = true;
+            if (syncFan) {
+                sinceFanSync = TimeSpan.Zero;
+            }
+        }
         try {
             double? last = null;
             if (duration > TimeSpan.Zero && !double.IsNaN(start) && Math.Abs(start - target) > CoolingReachedToleranceC) {
@@ -484,25 +524,23 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                         ? target
                         : Math.Round(start + ((target - start) * fraction), MidpointRounding.AwayFromZero);
                     if (step != last) {
-                        ct.ThrowIfCancellationRequested();
-                        await SetCoolerAsync(enabled: true, step, ct).ConfigureAwait(false);
-                        wrote = true;
+                        await WriteStepAsync(step).ConfigureAwait(false);
                         last = step;
                     }
                     ReportCooling(progress, label, target, fraction);
                     await CoolingDelay(CoolingRampInterval, ct).ConfigureAwait(false);
+                    sinceFanSync += CoolingRampInterval;
                 }
             }
             if (last != target) {
-                ct.ThrowIfCancellationRequested();
-                await SetCoolerAsync(enabled: true, target, ct).ConfigureAwait(false);
-                wrote = true;
+                await WriteStepAsync(target).ConfigureAwait(false);
             }
 
             var telemetry = await ReadCoolingTelemetryAsync().ConfigureAwait(false)
                 ?? throw new InvalidOperationException("camera is not connected");
             var best = Distance(telemetry.Temperature, target);
             var idle = TimeSpan.Zero;
+            var pinned = TimeSpan.Zero; // consecutive no-progress polls at saturated (or unreadable) power
             while (!Reached(telemetry.Temperature, target, cooling)) {
                 var span = Math.Abs(start - target);
                 ReportCooling(progress, label, target, double.IsNaN(span) || span == 0 ? 0 : 1 - (Distance(telemetry.Temperature, target) / span));
@@ -513,11 +551,12 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 if (best - distance >= CoolingProgressC) {
                     best = distance;
                     idle = TimeSpan.Zero;
+                    pinned = TimeSpan.Zero;
                     continue;
                 }
                 idle += CoolingPollInterval;
-                var regulating = telemetry.CoolerPowerPct is > 1 and < 99;
-                if (idle >= (regulating ? CoolingRegulatingTimeout : CoolingStallTimeout)) {
+                pinned = Saturated(telemetry.CoolerPowerPct, cooling) ? pinned + CoolingPollInterval : TimeSpan.Zero;
+                if (pinned >= CoolingStallTimeout || idle >= CoolingRegulatingTimeout) {
                     var power = telemetry.CoolerPowerPct is double p ? p.ToString("0", CultureInfo.InvariantCulture) + " %" : "unknown";
                     return string.Create(CultureInfo.InvariantCulture,
                         $"could not reach {target:0.#} °C (sensor at {telemetry.Temperature:0.#} °C, cooler power {power}, no progress for {idle.TotalMinutes:0} min)");
@@ -535,6 +574,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     private static double Distance(double temperature, double target) =>
         double.IsNaN(temperature) ? double.PositiveInfinity : Math.Abs(temperature - target);
 
+    /// <summary>Whether the TEC has nothing left to give in the direction it is asked to move: full
+    /// power on a cool, idle on a warm (a TEC cannot push the sensor above ambient). Unreadable
+    /// power counts as saturated so the shorter bound still applies (#1187). ≤1 % during a cool is
+    /// headroom, not saturation (#1210).</summary>
+    internal static bool Saturated(double? coolerPowerPct, bool cooling) =>
+        coolerPowerPct is not double power || (cooling ? power >= 99 : power <= 1);
+
     private static bool Reached(double temperature, double target, bool cooling) =>
         !double.IsNaN(temperature)
         && (cooling ? temperature <= target + CoolingReachedToleranceC : temperature >= target - CoolingReachedToleranceC);
@@ -551,9 +597,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         }
     }
 
-    /// <summary>Why a sequencer cooling call cannot start, or null. Reads the capabilities first if
-    /// the refresh has not yet; unknown capabilities let the write be attempted.</summary>
-    private string? CoolingRefusal(bool needsSetpoint) {
+    /// <summary>Why a sequencer cooling call cannot start, or null — in which case the call now
+    /// OWNS the sequencer cooling slot and must <see cref="EndSequencerCooling"/>. Reads the
+    /// capabilities first if the refresh has not yet; unknown capabilities let the write be
+    /// attempted. A second call while one is in flight is refused (#1210).</summary>
+    private string? BeginSequencerCooling(bool needsSetpoint) {
         bool connected;
         CameraCapabilitiesDto? caps;
         lock (_gate) {
@@ -569,7 +617,24 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 caps = _capabilities;
             }
         }
-        return CoolerCapabilityError(caps?.CanSetTemperature, caps?.HasCooler, needsSetpoint ? 0.0 : null);
+        var refusal = CoolerCapabilityError(caps?.CanSetTemperature, caps?.HasCooler, needsSetpoint ? 0.0 : null);
+        if (refusal is not null) {
+            return refusal;
+        }
+        lock (_gate) {
+            if (_sequencerCoolingActive) {
+                return "another camera cooling step is still running";
+            }
+            _sequencerCoolingActive = true;
+        }
+        return null;
+    }
+
+    private void EndSequencerCooling() {
+        lock (_gate) {
+            _coolingTargetC = double.NaN;
+            _sequencerCoolingActive = false;
+        }
     }
 
     private bool CoolingFailed(string operation, string reason, IProgress<ApplicationStatus>? progress) {
@@ -654,6 +719,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer WarmCamera stopped short of ambient ({Reason}); switching the cooler off anyway")]
     private partial void LogSequencerWarmShort(string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sequencer WarmCamera: cooler state unreadable (direct read failed, cache unknown); switching the cooler off without a ramp")]
+    private partial void LogSequencerWarmCoolerUnknown();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sequencer {Operation} failed: {Reason}")]
     private partial void LogSequencerCoolingFailed(string operation, string reason);
