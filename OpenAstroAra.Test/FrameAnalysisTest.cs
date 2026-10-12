@@ -92,6 +92,51 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task UpdateAnalysis_with_a_star_shape_writes_the_eccentricity_column_and_a_null_keeps_it() {
+            // #1264 — the long-dormant frames.eccentricity column is written by the shape-carrying overload.
+            var id = Guid.NewGuid();
+            await _repo.InsertAsync(Frame(id), CancellationToken.None);
+
+            await _repo.UpdateAnalysisAsync(id, 2.34, 128, 0.42, CancellationToken.None);
+            Assert.That(await EccentricityOf(id), Is.EqualTo(0.42).Within(1e-9));
+
+            await _repo.UpdateAnalysisAsync(id, 2.40, 130, CancellationToken.None); // the HFR-only write
+            Assert.That(await EccentricityOf(id), Is.EqualTo(0.42).Within(1e-9), "a shape-less write keeps the measured value");
+        }
+
+        private async Task<double?> EccentricityOf(Guid id) {
+            await using var conn = _db.OpenConnection();
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT eccentricity FROM frames WHERE id = $id";
+            cmd.Parameters.AddWithValue("$id", id.ToString("D"));
+            var value = await cmd.ExecuteScalarAsync(CancellationToken.None);
+            return value is null || value is DBNull ? null : Convert.ToDouble(value, CultureInfo.InvariantCulture);
+        }
+
+        [Test]
+        public async Task The_real_detector_records_the_star_shape_into_the_column_and_the_quality_feed() {
+            // #1264 — no metric override: the §59.5 detector runs on a synthetic star field, and the
+            // analysis worker must (a) call the shape-carrying write and (b) feed the unguided guard.
+            var frames = new Mock<IFrameRepository>();
+            var feed = new FrameQualityFeed();
+            using var camera = new CameraService(frames: frames.Object, imageHistory: new ImageHistoryService(), frameQuality: feed);
+            var id = Guid.NewGuid();
+            var pixels = SyntheticSky.Render(640, 480, 1.6, stars: 60);
+
+            await camera.AnalyzeFrameAsync(id, pixels, 640, 480, "L", exposureSec: 120);
+
+            frames.Verify(f => f.UpdateAnalysisAsync(id, It.IsAny<double>(), It.IsAny<int>(),
+                It.Is<double?>(e => e.HasValue && e.Value >= 0 && e.Value <= 1), It.IsAny<CancellationToken>()), Times.Once);
+            frames.Verify(f => f.UpdateAnalysisAsync(id, It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never,
+                "the shape-less write is only for a shape-less measurement");
+            Assert.That(feed.LatestLight, Is.Not.Null);
+            Assert.That(feed.LatestLight!.FrameId, Is.EqualTo(id));
+            Assert.That(feed.LatestLight.ExposureSeconds, Is.EqualTo(120));
+            Assert.That(feed.LatestLight.Eccentricity, Is.InRange(0, 1));
+            Assert.That(feed.LatestLight.FwhmPx, Is.GreaterThan(0));
+        }
+
+        [Test]
         public async Task Analysis_writes_back_and_feeds_the_session_history() {
             using var camera = Analyzer(out var frames, out var history, (_, _, _) => (2.5, 42));
             var id = Guid.NewGuid();
