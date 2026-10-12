@@ -90,9 +90,15 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
 
 class _FakeAlpacaNames implements AlpacaDeviceNamesClient {
   final calls = <String>[];
+  /// While > 0, every lookup answers empty (an unreachable management API).
+  int failuresLeft = 0;
   @override
   Future<Map<String, String>> fetchNames(String host, int port) async {
     calls.add('$host:$port');
+    if (failuresLeft > 0) {
+      failuresLeft--;
+      return const {};
+    }
     if (host == '127.0.0.1' && port == 6800) {
       return {
         'camera/0': 'ZWO ASI120MM Mini',
@@ -225,6 +231,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(h.profile.lastPut?.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
     expect(h.equipment.calls, contains('push'));
+  });
+
+  testWidgets('an endpoint that answered nothing is asked again on the next trigger',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings());
+    h.names.failuresLeft = 1; // the management API is briefly unreachable
+    await tester.ensureVisible(find.text('Discover Alpaca'));
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls, ['127.0.0.1:6800']);
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls, ['127.0.0.1:6800', '127.0.0.1:6800'],
+        reason: 'an empty answer is not remembered as resolved');
+    await _pick(tester, 'guider_pick_camera', 'ZWO ASI120MM Mini (127.0.0.1:6800/0)');
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls.length, 2, reason: 'a resolved endpoint is not refetched');
   });
 
   testWidgets('a stored Alpaca host/port is resolved on load so its devices are pickable',

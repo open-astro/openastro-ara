@@ -163,12 +163,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   /// Read the real device names on each "host:port" endpoint not yet
   /// resolved (parallel; an unreachable server costs only its own timeout)
   /// and fold them into [_alpacaNames]. Best-effort: the generic labels stay
-  /// when the management API can't be reached.
+  /// when the management API can't be reached, and an endpoint that answered
+  /// nothing is asked again on the next trigger (review r1: a brief outage
+  /// must not leave the labels generic until the panel is reopened).
   Future<void> _resolveAlpacaNames(Iterable<String> endpoints) async {
     final namesApi = ref.read(alpacaDeviceNamesApiProvider);
     final targets = <({String endpoint, String host, int port})>[];
-    for (final endpoint in endpoints) {
-      if (!_namedEndpoints.add(endpoint)) continue;
+    for (final endpoint in endpoints.toSet()) {
+      if (_namedEndpoints.contains(endpoint)) continue;
       final parsed = parseHostPort(endpoint);
       if (parsed.host == null || parsed.port == null) continue;
       targets.add((endpoint: endpoint, host: parsed.host!, port: parsed.port!));
@@ -183,6 +185,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     if (!mounted) return;
     setState(() {
       for (final result in fetched) {
+        if (result.names.isEmpty) continue; // retry next time
+        _namedEndpoints.add(result.endpoint);
         result.names.forEach((typeSlot, name) {
           _alpacaNames['${result.endpoint}|$typeSlot'] = name;
         });

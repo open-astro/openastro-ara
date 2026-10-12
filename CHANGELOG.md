@@ -37,7 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
-- **Settings → Guider pickers save a device, not a bare driver name (#1306).** The guide camera and mount lists used to offer only the daemon's generic "Alpaca Camera" / "Alpaca Mount"; saved as-is with no Alpaca host or port, the push never told the guider which server to use and it sat on localhost:0 with nothing connected. The pickers now list every real device on the stored server and on any server Discover Alpaca finds as `Name (host:port/N)`, picking a camera fills the Alpaca host and port, and Apply refuses a bare selection with the reason. The daemon refuses the same push with a 422 instead of leaving the guider disconnected.
+- **Settings → Guider pickers save a device, not a bare driver name (#1306).** The guide camera and mount lists used to offer only the daemon's generic "Alpaca Camera" / "Alpaca Mount"; saved as-is with no Alpaca host or port, the push never told the guider which server to use and it sat on localhost:0 with nothing connected. The pickers now list every real device on the stored server and on any server Discover Alpaca finds as `Name (host:port/N)`, picking a camera fills the Alpaca host and port, and Apply refuses a bare selection with the reason. The daemon refuses the same push with a 422 instead of leaving the guider disconnected. A profile that already held a bare `Alpaca …` selection with no Alpaca host and port needs a re-pick once, even if the guider still had a server configured on its own side.
 
 ### Removed
 
