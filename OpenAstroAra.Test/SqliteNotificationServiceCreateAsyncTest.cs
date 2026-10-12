@@ -144,6 +144,30 @@ namespace OpenAstroAra.Test {
             Assert.That(hit.Message, Does.Not.Contain("unattended hours"));
         }
 
+        // #1138 — the explicit window reaches the gate: a 10:00–14:00 site-local (UTC here) window
+        // escalates at noon although the sun is up, and not at midnight although the sun is down.
+        private SqliteNotificationService WindowedService(DateTimeOffset now, string start, string end) {
+            var profiles = new InMemoryProfileStore();
+            profiles.PutSiteSettings(profiles.GetSiteSettings() with { LatitudeDeg = 40, LongitudeDeg = 0, TimeZone = "UTC" });
+            profiles.PutSafetyPolicies(profiles.GetSafetyPolicies() with { UnattendedEscalation = true, UnattendedWindowStart = start, UnattendedWindowEnd = end });
+            return new SqliteNotificationService(_db, logger: null, profiles) { UtcNow = () => now };
+        }
+
+        [Test]
+        public async Task An_explicit_window_decides_the_escalation_not_the_sun() {
+            var daytimeWindow = WindowedService(WinterNoonUtc, "10:00", "14:00");
+            var noonId = Guid.NewGuid();
+            await daytimeWindow.CreateAsync(Sample(noonId, NotificationSeverity.Warning, "Dew heater dropout"), CancellationToken.None);
+            var noon = (await daytimeWindow.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == noonId);
+            Assert.That(noon.Severity, Is.EqualTo(NotificationSeverity.Error), "inside the explicit window at noon: escalated although the sun is up");
+
+            var atMidnight = WindowedService(WinterMidnightUtc, "10:00", "14:00");
+            var midnightId = Guid.NewGuid();
+            await atMidnight.CreateAsync(Sample(midnightId, NotificationSeverity.Warning, "Dew heater dropout"), CancellationToken.None);
+            var midnight = (await atMidnight.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == midnightId);
+            Assert.That(midnight.Severity, Is.EqualTo(NotificationSeverity.Warning), "outside the explicit window at midnight: untouched although the sun is down");
+        }
+
         [Test]
         public async Task Critical_is_already_the_ceiling_and_gains_no_suffix() {
             var svc = UnattendedAwareService(WinterMidnightUtc);
