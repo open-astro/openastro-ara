@@ -1479,13 +1479,18 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// after a restart with no disk (#1207; see <see cref="StoreMountProbe"/>).
     /// Best-effort: an unreadable /proc/self/mounts never blocks capture.
     /// </summary>
+    /// <summary>#1231 test seam for <see cref="StoreEjected"/>: the store-mount probe. The default
+    /// answers null off Linux (no /proc), which reads as "not ejected" — the same outcome the old
+    /// explicit OS guard produced.</summary>
+    internal Func<bool?> StoreMountedProbe { get; set; } = StoreMountProbe.IsStoreMounted;
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-capture probe over profile + /proc reads; a probe fault must degrade to 'capture proceeds'. CA1031's log-and-recover boundary applies.")]
     internal bool StoreEjected(out string saveDirectory) {
         const string mountPoint = StoreMountProbe.MountPoint;
         saveDirectory = string.Empty;
         try {
-            if (_profileStore is null || !OperatingSystem.IsLinux()) {
+            if (_profileStore is null) {
                 return false;
             }
             var dir = _profileStore.GetStorageSettings().SaveDirectory;
@@ -1496,7 +1501,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             saveDirectory = dir;
             // null (unreadable table) → "not ejected": a probe fault must
             // never cost the user a frame.
-            return StoreMountProbe.IsStoreMounted() == false;
+            return StoreMountedProbe() == false;
         } catch (Exception ex) {
             LogPreCaptureDiskProbeFailed(ex);
             return false;

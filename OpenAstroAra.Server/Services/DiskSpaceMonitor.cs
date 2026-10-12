@@ -221,9 +221,24 @@ namespace OpenAstroAra.Server.Services {
         // same save volume the monitor watches, with the same longest-prefix root resolution.
         /// <summary>Free + total bytes of the volume holding <paramref name="saveDir"/> —
         /// the §29 storage panel's real numbers (replaces a hardcoded placeholder).</summary>
-        internal static (long Free, long Total)? TryGetSpace(string saveDir) {
+        internal static (long Free, long Total)? TryGetSpace(string saveDir) => TryGetSpace(saveDir, StoreMountProbe.IsStoreMounted);
+
+        /// <summary>#1231 — a save directory under the §29 store path whose disk is NOT mounted (the
+        /// systemd self-bind of the empty directory, or a disk unplugged under it) has no volume to
+        /// report: <c>DriveInfo</c> would hand back the ROOT disk's free space as the store's. Null,
+        /// like a mount that is not there yet. A probe that cannot answer (null) trusts DriveInfo.</summary>
+        internal static bool StoreEjectedFor(string fullPath, Func<bool?> storeMounted) {
+            const string mount = StoreMountProbe.MountPoint;
+            var underStore = fullPath == mount || fullPath.StartsWith(mount + "/", StringComparison.Ordinal);
+            return underStore && storeMounted() == false;
+        }
+
+        internal static (long Free, long Total)? TryGetSpace(string saveDir, Func<bool?> storeMounted) {
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             var full = Path.GetFullPath(saveDir);
+            if (StoreEjectedFor(full, storeMounted)) {
+                return null;
+            }
             var drives = DriveInfo.GetDrives().Where(IsReadySafe).ToList();
             var root = LongestPrefixRoot(full, drives.Select(d => d.RootDirectory.FullName), comparison);
             if (root is null) {
@@ -247,11 +262,16 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        internal static long? TryGetFreeBytes(string saveDir) {
+        internal static long? TryGetFreeBytes(string saveDir) => TryGetFreeBytes(saveDir, StoreMountProbe.IsStoreMounted);
+
+        internal static long? TryGetFreeBytes(string saveDir, Func<bool?> storeMounted) {
             // Windows drive letters are case-insensitive (DriveInfo uppercases "D:\" but the save dir may be
             // "d:\..."); POSIX paths are case-sensitive. Match both the prefix test and the drive lookup the same way.
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             var full = Path.GetFullPath(saveDir);
+            if (StoreEjectedFor(full, storeMounted)) {
+                return null; // #1231 — not the root disk's number dressed up as the store's
+            }
             var drives = DriveInfo.GetDrives().Where(IsReady).ToList();
             var root = LongestPrefixRoot(full, drives.Select(d => d.RootDirectory.FullName), comparison);
             if (root is null) {

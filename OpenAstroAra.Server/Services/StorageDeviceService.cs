@@ -92,6 +92,11 @@ namespace OpenAstroAra.Server.Services {
         // request/result round trip is exercised end to end without root or systemd.
         private readonly Func<string, string[], CancellationToken, Task<(int ExitCode, string Output)>> run;
 
+        /// <summary>#1231 — "is a disk of its own mounted at the store path?" (null = unknown). lsblk's
+        /// mountpoint column alone would call the SD-card partition the ARA store after a restart
+        /// with no disk (systemd binds the empty directory into the namespace). Test seam.</summary>
+        internal Func<bool?> StoreMounted { get; set; } = StoreMountProbe.IsStoreMounted;
+
         public StorageDeviceService(ILogger<StorageDeviceService> logger)
             : this(logger, StorageHelperPaths.Default, null) {
         }
@@ -158,31 +163,41 @@ namespace OpenAstroAra.Server.Services {
                 return [];
             }
             var systemDisks = await SystemDisksAsync(ct).ConfigureAwait(false);
-            var devices = new List<StorageDeviceDto>();
+            // #1231 — a probe that cannot answer (null) leaves lsblk's word standing.
+            var storeMounted = StoreMounted() != false;
             try {
-                using var doc = JsonDocument.Parse(json);
-                if (!doc.RootElement.TryGetProperty("blockdevices", out var roots)) {
-                    return [];
-                }
-                foreach (var disk in roots.EnumerateArray()) {
-                    Collect(disk, parentModel: Text(disk, "model"), systemDisks, devices);
-                }
+                return ParseDevices(json, systemDisks, storeMounted);
             } catch (JsonException ex) {
                 LogEnumerateFailed(logger, ex);
                 return [];
+            }
+        }
+
+        /// <summary>Pure: lsblk's JSON → the candidate list. <paramref name="storeMounted"/> is the
+        /// probe's verdict on the store path (#1231); without it the root partition reads as the
+        /// ARA store after a restart with no disk. Internal for the unit tests (the OS guard in
+        /// <see cref="ListAsync"/> keeps the live path Linux-only).</summary>
+        internal static IReadOnlyList<StorageDeviceDto> ParseDevices(string json, IReadOnlySet<string> systemDisks, bool storeMounted) {
+            var devices = new List<StorageDeviceDto>();
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("blockdevices", out var roots)) {
+                return [];
+            }
+            foreach (var disk in roots.EnumerateArray()) {
+                Collect(disk, parentModel: Text(disk, "model"), systemDisks, storeMounted, devices);
             }
             return devices;
         }
 
         private static void Collect(JsonElement node, string? parentModel,
-                IReadOnlySet<string> systemDisks, List<StorageDeviceDto> into) {
+                IReadOnlySet<string> systemDisks, bool storeMounted, List<StorageDeviceDto> into) {
             var type = Text(node, "type");
             var path = Text(node, "path");
             var name = Text(node, "name");
 
             if (node.TryGetProperty("children", out var children) && children.ValueKind == JsonValueKind.Array) {
                 foreach (var child in children.EnumerateArray()) {
-                    Collect(child, parentModel ?? Text(node, "model"), systemDisks, into);
+                    Collect(child, parentModel ?? Text(node, "model"), systemDisks, storeMounted, into);
                 }
                 // A disk with partitions is never itself a candidate — the
                 // partitions are what get mounted.
@@ -222,7 +237,9 @@ namespace OpenAstroAra.Server.Services {
                 Removable: Bool(node, "rm"),
                 Transport: NullIfEmpty(Text(node, "tran")),
                 IsSystemDisk: isSystem,
-                IsAraStore: string.Equals(Text(node, "mountpoint"), MountPoint, StringComparison.Ordinal)));
+                // #1231 — the mountpoint column AND the probe: after a restart with no disk the root
+                // partition shows the store path (systemd's self-bind) and must not be offered as the store.
+                IsAraStore: storeMounted && string.Equals(Text(node, "mountpoint"), MountPoint, StringComparison.Ordinal)));
         }
 
         /// <summary>

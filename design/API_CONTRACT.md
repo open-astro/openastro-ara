@@ -504,6 +504,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-12 — Store detection: one probe for `is_ara_store`, the storage numbers and the capture gate (#1231)
+
+**Endpoint(s) or area:** `GET /api/v1/storage/devices` (`StorageDeviceDto.is_ara_store`), `GET /api/v1/profile/storage` free/total bytes and the §29 disk-space monitor, the per-frame pre-capture store gate, the `storage.devices_changed` watcher.
+
+**Decision:** `is_ara_store` is true only when lsblk shows the device at `/media/openastroara` AND the daemon's own mount probe says a filesystem of its own is mounted there; after a restart with no disk the root partition (systemd's self-bind of the empty directory) is no longer offered as the store. The storage free/total numbers and the disk-space monitor return "not resolvable" (null, no false alarm) for a save directory under an ejected store instead of the root disk's figures. The probe itself now reads `/proc/self/mountinfo` first: the store entry's `major:minor` must differ from the nearest ancestor mount's, or, when it is the same device, its `root` must not be the store path inside that ancestor (the systemd self-bind) — so an intentional `mount --bind /srv/frames /media/openastroara` and a btrfs subvolume are stores. A device number with no `/sys/dev/block/<maj:min>` entry (disk unplugged under a namespace-private bind) reads as ejected. `/proc/self/mounts` (the #1207 source-name rule) is the fallback when mountinfo is unreadable; neither readable is "unknown", which every consumer treats as "do not refuse" (capture proceeds, watcher skips the tick, lsblk's column stands).
+
+**Reasoning:** three consumers had three different answers to one question; the probe was already the capture gate's and is the only one that reads the daemon's own namespace. mountinfo carries the two fields that make the decision exact (device number, bind root) where the mounts table only has a device name, which cannot separate a self-bind from a deliberate bind. The detached-disk case was the untested mid-session eject from the #1226 review; the sysfs check answers it without a VM reproduction (not run), by asking the kernel whether the block device still exists.
+
+**Spec ref:** `Services/StoreMountProbe.cs` (`IsStoreMountedFromMountInfo`, `DeviceExists`), `Services/StorageDeviceService.cs` (`ParseDevices`), `Services/DiskSpaceMonitor.cs` (`StoreEjectedFor`), `Services/CameraService.cs` (`StoreEjected`), `Services/StorageDeviceWatcher.cs` (`BuildSnapshot`).
+
+**Related:** #1231, #1226, #1207, §29; tests `StoreDetectionFollowUpsTest`, `StorageStoreMountProbeTest`.
+
+---
+
 ### 2026-10-03 — Smart Focus judges "in focus" against the HFR the sweep measured
 
 **Where:** `GET /api/v1/autofocus/calibration` (`FocusCalibrationDto`), profile JSON `focus_calibration`.

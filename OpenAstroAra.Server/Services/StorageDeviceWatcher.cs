@@ -92,20 +92,28 @@ public sealed partial class StorageDeviceWatcher : BackgroundService {
 
     /// <summary>Block-device names + store-mount presence as one comparable
     /// string; null when the kernel views are momentarily unreadable.</summary>
-    private static string? TrySnapshot() {
+    private string? TrySnapshot() {
         try {
             var blocks = Directory.GetDirectories("/sys/block")
                 .Select(Path.GetFileName)
                 .Where(n => n is not null)
                 .OrderBy(n => n, StringComparer.Ordinal);
-            var mounted = StoreMountProbe.IsStoreMounted();
-            if (mounted is null) {
-                return null;
-            }
-            return string.Join(',', blocks) + "|store=" + (mounted.Value ? "1" : "0");
+            return BuildSnapshot(blocks!, StoreMounted());
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException) {
             return null;
         }
+    }
+
+    /// <summary>#1231 test seam: the store-mount probe (null = unknown this tick).</summary>
+    internal Func<bool?> StoreMounted { get; set; } = StoreMountProbe.IsStoreMounted;
+
+    /// <summary>Pure: block names + store presence as one comparable string; null when the probe
+    /// could not answer, so the tick is skipped rather than diffed against a guess (#1231).</summary>
+    internal static string? BuildSnapshot(IEnumerable<string> blockNames, bool? storeMounted) {
+        if (storeMounted is null) {
+            return null;
+        }
+        return string.Join(',', blockNames) + "|store=" + (storeMounted.Value ? "1" : "0");
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Storage devices changed: {Before} -> {After}.")]
