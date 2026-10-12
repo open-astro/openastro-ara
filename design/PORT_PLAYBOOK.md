@@ -5744,7 +5744,7 @@ Per-fault action is configurable in profile safety policies (§35 extension), wi
 | Fault | Detection | Default action | Notes |
 |---|---|---|---|
 | Camera disconnect / capture error mid-exposure | Alpaca connection error or capture timeout | Reconnect → Pause if persistent | In-flight frame lost; next frame retries |
-| Camera cooling failure (set temp not reached after timeout) | `CCDTemp` vs `SetCCDTemperature` drift > 5°C for > 5 min | Notify | Don't abort — user may want to image at warmer temp |
+| Camera cooling failure (set temp not reached after timeout) | `CCDTemp` vs `SetCCDTemperature` drift > 5°C for > 5 min without closing by ≥0.5°C (an active descent restarts the window, #1210) | Notify | Don't abort — user may want to image at warmer temp |
 | Camera dew heater unexpectedly OFF | Alpaca `DewHeaterPower` queried, expected vs reported | Re-command ON → Notify if still off | Camera-integrated heaters only |
 | Mount loses tracking | Alpaca `Tracking = false` unexpectedly during exposure | Re-enable → Pause if rejected | Common cause of trailed stars |
 | Mount slew error / refuses command | Alpaca slew returns error or doesn't complete | Retry → Abort + park | May indicate physical obstruction |
