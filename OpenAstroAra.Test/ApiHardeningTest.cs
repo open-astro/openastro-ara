@@ -19,6 +19,7 @@ using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -256,6 +257,42 @@ public class FrameFileConfinementTest {
 
             Assert.That(File.Exists(insideVariant), Is.False, "our variant goes");
             Assert.That(File.Exists(outsideVariant), Is.True, "a foreign directory is never enumerated or deleted from");
+        }
+
+        private static void WriteRealFits(string path) {
+            using var fits = OpenAstroAra.Fits.FitsImage.Create(path, 4, 4, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
+            fits.WriteImageData(new ushort[16]);
+        }
+
+        [Test]
+        public async Task Export_plans_only_the_rows_under_the_roots() {
+            var inside = await InsertAsync(Path.Combine(_root, "in.fits"));
+            var outside = await InsertAsync(Path.Combine(_outside, "out.fits"));
+
+            var prep = await _repo.PrepareExportAsync(new BulkExportRequestDto(FrameIds: [inside, outside]), CancellationToken.None);
+
+            Assert.That(prep, Is.Not.Null);
+            Assert.That(prep!.Entries.Select(e => Path.GetFileName(e.Path)), Is.EqualTo(new[] { "in.fits" }),
+                "a readable file outside the roots must never be pulled into the archive");
+        }
+
+        [Test]
+        public async Task Thumbnail_image_loader_and_header_reader_refuse_a_row_outside_the_roots() {
+            var insidePath = Path.Combine(_root, "real.fits");
+            var outsidePath = Path.Combine(_outside, "real.fits");
+            var inside = await InsertAsync(insidePath);
+            var outside = await InsertAsync(outsidePath);
+            WriteRealFits(insidePath);
+            WriteRealFits(outsidePath);
+            var profile = new HeadlessProfileService();
+
+            Assert.That(await _repo.LoadImageDataAsync(inside, profile, CancellationToken.None), Is.Not.Null, "ours loads");
+            Assert.That(await _repo.LoadImageDataAsync(outside, profile, CancellationToken.None), Is.Null, "foreign FITS is not loaded for solving");
+            Assert.That(await _repo.TryReadTargetCoordinatesAsync(outside, CancellationToken.None), Is.Null, "no header peek at a foreign file");
+
+            var thumb = await _repo.GetThumbnailAsync(outside, CancellationToken.None);
+            Assert.That(thumb, Is.Not.Null);
+            Assert.That(thumb!.Value.Bytes.Length, Is.LessThan(2000), "placeholder, not a render of the outside file");
         }
 
         [Test]
