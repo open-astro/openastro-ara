@@ -104,6 +104,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Phd2_section_maps_the_guide_camera_alpaca_unique_id_trimmed() {
+            // #1308 — the pin the push re-resolves against; a dropped or misspelled mapping would leave
+            // it "" and silently skip the identity check.
+            var store = new InMemoryProfileStore();
+            using var svc = new StoreBackedProfileService(store);
+            store.PutPhd2Settings(new Phd2SettingsDto(
+                Host: "h", Port: 4400, Phd2Profile: "p", DitherEnabled: false, DitherEveryNFrames: 1,
+                DitherPixels: 1, SettlePixels: 1, SettleTimeSec: 1, SettleTimeoutSec: 1, ForceCalibrationEachSession: false,
+                GuiderCamera: "Alpaca Camera [127.0.0.1:6800/1]", GuiderCameraAlpacaUniqueId: " ZWO_0 "));
+            Assert.That(svc.ActiveProfile.GuiderSettings.GuiderCameraAlpacaUniqueId, Is.EqualTo("ZWO_0"));
+            Assert.That(JsonSerializer.Deserialize("{\"host\":\"h\",\"port\":1,\"phd2_profile\":\"p\"}",
+                AraJsonSerializerContext.Default.Phd2SettingsDto)!.GuiderCameraAlpacaUniqueId, Is.EqualTo(""), "a pre-#1308 profile reads as unset");
+        }
+
+        [Test]
         public void Phd2_section_normalizes_out_of_range_guider_engine_values() {
             var store = new InMemoryProfileStore();
             using var svc = new StoreBackedProfileService(store);
