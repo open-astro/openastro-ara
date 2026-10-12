@@ -82,7 +82,14 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     /// which callers treat exactly like a missing file. Non-existent files are null too, so the
     /// old <c>IsNullOrEmpty || !File.Exists</c> checks collapse into this one call.
     /// </summary>
-    internal string? ConfinedExistingPath(string? filePath) {
+    internal string? ConfinedExistingPath(string? filePath) => ConfinedPath(filePath, mustExist: true);
+
+    /// <summary>The confinement check alone (<paramref name="mustExist"/> false): a FITS the user
+    /// already removed by hand still has sidecars (previews, thumbnail, histogram cache) beside it
+    /// that a delete-from-disk must sweep, so the delete path confines the catalogued path but does
+    /// not require the FITS itself to be present. A missing file cannot be a symlink, so the
+    /// link check is skipped for it.</summary>
+    internal string? ConfinedPath(string? filePath, bool mustExist) {
         if (string.IsNullOrWhiteSpace(filePath)) {
             return null;
         }
@@ -98,7 +105,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return null;
         }
         if (!File.Exists(full)) {
-            return null;
+            return mustExist ? null : full;
         }
         try {
             // A symlink planted inside a root must not reach outside it either.
@@ -122,6 +129,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         } catch (Exception ex) when (ex is InvalidOperationException or IOException) {
             return false;
         }
+        // Roots are compared as configured, not resolved: a save directory that is itself a symlink
+        // (~/Pictures → an external disk) matches rows written through that same path, which is how
+        // CameraService writes them. A row holding the resolved target instead would be refused;
+        // the daemon never writes such a row, so that stays a documented edge rather than a second
+        // resolution pass on every read.
         var sep = Path.DirectorySeparatorChar;
         foreach (var root in roots) {
             if (string.IsNullOrWhiteSpace(root)) {
@@ -1142,8 +1154,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             // previews, thumbnail) all go; locked/missing files are skipped.
             foreach (var fitsPath in paths) {
                 // #1194 — a row pointing outside the capture roots deletes nothing (and its sidecars
-                // are enumerated from the confined path, so they stay inside the roots too).
-                if (ConfinedExistingPath(fitsPath) is { } confined) {
+                // are enumerated from the confined path, so they stay inside the roots too). The FITS
+                // itself may already be gone (removed over SMB/Finder): its sidecars still go.
+                if (ConfinedPath(fitsPath, mustExist: false) is { } confined) {
                     DeleteFrameFilesBestEffort(confined);
                 }
             }

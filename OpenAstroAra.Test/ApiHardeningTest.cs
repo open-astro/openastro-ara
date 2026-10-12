@@ -217,6 +217,28 @@ public class FrameFileConfinementTest {
         }
 
         [Test]
+        public async Task Delete_from_disk_sweeps_the_sidecars_of_a_fits_the_user_already_removed() {
+            var insidePath = Path.Combine(_root, "gone.fits");
+            var inside = await InsertAsync(insidePath);
+            var stem = Path.ChangeExtension(insidePath, null);
+            await File.WriteAllTextAsync(stem + ".preview.jpg", "p");
+            await File.WriteAllTextAsync(stem + ".thumb.jpg", "t");
+            File.Delete(insidePath); // removed over SMB / in Finder
+
+            var outsidePath = Path.Combine(_outside, "gone2.fits");
+            var outside = await InsertAsync(outsidePath);
+            var outsideStem = Path.ChangeExtension(outsidePath, null);
+            await File.WriteAllTextAsync(outsideStem + ".preview.jpg", "p");
+            File.Delete(outsidePath);
+
+            await _repo.BulkDeleteAsync(new BulkDeleteRequestDto(FrameIds: [inside, outside], DeleteFromDisk: true), idempotencyKey: null, CancellationToken.None);
+
+            Assert.That(File.Exists(stem + ".preview.jpg"), Is.False, "sidecar under a root is swept even though the FITS was already gone");
+            Assert.That(File.Exists(stem + ".thumb.jpg"), Is.False);
+            Assert.That(File.Exists(outsideStem + ".preview.jpg"), Is.True, "a sidecar outside the roots is never touched");
+        }
+
+        [Test]
         public void The_default_roots_follow_the_profile_save_directory() {
             var store = new InMemoryProfileStore();
             var repo = new SqliteFrameRepository(_db, store);
