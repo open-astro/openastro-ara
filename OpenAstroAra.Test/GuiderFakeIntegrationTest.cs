@@ -715,6 +715,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_push_refuses_a_bare_alpaca_selection_before_anything_reaches_the_guider() {
+            // #1306 — the field case: bare "Alpaca Camera"/"Alpaca Mount" with no stored host/port. The
+            // push must throw the typed refusal (→ 422) and send NOTHING, rather than leave the guider on
+            // localhost:0 with its equipment disconnected. Proven red by deleting the guard in PushAsync.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            // Select AFTER connect so the connect-path push (unchanged, best-effort) is not what is measured.
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera";
+            settings.GuiderMount = "Alpaca Mount";
+            settings.GuiderAlpacaHost = "";
+            settings.GuiderAlpacaPort = 0;
+            var before = fake.ReceivedMethods.Count;
+
+            var ex = await Assert.ThrowsAsync<GuiderSelectionInvalidException>(
+                () => svc.PushGuiderProfileAsync("push-bare", CancellationToken.None)).ConfigureAwait(false);
+            Assert.That(ex!.Message, Does.Contain("guide camera 'Alpaca Camera'"));
+            Assert.That(fake.ReceivedMethods.Count, Is.EqualTo(before), "nothing may reach the guider");
+            Assert.That(fake.ReceivedMethods.Skip(before), Does.Not.Contain("set_selected_camera"));
+            Assert.That(fake.ReceivedMethods.Skip(before), Does.Not.Contain("set_connected"));
+        }
+
+        [Test]
         public async Task Profile_push_surfaces_a_failed_equipment_reconnect_as_a_typed_rpc_error() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
