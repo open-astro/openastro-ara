@@ -208,9 +208,13 @@ class ActiveFaultsAccumulator {
   }
 
   bool _applyAction(WsEvent event) {
-    // Only `recovered` is a clear; the in-flight actions (sequence_paused,
-    // reconnecting) and the terminal `gave_up` all leave the device faulted.
-    if (_string(event.payload['action']) != 'recovered') return false;
+    // `recovered` clears, and so does `released` (#1307: the user disconnected
+    // the device mid-recovery; the server resolves the row, so a relaunch
+    // would show no chip and the live view must agree). The in-flight actions
+    // (sequence_paused, reconnecting) and the terminal `gave_up` all leave the
+    // device faulted.
+    final action = _string(event.payload['action']);
+    if (action != 'recovered' && action != 'released') return false;
     final deviceType = _string(event.payload['device_type']);
     if (deviceType == null) return false;
     _recordClear(deviceType, event.ts);

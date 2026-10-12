@@ -102,6 +102,16 @@ void main() {
       expect(snap!.byDeviceType, isEmpty);
     });
 
+    test('a released action clears like recovered (the server resolves the row)', () {
+      final acc = ActiveFaultsAccumulator();
+      acc.apply(_fault('telescope', 'disconnected'));
+      final snap = acc.apply(_event(FaultWsEvents.actionTaken,
+          {'device_type': 'telescope', 'action': 'released'}));
+      expect(snap, isNotNull);
+      expect(snap!.byDeviceType, isEmpty,
+          reason: 'a user who disconnected the mount must not keep a red chip');
+    });
+
     test('equipment.connected heals a red fault but leaves an advisory', () {
       final acc = ActiveFaultsAccumulator();
       acc.apply(_fault('camera', 'disconnected'));

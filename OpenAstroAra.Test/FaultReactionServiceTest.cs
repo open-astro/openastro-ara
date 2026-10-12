@@ -293,8 +293,6 @@ namespace OpenAstroAra.Test {
             // #1307 — the field case: the ladder was still walking when the user disconnected the
             // mount. Before the fix the next rung re-dispatched a connect, which overwrote the user's
             // Disconnected with Error, and the linger later re-adopted the mount (AbortSlew + connect).
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new ReconnectOutcome(1, 1));
             // Rung 1 fails (Error throughout its confirm window); then the user disconnects, so every
             // later read says Disconnected.
             var reconnects = 0;
