@@ -293,8 +293,6 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
 
   void setMeridianRecenter(bool v) =>
       state = state.copyWith(meridianRecenter: v);
-  void setMeridianRecalGuider(bool v) =>
-      state = state.copyWith(meridianRecalGuider: v);
 
   void setMeridianRefocus(MeridianRefocusMode v) =>
       state = state.copyWith(meridianRefocus: v);

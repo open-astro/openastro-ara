@@ -566,9 +566,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
         // Required equipment, each with one §42.3 hot-reconnect attempt. Camera is always required
         // (imaging resumes after the flip); guider/focuser only when the flip flow will use them.
-        // The guider is required when the recovery will recalibrate it (the legacy bool, or the
-        // #1138 mode asking for a full recalibration); the focuser whenever the policy may re-focus.
-        var recalGuider = safety.MeridianRecalGuider || MeridianFlipPolicy.GuiderMode(safety.MeridianGuiderRecal) == MeridianFlipPolicy.GuiderFull;
+        // The guider is required whenever the recovery will bring it back (any mode but "skip" —
+        // the #1138 mode alone decides; the legacy bool is only its wire mirror); the focuser only when
+        // the policy insists on a re-focus.
+        var recalGuider = MeridianFlipPolicy.GuiderMode(safety.MeridianGuiderRecal) != MeridianFlipPolicy.GuiderSkip;
         if (await EnsureConnected(DeviceType.Camera, () => cameraMediator?.GetInfo().Connected ?? false, token) is { } cameraFail) {
             return cameraFail;
         }
