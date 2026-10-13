@@ -24,6 +24,7 @@ import '../settings/phd2_settings_state.dart';
 import '../settings/settings_nav.dart';
 import 'draft_sequences_state.dart';
 import 'rig_capabilities_state.dart';
+import '../tracking/tracking_calibration_state.dart';
 import 'sequence_editor_state.dart';
 import 'sequence_list_state.dart';
 
@@ -322,6 +323,10 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // The rig cooks the run: guiding only with a guider, filter switches only
   // with a wheel, autofocus only with a focuser (see RigCapabilities).
   final rig = await readRigCapabilities(container);
+  // #1264 — an unguided rig's probe starts from the last measured ceiling (or
+  // the prior the daemon kept); best-effort, a failed read just means the
+  // ladder alone decides tonight.
+  final trackingPrior = rig.guider ? null : await _trackingPriorSeconds(container);
 
   // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
   // when the filter set gives a real choice. Null = the user cancelled.
@@ -372,6 +377,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
           rig: rig,
+          trackingPriorSeconds: trackingPrior,
           ditherEveryNExposures: ditherEvery,
           manualFilterSwap: choice.manualFilterSwap,
         ),
@@ -424,6 +430,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     filterPlan: choice.filterPlan,
     startGuiding: choice.guide,
     rig: rig,
+    trackingPriorSeconds: trackingPrior,
     ditherEveryNExposures: ditherEvery,
     manualFilterSwap: choice.manualFilterSwap,
   );
@@ -445,6 +452,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         filterPlan: choice.filterPlan,
         startGuiding: choice.guide,
         rig: rig,
+        trackingPriorSeconds: trackingPrior,
         ditherEveryNExposures: ditherEvery,
         manualFilterSwap: choice.manualFilterSwap,
       ),
@@ -769,5 +777,19 @@ Future<void> _registerMosaicProject(
     unawaited(container.read(mosaicProjectsProvider.notifier).refresh());
   } catch (e) {
     debugPrint('[planning] mosaic project registration failed (run is unaffected): $e');
+  }
+}
+
+/// #1264 — last night's ceiling for the probe's `PriorSeconds`, or null when
+/// none is stored or the read fails (the run must never wait on it).
+Future<double?> _trackingPriorSeconds(ProviderContainer container) async {
+  try {
+    final cal = await container
+        .read(trackingCalibrationProvider.future)
+        .timeout(const Duration(seconds: 5));
+    return cal?.ceilingSeconds;
+  } catch (e) {
+    debugPrint('[planning] tracking prior read failed (ladder only): $e');
+    return null;
   }
 }

@@ -149,6 +149,11 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
         label: 'Plate Solving',
         groupId: 'imaging',
       ),
+      SettingsPanelInfo(
+        id: 'img.unguided',
+        label: 'Unguided',
+        groupId: 'imaging',
+      ),
     ],
   ),
   SettingsGroup(

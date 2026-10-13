@@ -6,6 +6,7 @@ import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_readiness.dart';
 import 'package:openastroara/models/profile_draft.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/services/camera_geometry_api.dart';
 import 'package:openastroara/services/device_facts_source.dart';
 import 'package:openastroara/services/filter_wheel_names_api.dart';
@@ -36,6 +37,7 @@ class _FakeSource implements DeviceFactsSource {
   final CameraGeometry? camera;
   final TelescopeOptics? optics;
   final MountProps? mount;
+  TrackingCalibration? tracking;
   final FilterWheelSlots? wheel;
   FocuserProps? focuser;
   RotatorProps? rotator;
@@ -69,6 +71,8 @@ class _FakeSource implements DeviceFactsSource {
   Future<TelescopeOptics?> telescopeOptics() async => optics;
   @override
   Future<MountProps?> mountProps() async => mount;
+  @override
+  Future<TrackingCalibration?> trackingCalibration() async => tracking;
   @override
   Future<FilterWheelSlots?> filterWheelSlots() async => wheel;
   @override
@@ -367,6 +371,8 @@ class _SlowSource implements DeviceFactsSource {
   Future<TelescopeOptics?> telescopeOptics() async => null;
   @override
   Future<MountProps?> mountProps() async => null;
+  @override
+  Future<TrackingCalibration?> trackingCalibration() async => null;
   @override
   Future<FilterWheelSlots?> filterWheelSlots() async => null;
   @override

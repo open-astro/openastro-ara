@@ -6,6 +6,8 @@ import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/tracking_calibration.dart';
+import 'package:openastroara/state/tracking/tracking_probe_live_state.dart';
 import 'package:openastroara/widgets/sequencer/run_dashboard_band.dart';
 
 class _FakeRunNotifier extends SequenceRunStateNotifier {
@@ -13,6 +15,13 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
   final SequenceRunStateInfo? _v;
   @override
   Future<SequenceRunStateInfo?> build() async => _v;
+}
+
+class _FixedProbe extends TrackingProbeLiveNotifier {
+  _FixedProbe(this._v);
+  final TrackingProbeLive? _v;
+  @override
+  TrackingProbeLive? build() => _v;
 }
 
 class _FakeWheel extends FilterWheelNotifier {
@@ -23,12 +32,13 @@ class _FakeWheel extends FilterWheelNotifier {
 }
 
 Future<void> _pump(WidgetTester tester, SequenceRunStateInfo? run,
-    {FilterWheelStatus? wheel}) async {
+    {FilterWheelStatus? wheel, TrackingProbeLive? probe}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(run)),
         filterWheelProvider.overrideWith(() => _FakeWheel(wheel)),
+        trackingProbeLiveProvider.overrideWith(() => _FixedProbe(probe)),
       ],
       child: const MaterialApp(home: Scaffold(body: RunDashboardBand())),
     ),
@@ -179,5 +189,29 @@ void main() {
     await tester.pump();
     expect(find.textContaining('The rig needs you'), findsNothing);
     expect(find.textContaining('Switch Filter'), findsOneWidget);
+  });
+
+  testWidgets('#1264 the tracking probe strip shows the ladder, then the ceiling', (tester) async {
+    const running = SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running);
+    await _pump(tester, running,
+        probe: const TrackingProbeLive(ladder: [10, 30, 60], priorSeconds: 45, rungs: [
+          TrackingProbeRung(exposureSeconds: 10, eccentricity: 0.2, fwhmPx: 2.0, stars: 120, usable: true, passed: true),
+        ]));
+    expect(find.text('Tracking probe · 1/3 rungs · prior 45 s'), findsOneWidget);
+    expect(find.text('Tracking probe 10 s · ecc 0.20 · FWHM 2.0 px · pass'), findsOneWidget);
+
+    // A fresh scope per case: a live ProviderScope keeps its first overrides.
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, running,
+        probe: const TrackingProbeLive(ladder: [10, 30], done: true, ceilingSeconds: 20, source: 'measured', rungs: [
+          TrackingProbeRung(exposureSeconds: 10, usable: true, passed: true),
+          TrackingProbeRung(exposureSeconds: 30, eccentricity: 0.7, usable: true, passed: false),
+        ]));
+    expect(find.text('Unguided ceiling 20 s (measured)'), findsOneWidget);
+    expect(find.text('Tracking probe 30 s · ecc 0.70 · trailed'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, running);
+    expect(find.textContaining('Tracking probe'), findsNothing, reason: 'guided rig: no strip');
   });
 }

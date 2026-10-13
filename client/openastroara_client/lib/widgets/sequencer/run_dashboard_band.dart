@@ -7,9 +7,11 @@ import '../../state/library/live_library_state.dart';
 import '../../state/sequencer/run_event_ticker.dart';
 import '../../state/sequencer/run_latest_frame_state.dart';
 import '../../models/sequence/sequence_summary.dart';
+import '../../models/tracking_calibration.dart';
 import '../../state/sequencer/run_spotlight_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/tracking/tracking_probe_live_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'run_state_badge.dart';
@@ -204,6 +206,9 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                     Text('$completed/$total', style: AraText.numeric),
                 ],
               ),
+              // #1264 — the Tracking Probe's ladder while it runs, then the
+              // ceiling it chose, the way the autofocus run shows its curve.
+              const _TrackingProbeStrip(),
               // S11 — the run's heartbeat: collapsed shows the newest event;
               // tap to expand the recent history.
               _TickerStrip(
@@ -218,6 +223,40 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
           ),
         );
       },
+    );
+  }
+}
+
+/// #1264 — rung-by-rung readout of the Tracking Probe (exposure, eccentricity,
+/// FWHM, pass/fail) and, once it is done, the unguided ceiling the run uses.
+/// Nothing on a guided rig (no probe ever starts) or before the probe begins.
+class _TrackingProbeStrip extends ConsumerWidget {
+  const _TrackingProbeStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final live = ref.watch(trackingProbeLiveProvider);
+    if (live == null) return const SizedBox.shrink();
+    final dim = AraText.caption.copyWith(color: AraColors.textSecondary);
+    return Padding(
+      padding: const EdgeInsets.only(top: AraSpace.s8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            live.done
+                ? describeTrackingCeiling(live)
+                : 'Tracking probe · ${live.rungs.length}/${live.ladder.length} rungs'
+                    '${live.priorSeconds != null ? ' · prior ${formatExposureSeconds(live.priorSeconds!)}' : ''}',
+            style: AraText.caption.copyWith(
+              color: live.done ? AraColors.textPrimary : AraColors.accentBusy,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          for (final r in live.rungs)
+            Text(describeTrackingRung(r), style: dim, overflow: TextOverflow.ellipsis),
+        ],
+      ),
     );
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
+import '../../models/tracking_calibration.dart';
 import '../ws/ws_providers.dart';
+import '../tracking/tracking_probe_live_state.dart';
 import 'sequence_list_state.dart';
 
 /// §Run-redesign S11 — the run's heartbeat: a quiet reverse-chronological
@@ -80,10 +82,25 @@ class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
     });
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
-      if (event == null || event.type != 'frame.complete') return;
+      if (event == null) return;
       if (ref.read(sequenceRunStateProvider).value?.state?.isActive != true) {
         return;
       }
+      // #1264 — the Tracking Probe's rungs and verdict read like the
+      // autofocus lines: one entry per rung, one for the chosen ceiling.
+      if (event.type == 'tracking_probe.rung_complete') {
+        final rung = TrackingProbeRung.fromJson(event.payload);
+        if (rung != null) _push(RunTickerKind.instruction, describeTrackingRung(rung));
+        return;
+      }
+      if (event.type == 'tracking_probe.completed') {
+        _push(
+          RunTickerKind.instruction,
+          describeTrackingCeiling(foldTrackingProbeEvent(null, event)!),
+        );
+        return;
+      }
+      if (event.type != 'frame.complete') return;
       final filter = event.payload['filter_name'];
       _push(
           RunTickerKind.frame,

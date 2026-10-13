@@ -474,6 +474,8 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 **Related:** #1264 (prior from the bridge's mount spec sheet is AlpacaBridge #815), §59.5 frame analysis, #1068 ETA, §45.13 polar-alignment log (the record's `polar_align_error_arcmin`); tests `UnguidedExposureCeilingTest`, `TrackingProbeServiceTest`.
 
+**Client consumption (2026-10-12, #1264 client half):** `TrackingApi` reads `GET /tracking/calibration` (404 → none) and posts `/recalibrate`; the readiness card shows the ceiling as an informational mount fact, the sub advisor prints "Unguided: about N s" beside the sky-limited figure on a rig with no guider, the run builder sends the stored ceiling as the probe's `PriorSeconds`, the Run tab folds `tracking_probe.*` into a live ladder readout and the ticker, and Settings → Imaging → Unguided shows the record with Recalibrate. No wire change.
+
 ---
 
 ### 2026-10-12 — Center After Drift trigger re-ported; `InputCoordinates` declination sign (#1195)

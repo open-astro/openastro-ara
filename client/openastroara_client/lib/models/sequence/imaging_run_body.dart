@@ -74,6 +74,9 @@ Map<String, dynamic> buildImagingRunBody({
   // [RigCapabilities]). Callers without a rig to read keep the old
   // "assume everything" shape.
   RigCapabilities rig = RigCapabilities.everything,
+  // #1264 — last night's measured ceiling (or the spec-sheet prior) as the
+  // probe's starting point; null = ladder only. Ignored on a guided rig.
+  double? trackingPriorSeconds,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -93,6 +96,7 @@ Map<String, dynamic> buildImagingRunBody({
     ditherEveryNExposures: ditherEveryNExposures,
     manualFilterSwap: manualFilterSwap,
     rig: rig,
+    trackingPriorSeconds: trackingPriorSeconds,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -160,6 +164,7 @@ Map<String, dynamic> buildTargetBlock({
   int? ditherEveryNExposures,
   bool manualFilterSwap = false,
   RigCapabilities rig = RigCapabilities.everything,
+  double? trackingPriorSeconds,
 }) {
   // Cook the block from the rig: a device the rig lacks gets no step and no
   // trigger, whatever the caller asked for. Without a focuser there is
@@ -306,7 +311,11 @@ Map<String, dynamic> buildTargetBlock({
     final longest = plan == null
         ? exposureSeconds
         : plan.map((s) => s.exposureSeconds).reduce(math.max);
-    return _item(trackingProbeType)..['MaxExposure'] = longest;
+    final probe = _item(trackingProbeType)..['MaxExposure'] = longest;
+    if (trackingPriorSeconds != null && trackingPriorSeconds > 0) {
+      probe['PriorSeconds'] = trackingPriorSeconds;
+    }
+    return probe;
   }
 
   // §36/§38 — a dialed framing position angle upgrades the plain slew to a

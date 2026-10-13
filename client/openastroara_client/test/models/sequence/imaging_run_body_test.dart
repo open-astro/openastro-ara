@@ -359,6 +359,31 @@ void main() {
           rig: rig,
         );
 
+    test('#1264 the probe carries last night\'s ceiling as PriorSeconds only when given', () {
+      Map<String, dynamic> probeOf(Map<String, dynamic> b) =>
+          childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
+      final bare = buildTargetBlock(
+          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing);
+      expect(probeOf(bare)['PriorSeconds'], isNull, reason: 'catalog default stays null');
+      final primed = buildTargetBlock(
+          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10,
+          rig: RigCapabilities.nothing, trackingPriorSeconds: 45);
+      expect(probeOf(primed)['PriorSeconds'], 45);
+      expect(probeOf(primed)['MaxExposure'], 300);
+      final viaRun = buildImagingRunBody(
+          raDeg: 1, decDeg: 2, exposureSeconds: 120, frameCount: 10,
+          rig: RigCapabilities.nothing, trackingPriorSeconds: 30);
+      Map<String, dynamic>? findProbe(Map<String, dynamic> node) {
+        if (node[r'$type'] == trackingProbeType) return node;
+        for (final c in childrenOf(node)) {
+          final hit = findProbe(c);
+          if (hit != null) return hit;
+        }
+        return null;
+      }
+      expect(findProbe(viaRun)!['PriorSeconds'], 30);
+    });
+
     test('a bare rig gets slew + tracking probe + loop: no AF, no guiding, no filter', () {
       final b = block(RigCapabilities.nothing, filter: 'Ha');
       final t = types(b);

@@ -1,4 +1,5 @@
 import '../services/camera_geometry_api.dart';
+import 'tracking_calibration.dart';
 import '../services/filter_wheel_names_api.dart';
 import '../services/focuser_props_api.dart';
 import '../services/rotator_props_api.dart';
@@ -177,7 +178,8 @@ abstract final class ReadinessRules {
   }
 
   static DeviceReadiness mount(String label, Uri? setupUri,
-      TelescopeOptics? optics, MountProps? props) {
+      TelescopeOptics? optics, MountProps? props,
+      {TrackingCalibration? tracking}) {
     final facts = <DeviceFact>[];
     final gaps = <DeviceGap>[];
     final fl = optics?.focalLengthMm;
@@ -197,6 +199,18 @@ abstract final class ReadinessRules {
     final rate = props?.maxSlewRateDegPerSec;
     if (rate != null) {
       facts.add(DeviceFact('Max slew rate', '${_num(rate)}°/s'));
+    }
+    // #1264 — the unguided exposure ceiling the last Tracking Probe found (or
+    // the prior it kept). Informational: a guided rig never needs it, and an
+    // unguided one measures it on its first run, so its absence is no gap.
+    if (tracking != null) {
+      final d = tracking.measuredUtc.toLocal();
+      final when =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      facts.add(DeviceFact(
+          'Unguided ceiling',
+          '${formatExposureSeconds(tracking.ceilingSeconds)} · '
+              '${tracking.measured ? 'measured' : 'prior'} $when'));
     }
     return DeviceReadiness(
       type: EquipmentDeviceType.mount,

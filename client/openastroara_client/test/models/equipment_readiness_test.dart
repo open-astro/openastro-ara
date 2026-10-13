@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_readiness.dart';
+import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/services/camera_geometry_api.dart';
 import 'package:openastroara/services/filter_wheel_names_api.dart';
 import 'package:openastroara/services/focuser_props_api.dart';
@@ -74,6 +75,24 @@ void main() {
       expect(r.label, 'iOptron CEM70');
       expect(r.facts.map((f) => f.value),
           containsAll(['530 mm', '106 mm', '4°/s']));
+    });
+
+    test('#1264 a stored tracking ceiling is an informational fact; none is no gap', () {
+      final bare = ReadinessRules.mount('CEM70', null,
+          const TelescopeOptics(focalLengthMm: 530, apertureMm: 106), const MountProps());
+      expect(bare.facts.map((f) => f.label), isNot(contains('Unguided ceiling')));
+      expect(bare.gaps, isEmpty);
+
+      final r = ReadinessRules.mount(
+          'CEM70',
+          null,
+          const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
+          const MountProps(),
+          tracking: TrackingCalibration(
+              ceilingSeconds: 45, measuredUtc: DateTime.utc(2026, 10, 11, 23), source: 'measured'));
+      expect(r.state, ReadinessState.ready);
+      final fact = r.facts.singleWhere((f) => f.label == 'Unguided ceiling');
+      expect(fact.value, startsWith('45 s · measured 2026-10-1'));
     });
 
     test('missing focal length is a required gap even with aperture', () {

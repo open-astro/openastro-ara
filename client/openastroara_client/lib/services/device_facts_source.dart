@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../models/tracking_calibration.dart';
+import 'tracking_api.dart';
 
 import '../models/discovered_device.dart';
 import '../models/server.dart';
@@ -32,6 +34,10 @@ abstract interface class DeviceFactsSource {
   Future<FilterWheelSlots?> filterWheelSlots();
   Future<FocuserProps?> focuserProps();
   Future<RotatorProps?> rotatorProps();
+
+  /// #1264 — the stored unguided tracking ceiling; null when never measured
+  /// (or the daemon predates it).
+  Future<TrackingCalibration?> trackingCalibration();
 
   void close();
 }
@@ -108,6 +114,16 @@ class AraDeviceFactsSource implements DeviceFactsSource {
 
   @override
   Future<RotatorProps?> rotatorProps() => RotatorPropsApi(_server).read();
+
+  @override
+  Future<TrackingCalibration?> trackingCalibration() async {
+    final api = TrackingApi(_server);
+    try {
+      return await api.read();
+    } finally {
+      api.close();
+    }
+  }
 
   @override
   void close() => _discovery.close();

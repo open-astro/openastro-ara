@@ -13,6 +13,10 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/optimal_sub_local.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/widgets/sequencer/optimal_sub_advisor.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/tracking_calibration.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
 
 const _switchFilter =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
@@ -254,6 +258,8 @@ void main() {
       CameraElectronics electronics = _rigElectronics,
       FilterSetSettings filterSet = _rigFilters,
       SiteSettings site = _rigSite,
+      GuiderStatus? guider,
+      TrackingCalibration? tracking,
     }) async {
       container = ProviderContainer(overrides: [
         opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
@@ -261,6 +267,10 @@ void main() {
             .overrideWith(() => _SeededElectronics(electronics)),
         filterSetProvider.overrideWith(() => _SeededFilters(filterSet)),
         siteSettingsProvider.overrideWith(() => _SeededSite(site)),
+        // #1264 — the rig's guider and stored tracking ceiling, no daemon.
+        guiderStatusProvider.overrideWith(() => _SeededGuider(guider)),
+        trackingCalibrationProvider
+            .overrideWith(() => _SeededTracking(tracking)),
       ]);
       addTearDown(container.dispose);
       container.read(sequenceEditorProvider.notifier).load(smartExposureDetail());
@@ -277,6 +287,31 @@ void main() {
       ));
       await tester.pump(); // settle the compute future
     }
+
+    testWidgets('#1264 an unguided rig sees the tracking ceiling beside the sky limit',
+        (tester) async {
+      await pumpAdvisor(tester,
+          tracking: TrackingCalibration(
+              ceilingSeconds: 45,
+              measuredUtc: DateTime.utc(2026, 10, 11),
+              source: 'measured'));
+      expect(find.textContaining('Suggested exposure:'), findsOneWidget);
+      expect(find.textContaining('Unguided: about 45 s (measured on the last run)'),
+          findsOneWidget);
+    });
+
+    testWidgets('#1264 a guided rig gets no unguided line', (tester) async {
+      await pumpAdvisor(tester,
+          guider: const GuiderStatus(
+              name: 'OpenAstro Guider',
+              connectionState: GuiderConnectionState.connected,
+              runtimeState: GuiderRuntimeState.guiding),
+          tracking: TrackingCalibration(
+              ceilingSeconds: 45,
+              measuredUtc: DateTime.utc(2026, 10, 11),
+              source: 'measured'));
+      expect(find.textContaining('Unguided'), findsNothing);
+    });
 
     testWidgets('renders the figure, filter and attribution from local math',
         (tester) async {
@@ -423,4 +458,18 @@ class _SeededSite extends SiteSettingsNotifier {
   final SiteSettings _v;
   @override
   SiteSettings build() => _v;
+}
+
+class _SeededGuider extends GuiderStatusNotifier {
+  _SeededGuider(this._v);
+  final GuiderStatus? _v;
+  @override
+  Future<GuiderStatus?> build() async => _v;
+}
+
+class _SeededTracking extends TrackingCalibrationNotifier {
+  _SeededTracking(this._v);
+  final TrackingCalibration? _v;
+  @override
+  Future<TrackingCalibration?> build() async => _v;
 }

@@ -61,6 +61,24 @@ void main() {
     expect(events.single.label, 'Run started');
   });
 
+  test('#1264 tracking probe rungs and the chosen ceiling read like instruction lines', () async {
+    run.push(info(SequenceRunState.running));
+    ws.add(WsEvent(
+        type: 'tracking_probe.rung_complete',
+        ts: DateTime.now().toUtc(),
+        seq: 1,
+        payload: const {'exposure_seconds': 30, 'eccentricity': 0.31, 'fwhm_px': 2.4, 'stars': 100, 'usable': true, 'passed': true}));
+    ws.add(WsEvent(
+        type: 'tracking_probe.completed',
+        ts: DateTime.now().toUtc(),
+        seq: 2,
+        payload: const {'ceiling_seconds': 30, 'source': 'measured', 'usable_rungs': 2, 'summary': 's'}));
+    await Future<void>.delayed(Duration.zero);
+    final labels = container.read(runEventTickerProvider).map((e) => e.label).toList();
+    expect(labels.first, 'Unguided ceiling 30 s (measured)');
+    expect(labels[1], 'Tracking probe 30 s · ecc 0.31 · FWHM 2.4 px · pass');
+  });
+
   test('frame.complete during a run appends with its filter', () async {
     run.push(info(SequenceRunState.running));
     ws.add(WsEvent(

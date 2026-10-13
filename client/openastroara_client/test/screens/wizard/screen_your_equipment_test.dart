@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/screens/wizard/screens/screen_equipment_discovery.dart';
 import 'package:openastroara/screens/wizard/screens/screen_your_equipment.dart';
 import 'package:openastroara/services/camera_geometry_api.dart';
@@ -62,6 +63,7 @@ class _FakeFactsSource implements DeviceFactsSource {
   final CameraGeometry? camera;
   final TelescopeOptics? optics;
   final MountProps? mount;
+  TrackingCalibration? tracking;
 
   @override
   Future<DiscoveredDevice?> resolve(
@@ -80,6 +82,8 @@ class _FakeFactsSource implements DeviceFactsSource {
   Future<TelescopeOptics?> telescopeOptics() async => optics;
   @override
   Future<MountProps?> mountProps() async => mount;
+  @override
+  Future<TrackingCalibration?> trackingCalibration() async => tracking;
   @override
   Future<FilterWheelSlots?> filterWheelSlots() async => null;
   @override

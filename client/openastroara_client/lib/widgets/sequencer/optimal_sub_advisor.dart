@@ -9,6 +9,11 @@ import '../../state/settings/camera_electronics_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
+import '../../state/guider/guider_state.dart';
+import '../../state/sequencer/rig_capabilities_state.dart';
+import '../../state/settings/phd2_settings_state.dart';
+import '../../state/tracking/tracking_calibration_state.dart';
+import '../../util/unguided_advice.dart';
 import '../../util/optimal_sub_local.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -344,6 +349,19 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
           // §3.1 — the daemon's ready-made star-detectability line (predicted
           // stars/sub, thin-field warning, or the set-up-your-sensor hint).
           if (r.starReason case final starReason?) Text(starReason, style: dim),
+          // #1264 — no guider: the mount's tracking ceiling sits next to the
+          // sky-limited number; the run takes the lower, never silently.
+          if (unguidedCeilingLine(
+                guided: guiderConfigured(
+                  ref.watch(guiderStatusProvider).asData?.value,
+                  ref.watch(phd2SettingsProvider),
+                ),
+                calibration:
+                    ref.watch(trackingCalibrationProvider).asData?.value,
+                skyLimitedSeconds: r.recommendedSec,
+              )
+              case final unguided?)
+            Text(unguided, style: dim),
           if (assumed.isNotEmpty)
             Text(
               'Using generic defaults for ${assumed.map(_assumedLabel).join(", ")} — '

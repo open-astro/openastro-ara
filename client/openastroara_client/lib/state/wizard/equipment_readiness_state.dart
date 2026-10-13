@@ -145,8 +145,14 @@ class WizardEquipmentReadiness
           // Both reads hit the same status endpoint — overlap them (r3 nit).
           final optics = source.telescopeOptics();
           final props = source.mountProps();
+          // #1264 — best-effort: the ceiling is a fact about the rig, not the
+          // mount endpoint, and its absence or failure must not gap the mount.
+          final tracking = source
+              .trackingCalibration()
+              .catchError((Object _) => null);
           return ReadinessRules.mount(
-              label, setupUri, await optics, await props);
+              label, setupUri, await optics, await props,
+              tracking: await tracking);
         case EquipmentDeviceType.filterWheel:
           return ReadinessRules.filterWheel(
               label, setupUri, await source.filterWheelSlots());

@@ -146,6 +146,15 @@ const Map<String, List<String>> _panelKeywords = {
     'trigger',
     'recalibrate',
   ],
+  'img.unguided': [
+    'unguided',
+    'tracking',
+    'trailing',
+    'periodic error',
+    'exposure ceiling',
+    'tracking probe',
+    'recalibrate',
+  ],
   'img.platesolve': [
     'astap',
     'astrometry',
