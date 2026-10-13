@@ -8227,6 +8227,10 @@ components:
             - integer
             - string
           format: int32
+        image_type:
+          type:
+            - 'null'
+            - string
     FaultDto:
       required:
         - id

@@ -344,6 +344,17 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-13 — #1177 manual capture frame type
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/camera/exposure` (`ExposureRequestDto`): new optional `image_type`.
+
+**Decision:** `image_type` ∈ {LIGHT, DARK, BIAS, FLAT, DARKFLAT}, case-insensitive; null/blank = LIGHT (the historical behaviour, unchanged for existing clients). It is written as the FITS `IMAGETYP`, mapped to the catalog frame type the sequencer path already uses (`DARKFLAT` → Dark), and DARK/BIAS start the Alpaca exposure with `light=false` so a shuttered camera stays dark. Any other value is an argument error → 422 before the connected check. `SNAPSHOT` is not accepted here: it is the Live tab's own kind.
+
+**Reasoning:** manual capture was LIGHT-only by design; a REST calibration affordance was the one thing missing for scripted dark/bias/flat sets without a sequence.
+
+**Spec ref:** `Contracts/EquipmentDtos.cs` (`ExposureRequestDto.ImageType`), `Services/CameraService.cs` (`NormalizeManualImageType`, `IsLightExposure`).
+
+**Related:** #1177; tests `ManualCaptureImageTypeTest`.
 ### 2026-10-13 — #1175 server internal state (§66.7)
 
 **Endpoint(s) or area:** new `GET /api/v1/server/internal-state` → `ServerInternalStateDto`.

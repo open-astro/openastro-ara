@@ -385,6 +385,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             throw new ArgumentOutOfRangeException(nameof(request), cameraOffset,
                 "Offset is outside the camera's supported range.");
         }
+        var manualImageType = NormalizeManualImageType(request.ImageType);
         if (client is null) {
             throw new InvalidOperationException("camera is not connected");
         }
@@ -614,6 +615,23 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     // ── Capture pipeline ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>#1177 — the manual-capture frame types. Null/blank = LIGHT (the historical default);
+    /// anything outside the set is an argument error (→ 422), never a silently relabelled light.</summary>
+    internal static string NormalizeManualImageType(string? imageType) {
+        if (string.IsNullOrWhiteSpace(imageType)) {
+            return "LIGHT";
+        }
+        var upper = imageType.Trim().ToUpperInvariant();
+        return upper is "LIGHT" or "DARK" or "BIAS" or "FLAT" or "DARKFLAT"
+            ? upper
+            : throw new ArgumentOutOfRangeException(nameof(imageType), imageType,
+                "ImageType must be one of LIGHT, DARK, BIAS, FLAT, DARKFLAT.");
+    }
+
+    /// <summary>Shutter open? Only darks and biases are taken closed.</summary>
+    internal static bool IsLightExposure(string kind) =>
+        kind is not ("dark" or "bias");
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background capture boundary: every stage (ASCOM writes, the blocking download, FITS IO, the catalog insert) can throw arbitrary driver/HTTP/disk exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-capture; any escape must be contained and logged as a failed capture (the pre-announced frame simply never appears), never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request) {
@@ -624,7 +642,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // The bool result is intentionally ignored (fire-and-forget): a false/failed capture is
             // already logged inside CaptureCoreAsync, and the pre-announced frame simply never lands
             // — unlike the sequencer path, there's no caller to surface a throw to.
-            _ = await CaptureCoreAsync(client, frameId, request, "LIGHT", FrameType.Light, "Manual capture", CancellationToken.None).ConfigureAwait(false);
+            // #1177 — the request's ImageType (validated at the entry point) picks the IMAGETYP, the
+            // catalog frame type and, through the lower-cased kind, the shutter.
+            var imageType = NormalizeManualImageType(request.ImageType);
+            _ = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), "Manual capture", CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
         } finally {
@@ -709,7 +730,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // capture on its first poll. Cleared HERE, not when the wait starts: an abort arriving
         // between StartExposure and the wait (the started event, a cache refresh) must still land.
         Interlocked.Exchange(ref _abortRequested, 0);
-        client.StartExposure(request.ExposureSec, true);
+        // #1177 — DARK and BIAS close the shutter (light=false); everything else (light, flat,
+        // snapshot, analysis, live view) exposes to the sky. `kind` is the lower-cased image type.
+        client.StartExposure(request.ExposureSec, IsLightExposure(kind));
         // Announce AFTER StartExposure returned: a driver that rejects the exposure throws here and
         // the caller's catch must not have to retract a start that never happened.
         markAnnounced();

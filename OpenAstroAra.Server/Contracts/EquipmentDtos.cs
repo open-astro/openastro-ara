@@ -177,7 +177,11 @@ public sealed record ExposureRequestDto(
     int? Width = null, int? Height = null,
     string? FilterName = null,
     // Electronic (pedestal) offset — distinct from the OffsetX/Y subframe position.
-    int? CameraOffset = null);
+    int? CameraOffset = null,
+    // #1177 — the frame type for a manual capture: LIGHT (default), DARK, BIAS, FLAT or DARKFLAT,
+    // case-insensitive. Drives the FITS IMAGETYP, the catalog frame type and the shutter: DARK and
+    // BIAS are taken with the shutter closed (Alpaca StartExposure light=false). Anything else is 422.
+    string? ImageType = null);
 
 public sealed record ExposureResponseDto(
     string FrameId,
