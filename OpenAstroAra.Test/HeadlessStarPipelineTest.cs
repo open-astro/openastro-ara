@@ -115,6 +115,9 @@ namespace OpenAstroAra.Test {
             Assert.That(rendered.OriginalImage, Is.EqualTo(plain), "the plain render survives");
             Assert.That(rendered.Image, Is.Not.EqualTo(plain), "the display buffer carries the rings");
             Assert.That(rendered.Image.Count(b => b == CircleStarAnnotator.Ink), Is.GreaterThan(plain.Count(b => b == 255)));
+            var once = (byte[])rendered.Image.Clone();
+            await rendered.DetectStars(annotateImage: true, StarSensitivity.Normal, NoiseReduction.None, cancelToken: CancellationToken.None);
+            Assert.That(rendered.Image, Is.EqualTo(once), "a second annotation starts from the plain render, not the rings");
 
             // Without an annotator the frame stays plain and nothing throws.
             var bare = new BaseImageData(pixels, w, h, 16, false, new ImageMetaData(), null!, null!, null!).RenderImage();

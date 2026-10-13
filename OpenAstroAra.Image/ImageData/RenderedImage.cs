@@ -152,7 +152,8 @@ namespace OpenAstroAra.Image.ImageData {
                     if (starAnnotator is null) {
                         Logger.Debug("DetectStars(annotateImage: true): no star annotator wired; returning the un-annotated frame.");
                     } else {
-                        Image = await starAnnotator.GetAnnotatedImage(parameters, result, Image, width, height).ConfigureAwait(false);
+                        // From the PLAIN render, so a second DetectStars does not ring the rings.
+                        Image = await starAnnotator.GetAnnotatedImage(parameters, result, OriginalImage, width, height).ConfigureAwait(false);
                     }
                 }
                 return this;
