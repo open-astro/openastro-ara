@@ -56,6 +56,9 @@ public sealed record FaultPlan(
 /// DewHeaterPower property, so there is nothing to observe or enforce over the transport this
 /// daemon speaks — the only DewHeater plumbing in the codebase is legacy NINA SDK surface off
 /// the Alpaca path. Dew mitigation on Alpaca rigs rides a Switch port, which the switch
+/// read-back watch covers. Matrix row 18 ("dew formation suspected", humidity + dew point + a
+/// rising HFR) is an ADVISORY, not a reaction plan: it lives in <see cref="DewFormationAdvisor"/>
+/// (a diagnostic the autofocus gate defers on, plus one notification per episode). The switch
 /// read-back watch (commanded-vs-read value mismatch) already covers.
 /// </summary>
 public static class FaultPolicyMatrix {

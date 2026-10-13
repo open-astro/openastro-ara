@@ -880,6 +880,15 @@ public partial class Program {
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
+        // §42.2 row 18 — dew formation advisory: humidity + dew-point gap + the HFR trend → the
+        // dew_formation diagnostic (which defers autofocus) and one Warning per episode. Advisory only.
+        builder.Services.AddSingleton<DewFormationAdvisor>(sp => new DewFormationAdvisor(
+            sp.GetService<IObservingConditionsService>(),
+            sp.GetService<ImageHistoryService>(),
+            sp.GetService<IDiagnosticsService>(),
+            sp.GetService<INotificationService>(),
+            sp.GetService<ILogger<DewFormationAdvisor>>()));
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<DewFormationAdvisor>());
 
         // §42.3 — equipment-fault reaction: subscribes to the EquipmentFaultHub and executes
         // the FaultPolicyMatrix plan per fault (pause-first for camera/mount, hot-reconnect
