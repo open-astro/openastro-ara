@@ -217,6 +217,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(executor.Request!.RungsSeconds, Is.EqualTo(new[] { 10.0, 30, 40 }), "capped at 2 × the 20 s prior");
             Assert.That(executor.Request.PriorSeconds, Is.EqualTo(20));
+            Assert.That(executor.Request.PriorSource, Is.EqualTo("the sequence's own prior"), "the executor names the source (#1264 stage 1)");
             Assert.That(probe.CeilingSeconds, Is.EqualTo(45));
             Assert.That(exposure.ExposureTime, Is.EqualTo(45));
             Assert.That(count.Iterations, Is.EqualTo((int)Math.Ceiling(3000.0 / 45)));
@@ -244,6 +245,7 @@ namespace OpenAstroAra.Test {
             await probe.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
 
             Assert.That(executor.Request!.PriorSeconds, Is.EqualTo(45));
+            Assert.That(executor.Request.PriorSource, Is.EqualTo("the last probe"), "the default interface method names a stored prior");
             Assert.That(executor.Request.RungsSeconds, Is.EqualTo(new[] { 10.0, 30, 60, 90 }), "capped at 2 × the stored 45 s");
             Assert.That(exposure.ExposureTime, Is.EqualTo(45), "inconclusive tonight: the stored ceiling stands");
         }

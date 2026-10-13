@@ -53,7 +53,7 @@ namespace OpenAstroAra.Test {
             var sparse = MountSpecSheet.Parse("""{"model":"ZWO AM5","mount_type":"strain_wave","worm_period_s":null,"periodic_error_pp_arcsec":null}""");
             Assert.That(sparse, Is.Not.Null, "a model with unknown figures is still a sheet");
             Assert.That(sparse!.WormPeriodS, Is.Null);
-            Assert.That(sparse.Source, Is.EqualTo("manufacturer"), "default source");
+            Assert.That(sparse.Source, Is.Null, "an unknown source stays unknown — never a guess");
         }
 
         [Test]
@@ -121,7 +121,7 @@ namespace OpenAstroAra.Test {
             Assert.That(stored, Is.EqualTo((45.0, "the last probe")), "a measurement beats the sheet");
 
             var body = await svc.ResolvePriorWithSourceAsync(20, CancellationToken.None);
-            Assert.That(body, Is.EqualTo((20.0, "the body")));
+            Assert.That(body, Is.EqualTo((20.0, "the sequence's own prior")));
 
             specs.CurrentMountSpecs = null;
             store.PutTrackingCalibration(null);
