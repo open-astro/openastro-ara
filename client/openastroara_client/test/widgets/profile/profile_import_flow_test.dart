@@ -45,7 +45,7 @@ void main() {
       final r = await readProfileShare(
         _File(uri: Uri.file('/tmp/share.json'), reportedLength: 16),
         readBytes: (path) async {
-          expect(path, '/tmp/share.json');
+          expect(path, endsWith('share.json')); // Windows gives \tmp\share.json
           return small;
         },
       );
