@@ -258,6 +258,8 @@ void main() {
       final later = tierProgress(bankedHours: 2, neededHours: 9, remainingTonightHours: 4)!;
       expect(later.standing, TierStanding.needsMoreNights);
       expect(later.line, '7 h to go — needs another night.');
+      expect(tierProgress(bankedHours: 0.1, neededHours: 12, remainingTonightHours: 1)!.line,
+          '12 h to go — needs another night.');
       expect(tierProgress(bankedHours: 8.5, neededHours: 9, remainingTonightHours: 1)!.line,
           '30 min to go — finishes tonight.');
     });

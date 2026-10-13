@@ -1,5 +1,4 @@
 import 'dart:async';
-import '../../util/integration_budget.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,7 @@ import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
+import '../../util/integration_budget.dart';
 import '../../util/coord_format.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';

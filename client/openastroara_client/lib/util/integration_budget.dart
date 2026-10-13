@@ -112,7 +112,13 @@ class IntegrationBudget {
   /// Label/value lines for the detail popover (#1140 P3 "auditable, never
   /// oracular"). Finite inputs only — a budget built without them says so.
   List<(String, String)> get auditLines {
-    if (surfaceBrightnessMagArcsec2.isNaN) {
+    if ([
+      surfaceBrightnessMagArcsec2,
+      darkSkyMagArcsec2,
+      filterBandwidthNm,
+      skyFluxEPerSecPx,
+      coreTargetFluxEPerSecPx,
+    ].any((v) => v.isNaN)) {
       return const [('Budget inputs', 'not recorded')];
     }
     String mag(double v) => '${v.toStringAsFixed(1)} mag/arcsec²';
@@ -149,13 +155,17 @@ class IntegrationBudget {
     return '${one(core)} · ${one(full)} · ${one(faint)}';
   }
 
-  static String _fmtHours(double h) {
-    if (h < 0.95) {
-      final m = (h * 60 / 10).ceil() * 10;
-      return '$m min';
-    }
-    return h < 10 ? '${h.toStringAsFixed(h < 3 ? 1 : 0)} h' : '${h.round()} h';
+  static String _fmtHours(double h) => formatBudgetHours(h);
+}
+
+/// "40 min" / "2.8 h" / "9 h" / "35 h" — one formatter for the tier line and
+/// the tier standing.
+String formatBudgetHours(double h) {
+  if (h < 0.95) {
+    final m = (h * 60 / 10).ceil() * 10;
+    return '$m min';
   }
+  return h < 10 ? '${h.toStringAsFixed(h < 3 ? 1 : 0)} h' : '${h.round()} h';
 }
 
 /// Kasten & Young (1989) airmass — well-behaved down to the horizon, unlike
@@ -331,9 +341,7 @@ class TierProgress {
           '${_fmt(hoursToGo)} to go — needs another night.',
       };
 
-  static String _fmt(double h) => h < 0.95
-      ? '${(h * 60 / 10).ceil() * 10} min'
-      : '${h.toStringAsFixed(h < 2.95 ? 1 : 0)} h';
+  static String _fmt(double h) => formatBudgetHours(h);
 }
 
 /// Pure — unit-tested. [bankedHours] null = nothing captured yet (returns
