@@ -35,6 +35,11 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
     public const string EventType = "dew_formation";
 
+    /// <summary>The HFR trend is judged over the most recent lights of the CURRENT filter taken since
+    /// the last autofocus (an autofocus resets the baseline; another filter has another HFR), capped
+    /// to this many frames so real dew in the last subs moves the late third.</summary>
+    public const int WindowFrames = 30;
+
     private readonly IObservingConditionsService? _weather;
     private readonly ImageHistoryService? _history;
     private readonly IDiagnosticsService? _diagnostics;
@@ -63,16 +68,28 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
         _logger = logger ?? NullLogger<DewFormationAdvisor>.Instance;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) {
+    public async Task StartAsync(CancellationToken cancellationToken) {
+        // Startup reconciliation (the DiskSpaceMonitor pattern): the episode lives in memory but the
+        // diagnostic lives in SQLite, so an event left open by a previous daemon would defer autofocus
+        // for good. Nothing has been emitted yet, so this only touches a stale one; if dew is still
+        // forming, the first tick re-opens it.
+        if (_diagnostics is not null) {
+            try {
+                await _diagnostics.ClearOpenEventsByTypeAsync(EventType, UtcNow(), cancellationToken).ConfigureAwait(false);
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                LogTickFailed(ex); // best effort: a diagnostics hiccup must not stop the daemon's hosted services
+            }
+        }
         if (_weather is not null && _history is not null) {
             _timer = new Timer(_ => _ = CheckOnceAsync(CancellationToken.None), null, PollInterval, PollInterval);
         }
-        return Task.CompletedTask;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) {
+    public async Task StopAsync(CancellationToken cancellationToken) {
         _timer?.Change(Timeout.Infinite, Timeout.Infinite);
-        return Task.CompletedTask;
+        // Let a tick in flight finish before Dispose frees the gate it will release.
+        await _tick.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _tick.Release();
     }
 
     /// <summary>One poll: read the weather and the HFR trend, move the episode. Internal for tests.</summary>
@@ -88,21 +105,40 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
                 LogWeatherReadFailed(ex);
                 return; // no verdict without weather; the episode keeps its last state
             }
-            var hfr = _history.ImagePoints.Where(p => string.Equals(p.Type, "LIGHT", StringComparison.OrdinalIgnoreCase))
-                .Select(p => p.Hfr).ToList();
-            var verdict = DewFormationRule.Evaluate(weather?.HumidityPct, weather?.TemperatureC, weather?.DewPointC, hfr);
+            if (weather is null || weather.State != EquipmentConnectionState.Connected) {
+                return; // a station that is not connected reads nothing: same as a failed read
+            }
+            var hfr = RecentLightHfr(_history.ImagePoints, _history.AutofocusPoints);
+            var verdict = DewFormationRule.Evaluate(weather.HumidityPct, weather.TemperatureC, weather.DewPointC, hfr);
             if (verdict.Suspected && !_episodeOpen) {
-                _episodeOpen = true;
+                // The flag follows a successful open, so a failed diagnostics/notification write retries
+                // next tick instead of counting as an episode nobody heard about.
                 await OpenEpisodeAsync(verdict.Detail, ct).ConfigureAwait(false);
+                _episodeOpen = true;
             } else if (!verdict.Suspected && _episodeOpen) {
-                _episodeOpen = false;
                 await CloseEpisodeAsync(ct).ConfigureAwait(false);
+                _episodeOpen = false;
             }
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             LogTickFailed(ex);
         } finally {
             _tick.Release();
         }
+    }
+
+    /// <summary>The HFR figures the rule judges: lights after the latest autofocus (its ordinal
+    /// watermark), of the filter the most recent light used, newest <see cref="WindowFrames"/> only.
+    /// Internal static for tests.</summary>
+    internal static List<double> RecentLightHfr(IReadOnlyList<OpenAstroAra.Sequencer.Interfaces.ImageHistoryEntry> images,
+            IReadOnlyList<OpenAstroAra.Sequencer.Interfaces.AutofocusHistoryEntry> autofocus) {
+        var sinceId = autofocus.Count == 0 ? long.MinValue : autofocus[^1].Id;
+        var lights = images.Where(p => string.Equals(p.Type, "LIGHT", StringComparison.OrdinalIgnoreCase) && p.Id > sinceId).ToList();
+        if (lights.Count == 0) {
+            return [];
+        }
+        var filter = lights[^1].Filter;
+        return lights.Where(p => string.Equals(p.Filter, filter, StringComparison.OrdinalIgnoreCase))
+            .TakeLast(WindowFrames).Select(p => p.Hfr).ToList();
     }
 
     private async Task OpenEpisodeAsync(string detail, CancellationToken ct) {

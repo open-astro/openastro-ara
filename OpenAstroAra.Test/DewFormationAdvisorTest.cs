@@ -28,6 +28,9 @@ namespace OpenAstroAra.Test {
 
         private static double[] Rising() => [2.0, 2.0, 2.1, 2.2, 2.4, 2.5, 2.6, 2.7, 2.8];
         private static double[] Flat() => [2.0, 2.1, 2.0, 2.1, 2.0, 2.1, 2.0, 2.1, 2.0];
+        private static readonly double[] HaFlat = [3.0, 3.1, 3.0, 3.1, 3.0, 3.1, 3.0];
+        private static readonly double[] HaConstant = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0];
+        private static readonly double[] LateRise = [2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0];
 
         [Test]
         public void The_pattern_needs_saturated_air_at_the_dew_point_and_a_rising_hfr() {
@@ -66,6 +69,59 @@ namespace OpenAstroAra.Test {
             await advisor.CheckOnceAsync(CancellationToken.None);
             diagnostics.Verify(d => d.ClearOpenEventsByTypeAsync("dew_formation", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
             notifications.Verify(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()), Times.Once, "clearing is quiet");
+        }
+
+        [Test]
+        public async Task Startup_clears_an_event_a_previous_daemon_left_open() {
+            // The episode is in memory, the diagnostic is in SQLite: without this, autofocus would stay
+            // deferred for good after a restart during dew.
+            var diagnostics = new Mock<IDiagnosticsService>();
+            using var advisor = new DewFormationAdvisor(null, null, diagnostics.Object, null);
+            await advisor.StartAsync(CancellationToken.None);
+            diagnostics.Verify(d => d.ClearOpenEventsByTypeAsync("dew_formation", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
+            await advisor.StopAsync(CancellationToken.None);
+        }
+
+        [Test]
+        public void The_hfr_window_is_the_current_filter_since_the_last_autofocus_newest_first() {
+            var history = new ImageHistoryService();
+            // Flat L lights, then a refocus, then Hα lights that are naturally broader: not a dew trend.
+            foreach (var h in Flat()) history.RecordImage("LIGHT", h, "L");
+            history.RecordAutofocus(5.0, "L");
+            foreach (var h in HaFlat) history.RecordImage("LIGHT", h, "Ha");
+            var window = DewFormationAdvisor.RecentLightHfr(history.ImagePoints, history.AutofocusPoints);
+            Assert.That(window, Is.EqualTo(HaFlat), "only the Hα lights after the autofocus");
+            Assert.That(DewFormationRule.Evaluate(97, 8.0, 7.6, window).Suspected, Is.False, "a filter change is not dew");
+
+            // Mixed filters with no autofocus between: the current filter's lights only.
+            var mixed = new ImageHistoryService();
+            foreach (var h in Flat()) mixed.RecordImage("LIGHT", h, "L");
+            foreach (var h in HaConstant) mixed.RecordImage("LIGHT", h, "Ha");
+            Assert.That(DewFormationAdvisor.RecentLightHfr(mixed.ImagePoints, mixed.AutofocusPoints), Has.All.EqualTo(3.0));
+
+            // A long run: only the newest WindowFrames count, so dew in the last subs moves the late third.
+            var long_ = new ImageHistoryService();
+            for (var i = 0; i < 300; i++) long_.RecordImage("LIGHT", 2.0, "L");
+            foreach (var h in LateRise) long_.RecordImage("LIGHT", h, "L");
+            var recent = DewFormationAdvisor.RecentLightHfr(long_.ImagePoints, long_.AutofocusPoints);
+            Assert.That(recent, Has.Count.EqualTo(DewFormationAdvisor.WindowFrames));
+            Assert.That(DewFormationRule.Evaluate(97, 8.0, 7.6, recent).Suspected, Is.True, "dew in the last ten subs is seen");
+        }
+
+        [Test]
+        public async Task A_station_that_is_not_connected_keeps_the_last_verdict() {
+            var weather = new Mock<IObservingConditionsService>();
+            var dto = new ObservingConditionsDto("w", "Station", EquipmentConnectionState.Connected, 8.0, 97, 7.6, null, null, null, null, null, null, true, "now");
+            weather.Setup(w => w.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => dto);
+            var history = new ImageHistoryService();
+            foreach (var h in Rising()) history.RecordImage("LIGHT", h, "L");
+            var diagnostics = new Mock<IDiagnosticsService>();
+            using var advisor = new DewFormationAdvisor(weather.Object, history, diagnostics.Object, null);
+            await advisor.CheckOnceAsync(CancellationToken.None);
+            dto = dto with { State = EquipmentConnectionState.Disconnected, HumidityPct = null, TemperatureC = null, DewPointC = null };
+            await advisor.CheckOnceAsync(CancellationToken.None);
+            diagnostics.Verify(d => d.ClearOpenEventsByTypeAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Never,
+                "a station going away is not 'the dew cleared'");
         }
 
         [Test]
