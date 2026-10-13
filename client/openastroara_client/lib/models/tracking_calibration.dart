@@ -56,6 +56,25 @@ class TrackingCalibration {
   }
 }
 
+/// #1264 stage 1 — `GET /api/v1/tracking/prior`: what the next probe would
+/// start from and why ("the last probe", "the mount's spec sheet (manufacturer)"),
+/// resolved by the daemon's own code so the client never recomputes it. Both
+/// null when nothing applies.
+class TrackingPrior {
+  final double? seconds;
+  final String? source;
+  const TrackingPrior({this.seconds, this.source});
+
+  static TrackingPrior fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return const TrackingPrior();
+    final s = json['seconds'];
+    return TrackingPrior(
+      seconds: s is num && s.isFinite && s > 0 ? s.toDouble() : null,
+      source: json['source'] is String ? json['source'] as String : null,
+    );
+  }
+}
+
 /// One exposure of the probe's ladder and how it was judged.
 class TrackingProbeRung {
   final double exposureSeconds;

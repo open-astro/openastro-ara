@@ -1639,6 +1639,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/tracking/prior:
+    get:
+      tags:
+        - Tracking
+      operationId: GetTrackingPrior
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackingPriorDto'
   /api/v1/tracking/recalibrate:
     post:
       tags:
@@ -12729,6 +12741,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TrackingProbeRungDto'
+    TrackingPriorDto:
+      required:
+        - seconds
+        - source
+      type: object
+      properties:
+        seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        source:
+          type:
+            - 'null'
+            - string
     TrackingProbeRungDto:
       required:
         - exposure_seconds

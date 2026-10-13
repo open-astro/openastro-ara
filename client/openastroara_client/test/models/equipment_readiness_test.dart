@@ -81,7 +81,7 @@ void main() {
     test('#1264 the spec sheet is a fact when the bridge ships one, and silent when not', () {
       const optics = TelescopeOptics(focalLengthMm: 530, apertureMm: 106);
       final withSheet = ReadinessRules.mount('EQM-35', null, optics,
-          const MountProps(name: 'EQM-35', specs: MountSpecSheet(model: 'EQM-35 Pro', wormPeriodS: 638, periodicErrorPpArcsec: 25)));
+          const MountProps(name: 'EQM-35', specs: MountSpecSheet(model: 'EQM-35 Pro', source: 'manufacturer', wormPeriodS: 638, periodicErrorPpArcsec: 25)));
       expect(withSheet.state, ReadinessState.ready);
       expect(withSheet.facts.singleWhere((f) => f.label == 'Spec sheet').value,
           'Periodic error 25″ p-p over 638 s · manufacturer');

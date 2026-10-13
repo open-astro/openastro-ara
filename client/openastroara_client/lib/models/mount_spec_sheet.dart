@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 /// #1264 stage 1 — the mount's spec sheet as AlpacaBridge #815 publishes it
 /// and the daemon relays it in the telescope capabilities (`mount_specs`):
 /// the two tracking figures Ara needs (worm period, periodic error) plus the
@@ -8,8 +6,9 @@ class MountSpecSheet {
   final String? driverId;
   final String? model;
 
-  /// `manufacturer` | `measured` | `community` — shown next to the number.
-  final String source;
+  /// `manufacturer` | `measured` | `community` — shown next to the number;
+  /// null when the sheet does not say (never a guess).
+  final String? source;
   final double? wormPeriodS;
   final double? periodicErrorPpArcsec;
   final bool hasEncoders;
@@ -21,7 +20,7 @@ class MountSpecSheet {
   const MountSpecSheet({
     this.driverId,
     this.model,
-    this.source = 'manufacturer',
+    this.source,
     this.wormPeriodS,
     this.periodicErrorPpArcsec,
     this.hasEncoders = false,
@@ -44,7 +43,7 @@ class MountSpecSheet {
     return MountSpecSheet(
       driverId: str('driver_id'),
       model: str('model'),
-      source: str('source') ?? 'manufacturer',
+      source: str('source'),
       wormPeriodS: num_('worm_period_s'),
       periodicErrorPpArcsec: num_('periodic_error_pp_arcsec'),
       hasEncoders: json['has_encoders'] == true,
@@ -72,7 +71,7 @@ class MountSpecSheet {
         : pe == null
         ? 'Periodic error unknown'
         : 'Periodic error ${_fmt(pe)}″ p-p${worm == null ? '' : ' over ${_fmt(worm)} s'}';
-    return '$head · $source';
+    return source == null ? head : '$head · $source';
   }
 
   static String _fmt(double v) =>
@@ -106,60 +105,4 @@ class MountSpecSheet {
     maxPayloadKg,
     notes,
   );
-}
-
-/// The shortest prior ever suggested (the daemon's floor; the ladder starts at
-/// 10 s).
-const double minUnguidedPriorSeconds = 5;
-
-/// The trailing tolerance in arcseconds: a pixel, or half the seeing disc,
-/// whichever is larger. Null without either figure.
-double? trackingTolerance({
-  double? pixelScaleArcsec,
-  double? seeingFwhmArcsec,
-}) {
-  final px = pixelScaleArcsec != null && pixelScaleArcsec > 0
-      ? pixelScaleArcsec
-      : null;
-  final see = seeingFwhmArcsec != null && seeingFwhmArcsec > 0
-      ? 0.5 * seeingFwhmArcsec
-      : null;
-  if (px == null && see == null) return null;
-  return math.max(px ?? 0, see ?? 0);
-}
-
-/// The unguided exposure prior the sheet implies for THIS rig, in seconds —
-/// the same formula the daemon's `MountSpecSheet.UnguidedPriorSeconds` uses,
-/// so the advisor's number matches the probe's starting point:
-///
-///     tolerance = max(1 px × pixel scale, 0.5 × seeing FWHM)
-///     pe_rate   = 2π · (periodic_error_pp / 2) / worm_period   (0 with encoders)
-///     pa_rate   = 15.04 · sin(polar-align error)               (worst case, cos dec = 1)
-///     t         = tolerance / (pe_rate + pa_rate), floored at 5 s
-///
-/// Null when no drift term is known or no tolerance can be set. Pure.
-double? unguidedPriorFromSpecs(
-  MountSpecSheet? sheet, {
-  double? pixelScaleArcsec,
-  double? seeingFwhmArcsec,
-  double? polarAlignErrorArcmin,
-}) {
-  final tol = trackingTolerance(
-    pixelScaleArcsec: pixelScaleArcsec,
-    seeingFwhmArcsec: seeingFwhmArcsec,
-  );
-  if (tol == null || tol <= 0) return null;
-  var rate = 0.0;
-  var anyTerm = false;
-  if (sheet != null && !sheet.hasEncoders && sheet.hasTrackingFigures) {
-    rate +=
-        2 * math.pi * (sheet.periodicErrorPpArcsec! / 2) / sheet.wormPeriodS!;
-    anyTerm = true;
-  }
-  if (polarAlignErrorArcmin != null && polarAlignErrorArcmin > 0) {
-    rate += 15.04 * math.sin(polarAlignErrorArcmin / 60 * math.pi / 180);
-    anyTerm = true;
-  }
-  if (!anyTerm || rate <= 0) return null;
-  return math.max(minUnguidedPriorSeconds, tol / rate);
 }

@@ -57,3 +57,20 @@ final trackingCalibrationProvider =
     AsyncNotifierProvider<TrackingCalibrationNotifier, TrackingCalibration?>(
       TrackingCalibrationNotifier.new,
     );
+
+/// #1264 stage 1 — the daemon's resolved prior for the sub advisor. Watches the
+/// calibration provider so a completed probe (or a Recalibrate) re-reads it.
+final trackingPriorProvider = FutureProvider<TrackingPrior>((ref) async {
+  ref.watch(trackingCalibrationProvider);
+  final server = ref.watch(activeServerProvider);
+  if (server == null) return const TrackingPrior();
+  final api = ref.read(trackingApiFactoryProvider)(server);
+  try {
+    return await api.readPrior();
+  } catch (e) {
+    debugPrint('[tracking] prior read failed: $e');
+    return const TrackingPrior();
+  } finally {
+    api.close();
+  }
+});

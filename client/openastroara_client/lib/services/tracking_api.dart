@@ -32,6 +32,18 @@ class TrackingApi {
     }
   }
 
+  /// The prior the next probe would start from, and its source (#1264 stage 1).
+  /// A daemon predating the route (404) answers "nothing".
+  Future<TrackingPrior> readPrior() async {
+    try {
+      final res = await _dio.get<dynamic>('/api/v1/tracking/prior');
+      return TrackingPrior.fromJson(res.data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const TrackingPrior();
+      rethrow;
+    }
+  }
+
   /// Clear the stored calibration (204). The next unguided run's probe starts
   /// from the ladder again instead of last night's ceiling.
   Future<void> recalibrate() async {

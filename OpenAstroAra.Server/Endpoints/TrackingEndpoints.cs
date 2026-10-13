@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -39,6 +40,14 @@ public static class TrackingEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetTrackingCalibration");
 
+        // #1264 stage 1 — what the next probe would start from and why, resolved by the sequencer's own
+        // executor (body → stored calibration → spec sheet) so the client shows the daemon's number.
+        tracking.MapGet("/prior", async (OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor executor, CancellationToken ct) => {
+            var (seconds, source) = await executor.ResolvePriorWithSourceAsync(null, ct);
+            return Results.Ok(new TrackingPriorDto(seconds, source));
+        })
+            .Produces<TrackingPriorDto>(StatusCodes.Status200OK)
+            .WithName("GetTrackingPrior");
         tracking.MapPost("/recalibrate", (IProfileStore profiles) => {
             profiles.PutTrackingCalibration(null);
             return Results.NoContent();

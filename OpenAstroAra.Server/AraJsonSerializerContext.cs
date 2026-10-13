@@ -256,6 +256,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FocusCalibrationSampleDto))]
 [JsonSerializable(typeof(IReadOnlyList<FocusCalibrationSampleDto>))]
 [JsonSerializable(typeof(TrackingCalibrationDto))]
+[JsonSerializable(typeof(TrackingPriorDto))]
 [JsonSerializable(typeof(TrackingProbeRungDto))]
 [JsonSerializable(typeof(IReadOnlyList<TrackingProbeRungDto>))]
 [JsonSerializable(typeof(SiteSettingsDto))]

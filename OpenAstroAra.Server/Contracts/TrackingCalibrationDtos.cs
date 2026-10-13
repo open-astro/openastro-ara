@@ -20,8 +20,8 @@ namespace OpenAstroAra.Server.Contracts;
 /// #1264 — the unguided tracking ceiling measured by the sequencer's <c>TrackingProbe</c> at run start
 /// (profile JSON <c>tracking_calibration</c>). Daemon-owned derived data like <see cref="FocusCalibrationDto"/>:
 /// written by the probe, never by the client; null on the profile = never measured. The next night's prior is
-/// <see cref="CeilingSeconds"/> when the run body carries none of its own (<c>TrackingProbeService.ResolvePriorAsync</c>);
-/// a body prior (the mount's spec sheet) wins over it.
+/// <see cref="CeilingSeconds"/> when the run body carries none of its own (<c>TrackingProbeService.ResolvePriorWithSourceAsync</c>:
+/// body → this record → the mount's spec sheet, #1264 stage 1); a body prior wins over it.
 /// </summary>
 /// <param name="CeilingSeconds">The longest unguided exposure the probe passed (interpolated one step toward the
 /// first failing rung when both exist).</param>
@@ -62,3 +62,9 @@ public sealed record TrackingProbeRungDto(
     int Stars,
     bool Usable,
     bool Passed);
+
+/// <summary>#1264 stage 1 — <c>GET /api/v1/tracking/prior</c>: the unguided prior the next probe would
+/// start from with no body value, and where it comes from (<c>the last probe</c>, <c>the mount's spec
+/// sheet (manufacturer)</c>), resolved by the same code the sequencer uses so the client never recomputes
+/// it. Both null when nothing applies: never measured and no sheet.</summary>
+public sealed record TrackingPriorDto(double? Seconds, string? Source);

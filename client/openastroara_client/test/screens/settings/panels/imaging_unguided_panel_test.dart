@@ -156,7 +156,7 @@ void main() {
 
   testWidgets('#1264 the spec-sheet row names the sheet, or says there is none', (tester) async {
     await _pump(tester, connected: true, mountKnown: true,
-        specs: const MountSpecSheet(model: 'EQM-35 Pro', wormPeriodS: 638, periodicErrorPpArcsec: 25, hasPec: true));
+        specs: const MountSpecSheet(model: 'EQM-35 Pro', source: 'manufacturer', wormPeriodS: 638, periodicErrorPpArcsec: 25, hasPec: true));
     expect(find.textContaining('EQM-35 Pro: Periodic error 25″ p-p over 638 s · manufacturer · PEC available'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());

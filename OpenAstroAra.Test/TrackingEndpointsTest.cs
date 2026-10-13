@@ -46,6 +46,9 @@ namespace OpenAstroAra.Test {
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton<IProfileStore>(store);
+            // #1264 stage 1 — the prior route asks the sequencer's executor; the real one with no sheet.
+            builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(
+                new TrackingProbeService(store, new NoFrames()));
             builder.Services.AddProblemDetails();
             builder.Services.ConfigureHttpJsonOptions(opts => {
                 // Program.cs's wire shape: the source-gen context plus snake_case names.
@@ -63,6 +66,29 @@ namespace OpenAstroAra.Test {
             http.Dispose();
             await app.StopAsync();
             await app.DisposeAsync();
+        }
+
+        private sealed class NoFrames : IAnalysisFrameSource {
+            public Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) =>
+                throw new InvalidOperationException("the prior never captures");
+        }
+
+        [Test]
+        public async Task The_prior_route_names_the_stored_ceiling_or_nothing() {
+            store.PutTrackingCalibration(null);
+            using (var none = await http.GetAsync(new Uri("/api/v1/tracking/prior", UriKind.Relative))) {
+                Assert.That(none.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+                using var doc = JsonDocument.Parse(await none.Content.ReadAsStringAsync());
+                Assert.That(doc.RootElement.GetProperty("seconds").ValueKind, Is.EqualTo(JsonValueKind.Null));
+                Assert.That(doc.RootElement.GetProperty("source").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            }
+            store.PutTrackingCalibration(new TrackingCalibrationDto(45, new DateTimeOffset(2026, 10, 11, 2, 0, 0, TimeSpan.Zero),
+                null, null, null, null, "measured", []));
+            using var stored = await http.GetAsync(new Uri("/api/v1/tracking/prior", UriKind.Relative));
+            using var doc2 = JsonDocument.Parse(await stored.Content.ReadAsStringAsync());
+            Assert.That(doc2.RootElement.GetProperty("seconds").GetDouble(), Is.EqualTo(45));
+            Assert.That(doc2.RootElement.GetProperty("source").GetString(), Is.EqualTo("the last probe"));
+            store.PutTrackingCalibration(null);
         }
 
         [Test]

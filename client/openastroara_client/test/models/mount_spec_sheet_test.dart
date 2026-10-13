@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/mount_spec_sheet.dart';
 
@@ -17,20 +15,23 @@ const _eqm35 = {
 };
 
 void main() {
-  test('parses the bridge sheet; null fields stay unknown', () {
+  test('parses the bridge sheet; null fields stay unknown, never a guess', () {
     final s = MountSpecSheet.fromJson(_eqm35)!;
     expect(s.model, 'Sky-Watcher EQM-35 Pro');
+    expect(s.source, 'manufacturer');
     expect(s.wormPeriodS, 638);
     expect(s.periodicErrorPpArcsec, 25);
     expect(s.hasPec, isTrue);
     expect(s.hasTrackingFigures, isTrue);
     expect(s.trackingFact, 'Periodic error 25″ p-p over 638 s · manufacturer');
+
     final sparse = MountSpecSheet.fromJson(const {
       'model': 'ZWO AM5',
       'worm_period_s': null,
     })!;
     expect(sparse.hasTrackingFigures, isFalse);
-    expect(sparse.trackingFact, 'Periodic error unknown · manufacturer');
+    expect(sparse.source, isNull, reason: 'the sheet did not say');
+    expect(sparse.trackingFact, 'Periodic error unknown');
     expect(
       MountSpecSheet.fromJson(const {
         'has_encoders': true,
@@ -42,68 +43,11 @@ void main() {
     expect(MountSpecSheet.fromJson('x'), isNull);
   });
 
-  test('the EQM-35 example gives the same prior as the daemon', () {
-    final s = MountSpecSheet.fromJson(_eqm35);
-    // RedCat at 2.3"/px, seeing 3": tolerance max(2.3, 1.5) = 2.3"; pe_rate 2π·12.5/638.
-    final prior = unguidedPriorFromSpecs(
-      s,
-      pixelScaleArcsec: 2.3,
-      seeingFwhmArcsec: 3.0,
-    )!;
-    expect(prior, closeTo(2.3 / (2 * math.pi * 12.5 / 638), 1e-6));
-    expect(prior, closeTo(18.7, 0.1));
-    // Fine pixels: seeing sets the tolerance.
+  test('value equality', () {
+    expect(MountSpecSheet.fromJson(_eqm35), MountSpecSheet.fromJson(_eqm35));
     expect(
-      unguidedPriorFromSpecs(s, pixelScaleArcsec: 0.8, seeingFwhmArcsec: 3.0),
-      closeTo(1.5 / (2 * math.pi * 12.5 / 638), 1e-6),
-    );
-  });
-
-  test('encoders drop the periodic-error term; polar misalignment adds drift; floors and nulls', () {
-    final enc = MountSpecSheet.fromJson({..._eqm35, 'has_encoders': true});
-    expect(
-      unguidedPriorFromSpecs(enc, pixelScaleArcsec: 2.3, seeingFwhmArcsec: 3.0),
-      isNull,
-    );
-    final paRate = 15.04 * math.sin(10 / 60 * math.pi / 180);
-    expect(
-      unguidedPriorFromSpecs(
-        enc,
-        pixelScaleArcsec: 2.3,
-        seeingFwhmArcsec: 3.0,
-        polarAlignErrorArcmin: 10,
-      ),
-      closeTo(2.3 / paRate, 1e-6),
-    );
-    final both = unguidedPriorFromSpecs(
       MountSpecSheet.fromJson(_eqm35),
-      pixelScaleArcsec: 2.3,
-      seeingFwhmArcsec: 3.0,
-      polarAlignErrorArcmin: 10,
-    )!;
-    expect(both, lessThan(2.3 / paRate));
-    expect(
-      unguidedPriorFromSpecs(MountSpecSheet.fromJson(_eqm35)),
-      isNull,
-      reason: 'no tolerance',
-    );
-    final wild = MountSpecSheet.fromJson({
-      ..._eqm35,
-      'periodic_error_pp_arcsec': 5000,
-      'worm_period_s': 10,
-    });
-    expect(
-      unguidedPriorFromSpecs(
-        wild,
-        pixelScaleArcsec: 2.3,
-        seeingFwhmArcsec: 3.0,
-      ),
-      minUnguidedPriorSeconds,
-    );
-    expect(
-      unguidedPriorFromSpecs(null, pixelScaleArcsec: 2.3),
-      isNull,
-      reason: 'no sheet, no PA: nothing to bound',
+      isNot(MountSpecSheet.fromJson({..._eqm35, 'has_pec': false})),
     );
   });
 }
