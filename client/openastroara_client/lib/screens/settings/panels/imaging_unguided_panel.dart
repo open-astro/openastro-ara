@@ -185,6 +185,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
                 final sheet =>
                   '${sheet.model ?? 'This mount'}: ${sheet.trackingFact}${sheet.hasPec ? ' · PEC available' : ''}',
               },
+              AsyncError() => 'Couldn\'t read the mount — check its connection.',
               _ => 'Reading the mount…',
             },
             helpKey: 'img.unguided.ceiling',
@@ -222,6 +223,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         EditableNumberRow(
           label: 'Round at or under eccentricity',
           helpKey: 'img.unguided.eccentricity',
+          hint: 'Kept below the trailed bar; follows it down when you lower that',
           currentValue: _num(u.goodEccentricity),
           getCanonical: () => _num(ref.read(unguidedSettingsProvider).goodEccentricity),
           parse: (s) {

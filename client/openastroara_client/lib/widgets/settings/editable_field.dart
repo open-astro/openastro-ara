@@ -130,6 +130,9 @@ class EditableNumberRow extends StatelessWidget {
   final String Function() getCanonical;
   final void Function(String) parse;
   final String? helpKey;
+
+  /// Optional one-line note under the label (same as [EditableTextRow.hint]).
+  final String? hint;
   const EditableNumberRow({
     super.key,
     required this.label,
@@ -137,6 +140,7 @@ class EditableNumberRow extends StatelessWidget {
     required this.getCanonical,
     required this.parse,
     this.helpKey,
+    this.hint,
   });
 
   @override
@@ -147,6 +151,7 @@ class EditableNumberRow extends StatelessWidget {
       getCanonical: getCanonical,
       parse: parse,
       helpKey: helpKey,
+      hint: hint,
     );
   }
 }

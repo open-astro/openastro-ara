@@ -2324,9 +2324,8 @@ const Map<String, Help> helpRegistry = {
     body:
         'Before the first probe has measured anything, the mount\'s spec sheet (periodic error over its worm '
         'period, plus your latest polar-align residual) gives a starting ceiling: the time until the drift '
-        'exceeds a tolerance. "Larger of the two" takes one pixel or half the seeing disc, whichever is '
-        'larger — the shipped basis; "one pixel" is strict on well-sampled rigs; "half the seeing" is strict '
-        'on undersampled ones. The probe measures the real figure on the night either way.',
+        'exceeds a tolerance. "Larger of one pixel or half the seeing" is the shipped basis; "One pixel" is '
+        'strict on well-sampled rigs; "Half the seeing disc" is strict on undersampled ones. The probe measures the real figure on the night either way.',
     relatedSettings: ['img.unguided.prior_tolerance_basis'],
   ),
 };

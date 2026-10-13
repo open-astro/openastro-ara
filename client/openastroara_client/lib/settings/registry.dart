@@ -910,8 +910,8 @@ const List<Setting> settingsRegistry = [
     description: 'How much trailing the mount\'s spec-sheet prior allows before anything is measured: one pixel, half the seeing disc, or whichever is larger (the shipped basis).',
     keywords: ['unguided', 'prior', 'tolerance', 'spec sheet', 'seeing', 'pixel'],
     path: ['Settings', 'Imaging', 'Unguided'],
-    type: SettingType.enumValue(['Larger of the two', 'One pixel', 'Half the seeing']),
-    defaultValue: 'Larger of the two',
+    type: SettingType.enumValue(['Larger of one pixel or half the seeing', 'One pixel', 'Half the seeing disc']),
+    defaultValue: 'Larger of one pixel or half the seeing',
     profilePath: 'unguided.prior_tolerance_basis',
   ),
   Setting(
