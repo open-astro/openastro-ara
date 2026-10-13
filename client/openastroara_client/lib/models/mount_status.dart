@@ -1,4 +1,5 @@
 import '../util/slew_rates.dart';
+import 'mount_spec_sheet.dart';
 import 'equipment_device_status.dart';
 
 /// Mount (telescope) capabilities (read once on connect, nullable until then):
@@ -25,6 +26,9 @@ class MountCapabilities {
   /// when the mount reports none or the daemon predates the field.
   final List<SlewRateBand> axisRateBands;
 
+  /// #1264 — the bridge's spec sheet for this mount, when the driver ships one.
+  final MountSpecSheet? specs;
+
   const MountCapabilities({
     required this.canSlew,
     required this.canSync,
@@ -35,6 +39,7 @@ class MountCapabilities {
     this.canMoveAxis = false,
     this.axisRatesDegPerSec = const [],
     this.axisRateBands = const [],
+    this.specs,
   });
 
   /// The bands the speed picker is built from: [axisRateBands] when the daemon
@@ -52,6 +57,7 @@ class MountCapabilities {
         canSetTracking: json['can_set_tracking'] as bool? ?? false,
         canFindHome: json['can_find_home'] as bool? ?? false,
         canMoveAxis: json['can_move_axis'] as bool? ?? false,
+        specs: MountSpecSheet.fromJson(json['mount_specs']),
         axisRatesDegPerSec: (json['move_axis_rates_deg_per_sec'] as List<dynamic>?)
                 ?.map((e) {
                   if (e is! num) {
@@ -92,7 +98,8 @@ class MountCapabilities {
           other.canFindHome == canFindHome &&
           other.canMoveAxis == canMoveAxis &&
           _listEq(other.axisRatesDegPerSec, axisRatesDegPerSec) &&
-          _listEq(other.axisRateBands, axisRateBands));
+          _listEq(other.axisRateBands, axisRateBands) &&
+          other.specs == specs);
 
   static bool _listEq<T>(List<T> a, List<T> b) {
     if (a.length != b.length) return false;
@@ -105,7 +112,7 @@ class MountCapabilities {
   @override
   int get hashCode => Object.hash(canSlew, canSync, canPark, canUnpark,
       canSetTracking, canFindHome, canMoveAxis, Object.hashAll(axisRatesDegPerSec),
-      Object.hashAll(axisRateBands));
+      Object.hashAll(axisRateBands), specs);
 }
 
 /// Live status of the connected ASCOM Telescope

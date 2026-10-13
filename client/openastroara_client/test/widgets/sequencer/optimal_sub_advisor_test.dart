@@ -4,6 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart'
     show takeExposureType;
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/mount_spec_sheet.dart';
+import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
@@ -263,8 +267,24 @@ void main() {
       GuiderStatus? guider,
       TrackingCalibration? tracking,
       double noiseTolerancePct = 5,
+      MountSpecSheet? mountSpecs,
     }) async {
       container = ProviderContainer(overrides: [
+        if (mountSpecs != null)
+          mountProvider.overrideWith(() => _SeededMount(MountStatus(
+                deviceId: 'mnt',
+                name: 'EQM-35',
+                connectionState: EquipmentConnectionState.connected,
+                capabilities: MountCapabilities(
+                    canSlew: true, canSync: true, canPark: true, canUnpark: true,
+                    canSetTracking: true, canFindHome: false, specs: mountSpecs),
+                runtimeState: 'tracking',
+                rightAscensionHours: 5,
+                declinationDegrees: 20,
+                tracking: true,
+                parked: false,
+                atHome: false,
+              ))),
         planningPrefsProvider.overrideWith(
             () => _SeededPrefs(PlanningPrefs(noiseTolerancePct: noiseTolerancePct))),
         opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
@@ -302,6 +322,14 @@ void main() {
               source: 'measured'));
       expect(find.textContaining('Suggested exposure:'), findsOneWidget);
       expect(find.textContaining('Unguided: about 45 s (measured 2026-10-1'),
+          findsOneWidget);
+    });
+
+    testWidgets('#1264 stage 1: with nothing measured, the mount\'s spec sheet gives the prior', (tester) async {
+      await pumpAdvisor(tester,
+          mountSpecs: const MountSpecSheet(
+              model: 'EQM-35 Pro', source: 'community', wormPeriodS: 638, periodicErrorPpArcsec: 25));
+      expect(find.textContaining('community prior from the mount\'s spec sheet; the first run measures it'),
           findsOneWidget);
     });
 
@@ -493,4 +521,11 @@ class _SeededPrefs extends PlanningPrefsNotifier {
   final PlanningPrefs _v;
   @override
   PlanningPrefs build() => _v;
+}
+
+class _SeededMount extends MountNotifier {
+  _SeededMount(this._v);
+  final MountStatus _v;
+  @override
+  Future<MountStatus?> build() async => _v;
 }

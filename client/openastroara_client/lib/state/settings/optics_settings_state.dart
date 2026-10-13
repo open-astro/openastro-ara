@@ -168,3 +168,11 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings>
 final opticsSettingsProvider =
     NotifierProvider<OpticsSettingsNotifier, OpticsSettings>(
         OpticsSettingsNotifier.new);
+
+/// Arcseconds per unbinned pixel from the optics, or null until the focal
+/// length and pixel size are set (206.265 × µm ÷ (mm × reducer)).
+double? pixelScaleArcsecOf(OpticsSettings o) {
+  if (o.focalLengthMm <= 0 || o.pixelSizeUm <= 0) return null;
+  final reducer = o.reducerFactor > 0 ? o.reducerFactor : 1.0;
+  return 206.265 * o.pixelSizeUm / (o.focalLengthMm * reducer);
+}

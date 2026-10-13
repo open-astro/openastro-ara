@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/mount_spec_sheet.dart';
+import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/screens/settings/panels/imaging_unguided_panel.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -21,10 +25,28 @@ class _Fixed extends TrackingCalibrationNotifier {
   }
 }
 
+class _SeededMount extends MountNotifier {
+  _SeededMount(this._v);
+  final MountStatus? _v;
+  @override
+  Future<MountStatus?> build() async => _v;
+}
+
+MountStatus _mount(MountSpecSheet? specs) => MountStatus(
+      deviceId: 'mnt', name: 'EQM-35', connectionState: EquipmentConnectionState.connected,
+      capabilities: MountCapabilities(
+          canSlew: true, canSync: true, canPark: true, canUnpark: true,
+          canSetTracking: true, canFindHome: false, specs: specs),
+      runtimeState: 'tracking', rightAscensionHours: 5, declinationDegrees: 20,
+      tracking: true, parked: false, atHome: false,
+    );
+
 Future<_Fixed> _pump(
   WidgetTester tester, {
   required bool connected,
   TrackingCalibration? cal,
+  MountSpecSheet? specs,
+  bool mountKnown = false,
 }) async {
   tester.view.physicalSize = const Size(1600, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -37,6 +59,7 @@ Future<_Fixed> _pump(
           connected ? const AraServer(hostname: 'rig', port: 5555) : null,
         ),
         trackingCalibrationProvider.overrideWith(() => notifier),
+        mountProvider.overrideWith(() => _SeededMount(mountKnown ? _mount(specs) : null)),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -130,4 +153,14 @@ void main() {
       );
     },
   );
+
+  testWidgets('#1264 the spec-sheet row names the sheet, or says there is none', (tester) async {
+    await _pump(tester, connected: true, mountKnown: true,
+        specs: const MountSpecSheet(model: 'EQM-35 Pro', wormPeriodS: 638, periodicErrorPpArcsec: 25, hasPec: true));
+    expect(find.textContaining('EQM-35 Pro: Periodic error 25″ p-p over 638 s · manufacturer · PEC available'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, connected: true, mountKnown: true);
+    expect(find.textContaining('No spec sheet for this mount'), findsOneWidget);
+  });
 }

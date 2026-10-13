@@ -289,6 +289,7 @@ public partial class Program {
         // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
         builder.Services.AddSingleton<TelescopeService>();
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
+        builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
         // backs BOTH the REST IFocuserService and the Sequencer's IFocuserMediator (§8.1), so the
         // MoveFocuser* instructions drive the live device (the mediator wiring is below; this
@@ -747,7 +748,8 @@ public partial class Program {
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TrackingProbeService>>(),
                 ws: sp.GetRequiredService<IWsBroadcaster>(),
                 notifications: sp.GetRequiredService<INotificationService>(),
-                polarAlignLog: sp.GetService<IPolarAlignmentLog>()));
+                polarAlignLog: sp.GetService<IPolarAlignmentLog>(),
+                specs: sp.GetService<IMountSpecSheetSource>()));
         // §48.3 — the auto-exposure flat set (panel light → probe-to-ADU → saved FLAT frames).
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(sp =>
             new FlatCaptureService(

@@ -15,6 +15,8 @@ import '../../state/sequencer/rig_capabilities_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/tracking/tracking_calibration_state.dart';
 import '../../util/unguided_advice.dart';
+import '../../models/mount_spec_sheet.dart';
+import '../../state/equipment/mount_state.dart';
 import '../../util/optimal_sub_local.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -361,6 +363,21 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
                 calibration:
                     ref.watch(trackingCalibrationProvider).asData?.value,
                 skyLimitedSeconds: r.recommendedSec,
+                specPriorSeconds: unguidedPriorFromSpecs(
+                  ref.watch(mountProvider).asData?.value?.capabilities?.specs,
+                  pixelScaleArcsec: pixelScaleArcsecOf(
+                    ref.watch(opticsSettingsProvider),
+                  ),
+                  seeingFwhmArcsec:
+                      ref.watch(siteSettingsProvider).typicalSeeingArcsec,
+                ),
+                specSource: ref
+                    .watch(mountProvider)
+                    .asData
+                    ?.value
+                    ?.capabilities
+                    ?.specs
+                    ?.source,
               )
               case final unguided?)
             Text(unguided, style: dim),

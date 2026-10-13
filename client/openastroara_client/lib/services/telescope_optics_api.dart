@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../models/mount_spec_sheet.dart';
 
 import '../models/server.dart';
 
@@ -45,9 +46,14 @@ class MountProps {
   final String? name;
   final double? maxSlewRateDegPerSec;
 
-  const MountProps({this.name, this.maxSlewRateDegPerSec});
+  /// #1264 — the bridge's spec sheet (`capabilities.mount_specs`), null when
+  /// the driver ships none.
+  final MountSpecSheet? specs;
 
-  bool get hasAny => name != null || maxSlewRateDegPerSec != null;
+  const MountProps({this.name, this.maxSlewRateDegPerSec, this.specs});
+
+  bool get hasAny =>
+      name != null || maxSlewRateDegPerSec != null || specs != null;
 
   /// Parse a `GET /api/v1/equipment/telescope` body, or null when no mount is
   /// connected (same contract as [TelescopeOptics.fromTelescopeJson]).
@@ -58,8 +64,10 @@ class MountProps {
         ? rawName.trim()
         : null;
     double? maxRate;
+    MountSpecSheet? specs;
     final caps = json['capabilities'];
     if (caps is Map<String, dynamic>) {
+      specs = MountSpecSheet.fromJson(caps['mount_specs']);
       final rates = caps['move_axis_rates_deg_per_sec'];
       if (rates is List) {
         for (final r in rates) {
@@ -69,7 +77,7 @@ class MountProps {
         }
       }
     }
-    return MountProps(name: name, maxSlewRateDegPerSec: maxRate);
+    return MountProps(name: name, maxSlewRateDegPerSec: maxRate, specs: specs);
   }
 }
 

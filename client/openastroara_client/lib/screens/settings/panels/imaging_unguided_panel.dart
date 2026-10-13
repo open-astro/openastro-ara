@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/tracking_calibration.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/tracking/tracking_calibration_state.dart';
+import '../../../state/equipment/mount_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -118,6 +119,18 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel> {
               ),
           ],
         ],
+        // #1264 — the mount's spec sheet (AlpacaBridge #815): the prior the
+        // first unguided run starts from when nothing is measured yet.
+        if (connected)
+          SettingsRow(
+            label: 'Mount spec sheet',
+            value: switch (ref.watch(mountProvider).asData?.value?.capabilities?.specs) {
+              null => 'No spec sheet for this mount — the first unguided run measures the ceiling from the ladder.',
+              final sheet => '${sheet.model ?? 'This mount'}: ${sheet.trackingFact}'
+                  '${sheet.hasPec ? ' · PEC available' : ''}',
+            },
+            helpKey: 'img.unguided.ceiling',
+          ),
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,

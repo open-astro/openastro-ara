@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_readiness.dart';
 import 'package:openastroara/models/tracking_calibration.dart';
+import 'package:openastroara/models/mount_spec_sheet.dart';
 import 'package:openastroara/services/camera_geometry_api.dart';
 import 'package:openastroara/services/filter_wheel_names_api.dart';
 import 'package:openastroara/services/focuser_props_api.dart';
@@ -75,6 +76,19 @@ void main() {
       expect(r.label, 'iOptron CEM70');
       expect(r.facts.map((f) => f.value),
           containsAll(['530 mm', '106 mm', '4°/s']));
+    });
+
+    test('#1264 the spec sheet is a fact when the bridge ships one, and silent when not', () {
+      const optics = TelescopeOptics(focalLengthMm: 530, apertureMm: 106);
+      final withSheet = ReadinessRules.mount('EQM-35', null, optics,
+          const MountProps(name: 'EQM-35', specs: MountSpecSheet(model: 'EQM-35 Pro', wormPeriodS: 638, periodicErrorPpArcsec: 25)));
+      expect(withSheet.state, ReadinessState.ready);
+      expect(withSheet.facts.singleWhere((f) => f.label == 'Spec sheet').value,
+          'Periodic error 25″ p-p over 638 s · manufacturer');
+      final without = ReadinessRules.mount('EQM-35', null, optics, const MountProps(name: 'EQM-35'));
+      expect(without.state, ReadinessState.ready, reason: 'no sheet is no gap: the Unguided panel says so instead');
+      expect(without.gaps, isEmpty);
+      expect(without.facts.where((f) => f.label == 'Spec sheet'), isEmpty);
     });
 
     test('#1264 a stored tracking ceiling is an informational fact; none is no gap', () {

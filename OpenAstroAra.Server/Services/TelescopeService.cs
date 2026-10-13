@@ -39,7 +39,7 @@ namespace OpenAstroAra.Server.Services;
 /// supersede, §32.4 background-refresh cache, read-once capabilities, AbortSlew-before-disconnect).
 /// REST-only — the <c>ITelescopeMediator</c> unification is the follow-up.
 /// </summary>
-public sealed partial class TelescopeService : ITelescopeService, IRetainedDeviceSource, IDisposable {
+public sealed partial class TelescopeService : ITelescopeService, IRetainedDeviceSource, IMountSpecSheetSource, IDisposable {
 
     // #1127 — the record the card names. The remembered-selection store and this can diverge
     // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
@@ -989,7 +989,18 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm,
             CanMoveAxis: canMoveAxis,
             MoveAxisRatesDegPerSec: [.. EndpointsOf(padBands)],
-            MoveAxisRateBandsDegPerSec: BandDtosOf(padBands));
+            MoveAxisRateBandsDegPerSec: BandDtosOf(padBands),
+            // #1264 — the bridge's spec sheet rides the same once-per-connect read; null without one.
+            MountSpecs: MountSpecSheet.TryRead(c));
+    }
+
+    /// <inheritdoc/>
+    public MountSpecSheetDto? CurrentMountSpecs {
+        get {
+            lock (_gate) {
+                return _capabilities?.MountSpecs;
+            }
+        }
     }
 
     /// <summary>The direction pad's two AxisRates reads (Primary, Secondary) as [Min,Max] bands, each

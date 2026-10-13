@@ -54,4 +54,25 @@ void main() {
       expect(o.apertureMm, isNull);
     });
   });
+
+  test('#1264 MountProps carries the bridge spec sheet from capabilities.mount_specs', () {
+    final p = MountProps.fromTelescopeJson(const {
+      'state': 'connected',
+      'name': 'EQM-35',
+      'capabilities': {
+        'mount_specs': {
+          'model': 'Sky-Watcher EQM-35 Pro',
+          'source': 'community',
+          'worm_period_s': 638,
+          'periodic_error_pp_arcsec': 25,
+        },
+      },
+    });
+    expect(p!.specs, isNotNull);
+    expect(p.specs!.source, 'community');
+    expect(p.specs!.wormPeriodS, 638);
+    expect(p.hasAny, isTrue);
+    final none = MountProps.fromTelescopeJson(const {'state': 'connected', 'name': 'x', 'capabilities': {}});
+    expect(none!.specs, isNull);
+  });
 }

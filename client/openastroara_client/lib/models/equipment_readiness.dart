@@ -200,6 +200,14 @@ abstract final class ReadinessRules {
     if (rate != null) {
       facts.add(DeviceFact('Max slew rate', '${_num(rate)}°/s'));
     }
+    // #1264 — the mount's spec sheet (AlpacaBridge #815): the tracking prior
+    // an unguided run starts from. A fact when the bridge ships one; no gap
+    // when it does not — a gap would amber every mount card while no bridge
+    // build ships sheets yet, and Settings → Imaging → Unguided already says
+    // "No spec sheet for this mount".
+    if (props?.specs case final sheet?) {
+      facts.add(DeviceFact('Spec sheet', sheet.trackingFact));
+    }
     // #1264 — the unguided exposure ceiling the last Tracking Probe found (or
     // the prior it kept). Informational: a guided rig never needs it, and an
     // unguided one measures it on its first run, so its absence is no gap.

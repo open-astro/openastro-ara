@@ -7,9 +7,21 @@ String? unguidedCeilingLine({
   required bool guided,
   required TrackingCalibration? calibration,
   required double skyLimitedSeconds,
+  // #1264 stage 1 — the prior the mount's spec sheet implies for this rig
+  // (unguidedPriorFromSpecs), used only before anything is measured.
+  double? specPriorSeconds,
+  String? specSource,
 }) {
   if (guided) return null;
   if (calibration == null) {
+    if (specPriorSeconds != null) {
+      final lower = specPriorSeconds < skyLimitedSeconds
+          ? ' — the run uses this lower figure until it has measured'
+          : ' — the sky limit above is the lower of the two';
+      return 'Unguided: about ${formatExposureSeconds(specPriorSeconds)} '
+          '(${specSource ?? 'manufacturer'} prior from the mount\'s spec sheet; '
+          'the first run measures it)$lower.';
+    }
     return 'Unguided rig: the run measures how long a sub your mount holds '
         '(a Tracking Probe at the target) and shortens the subs to it.';
   }

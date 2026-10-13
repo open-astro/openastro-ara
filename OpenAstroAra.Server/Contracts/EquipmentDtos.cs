@@ -216,7 +216,27 @@ public sealed record TelescopeCapabilitiesDto(
     // when the mount reports no axis rates.
     bool CanMoveAxis = false,
     IReadOnlyList<double>? MoveAxisRatesDegPerSec = null,
-    IReadOnlyList<MoveAxisRateBandDto>? MoveAxisRateBandsDegPerSec = null);
+    IReadOnlyList<MoveAxisRateBandDto>? MoveAxisRateBandsDegPerSec = null,
+    // #1264 stage 1 — the mount's spec sheet from AlpacaBridge #815 (`openastro:specs`
+    // action), read once per connect. Null when the driver ships no sheet: the client
+    // shows "No spec sheet for this mount" and the tracking probe starts from its ladder.
+    MountSpecSheetDto? MountSpecs = null);
+
+/// <summary>#1264 — the bridge's per-driver mount spec sheet (schema <c>openastro.mount-specs/1</c>).
+/// <c>WormPeriodS</c> and <c>PeriodicErrorPpArcsec</c> are the two the unguided prior needs; null means
+/// unknown, never a guess. <c>Source</c> is <c>manufacturer</c> | <c>measured</c> | <c>community</c>;
+/// <c>MountType</c> is <c>worm_eq</c> | <c>strain_wave</c> | <c>direct_drive</c> | <c>alt_az</c> | <c>other</c>.</summary>
+public sealed record MountSpecSheetDto(
+    string? DriverId,
+    string? Model,
+    string Source,
+    double? WormPeriodS,
+    double? PeriodicErrorPpArcsec,
+    bool HasEncoders,
+    bool HasPec,
+    string? MountType,
+    double? MaxPayloadKg,
+    string? Notes);
 
 /// <summary>One MoveAxis rate band (deg/sec): the mount honours any magnitude in
 /// <c>[Min, Max]</c>; <c>Min == Max</c> is a single discrete rate (#1126).</summary>

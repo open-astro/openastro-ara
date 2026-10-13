@@ -56,6 +56,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
     private readonly IWsBroadcaster? _ws;
     private readonly INotificationService? _notifications;
     private readonly IPolarAlignmentLog? _polarAlignLog;
+    private readonly IMountSpecSheetSource? _specs;
     private readonly Func<DateTimeOffset> _clock;
     private readonly ILogger<TrackingProbeService> _logger;
 
@@ -67,7 +68,8 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
             IWsBroadcaster? ws = null,
             INotificationService? notifications = null,
             IPolarAlignmentLog? polarAlignLog = null,
-            Func<DateTimeOffset>? clock = null) {
+            Func<DateTimeOffset>? clock = null,
+            IMountSpecSheetSource? specs = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
         _logger = logger ?? NullLogger<TrackingProbeService>.Instance;
@@ -75,6 +77,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
         _ws = ws;
         _notifications = notifications;
         _polarAlignLog = polarAlignLog;
+        _specs = specs;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 
@@ -126,12 +129,30 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
     }
 
     /// <inheritdoc/>
-    public Task<double?> ResolvePriorAsync(double? bodyPriorSeconds, CancellationToken token) {
+    public async Task<double?> ResolvePriorAsync(double? bodyPriorSeconds, CancellationToken token) =>
+        (await ResolvePriorWithSourceAsync(bodyPriorSeconds, token).ConfigureAwait(false)).Seconds;
+
+    /// <summary>The prior and its source, in order: the body's own value; the profile's stored
+    /// calibration (last night's measurement); the mount's spec sheet (#1264 stage 1) turned into
+    /// seconds for THIS rig's pixel scale, the site's typical seeing and the latest polar-align
+    /// residual. Null when none applies — the ladder alone decides.</summary>
+    public async Task<(double? Seconds, string? Source)> ResolvePriorWithSourceAsync(double? bodyPriorSeconds, CancellationToken token) {
         if (bodyPriorSeconds is double body && body > 0) {
-            return Task.FromResult<double?>(body);
+            return (body, "the body");
         }
         var stored = _profiles.GetTrackingCalibration();
-        return Task.FromResult(stored is { CeilingSeconds: > 0 } ? stored.CeilingSeconds : (double?)null);
+        if (stored is { CeilingSeconds: > 0 }) {
+            return (stored.CeilingSeconds, "the last probe");
+        }
+        var sheet = _specs?.CurrentMountSpecs;
+        if (sheet is null) {
+            return (null, null);
+        }
+        var pixelScale = PixelScaleArcsec(_profiles.GetOpticsSettings());
+        var seeing = _profiles.GetSiteSettings()?.TypicalSeeingArcsec;
+        var polarAlign = await LatestPolarAlignErrorAsync(token).ConfigureAwait(false);
+        var seconds = MountSpecSheet.UnguidedPriorSeconds(sheet, pixelScale, seeing, polarAlign);
+        return seconds is null ? (null, null) : (seconds, $"the mount's spec sheet ({sheet.Source})");
     }
 
     public async Task<TrackingProbeResult> ProbeAsync(TrackingProbeRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {

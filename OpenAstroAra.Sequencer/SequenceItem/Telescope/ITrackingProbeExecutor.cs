@@ -50,5 +50,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         /// stored <c>tracking_calibration</c> ceiling — last night's measurement is this night's prior.
         /// Null for an unknown mount that was never probed. Default: the body's value.</summary>
         Task<double?> ResolvePriorAsync(double? bodyPriorSeconds, CancellationToken token) => Task.FromResult(bodyPriorSeconds);
+
+        /// <summary>#1264 stage 1 — the prior AND where it came from, for the notifications ("…than the
+        /// 45 s prior from the last probe"): the body's own value, the stored calibration, or the
+        /// mount's spec sheet. Default wraps <see cref="ResolvePriorAsync"/> with the two sources the
+        /// body-or-store rule can produce.</summary>
+        async Task<(double? Seconds, string? Source)> ResolvePriorWithSourceAsync(double? bodyPriorSeconds, CancellationToken token) {
+            var prior = await ResolvePriorAsync(bodyPriorSeconds, token).ConfigureAwait(false);
+            return (prior, prior is null ? null : bodyPriorSeconds is not null ? "the body" : "the last probe");
+        }
     }
 }

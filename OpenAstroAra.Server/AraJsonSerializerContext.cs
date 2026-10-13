@@ -290,6 +290,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(MoveAxisRateBandDto))]
 [JsonSerializable(typeof(IReadOnlyList<MoveAxisRateBandDto>))]
 [JsonSerializable(typeof(TelescopeCapabilitiesDto))]
+[JsonSerializable(typeof(MountSpecSheetDto))]
 [JsonSerializable(typeof(TelescopeDto))]
 [JsonSerializable(typeof(TelescopeStateDto))]
 [JsonSerializable(typeof(TemplateInstantiateRequestDto))]
