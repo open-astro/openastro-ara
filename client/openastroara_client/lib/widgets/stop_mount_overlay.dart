@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/verify_position_result.dart';
+import '../services/plate_solve_api.dart';
 import '../state/equipment/mount_state.dart';
+import '../state/plate_solve/plate_solve_api_state.dart';
 import '../state/sequencer/sequence_list_state.dart';
 import '../state/ws/ws_providers.dart';
 import '../util/friendly_error.dart';
@@ -253,6 +256,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
           haltedRa: haltedRa,
           haltedDec: haltedDec,
           onAction: (action) => _runSequenceAction(action),
+          onVerify: _verifyPosition,
         ),
       ).whenComplete(() => _awaitingPause = false),
     );
@@ -303,33 +307,85 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     }
   }
 
+  /// §57.4 "Verify Position — show me an image": one quick snapshot, solved by
+  /// the daemon, compared with where the mount says it is and where the slew
+  /// was aimed. Null when there is no server; a daemon sentence (422/409) is
+  /// thrown as a [PlateSolveException] for the dialog to show.
+  Future<VerifyPositionResult?> _verifyPosition() async {
+    final api = ref.read(plateSolveApiProvider);
+    if (api == null) return null;
+    return api.verifyPosition();
+  }
+
   static double? _numOrNull(dynamic v) => v is num ? v.toDouble() : null;
 }
 
 enum _StopModalAction { resume, skipTarget, endSession }
 
 /// §57.4 — the post-stop modal: where the mount halted, what was paused, and
-/// the resume/skip/end choices. Verify-Position (capture + solve) is the
-/// deferred follow-up.
-class _MountStoppedDialog extends StatelessWidget {
+/// the resume/skip/end choices, and §57.4 Verify-Position: one quick image,
+/// solved, shown beside the mount's own figures so the user can confirm the
+/// mount is somewhere sane before any further movement.
+class _MountStoppedDialog extends StatefulWidget {
   final double? haltedRa;
   final double? haltedDec;
   final void Function(_StopModalAction action) onAction;
+
+  /// Null = no server to ask. Throws a [PlateSolveException] with the daemon's
+  /// sentence when the look cannot be taken (no camera, solver unconfigured).
+  final Future<VerifyPositionResult?> Function() onVerify;
 
   const _MountStoppedDialog({
     required this.haltedRa,
     required this.haltedDec,
     required this.onAction,
+    required this.onVerify,
   });
+
+  @override
+  State<_MountStoppedDialog> createState() => _MountStoppedDialogState();
+}
+
+class _MountStoppedDialogState extends State<_MountStoppedDialog> {
+  bool _verifying = false;
+  VerifyPositionResult? _verified;
+  String? _verifyError;
+
+  Future<void> _verify() async {
+    setState(() {
+      _verifying = true;
+      _verifyError = null;
+    });
+    try {
+      final result = await widget.onVerify();
+      if (!mounted) return;
+      setState(() {
+        _verified = result;
+        if (result == null) _verifyError = 'No server connection — cannot take a verification image.';
+      });
+    } on PlateSolveException catch (e) {
+      if (!mounted) return;
+      setState(() => _verifyError = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _verifyError = friendlyError(e, action: 'take the verification image'));
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final position = haltedRa != null && haltedDec != null
-        ? 'RA ${haltedRa!.toStringAsFixed(2)}h, '
-              'Dec ${haltedDec! >= 0 ? '+' : ''}${haltedDec!.toStringAsFixed(1)}°'
+    final position = widget.haltedRa != null && widget.haltedDec != null
+        ? 'RA ${widget.haltedRa!.toStringAsFixed(2)}h, '
+              'Dec ${widget.haltedDec! >= 0 ? '+' : ''}${widget.haltedDec!.toStringAsFixed(1)}°'
         : 'unknown';
+    final verified = _verified;
     return AlertDialog(
+      // Scrollable: the verification lines push a 600 px-tall window past its
+      // height, and the modal must never clip the Resume / Skip / End choices.
+      scrollable: true,
       title: const Text('Mount stopped at user request'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -343,6 +399,38 @@ class _MountStoppedDialog extends StatelessWidget {
             'the mount is in a safe position before resuming.',
             style: theme.textTheme.bodySmall,
           ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            key: const ValueKey('stop_modal_verify'),
+            onPressed: _verifying ? null : _verify,
+            icon: _verifying
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.camera_alt_outlined, size: 18),
+            label: Text(_verifying ? 'Taking a 2 s image and solving…' : 'Verify Position — show me an image'),
+          ),
+          if (verified != null) ...[
+            const SizedBox(height: 8),
+            for (final line in verified.lines)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  line,
+                  key: const ValueKey('stop_modal_verify_line'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: line.startsWith('Image did not solve') ? AraColors.accentBusy : null,
+                  ),
+                ),
+              ),
+          ],
+          if (_verifyError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _verifyError!,
+                key: const ValueKey('stop_modal_verify_error'),
+                style: theme.textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+              ),
+            ),
         ],
       ),
       actions: [
@@ -350,7 +438,7 @@ class _MountStoppedDialog extends StatelessWidget {
           key: const ValueKey('stop_modal_resume'),
           onPressed: () {
             Navigator.of(context).pop();
-            onAction(_StopModalAction.resume);
+            widget.onAction(_StopModalAction.resume);
           },
           child: const Text('Resume sequence'),
         ),
@@ -358,7 +446,7 @@ class _MountStoppedDialog extends StatelessWidget {
           key: const ValueKey('stop_modal_skip'),
           onPressed: () {
             Navigator.of(context).pop();
-            onAction(_StopModalAction.skipTarget);
+            widget.onAction(_StopModalAction.skipTarget);
           },
           child: const Text('Skip this target'),
         ),
@@ -366,7 +454,7 @@ class _MountStoppedDialog extends StatelessWidget {
           key: const ValueKey('stop_modal_end'),
           onPressed: () {
             Navigator.of(context).pop();
-            onAction(_StopModalAction.endSession);
+            widget.onAction(_StopModalAction.endSession);
           },
           child: const Text('End session'),
         ),

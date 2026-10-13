@@ -223,6 +223,8 @@ public partial class Program {
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPlateSolveService, OpenAstroAra.Server.Services.PlateSolveService>();
         // §28 centering — slew → solve → sync → re-slew loop over live equipment (the §58.4 flip recenter uses it).
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.ICenteringService, OpenAstroAra.Server.Services.CenteringService>();
+        // §57.4 — Verify-Position after a Stop Mount: one snapshot, solved, beside the mount's figures.
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IVerifyPositionService, OpenAstroAra.Server.Services.VerifyPositionService>();
         // §58.4 — the real meridian-flip orchestration (stop guiding → pass meridian → flip slew → recenter →
         // resume guiding), replacing the throwing placeholder. Handed into the sequencer factory below so the
         // MeridianFlipTrigger prototype runs it. Mount-gated to live-validate.

@@ -12,6 +12,10 @@ import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/services/plate_solve_api.dart';
+import 'package:openastroara/models/verify_position_result.dart';
+import 'package:openastroara/models/plate_solve_result.dart';
+import 'package:openastroara/state/plate_solve/plate_solve_api_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -57,6 +61,24 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
 
   @override
   void close() {}
+}
+
+class _FakeSolveApi extends PlateSolveApi {
+  _FakeSolveApi() : super(const AraServer(hostname: 'h', port: 5555));
+  int calls = 0;
+  Object? error;
+  VerifyPositionResult answer = const VerifyPositionResult(
+    success: true, solvedRaHours: 9.93, solvedDecDegrees: 69.07,
+    mountRaHours: 9.93, mountDecDegrees: 69.57, intendedRaHours: 9.93, intendedDecDegrees: 69.07,
+    solvedToMountArcmin: 30.0, solvedToIntendedArcmin: 0.4, exposureSeconds: 2);
+  @override
+  Future<VerifyPositionResult> verifyPosition({double? exposureSeconds}) async {
+    calls++;
+    if (error case final e?) throw e;
+    return answer;
+  }
+  @override
+  Future<PlateSolveResult> solve(String id) => throw UnimplementedError();
 }
 
 class _FakeSeqClient implements SequenceClient {
@@ -136,6 +158,7 @@ void main() {
   late StreamController<WsEvent> ws;
   late _FakeMountApi mountApi;
   late _FakeSeqClient seqApi;
+  late _FakeSolveApi solveApi;
   late ProviderContainer container;
 
   Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content')}) async {
@@ -143,6 +166,7 @@ void main() {
     addTearDown(ws.close);
     mountApi = _FakeMountApi();
     seqApi = _FakeSeqClient();
+    solveApi = _FakeSolveApi();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -152,6 +176,7 @@ void main() {
           serverLinkUpProvider.overrideWith((ref) => ref.watch(_linkUp)),
           mountApiFactoryProvider.overrideWithValue((_) => mountApi),
           sequenceApiFactoryProvider.overrideWithValue((_) => seqApi),
+          plateSolveApiFactoryProvider.overrideWithValue((_) => solveApi),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -478,6 +503,7 @@ void main() {
             serverLinkUpProvider.overrideWith((ref) => ref.watch(_linkUp)),
             mountApiFactoryProvider.overrideWithValue((_) => mountApi),
             sequenceApiFactoryProvider.overrideWithValue((_) => seqApi),
+            plateSolveApiFactoryProvider.overrideWithValue((_) => solveApi),
           ],
           child: MaterialApp(
             home: Scaffold(
@@ -509,5 +535,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(mountApi.commands, contains('abort'));
     });
+  });
+
+  testWidgets('§57.4 Verify Position takes one image through the daemon and shows the three positions', (tester) async {
+    await pump(tester);
+    await fire(tester, _event(SlewWsEvents.started, {'target_ra_hours': 9.93, 'target_dec_degrees': 69.07}));
+    await fire(tester, _event(SlewWsEvents.aborted, {'halted_ra_hours': 9.93, 'halted_dec_degrees': 69.57}));
+    expect(find.byKey(const ValueKey('stop_modal_verify')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
+    await tester.pumpAndSettle();
+    expect(solveApi.calls, 1, reason: 'one quick snapshot + solve on the daemon');
+    expect(find.text('Image solved: RA 9.93h, Dec +69.07°'), findsOneWidget);
+    expect(find.text('Mount reports: RA 9.93h, Dec +69.57° (30.0′ off)'), findsOneWidget);
+    expect(find.text('Slew was aimed at: RA 9.93h, Dec +69.07° (24″ off)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stop_modal_resume')), findsOneWidget, reason: 'the choices stay; verify only looks');
+    expect(mountApi.commands, isEmpty, reason: 'no slew, no sync');
+  });
+
+  testWidgets('§57.4 a daemon refusal (no camera / solver unconfigured) is shown in the modal, not thrown', (tester) async {
+    await pump(tester);
+    solveApi.error = const PlateSolveException('No camera is connected to take the verification image.');
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted));
+    await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('stop_modal_verify_error')), findsOneWidget);
+    expect(find.textContaining('No camera is connected'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stop_modal_verify')), findsOneWidget, reason: 'the user can try again');
   });
 }

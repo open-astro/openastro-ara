@@ -2750,6 +2750,32 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/platesolve/verify-position:
+    post:
+      tags:
+        - PlateSolve
+      summary: '§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount''s reported and intended positions.'
+      operationId: VerifyMountPosition
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/VerifyPositionRequestDto'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyPositionResultDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/platesolve/database:
     get:
       tags:
@@ -13189,6 +13215,99 @@ components:
               - number
               - string
             format: double
+    VerifyPositionRequestDto:
+      type: object
+      properties:
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+    VerifyPositionResultDto:
+      required:
+        - success
+        - solved_ra_hours
+        - solved_dec_degrees
+        - mount_ra_hours
+        - mount_dec_degrees
+        - intended_ra_hours
+        - intended_dec_degrees
+        - solved_to_mount_arcmin
+        - solved_to_intended_arcmin
+        - exposure_seconds
+        - note
+      type: object
+      properties:
+        success:
+          type: boolean
+        solved_ra_hours:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        solved_dec_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mount_ra_hours:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mount_dec_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        intended_ra_hours:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        intended_dec_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        solved_to_mount_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        solved_to_intended_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        note:
+          type:
+            - 'null'
+            - string
     WsCatalogResponse:
       required:
         - events

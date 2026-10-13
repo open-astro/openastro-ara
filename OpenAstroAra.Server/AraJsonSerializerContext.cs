@@ -261,6 +261,9 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(SkyModelCalibrationDto))]
 [JsonSerializable(typeof(SkyModelFilterCalibrationDto))]
 [JsonSerializable(typeof(TrackingPriorDto))]
+// §57.4 — Verify-Position after a Stop Mount.
+[JsonSerializable(typeof(VerifyPositionRequestDto))]
+[JsonSerializable(typeof(VerifyPositionResultDto))]
 // §58.14 — pre-sleep checklist.
 [JsonSerializable(typeof(PreflightChecklistDto))]
 [JsonSerializable(typeof(PreflightItemDto))]

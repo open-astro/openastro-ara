@@ -57,12 +57,37 @@ public static class PlateSolveEndpoints {
         // #1121 — read-only: is there a star database where the solver will look? A fresh install
         // that skipped the DEPLOY.md download fails every solve with ASTAP exit 32, and only the
         // daemon log said why. Settings → Plate solving shows this.
+        // §57.4 — "Verify Position — show me an image" after a Stop Mount: one quick snapshot, solved, beside
+        // the mount's reported and intended positions. Synchronous (a 2 s exposure + one solve); 422 when the
+        // solver or optics are not configured, 409 when no camera is connected to take the snapshot.
+        solve.MapPost("/verify-position", VerifyPositionAsync)
+            .Accepts<VerifyPositionRequestDto>("application/json")
+            .Produces<VerifyPositionResultDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("VerifyMountPosition")
+            .WithSummary("§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount's reported and intended positions.");
+
         solve.MapGet("/database", GetDatabaseStatus)
             .Produces<PlateSolveDatabaseStatusDto>(StatusCodes.Status200OK)
             .WithName("GetPlateSolveDatabaseStatus")
             .WithSummary("Report the ASTAP star-database directory's contents and whether the solver binary exists.");
 
         return app;
+    }
+
+    // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
+    // [FromBody]/[FromServices] are explicit: a host that maps this group without registering the verify
+    // service (the settings-wiring test) must still infer every route's parameters.
+    public static async Task<IResult> VerifyPositionAsync([Microsoft.AspNetCore.Mvc.FromBody] VerifyPositionRequestDto? request,
+            [Microsoft.AspNetCore.Mvc.FromServices] IVerifyPositionService verify, CancellationToken ct) {
+        try {
+            return Results.Ok(await verify.VerifyAsync(request?.ExposureSeconds, ct));
+        } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        } catch (InvalidOperationException ex) {
+            // The imaging mediator's "no camera connected" — the user has to connect one to look.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with a real store.

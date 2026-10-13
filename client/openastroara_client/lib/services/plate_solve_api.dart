@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/plate_solve_result.dart';
 import '../models/server.dart';
+import '../models/verify_position_result.dart';
 
 /// Client-side wrapper around §18.I `POST /api/v1/platesolve/frames/{id}/solve`.
 /// Asks the daemon to plate-solve a catalogued frame with the configured solver
@@ -44,6 +45,29 @@ class PlateSolveApi {
         throw PlateSolveException(detail ??
             'The plate solver is not configured (check focal length, pixel '
                 'size, and the ASTAP path in settings).');
+      }
+      rethrow;
+    }
+  }
+
+  /// §57.4 — Verify-Position after a Stop Mount: the daemon takes one quick
+  /// snapshot ([exposureSeconds], default 2 s) and solves it. 422 (solver or
+  /// optics not configured) and 409 (no camera to look with) surface as a
+  /// [PlateSolveException] with the daemon's sentence.
+  Future<VerifyPositionResult> verifyPosition({double? exposureSeconds}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/platesolve/verify-position',
+        data: {'exposure_seconds': ?exposureSeconds},
+      );
+      return VerifyPositionResult.fromJson(res.data ?? const <String, dynamic>{});
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 422 || code == 409) {
+        throw PlateSolveException(_problemDetail(e.response?.data) ??
+            (code == 409
+                ? 'No camera is connected to take the verification image.'
+                : 'The plate solver is not configured (check focal length, pixel size, and the ASTAP path in settings).'));
       }
       rethrow;
     }
