@@ -75,6 +75,18 @@ class _UnreachableAfterCreate extends ProfileApi {
   Future<SafetyPolicies> getSafetyPolicies() async => _gone();
 }
 
+/// The very first request (createProfile) dies in transit: no profile exists yet.
+class _UnreachableOnCreate extends ProfileApi {
+  _UnreachableOnCreate()
+    : super(const AraServer(hostname: 'rig-a', port: 5555));
+  @override
+  Future<ProfileMeta> createProfile(String name) async => throw DioException(
+    requestOptions: RequestOptions(path: '/api/v1/profiles'),
+    type: DioExceptionType.connectionError,
+    message: 'Connection refused',
+  );
+}
+
 void main() {
   testWidgets(
     'Save Profile with no server stores a pending draft and leaves the wizard',
@@ -234,6 +246,78 @@ void main() {
         findsNothing,
         reason: 'the spinner is gone',
       );
+      expect(find.textContaining('saved on this device'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a connection lost on the very first request keeps the draft pinned, with no profile id',
+    (tester) async {
+      final store = _MemStore();
+      var completed = 0;
+      final container = ProviderContainer(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'rig-a', port: 5555),
+          ),
+          pendingProfileDraftServiceProvider.overrideWithValue(store),
+          wsEventStreamProvider.overrideWithValue(null),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => WizardShell(
+                          createApi: (_) => _UnreachableOnCreate(),
+                          onComplete: (_) => completed++,
+                        ),
+                      ),
+                    ),
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      container
+          .read(wizardControllerProvider.notifier)
+          .jumpTo(ProfileWizard.totalSteps);
+      container.read(wizardControllerProvider).draft.profileName =
+          'Never created';
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      await tester.tap(find.text('Save Profile'));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      final pending = await store.loadAll();
+      expect(pending.single.name, 'Never created');
+      expect(pending.single.serverKey, 'rig-a:5555');
+      expect(
+        pending.single.draft.savedProfileId,
+        isNull,
+        reason: 'nothing was created on the rig',
+      );
+      expect(completed, 1);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.textContaining('saved on this device'), findsOneWidget);
     },
   );
