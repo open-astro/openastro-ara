@@ -13,6 +13,8 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/optimal_sub_local.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/widgets/sequencer/optimal_sub_advisor.dart';
+import 'package:openastroara/services/planning_prefs_service.dart';
+import 'package:openastroara/state/planning/planning_prefs_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
@@ -260,8 +262,11 @@ void main() {
       SiteSettings site = _rigSite,
       GuiderStatus? guider,
       TrackingCalibration? tracking,
+      double noiseTolerancePct = 5,
     }) async {
       container = ProviderContainer(overrides: [
+        planningPrefsProvider.overrideWith(
+            () => _SeededPrefs(PlanningPrefs(noiseTolerancePct: noiseTolerancePct))),
         opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
         cameraElectronicsProvider
             .overrideWith(() => _SeededElectronics(electronics)),
@@ -311,6 +316,15 @@ void main() {
               measuredUtc: DateTime.utc(2026, 10, 11),
               source: 'measured'));
       expect(find.textContaining('Unguided'), findsNothing);
+    });
+
+    testWidgets('#1140 the noise-tolerance knob moves the suggested exposure', (tester) async {
+      await pumpAdvisor(tester, filterName: 'Ha 7nm');
+      final at5 = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      await tester.pumpWidget(const SizedBox());
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', noiseTolerancePct: 2);
+      final at2 = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      expect(at2, isNot(at5), reason: 'the advisor read the pref, not the 5 % default');
     });
 
     testWidgets('renders the figure, filter and attribution from local math',
@@ -472,4 +486,11 @@ class _SeededTracking extends TrackingCalibrationNotifier {
   final TrackingCalibration? _v;
   @override
   Future<TrackingCalibration?> build() async => _v;
+}
+
+class _SeededPrefs extends PlanningPrefsNotifier {
+  _SeededPrefs(this._v);
+  final PlanningPrefs _v;
+  @override
+  PlanningPrefs build() => _v;
 }

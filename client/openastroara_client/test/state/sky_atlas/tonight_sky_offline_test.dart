@@ -4,11 +4,46 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/services/planning_prefs_service.dart';
+import 'package:openastroara/state/planning/planning_prefs_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 
 /// Pins savedServersProvider to an empty list = genuinely no server.
 class _NoServers extends SavedServersNotifier {
   @override
   Future<List<AraServer>> build() async => const [];
+}
+
+class _SavedPrefs extends PlanningPrefsService {
+  _SavedPrefs(this.prefs);
+  final PlanningPrefs prefs;
+  @override
+  Future<PlanningPrefs> load() async => prefs;
+  @override
+  Future<void> save(PlanningPrefs prefs) async {}
+}
+
+class _SeededOptics extends OpticsSettingsNotifier {
+  _SeededOptics(this._v);
+  final OpticsSettings _v;
+  @override
+  OpticsSettings build() => _v;
+}
+
+class _SeededElectronics extends CameraElectronicsNotifier {
+  _SeededElectronics(this._v);
+  final CameraElectronics _v;
+  @override
+  CameraElectronics build() => _v;
+}
+
+class _SeededFilters extends FilterSetNotifier {
+  _SeededFilters(this._v);
+  final FilterSetSettings _v;
+  @override
+  FilterSetSettings build() => _v;
 }
 
 class _SeededSite extends SiteSettingsNotifier {
@@ -53,4 +88,40 @@ void main() {
     expect(await c.read(tonightSkyProvider.future), isEmpty);
   });
 
+
+  test('#1140 the saved noise-tolerance knob reaches the ranker (a tighter knob = longer subs)', () async {
+    Future<double> subAt(double pct) async {
+      final c = ProviderContainer(overrides: [
+        savedServersProvider.overrideWith(_NoServers.new),
+        planningPrefsServiceProvider
+            .overrideWithValue(_SavedPrefs(PlanningPrefs(noiseTolerancePct: pct))),
+        siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
+              siteName: 'cached',
+              latitudeDeg: 34.0,
+              longitudeDeg: -84.0,
+              bortleClass: 6,
+              defaultHorizonAltitudeDeg: 20,
+              twilightDefinition: TwilightDefinition.astronomical,
+            ))),
+        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+              focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
+              sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
+              readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
+        filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
+              filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
+      ]);
+      addTearDown(c.dispose);
+      final keep = c.listen(tonightSkyProvider, (_, _) {});
+      addTearDown(keep.close);
+      final list = await c.read(tonightSkyProvider.future);
+      final withSub = list.where((o) => o.optimalSubS != null).toList();
+      expect(withSub, isNotEmpty, reason: 'a configured rig yields an optimal sub');
+      return withSub.first.optimalSubS!;
+    }
+
+    final loose = await subAt(5);
+    final tight = await subAt(2);
+    expect(tight, greaterThan(loose), reason: 'the knob was read from the saved prefs, not the default');
+  });
 }
