@@ -89,6 +89,12 @@ jobs:
       # SupersedeSelectorTest runs check-flutter.yml's selectors through every jq engine on
       # PATH and asserts they agree, so give it the engine production actually uses. Go is
       # preinstalled on the hosted runner; the version is pinned so the guard is reproducible.
+      - name: Setup Go (for gojq)
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5  # v5.5.0 pinned per zizmor pattern
+        with:
+          go-version: '1.24'
+          cache: false
+
       - name: Install gojq (the engine behind gh --jq)
         run: |
           go install github.com/itchyny/gojq/cmd/gojq@v0.12.17

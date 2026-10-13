@@ -59,9 +59,10 @@ namespace OpenAstroAra.Test {
 
             public readonly ConcurrentQueue<int> PositionWrites = new();
             private int _reads;
-            /// <summary>Every GET the stub answered (#1173): "still nothing after K ticks" waits
-            /// count these rather than wall-clock, so a loaded runner stretches the wait, never
-            /// the number of refresh ticks the claim is about.</summary>
+            /// <summary>Every GET the stub answered (#1173). A "still nothing after a while" wait
+            /// counts these rather than wall-clock, so a loaded runner stretches the wait and never
+            /// shortens what the service did in it. One refresh tick is several reads (position,
+            /// names, offsets), so a read count is a lower bound on ticks, not a tick count.</summary>
             public int Reads => Volatile.Read(ref _reads);
 
             /// <summary>The stub answers this many <c>names</c> reads with an Alpaca error before
@@ -390,9 +391,10 @@ namespace OpenAstroAra.Test {
             await svc.ChangeFilterAsync(new FilterChangeRequestDto(2), idempotencyKey: null, CancellationToken.None);
             Assert.That(await WaitForWriteAsync(stub, TimeSpan.FromSeconds(10)), Is.True);
             while (stub.PositionWrites.TryDequeue(out _)) { }
-            // The stale home task runs now: it must step aside. Let the service take a handful of
-            // refresh reads after the dispatch (#1173: counted, not a fixed 500 ms) before claiming
-            // that nothing was written.
+            // The stale home task runs now: it must step aside. HomeInBackground is synchronous, so
+            // a stale write would already be queued here; the wait below (a few more stub reads,
+            // #1173: counted rather than a fixed 500 ms) only lets any in-flight refresh land
+            // before the empty-queue claim.
             var readsAtDispatch = stub.Reads;
             svc.HomeInBackground(client!, stale);
             Assert.That(await WaitForReadsAsync(stub, readsAtDispatch + 5, TimeSpan.FromSeconds(10)), Is.True, "the refresh stopped reading");
