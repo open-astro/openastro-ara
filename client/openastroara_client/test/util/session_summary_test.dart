@@ -8,6 +8,7 @@ AraNotification _n(
   DateTime at, {
   NotificationSeverity severity = NotificationSeverity.warning,
   String message = '',
+  String? sequenceId,
 }) => AraNotification(
   id: title,
   postedUtc: at,
@@ -17,6 +18,8 @@ AraNotification _n(
   message: message,
   read: false,
   dismissed: false,
+  relatedEntityType: sequenceId == null ? null : 'sequence',
+  relatedEntityId: sequenceId,
 );
 
 void main() {
@@ -76,6 +79,7 @@ void main() {
         'Unattended shutdown executed',
         start.add(const Duration(hours: 5, minutes: 24)),
         message: 'the equipment was put to bed',
+        sequenceId: 'seq-1',
       );
       final s = buildSessionSummary(
         sequence: seq,
@@ -86,10 +90,15 @@ void main() {
             'Yesterday',
             start.subtract(const Duration(hours: 2)),
           ), // before the run
+          _n(
+            'Dew point reached',
+            start.add(const Duration(hours: 8, minutes: 50)),
+          ), // the morning after: not the night's story
           _n('Next week', start.add(const Duration(days: 3))), // long after
         ],
       )!;
       expect(s.title, 'Session paused — the rig needs you');
+      expect(s.headline, contains('the rig was dealt with at'));
       expect(
         s.endedUtc,
         shutdown.postedUtc,
@@ -100,6 +109,33 @@ void main() {
         'Meridian flip failed',
       ]);
       expect(s.headline, contains('waiting for you'));
+    });
+
+    test('a parked run with no daemon record keeps only notifications tied to it, and no time', () {
+      final run = SequenceRunStateInfo(
+        sequenceId: 'seq-1',
+        runId: 'r3',
+        state: SequenceRunState.pausedAwaitingUser,
+        startedUtc: start,
+      );
+      final s = buildSessionSummary(
+        sequence: seq,
+        run: run,
+        notifications: [
+          _n('Dew point reached', start.add(const Duration(hours: 8))),
+          _n('Guider lost the star', start.add(const Duration(hours: 2))),
+        ],
+      )!;
+      expect(s.endedUtc, isNull);
+      expect(
+        s.incidents,
+        isEmpty,
+        reason: 'nothing the daemon tied to this sequence',
+      );
+      expect(
+        s.headline,
+        'M81 night paused and is waiting for you — resume it or stop it.',
+      );
     });
 
     test('an idle or running run is no card', () {

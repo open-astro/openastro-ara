@@ -29,7 +29,14 @@ class AraNotification {
     required this.message,
     required this.read,
     required this.dismissed,
+    this.relatedEntityType,
+    this.relatedEntityId,
   });
+
+  /// What the daemon says this is about (`"sequence"` + its id for the
+  /// unattended-shutdown record and the restart notice); null for most.
+  final String? relatedEntityType;
+  final String? relatedEntityId;
 
   final String id;
   final DateTime postedUtc;
@@ -49,6 +56,8 @@ class AraNotification {
         message: message,
         read: read ?? this.read,
         dismissed: dismissed ?? this.dismissed,
+        relatedEntityType: relatedEntityType,
+        relatedEntityId: relatedEntityId,
       );
 
   factory AraNotification.fromJson(Map<String, dynamic> json) =>
@@ -65,6 +74,8 @@ class AraNotification {
         message: json['message'] as String? ?? '',
         read: json['read'] == true,
         dismissed: json['dismissed'] == true,
+        relatedEntityType: json['related_entity_type'] as String?,
+        relatedEntityId: json['related_entity_id'] as String?,
       );
 }
 

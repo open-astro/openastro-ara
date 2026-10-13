@@ -51,7 +51,10 @@ class SessionSummary {
       SequenceRunState.failed => '$on failed$when.',
       SequenceRunState.stopped => '$on was stopped$when.',
       SequenceRunState.pausedAwaitingUser =>
-        '$on paused$when and is waiting for you — resume it or stop it.',
+        endedUtc == null
+            ? '$on paused and is waiting for you — resume it or stop it.'
+            : '$on paused and is waiting for you; the rig was dealt with$when. '
+                  'Resume it or stop it.',
       _ => '$on ended$when.',
     };
   }
@@ -75,9 +78,35 @@ bool isSummaryWorthyState(SequenceRunState? s) =>
     s == SequenceRunState.stopped ||
     s == SequenceRunState.pausedAwaitingUser;
 
+/// The daemon's own stamp for when this run's night ended: its `completedUtc`,
+/// or — for a run parked `pausedAwaitingUser`, which the daemon never
+/// completes — the newest notification the daemon tied to this sequence
+/// (the §58.12 unattended-shutdown record is one). Null when neither exists:
+/// the card then says "paused" without pretending to know when.
+DateTime? sessionEndAnchor(
+  SequenceRunStateInfo run,
+  Iterable<AraNotification> notifications,
+) {
+  if (run.completedUtc != null) return run.completedUtc;
+  final start = run.startedUtc;
+  DateTime? newest;
+  for (final n in notifications) {
+    if (n.relatedEntityType != 'sequence' ||
+        n.relatedEntityId != run.sequenceId) {
+      continue;
+    }
+    if (start != null && n.postedUtc.isBefore(start)) continue;
+    if (newest == null || n.postedUtc.isAfter(newest)) newest = n.postedUtc;
+  }
+  return newest;
+}
+
 /// Incidents are warning-and-above notifications posted from the run's start
-/// until shortly after it ended (the shutdown ladder posts its record a few
-/// minutes after the pause), newest first, capped so the card stays a card.
+/// until shortly after its end anchor (the shutdown ladder posts its record a
+/// few minutes after the pause), newest first, capped so the card stays a
+/// card. With no anchor at all only notifications the daemon tied to this
+/// sequence count — a dew warning the morning after is not the night's story.
+/// Pure: no wall clock.
 List<AraNotification> incidentsFor(
   SequenceRunStateInfo run,
   Iterable<AraNotification> notifications, {
@@ -86,14 +115,17 @@ List<AraNotification> incidentsFor(
 }) {
   final start = run.startedUtc;
   if (start == null) return const [];
-  final end = (run.completedUtc ?? DateTime.now().toUtc()).add(tail);
+  final anchor = sessionEndAnchor(run, notifications);
+  final end = anchor?.add(tail);
+  bool related(AraNotification n) =>
+      n.relatedEntityType == 'sequence' && n.relatedEntityId == run.sequenceId;
   final hits =
       notifications
           .where(
             (n) =>
                 n.severity.index >= NotificationSeverity.warning.index &&
                 !n.postedUtc.isBefore(start) &&
-                !n.postedUtc.isAfter(end),
+                (end != null ? !n.postedUtc.isAfter(end) : related(n)),
           )
           .toList()
         ..sort((a, b) => b.postedUtc.compareTo(a.postedUtc));
@@ -108,10 +140,6 @@ SessionSummary? buildSessionSummary({
 }) {
   final state = run.state;
   if (state == null || !isSummaryWorthyState(state)) return null;
-  final incidents = incidentsFor(run, notifications);
-  final ended =
-      run.completedUtc ??
-      (incidents.isNotEmpty ? incidents.first.postedUtc : null);
   return SessionSummary(
     sequenceId: run.sequenceId.isEmpty ? sequence.id : run.sequenceId,
     runId: run.runId,
@@ -121,9 +149,9 @@ SessionSummary? buildSessionSummary({
     state: state,
     targetName: run.currentTargetName,
     startedUtc: run.startedUtc,
-    endedUtc: ended,
+    endedUtc: sessionEndAnchor(run, notifications),
     framesCaptured: run.framesCaptured,
-    incidents: incidents,
+    incidents: incidentsFor(run, notifications),
   );
 }
 
