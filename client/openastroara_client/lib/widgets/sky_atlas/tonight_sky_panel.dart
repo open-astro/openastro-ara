@@ -17,6 +17,7 @@ import '../../theme/ara_metrics.dart';
 import '../../util/banked_hours.dart';
 import '../../util/integration_budget.dart';
 import '../../util/coord_format.dart';
+import 'optimal_sub_calculator_dialog.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
 import 'target_preview.dart';
@@ -153,6 +154,13 @@ class TonightSkyPanel extends ConsumerWidget {
                       onSelected: (_) =>
                           ref.read(tonightSkyUpNowProvider.notifier).toggle(),
                     ),
+                  ),
+                  // #1140 / NEXTGEN §5 — the standalone Optimal Sub calculator,
+                  // seeded from the profile.
+                  IconButton(
+                    tooltip: 'Optimal Sub calculator',
+                    icon: const Icon(Icons.calculate_outlined, size: 18),
+                    onPressed: () => showOptimalSubCalculator(context, ref),
                   ),
                   IconButton(
                     tooltip: 'Refresh',

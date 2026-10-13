@@ -868,4 +868,24 @@ void _budgetTests() {
     await tester.pump();
     expect(find.textContaining('to go — needs another night.'), findsOneWidget);
   });
+
+  testWidgets('#1140 NEXTGEN §5 the header opens the Optimal Sub calculator seeded from the profile', (tester) async {
+    tester.view.physicalSize = const Size(1400, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final container = ProviderContainer(overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [_m31]),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+    ));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Optimal Sub calculator'));
+    await tester.pumpAndSettle();
+    expect(find.text('Optimal Sub calculator'), findsOneWidget);
+    // An unset profile (0 mm aperture…) is a sentence, not a crash.
+    expect(find.textContaining('Needs a positive'), findsOneWidget);
+  });
 }

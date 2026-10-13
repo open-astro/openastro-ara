@@ -2242,6 +2242,21 @@ const Map<String, Help> helpRegistry = {
   ),
 
   // ── Planning knobs (img.defaults, #1140) ────────────────────────────────
+  // ── Optimal Sub calculator (NEXTGEN §5, #1140) ───────────────────────────
+  'plan.optimal_sub_calculator': Help(
+    key: 'plan.optimal_sub_calculator',
+    title: 'Optimal Sub calculator',
+    body:
+        'The same maths Tonight\'s Sky, the plan dialog and the sequence editor\'s advisor use, as a scratch pad: '
+        'change any input and watch the sub length and the hours move. Glover\'s floor is the exposure past which '
+        'the camera\'s read noise adds less than your tolerance to the stack\'s noise (t = tolerance · R² / P, '
+        'with P the sky flux per pixel from aperture, pixel scale, QE, passband and sky brightness); the ceiling is '
+        'where the sky alone fills the well. Add a target\'s surface brightness and the Integration Budget tiers '
+        'appear with their inputs.\n\n'
+        'It opens seeded from your profile and your rig\'s fitted sky-model k for the first filter\'s kind; '
+        'picking another kind swaps in its default passband and k. Nothing here writes back to the profile.',
+    relatedHelpKeys: ['img.defaults.noise_tolerance_pct', 'img.defaults.sky_model_calibration'],
+  ),
   'img.defaults.sky_model_calibration': Help(
     key: 'img.defaults.sky_model_calibration',
     title: 'Sky model calibration',
