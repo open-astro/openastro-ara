@@ -204,9 +204,7 @@ abstract final class ReadinessRules {
     // the prior it kept). Informational: a guided rig never needs it, and an
     // unguided one measures it on its first run, so its absence is no gap.
     if (tracking != null) {
-      final d = tracking.measuredUtc.toLocal();
-      final when =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final when = formatCalibrationDate(tracking.measuredUtc);
       facts.add(DeviceFact(
           'Unguided ceiling',
           '${formatExposureSeconds(tracking.ceilingSeconds)} · '

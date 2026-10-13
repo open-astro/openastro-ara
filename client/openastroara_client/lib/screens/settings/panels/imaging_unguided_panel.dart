@@ -46,11 +46,6 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel> {
     }
   }
 
-  static String _date(DateTime utc) {
-    final d = utc.toLocal();
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final connected = ref.watch(activeServerProvider) != null;
@@ -79,7 +74,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel> {
             label: 'Unguided ceiling',
             value:
                 '${formatExposureSeconds(record.ceilingSeconds)} · '
-                '${record.measured ? 'measured' : 'prior kept'} on ${_date(record.measuredUtc)}',
+                '${record.measured ? 'measured' : 'prior kept'} on ${formatCalibrationDate(record.measuredUtc)}',
             helpKey: 'img.unguided.ceiling',
           ),
           if (record.priorSeconds != null)

@@ -91,6 +91,13 @@ class TrackingProbeRung {
   }
 }
 
+/// "2026-10-11" in the device's local day — the readiness fact and the
+/// Unguided panel share it.
+String formatCalibrationDate(DateTime utc) {
+  final d = utc.toLocal();
+  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
 /// "45 s" / "2.5 min" — the same shape the sub advisor uses.
 String formatExposureSeconds(double seconds) => seconds < 120
     ? '${seconds.round()} s'
