@@ -107,6 +107,45 @@ class ConfigureStorageFstabRebuild(unittest.TestCase):
         self.assertIn("ERROR: fstab_", result.stdout, "a typed ERROR line, never a bare death")
         self.assertFalse(missing.exists(), "nothing is written when the source could not be read")
 
+    def test_fstab_entry_mode_is_refused_against_the_real_fstab_or_a_shaped_uuid(self) -> None:
+        # r1 finding: the mode skips blkid and the system-disk refusal, and the daemon user can
+        # hand root any argv through the request file — so it must be unreachable in production.
+        env = dict(self.env)
+        env.pop("FSTAB")
+        real = subprocess.run(["sh", str(HELPER), "--fstab-entry", "1111-2222"], capture_output=True, text=True, env=env)
+        self.assertEqual(real.returncode, 9, real.stdout + real.stderr)
+        self.assertIn("ERROR: usage fstab_entry_needs_scratch_fstab", real.stdout)
+        explicit = self.run_entry("1111-2222", FSTAB="/etc/fstab")
+        self.assertEqual(explicit.returncode, 9, "naming /etc/fstab explicitly is refused too")
+        for bad in ("abcd /etc ext4 defaults 0 0 #", "abcd\t/etc", "../x", "1111;touch /tmp/x"):
+            r = self.run_entry(bad)
+            self.assertEqual(r.returncode, 9, f"uuid {bad!r} must be refused: {r.stdout}")
+            self.assertIn("ERROR: usage fstab_entry_bad_uuid", r.stdout)
+        self.assertEqual(self.fstab.read_text(), BASE_FSTAB, "nothing was written by any refused run")
+
+    @unittest.skipUnless(os.geteuid() == 0, "the root fence can only be observed as root")
+    def test_fstab_entry_mode_is_refused_as_root(self) -> None:
+        r = self.run_entry("1111-2222")
+        self.assertEqual(r.returncode, 9)
+        self.assertIn("fstab_entry_refused_as_root", r.stdout)
+
+    def test_a_rebuild_waits_for_an_externally_held_lock(self) -> None:
+        # The six-way race above can pass by luck when the runs do not overlap; this one cannot:
+        # the lock is held for ~2 s by another process, and the rebuild must not finish before it.
+        import time
+        self.lock.touch()
+        holder = subprocess.Popen(["flock", str(self.lock), "sh", "-c", "sleep 2"])
+        try:
+            time.sleep(0.3)  # let the holder take the lock
+            started = time.monotonic()
+            result = self.run_entry("1111-3333")
+            elapsed = time.monotonic() - started
+        finally:
+            holder.wait(timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertGreaterEqual(elapsed, 1.5, "the rebuild ran while another process held the fstab lock")
+        self.assertEqual(len(self.ara_lines()), 1)
+
     def test_exfat_entries_carry_the_owner_uid_and_gid(self) -> None:
         result = self.run_entry("ffff-0001", "exfat")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

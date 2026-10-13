@@ -50,6 +50,7 @@ fi
 
 usage() {
     echo "usage: $0 [--format] [--fs exfat|ext4] [--check] [--eject] <uuid> [<expected-label>]" >&2
+    echo "       $0 --fstab-entry <uuid> [exfat|ext4]   (bench only: refused as root or against /etc/fstab)" >&2
     exit 9
 }
 
@@ -211,7 +212,23 @@ EXPECTED_LABEL=${2:-}
 [ -n "$UUID" ] || usage
 
 if [ "$FSTAB_ONLY" = 1 ]; then
-    # Bench mode: just the locked fstab rebuild for this uuid, against $FSTAB.
+    # Bench mode: just the locked fstab rebuild for this uuid, against $FSTAB. This mode
+    # skips the blkid lookup and the system-disk refusal, so it must never be able to touch
+    # the real fstab as root — the daemon user can hand this script any argv through the
+    # request file (storage-request.sh passes the lines through verbatim) and through the
+    # dev-rig sudoers entry. Three fences, each sufficient on its own: not root, not the
+    # real fstab, and a uuid that is only hex and dashes (no spaces/tabs that could smuggle
+    # a mount point into the line).
+    if [ "$(id -u)" = 0 ]; then
+        echo "ERROR: usage fstab_entry_refused_as_root"
+        exit 9
+    fi
+    case "$FSTAB" in
+        /etc/fstab|"") echo "ERROR: usage fstab_entry_needs_scratch_fstab"; exit 9 ;;
+    esac
+    case "$UUID" in
+        *[!0-9A-Fa-f-]*|"") echo "ERROR: usage fstab_entry_bad_uuid"; exit 9 ;;
+    esac
     fs=${2:-ext4}
     case "$fs" in exfat|ext4) ;; *) usage ;; esac
     ensure_fstab_entry "$UUID" "$fs"
