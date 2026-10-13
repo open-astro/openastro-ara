@@ -6840,16 +6840,19 @@ CREATE TABLE mosaic_panels (
 
 ### 47.7 API endpoints
 
+As shipped (#1146; `design/API_CONTRACT.md` has the wire shapes):
+
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/v1/mosaics` | Create a mosaic (body: name, center coords, grid, overlap, rotation) |
-| `GET` | `/api/v1/mosaics` | List user's mosaics |
-| `GET` | `/api/v1/mosaics/{id}` | Full state — grid, panels, completion % per panel |
-| `GET` | `/api/v1/mosaics/{id}/panels` | Per-panel detail with frame counts per filter |
-| `PATCH` | `/api/v1/mosaics/{id}` | Update overlap / rotation / scheduling (only if no frames captured yet) |
-| `DELETE` | `/api/v1/mosaics/{id}` | Remove (panels remain as standalone targets if user wants) |
-| `POST` | `/api/v1/mosaics/{id}/build-sequence` | Generate a sequence for the mosaic with the user's filter list + per-filter frame count |
-| `POST` | `/api/v1/mosaics/{id}/resume` | Generate a sequence for **incomplete panels only** (per §47.9) |
+| `POST` | `/api/v1/mosaics` | Create a project (name, centre, grid, overlap, position angle, `panels` centres, `frames_per_panel`) |
+| `GET` | `/api/v1/mosaics` | List projects, newest first (cursor-paged) |
+| `GET` | `/api/v1/mosaics/{id}` | The plan |
+| `GET` | `/api/v1/mosaics/{id}/panels` | Per-panel centre, `crosses_ra_wrap`, derived status / `frames_captured` / newest frame |
+| `GET` | `/api/v1/mosaics/{id}/progress` | Panels done, current panel, frames owed per panel, frames so far |
+| `DELETE` | `/api/v1/mosaics/{id}` | Remove the project (frames stay in the catalog) |
+
+Not shipped: `PATCH` (edit a plan), `/build-sequence` (the client builds the
+run), `/resume`, per-filter counts on `/panels`.
 
 ### 47.8 Storage layout for mosaic captures
 

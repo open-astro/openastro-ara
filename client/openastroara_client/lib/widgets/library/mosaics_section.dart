@@ -97,7 +97,8 @@ class MosaicPanelDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cols = project.mosaic.panelCountX.clamp(1, 8);
+    // The daemon clamps a grid to 32 per axis; the dots follow the real width.
+    final cols = project.mosaic.panelCountX.clamp(1, 32);
     final panels = project.panels;
     if (panels.isEmpty) return const SizedBox.shrink();
     final rows = <List<MosaicPanel>>[];

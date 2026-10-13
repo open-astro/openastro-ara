@@ -752,7 +752,8 @@ Future<void> _registerMosaicProject(
   final centreDec = panels.map((p) => p.decDeg).reduce((a, b) => a + b) / panels.length;
   try {
     await api.create(
-      name: targetName,
+      // buildTargetBlock trims the block name; the project must match it exactly.
+      name: targetName.trim(),
       centerRaDeg: centreRa,
       centerDecDeg: centreDec,
       cols: cols * rows == panels.length ? cols : panels.length,
