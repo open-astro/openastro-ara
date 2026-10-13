@@ -530,6 +530,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'What the disk-space monitor does when free space on your image save volume **drops to** the **critical** threshold (set under Settings → Session → Storage).\n\n'
         '* **Warn only** (default): raise a red diagnostic and, if enabled, a *Low disk space* notification — but keep capturing. You decide what to do.\n'
+        '* **Pause the running sequence**: suspend any in-progress sequence at its next step and refuse new frames; free some space, then resume the run from the Run tab. A critical notification records that it paused the run.\n'
         '* **Abort the running sequence**: also halt any in-progress sequence, so you don\'t keep filling the disk with frames that may not even save. A critical notification records that it stopped the run.\n\n'
         'This fires on the *transition* into critical (when free space crosses the threshold going down), so it halts a sequence that\'s already running. Starting a brand-new sequence while the disk is already critical isn\'t blocked yet — a pre-capture check is a planned follow-up. Either way the monitor never deletes anything.',
     relatedSettings: [

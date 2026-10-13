@@ -340,10 +340,10 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.on_disk_space_critical',
     label: 'On critically-low disk',
-    description: 'Action when free space on the save volume hits the critical threshold: warn only, or also abort the running sequence.',
-    keywords: ['disk', 'space', 'storage', 'full', 'critical', 'abort', 'halt', 'stop', 'sequence'],
+    description: 'Action when free space on the save volume hits the critical threshold: warn only, pause the running sequence until you free space, or abort it.',
+    keywords: ['disk', 'space', 'storage', 'full', 'critical', 'abort', 'pause', 'halt', 'stop', 'sequence'],
     path: ['Settings', 'Unattended running', 'When to stop'],
-    type: SettingType.enumValue(['Warn only', 'Abort the running sequence']),
+    type: SettingType.enumValue(['Warn only', 'Pause the running sequence', 'Abort the running sequence']),
     defaultValue: 'Warn only',
     profilePath: 'safety.on_disk_space_critical',
   ),

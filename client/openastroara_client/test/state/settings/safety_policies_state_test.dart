@@ -114,6 +114,8 @@ void main() {
       final n = container.read(safetyPoliciesProvider.notifier);
       expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical,
           DiskSpaceCriticalAction.warn);
+      n.setOnDiskSpaceCritical(DiskSpaceCriticalAction.pause);
+      expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical, DiskSpaceCriticalAction.pause, reason: "#1185");
       n.setOnDiskSpaceCritical(DiskSpaceCriticalAction.abort);
       expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical,
           DiskSpaceCriticalAction.abort);

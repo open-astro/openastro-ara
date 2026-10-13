@@ -242,10 +242,16 @@ public sealed class ProfileShareService : IProfileShareService {
         "Equipment (camera / mount / focuser / …) — re-select in the wizard",
         "Save directory + filename template",
         "ASTAP executable + index paths",
-        "Site location (latitude / longitude / elevation / timezone)",
-        "PHD2 host / port / profile",
-        "Notification tokens",
-        "Autofocus calibration — regenerates on your first autofocus sweep",
+        "Site location (latitude / longitude / elevation / timezone / site name)",
+        "Custom terrain horizon — a skyline fingerprints the site",
+        "PHD2 host / port / profile and guide-scope geometry (focal length, pixel size)",
+        "Notification tokens (Pushover, Telegram)",
+        "Optics geometry (focal length, reducer, sensor size, pixel size, aperture) — described in the rig note instead",
+        "Camera electronics (gain / offset / readout) — re-captured on your first connect",
+        "Filter list — declare your own filters",
+        "Autofocus (Smart Focus) calibration — regenerates on your first autofocus sweep",
+        "Tracking calibration — measured on the donor's mount",
+        "Sky-model calibration — fitted to the donor's optics, camera and sky",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including

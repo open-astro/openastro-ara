@@ -419,6 +419,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           items: const {
             DiskSpaceCriticalAction.warn:
                 'Warn only (diagnostic + notification)',
+            DiskSpaceCriticalAction.pause: 'Pause the running sequence',
             DiskSpaceCriticalAction.abort: 'Abort the running sequence',
           },
           onChanged: (v) {

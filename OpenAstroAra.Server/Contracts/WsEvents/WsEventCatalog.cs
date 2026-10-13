@@ -210,10 +210,10 @@ public static class WsEventCatalog {
     public const string SequenceAutoFlatsDecided = "sequence.auto_flats_decided";
 
     public const string CalibrationFlatsGenerated = "calibration.flats_generated";
-    public const string DarkLibraryBuildStarted = "calibration.dark_library.build_started";
-    public const string DarkLibraryFrameComplete = "calibration.dark_library.frame_complete";
-    public const string DarkLibraryBuildComplete = "calibration.dark_library.build_complete";
-    public const string DarkLibraryBuildFailed = "calibration.dark_library.build_failed";
+    // #1185 — the four `calibration.dark_library.*` build events that used to be declared here were never
+    // published by anything (the §39 dark-library build runs as a sequence and reports through
+    // GET /api/v1/calibration/dark-library/status + the sequence.* events). Declaring an event nobody sends is a
+    // contract lie, so they are gone; the guider's own library events (guider.dark_library.*) are unrelated.
 
     public const string MosaicCreated = "mosaic.created";
     public const string MosaicPanelComplete = "mosaic.panel_complete";
@@ -326,8 +326,6 @@ public static class WsEventCatalog {
         SequenceAutoFlatsPrompt, SequenceAutoFlatsDecided,
 
         CalibrationFlatsGenerated,
-        DarkLibraryBuildStarted, DarkLibraryFrameComplete,
-        DarkLibraryBuildComplete, DarkLibraryBuildFailed,
 
         MosaicCreated, MosaicPanelComplete, MosaicComplete,
 

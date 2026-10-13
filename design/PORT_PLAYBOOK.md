@@ -790,7 +790,7 @@ Cross-refs §38 (sequence schema + NINA import), §39 (calibration + matching fl
 | NINA import | `/api/v1/sequences/import` | `SequenceImportRequestDto`, `SequenceImportResultDto` | `sequence.imported`, `sequence.import_warning` | §38.4 |
 | Sequence sharing | `/api/v1/sequences/{id}/share-export` | `SequenceShareDto` | (none) | §70 |
 | Calibration session lookup | `/api/v1/calibration/sessions`, `/api/v1/calibration/sessions/{id}/matching-flats` | `CalibrationSessionDto`, `MatchingFlatsRequestDto`, `GeneratedFlatSequenceDto` | `calibration.flats_generated` | §39 |
-| Dark library | `/api/v1/calibration/dark-library/{build,status,list}` | `DarkLibraryBuildRequestDto`, `DarkLibraryStateDto`, `DarkLibraryEntryDto` | `calibration.dark_library.{build_started,frame_complete,build_complete,build_failed}` | §39, §63 (PHD2 dark-library) |
+| Dark library | `/api/v1/calibration/dark-library/{build,status,list}` | `DarkLibraryBuildRequestDto`, `DarkLibraryStateDto`, `DarkLibraryEntryDto` | none of its own — the build runs as a sequence (`sequence.*` events) and `GET …/status` reports it (#1185 retired the never-sent `calibration.dark_library.*` names) | §39, §63 (PHD2 dark-library) |
 | Auto-flats prompt | `/api/v1/sequences/{id}/auto-flats-decision` | `AutoFlatsDecisionRequestDto` | `sequence.auto_flats_prompt`, `sequence.auto_flats_decided` | §48 |
 | Mosaic planning | `/api/v1/mosaics`, `/api/v1/mosaics/{id}/{panels,progress}` | `MosaicDto`, `MosaicPanelDto`, `MosaicProgressDto` | `mosaic.{created,panel_complete,complete}` | §47 |
 
@@ -9618,7 +9618,7 @@ Domain reservations (so AI doesn't invent overlapping namespaces):
 | `guider` | PHD2 wrapper | `guider.guiding`, `guider.dither_settled` |
 | `polar_align` | §45 PA loop | `polar_align.frame_complete` |
 | `meridian_flip` | §58 flip orchestration | `meridian_flip.starting` |
-| `calibration` | §39 calibration + dark library | `calibration.dark_library.build_started` |
+| `calibration` | §39 calibration + dark library | `calibration.flats_generated` |
 | `mosaic` | §47 mosaic | `mosaic.panel_complete` |
 | `session` | §40 session events | `session.started`, `session.restretch.progress` |
 | `notification` | §46 in-app feed | `notification.posted` |

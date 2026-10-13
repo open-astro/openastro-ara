@@ -87,6 +87,11 @@ namespace OpenAstroAra.Test {
             // The default and anything unrecognised mean warn-only (safe).
             Assert.That(DiskSpaceMonitor.ShouldAbortSequence("warn"), Is.False);
             Assert.That(DiskSpaceMonitor.ShouldAbortSequence("pause"), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldPauseSequence(" Pause "), Is.True, "#1185 — pause is its own policy");
+            Assert.That(DiskSpaceMonitor.ShouldPauseSequence("abort"), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldStopCaptures("pause"), Is.True);
+            Assert.That(DiskSpaceMonitor.ShouldStopCaptures("abort"), Is.True);
+            Assert.That(DiskSpaceMonitor.ShouldStopCaptures("warn"), Is.False);
             Assert.That(DiskSpaceMonitor.ShouldAbortSequence(""), Is.False);
             Assert.That(DiskSpaceMonitor.ShouldAbortSequence(null), Is.False);
         }
@@ -218,6 +223,7 @@ namespace OpenAstroAra.Test {
             Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, "abort"), Is.True);
             // The 'warn' default NEVER blocks — the monitor's notification path owns reporting.
             Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, "warn"), Is.False);
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, "pause"), Is.True, "#1185 — a paused run must not keep filling the disk");
             Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, null), Is.False,
                 "an unset/unknown policy degrades to the safe warn-only behaviour");
             // Merely LOW (not critical) never blocks even under abort.

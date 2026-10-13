@@ -309,6 +309,21 @@ namespace OpenAstroAra.Server.Services {
                 return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // unknown id, or not installed
             }
             var path = Path.Combine(dir, CatalogFileName);
+            // #1185 — the same query against the same file is answered from memory: the planetarium asks for a
+            // catalog more than once per session and a full parse is tens of MB of CSV. Keyed by the file's
+            // length + mtime (an install swaps the file, so a new install is a new key) and the query parameters.
+            CatalogCacheKey? cacheKey = null;
+            try {
+                var info = new FileInfo(path);
+                if (info.Exists) {
+                    cacheKey = new CatalogCacheKey(path, info.Length, info.LastWriteTimeUtc.Ticks, maxMag, limit);
+                    if (_catalogCache.TryGetValue(cacheKey.Value, out var cached)) {
+                        return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(cached);
+                    }
+                }
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                cacheKey = null; // a stat failure just means "no cache"; the read below reports its own failure
+            }
             // Parse off the request thread — a full catalog can be tens of MB, and the read+parse is CPU + blocking I/O.
             // The open lives inside the lambda (not a File.Exists pre-check) so a missing or concurrently-deleted
             // catalog.csv returns null → 404, rather than throwing across the await into a 500. (SkyCatalogReader.Read
@@ -316,7 +331,11 @@ namespace OpenAstroAra.Server.Services {
             return Task.Run<IReadOnlyList<CatalogObjectDto>?>(() => {
                 try {
                     using var stream = File.OpenRead(path);
-                    return SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
+                    var rows = SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
+                    if (cacheKey is { } key) {
+                        RememberCatalog(key, rows);
+                    }
+                    return rows;
                 } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                     // Any file-read failure — missing/removed-mid-read catalog.csv, a permission error, a mid-stream
                     // I/O fault — maps to null → 404 ("catalog unavailable"), never an unhandled 500. (FileNotFound /
@@ -329,6 +348,22 @@ namespace OpenAstroAra.Server.Services {
                 }
             }, ct);
         }
+
+        private readonly record struct CatalogCacheKey(string Path, long Length, long MtimeTicks, double? MaxMag, int? Limit);
+        private readonly ConcurrentDictionary<CatalogCacheKey, IReadOnlyList<CatalogObjectDto>> _catalogCache = new();
+        internal const int CatalogCacheEntries = 8;
+
+        /// <summary>Keep the last few distinct queries; a full clear on overflow is simpler than LRU bookkeeping
+        /// and the entries are few (one planetarium, a handful of magnitude cuts).</summary>
+        private void RememberCatalog(CatalogCacheKey key, IReadOnlyList<CatalogObjectDto> rows) {
+            if (_catalogCache.Count >= CatalogCacheEntries) {
+                _catalogCache.Clear();
+            }
+            _catalogCache[key] = rows;
+        }
+
+        /// <summary>Cached catalog queries (for tests).</summary>
+        internal int CatalogCacheCount => _catalogCache.Count;
 
         public Task<PackageDeleteResult> DeleteAsync(string packageId, CancellationToken ct) {
             var dir = PackageDir(packageId);

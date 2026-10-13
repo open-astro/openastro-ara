@@ -107,12 +107,21 @@ namespace OpenAstroAra.Server.Services {
             => current != DiskSpaceLevel.Ok && current > previous;
 
         /// <summary>
-        /// Whether the §29 <c>OnDiskSpaceCritical</c> safety policy says to halt the running sequence (the only
-        /// non-warn action: "abort"). Anything else — including the "warn" default, an unknown value, or null —
-        /// means warn-only, so a mis-set policy degrades to the safe behaviour.
+        /// Whether the §29 <c>OnDiskSpaceCritical</c> safety policy says to halt the running sequence ("abort").
+        /// Anything else — including the "warn" default, "pause", an unknown value, or null — is not an abort, so
+        /// a mis-set policy degrades to the safe behaviour.
         /// </summary>
         public static bool ShouldAbortSequence(string? onDiskSpaceCritical)
             => string.Equals(onDiskSpaceCritical?.Trim(), "abort", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>#1185 — the "pause" policy: suspend the running sequence (the §35 safety pause, resumable
+        /// once space is freed) instead of aborting it. Blocked on a no-op pause before; pause is real now.</summary>
+        public static bool ShouldPauseSequence(string? onDiskSpaceCritical)
+            => string.Equals(onDiskSpaceCritical?.Trim(), "pause", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Abort or pause: either way a critical volume stops new frames.</summary>
+        public static bool ShouldStopCaptures(string? onDiskSpaceCritical)
+            => ShouldAbortSequence(onDiskSpaceCritical) || ShouldPauseSequence(onDiskSpaceCritical);
 
         /// <summary>
         /// Of the mounted volume roots, the one that actually contains <paramref name="fullPath"/> — the longest
@@ -214,7 +223,7 @@ namespace OpenAstroAra.Server.Services {
         public static bool PreCaptureShouldBlock(long freeBytes, int warnGb, int criticalGb, string? onDiskSpaceCritical) {
             var (lowBytes, criticalBytes) = ResolveThresholdBytes(warnGb, criticalGb);
             return Evaluate(freeBytes, lowBytes, criticalBytes) == DiskSpaceLevel.Critical
-                && ShouldAbortSequence(onDiskSpaceCritical);
+                && ShouldStopCaptures(onDiskSpaceCritical);
         }
 
         // internal (not private): the §29 per-frame pre-capture check in CameraService probes the
@@ -321,15 +330,27 @@ namespace OpenAstroAra.Server.Services {
             // fires, abortedRuns will be 0 (the run is already Aborting) — correct: they stopped it themselves,
             // so no auto-action is recorded and no duplicate "Sequence halted" notification fires.
             var abortedRuns = 0;
-            if (level == DiskSpaceLevel.Critical && previous != DiskSpaceLevel.Critical
-                && ShouldAbortSequence(_profileStore.GetSafetyPolicies().OnDiskSpaceCritical)) {
-                abortedRuns = await _sequencer.AbortActiveRunsAsync(ct);
-                if (abortedRuns > 0) {
-                    LogAbortedSequences(abortedRuns, freeGb, saveDir);
-                } else {
-                    LogAbortPolicyNoRuns(freeGb, saveDir);
+            var pausedRuns = 0;
+            var policy = _profileStore.GetSafetyPolicies().OnDiskSpaceCritical;
+            if (level == DiskSpaceLevel.Critical && previous != DiskSpaceLevel.Critical) {
+                if (ShouldAbortSequence(policy)) {
+                    abortedRuns = await _sequencer.AbortActiveRunsAsync(ct);
+                    if (abortedRuns > 0) {
+                        LogAbortedSequences(abortedRuns, freeGb, saveDir);
+                    } else {
+                        LogAbortPolicyNoRuns(freeGb, saveDir);
+                    }
+                } else if (ShouldPauseSequence(policy)) {
+                    // #1185 — the §35 safety pause: the run suspends at the next instruction boundary and
+                    // the pre-capture check refuses new frames; freeing space and resuming picks it back up.
+                    pausedRuns = (await _sequencer.PauseActiveRunsAsync(ct)).Count;
+                    if (pausedRuns > 0) {
+                        LogPausedSequences(pausedRuns, freeGb, saveDir);
+                    }
                 }
             }
+            var haltedRuns = abortedRuns + pausedRuns;
+            var haltVerb = abortedRuns > 0 ? "abort halted" : "pause paused";
 
             await _diagnostics.CreateEventAsync(
                 new DiagnosticEventDto(
@@ -339,9 +360,9 @@ namespace OpenAstroAra.Server.Services {
                     Description: description,
                     DetectedUtc: now,
                     ClearedUtc: null,
-                    AutoActionTaken: abortedRuns > 0,
-                    AutoActionDescription: abortedRuns > 0
-                        ? $"OnDiskSpaceCritical=abort halted {abortedRuns} running sequence(s)."
+                    AutoActionTaken: haltedRuns > 0,
+                    AutoActionDescription: haltedRuns > 0
+                        ? $"OnDiskSpaceCritical={haltVerb} {haltedRuns} running sequence(s)."
                         : null),
                 recommendedAction,
                 autoCorrectible: false,
@@ -378,7 +399,7 @@ namespace OpenAstroAra.Server.Services {
                         Severity: NotificationSeverity.Critical,
                         Category: NotificationCategory.Storage,
                         Title: "Sequence halted — disk critically low",
-                        Message: $"Aborted {abortedRuns} running sequence(s): {freeGb:F1} GB free on {saveDir} (your OnDiskSpaceCritical policy is set to abort).",
+                        Message: $"{(abortedRuns > 0 ? "Aborted" : "Paused")} {haltedRuns} running sequence(s): {freeGb:F1} GB free on {saveDir} (your OnDiskSpaceCritical policy is set to {(abortedRuns > 0 ? "abort" : "pause")}).",
                         Read: false,
                         Dismissed: false,
                         DismissedUtc: null,
@@ -397,6 +418,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Disk space {Words} ({Previous}->{Level}): {FreeGb} GB free on {SaveDir}.")]
         private partial void LogLowSpace(string words, DiskSpaceLevel previous, DiskSpaceLevel level, double freeGb, string saveDir);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Disk critically low ({FreeGb} GB on {SaveDir}); OnDiskSpaceCritical=pause paused {Count} running sequence(s) — free space, then resume.")]
+        private partial void LogPausedSequences(int count, double freeGb, string saveDir);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Disk critically low ({FreeGb} GB on {SaveDir}); OnDiskSpaceCritical=abort halted {Count} running sequence(s).")]
         private partial void LogAbortedSequences(int count, double freeGb, string saveDir);

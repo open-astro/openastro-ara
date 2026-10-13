@@ -204,7 +204,8 @@ public sealed record SafetyPoliciesDto(
     int GuiderRetryTimeoutSec,
     bool SkipTargetIfRecoveryFails,
     // §29 — action when the §29 disk-space monitor hits the critical threshold: "warn" (default — the diagnostic
-    // + notification only) or "abort" (also halt any running sequence so it doesn't capture into a full disk).
+    // + notification only), "pause" (#1185 — suspend any running sequence and refuse new frames until space is
+    // freed and the run resumed) or "abort" (halt any running sequence).
     // Optional ctor default so a profile.json predating this field still deserializes.
     string OnDiskSpaceCritical = "warn",
     // §58.9 unattended flip safety — the pre-flip flight check (endpoint-altitude / mount-health /

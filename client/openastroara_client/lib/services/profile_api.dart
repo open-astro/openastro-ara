@@ -1056,9 +1056,11 @@ class ProfileApi {
             (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
         skipTargetIfRecoveryFails:
             (j['skip_target_if_recovery_fails'] as bool?) ?? true,
-        onDiskSpaceCritical: (j['on_disk_space_critical'] as String?) == 'abort'
-            ? DiskSpaceCriticalAction.abort
-            : DiskSpaceCriticalAction.warn,
+        onDiskSpaceCritical: switch ((j['on_disk_space_critical'] as String?)?.toLowerCase()) {
+          'abort' => DiskSpaceCriticalAction.abort,
+          'pause' => DiskSpaceCriticalAction.pause,
+          _ => DiskSpaceCriticalAction.warn,
+        },
         flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
         expectedFlipSlewSeconds:
             (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,

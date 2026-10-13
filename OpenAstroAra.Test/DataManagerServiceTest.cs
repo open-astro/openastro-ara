@@ -219,6 +219,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ReadCatalogAsync_answers_a_repeated_query_from_memory_until_the_file_changes() {
+            // #1185 — the planetarium asks for the same catalog more than once a session; the second
+            // identical query must not re-parse the CSV, and a re-installed file (new mtime/length) must.
+            var dir = Path.Combine(_root, "hyg-stars");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(Path.Combine(dir, DataManagerService.CatalogFileName),
+                "id,proper,ra,dec,mag\n0,Sol,0.0,0.0,4.85\n1,Sirius,101.3,-16.7,-1.46\n");
+            await File.WriteAllTextAsync(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName), "stamp");
+            Assert.That(_svc.CatalogCacheCount, Is.EqualTo(0));
+            var first = await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None);
+            Assert.That(_svc.CatalogCacheCount, Is.EqualTo(1));
+            var second = await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None);
+            Assert.That(second, Is.SameAs(first), "the same query against the same file is the cached list");
+            await _svc.ReadCatalogAsync("hyg-stars", 5.0, null, CancellationToken.None);
+            Assert.That(_svc.CatalogCacheCount, Is.EqualTo(2), "a different magnitude cut is its own entry");
+
+            var path = Path.Combine(_root, "hyg-stars", "catalog.csv");
+            await File.AppendAllTextAsync(path, "\n", CancellationToken.None); // the file changed (length)
+            var third = await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None);
+            Assert.That(third, Is.Not.SameAs(first), "a changed file is parsed again");
+        }
+
+        [Test]
         public async Task ReadCatalogAsync_is_null_until_installed_then_parses_catalog_csv() {
             // Not installed → null; an unknown / non-catalog id → null (never touches the disk).
             Assert.That(await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None), Is.Null);

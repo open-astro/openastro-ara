@@ -11,7 +11,8 @@ import '../../services/profile_api.dart';
 enum UnsafeAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
 enum GuiderLostAction { pauseAndRetry, skipTarget, abortSequence }
-enum DiskSpaceCriticalAction { warn, abort }
+/// #1185 — `pause` suspends the running sequence (resumable once space is freed).
+enum DiskSpaceCriticalAction { warn, pause, abort }
 
 /// §58.4 step 3 / §58.6 (#1138) — re-focus after a meridian flip.
 enum MeridianRefocusMode { always, ifTempDrifted, never }
