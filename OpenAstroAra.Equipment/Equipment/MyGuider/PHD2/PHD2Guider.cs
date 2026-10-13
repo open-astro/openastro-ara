@@ -407,6 +407,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         public async Task<bool> Dither(IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            // Every dither starts with a clean verdict: a refusal below must not inherit the
+            // previous dither's settle error (#1156 r1).
+            _lastSettleError = null;
             if (Connected) {
                 var state = await GetAppState();
                 if (state != PhdAppState.GUIDING) {
@@ -437,7 +440,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 // events before SendMessage returns, and if we only set Settling=true afterwards a fast
                 // SettleDone would be missed and WaitForSettling would never see a settle in progress.
                 Settling = true;
-                _lastSettleError = null;
                 var ditherMsgResponse = await SendMessage(ditherMsg);
                 if (ditherMsgResponse.error != null) {
                     /* Dither failed */

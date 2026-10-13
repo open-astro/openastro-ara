@@ -293,11 +293,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             ok = false;
             error = ex.Message;
         }
-        if (ditherGuider is not null) {
-            // Dither() returns true once the RPC was sent; the settle outcome is read separately.
-            error ??= ditherGuider.LastSettleError;
-            ok = ok && error is null;
+        if (ditherGuider is not null && ok) {
+            // Dither() returns true once the RPC was sent; the settle verdict is read separately.
+            error = ditherGuider.LastSettleError;
+            ok = error is null;
         } else if (!ok) {
+            // A false return is the guider saying no (not guiding, already stopped, RPC refused).
             error ??= "refused";
         }
         await PublishOperationCompleteAsync(accepted, ok, error).ConfigureAwait(false);
