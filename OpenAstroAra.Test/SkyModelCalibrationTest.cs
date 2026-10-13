@@ -22,6 +22,7 @@ using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -78,11 +79,48 @@ namespace OpenAstroAra.Test {
             Assert.That(without.K, Is.Null, "never guessed");
             Assert.That(without.Note, Does.Contain("one exposure length").And.Contain("bias"));
 
-            frames.Add(Frame(null, 0.001, 501, FrameType.Bias));
+            // A bias at another binning does not pin a bin-1 group.
+            frames.Add(Frame(null, 0, 2004, FrameType.Bias, bin: 2));
+            Assert.That(SkyModelCalibrationService.Fit(frames, Site, Optics, Camera, Filters, Now).Filters.Single(f => f.Kind == "ha").Note, Does.Contain("no bias frame at bin 1"));
+
+            // A 0 s bias (a camera with a 0 s minimum, or EXPTIME=0 from the scan) counts.
+            frames.Add(Frame(null, 0, 501, FrameType.Bias));
             var with = SkyModelCalibrationService.Fit(frames, Site, Optics, Camera, Filters, Now).Filters.Single(f => f.Kind == "ha");
             Assert.That(with.K, Is.EqualTo(1.1).Within(1e-3));
             Assert.That(with.PedestalAdu, Is.EqualTo(501));
             Assert.That(with.Passed, Is.True);
+        }
+
+        [Test]
+        public async Task Recalibrate_keeps_the_NEWEST_frames_when_the_window_holds_more_than_the_cap() {
+            // The catalog lists oldest first. 4100 frames across 41 nights in the window: only the first
+            // 100 (the OLDEST night) were shot at a different rig state (k = 0.5); the newest 4000 are at
+            // k = 1.0. A fit that took the first 4000 would be polluted; the newest-first cap is not.
+            var store = new InMemoryProfileStore();
+            store.PutSiteSettings(Site); store.PutOpticsSettings(Optics); store.PutCameraElectronics(Camera); store.PutFilterSet(Filters);
+            var rate1 = SkyModelCalibrationService.PredictedSkyRateEPerSecPerPx(FilterKind.L, 1, Site, Optics, Camera, Filters) / Camera.ElectronsPerAdu;
+            var all = new List<FrameListItemDto>();
+            for (var i = 0; i < 4100; i++) {
+                var k = i < 100 ? 0.5 : 1.0;
+                var t = 30.0 * (1 + i % 3); // 30 / 60 / 90 s
+                all.Add(Frame("L", t, 500 + k * rate1 * t, daysAgo: 60 - i / 100)); // oldest first
+            }
+            var pages = all.Chunk(200).ToList();
+            var repo = new Mock<IFrameRepository>();
+            for (var p = 0; p < pages.Count; p++) {
+                var cursor = p == 0 ? null : (p * 200).ToString(CultureInfo.InvariantCulture);
+                var hasMore = p < pages.Count - 1;
+                repo.Setup(r => r.ListAsync(200, cursor, null, null, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new CursorPage<FrameListItemDto>(pages[p], hasMore ? ((p + 1) * 200).ToString(CultureInfo.InvariantCulture) : null, hasMore));
+            }
+            var svc = new SkyModelCalibrationService(store, repo.Object) { UtcNow = () => Now };
+
+            var record = await svc.RecalibrateAsync(CancellationToken.None);
+
+            Assert.That(record.FramesConsidered, Is.EqualTo(SkyModelCalibrationService.MaxFrames));
+            var l = record.Filters.Single();
+            Assert.That(l.K, Is.EqualTo(1.0).Within(1e-3), "the oldest night fell off the cap, not the newest");
+            Assert.That(l.ScatterPct, Is.EqualTo(0).Within(0.1));
         }
 
         [Test]

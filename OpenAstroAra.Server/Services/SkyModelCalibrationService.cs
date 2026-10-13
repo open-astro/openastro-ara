@@ -68,15 +68,19 @@ public sealed class SkyModelCalibrationService {
         var now = UtcNow();
         var frames = new List<FrameListItemDto>();
         if (_frames is not null) {
+            // The catalog lists oldest first, so every page is read and the window + cap are applied
+            // afterwards: the fit must see the NEWEST frames (a rig change in the last nights has to
+            // reach k), never the oldest 4000 of a busy season.
             string? cursor = null;
             var since = now - RecentWindow;
             do {
                 var page = await _frames.ListAsync(200, cursor, null, null, ct).ConfigureAwait(false);
                 frames.AddRange(page.Items.Where(f => f.CapturedUtc >= since));
                 cursor = page.HasMore ? page.NextCursor : null;
-            } while (cursor is not null && frames.Count < MaxFrames);
+            } while (cursor is not null);
         }
-        var record = Fit(frames, _profiles.GetSiteSettings(), _profiles.GetOpticsSettings(), _profiles.GetCameraElectronics(),
+        var recent = frames.OrderByDescending(f => f.CapturedUtc).Take(MaxFrames).ToList();
+        var record = Fit(recent, _profiles.GetSiteSettings(), _profiles.GetOpticsSettings(), _profiles.GetCameraElectronics(),
             _profiles.GetFilterSet(), now);
         _profiles.PutSkyModelCalibration(record);
         return record;
@@ -85,13 +89,18 @@ public sealed class SkyModelCalibrationService {
     /// <summary>The pure fit. Internal static so the maths is unit-tested without a catalog.</summary>
     public static SkyModelCalibrationDto Fit(IReadOnlyList<FrameListItemDto> frames, SiteSettingsDto site, OpticsSettingsDto optics,
             CameraElectronicsDto camera, FilterSetDto filterSet, DateTimeOffset now) {
-        var usable = frames.Where(f => f.BackgroundAdu is double bg && !double.IsNaN(bg) && f.ExposureSeconds > 0).ToList();
-        var lights = usable.Where(f => f.FrameType == FrameType.Light).ToList();
-        var biasPedestal = MedianOrNull(usable.Where(f => f.FrameType == FrameType.Bias).Select(f => f.BackgroundAdu!.Value));
+        // A measured background is the entry ticket; only a LIGHT needs a positive exposure (a bias is
+        // legitimately 0 s on cameras with a 0 s minimum and on scan-ingested EXPTIME=0 files).
+        var usable = frames.Where(f => f.BackgroundAdu is double bg && !double.IsNaN(bg)).ToList();
+        var lights = usable.Where(f => f.FrameType == FrameType.Light && f.ExposureSeconds > 0).ToList();
+        var biases = usable.Where(f => f.FrameType == FrameType.Bias).ToList();
 
         var results = new List<SkyModelFilterCalibrationDto>();
         foreach (var group in lights.GroupBy(f => (Kind: KindOf(f.FilterName, filterSet), Bin: f.Bin ?? 1))
                      .Where(g => g.Key.Kind is not null).OrderBy(g => KindName(g.Key.Kind!.Value), StringComparer.Ordinal).ThenBy(g => g.Key.Bin)) {
+            // The pedestal is per binning (summed software binning multiplies it) — a bias at another
+            // binning says nothing about this group.
+            var biasPedestal = MedianOrNull(biases.Where(b => (b.Bin ?? 1) == group.Key.Bin).Select(b => b.BackgroundAdu!.Value));
             results.Add(FitKind(group.Key.Kind!.Value, group.Key.Bin, group.ToList(), biasPedestal, site, optics, camera, filterSet));
         }
         return new SkyModelCalibrationDto(now, usable.Count, results);
@@ -129,7 +138,7 @@ public sealed class SkyModelCalibrationService {
             scatterPct = rateAduPerSec > 0 ? StdDev(rates) / rateAduPerSec * 100.0 : double.PositiveInfinity;
         } else {
             return Unfit(kindName, bin, n,
-                $"All {n} frames share one exposure length ({t[0].ToString("0.#", CultureInfo.InvariantCulture)} s) and the library has no bias frame to pin the pedestal; vary the exposure or shoot a bias.");
+                $"All {n} frames share one exposure length ({t[0].ToString("0.#", CultureInfo.InvariantCulture)} s) and the library has no bias frame at bin {bin} to pin the pedestal; vary the exposure or shoot a bias.");
         }
         if (rateAduPerSec <= 0) {
             return Unfit(kindName, bin, n, "The fitted sky rate is not positive (the background does not grow with exposure).");
