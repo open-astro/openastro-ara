@@ -92,7 +92,9 @@ Future<void> captureProfileCache(
       api.getCameraElectronics(),
       // #1137 — the §36 terrain skyline: the offline Tonight's Sky ranker
       // honours it, so it must come from the cache too, not only the server.
-      api.getCustomHorizon(),
+      // Best-effort: a daemon without the endpoint must not fail the whole
+      // capture (null = not captured; the seed then leaves the notifier alone).
+      _tryHorizon(api),
     ).wait;
     await cache.saveSections(activeId, {
       'optics': ProfileApi.opticsToJson(optics),
@@ -101,10 +103,20 @@ Future<void> captureProfileCache(
       'site': ProfileApi.siteSettingsToJson(site),
       'filter_set': ProfileApi.filterSetToJson(filters),
       'camera_electronics': ProfileApi.cameraElectronicsToJson(electronics),
-      'custom_horizon': ProfileApi.customHorizonToJson(horizon),
+      if (horizon != null)
+        'custom_horizon': ProfileApi.customHorizonToJson(horizon),
     });
   } catch (e) {
     debugPrint('[profile-cache] capture failed (offline cache stays stale): $e');
+  }
+}
+
+Future<List<CustomHorizonPoint>?> _tryHorizon(ProfileApi api) async {
+  try {
+    return await api.getCustomHorizon();
+  } catch (e) {
+    debugPrint('[profile-cache] custom horizon not captured: $e');
+    return null;
   }
 }
 
