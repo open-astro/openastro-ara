@@ -522,6 +522,14 @@ void main() {
     await t.pumpWidget(_harness(autofocus: AutofocusLive(run: _completed, focusedThisSession: true)));
     await t.pump();
     expect(find.byType(CollimationCard), findsNothing, reason: 'no verdict → no card');
+
+    // A verdict still in memory while the NEXT run is sweeping stays hidden:
+    // the probes are the story now, and the verdict belongs to the last run.
+    const running = AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 9, completedSteps: 3, sweepAttempt: 1);
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(_harness(autofocus: AutofocusLive(run: running, collimation: verdict)));
+    await t.pump();
+    expect(find.byType(CollimationCard), findsNothing, reason: 'running run → verdict hidden');
   });
 
   testWidgets('#1139 a good verdict reads green with nothing to do', (t) async {
