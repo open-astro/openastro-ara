@@ -127,7 +127,18 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     if (server == null) {
       // §2 / #1137 — no rig in reach: keep the profile on this device and
       // apply it the moment a server connects (pending_profile_drafts_state).
-      await _saveLocally(draft, server: null, finalSave: finalSave, nav: nav, messenger: messenger);
+      // The guard covers the file write: a second tap must not store a second
+      // draft that the replay would turn into two profiles.
+      setState(() => _isSaving = true);
+      try {
+        await _saveLocally(draft, server: null, finalSave: finalSave, nav: nav, messenger: messenger);
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        } else {
+          _isSaving = false;
+        }
+      }
       return;
     }
     final api = (widget.createApi ?? ProfileApi.new)(server);
