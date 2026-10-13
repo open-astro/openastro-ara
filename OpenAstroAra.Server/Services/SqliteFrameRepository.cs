@@ -839,8 +839,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             Guid id, OpenAstroAra.Profile.Interfaces.IProfileService profileService, CancellationToken ct) {
         // §18.I — reuse the proven preview FITS read path, then wrap the raw 16-bit pixels as IImageData for
         // the plate-solver. The real profileService is passed in (the CLI solver writes a temp FITS via the
-        // image's SaveToDisk, which reads the profile for the file pattern). Star detection/annotator are
-        // genuinely untouched by solving → null. FITS frames are 16-bit; isBayered preserves the CFA flag.
+        // image's SaveToDisk, which reads the profile for the file pattern). #1147: the headless detector
+        // and circle annotator are wired so DetectStars(annotateImage: true) on this image works; solving
+        // itself never calls them. FITS frames are 16-bit; isBayered preserves the CFA flag, and the
+        // metadata carries the pattern so an OSC frame renders as luminance, not the CFA checkerboard.
         var (catalogued, _) = await GetPathAndTypeAsync(id, ct);
         var filePath = ConfinedExistingPath(catalogued);
         if (filePath is null) {
@@ -849,9 +851,15 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         // A corrupt/truncated FITS lets LoadFitsPixels throw → 500, consistent with GetPreviewAsync/
         // GetThumbnailAsync on the same file (a malformed catalogued frame is an exceptional, not user-input, case).
         var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+        var metaData = new OpenAstroAra.Image.ImageData.ImageMetaData();
+        if (!string.IsNullOrEmpty(bayerPat)) {
+            metaData.Camera.SensorType = OpenAstroAra.Image.ImageData.ImageMetaData.StringToSensorType(bayerPat);
+        }
         return new OpenAstroAra.Image.ImageData.BaseImageData(
             pixels, width, height, bitDepth: 16, isBayered: !string.IsNullOrEmpty(bayerPat),
-            new OpenAstroAra.Image.ImageData.ImageMetaData(), profileService, null!, null!);
+            metaData, profileService,
+            OpenAstroAra.Image.ImageAnalysis.HeadlessStarDetection.Instance,
+            OpenAstroAra.Image.ImageAnalysis.CircleStarAnnotator.Instance);
     }
 
     public async Task<(double RaDegrees, double DecDegrees)?> TryReadTargetCoordinatesAsync(Guid id, CancellationToken ct) {

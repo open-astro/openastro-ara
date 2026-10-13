@@ -335,7 +335,13 @@ public class FrameFileConfinementTest {
             WriteRealFits(outsidePath);
             var profile = new HeadlessProfileService();
 
-            Assert.That(await _repo.LoadImageDataAsync(inside, profile, CancellationToken.None), Is.Not.Null, "ours loads");
+            var loaded = await _repo.LoadImageDataAsync(inside, profile, CancellationToken.None);
+            Assert.That(loaded, Is.Not.Null, "ours loads");
+            // #1147 — the detector and annotator are wired: annotation runs, it no longer dereferences a null.
+            var detected = await loaded!.RenderImage().DetectStars(annotateImage: true,
+                OpenAstroAra.Core.Enums.StarSensitivity.Normal, OpenAstroAra.Core.Enums.NoiseReduction.None,
+                cancelToken: CancellationToken.None);
+            Assert.That(detected.Image.Length, Is.EqualTo(16), "a 4×4 frame renders one byte per pixel, annotated or not");
             Assert.That(await _repo.LoadImageDataAsync(outside, profile, CancellationToken.None), Is.Null, "foreign FITS is not loaded for solving");
             Assert.That(await _repo.TryReadTargetCoordinatesAsync(outside, CancellationToken.None), Is.Null, "no header peek at a foreign file");
 

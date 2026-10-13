@@ -90,7 +90,7 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         // Map ASCOM SensorType → the §65 BayerPattern. Bayer-mosaic types only; exotic CFAs throw.
-        private static OpenAstroAra.Stretch.BayerPattern ToBayerPattern(SensorType s) => s switch {
+        internal static OpenAstroAra.Stretch.BayerPattern ToBayerPattern(SensorType s) => s switch {
             SensorType.RGGB => OpenAstroAra.Stretch.BayerPattern.RGGB,
             SensorType.BGGR => OpenAstroAra.Stretch.BayerPattern.BGGR,
             SensorType.GBRG => OpenAstroAra.Stretch.BayerPattern.GBRG,
@@ -99,8 +99,13 @@ namespace OpenAstroAra.Image.ImageData {
                 $"Bilinear debayer supports RGGB/BGGR/GBRG/GRBG; got {s} (CMYG/LRGB/etc. unsupported)."),
         };
 
+        /// <summary>The four Bayer mosaics the bilinear debayer handles; anything else (CMYG, LRGB, a
+        /// monochrome flag on a Bayered frame) is not a pattern we can place.</summary>
+        internal static bool IsSupportedBayer(SensorType s) =>
+            s is SensorType.RGGB or SensorType.BGGR or SensorType.GBRG or SensorType.GRBG;
+
         // Rec.601 luma from the debayered planes.
-        private static ushort[] Luminance(ushort[] r, ushort[] g, ushort[] b) {
+        internal static ushort[] Luminance(ushort[] r, ushort[] g, ushort[] b) {
             var lum = new ushort[r.Length];
             for (int i = 0; i < r.Length; i++) {
                 lum[i] = (ushort)(0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i]);
@@ -129,13 +134,10 @@ namespace OpenAstroAra.Image.ImageData {
             // §2105: headless star detection + HFR on the raw 16-bit frame via the dependency-free
             // StarDetector (the §26 decision ruled out OpenCvSharp4). Sensitivity selects the k·σ
             // threshold; lower k ⇒ more stars. NoiseReduction != None turns on a 3×3 median pre-filter.
-            // Offloaded — the flood-fill is CPU-bound (~50-300ms full-res). On-image annotation is not
-            // yet wired (it needs the §2105 annotator); annotateImage is honoured as a no-op for now.
-            if (annotateImage) {
-                // The §2105 on-image annotator (overlay drawing) isn't wired yet — make the no-op visible
-                // so a future §59 autofocus caller that asks for annotation sees why it gets a plain frame.
-                Logger.Debug("DetectStars(annotateImage: true): star annotation not yet implemented; returning the un-annotated frame.");
-            }
+            // Offloaded — the flood-fill is CPU-bound (~50-300ms full-res). #1147: annotateImage draws the
+            // detections onto the display buffer through the injected IStarAnnotator (Image, not
+            // OriginalImage, so the plain render survives); with no annotator wired the frame stays plain
+            // and says so.
             var parameters = new StarDetectionParams {
                 Sensitivity = SensitivityToSigma(sensitivity),
                 NoiseReduction = (int)noiseReduction,
@@ -143,9 +145,16 @@ namespace OpenAstroAra.Image.ImageData {
             var pixels = RawImageData.Data.FlatArray;
             var width = RawImageData.Properties.Width;
             var height = RawImageData.Properties.Height;
-            return Task.Run<IRenderedImage>(() => {
+            return Task.Run<IRenderedImage>(async () => {
                 var result = StarDetector.Detect(pixels, width, height, parameters, cancelToken);
                 UpdateAnalysis(parameters, result);
+                if (annotateImage) {
+                    if (starAnnotator is null) {
+                        Logger.Debug("DetectStars(annotateImage: true): no star annotator wired; returning the un-annotated frame.");
+                    } else {
+                        Image = await starAnnotator.GetAnnotatedImage(parameters, result, Image, width, height).ConfigureAwait(false);
+                    }
+                }
                 return this;
             }, cancelToken);
         }

@@ -149,6 +149,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
     }
 
     public interface IStarAnnotator {
-        Task<byte[]> GetAnnotatedImage(StarDetectionParams parameters, StarDetectionResult result, byte[] source);
+        /// <summary>Draw the detected stars onto the 8-bit, one-byte-per-pixel display buffer <paramref name="source"/>
+        /// (row-major, <paramref name="width"/> × <paramref name="height"/>) and return the annotated copy.</summary>
+        Task<byte[]> GetAnnotatedImage(StarDetectionParams parameters, StarDetectionResult result, byte[] source, int width, int height);
     }
 }

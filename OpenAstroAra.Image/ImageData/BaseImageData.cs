@@ -86,9 +86,18 @@ namespace OpenAstroAra.Image.ImageData {
             // via the §65 SkiaSharp-era Stretcher — an auto-STF stretch so the result is viewable
             // straight out of the camera. Re-stretch with explicit params is RenderedImage.Stretch().
             //
-            // Bayered (OSC) frames render here as the raw, undebayered mosaic (a grey CFA pattern) —
-            // colour comes from the separate RenderedImage.Debayer() path (a later §2105 sub-PR); the
-            // catalog colour preview already debayers via Debayer.SuperPixel in the §65 server path.
+            // #1147: a Bayered (OSC) frame whose metadata names a Bayer mosaic renders as the debayered
+            // LUMINANCE (bilinear debayer → Rec.601 luma), not the grey CFA checkerboard — the one-byte
+            // display buffer is mono by contract, so luminance is the honest OSC display; colour planes
+            // come from RenderedImage.Debayer(). A Bayered frame with no usable pattern (Monochrome /
+            // CMYG / LRGB in the metadata) still renders the raw mosaic rather than guessing RGGB.
+            var pattern = MetaData?.Camera?.SensorType ?? SensorType.Monochrome;
+            if (Properties.IsBayered && RenderedImage.IsSupportedBayer(pattern)) {
+                var (r, g, b) = OpenAstroAra.Stretch.Debayer.Bilinear(
+                    Data.FlatArray, Properties.Width, Properties.Height, RenderedImage.ToBayerPattern(pattern));
+                return OpenAstroAra.Stretch.Stretcher.Apply(
+                    OpenAstroAra.Stretch.StretchAlgorithm.AutoStf, RenderedImage.Luminance(r, g, b));
+            }
             return OpenAstroAra.Stretch.Stretcher.Apply(
                 OpenAstroAra.Stretch.StretchAlgorithm.AutoStf, Data.FlatArray);
         }
