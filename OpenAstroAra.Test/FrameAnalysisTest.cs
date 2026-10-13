@@ -278,8 +278,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Registering_a_capture_stores_the_request_binning_on_the_row() {
-            // #1140 P2 — the pixel scale the calibration fit needs comes from the binning at capture.
+        public async Task Registering_a_capture_stores_the_APPLIED_binning_on_the_row() {
+            // #1140 P2 — the pixel scale the calibration fit needs comes from the binning the driver
+            // actually used: a request for 2 that the driver coerced to 1 must store 1 (like XBINNING).
             var frames = new Mock<IFrameRepository>();
             frames.Setup(f => f.EnsureManualCaptureSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Session);
             using var camera = new CameraService(frames: frames.Object);
@@ -287,9 +288,13 @@ namespace OpenAstroAra.Test {
             await File.WriteAllBytesAsync(path, new byte[64]);
             var id = Guid.NewGuid();
 
-            await camera.RegisterFrameAsync(id, new ExposureRequestDto(30, 100, BinX: 2, BinY: 2), FrameType.Flat, "flat", DateTimeOffset.UtcNow, path, 10, 10);
+            await camera.RegisterFrameAsync(id, new ExposureRequestDto(30, 100, BinX: 2, BinY: 2), FrameType.Flat, "flat", DateTimeOffset.UtcNow, path, 10, 10, appliedBin: 1);
+            frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == id && d.Bin == 1 && d.BackgroundAdu == null), It.IsAny<CancellationToken>()), Times.Once);
 
-            frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == id && d.Bin == 2 && d.BackgroundAdu == null), It.IsAny<CancellationToken>()), Times.Once);
+            // No read-back available: the request's binning is the best figure there is.
+            var id2 = Guid.NewGuid();
+            await camera.RegisterFrameAsync(id2, new ExposureRequestDto(30, 100, BinX: 2, BinY: 2), FrameType.Flat, "flat", DateTimeOffset.UtcNow, path, 10, 10);
+            frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == id2 && d.Bin == 2), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
