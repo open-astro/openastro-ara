@@ -38,6 +38,7 @@ class _FakeSource implements DeviceFactsSource {
   final TelescopeOptics? optics;
   final MountProps? mount;
   TrackingCalibration? tracking;
+  bool trackingThrows = false;
   final FilterWheelSlots? wheel;
   FocuserProps? focuser;
   RotatorProps? rotator;
@@ -72,7 +73,10 @@ class _FakeSource implements DeviceFactsSource {
   @override
   Future<MountProps?> mountProps() async => mount;
   @override
-  Future<TrackingCalibration?> trackingCalibration() async => tracking;
+  Future<TrackingCalibration?> trackingCalibration() async {
+    if (trackingThrows) throw Exception('500 from /tracking/calibration');
+    return tracking;
+  }
   @override
   Future<FilterWheelSlots?> filterWheelSlots() async => wheel;
   @override
@@ -124,6 +128,40 @@ void main() {
     // Unassigned types never appear — no phantom cards.
     expect(map.containsKey(EquipmentDeviceType.rotator), isFalse);
     expect(source.closes, 1);
+  });
+
+  test('#1264 a stored tracking ceiling lands on the mount card as a fact', () async {
+    final source = _FakeSource(
+      devices: {'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70')},
+      optics: const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
+      mount: const MountProps(name: 'iOptron CEM70'),
+    )..tracking = TrackingCalibration(
+        ceilingSeconds: 45, measuredUtc: DateTime.utc(2026, 10, 11, 12), source: 'measured');
+    final c = _container(source);
+    await c
+        .read(wizardEquipmentReadinessProvider.notifier)
+        .readAll(_server, EquipmentSlots()..mountDeviceId = 'mnt-1');
+    final mount = c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.mount]!;
+    expect(mount.state, ReadinessState.ready);
+    expect(mount.facts.map((f) => f.label), contains('Unguided ceiling'));
+    expect(mount.facts.singleWhere((f) => f.label == 'Unguided ceiling').value,
+        startsWith('45 s · measured 2026-10-11'));
+  });
+
+  test('#1264 a failed tracking read never gaps or unreaches the mount card', () async {
+    final source = _FakeSource(
+      devices: {'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70')},
+      optics: const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
+      mount: const MountProps(name: 'iOptron CEM70'),
+    )..trackingThrows = true;
+    final c = _container(source);
+    await c
+        .read(wizardEquipmentReadinessProvider.notifier)
+        .readAll(_server, EquipmentSlots()..mountDeviceId = 'mnt-1');
+    final mount = c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.mount]!;
+    expect(mount.state, ReadinessState.ready, reason: 'the ceiling is informational only');
+    expect(mount.gaps, isEmpty);
+    expect(mount.facts.map((f) => f.label), isNot(contains('Unguided ceiling')));
   });
 
   test('an assigned device missing from the bridge is unreachable with a '
