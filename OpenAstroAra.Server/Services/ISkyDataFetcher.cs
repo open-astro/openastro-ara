@@ -22,11 +22,6 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services {
 
     /// <summary>
-    /// §36-2 seam over "open a byte stream for a sky-data package URL". Abstracting the HTTP fetch behind an
-    /// interface lets the <see cref="DataManagerService"/> download worker be unit-tested with an in-memory archive
-    /// (no network), while production uses <see cref="HttpSkyDataFetcher"/>.
-    /// </summary>
-    /// <summary>
     /// What a completed install remembers about the remote package so the next fetch can be conditional
     /// (§36 incremental update, #1171): the <c>Last-Modified</c> date and/or the <c>ETag</c>. Either may be
     /// null when the server did not send it; a validator with neither is treated as "no validator".
@@ -34,6 +29,12 @@ namespace OpenAstroAra.Server.Services {
     public sealed record SkyDataValidator(DateTimeOffset? LastModified, string? ETag) {
         public bool IsEmpty => LastModified is null && string.IsNullOrWhiteSpace(ETag);
     }
+
+    /// <summary>
+    /// §36-2 seam over "open a byte stream for a sky-data package URL". Abstracting the HTTP fetch behind an
+    /// interface lets the <see cref="DataManagerService"/> download worker be unit-tested with an in-memory archive
+    /// (no network), while production uses <see cref="HttpSkyDataFetcher"/>.
+    /// </summary>
 
     public interface ISkyDataFetcher {
         /// <summary>Open a read stream for <paramref name="source"/>. The returned <see cref="SkyDataFetch"/> owns the
@@ -75,8 +76,12 @@ namespace OpenAstroAra.Server.Services {
         public string? ETag { get; init; }
 
         /// <summary>Both validators, or null when the server sent neither.</summary>
-        public SkyDataValidator? Validator =>
-            LastModified is null && ETag is null ? null : new SkyDataValidator(LastModified, ETag);
+        public SkyDataValidator? Validator {
+            get {
+                var v = new SkyDataValidator(LastModified, ETag);
+                return v.IsEmpty ? null : v;
+            }
+        }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort stream teardown: any error tearing down the content stream must not leak the response/client (disposed in the finally) nor turn an already-finished download into a failure.")]
@@ -126,11 +131,14 @@ namespace OpenAstroAra.Server.Services {
                     // §36 incremental update: ask the CDN to answer 304 if the package is unchanged.
                     request.Headers.IfModifiedSince = since;
                 }
-                if (!string.IsNullOrWhiteSpace(validator?.ETag)
-                        && System.Net.Http.Headers.EntityTagHeaderValue.TryParse(validator.ETag, out var etag)) {
+                if (!string.IsNullOrWhiteSpace(validator?.ETag)) {
                     // #1171 — the ETag survives a re-upload of identical bytes where Last-Modified does not; an
-                    // unparsable stored tag is simply not sent (the date alone still makes the GET conditional).
-                    request.Headers.IfNoneMatch.Add(etag);
+                    // unparsable stored tag is not sent (the date alone, if any, still makes the GET conditional).
+                    if (System.Net.Http.Headers.EntityTagHeaderValue.TryParse(validator.ETag, out var etag)) {
+                        request.Headers.IfNoneMatch.Add(etag);
+                    } else {
+                        OpenAstroAra.Core.Utility.Logger.Debug($"sky-data fetch of {source}: stored ETag '{validator.ETag}' is not a valid entity tag; fetching without If-None-Match.");
+                    }
                 }
                 // ResponseHeadersRead so the (potentially multi-GB) body streams rather than buffering in memory.
                 var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
