@@ -49,11 +49,15 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
   double? decDeg,
   // #1140 — the Glover noise-tolerance knob; see planningPrefsProvider.
   double noiseTolerancePct = 5.0,
+  // #1140 P2 — the rig's sky-model calibration by filter-kind wire token
+  // (`SkyModelCalibration.appliedK`); the matched filter's kind picks the k.
+  Map<String, double> skyCalibrationK = const {},
 }) {
   final assumed = <String>[];
 
   // ── Filter passband: named profile filter → broadband default ────────────
   double bandwidth;
+  var k = 1.0;
   final name = filterName?.trim();
   if (name != null && name.isNotEmpty) {
     final match = filterSet.filters
@@ -70,6 +74,7 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
     bandwidth = match.bandwidthNm > 0
         ? match.bandwidthNm
         : match.kind.defaultBandwidthNm;
+    k = skyCalibrationK[match.kind.wire] ?? 1.0;
   } else {
     bandwidth = defaultBroadbandBandwidthNm;
     assumed.add('filter_bandwidth_nm');
@@ -134,6 +139,7 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
       sqmMagPerArcsec2: site.sqmMagPerArcsec2,
     ),
     filterBandwidthNm: bandwidth,
+    skyCalibrationK: k,
   );
 
   var window = computeOptimalSub(input);

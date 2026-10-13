@@ -30,6 +30,13 @@ class OptimalSubInput {
   final double noiseTolerancePct;
   final double saturationHeadroomFraction;
 
+  /// #1140 P2 — the rig's sky-model calibration factor for this filter kind
+  /// (`SkyModelCalibration.appliedK`), 1.0 when none passed the gate. It scales
+  /// the modelled photon flux — sky AND target alike, since it stands for
+  /// transmission and QE-curve losses the spec sheet misses — so the budget's
+  /// hours scale by 1/k and the Glover sub length follows the real sky rate.
+  final double skyCalibrationK;
+
   const OptimalSubInput({
     required this.readNoiseE,
     required this.fullWellE,
@@ -43,6 +50,7 @@ class OptimalSubInput {
     required this.filterBandwidthNm,
     this.noiseTolerancePct = 5.0,
     this.saturationHeadroomFraction = 0.8,
+    this.skyCalibrationK = 1.0,
   });
 }
 
@@ -122,7 +130,8 @@ double pixelScaleArcsec(OptimalSubInput input) =>
 double apertureAreaCm2(OptimalSubInput input) =>
     math.pi * math.pow(input.apertureMm / 20.0, 2).toDouble();
 
-/// `P`: the modelled sky-background flux in e⁻/s/pixel.
+/// `P`: the modelled sky-background flux in e⁻/s/pixel, times the rig's
+/// fitted calibration factor (1.0 = the spec-sheet model).
 double skyFluxEPerSecPerPx(OptimalSubInput input) {
   _validateFluxInputs(input);
   final scale = pixelScaleArcsec(input);
@@ -132,7 +141,8 @@ double skyFluxEPerSecPerPx(OptimalSubInput input) {
       apertureAreaCm2(input) *
       scale *
       scale *
-      input.quantumEfficiency;
+      input.quantumEfficiency *
+      input.skyCalibrationK;
 }
 
 /// The full sub-exposure window. Floor: `C(ε)·R²/P` with
@@ -185,6 +195,7 @@ void _validateComputeInputs(OptimalSubInput input) {
   _requirePositive(input.readNoiseE, 'readNoiseE');
   _requirePositive(input.fullWellE, 'fullWellE');
   _requirePositive(input.noiseTolerancePct, 'noiseTolerancePct');
+  _requirePositive(input.skyCalibrationK, 'skyCalibrationK');
   if (input.noiseTolerancePct > 100.0) {
     throw ArgumentError('Noise tolerance must be in (0, 100] %.');
   }

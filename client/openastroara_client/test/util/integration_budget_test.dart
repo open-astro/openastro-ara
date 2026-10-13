@@ -3,7 +3,7 @@ import 'package:openastroara/util/integration_budget.dart';
 import 'package:openastroara/util/optimal_sub.dart';
 
 // The RedCat 91 + 2600MM rig the design doc's dry runs validated against.
-OptimalSubInput rig({double skyMag = 21.9, double bandwidthNm = 300}) =>
+OptimalSubInput rig({double skyMag = 21.9, double bandwidthNm = 300, double skyCalibrationK = 1.0}) =>
     OptimalSubInput(
       readNoiseE: 1.5,
       fullWellE: 50000,
@@ -13,6 +13,7 @@ OptimalSubInput rig({double skyMag = 21.9, double bandwidthNm = 300}) =>
       quantumEfficiency: 0.8,
       skyMagPerArcsec2: skyMag,
       filterBandwidthNm: bandwidthNm,
+      skyCalibrationK: skyCalibrationK,
     );
 
 void main() {
@@ -206,6 +207,21 @@ void main() {
       // Narrowband (7 nm) under that city sky: the sky term shrinks with the passband.
       final cityNb = computeIntegrationBudget(input: rig(skyMag: 18.5, bandwidthNm: 7), surfaceBrightnessMagArcsec2: 21, peakAltitudeDeg: 60);
       expect(cityNb.skyFluxEPerSecPx, lessThan(city.skyFluxEPerSecPx / 10));
+    });
+  });
+
+  group('#1140 P2 sky-model calibration k', () {
+    test('k scales sky and target flux alike, so hours scale by 1/k and the audit line names it', () {
+      final spec = computeIntegrationBudget(input: rig(), surfaceBrightnessMagArcsec2: 22, peakAltitudeDeg: 60);
+      final fitted = computeIntegrationBudget(
+          input: rig(skyCalibrationK: 0.8), surfaceBrightnessMagArcsec2: 22, peakAltitudeDeg: 60);
+      expect(fitted.skyFluxEPerSecPx, closeTo(spec.skyFluxEPerSecPx * 0.8, 1e-9));
+      expect(fitted.coreTargetFluxEPerSecPx, closeTo(spec.coreTargetFluxEPerSecPx * 0.8, 1e-9));
+      expect(fitted.full.hours, closeTo(spec.full.hours / 0.8, 1e-6), reason: 'a rig that loses 20 % of the light needs 25 % longer');
+      final lines = Map.fromEntries(fitted.auditLines.map((l) => MapEntry(l.$1, l.$2)));
+      expect(lines['Sky model calibration'], 'k 0.80 from your frames');
+      final specLines = Map.fromEntries(spec.auditLines.map((l) => MapEntry(l.$1, l.$2)));
+      expect(specLines['Sky model calibration'], 'not fitted — spec-sheet model');
     });
   });
 

@@ -2254,8 +2254,9 @@ const Map<String, Help> helpRegistry = {
         'and no bias frame is needed; with one length a bias frame pins it. k is measured sky rate over modelled '
         'sky rate; a kind passes when k lands in 0.4–1.5 and the scatter stays under 30 % over at least three '
         'frames. A kind that fails keeps its figures with the reason, and is not applied.\n\n'
-        'Recalibrate refits from the last 90 days whenever you like; nothing is applied to the planner until a '
-        'kind passes.',
+        'Recalibrate refits from the last 90 days whenever you like. A kind that passes is applied: Tonight\'s Sky\'s '
+        'hours (scaled by 1/k, since a loss dims target and sky alike), the plan dialog\'s and the sub advisor\'s '
+        'sub length all use it, and each row\'s budget popover names the k it used.',
     relatedSettings: ['img.defaults.noise_tolerance_pct'],
   ),
   'img.defaults.noise_tolerance_pct': Help(

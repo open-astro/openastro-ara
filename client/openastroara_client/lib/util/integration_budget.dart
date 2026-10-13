@@ -92,6 +92,10 @@ class IntegrationBudget {
   final double coreTargetFluxEPerSecPx;
   final BudgetTuning tuning;
 
+  /// #1140 P2 — the sky-model calibration factor the fluxes were scaled by
+  /// (1.0 = spec-sheet model, nothing fitted for this filter kind).
+  final double skyCalibrationK;
+
   const IntegrationBudget({
     required this.core,
     required this.full,
@@ -104,6 +108,7 @@ class IntegrationBudget {
     this.skyFluxEPerSecPx = double.nan,
     this.coreTargetFluxEPerSecPx = double.nan,
     this.tuning = BudgetTuning.v1,
+    this.skyCalibrationK = 1.0,
   });
 
   /// The effective sky tonight: dark sky brightened by the moon.
@@ -135,6 +140,12 @@ class IntegrationBudget {
       ),
       ('Filter passband', '${filterBandwidthNm.toStringAsFixed(0)} nm'),
       ('Airmass at peak', airmass.toStringAsFixed(2)),
+      (
+        'Sky model calibration',
+        skyCalibrationK == 1.0
+            ? 'not fitted — spec-sheet model'
+            : 'k ${skyCalibrationK.toStringAsFixed(2)} from your frames',
+      ),
       ('Sky flux', flux(skyFluxEPerSecPx)),
       ('Core target flux', flux(coreTargetFluxEPerSecPx)),
       (
@@ -306,6 +317,7 @@ IntegrationBudget computeIntegrationBudget({
     coreTargetFluxEPerSecPx: skyFluxEPerSecPerPx(
         _withSkyMag(input, surfaceBrightnessMagArcsec2 + extinctionMag)),
     tuning: tuning,
+    skyCalibrationK: input.skyCalibrationK,
   );
 }
 
@@ -376,4 +388,5 @@ OptimalSubInput _withSkyMag(OptimalSubInput i, double mag) => OptimalSubInput(
       filterBandwidthNm: i.filterBandwidthNm,
       noiseTolerancePct: i.noiseTolerancePct,
       saturationHeadroomFraction: i.saturationHeadroomFraction,
+      skyCalibrationK: i.skyCalibrationK,
     );

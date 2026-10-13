@@ -12,6 +12,7 @@ import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/planning/planning_prefs_state.dart';
+import '../../state/planning/sky_model_calibration_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/optimal_sub_local.dart';
 
@@ -56,17 +57,32 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
   // Whether the rig has a guider at all. Without one the guide toggle is not
   // offered (the run is cooked from the rig — no guider, no guiding).
   bool guiderAvailable = true,
-}) =>
-    showDialog<TargetPlanChoice>(
-      context: context,
-      builder: (_) => _TargetPlanDialog(
-        targetName: targetName,
-        raDeg: raDeg,
-        decDeg: decDeg,
-        remainingDarkHours: remainingDarkHours,
-        guiderAvailable: guiderAvailable,
-      ),
-    );
+}) async {
+  // #1140 P2 — the rig's fitted sky-model calibration, resolved BEFORE the
+  // dialog builds its options (built once in initState): a fresh launch may
+  // still be loading the store. An unreachable rig plans with the spec sheet.
+  var skyCalibrationK = const <String, double>{};
+  try {
+    skyCalibrationK = (await ProviderScope.containerOf(context, listen: false)
+                .read(skyModelCalibrationProvider.future))
+            ?.appliedK ??
+        const {};
+  } catch (_) {
+    // no scope, or the store failed: spec-sheet model
+  }
+  if (!context.mounted) return null;
+  return showDialog<TargetPlanChoice>(
+    context: context,
+    builder: (_) => _TargetPlanDialog(
+      targetName: targetName,
+      raDeg: raDeg,
+      decDeg: decDeg,
+      remainingDarkHours: remainingDarkHours,
+      guiderAvailable: guiderAvailable,
+      skyCalibrationK: skyCalibrationK,
+    ),
+  );
+}
 
 /// Whether [filters] offers a real filter-change choice (any mono narrowband
 /// or broadband filter). OSC / dual- / tri-band shooters image through one
@@ -99,6 +115,7 @@ class _TargetPlanDialog extends ConsumerStatefulWidget {
     required this.decDeg,
     required this.remainingDarkHours,
     required this.guiderAvailable,
+    this.skyCalibrationK = const {},
   });
 
   final String targetName;
@@ -106,6 +123,10 @@ class _TargetPlanDialog extends ConsumerStatefulWidget {
   final double decDeg;
   final double? remainingDarkHours;
   final bool guiderAvailable;
+
+  /// #1140 P2 — the rig's sky-model calibration by filter-kind wire token
+  /// (`SkyModelCalibration.appliedK`), resolved by [showTargetPlanDialog].
+  final Map<String, double> skyCalibrationK;
 
   @override
   ConsumerState<_TargetPlanDialog> createState() => _TargetPlanDialogState();
@@ -147,6 +168,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
       raDeg: widget.raDeg,
       decDeg: widget.decDeg,
       noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
+      skyCalibrationK: widget.skyCalibrationK,
     );
     if (outcome is! LocalOptimalSubSuccess) {
       return defaultExposure > 0 ? defaultExposure : 60;

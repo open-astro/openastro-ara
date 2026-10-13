@@ -168,6 +168,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   /// read noise may add; 5 is the classic figure). A client-local planning
   /// preference, so the ranker takes it as an input.
   double noiseTolerancePct = 5.0,
+
+  /// #1140 P2 — the rig's sky-model calibration by filter-kind wire token
+  /// (`SkyModelCalibration.appliedK`); a kind not in the map uses 1.0. Plain
+  /// data so it crosses into the ranking isolate.
+  Map<String, double> skyCalibrationK = const {},
 }) {
   // The curated imaging-regions layer (realistic extents + evocative names for
   // the famous complexes, plus region-scale fields with no catalog anchor)
@@ -305,6 +310,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         skyMagPerArcsec2: skyMag,
         filterBandwidthNm: effectiveBandwidthNm(filter),
         noiseTolerancePct: noiseTolerancePct,
+        skyCalibrationK: skyCalibrationK[filter.kind.wire] ?? 1.0,
       );
       final result = computeOptimalSub(input);
       return (

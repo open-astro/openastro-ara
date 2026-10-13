@@ -17,6 +17,8 @@ import 'package:openastroara/services/planning_prefs_service.dart';
 import 'package:openastroara/state/planning/planning_prefs_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/tracking_calibration.dart';
+import 'package:openastroara/models/sky_model_calibration.dart';
+import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
 
@@ -264,9 +266,11 @@ void main() {
       TrackingCalibration? tracking,
       double noiseTolerancePct = 5,
       TrackingPrior prior = const TrackingPrior(),
+      SkyModelCalibration? skyModel,
     }) async {
       container = ProviderContainer(overrides: [
         trackingPriorProvider.overrideWith((ref) async => prior),
+        skyModelCalibrationProvider.overrideWith(() => _SeededSkyModel(skyModel)),
         planningPrefsProvider.overrideWith(
             () => _SeededPrefs(PlanningPrefs(noiseTolerancePct: noiseTolerancePct))),
         opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
@@ -292,7 +296,8 @@ void main() {
           ),
         ),
       ));
-      await tester.pump(); // settle the compute future
+      await tester.pump(); // settle the calibration read…
+      await tester.pump(); // …and the compute future
     }
 
     testWidgets('#1264 an unguided rig sees the tracking ceiling beside the sky limit',
@@ -325,6 +330,23 @@ void main() {
               measuredUtc: DateTime.utc(2026, 10, 11),
               source: 'measured'));
       expect(find.textContaining('Unguided'), findsNothing);
+    });
+
+    testWidgets('#1140 P2 a fitted sky-model k for the filter\'s kind moves the suggested exposure', (tester) async {
+      await pumpAdvisor(tester, filterName: 'Ha 7nm');
+      final spec = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      await tester.pumpWidget(const SizedBox());
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', skyModel: SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
+        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.5, frameCount: 9, passed: true)]));
+      final fitted = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      expect(fitted, isNot(spec), reason: 'the advisor read the calibration, not the spec-sheet model');
+      // A k for another kind, or one that failed the gate, leaves the figure alone.
+      await tester.pumpWidget(const SizedBox());
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', skyModel: SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
+        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.5, frameCount: 9, passed: false, note: 'scatter')]));
+      expect(tester.widget<Text>(find.textContaining('Suggested exposure:')).data!, spec);
     });
 
     testWidgets('#1140 the noise-tolerance knob moves the suggested exposure', (tester) async {
@@ -444,6 +466,13 @@ const _rigElectronics = CameraElectronics(
     readNoiseE: 1.5,
     fullWellE: 51000,
     quantumEfficiencyPeak: 0.8);
+class _SeededSkyModel extends SkyModelCalibrationNotifier {
+  _SeededSkyModel(this._v);
+  final SkyModelCalibration? _v;
+  @override
+  Future<SkyModelCalibration?> build() async => _v;
+}
+
 const _rigFilters = FilterSetSettings(filters: [
   PlanningFilter(name: 'Ha 7nm', kind: FilterKind.ha, bandwidthNm: 7),
   PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0),

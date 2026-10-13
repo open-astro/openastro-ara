@@ -10,6 +10,7 @@ import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/planning/planning_prefs_state.dart';
+import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/sequencer/rig_capabilities_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -178,6 +179,15 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     }
   }
 
+  Future<Map<String, double>> _skyCalibrationK() async {
+    try {
+      return (await ref.read(skyModelCalibrationProvider.future))?.appliedK ??
+          const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// Computes locally (PORT_DECISIONS 2026-07-15 — planning math lives in the
   /// client; no daemon round-trip). Kept async-shaped and sequence-guarded so
   /// didUpdateWidget's re-fetch semantics are unchanged.
@@ -190,6 +200,10 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       _hidden = false;
     });
     try {
+      // #1140 P2 — the rig's fitted sky-model k, awaited (the store may still
+      // be loading on a fresh launch); an unreachable rig reads as unfitted.
+      final skyCalibrationK = await _skyCalibrationK();
+      if (!mounted || seq != _fetchSeq) return; // superseded
       final outcome = resolveOptimalSubLocal(
         optics: ref.read(opticsSettingsProvider),
         electronics: ref.read(cameraElectronicsProvider),
@@ -197,6 +211,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
         filterSet: ref.read(filterSetProvider),
         filterName: widget.filterName,
         noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
+        skyCalibrationK: skyCalibrationK,
         // Already DEGREES (targetPositionForExposure converts NINA's RA hours).
         raDeg: widget.targetPosition?.raDeg,
         decDeg: widget.targetPosition?.decDeg,
