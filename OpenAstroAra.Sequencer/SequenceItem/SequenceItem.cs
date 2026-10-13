@@ -238,6 +238,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                         var success = false;
                         Exception? lastAttemptException = null;
                         for (int i = 0; i < Attempts; i++) {
+                            // #1155 — each attempt starts the clock again: a retried 300 s exposure
+                            // owes its full length on the second try, not 0.
+                            RunningSinceUtc = DateTimeOffset.UtcNow;
                             using var checkTokenSource = new CancellationTokenSource();
                             var checkTimeout = TimeSpan.FromMinutes(2);
                             try {

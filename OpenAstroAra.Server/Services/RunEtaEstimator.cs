@@ -130,8 +130,9 @@ public static class RunEtaEstimator {
     }
 
     // #1155 — what a RUNNING instruction still owes: its estimate minus the part already spent (a
-    // 300 s exposure 250 s in owes 50 s, not 300). Only when the item stamps its start; the TOTAL
-    // keeps the full cost (it is the plan, not the clock).
+    // 300 s exposure 250 s in owes 50 s, not 300). Applies to the nominal too (a slew reads 0 after
+    // its 15 s). Only when the item stamps its start; the TOTAL keeps the full cost (it is the plan,
+    // not the clock).
     private static double RemainingLeafCost(ISequenceItem leaf) {
         var cost = LeafCost(leaf);
         // An estimate that is already "left from now" (WaitForTime) must not be credited again.

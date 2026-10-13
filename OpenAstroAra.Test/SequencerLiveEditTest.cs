@@ -247,7 +247,8 @@ namespace OpenAstroAra.Test {
             // wait's elapsed time, so the remaining figure must have moved.
             var id = Guid.NewGuid();
             var (svc, _) = BuildService(id, BuildBody(c => {
-                c.Items.Add(new WaitForTimeSpan { Time = 4 });
+                // 8 s: the move below lands well inside the wait even on a slow runner.
+                c.Items.Add(new WaitForTimeSpan { Time = 8 });
                 c.Items.Add(new SequentialContainer { Name = "alpha" });
                 c.Items.Add(new SequentialContainer { Name = "beta" });
             }));
