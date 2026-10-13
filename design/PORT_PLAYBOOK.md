@@ -8593,28 +8593,31 @@ When user reconnects to ARA the next morning, the first-screen-after-server-hand
 
 ### 58.14 Pre-sleep checklist
 
-Just before astronomical dusk, ARA runs a one-shot self-test and surfaces a pre-sleep summary in WILMA:
+Once the site is dark (the client's nautical-dark test, sun below −12°) and a sequence is running, ARA reads a one-shot self-test from the daemon (`GET /api/v1/preflight/today`) and shows it once per night as the bedtime card in WILMA (the evening's date is the acknowledgement key, so a 03:00 reconnect does not ask again); it stays on Setup → Before you sleep with a Refresh:
 
 ```
 Tonight's sequence — pre-flight check
 
-✓ All equipment connected and healthy
+✓ Equipment: all 4 devices connected and healthy
 ✓ Storage: 412 GB free
-✓ Plate solver tested OK
-✓ Cooler at target (−10 °C)
-✓ Mount safety: tracking + slew rate verified
+✓ Plate solver: solver and star database (d50) present; not test-solved
+✓ Cooler: at target (−10 °C)
+✓ Mount safety: tracking; the flip watchdog uses the profile's expected slew time
+✓ Tonight's sequence: M81 night is running
 
 Planned meridian flips tonight:
   • 02:14 — M81 (alt 67° at flip, OK)
-  • 04:33 — NGC 6188 (alt 12° at flip — BELOW soft warning, above hard floor)
+  • 04:33 — NGC 6188 (alt 12° at flip — below the soft warning, above the hard floor)
 
 Unattended hours: 23:00 — 06:30
-Alarm device: macbook-bedroom.local (verified audible)
+Alarm device: macbook-bedroom.local (alarm sound on)
 
   [ All good — let me go to bed ]   [ Adjust ]
 ```
 
-User taps "all good" once before sleeping. Catches mis-set thresholds, disconnected equipment, low storage, etc., before they become 3am alarms.
+Grading: the mount and camera must be connected (a failure otherwise); other selected devices that are not connected and unresolved faults are warnings; storage uses the profile's own warn/critical thresholds; the cooler is "at target" within 1 °C of its setpoint; a parked mount fails, an untracking one warns; the flip forecast is the active target's crossing of the flip point (meridian + `MinutesAfterMeridian`) graded against the site's soft warning and hard floor. Anything the daemon cannot read grades *unknown*, never a silent ok. "All good" is vetoed only by a failure or a flip below the hard floor; warnings are the user's call at Adjust. Both buttons answer the night.
+
+Deferred (the card says so where it matters): a real test solve (the solver and star database are checked for presence only), a slew-rate check (Alpaca has no slew-duration estimate; the §58.9 watchdog uses the profile's expected flip seconds), forecasts for the sequence's non-active targets (only the live target's coordinates are readable; the card counts the rest), and verifying the alarm device is audible (the card names the connected client and whether its alarm sound is on).
 
 ### 58.15 WebSocket events
 
