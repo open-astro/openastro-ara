@@ -202,6 +202,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_absurd_grid_is_clamped_not_inserted_row_by_row() {
+            var dto = await _svc.CreateAsync(new MosaicCreateRequestDto("Huge", 10, 10, 1000, 1000, 10, 0, null), null, CancellationToken.None);
+            Assert.That(dto.PanelCountX, Is.EqualTo(SqliteMosaicService.MaxPanelsPerAxis));
+            Assert.That(dto.PanelCountY, Is.EqualTo(SqliteMosaicService.MaxPanelsPerAxis));
+            Assert.That(dto.TotalPanels, Is.EqualTo(SqliteMosaicService.MaxPanelsPerAxis * SqliteMosaicService.MaxPanelsPerAxis));
+            Assert.That((await _svc.GetPanelsAsync(dto.Id, CancellationToken.None)).Count, Is.EqualTo(dto.TotalPanels));
+        }
+
+        [Test]
         public void Ra_wrap_and_panel_name_helpers() {
             Assert.That(SqliteMosaicService.CrossesRaWrap(359.5, 0, 2.0), Is.True);
             Assert.That(SqliteMosaicService.CrossesRaWrap(0.5, 0, 2.0), Is.True);

@@ -31,6 +31,9 @@ public sealed class SqliteMosaicService : IMosaicService {
     /// <summary>Default light frames a panel owes when the client does not say (the old placeholder's figure).</summary>
     public const int DefaultFramesPerPanel = 20;
 
+    /// <summary>Largest grid side accepted (the planetarium allows 8; 32×32 = 1024 panels is already absurd).</summary>
+    public const int MaxPanelsPerAxis = 32;
+
     private readonly IAraDatabase _db;
     private readonly IProfileStore? _profile;
     private readonly Func<DateTimeOffset> _clock;
@@ -78,8 +81,10 @@ public sealed class SqliteMosaicService : IMosaicService {
     public async Task<MosaicDto> CreateAsync(MosaicCreateRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         var name = string.IsNullOrWhiteSpace(request.Name) ? "Mosaic" : request.Name.Trim();
-        var x = Math.Max(1, request.PanelCountX);
-        var y = Math.Max(1, request.PanelCountY);
+        // The planetarium offers up to 8×8; anything far beyond that is a malformed request, and an
+        // unbounded grid would insert a row per panel in one transaction. Clamp rather than reject.
+        var x = Math.Clamp(request.PanelCountX, 1, MaxPanelsPerAxis);
+        var y = Math.Clamp(request.PanelCountY, 1, MaxPanelsPerAxis);
         var overlap = Math.Clamp(request.OverlapPercent, 0, 90);
         var pa = ((request.PositionAngleDegrees ?? 0.0) % 360 + 360) % 360;
         var framesPerPanel = request.FramesPerPanel is > 0 ? request.FramesPerPanel.Value : DefaultFramesPerPanel;
