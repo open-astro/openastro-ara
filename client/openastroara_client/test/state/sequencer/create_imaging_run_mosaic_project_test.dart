@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,6 +51,7 @@ class _SeqClient implements SequenceClient {
 
 class _MosaicClient implements MosaicClient {
   final creates = <Map<String, Object?>>[];
+  Object? throwOnCreate;
   @override
   Future<Mosaic> create({
     required String name,
@@ -62,6 +64,7 @@ class _MosaicClient implements MosaicClient {
     required List<({double raDeg, double decDeg})> panels,
     required int framesPerPanel,
   }) async {
+    if (throwOnCreate != null) throw throwOnCreate!;
     creates.add({
       'name': name,
       'cols': cols,
@@ -175,6 +178,43 @@ void main() {
       );
     },
   );
+
+  testWidgets('a registration that fails never fails the run', (tester) async {
+    // An older daemon (no mosaics body fields) or a 500: the sequence is already
+    // created by then, so the run result must still come back.
+    final seq = _SeqClient();
+    final mosaics = _MosaicClient()
+      ..throwOnCreate = DioException(
+        requestOptions: RequestOptions(path: '/api/v1/mosaics'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/api/v1/mosaics'),
+          statusCode: 500,
+        ),
+      );
+    final container = ProviderContainer(
+      overrides: [
+        draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+        sequenceApiProvider.overrideWith((ref) => seq),
+        mosaicApiProvider.overrideWithValue(mosaics),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final result = await _run(
+      tester,
+      container,
+      panels: const [(raDeg: 10, decDeg: 20), (raDeg: 11, decDeg: 20)],
+      grid: (cols: 2, rows: 1, overlapPercent: 10),
+    );
+
+    expect(result, isNotNull);
+    expect(result!.draft, isFalse);
+    expect(result.sequenceId, 'seq-1');
+    expect(seq.created, [
+      'Veil',
+    ], reason: 'the run reached the daemon exactly once');
+    expect(mosaics.creates, isEmpty);
+  });
 
   testWidgets('a single-target run registers no project', (tester) async {
     final mosaics = _MosaicClient();

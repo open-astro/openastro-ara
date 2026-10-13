@@ -80,7 +80,9 @@ public sealed class SqliteMosaicService : IMosaicService {
 
     public async Task<MosaicDto> CreateAsync(MosaicCreateRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        var name = string.IsNullOrWhiteSpace(request.Name) ? "Mosaic" : request.Name.Trim();
+        // Exactly as sent: the panel blocks are filed under "<name> i/N" by the client, so any
+        // normalisation here would stop a padded name from ever matching its own frames (bot note).
+        var name = string.IsNullOrWhiteSpace(request.Name) ? "Mosaic" : request.Name;
         // The planetarium offers up to 8×8; anything far beyond that is a malformed request, and an
         // unbounded grid would insert a row per panel in one transaction. Clamp rather than reject.
         var x = Math.Clamp(request.PanelCountX, 1, MaxPanelsPerAxis);
