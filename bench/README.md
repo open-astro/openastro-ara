@@ -22,9 +22,12 @@ PHD2 daemon, no devices):
 The `AlpacaFaultProxy` connection-drop fault relies on the OS holding a partial HTTP
 response open long enough for the client to observe it before the reset — behaviour
 that is kernel- and runtime-sensitive. The macOS host can't catch a Linux-only
-regression in that path, and GitHub's hosted runners are x64. This lane keeps a
-standing `linux/arm64` check so a future kernel/runtime change that breaks the Drop
-mechanic (see the bench-5 Drop-fault note in the retired `PORT_TODO.md`, citation key in `design/README.md`) is caught here.
+regression in that path. CI runs the `bench` test category natively on GitHub's hosted
+`ubuntu-24.04-arm` runner on every server change (`Bench (linux-arm64, native)` in
+`ci.yml`, #1173), so a future kernel/runtime change that breaks the Drop mechanic (see
+the bench-5 Drop-fault note in the retired `PORT_TODO.md`, citation key in
+`design/README.md`) is caught there. This Docker lane is the same check run from a Mac:
+`bench/run.sh` builds and runs it under QEMU without touching the host's build tree.
 
 The image is **copy-in, not bind-mount**: the host builds for `osx-arm64` and this
 lane for `linux-arm64`, and sharing the source tree's `obj/`/`bin/` across the two
