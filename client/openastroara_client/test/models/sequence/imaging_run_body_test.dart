@@ -359,7 +359,7 @@ void main() {
           rig: rig,
         );
 
-    test('#1264 the probe carries last night\'s ceiling as PriorSeconds only when given', () {
+    test('#1264 the probe carries a SPEC-SHEET prior as PriorSeconds only when given (never the stored ceiling)', () {
       Map<String, dynamic> probeOf(Map<String, dynamic> b) =>
           childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
       final bare = buildTargetBlock(
