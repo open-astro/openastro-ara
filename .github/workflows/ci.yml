@@ -85,6 +85,15 @@ jobs:
       # skill's git-state guards against throwaway repositories (they decide
       # whether a branch carries live work or an already-merged leftover, and
       # every prose-only revision of them so far has been wrong).
+      # #1173 — `gh --jq` embeds gojq (Go regexp); ubuntu-latest ships oniguruma `jq`.
+      # SupersedeSelectorTest runs check-flutter.yml's selectors through every jq engine on
+      # PATH and asserts they agree, so give it the engine production actually uses. Go is
+      # preinstalled on the hosted runner; the version is pinned so the guard is reproducible.
+      - name: Install gojq (the engine behind gh --jq)
+        run: |
+          go install github.com/itchyny/gojq/cmd/gojq@v0.12.17
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Python tooling tests
         run: python3 -m unittest discover -s scripts/tests -v
 
@@ -457,6 +466,51 @@ jobs:
       # reachable, so this filter is belt-and-suspenders for a clean unit run.)
       - name: dotnet test (solution, Release)
         run: dotnet test OpenAstroAra.sln -c Release --no-build --verbosity normal --filter "TestCategory!=Integration"
+
+  # #1173 — the §42.2 virtual-observatory bench on a real Linux/arm64 kernel + runtime, the
+  # platform the §13 RPi deployment targets. bench/Dockerfile.linux-arm64 stays the local
+  # (QEMU) way to run it from a Mac; here the hosted arm64 runner runs it natively, so no
+  # Docker, no emulation. Same gates as server-test, filtered to the bench category.
+  bench-arm64:
+    name: Bench (linux-arm64, native)
+    runs-on: ubuntu-24.04-arm
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install CFITSIO (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcfitsio10
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-arm64-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-nuget-
+
+      - name: dotnet restore (test project)
+        run: dotnet restore OpenAstroAra.Test/OpenAstroAra.Test.csproj
+
+      - name: dotnet build (test project, Release)
+        run: dotnet build OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-restore
+
+      # The bench fixtures are the ones tagged [Category("bench")] — one source of truth, the
+      # same filter the Docker lane's ENTRYPOINT uses.
+      - name: dotnet test (bench category, native arm64)
+        run: dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-build --verbosity normal --filter "TestCategory=bench"
 
   server-build:
     name: Server (build + cross-publish + Docker)

@@ -13,6 +13,7 @@ breaks these tests rather than silently breaking the weekly bump.
 from __future__ import annotations
 
 import importlib.util
+import re
 import shutil
 import tempfile
 import unittest
@@ -522,12 +523,10 @@ class SupersedeSelectorTest(unittest.TestCase):
         deliberately written to the intersection of the two -- character
         classes, `+`, anchors, escaped dots, nothing engine-specific.
 
-        Be clear about the coverage this actually buys: ubuntu-latest, where
-        CI runs this suite, ships `jq` and not `gojq`, so in CI the only
-        engine exercised is the one production does NOT use. The cross-check
-        fires only where someone has both installed. Closing that gap means
-        installing gojq in the sanity job -- tracked in #1173,
-        not done here because it edits ci.yml.
+        ubuntu-latest ships `jq` and not `gojq`; the Sanity job installs gojq
+        (#1173) so CI exercises the engine production uses as well, and the
+        cross-check below is real there. On a box with only one engine the
+        case still runs against that one.
         """
         import subprocess
 
@@ -744,6 +743,21 @@ class SupersedeSelectorTest(unittest.TestCase):
         m = re.search(r"gh pr list --state open --limit (\d+)", self.text)
         self.assertIsNotNone(m, "the supersede list call no longer passes --limit")
         self.assertGreaterEqual(int(m.group(1)), 1000)
+
+    def test_the_existing_guard_ignores_a_fork_pr_of_the_same_branch_name(self):
+        # #1173 — the "Stop if this bump is already proposed" step: `--head` also matches a
+        # fork branch of the same name (the #997 failure mode), so the guard must carry the
+        # isCrossRepository filter and its selector must skip the fork PR.
+        guard = re.search(r"Stop if this bump is already proposed.*?run: \|(.*?)\n      - name:", self.text, re.S)
+        self.assertIsNotNone(guard, "the existing-bump guard step is gone")
+        call = re.search(r"gh pr list --head \"\$BRANCH\" --state open --json ([^ ]+) --jq '([^']*)'", guard.group(1))
+        self.assertIsNotNone(call, "the guard no longer calls gh pr list --head")
+        self.assertIn("isCrossRepository", call.group(1), "the guard must ask for isCrossRepository")
+        selector = call.group(2)
+        payload = '[{"number": 7, "isCrossRepository": true}, {"number": 9, "isCrossRepository": false}]'
+        self.assertEqual(self._jq(selector, payload), "9")
+        self.assertEqual(self._jq(selector, '[{"number": 7, "isCrossRepository": true}]'), "",
+                         "a fork PR alone must not read as 'already proposed'")
 
     def test_new_pr_selector_is_empty_when_nothing_matches(self):
         # `.[0].number` would print a literal "null" here, `[ -n ]` would pass,

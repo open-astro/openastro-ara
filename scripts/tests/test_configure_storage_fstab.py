@@ -39,6 +39,7 @@ def linux_with_flock() -> bool:
 
 
 @unittest.skipUnless(linux_with_flock(), "configure-storage.sh's lock needs util-linux flock (Linux)")
+@unittest.skipIf(os.geteuid() == 0, "the bench mode refuses to run as root by design; see ConfigureStorageFstabRootFence")
 class ConfigureStorageFstabRebuild(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -123,12 +124,6 @@ class ConfigureStorageFstabRebuild(unittest.TestCase):
             self.assertIn("ERROR: usage fstab_entry_bad_uuid", r.stdout)
         self.assertEqual(self.fstab.read_text(), BASE_FSTAB, "nothing was written by any refused run")
 
-    @unittest.skipUnless(os.geteuid() == 0, "the root fence can only be observed as root")
-    def test_fstab_entry_mode_is_refused_as_root(self) -> None:
-        r = self.run_entry("1111-2222")
-        self.assertEqual(r.returncode, 9)
-        self.assertIn("fstab_entry_refused_as_root", r.stdout)
-
     def test_a_rebuild_waits_for_an_externally_held_lock(self) -> None:
         # The six-way race above can pass by luck when the runs do not overlap; this one cannot:
         # the lock is held for ~2 s by another process, and the rebuild must not finish before it.
@@ -136,7 +131,12 @@ class ConfigureStorageFstabRebuild(unittest.TestCase):
         self.lock.touch()
         holder = subprocess.Popen(["flock", str(self.lock), "sh", "-c", "sleep 2"])
         try:
-            time.sleep(0.3)  # let the holder take the lock
+            # Wait until the holder actually has the lock (#1353 note): a non-blocking probe
+            # fails exactly while it is held, so no fixed sleep decides the race.
+            deadline = time.monotonic() + 5
+            while subprocess.run(["flock", "-n", str(self.lock), "true"]).returncode == 0:
+                self.assertLess(time.monotonic(), deadline, "the holder never took the lock")
+                time.sleep(0.02)
             started = time.monotonic()
             result = self.run_entry("1111-3333")
             elapsed = time.monotonic() - started
@@ -152,6 +152,19 @@ class ConfigureStorageFstabRebuild(unittest.TestCase):
         line = self.ara_lines()[0]
         self.assertIn("  exfat  ", line)
         self.assertIn(f"uid={os.getuid()},gid={os.getgid()}", line)
+
+
+@unittest.skipUnless(linux_with_flock() and os.geteuid() == 0, "the root fence can only be observed as root")
+class ConfigureStorageFstabRootFence(unittest.TestCase):
+    def test_fstab_entry_mode_is_refused_as_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fstab = Path(tmp) / "fstab"
+            fstab.write_text(BASE_FSTAB)
+            env = dict(os.environ, FSTAB=str(fstab), FSTAB_LOCK=str(Path(tmp) / "lock"), ARA_STORAGE_OWNER="root")
+            r = subprocess.run(["sh", str(HELPER), "--fstab-entry", "1111-2222"], capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 9, r.stdout + r.stderr)
+            self.assertIn("fstab_entry_refused_as_root", r.stdout)
+            self.assertEqual(fstab.read_text(), BASE_FSTAB)
 
 
 if __name__ == "__main__":

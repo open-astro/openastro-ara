@@ -203,7 +203,14 @@ namespace OpenAstroAra.Test {
             var (profile, profileService) = ProfileWith(useSideOfPier: true);
             using (profile) {
                 using var svc = await ConnectAsync(box, profileService);
-                await Task.Delay(TimeSpan.FromSeconds(5)); // two or more refresh ticks after the first
+                // #1173 — count refresh ticks instead of holding a fixed 5 s: wait until the refresh
+                // has asked for RA three more times (each tick reads it), then make the claim.
+                var raReadsAtConnect = box.Gets.Count(g => g.EndsWith("/rightascension", StringComparison.Ordinal));
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+                while (box.Gets.Count(g => g.EndsWith("/rightascension", StringComparison.Ordinal)) < raReadsAtConnect + 3) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the refresh never ticked three more times");
+                    await Task.Delay(50);
+                }
 
                 Assert.That(((ITelescopeMediator)svc).GetInfo().SideOfPier, Is.EqualTo(PierSide.pierUnknown));
                 Assert.That(box.Gets.Count(g => g.EndsWith("/sideofpier", StringComparison.Ordinal)), Is.EqualTo(1),

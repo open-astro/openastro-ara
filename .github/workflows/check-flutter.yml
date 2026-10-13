@@ -86,7 +86,10 @@ jobs:
           # would fail identically every week until stable moved again: the
           # watcher stops watching, silently, which is the problem #997 exists
           # to solve.
-          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+          # `isCrossRepository | not` (#1173): `--head` also matches a FORK branch of the same
+          # name, and a contributor's fork PR must not make this job think the bump is already
+          # proposed — the same filter the supersede step applies below.
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number,isCrossRepository --jq 'first(.[] | select(.isCrossRepository | not) | .number)')" ]; then
             echo "open=true" >> "$GITHUB_OUTPUT"
             echo "A PR for $BRANCH is already open; nothing to do."
             exit 0

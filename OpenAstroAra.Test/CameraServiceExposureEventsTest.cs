@@ -163,7 +163,11 @@ namespace OpenAstroAra.Test {
             var capture = svc.CaptureForAnalysisAsync(30, 1, CancellationToken.None);
             await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the exposure was never announced");
             await Assert.CatchAsync<Exception>(() => svc.AbortExposureAsync(CancellationToken.None));
-            await Task.Delay(600); // a couple of ImageReady polls with the refused abort behind them
+            // #1173 — "a couple of ImageReady polls with the refused abort behind them", counted
+            // in reads rather than held for a fixed 600 ms.
+            var pollsAtAbort = box.Gets.Count(g => g.EndsWith("/imageready", StringComparison.Ordinal));
+            await WaitForAsync(() => Task.FromResult(box.Gets.Count(g => g.EndsWith("/imageready", StringComparison.Ordinal)) >= pollsAtAbort + 2),
+                "the exposure loop stopped polling ImageReady after the refused abort");
             ready = true;
             await capture.WaitAsync(TimeSpan.FromSeconds(10));
 
