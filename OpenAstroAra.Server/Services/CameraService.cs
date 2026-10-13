@@ -942,6 +942,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Justification = "Fire-and-forget analysis boundary: detector/DB/WS faults must degrade to a logged skip — the frame is already captured, registered, and safe; analysis is enrichment. CA1031's log-and-recover boundary applies.")]
     internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height, string? filterName, double exposureSec = 0) {
         try {
+            // #1140 P2 — the sky background is measured for EVERY frame, before the star gate below:
+            // a starless or cloudy frame still has a background the calibration fit can read (and
+            // reject by its own residual), and a flat or dark records its level too.
+            var (backgroundAdu, medianAdu) = FrameBackground.Measure(pixels);
+            if (_frames is not null && !double.IsNaN(backgroundAdu)) {
+                await _frames.UpdateBackgroundAsync(frameId, backgroundAdu, medianAdu, CancellationToken.None).ConfigureAwait(false);
+            }
             // The test seam yields HFR + stars only (shape unknown); the real detector also gives the
             // #1264 star shape (median FWHM and roundness → eccentricity) the unguided guard reads.
             double hfr, fwhm = double.NaN, eccentricity = double.NaN;
@@ -1664,7 +1671,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             QualityScore: null,
             Rating: 0,
             Tags: Array.Empty<string>(),
-            FocuserPosition: focuserPosition), CancellationToken.None).ConfigureAwait(false);
+            FocuserPosition: focuserPosition,
+            Bin: request.BinX), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────

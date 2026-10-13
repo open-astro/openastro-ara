@@ -8627,6 +8627,27 @@ components:
             - integer
             - string
           format: int32
+        background_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        median_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        bin:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     FrameHistogramDto:
       required:
         - bins
@@ -8833,6 +8854,34 @@ components:
           type:
             - 'null'
             - string
+        gain:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        background_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        median_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        bin:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     FramePreviewRequestDto:
       required:
         - stretch_palette

@@ -152,13 +152,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Analysis_skips_a_star_starved_frame() {
+        public async Task Analysis_skips_a_star_starved_frame_but_still_records_its_background() {
             using var camera = Analyzer(out var frames, out var history,
                 (_, _, _) => (1.8, CameraService.MinStarsForAnalysis - 1));
+            var id = Guid.NewGuid();
 
-            await camera.AnalyzeFrameAsync(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            await camera.AnalyzeFrameAsync(id, new ushort[] { 500, 510, 520, 9000 }, 2, 2, "Ha");
 
             frames.Verify(f => f.UpdateAnalysisAsync(It.IsAny<Guid>(), It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+            // #1140 P2 — the sky background is independent of the star gate: p05 of 4 pixels is the
+            // darkest one (500), the upper median is 510.
+            frames.Verify(f => f.UpdateBackgroundAsync(id, 500, 510, It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(history.ImagePoints, Is.Empty,
                 "a 2-star HFR is noise that would swing the drift trigger's trend line");
         }
@@ -258,6 +262,28 @@ namespace OpenAstroAra.Test {
 
             await camera.AnalyzeFrameAsync(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
             Assert.Pass("fire-and-forget boundary held");
+        }
+
+        [Test]
+        public async Task UpdateBackground_stamps_p05_and_median_and_insert_carries_bin() {
+            var id = Guid.NewGuid();
+            await _repo.InsertAsync(Frame(id) with { Bin = 2 }, CancellationToken.None);
+            Assert.That((await _repo.GetAsync(id, CancellationToken.None))!.BackgroundAdu, Is.Null, "unmeasured until the worker runs");
+
+            await _repo.UpdateBackgroundAsync(id, 518, 603.5, CancellationToken.None);
+
+            var got = await _repo.GetAsync(id, CancellationToken.None);
+            Assert.That(got!.BackgroundAdu, Is.EqualTo(518));
+            Assert.That(got.MedianAdu, Is.EqualTo(603.5));
+            Assert.That(got.Bin, Is.EqualTo(2));
+            var listed = (await _repo.ListAsync(10, null, null, null, CancellationToken.None)).Items.Single(f => f.Id == id);
+            Assert.That(listed.BackgroundAdu, Is.EqualTo(518));
+            Assert.That(listed.Gain, Is.EqualTo(100), "the list item carries what the calibration fit reads");
+            Assert.That(listed.Bin, Is.EqualTo(2));
+
+            await Assert.DoesNotThrowAsync(() => _repo.UpdateBackgroundAsync(Guid.NewGuid(), 1, 1, CancellationToken.None));
+            await _repo.UpdateBackgroundAsync(id, double.NaN, double.NaN, CancellationToken.None);
+            Assert.That((await _repo.GetAsync(id, CancellationToken.None))!.BackgroundAdu, Is.EqualTo(518), "NaN never overwrites a measurement");
         }
 
         private static FrameDto Frame(Guid id) => new(

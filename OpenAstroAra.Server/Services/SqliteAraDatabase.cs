@@ -145,6 +145,14 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
             UPDATE schema_version SET version = 4 WHERE version < 4;
             """, ct);
 
+        // #1140 P2 — the frame-level sky background (5th percentile + median ADU) the Integration
+        // Budget calibration fits against, and the binning the pixel scale needs for that fit.
+        // After the rebuild passes above: they recreate `frames` from their own DDL, which does not
+        // know these columns, so adding them earlier would be undone on an old database.
+        await AddColumnIfMissingAsync(conn, "frames", "background_adu", "REAL", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "median_adu", "REAL", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "bin", "INTEGER", ct);
+
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
         // §50 stats-perf: most stats queries restrict to light frames and

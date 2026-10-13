@@ -69,7 +69,14 @@ public sealed record FrameDto(
     IReadOnlyList<string> Tags,
     // §38: focuser step position at capture (for the §50.4 focus-vs-temperature
     // view). Optional + last so existing constructions stay source-compatible.
-    int? FocuserPosition = null);
+    int? FocuserPosition = null,
+    // #1140 P2 — the frame's sky background: the 5th-percentile ADU (what the Integration Budget
+    // calibration fits against; a nebula lifts the median, not the darkest 5 %) and the median ADU
+    // beside it. Null until the post-capture analysis (or a histogram read) has measured them.
+    double? BackgroundAdu = null,
+    double? MedianAdu = null,
+    // #1140 P2 — the binning at capture (null for rows older than the column).
+    int? Bin = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(
@@ -91,7 +98,12 @@ public sealed record FrameListItemDto(
     // as protected. Optional + last so existing constructions stay
     // source-compatible.
     DateTimeOffset? SyncedAt = null,
-    string? SyncTarget = null);
+    string? SyncTarget = null,
+    // #1140 P2 — what the calibration fit reads per frame without a detail GET each.
+    int? Gain = null,
+    double? BackgroundAdu = null,
+    double? MedianAdu = null,
+    int? Bin = null);
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
 /// <summary>

@@ -460,13 +460,15 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json, focuser_position)
+                 quality_score_json, rating, tags_json, focuser_position,
+                 background_adu, median_adu, bin)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
                  $file_path, $file_size_bytes, $width, $height, $bit_depth,
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
-                 $quality_score_json, $rating, $tags_json, $focuser_position);
+                 $quality_score_json, $rating, $tags_json, $focuser_position,
+                 $background_adu, $median_adu, $bin);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -495,6 +497,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$tags_json",
             JsonSerializer.Serialize(f.Tags, AraJsonSerializerContext.Default.IReadOnlyListString));
         cmd.Parameters.AddWithValue("$focuser_position", DbValue(f.FocuserPosition));
+        cmd.Parameters.AddWithValue("$background_adu", DbValue(f.BackgroundAdu));
+        cmd.Parameters.AddWithValue("$median_adu", DbValue(f.MedianAdu));
+        cmd.Parameters.AddWithValue("$bin", DbValue(f.Bin));
         await cmd.ExecuteNonQueryAsync(ct);
         // The session's running count (it stayed 0 for every session until now).
         await using var bump = conn.CreateCommand();
@@ -528,7 +533,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var sql = """
             SELECT id, session_id, target_name, frame_type, filter_name,
                    exposure_seconds, captured_utc, hfr, star_count,
-                   quality_score_json, rating, synced_at, sync_target
+                   quality_score_json, rating, synced_at, sync_target,
+                   gain, background_adu, median_adu, bin
             FROM frames
             WHERE 1=1
             """;
@@ -576,7 +582,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 SyncedAt: await reader.IsDBNullAsync(11, ct)
                     ? null
                     : DateTimeOffset.Parse(reader.GetString(11)),
-                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12)));
+                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12),
+                Gain: await reader.IsDBNullAsync(13, ct) ? null : reader.GetInt32(13),
+                BackgroundAdu: await reader.IsDBNullAsync(14, ct) ? null : reader.GetDouble(14),
+                MedianAdu: await reader.IsDBNullAsync(15, ct) ? null : reader.GetDouble(15),
+                Bin: await reader.IsDBNullAsync(16, ct) ? null : reader.GetInt32(16)));
         }
         var hasMore = await reader.ReadAsync(ct);  // the pageSize+1 row
         var nextCursor = hasMore ? (offset + pageSize).ToString() : null;
@@ -591,7 +601,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    exposure_seconds, gain, "offset", temperature_c, captured_utc,
                    file_path, file_size_bytes, width, height, bit_depth,
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                   quality_score_json, rating, tags_json, focuser_position
+                   quality_score_json, rating, tags_json, focuser_position,
+                   background_adu, median_adu, bin
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -636,7 +647,24 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             QualityScore: quality,
             Rating: reader.GetInt32(21),
             Tags: tags,
-            FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23));
+            FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23),
+            BackgroundAdu: await reader.IsDBNullAsync(24, ct) ? null : reader.GetDouble(24),
+            MedianAdu: await reader.IsDBNullAsync(25, ct) ? null : reader.GetDouble(25),
+            Bin: await reader.IsDBNullAsync(26, ct) ? null : reader.GetInt32(26));
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateBackgroundAsync(Guid frameId, double backgroundAdu, double medianAdu, CancellationToken ct) {
+        if (double.IsNaN(backgroundAdu) || double.IsNaN(medianAdu)) {
+            return; // an empty frame measured nothing; never write NaN into the catalog
+        }
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE frames SET background_adu = $bg, median_adu = $med WHERE id = $id";
+        cmd.Parameters.AddWithValue("$bg", backgroundAdu);
+        cmd.Parameters.AddWithValue("$med", medianAdu);
+        cmd.Parameters.AddWithValue("$id", frameId.ToString("D"));
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<(byte[] Bytes, string ContentType, OpenAstroAra.Stretch.StretchParams? AppliedManual)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
@@ -1313,6 +1341,19 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             histogram = ComputeHistogram(pixels);
             TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
                 histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
+            // #1140 P2 — the pixels are in hand: back-fill the catalog's sky background for a frame
+            // the analysis worker never measured (scan-ingested, or captured before the column).
+            // COALESCE keeps a value the worker already wrote.
+            var (p05, median) = FrameBackground.Measure(pixels);
+            if (!double.IsNaN(p05)) {
+                await using var fill = _db.OpenConnection();
+                await using var fillCmd = fill.CreateCommand();
+                fillCmd.CommandText = "UPDATE frames SET background_adu = COALESCE(background_adu, $bg), median_adu = COALESCE(median_adu, $med) WHERE id = $id";
+                fillCmd.Parameters.AddWithValue("$bg", p05);
+                fillCmd.Parameters.AddWithValue("$med", median);
+                fillCmd.Parameters.AddWithValue("$id", id.ToString());
+                await fillCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
         }
         // Catalog columns merge fresh at serve time (never cached): analysis
         // lands asynchronously, so Stars/Hfr can appear after the pixel

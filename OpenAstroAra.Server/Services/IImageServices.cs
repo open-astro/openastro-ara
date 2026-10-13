@@ -62,6 +62,11 @@ public interface IFrameRepository {
     Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, double? eccentricity, CancellationToken ct) =>
         UpdateAnalysisAsync(frameId, hfr, starCount, ct);
 
+    /// <summary>#1140 P2 — stamp the frame's sky background (5th-percentile and median ADU, see
+    /// <see cref="FrameBackground"/>). Written for every frame, stars or not; a deleted frame is a
+    /// silent no-op. Default no-op so fakes keep compiling.</summary>
+    Task UpdateBackgroundAsync(Guid frameId, double backgroundAdu, double medianAdu, CancellationToken ct) => Task.CompletedTask;
+
     /// <summary>
     /// §14e — id of the lazily-created "manual capture" session that REST-initiated exposures
     /// attach to. Idempotent per daemon lifetime. Sequence runs do NOT use this — they open
