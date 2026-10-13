@@ -120,6 +120,12 @@ namespace OpenAstroAra.Server.Services {
             this.logger = logger;
             this.paths = paths;
             this.run = run ?? RunAsync;
+            if (!string.Equals(paths.RequestDirectory, DefaultRequestDirectory, StringComparison.Ordinal)
+                    && File.Exists(paths.HelperUnitTemplate)) {
+                // #1248 r1 — the root unit still reads /run/openastroara/storage: with the exchange
+                // directory moved on a packaged install every request would time out silently.
+                LogExchangeDirectoryOverridden(logger, paths.RequestDirectory, DefaultRequestDirectory);
+            }
             SweepStaleExchangeFiles();
         }
 
@@ -580,6 +586,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Storage configure for UUID {Uuid} failed: {Code} {Detail}.")]
         private static partial void LogConfigureFailed(ILogger logger, string uuid, string code, string detail);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Storage exchange directory is {Directory} (OPENASTROARA_STORAGE_EXCHANGE_DIR), but the root helper unit reads {Default}: storage requests will time out. This override is for tests.")]
+        private static partial void LogExchangeDirectoryOverridden(ILogger logger, string directory, string @default);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Storage exchange: swept {Count} stale request/result file(s) from {Directory} (#1135).")]
         private static partial void LogStaleExchangeSwept(ILogger logger, int count, string directory);
