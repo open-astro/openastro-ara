@@ -48,7 +48,8 @@ class TrackingCalibrationNotifier extends AsyncNotifier<TrackingCalibration?> {
     } finally {
       api.close();
     }
-    state = const AsyncData(null);
+    // The panel may have closed while the request ran; the clear still worked.
+    if (ref.mounted) state = const AsyncData(null);
   }
 }
 

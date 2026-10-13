@@ -5,7 +5,7 @@ import 'package:openastroara/util/unguided_advice.dart';
 void main() {
   final measured = TrackingCalibration(
     ceilingSeconds: 45,
-    measuredUtc: DateTime.utc(2026, 10, 11),
+    measuredUtc: DateTime.utc(2026, 10, 11, 12),
     source: 'measured',
   );
 
@@ -38,14 +38,14 @@ void main() {
         calibration: measured,
         skyLimitedSeconds: 300,
       ),
-      'Unguided: about 45 s (measured on the last run) — the run uses this lower figure.',
+      'Unguided: about 45 s (measured 2026-10-11) — the run uses this lower figure.',
     );
   });
 
   test('a prior above the sky limit defers to the sky limit', () {
     final prior = TrackingCalibration(
       ceilingSeconds: 600,
-      measuredUtc: DateTime.utc(2026, 10, 11),
+      measuredUtc: DateTime.utc(2026, 10, 11, 12),
       source: 'prior',
     );
     expect(
@@ -54,7 +54,7 @@ void main() {
         calibration: prior,
         skyLimitedSeconds: 300,
       ),
-      'Unguided: about 10 min (prior, not yet measured) — the sky limit above is the lower of the two.',
+      'Unguided: about 10 min (prior kept, not yet measured) — the sky limit above is the lower of the two.',
     );
   });
 }

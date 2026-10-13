@@ -15,8 +15,8 @@ String? unguidedCeilingLine({
   }
   final ceiling = calibration.ceilingSeconds;
   final how = calibration.measured
-      ? 'measured on the last run'
-      : 'prior, not yet measured';
+      ? 'measured ${formatCalibrationDate(calibration.measuredUtc)}'
+      : 'prior kept, not yet measured';
   final lower = ceiling < skyLimitedSeconds
       ? ' — the run uses this lower figure'
       : ' — the sky limit above is the lower of the two';

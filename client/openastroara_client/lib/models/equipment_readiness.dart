@@ -208,7 +208,7 @@ abstract final class ReadinessRules {
       facts.add(DeviceFact(
           'Unguided ceiling',
           '${formatExposureSeconds(tracking.ceilingSeconds)} · '
-              '${tracking.measured ? 'measured' : 'prior'} $when'));
+              '${tracking.measured ? 'measured' : 'prior kept'} $when'));
     }
     return DeviceReadiness(
       type: EquipmentDeviceType.mount,

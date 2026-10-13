@@ -296,7 +296,7 @@ void main() {
               measuredUtc: DateTime.utc(2026, 10, 11),
               source: 'measured'));
       expect(find.textContaining('Suggested exposure:'), findsOneWidget);
-      expect(find.textContaining('Unguided: about 45 s (measured on the last run)'),
+      expect(find.textContaining('Unguided: about 45 s (measured 2026-10-1'),
           findsOneWidget);
     });
 
