@@ -22,7 +22,7 @@ import '../calibration/calibration_screen.dart';
 
 /// Setup tab — the dusk ritual as a two-pane surface (§25 flow redesign).
 /// Left: the Tonight checklist (Connect equipment → Smart Focus → Polar align →
-/// Calibration frames), each row with a live readiness glyph. Right: the selected step's
+/// Calibration frames → Before you sleep), each row with a live readiness glyph. Right: the selected step's
 /// instrument. Gates are checkmarks, not dams — nothing here blocks; the rail
 /// order just reads as the night (Plan → Setup → Run → Live).
 class SetupTab extends ConsumerStatefulWidget {

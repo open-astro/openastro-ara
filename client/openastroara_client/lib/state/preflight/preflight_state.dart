@@ -74,9 +74,12 @@ class PreflightPromptNotifier extends AsyncNotifier<PreflightPromptState> {
 
   @override
   Future<PreflightPromptState> build() async {
-    _acknowledged = await ref
-        .read(preflightPrefsProvider)
-        .loadAcknowledgedNights();
+    // Merge, never replace: a rebuild that started before acknowledgeTonight()
+    // and lands after it must not resurrect the card from a stale disk read.
+    _acknowledged = {
+      ..._acknowledged,
+      ...await ref.read(preflightPrefsProvider).loadAcknowledgedNights(),
+    };
     ref.watch(skyClockProvider);
     final site = ref.watch(siteSettingsProvider);
     // Await the list (not its AsyncValue): the first build must not answer

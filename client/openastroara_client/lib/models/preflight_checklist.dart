@@ -150,8 +150,10 @@ class PreflightChecklist {
 /// acknowledgement is keyed on it, so a 23:00 "all good" holds through a 03:00
 /// reconnect.
 String preflightNightKey(DateTime local) {
+  // Calendar arithmetic, not a 24 h subtraction: on a spring-forward day the
+  // latter lands an hour early and 00:30 would key the night before last.
   final evening = local.hour < 12
-      ? local.subtract(const Duration(days: 1))
+      ? DateTime(local.year, local.month, local.day - 1)
       : local;
   String two(int n) => n.toString().padLeft(2, '0');
   return '${evening.year}-${two(evening.month)}-${two(evening.day)}';

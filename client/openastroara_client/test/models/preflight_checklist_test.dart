@@ -114,6 +114,8 @@ void main() {
       expect(preflightNightKey(DateTime(2026, 7, 18, 23, 0)), '2026-07-18');
       expect(preflightNightKey(DateTime(2026, 7, 19, 3, 0)), '2026-07-18');
       expect(preflightNightKey(DateTime(2026, 7, 19, 12, 0)), '2026-07-19');
+    // Spring-forward morning (US, 2026-03-08): 00:30 is still the 7th, not the 6th.
+    expect(preflightNightKey(DateTime(2026, 3, 8, 0, 30)), '2026-03-07');
     },
   );
 
