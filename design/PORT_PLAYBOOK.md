@@ -4639,7 +4639,7 @@ installed package is a **conditional GET**: the install sentinel records the rem
 and `ETag`, the next fetch sends `If-Modified-Since` and `If-None-Match`, and a 304 keeps the install
 untouched (`ISkyDataFetcher`, `SkyDataInstaller.ReadRemoteValidator`). Downloads stream straight
 into the SHA-checked extractor, so there is no partial file to resume with HTTP `Range`; with
-catalog packages in the single-digit-MB range a dropped transfer simply restarts, and resume is
+catalog packages at tens of MB at most (the recommended `hyg-stars` is a 13.6 MB download, 33.9 MB on disk) a dropped transfer simply restarts, and resume is
 deliberately not implemented until a package size makes it worth a staged temp file.
 
 ### 36.5 Politeness considerations (CDS bandwidth)
