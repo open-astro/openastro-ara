@@ -240,7 +240,7 @@ void _aimTests() {
     expect(setPlanAim(setPlanAim(plan, 0, (60, 0)), 0, (0, 0)).targets.single.isAimed, isFalse);
     expect(setPlanAim(plan, 7, (1, 1)), same(plan));
     // Independent of rotation / mosaic edits.
-    final all = setPlanMosaic(setPlanRotation(setPlanAim(plan, 0, (10, 5)), 0, 45), 0,
+    final all = setPlanMosaic(setPlanRotation(setPlanAim(plan, 0, (10, 5)), 0, 45), 0, bankedHours: const {},
         (cols: 2, rows: 1, overlapPct: 10));
     expect(all.targets.single.aimOffsetArcmin, (10.0, 5.0));
     expect(all.targets.single.positionAngleDeg, 45);
@@ -261,7 +261,7 @@ void _mosaicTests() {
     expect(single.mosaic, singleFrame);
     expect(single.subsPerPanel(overheads), single.subCount);
 
-    final grid = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10));
+    final grid = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10), bankedHours: const {});
     final t = grid.targets.single;
     expect(t.mosaic.panelCount, 4);
     // 3 h / 4 panels = 0.75 h each, each charged its own setup + AF: fewer
@@ -271,9 +271,9 @@ void _mosaicTests() {
     expect(per, greaterThan(0));
     expect(t.hours, single.hours, reason: 'the slot itself is unchanged');
 
-    expect(setPlanMosaic(plan, 0, (cols: 0, rows: 99, overlapPct: 80)).targets.single.mosaic,
+    expect(setPlanMosaic(plan, 0, (cols: 0, rows: 99, overlapPct: 80), bankedHours: const {}).targets.single.mosaic,
         (cols: 1, rows: 8, overlapPct: 50));
-    expect(setPlanMosaic(plan, 4, singleFrame), same(plan));
+    expect(setPlanMosaic(plan, 4, singleFrame, bankedHours: const {}), same(plan));
     // Rotation and mosaic are independent edits.
     final both = setPlanRotation(grid, 0, 30);
     expect(both.targets.single.mosaic.panelCount, 4);
@@ -429,7 +429,7 @@ void _tierHandshakeTests() {
     final mosaic = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10), bankedHours: const {'near': 7.0});
     expect(mosaic.notes, isEmpty, reason: 'each panel gets a quarter of the night: the tier is not completed any more');
     expect(integrationHoursOf(near, 3.0, const SessionOverheads(), panels: 4),
-        lessThan(integrationHoursOf(near, 3.0, const SessionOverheads()) / 3), reason: 'per-panel setup costs too');
+        lessThan(integrationHoursOf(near, 3.0, const SessionOverheads()) / 4), reason: 'per-panel setup costs too');
 
     final back = setPlanMosaic(mosaic, 0, (cols: 1, rows: 1, overlapPct: 0), bankedHours: const {'near': 7.0});
     expect(back.notes.single, 'near: this slice completes its full-structure tier.');

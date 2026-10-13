@@ -188,9 +188,9 @@ double? _tierHoursToGo(TonightSkyObject o, Map<String, double> banked) {
 /// span when the object has no sub length yet. The ONE formula the value
 /// function and the tier note share.
 double integrationHoursOf(TonightSkyObject o, double hours, SessionOverheads overheads, {int panels = 1}) {
-  final subS = o.optimalSubS;
-  if (subS == null || subS <= 0) return hours / panels;
   final n = panels < 1 ? 1 : panels;
+  final subS = o.optimalSubS;
+  if (subS == null || subS <= 0) return hours / n;
   return overheads.subsIn(hours / n, subS) * subS / 3600.0;
 }
 
@@ -497,7 +497,9 @@ SessionPlan setPlanMosaic(
   MosaicGrid g, {
   // §Integration Budget P5 — a mosaic spreads the slice over its panels, so
   // the "completes its tier" note is redone for the new per-panel integration.
-  Map<String, double> bankedHours = const {},
+  // Required: a caller that forgot the banked hours would silently drop a
+  // "tier already complete" note.
+  required Map<String, double> bankedHours,
   SessionOverheads overheads = const SessionOverheads(),
 }) {
   if (index < 0 || index >= plan.targets.length) return plan;
