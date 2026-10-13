@@ -132,7 +132,9 @@ internal static class CFitsIOResolver {
     /// <summary>
     /// Pure candidate walk: <paramref name="explicitPath"/> through <paramref name="tryLoad"/>, then
     /// <see cref="LibraryName"/> through <paramref name="tryDefault"/>, then each of
-    /// <paramref name="versionedSonames"/> through <paramref name="tryLoad"/>. Stops at the first load.
+    /// <paramref name="versionedSonames"/> through <paramref name="tryLoad"/>. Stops at the first candidate that loads AND exports
+    /// <see cref="RequiredExport"/>; a loaded candidate without it is released through <c>free</c>,
+    /// recorded with <see cref="WrongLibrarySuffix"/>, and the walk continues (#1214).
     /// </summary>
     internal static (IntPtr Handle, CFitsIOResolution Report) Resolve(
         string? explicitPath, TryLoadLibrary tryDefault, TryLoadLibrary tryLoad, IReadOnlyList<string> versionedSonames,
