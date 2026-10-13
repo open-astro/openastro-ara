@@ -6729,13 +6729,16 @@ UI flow:
 5. Aladin Lite overlay renders the panel grid as colored rectangles on the sky map — user sees exactly which areas each panel covers, can drag the whole mosaic to recenter, can rotate
 6. User confirms → mosaic saved as a single logical entity with N×M panels
 
-> **Implementation status.** The Frame-mode FOV overlay and the **mosaic
-> panel-grid preview** (cols × rows × overlap, profile-derived field rectangle)
-> shipped. **"Build Mosaic Sequence"** — turning the previewed grid into N×M
-> sequencer sub-targets — is **deferred (1e)**: it needs the server-side
-> `IMosaicService` to compute and persist the per-panel RA/Dec offsets (§47.3
-> math). Until then Frame mode is a planning/preview surface, not a sequence
-> generator.
+> **Implementation status (2026-10-12, #1146).** The Frame-mode FOV overlay and
+> the **mosaic panel-grid preview** shipped; adding the framed grid to the
+> sequence builds one target block per panel (`"<name> i/N"`, Center and Rotate
+> at the framing angle) and registers a **mosaic project** on the daemon
+> (`SqliteMosaicService`, `/api/v1/mosaics`). Per-panel completion is **derived
+> from the frame catalog** (lights filed under each panel's block), not stored,
+> so it survives restarts and Library deletes; the Library shows a Mosaics
+> section. The §47.3 panel math below is the client's planetarium grid (sent as
+> `panels`), with the daemon's optics-based spread as the fallback. See
+> `design/API_CONTRACT.md` ("Mosaic projects persist", #1146) for the wire shape.
 
 ### 47.3 Panel math (computed server-side)
 
@@ -6802,31 +6805,36 @@ Plate solving, autofocus, frame loop, dithering — all run per panel exactly as
 
 ### 47.6 Schema
 
+As shipped in `SqliteAraDatabase.cs` (#1146). Completion is **not** a column:
+a panel's light frames are the `frames` rows whose `target_name` is the
+panel's block `"<name> i/N"` (1-based, row-major), so status, counts and the
+newest frame are computed at read time. Earlier drafts of this section had a
+`scheduling` column and a `(mosaic_id, panel_col, panel_row)` key; neither exists.
+
 ```sql
 CREATE TABLE mosaics (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,            -- "M31 Mosaic", "Heart and Soul"
-  center_ra REAL NOT NULL,
-  center_dec REAL NOT NULL,
-  rotation REAL DEFAULT 0,
-  grid_cols INT NOT NULL,
-  grid_rows INT NOT NULL,
-  overlap_pct REAL DEFAULT 0.10,
-  panel_fov_x_arcmin REAL,        -- computed at creation
-  panel_fov_y_arcmin REAL,
-  scheduling TEXT DEFAULT 'interleaved',  -- 'interleaved' | 'sequential'
-  created_at TIMESTAMP,
-  notes TEXT
+  id                     TEXT PRIMARY KEY NOT NULL,
+  name                   TEXT NOT NULL,
+  center_ra_deg          REAL NOT NULL,
+  center_dec_deg         REAL NOT NULL,
+  panels_x               INTEGER NOT NULL,   -- columns (clamped to 32)
+  panels_y               INTEGER NOT NULL,   -- rows (clamped to 32)
+  overlap_percent        REAL NOT NULL,
+  position_angle_deg     REAL NOT NULL,
+  frames_per_panel       INTEGER NOT NULL,   -- lights a panel owes to count as done
+  created_at             TEXT NOT NULL,
+  generated_sequence_id  TEXT
 );
 
 CREATE TABLE mosaic_panels (
-  mosaic_id TEXT REFERENCES mosaics(id),
-  panel_col INT,
-  panel_row INT,
-  center_ra REAL,
-  center_dec REAL,
-  -- target row in `targets` table is created on demand; lookup by mosaic_id + panel_col + panel_row
-  PRIMARY KEY (mosaic_id, panel_col, panel_row)
+  mosaic_id              TEXT NOT NULL REFERENCES mosaics(id) ON DELETE CASCADE,
+  panel_index            INTEGER NOT NULL,   -- row-major, 0-based
+  panel_x                INTEGER NOT NULL,
+  panel_y                INTEGER NOT NULL,
+  center_ra_deg          REAL NOT NULL,
+  center_dec_deg         REAL NOT NULL,
+  crosses_ra_wrap        INTEGER NOT NULL,   -- §47.3
+  PRIMARY KEY (mosaic_id, panel_index)
 );
 ```
 
