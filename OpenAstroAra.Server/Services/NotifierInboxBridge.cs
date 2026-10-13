@@ -30,7 +30,10 @@ namespace OpenAstroAra.Server.Services;
 /// an error <see cref="NotificationSeverity.Error"/>, category Equipment (that is what the
 /// callers are: devices, the guider, the solver). The same text within
 /// <see cref="RepeatWindow"/> is posted once — a device loop that warns every refresh tick
-/// must not fill the inbox. Posting is fire-and-forget and never throws into the caller.
+/// must not fill the inbox. Posting is handed to the thread pool (<c>Task.Run</c>): the
+/// SQLite write, its busy wait and the unattended-escalation profile read must never run on
+/// the device thread that raised the toast (r1 finding — PHD2's settle path, the centering
+/// solver and the sequencer all toast mid-run). Nothing here throws into the caller.
 /// </summary>
 public sealed partial class NotifierInboxBridge : INotifierSink {
 
@@ -53,12 +56,44 @@ public sealed partial class NotifierInboxBridge : INotifierSink {
         }
         var key = (isError ? "E|" : "W|") + header + "|" + message;
         var now = _clock();
-        if (_lastPosted.TryGetValue(key, out var last) && now - last < RepeatWindow) {
+        if (!ClaimSlot(key, now)) {
             return; // the same toast inside the window: the inbox already has it
         }
-        _lastPosted[key] = now;
-        _ = PostAsync(isError, header, message, now);
+        Prune(now);
+        _ = Task.Run(() => PostAsync(isError, header, message, now));
     }
+
+    /// <summary>Atomic check-and-set on the per-text slot: two threads raising the same toast at
+    /// the same instant get one post, not two.</summary>
+    private bool ClaimSlot(string key, DateTimeOffset now) {
+        while (true) {
+            if (_lastPosted.TryAdd(key, now)) {
+                return true;
+            }
+            if (!_lastPosted.TryGetValue(key, out var last)) {
+                continue; // pruned between the two calls — try to add again
+            }
+            if (now - last < RepeatWindow) {
+                return false;
+            }
+            if (_lastPosted.TryUpdate(key, now, last)) {
+                return true;
+            }
+        }
+    }
+
+    /// <summary>Drop slots older than the window so changing texts (exception messages, error
+    /// codes) cannot grow the table over a multi-night uptime.</summary>
+    private void Prune(DateTimeOffset now) {
+        foreach (var entry in _lastPosted) {
+            if (now - entry.Value >= RepeatWindow) {
+                _lastPosted.TryRemove(entry);
+            }
+        }
+    }
+
+    /// <summary>Slots currently held (for tests).</summary>
+    internal int SlotCount => _lastPosted.Count;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget inbox write behind a device-layer toast: a storage fault is logged, never surfaced at the call site.")]

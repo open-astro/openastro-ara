@@ -93,6 +93,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Notify_returns_at_once_while_the_inbox_write_blocks() {
+            // r1 finding: the SQLite write (and its busy wait) must not run on the device thread
+            // that raised the toast — PHD2's settle path and the sequencer toast mid-run.
+            // A synchronously blocking write, the way Microsoft.Data.Sqlite's *Async calls behave.
+            using var release = new ManualResetEventSlim(false);
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Returns(() => { entered.TrySetResult(); release.Wait(TimeSpan.FromSeconds(10)); return Task.CompletedTask; });
+            var bridge = new NotifierInboxBridge(notifications.Object, NullLogger<NotifierInboxBridge>.Instance);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            bridge.Notify(isError: false, header: null, "star lost");
+            sw.Stop();
+
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromMilliseconds(500)), "Notify must not wait for the inbox write");
+            Assert.That(await Task.WhenAny(entered.Task, Task.Delay(TimeSpan.FromSeconds(5))), Is.SameAs(entered.Task), "the write did start, elsewhere");
+            release.Set();
+        }
+
+        [Test]
+        public void Old_slots_are_pruned_and_a_simultaneous_duplicate_posts_once() {
+            var posted = 0;
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Callback(() => Interlocked.Increment(ref posted)).Returns(Task.CompletedTask);
+            var now = new DateTimeOffset(2026, 10, 13, 22, 0, 0, TimeSpan.Zero);
+            var bridge = new NotifierInboxBridge(notifications.Object, NullLogger<NotifierInboxBridge>.Instance, () => now);
+
+            Parallel.For(0, 32, _ => bridge.Notify(isError: false, header: null, "same toast"));
+            Assert.That(bridge.SlotCount, Is.EqualTo(1));
+            for (var i = 0; i < 20; i++) {
+                bridge.Notify(isError: true, header: null, $"error code {i}");
+            }
+            Assert.That(bridge.SlotCount, Is.EqualTo(21), "every distinct text holds a slot inside the window");
+
+            now += NotifierInboxBridge.RepeatWindow + TimeSpan.FromSeconds(1);
+            bridge.Notify(isError: false, header: null, "a new night");
+            Assert.That(bridge.SlotCount, Is.EqualTo(1), "slots older than the window are pruned on the next post");
+            Assert.That(SpinWait.SpinUntil(() => Volatile.Read(ref posted) >= 22, TimeSpan.FromSeconds(5)), Is.True);
+            Assert.That(posted, Is.EqualTo(22), "32 simultaneous identical toasts posted exactly once");
+        }
+
+        [Test]
         public void A_failing_inbox_write_is_swallowed() {
             var notifications = new Mock<INotificationService>();
             notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
