@@ -24,7 +24,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void P05_and_median_are_exact_rank_statistics() {
-            // 0..99 once each: rank 5 of 100 is value 4; the upper median (rank 50) is 49.
+            // 0..99 once each: rank 5 of 100 is value 4; the median rank (n+1)/2 = 50 is the LOWER middle value, 49.
             var pixels = Enumerable.Range(0, 100).Select(v => (ushort)v).ToArray();
             var (p05, median) = FrameBackground.Measure(pixels);
             Assert.That(p05, Is.EqualTo(4));

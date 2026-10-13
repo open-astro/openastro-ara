@@ -1378,12 +1378,20 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     /// the column, or its histogram was cached before this build) gets its sky background the first
     /// time its histogram is read. Best effort: the histogram is the request; a catalog write that
     /// fails (a locked database) must not fail it. COALESCE keeps a value a worker wrote meanwhile.</summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort enrichment on a read path: any fault is logged and the histogram is still served.")]
     [LoggerMessage(Level = LogLevel.Debug, Message = "Sky-background back-fill for frame {FrameId} failed; the histogram is still served.")]
     private partial void LogBackgroundBackfillFailed(Exception ex, Guid frameId);
 
+    // One back-fill attempt per frame per process: a frame whose measurement stays null (an empty
+    // image measures NaN; a locked catalog refuses the write) must not reload its whole FITS on
+    // every histogram read.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> _backfillTried = new();
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort enrichment on a read path: any fault is logged and the histogram is still served.")]
     private async Task BackfillBackgroundAsync(Guid id, string filePath, ushort[]? pixels, CancellationToken ct) {
+        if (!_backfillTried.TryAdd(id, 0)) {
+            return;
+        }
         try {
             pixels ??= LoadFitsPixels(filePath).Pixels;
             var (p05, median) = FrameBackground.Measure(pixels);

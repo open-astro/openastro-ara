@@ -297,8 +297,20 @@ public class FrameFileConfinementTest {
                 cmd.Parameters.AddWithValue("$id", cached.ToString());
                 await cmd.ExecuteNonQueryAsync();
             }
-            Assert.That(await _repo.GetHistogramAsync(cached, CancellationToken.None), Is.Not.Null);
-            Assert.That((await _repo.GetAsync(cached, CancellationToken.None))!.BackgroundAdu, Is.EqualTo(500), "filled from the pixels although the histogram came from the cache");
+            // Another process (a fresh repository: the one-try-per-process guard is per instance) opens the
+            // histogram: it comes from the cache, and the pixels are loaded just for the fill.
+            var again = new SqliteFrameRepository(_db, new InMemoryProfileStore(), captureRoots: () => new[] { _root });
+            Assert.That(await again.GetHistogramAsync(cached, CancellationToken.None), Is.Not.Null);
+            Assert.That((await again.GetAsync(cached, CancellationToken.None))!.BackgroundAdu, Is.EqualTo(500), "filled from the pixels although the histogram came from the cache");
+            // The same instance never reloads a FITS twice for a frame whose fill cannot land.
+            await using (var conn = _db.OpenConnection()) {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "UPDATE frames SET background_adu = NULL, median_adu = NULL WHERE id = $id";
+                cmd.Parameters.AddWithValue("$id", cached.ToString());
+                await cmd.ExecuteNonQueryAsync();
+            }
+            Assert.That(await again.GetHistogramAsync(cached, CancellationToken.None), Is.Not.Null);
+            Assert.That((await again.GetAsync(cached, CancellationToken.None))!.BackgroundAdu, Is.Null, "one attempt per frame per process");
         }
 
         [Test]
