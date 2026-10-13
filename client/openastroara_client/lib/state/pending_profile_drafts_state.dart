@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -76,14 +77,22 @@ String pendingDraftServerKey(AraServer server) =>
 /// `saveWizardProfile` the connected wizard uses. A draft saved against another
 /// server is HELD (its half-created profile lives there, and its sections must
 /// not land on this rig's active profile); a draft with no server recorded was
-/// saved fully offline and may go anywhere. A draft that applied is deleted; one
-/// that failed stays for the next connect with its `savedProfileId`, so a retry
-/// re-applies sections onto the profile it already created instead of orphaning
-/// another — after checking that profile is still the ACTIVE one (another client
-/// may have switched profiles since): it is re-selected when it still exists,
-/// or the id is dropped and a fresh profile created when it is gone.
-/// Returns (applied, failed, held) counts.
-Future<(int applied, int failed, int held)> replayPendingProfileDrafts(
+/// saved fully offline and may go anywhere. A draft that applied is deleted.
+///
+/// A failure is retried ONLY when it was a transport failure (the daemon never
+/// answered): the draft stays with its `savedProfileId`, so the next connect
+/// re-applies the sections onto the profile it already created instead of
+/// orphaning another — after checking that profile is still the ACTIVE one
+/// (another client may have switched profiles since): it is re-selected when it
+/// still exists, or the id is dropped and a fresh profile created when it is
+/// gone. Anything else (a 4xx, an older daemon missing an endpoint, a bad
+/// value) is a REJECTION: retrying would fail the same way on every reconnect
+/// and re-select a profile the user may have moved away from, so the draft is
+/// dropped and the notice says so. The profile it did create stays on the rig
+/// to be finished from Setup.
+/// Returns (applied, failed, held, rejected) counts.
+Future<(int applied, int failed, int held, int rejected)>
+    replayPendingProfileDrafts(
   PendingProfileDraftService store,
   ProfileApi api, {
   required String serverKey,
@@ -91,6 +100,7 @@ Future<(int applied, int failed, int held)> replayPendingProfileDrafts(
   var applied = 0;
   var failed = 0;
   var held = 0;
+  var rejected = 0;
   for (final pending in await store.loadAll()) {
     if (pending.serverKey != null && pending.serverKey != serverKey) {
       held++;
@@ -112,17 +122,32 @@ Future<(int applied, int failed, int held)> replayPendingProfileDrafts(
       await store.delete(pending.id);
       applied++;
     } catch (e) {
-      // Keep the draft, but persist the savedProfileId the attempt may have
-      // stamped so the next replay re-uses that profile.
-      debugPrint('[profile-drafts] replay of "${pending.name}" failed: $e');
-      try {
-        await store.save(pending);
-      } catch (_) {}
-      failed++;
+      if (isProfileReplayTransportFailure(e)) {
+        // Keep the draft, but persist the savedProfileId the attempt may have
+        // stamped so the next replay re-uses that profile.
+        debugPrint('[profile-drafts] replay of "${pending.name}" failed in transit: $e');
+        try {
+          await store.save(pending);
+        } catch (_) {}
+        failed++;
+      } else {
+        debugPrint('[profile-drafts] replay of "${pending.name}" rejected, dropping it: $e');
+        try {
+          await store.delete(pending.id);
+        } catch (_) {}
+        rejected++;
+      }
     }
   }
-  return (applied, failed, held);
+  return (applied, failed, held, rejected);
 }
+
+/// True when the daemon never answered: every failed section had no response,
+/// or the single request that failed (create, list, select) got none. A reply
+/// with any status code is a rejection, not a transport failure.
+bool isProfileReplayTransportFailure(Object e) =>
+    e is ProfileSaveTransportFailure ||
+    (e is DioException && e.response == null);
 
 /// Root-mounted: when the active server's WebSocket reaches `connected`, apply
 /// whatever drafts are waiting for THAT server. Listening on the link (not just
@@ -143,12 +168,13 @@ final pendingProfileDraftReplayProvider = Provider<void>((ref) {
     inFlight = true;
     try {
       final store = ref.read(pendingProfileDraftServiceProvider);
-      final (applied, failed, held) = await replayPendingProfileDrafts(
+      final (applied, failed, held, rejected) =
+          await replayPendingProfileDrafts(
         store,
         api,
         serverKey: pendingDraftServerKey(server),
       );
-      if (applied + failed + held == 0) return; // nothing was pending
+      if (applied + failed + held + rejected == 0) return; // nothing pending
       if (applied > 0) {
         ref.invalidate(profileManagementProvider);
       }
@@ -164,6 +190,10 @@ final pendingProfileDraftReplayProvider = Provider<void>((ref) {
           '$held profile${held == 1 ? '' : 's'} saved offline '
               'belong${held == 1 ? 's' : ''} to a different rig and will be '
               'applied when you connect to it.',
+        if (rejected > 0)
+          '$rejected profile${rejected == 1 ? '' : 's'} saved offline '
+              '${rejected == 1 ? 'was' : 'were'} rejected by the rig and '
+              'discarded; finish ${rejected == 1 ? 'it' : 'them'} from Setup.',
       ];
       if (parts.isNotEmpty) {
         ref

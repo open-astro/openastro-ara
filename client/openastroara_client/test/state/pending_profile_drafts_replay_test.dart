@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/profile_draft.dart' show ProfileDraft;
 import 'package:openastroara/models/profile_list.dart';
@@ -23,7 +24,8 @@ import 'package:openastroara/state/settings/storage_settings_state.dart';
 class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi() : super(const AraServer(hostname: 'test', port: 1));
   final created = <String>[];
-  bool failSite = false;
+  bool failSite = false; // in transit: no response at all
+  bool rejectSite = false; // the daemon answers 422
   int n = 0;
 
   @override
@@ -53,7 +55,22 @@ class _FakeProfileApi extends ProfileApi {
   Future<SiteSettings> getSiteSettings() async => const SiteSettings();
   @override
   Future<SiteSettings> putSiteSettings(SiteSettings v) async {
-    if (failSite) throw StateError('site PUT failed');
+    if (failSite) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/api/v1/profile/site'),
+        type: DioExceptionType.connectionError,
+      );
+    }
+    if (rejectSite) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/api/v1/profile/site'),
+        type: DioExceptionType.badResponse,
+        response: Response(
+          requestOptions: RequestOptions(path: '/api/v1/profile/site'),
+          statusCode: 422,
+        ),
+      );
+    }
     return v;
   }
 
@@ -133,7 +150,7 @@ void main() {
       await pend('Backyard');
       final api = _FakeProfileApi();
 
-      final (applied, failed, held) = await replayPendingProfileDrafts(
+      final (applied, failed, held, _) = await replayPendingProfileDrafts(
         store,
         api,
         serverKey: 'rig-a:5555',
@@ -145,11 +162,11 @@ void main() {
     },
   );
 
-  test('#1137: a draft whose sections failed stays pending with its created profile id', () async {
+  test('#1137: a draft whose sections failed IN TRANSIT stays pending with its created profile id', () async {
     await pend('Flaky');
     final api = _FakeProfileApi()..failSite = true;
 
-    final (applied, failed, held) = await replayPendingProfileDrafts(
+    final (applied, failed, held, _) = await replayPendingProfileDrafts(
       store,
       api,
       serverKey: 'rig-a:5555',
@@ -170,7 +187,7 @@ void main() {
       api,
       serverKey: 'rig-a:5555',
     );
-    expect(second, (1, 0, 0));
+    expect(second, (1, 0, 0, 0));
     expect(api.created, ['Flaky'], reason: 'no second create on the retry');
     expect(await store.loadAll(), isEmpty);
   });
@@ -182,7 +199,7 @@ void main() {
       await pend('Anywhere');
       final api = _FakeProfileApi();
 
-      final (applied, failed, held) = await replayPendingProfileDrafts(
+      final (applied, failed, held, _) = await replayPendingProfileDrafts(
         store,
         api,
         serverKey: 'rig-a:5555',
@@ -214,7 +231,7 @@ void main() {
       serverKey: 'rig-a:5555',
     );
 
-    expect(result, (1, 0, 0));
+    expect(result, (1, 0, 0, 0));
     expect(api.created, isEmpty, reason: 'no second profile');
     expect(api.selected, [
       'profile-old',
@@ -237,8 +254,36 @@ void main() {
       serverKey: 'rig-a:5555',
     );
 
-    expect(result, (1, 0, 0));
+    expect(result, (1, 0, 0, 0));
     expect(api.created, ['Vanished']);
     expect(api.selected, isEmpty);
+  });
+
+  test('#1327: a draft the daemon rejects is dropped, not retried on every reconnect', () async {
+    await pend('Bad value');
+    final api = _FakeProfileApi()..rejectSite = true;
+
+    final first = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+
+    expect(first, (0, 0, 0, 1));
+    expect(api.created, ['Bad value'], reason: 'the profile it did create stays on the rig');
+    expect(await store.loadAll(), isEmpty, reason: 'nothing left to retry');
+
+    // The user moves the rig to their real profile; a reconnect must not swap it back.
+    api
+      ..known.add('real')
+      ..activeId = 'real';
+    final second = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+    expect(second, (0, 0, 0, 0));
+    expect(api.selected, isEmpty, reason: 'no re-select of the rejected profile');
+    expect(api.activeId, 'real');
   });
 }
