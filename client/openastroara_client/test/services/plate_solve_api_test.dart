@@ -177,7 +177,7 @@ void main() {
           isA<PlateSolveException>().having(
             (e) => e.message,
             'message',
-            contains('No camera is connected'),
+            contains('cannot take the verification image'),
           ),
         ),
       );

@@ -93,13 +93,15 @@ public static class PlateSolveEndpoints {
             // The exposure or binning is outside the camera's capabilities.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (TimeoutException) {
-            // The camera's in-flight gate is held by a long exposure (the Stop Mount modal can open
-            // mid-sequence-exposure): busy now, not broken — try again when it has read out.
-            return Results.Problem("The camera is busy with an exposure — try Verify Position again once it has read out.",
+            // The capture path's 20-minute gate wait expired: a leaked in-flight flag, which only a daemon
+            // restart clears. (A gate merely HELD by a long exposure is CameraBusyException below, thrown
+            // before any wait — this branch is the stuck case, and no interactive client waits it out.)
+            return Results.Problem("The camera's in-flight gate is stuck — check the daemon log; a restart clears it.",
                 statusCode: StatusCodes.Status409Conflict);
         } catch (InvalidOperationException ex) {
-            // The imaging mediator's "no camera connected", and a capture that timed out or lost the
-            // device mid-exposure: nothing to look with right now.
+            // CameraBusyException (the gate is held by another exposure: fail fast, tap again later), the
+            // imaging mediator's "no camera connected", and a capture that lost the device mid-exposure:
+            // nothing to look with right now; the message says which.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }

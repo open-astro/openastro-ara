@@ -26,6 +26,16 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
+/// <summary>§57.4 — the camera's in-flight gate is held (a sequence sub still exposing, a live-view
+/// frame): Verify-Position fails FAST with this instead of queueing behind it (the sequencer's capture
+/// path waits up to 20 minutes, which no interactive client outlives). The user taps again later.</summary>
+public sealed class CameraBusyException : InvalidOperationException {
+    public const string DefaultMessage = "The camera is busy with an exposure — try Verify Position again once it has read out.";
+    public CameraBusyException() : base(DefaultMessage) { }
+    public CameraBusyException(string message) : base(message) { }
+    public CameraBusyException(string message, Exception innerException) : base(message, innerException) { }
+}
+
 /// <summary>§57.4 Verify-Position — see <see cref="VerifyPositionService"/>.</summary>
 public interface IVerifyPositionService {
     Task<VerifyPositionResultDto> VerifyAsync(double? exposureSeconds, CancellationToken ct);
@@ -50,6 +60,7 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
     private readonly IImagingMediator imagingMediator;
     private readonly ITelescopeMediator telescopeMediator;
     private readonly IFilterWheelMediator filterWheelMediator;
+    private readonly ICameraService? camera;
 
     public VerifyPositionService(
             IProfileService profileService,
@@ -57,13 +68,15 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
             IImagingMediator imagingMediator,
             ITelescopeMediator telescopeMediator,
             IFilterWheelMediator filterWheelMediator,
-            IProfileStore? profileStore = null) {
+            IProfileStore? profileStore = null,
+            ICameraService? camera = null) {
         this.profileService = profileService;
         this.plateSolverFactory = plateSolverFactory;
         this.imagingMediator = imagingMediator;
         this.telescopeMediator = telescopeMediator;
         this.filterWheelMediator = filterWheelMediator;
         this.profileStore = profileStore;
+        this.camera = camera;
     }
 
     public async Task<VerifyPositionResultDto> VerifyAsync(double? exposureSeconds, CancellationToken ct) {
@@ -88,6 +101,12 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
         if (!(focalLength > 0) || !(pixelSize > 0)) {
             throw new PlateSolverConfigurationException(
                 $"Cannot verify the position: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
+        }
+
+        // Fail fast while another exposure holds the camera: the capture path would otherwise wait
+        // on the gate for up to 20 minutes, long past any client's timeout (review of #1346).
+        if (camera is not null && !camera.IsFreeToCapture(this)) {
+            throw new CameraBusyException();
         }
 
         var info = telescopeMediator.GetInfo();

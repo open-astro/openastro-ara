@@ -66,7 +66,7 @@ class PlateSolveApi {
       if (code == 422 || code == 409) {
         throw PlateSolveException(_problemDetail(e.response?.data) ??
             (code == 409
-                ? 'No camera is connected to take the verification image.'
+                ? 'The camera cannot take the verification image right now (not connected, or busy with an exposure).'
                 : 'The plate solver is not configured (check focal length, pixel size, and the ASTAP path in settings).'));
       }
       rethrow;

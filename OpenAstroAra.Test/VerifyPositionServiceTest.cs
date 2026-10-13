@@ -133,6 +133,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Verify_fails_fast_while_another_exposure_holds_the_camera() {
+            // The camera reports its in-flight gate held: no capture is attempted (the capture path would
+            // wait up to 20 min), the caller gets CameraBusyException → 409 at once.
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(Mock.Of<IPlateSolveSettings>());
+            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
+            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(false);
+            var factory = new Mock<IPlateSolverFactory>(MockBehavior.Strict);
+            using var svc = new VerifyPositionService(profileService.Object, factory.Object, Mock.Of<IImagingMediator>(),
+                Mock.Of<ITelescopeMediator>(), Mock.Of<IFilterWheelMediator>(), camera: camera.Object);
+
+            await Assert.ThatAsync(() => svc.VerifyAsync(2, CancellationToken.None), Throws.TypeOf<CameraBusyException>());
+            factory.VerifyNoOtherCalls();
+
+            var busy = new Mock<IVerifyPositionService>();
+            busy.Setup(v => v.VerifyAsync(It.IsAny<double?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new CameraBusyException());
+            var problem = (ProblemHttpResult)await PlateSolveEndpoints.VerifyPositionAsync(null, busy.Object, CancellationToken.None);
+            Assert.That(problem.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That(problem.ProblemDetails.Detail, Does.Contain("busy"));
+        }
+
+        [Test]
         public async Task Verify_without_optics_is_a_configuration_error() {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(Mock.Of<IPlateSolveSettings>());
