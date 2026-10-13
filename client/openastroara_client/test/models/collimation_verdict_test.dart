@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/collimation_verdict.dart';
+import 'package:openastroara/widgets/focus/collimation_dial.dart';
 
 void main() {
   final at = DateTime.utc(2026, 10, 13, 2);
@@ -25,6 +26,14 @@ void main() {
       CollimationVerdict.fromPayload(const {'severity': 'good'}, at: at),
       isNull,
       reason: 'no offset',
+    );
+    expect(
+      CollimationVerdict.fromPayload(const {
+        'severity': 'good',
+        'offset_percent': double.nan,
+      }, at: at),
+      isNull,
+      reason: 'NaN offset',
     );
   });
 
@@ -77,5 +86,26 @@ void main() {
       collimationHintFor('sct', CollimationSeverity.good),
       'Nothing to do.',
     );
+  });
+
+  test('the dial\'s soft scale keeps slight and significant offsets apart', () {
+    final f5 = CollimationDialPainter.shiftFraction(5);
+    final f10 = CollimationDialPainter.shiftFraction(10);
+    final f15 = CollimationDialPainter.shiftFraction(15);
+    final f30 = CollimationDialPainter.shiftFraction(30);
+    expect(
+      f5,
+      inInclusiveRange(0.3, 0.4),
+      reason: 'a slight shift is visibly off-centre',
+    );
+    expect(f10, greaterThan(f5));
+    expect(
+      f15,
+      greaterThan(f10 + 0.1),
+      reason: '10 % and 15 % do not draw in the same place',
+    );
+    expect(f30, greaterThan(f15));
+    expect(f30, lessThan(1));
+    expect(CollimationDialPainter.shiftFraction(0), 0);
   });
 }

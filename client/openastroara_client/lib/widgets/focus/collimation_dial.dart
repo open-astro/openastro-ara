@@ -89,15 +89,23 @@ class CollimationCard extends ConsumerWidget {
 }
 
 /// The donut: outer ring, and the central-obstruction shadow displaced by the
-/// measured offset. The displacement is drawn at 3× so a slight (5 %) shift
-/// reads at 72 px; a dotted cross marks the ring centre for reference.
+/// measured offset. The displacement uses a soft-saturating scale — steep for
+/// small offsets so a slight (5 %) shift reads at 72 px, still growing past
+/// 15 % so a significant verdict never collapses onto a slight one — capped
+/// at 60 % of the radius; a cross marks the ring centre for reference.
 class CollimationDialPainter extends CustomPainter {
   final CollimationVerdict verdict;
   final Color color;
   const CollimationDialPainter({required this.verdict, required this.color});
 
-  /// Exaggeration so a 5 % offset is visibly off-centre at thumbnail size.
-  static const double gain = 3;
+  /// Offset (% of donut diameter) at which the drawn shift reaches 63 % of
+  /// its cap: 5 % lands near a third of the cap, 15 % near three quarters,
+  /// 30 % near the cap. Pure — unit-tested.
+  static const double softScalePercent = 12;
+
+  /// Drawn shift as a fraction of the cap, in [0, 1).
+  static double shiftFraction(double offsetPercent) =>
+      1 - math.exp(-math.max(0, offsetPercent) / softScalePercent);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -123,10 +131,7 @@ class CollimationDialPainter extends CustomPainter {
       cross,
     );
     // The shadow: offset_percent is a fraction of the donut DIAMETER.
-    final shift = (verdict.offsetPercent / 100 * (2 * outer) * gain).clamp(
-      0.0,
-      outer * 0.6,
-    );
+    final shift = outer * 0.6 * shiftFraction(verdict.offsetPercent);
     final a = verdict.directionDegrees * math.pi / 180; // image frame, y down
     final shadowCentre = c + Offset(math.cos(a) * shift, math.sin(a) * shift);
     final shadow = Paint()..color = color.withValues(alpha: 0.85);

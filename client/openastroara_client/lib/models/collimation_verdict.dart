@@ -51,7 +51,7 @@ class CollimationVerdict {
   }) {
     final severity = CollimationSeverity.fromWire(p['severity']);
     final offset = p['offset_percent'];
-    if (severity == null || offset is! num) return null;
+    if (severity == null || offset is! num || !offset.isFinite) return null;
     final dir = p['direction_degrees'];
     final stars = p['stars_used'];
     return CollimationVerdict(
