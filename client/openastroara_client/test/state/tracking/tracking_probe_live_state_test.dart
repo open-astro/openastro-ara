@@ -182,6 +182,19 @@ void main() {
       await ws.close();
     });
 
+    test('a provider first built mid-run keeps the ladder when the run state lands', () async {
+      run.push(const SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running));
+      await Future<void>.delayed(Duration.zero);
+      // Rebuild the provider as if the Run tab opened now.
+      container.invalidate(trackingProbeLiveProvider);
+      container.read(trackingProbeLiveProvider);
+      ws.add(_ev('tracking_probe.started', {'rungs': [10, 30]}));
+      await Future<void>.delayed(Duration.zero);
+      run.push(const SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running));
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(trackingProbeLiveProvider)!.ladder, [10, 30], reason: 'same run id, no wipe');
+    });
+
     test('folds the stream and clears on a new run id', () async {
       run.push(
         const SequenceRunStateInfo(

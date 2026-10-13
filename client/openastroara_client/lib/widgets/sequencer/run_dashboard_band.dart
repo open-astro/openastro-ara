@@ -246,7 +246,7 @@ class _TrackingProbeStrip extends ConsumerWidget {
           Text(
             live.done
                 ? describeTrackingCeiling(live)
-                : 'Tracking probe · ${live.rungs.length}/${live.ladder.length} rungs'
+                : 'Tracking probe · ${live.rungs.length}${live.ladder.isEmpty ? '' : '/${live.ladder.length}'} rungs'
                     '${live.priorSeconds != null ? ' · prior ${formatExposureSeconds(live.priorSeconds!)}' : ''}',
             style: AraText.caption.copyWith(
               color: live.done ? AraColors.textPrimary : AraColors.accentBusy,

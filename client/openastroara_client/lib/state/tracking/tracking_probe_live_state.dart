@@ -91,10 +91,15 @@ class TrackingProbeLiveNotifier extends Notifier<TrackingProbeLive?> {
 
   @override
   TrackingProbeLive? build() {
+    // Seed from the run already known, so a Run tab opened mid-probe does not
+    // treat the first run-state update as a "new run" and wipe the ladder; a
+    // null run (loading, no selection) is not a run change either.
+    _runId = ref.read(sequenceRunStateProvider).value?.runId;
     ref.listen(sequenceRunStateProvider, (prev, next) {
-      final id = next.value?.runId;
-      if (id != _runId) {
-        _runId = id;
+      final run = next.value;
+      if (run == null) return;
+      if (run.runId != _runId) {
+        _runId = run.runId;
         state = null;
       }
     });
