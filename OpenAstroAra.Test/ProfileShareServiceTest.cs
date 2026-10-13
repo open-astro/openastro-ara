@@ -423,6 +423,24 @@ public class ProfileShareServiceTest {
                 settings.GetProperty("phd2").GetProperty("host").GetString()!.Length == 0),
             ("Notification", () =>
                 settings.GetProperty("notifications").GetProperty("pushover_token").GetString()!.Length == 0),
+            // #1185 — the advisory mirrors every category StripForShare empties, not just the first five.
+            ("horizon", () =>
+                settings.GetProperty("custom_horizon").GetProperty("points").GetArrayLength() == 0),
+            ("Optics geometry", () =>
+                settings.GetProperty("optics").GetProperty("focal_length_mm").GetDouble() == 0),
+            ("Camera electronics", () =>
+                settings.GetProperty("camera_electronics").GetProperty("sensor_name").GetString()!.Length == 0),
+            ("Filter list", () =>
+                settings.GetProperty("filter_set").GetProperty("filters").GetArrayLength() == 0),
+            ("guide-scope geometry", () =>
+                settings.GetProperty("phd2").GetProperty("guide_focal_length").GetInt32() == 0),
+            ("Tracking calibration", () =>
+                settings.GetProperty("tracking_calibration").ValueKind == JsonValueKind.Null),
+            ("Sky-model calibration", () =>
+                settings.GetProperty("sky_model_calibration").ValueKind == JsonValueKind.Null),
+            ("calibration state", () =>
+                settings.GetProperty("calibration_state").EnumerateObject().All(entry =>
+                    entry.Value.EnumerateObject().All(f => f.Value.ValueKind != JsonValueKind.String || f.Value.GetString()!.Length == 0))),
         };
         foreach (var (keyword, stripped) in categories) {
             preview.DroppedFields.Should().Contain(

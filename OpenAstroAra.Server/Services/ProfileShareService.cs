@@ -252,6 +252,7 @@ public sealed class ProfileShareService : IProfileShareService {
         "Autofocus (Smart Focus) calibration — regenerates on your first autofocus sweep",
         "Tracking calibration — measured on the donor's mount",
         "Sky-model calibration — fitted to the donor's optics, camera and sky",
+        "Guider calibration state (dark library / defect map stamps) — rebuild on your rig",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including
