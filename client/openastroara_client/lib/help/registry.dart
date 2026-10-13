@@ -2215,12 +2215,15 @@ const Map<String, Help> helpRegistry = {
     key: 'img.unguided.probe',
     title: 'Tracking probe',
     body:
-        'A ladder of exposures at the target — 10, 30, 60 and 120 s, capped at the planned sub and at twice the '
-        'prior — each judged by the same star analysis autofocus uses: a rung passes when the median eccentricity '
-        'stays at or under 0.5 and the FWHM within 1.2× the 10 s frame. Too few stars makes a rung unusable, not a '
-        'fail. The ceiling is the longest passing rung, moved halfway toward the first failing one. Fewer than two '
-        'usable rungs keep the prior and say so. A result more than 2× off the prior raises a notification: check '
-        'balance, clutch and the worm — or the spec sheet is wrong.\n\n'
+        'A ladder of exposures at the target — 10, 30, 60 and 120 s, then the planned sub or twice the prior '
+        '(whichever is lower) as a final rung; nothing longer than that cap is tried. Each frame is judged by '
+        'the same star analysis autofocus uses: a rung passes when the median eccentricity stays at or under 0.5 '
+        'and the FWHM within 1.2× the first usable rung\'s. Too few stars makes a rung unusable, not a fail. '
+        'The ceiling is the longest passing rung, moved halfway toward the first failing one. When even the '
+        'first usable rung trails, that rung IS the ceiling (nothing shorter was tried; the guard can still step '
+        'down from there). Only a ladder with fewer than two usable rungs and no failure is inconclusive — then '
+        'the prior is kept and the summary says so. A result more than 2× off the prior raises a notification: '
+        'check balance, clutch and the worm — or the prior is wrong.\n\n'
         'Alt-az mounts also suffer field rotation, a different ceiling the probe does not measure yet.',
     relatedHelpKeys: ['img.unguided.ceiling', 'img.unguided.guard'],
   ),
@@ -2230,8 +2233,9 @@ const Map<String, Help> helpRegistry = {
     body:
         'Watches each unguided imaging loop. Two consecutive lights over the eccentricity tolerance step the '
         'exposure down one rung (those frames are tagged "trailed" and you get one notification); ten consecutive '
-        'round ones (eccentricity 0.3 or better) below the sky-limited length step it back up. Center After Drift '
-        're-centres the target every 30 minutes on the same rigs.',
+        'round ones (eccentricity 0.3 or better) below the sky-limited length step it back up. On the same rigs '
+        'Center After Drift plate-solves every saved light and re-centres the target once it has drifted more than '
+        '10 arcminutes — a run that drifts less is left alone.',
     relatedHelpKeys: ['img.unguided.ceiling', 'img.unguided.probe'],
   ),
 };

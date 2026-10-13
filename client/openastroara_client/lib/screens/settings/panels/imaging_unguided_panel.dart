@@ -134,9 +134,10 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel> {
         const SettingsRow(
           label: 'Tracking probe',
           value:
-              'After focus and before the first imaging loop: 10, 30, 60 and 120 s frames at the target, '
-              'capped at the planned sub and twice the prior. A rung passes with eccentricity ≤ 0.5 and '
-              'FWHM within 1.2× the 10 s frame; the ceiling is the longest pass, moved halfway toward the first fail.',
+              'After focus and before the first imaging loop: 10, 30, 60 and 120 s frames at the target, then the '
+              'planned sub or twice the prior as a final rung. A rung passes with eccentricity ≤ 0.5 and FWHM within '
+              '1.2× the first usable rung; the ceiling is the longest pass, moved halfway toward the first fail — or the '
+              'first usable rung itself when even that one trails. Fewer than two usable rungs with no failure keeps the prior.',
           helpKey: 'img.unguided.probe',
         ),
         const SettingsRow(
