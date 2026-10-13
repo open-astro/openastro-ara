@@ -668,6 +668,18 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        private double decMinimumMove;
+        [DataMember]
+        public double DecMinimumMove {
+            get => decMinimumMove;
+            set {
+                if (decMinimumMove != value) {
+                    decMinimumMove = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
         private string decGuideMode = "auto";
         [DataMember]
         public string DecGuideMode {

@@ -69,8 +69,12 @@ namespace OpenAstroAra.Profile.Interfaces {
         double RAAggressiveness { get; set; }
         /// <summary>Dec aggressiveness, 0..1 (same wire scale as <see cref="RAAggressiveness"/>).</summary>
         double DecAggressiveness { get; set; }
-        /// <summary>Minimum guide move, pixels (applied to both axes).</summary>
+        /// <summary>RA minimum guide move, pixels (PHD2's <c>minMove</c> on the RA algorithm). Kept under
+        /// its historical name: it was one value for both axes before #1156 split Dec out.</summary>
         double MinimumMove { get; set; }
+        /// <summary>Dec minimum guide move, pixels (#1156). Dec usually wants a larger value than RA —
+        /// backlash and the slower Dec drift make small corrections pure noise chasing.</summary>
+        double DecMinimumMove { get; set; }
         /// <summary>Dec guide mode: "auto" | "north" | "south" | "off".</summary>
         string DecGuideMode { get; set; }
         /// <summary>Guide exposure, ms, sent with PHD2's <c>set_exposure</c> (runtime-safe: it applies on

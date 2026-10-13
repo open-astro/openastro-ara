@@ -53,7 +53,8 @@ class Phd2Settings {
   final double guidePixelSize; // µm, 0 = unset
   final double raAggressiveness; // 0..1
   final double decAggressiveness; // 0..1
-  final double minimumMove; // px
+  final double minimumMove; // px, RA (historical name — one value for both axes before #1156)
+  final double decMinimumMove; // px, Dec (#1156)
   final String decGuideMode; // auto | north | south | off
 
   // §63.17 guider equipment selection — pushed to the daemon inside the §63.5
@@ -101,6 +102,7 @@ class Phd2Settings {
     this.raAggressiveness = 0.7,
     this.decAggressiveness = 0.7,
     this.minimumMove = 0.15,
+    this.decMinimumMove = 0.15,
     this.decGuideMode = 'auto',
     this.guiderCamera = '',
     this.guiderCameraId = '',
@@ -132,6 +134,7 @@ class Phd2Settings {
     double? raAggressiveness,
     double? decAggressiveness,
     double? minimumMove,
+    double? decMinimumMove,
     String? decGuideMode,
     String? guiderCamera,
     String? guiderCameraId,
@@ -163,6 +166,7 @@ class Phd2Settings {
         raAggressiveness: raAggressiveness ?? this.raAggressiveness,
         decAggressiveness: decAggressiveness ?? this.decAggressiveness,
         minimumMove: minimumMove ?? this.minimumMove,
+        decMinimumMove: decMinimumMove ?? this.decMinimumMove,
         decGuideMode: decGuideMode ?? this.decGuideMode,
         guiderCamera: guiderCamera ?? this.guiderCamera,
         guiderCameraId: guiderCameraId ?? this.guiderCameraId,
@@ -274,6 +278,11 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   void setMinimumMove(double v) {
     if (v < 0) return;
     state = state.copyWith(minimumMove: v);
+  }
+
+  void setDecMinimumMove(double v) {
+    if (v < 0) return;
+    state = state.copyWith(decMinimumMove: v);
   }
 
   void setDecGuideMode(String v) {

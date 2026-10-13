@@ -186,6 +186,7 @@ void main() {
       expect(s.raAggressiveness, 0.7);
       expect(s.decAggressiveness, 0.7);
       expect(s.minimumMove, 0.15);
+      expect(s.decMinimumMove, 0.15);
       expect(s.decGuideMode, 'auto');
     });
 
@@ -200,8 +201,12 @@ void main() {
       // Focal / pixel / min-move reject negatives.
       n.setGuideFocalLength(-5);
       n.setMinimumMove(-1);
+      n.setDecMinimumMove(-1);
       expect(container.read(phd2SettingsProvider).guideFocalLength, 0);
       expect(container.read(phd2SettingsProvider).minimumMove, 0.15);
+      expect(container.read(phd2SettingsProvider).decMinimumMove, 0.15);
+      n.setDecMinimumMove(0.3);
+      expect(container.read(phd2SettingsProvider).decMinimumMove, 0.3, reason: '#1156 — Dec has its own dead band');
       n.setGuideFocalLength(250);
       expect(container.read(phd2SettingsProvider).guideFocalLength, 250);
     });

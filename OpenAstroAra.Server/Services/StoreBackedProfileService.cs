@@ -186,6 +186,8 @@ internal static class ProfileStoreMapper {
         guider.RAAggressiveness = Math.Clamp(phd2.RaAggressiveness, 0.0, 1.0);
         guider.DecAggressiveness = Math.Clamp(phd2.DecAggressiveness, 0.0, 1.0);
         guider.MinimumMove = Math.Max(0.0, phd2.MinimumMove);
+        // #1156 — a pre-split profile has no Dec value: Dec follows RA, as it always did.
+        guider.DecMinimumMove = Math.Max(0.0, phd2.DecMinimumMove ?? phd2.MinimumMove);
         guider.DecGuideMode = NormalizeDecGuideMode(phd2.DecGuideMode);
         guider.GuideExposureMs = Math.Max(0, phd2.GuideExposureMs);
         // §63.17 equipment selections — trimmed (choice strings are matched verbatim by the daemon; stray

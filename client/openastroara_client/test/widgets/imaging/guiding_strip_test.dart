@@ -514,7 +514,8 @@ void main() {
     expect(find.byType(GuidingTuneDialog), findsOneWidget);
     expect(find.text('RA aggressiveness'), findsOneWidget);
     expect(find.text('Dec aggressiveness'), findsOneWidget);
-    expect(find.text('Minimum move (px)'), findsOneWidget);
+    expect(find.text('RA minimum move (px)'), findsOneWidget);
+    expect(find.text('Dec minimum move (px)'), findsOneWidget, reason: '#1156 — Dec has its own dead band');
     expect(find.text('Dec guide mode'), findsOneWidget);
     expect(find.text('Dither pixels'), findsOneWidget);
     // Guide exposure (set_exposure, runtime-safe) — unset by default.
@@ -709,13 +710,15 @@ void main() {
     // A negative minimum move is rejected at parse time (the notifier bound,
     // mirrored) — the field snaps back to the canonical draft value instead
     // of sitting invalid until an Apply silently drops it.
-    final field = find.widgetWithText(TextField, '0.15');
+    // Two fields show 0.15 now (RA and Dec minimum move, #1156); the RA row comes first.
+    final field = find.widgetWithText(TextField, '0.15').first;
     await tester.enterText(field, '-3');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(TextField, '0.15'), findsOneWidget,
+    expect(find.widgetWithText(TextField, '0.15'), findsNWidgets(2),
         reason: 'invalid input snaps back to the last good value');
     expect(container.read(phd2SettingsProvider).minimumMove, 0.15);
+    expect(container.read(phd2SettingsProvider).decMinimumMove, 0.15);
 
     await _teardownPanel(tester, container);
   });

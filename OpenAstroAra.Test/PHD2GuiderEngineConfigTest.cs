@@ -29,13 +29,15 @@ namespace OpenAstroAra.Test {
     public class PHD2GuiderEngineConfigTest {
 
         private static IGuiderSettings Settings(int focal = 250, double pixel = 2.9, double ra = 0.7,
-                double dec = 0.65, double minMove = 0.15, string mode = "north", int exposureMs = 0) {
+                double dec = 0.65, double minMove = 0.15, string mode = "north", int exposureMs = 0,
+                double? decMinMove = null) {
             var s = new Mock<IGuiderSettings>();
             s.SetupGet(x => x.GuideFocalLength).Returns(focal);
             s.SetupGet(x => x.GuidePixelSize).Returns(pixel);
             s.SetupGet(x => x.RAAggressiveness).Returns(ra);
             s.SetupGet(x => x.DecAggressiveness).Returns(dec);
             s.SetupGet(x => x.MinimumMove).Returns(minMove);
+            s.SetupGet(x => x.DecMinimumMove).Returns(decMinMove ?? minMove);
             s.SetupGet(x => x.DecGuideMode).Returns(mode);
             s.SetupGet(x => x.GuideExposureMs).Returns(exposureMs);
             return s.Object;
@@ -75,6 +77,7 @@ namespace OpenAstroAra.Test {
             s.SetupGet(x => x.RAAggressiveness).Returns(0.5);
             s.SetupGet(x => x.DecAggressiveness).Returns(0.85);
             s.SetupGet(x => x.MinimumMove).Returns(0.15);
+            s.SetupGet(x => x.DecMinimumMove).Returns(0.25);
             s.SetupGet(x => x.DecGuideMode).Returns("north");
             s.SetupGet(x => x.GuideExposureMs).Returns(500);
 
@@ -198,6 +201,22 @@ namespace OpenAstroAra.Test {
             Assert.That(msgs.OfType<Phd2SetAlgoParam>().Count(), Is.EqualTo(4));
             Assert.That(msgs.OfType<Phd2SetDecGuideMode>().Count(), Is.EqualTo(1));
         }
+
+        [Test]
+        public void Build_pushes_each_axis_its_own_minimum_move() {
+            // #1156 — Dec typically wants a larger dead band than RA (backlash); the two are
+            // separate profile values and separate set_algo_param calls. An unset axis is left alone.
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(minMove: 0.1, decMinMove: 0.3));
+            var minMoves = msgs.OfType<Phd2SetAlgoParam>().Where(a => a.Parameters!.Name == "minMove").ToList();
+            Assert.That(minMoves.Single(a => a.Parameters!.Axis == "ra").Parameters!.Value, Is.EqualTo(0.1));
+            Assert.That(minMoves.Single(a => a.Parameters!.Axis == "dec").Parameters!.Value, Is.EqualTo(0.3));
+
+            var raOnly = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(minMove: 0.1, decMinMove: 0))
+                .OfType<Phd2SetAlgoParam>().Where(a => a.Parameters!.Name == "minMove").ToList();
+            Assert.That(raOnly.Select(a => a.Parameters!.Axis), Is.EqualTo(RaAxisOnly), "Dec at 0 = unset: not pushed");
+        }
+
+        private static readonly string[] RaAxisOnly = { "ra" };
 
         [Test]
         public void Build_with_all_unset_values_pushes_nothing() {

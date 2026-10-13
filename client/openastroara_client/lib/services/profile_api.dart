@@ -824,6 +824,8 @@ class ProfileApi {
     raAggressiveness: (j['ra_aggressiveness'] as num?)?.toDouble() ?? 0.7,
     decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
     minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
+    // #1156 — a daemon profile from before the split has no Dec value: Dec follows RA.
+    decMinimumMove: (j['dec_minimum_move'] as num?)?.toDouble() ?? (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
     decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
     // §63.17 guider equipment selection ("" / 0 = unset).
     guiderCamera: (j['guider_camera'] as String?) ?? '',
@@ -858,6 +860,7 @@ class ProfileApi {
     'ra_aggressiveness': v.raAggressiveness,
     'dec_aggressiveness': v.decAggressiveness,
     'minimum_move': v.minimumMove,
+    'dec_minimum_move': v.decMinimumMove,
     'dec_guide_mode': v.decGuideMode,
     'guider_camera': v.guiderCamera,
     'guider_camera_id': v.guiderCameraId,

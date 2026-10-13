@@ -155,7 +155,7 @@ public static class ProfileSnapshotNormalizer {
             SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
             ForceCalibrationEachSession: false,
             GuideFocalLength: 0, GuidePixelSize: 0, RaAggressiveness: 0.7,
-            DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto"),
+            DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto", DecMinimumMove: 0.15),
         EquipmentConnection: new(
             Camera: true, Mount: true, Focuser: true, FilterWheel: true,
             Rotator: true, Guider: true, FlatPanel: true, Dome: true,

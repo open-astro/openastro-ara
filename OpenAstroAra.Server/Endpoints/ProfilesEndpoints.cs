@@ -83,8 +83,11 @@ public static partial class ProfilesEndpoints {
                 }
                 if (oldName is not null && !shared) {
                     // #1156 lifecycle hook — carry the twin (and its calibration) over to the new
-                    // name. Fire-and-forget, never throws.
-                    _ = guider.TryRenameAraGuiderProfileAsync(oldName, id, body.Name, CancellationToken.None);
+                    // name AS STORED (the repository normalizes: blank → "Untitled profile",
+                    // over-long → truncated), so the twin's name is the one the next connect looks
+                    // for. Fire-and-forget, never throws.
+                    var storedName = repo.List().Profiles.FirstOrDefault(p => p.Id == id)?.Name ?? body.Name;
+                    _ = guider.TryRenameAraGuiderProfileAsync(oldName, id, storedName, CancellationToken.None);
                 }
                 return Results.NoContent();
             })

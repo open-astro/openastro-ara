@@ -1615,6 +1615,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_sequencer_dither_aborted_mid_settle_is_reported_cancelled_not_ok() {
+            // #1351 r1 note: WaitForSettling swallows the cancellation and Dither() returns true
+            // with no settle verdict — the terminal event must not call that a settled dither.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+
+            using var abort = new CancellationTokenSource();
+            var ditherTask = svc.Dither(abort.Token);
+            Assert.That(await WaitUntilAsync(() => dithers == 1).ConfigureAwait(false), Is.True);
+            await abort.CancelAsync().ConfigureAwait(false); // the sequence is aborted while the guider is still settling
+            Assert.That(await ditherTask.ConfigureAwait(false), Is.True, "precondition: Dither() reports the RPC as sent");
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var e = ws.Of("guider.dither_complete")[0];
+            Assert.That(e.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(e.GetProperty("error").GetString(), Is.EqualTo("cancelled"));
+        }
+
+        [Test]
         public async Task A_sequencer_dither_publishes_dither_complete_without_an_operation_id() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);

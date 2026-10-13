@@ -99,6 +99,14 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.RAAggressiveness, Is.EqualTo(0.8));
             Assert.That(guider.DecAggressiveness, Is.EqualTo(0.65));
             Assert.That(guider.MinimumMove, Is.EqualTo(0.2));
+            Assert.That(guider.DecMinimumMove, Is.EqualTo(0.2), "#1156 — no Dec value in the DTO: Dec follows RA, as before the split");
+
+            // #1156 — an explicit Dec value is its own thing (and floored at 0 like RA).
+            store.PutPhd2Settings(store.GetPhd2Settings() with { DecMinimumMove = 0.35 });
+            Assert.That(svc.ActiveProfile.GuiderSettings.DecMinimumMove, Is.EqualTo(0.35));
+            Assert.That(svc.ActiveProfile.GuiderSettings.MinimumMove, Is.EqualTo(0.2), "RA is untouched by the Dec value");
+            store.PutPhd2Settings(store.GetPhd2Settings() with { DecMinimumMove = -2.0 });
+            Assert.That(svc.ActiveProfile.GuiderSettings.DecMinimumMove, Is.EqualTo(0.0));
             Assert.That(guider.GuideExposureMs, Is.EqualTo(500));
             Assert.That(guider.DecGuideMode, Is.EqualTo("north"));
         }
@@ -140,6 +148,7 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.RAAggressiveness, Is.EqualTo(1.0));   // clamped high
             Assert.That(guider.DecAggressiveness, Is.EqualTo(0.0));  // clamped low
             Assert.That(guider.MinimumMove, Is.EqualTo(0.0));        // floored at 0
+            Assert.That(guider.DecMinimumMove, Is.EqualTo(0.0));     // #1156 — follows the floored RA value
             Assert.That(guider.DecGuideMode, Is.EqualTo("auto"));    // unknown → auto
             Assert.That(guider.GuideExposureMs, Is.EqualTo(0));      // floored at 0 (= unset)
         }

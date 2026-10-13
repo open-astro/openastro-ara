@@ -481,7 +481,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           },
         ),
         EditableNumberRow(
-          label: 'Minimum move (px)',
+          label: 'RA minimum move (px)',
           helpKey: 'eq.guider.minimum_move',
           currentValue: phd2.minimumMove.toString(),
           getCanonical: () =>
@@ -489,6 +489,17 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setMinimumMove(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Dec minimum move (px)',
+          helpKey: 'eq.guider.dec_minimum_move',
+          currentValue: phd2.decMinimumMove.toString(),
+          getCanonical: () =>
+              ref.read(phd2SettingsProvider).decMinimumMove.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) phd2N.setDecMinimumMove(v);
           },
         ),
         SettingsDropdownRow<String>(

@@ -1351,11 +1351,19 @@ const Map<String, Help> helpRegistry = {
   ),
   'eq.guider.minimum_move': Help(
     key: 'eq.guider.minimum_move',
-    title: 'Minimum move',
+    title: 'RA minimum move',
     body:
-        'Smallest error (in guide pixels) OpenAstro Guider will react to. Errors below this are ignored, so the mount doesn\'t chase seeing noise.\n\n'
+        'Smallest RA error (in guide pixels) OpenAstro Guider will react to. Errors below this are ignored, so the mount doesn\'t chase seeing noise.\n\n'
         '**~0.15 px** is typical. Raise it in poor seeing to calm the corrections; lower it only with a very stable mount + sky.',
-    relatedSettings: ['eq.guider.ra_aggressiveness'],
+    relatedSettings: ['eq.guider.ra_aggressiveness', 'eq.guider.dec_minimum_move'],
+  ),
+  'eq.guider.dec_minimum_move': Help(
+    key: 'eq.guider.dec_minimum_move',
+    title: 'Dec minimum move',
+    body:
+        'Smallest Dec error (in guide pixels) OpenAstro Guider will react to. Dec drifts slowly and most mounts have Dec backlash, so a dead band a little wider than RA\'s keeps the guider from reversing the worm for nothing.\n\n'
+        '**0.15–0.3 px** is typical. If Dec corrections oscillate (overshoot, then correct back), raise it before lowering Dec aggressiveness.',
+    relatedSettings: ['eq.guider.minimum_move', 'eq.guider.dec_aggressiveness', 'eq.guider.dec_guide_mode'],
   ),
   'eq.guider.dec_guide_mode': Help(
     key: 'eq.guider.dec_guide_mode',

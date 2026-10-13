@@ -161,7 +161,11 @@ public sealed partial class GuiderService : IGuiderMediator {
         var sent = await guider.Dither(_noProgress, token).ConfigureAwait(false);
         // #1156 — the sequencer's dither reports its terminal status too (no operation id:
         // nothing was accepted over REST), so the Live tab sees a settle failure as it happens.
-        var error = sent ? guider.LastSettleError : "refused";
+        // An abort mid-settle makes Dither() return true with no verdict (WaitForSettling
+        // swallows the cancellation) — that is not a settled dither (#1351 r1 note).
+        var error = !sent ? "refused"
+            : token.IsCancellationRequested ? "cancelled"
+            : guider.LastSettleError;
         await PublishDitherCompleteAsync(operationId: null, ok: sent && error is null, error).ConfigureAwait(false);
         return sent;
     }

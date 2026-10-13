@@ -344,6 +344,17 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-13 — #1156 per-axis minimum move
+
+**Endpoint(s) or area:** `GET/PUT /api/v1/profile/phd2` (`Phd2SettingsDto`): new optional `dec_minimum_move` (double, px).
+
+**Decision:** `minimum_move` keeps its name and becomes the RA dead band; `dec_minimum_move` is Dec's. The DTO field is nullable with a null default: a profile.json written before the split deserializes to null and hydration uses the RA value for Dec, so an upgrade changes nothing on the wire until the user sets Dec. The client always sends both. The engine push sends `set_algo_param(ra, minMove)` and `set_algo_param(dec, minMove)` independently, each only when > 0.
+
+**Reasoning:** Dec drifts slowly and most mounts have Dec backlash, so Dec wants a wider dead band than RA; one shared value forced a compromise on both axes.
+
+**Spec ref:** `Contracts/ProfileDtos.cs` (`Phd2SettingsDto.DecMinimumMove`), `Services/StoreBackedProfileService.ApplyPhd2`, `PHD2Guider.GuiderEngineConfig.cs`; client `state/settings/phd2_settings_state.dart`, `settings/registry.dart` (`eq.guider.dec_minimum_move`).
+
+**Related:** #1156; tests `PHD2GuiderEngineConfigTest.Build_pushes_each_axis_its_own_minimum_move`, `StoreBackedProfileServiceTest`.
 ### 2026-10-13 — #1156 guider profile lifecycle hooks + terminal status for guider 202s
 
 **Endpoint(s) or area:** `POST /api/v1/profiles` (duplicate, no settings body) and `PUT /api/v1/profiles/{id}` (rename) gain guider-twin side effects; new WS event `guider.operation_complete`; `guider.dither_complete` (declared, never published) is now published.

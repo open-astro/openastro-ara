@@ -281,9 +281,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (guider.DecAggressiveness > 0) {
                 messages.Add(AlgoParam("dec", "aggression", guider.DecAggressiveness));
             }
+            // #1156 — per-axis minimum move; each is pushed only when set.
             if (guider.MinimumMove > 0) {
                 messages.Add(AlgoParam("ra", "minMove", guider.MinimumMove));
-                messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
+            }
+            if (guider.DecMinimumMove > 0) {
+                messages.Add(AlgoParam("dec", "minMove", guider.DecMinimumMove));
             }
 
             // Guide exposure — set_exposure is runtime-safe (PHD2 applies it on the next frame, guiding

@@ -437,7 +437,10 @@ public sealed record Phd2SettingsDto(
     int GuideExposureMaxMs = 6000,
     // The guide exposure itself (ms), pushed with PHD2's runtime-safe set_exposure; 0 = unset (the
     // guider keeps its own). Set from Imaging → Guiding → Tune Guiding; optional so older profiles load.
-    int GuideExposureMs = 0);
+    int GuideExposureMs = 0,
+    // #1156 — Dec minimum move, px. Null = "same as minimum_move" so a profile.json written before the
+    // split keeps guiding exactly as it did; the client always sends both.
+    double? DecMinimumMove = null);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default

@@ -10309,6 +10309,13 @@ components:
             - string
           format: int32
           default: 0
+        dec_minimum_move:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     PlanningFilterDto:
       required:
         - name

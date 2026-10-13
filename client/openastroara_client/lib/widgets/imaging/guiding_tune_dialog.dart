@@ -59,7 +59,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   // The daemon's copy as fetched at open. The dialog's hydrate deliberately
   // does NOT go through the shared notifier: Settings → Guider stages its own
   // unsaved edits in the shared provider (pre-Save), and a provider hydrate
-  // here would silently revert them. Apply PUTs _serverCopy + the six tuning
+  // here would silently revert them. Apply PUTs _serverCopy + the seven tuning
   // fields, so nothing unconfirmed is persisted and nothing staged is lost.
   Phd2Settings? _serverCopy;
 
@@ -126,13 +126,14 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       _status = null;
     });
     try {
-      // PUT the daemon's own copy + ONLY the six runtime-safe tuning fields
+      // PUT the daemon's own copy + ONLY the seven runtime-safe tuning fields
       // from the draft — never the shared provider's object, which may hold
       // Settings → Guider edits the user hasn't confirmed with Save.
       final toSave = serverCopy.copyWith(
         raAggressiveness: draft.raAggressiveness,
         decAggressiveness: draft.decAggressiveness,
         minimumMove: draft.minimumMove,
+        decMinimumMove: draft.decMinimumMove,
         decGuideMode: draft.decGuideMode,
         ditherPixels: draft.ditherPixels,
         guideExposureMs: draft.guideExposureMs,
@@ -140,11 +141,12 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       final echoed = await api.putPhd2Settings(toSave);
       _serverCopy = echoed;
       // Reflect the now-persisted tuning values in the shared provider (the
-      // setters touch only these six fields — staged Settings edits survive).
+      // setters touch only these seven fields — staged Settings edits survive).
       final n = ref.read(phd2SettingsProvider.notifier);
       n.setRaAggressiveness(draft.raAggressiveness);
       n.setDecAggressiveness(draft.decAggressiveness);
       n.setMinimumMove(draft.minimumMove);
+      n.setDecMinimumMove(draft.decMinimumMove);
       n.setDecGuideMode(draft.decGuideMode);
       n.setDitherPixels(draft.ditherPixels);
       n.setGuideExposureMs(draft.guideExposureMs);
@@ -240,7 +242,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                         onChanged: (v) => _edit((d) => d.copyWith(decAggressiveness: v)),
                       ),
                       EditableNumberRow(
-                        label: 'Minimum move (px)',
+                        label: 'RA minimum move (px)',
                         currentValue: phd2.minimumMove.toString(),
                         getCanonical: () => _current.minimumMove.toString(),
                         parse: (s) {
@@ -251,6 +253,17 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                           final v = double.tryParse(s);
                           if (v != null && v >= 0) {
                             _edit((d) => d.copyWith(minimumMove: v));
+                          }
+                        },
+                      ),
+                      EditableNumberRow(
+                        label: 'Dec minimum move (px)',
+                        currentValue: phd2.decMinimumMove.toString(),
+                        getCanonical: () => _current.decMinimumMove.toString(),
+                        parse: (s) {
+                          final v = double.tryParse(s);
+                          if (v != null && v >= 0) {
+                            _edit((d) => d.copyWith(decMinimumMove: v));
                           }
                         },
                       ),

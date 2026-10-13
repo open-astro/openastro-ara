@@ -279,7 +279,8 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaAggressiveness: 0.7,
         DecAggressiveness: 0.7,
         MinimumMove: 0.15,
-        DecGuideMode: "auto");
+        DecGuideMode: "auto",
+        DecMinimumMove: 0.15);
 
     public Phd2SettingsDto GetPhd2Settings() {
         lock (_lock) { return _phd2; }

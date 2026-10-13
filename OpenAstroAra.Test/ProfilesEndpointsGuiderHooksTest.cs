@@ -124,6 +124,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_rename_hook_gets_the_name_as_the_repository_stored_it() {
+            // The repository normalizes names (blank → "Untitled profile", over-long → truncated); the
+            // twin must follow the STORED name or the next connect looks for a twin that isn't there.
+            var id = repo.List().ActiveId!.Value;
+            var resp = await http.PutAsJsonAsync($"/api/v1/profiles/{id}", new { name = "   " }, Json);
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+            var stored = repo.List().Profiles.Single(p => p.Id == id).Name;
+            Assert.That(stored, Is.Not.EqualTo("   "), "precondition: the repository normalized the blank name");
+
+            guider.Verify(g => g.TryRenameAraGuiderProfileAsync("Rig A", id, stored, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public async Task Renaming_one_of_two_identically_named_profiles_leaves_the_shared_twin_alone() {
             var second = repo.Create("Rig A", settings: null, makeActive: false);
             var resp = await http.PutAsJsonAsync($"/api/v1/profiles/{second.Id}", new { name = "Rig B" }, Json);
