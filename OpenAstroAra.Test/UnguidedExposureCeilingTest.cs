@@ -104,6 +104,9 @@ namespace OpenAstroAra.Test {
             Assert.That(UnguidedExposureLadder.Build(null, 45, null), Is.EqualTo(new[] { 10.0, 30, 45 }), "planned 45 s: the rungs below it, then the plan itself as the final rung");
             Assert.That(UnguidedExposureLadder.Build(null, 300, 20), Is.EqualTo(new[] { 10.0, 30, 40 }), "2 × a 20 s prior = 40 s cap, itself the final rung");
             Assert.That(UnguidedExposureLadder.Build(null, 8, null), Is.EqualTo(OnlyEight), "planned shorter than every rung: measure at the plan itself");
+            Assert.That(UnguidedExposureLadder.Build(null, 300, 5), Is.EqualTo(new[] { 5.0, 10 }), "a floored 5 s prior still gets two rungs: the prior, then twice it");
+            Assert.That(UnguidedExposureLadder.Build(null, 300, 4), Is.EqualTo(new[] { 4.0, 8 }), "below the first default rung: [prior, 2 × prior]");
+            Assert.That(UnguidedExposureLadder.Build(null, 300, 7), Is.EqualTo(new[] { 10.0, 14 }), "two rungs already fit under 2 × 7 s: the prior is not inserted");
             Assert.That(UnguidedExposureLadder.Build(MessyRungs, 0, null), Is.EqualTo(new[] { 5.0, 60, 120 }), "sorted, distinct, positive");
         }
 

@@ -65,6 +65,12 @@ namespace OpenAstroAra.Sequencer.Utility {
                 // twice the prior) rather than at nothing.
                 kept.Add(double.IsPositiveInfinity(cap) ? source[0] : cap);
             }
+            // A prior short enough that only one rung fits under 2 × prior (a 5 s floor gives [10])
+            // would make every probe inconclusive and hand the run the prior even when that one
+            // frame was clean. The prior itself becomes the first rung: [prior, 2 × prior].
+            if (kept.Count == 1 && priorSeconds is double p && p > 0 && p < kept[0] - 1e-9) {
+                kept.Insert(0, p);
+            }
             return kept;
         }
 
