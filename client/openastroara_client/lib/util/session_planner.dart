@@ -181,12 +181,30 @@ double? _tierHoursToGo(TonightSkyObject o, Map<String, double> banked) {
   return needed - have;
 }
 
-double _valueOf(TonightSkyObject o, double hours, [Map<String, double> banked = const {}]) {
+/// The shutter-open integration a slice of [hours] clock time yields for [o]
+/// under [overheads] (setup, dither settles, autofocus): the figure the tier
+/// budget and the banked hours are in. Falls back to the clock span when the
+/// object has no sub length yet.
+double _integrationHoursOf(TonightSkyObject o, double hours, SessionOverheads overheads) {
+  final subS = o.optimalSubS;
+  if (subS == null || subS <= 0) return hours;
+  return overheads.subsIn(hours, subS) * subS / 3600.0;
+}
+
+double _valueOf(
+  TonightSkyObject o,
+  double hours, [
+  Map<String, double> banked = const {},
+  SessionOverheads overheads = const SessionOverheads(),
+]) {
   final base = o.hoursFreeScore ?? ((o.score ?? 0) * 0.75);
   final toGo = _tierHoursToGo(o, banked);
   final hoursFactor = toGo != null && toGo <= 0 ? _tierCompleteHoursFactor : 1.0;
+  // Completion is judged on INTEGRATION, as the budget and the banked hours
+  // are: a 2 h slice with 120 s subs and the night's overheads integrates
+  // about 1.7 h, so it does not finish a tier 2 h short.
   final completion = toGo != null && toGo > 0
-      ? _tierCompletionBonus * (hours / toGo).clamp(0.0, 1.0)
+      ? _tierCompletionBonus * (_integrationHoursOf(o, hours, overheads) / toGo).clamp(0.0, 1.0)
       : 0.0;
   // CONCAVE hours value (sqrt, saturating at 6 h): integration has diminishing
   // returns, and concavity is what makes the greedy allocator split windows
@@ -210,7 +228,10 @@ String? tierNoteFor(SessionPlanTarget t, Map<String, double> banked) {
     return '${t.object.name}: full-structure tier already complete — '
         'diminishing returns; a new target would gain more from these hours.';
   }
-  if (t.hours >= toGo) {
+  final subS = t.subSeconds;
+  final subs = t.subCount;
+  final integration = subS != null && subs != null && subS > 0 ? subs * subS / 3600.0 : t.hours;
+  if (integration >= toGo - 1e-9) {
     return '${t.object.name}: this slice completes its full-structure tier.';
   }
   return null;
@@ -286,7 +307,7 @@ SessionPlan planImagingSession({
   (TonightSkyObject, DateTime, DateTime)? bestSingle;
   var bestSingleValue = double.negativeInfinity;
   for (final c in candidates) {
-    final v = _valueOf(c.$1, _hoursBetween(c.$2, c.$3), bankedHours);
+    final v = _valueOf(c.$1, _hoursBetween(c.$2, c.$3), bankedHours, overheads);
     if (v > bestSingleValue) {
       bestSingleValue = v;
       bestSingle = c;
@@ -319,7 +340,7 @@ SessionPlan planImagingSession({
     var bestGain = 0.0;
     for (var i = 0; i < slices.length; i++) {
       final s0 = slices[i];
-      final currentValue = _valueOf(s0.object, s0.hours, bankedHours);
+      final currentValue = _valueOf(s0.object, s0.hours, bankedHours, overheads);
       final own = usableOf[s0.object.id]!;
       // The region this split may occupy: the slice itself PLUS any
       // unallocated window on either side (up to the neighbouring slices) —
@@ -356,8 +377,8 @@ SessionPlan planImagingSession({
                 t.isAfter(secondUsable.$1) ? t : secondUsable.$1;
             final h2 = _hoursBetween(s2start, s2end);
             if (h1 < _minSliceHours || h2 < _minSliceHours) continue;
-            final gain = _valueOf(firstObj, h1, bankedHours) +
-                _valueOf(secondObj, h2, bankedHours) -
+            final gain = _valueOf(firstObj, h1, bankedHours, overheads) +
+                _valueOf(secondObj, h2, bankedHours, overheads) -
                 currentValue;
             if (gain > bestGain) {
               bestGain = gain;
@@ -422,6 +443,8 @@ SessionPlan swapPlanTarget(
   int index,
   TonightSkyObject replacement, {
   SessionOverheads overheads = const SessionOverheads(),
+  // §Integration Budget P5 — so the swapped-in target gets its tier note too.
+  Map<String, double> bankedHours = const {},
 }) {
   if (index < 0 || index >= plan.targets.length) return plan;
   final old = plan.targets[index];
@@ -438,6 +461,7 @@ SessionPlan swapPlanTarget(
       '${fresh.hours.toStringAsFixed(1)} h of that slot — trimmed to its dark window.',
     );
   }
+  if (tierNoteFor(fresh, bankedHours) case final note?) notes.add(note);
   final targets = [...plan.targets]..[index] = fresh;
   return SessionPlan(
     targets: targets,

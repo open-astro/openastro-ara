@@ -395,6 +395,40 @@ void _tierHandshakeTests() {
     expect(forced.notes.single, contains('full-structure tier already complete — diminishing returns'));
   });
 
+  test('P5: completion is judged on integration, not the clock span', () {
+    // 2 h to go. A 2 h slice with 120 s subs at the default overheads integrates ~1.7 h: not complete.
+    final near = obj('near', winStart: winStart, winEnd: winStart.add(const Duration(hours: 2)), budgetFullHours: 9);
+    final plan = planImagingSession(
+      ranked: [near],
+      windowStartUtc: winStart,
+      windowEndUtc: winStart.add(const Duration(hours: 2)),
+      bankedHours: const {'near': 7.0},
+    );
+    final slice = plan.targets.single;
+    expect(slice.hours, closeTo(2.0, 1e-9));
+    expect(slice.subCount! * slice.subSeconds! / 3600, lessThan(2.0));
+    expect(plan.notes, isEmpty, reason: 'about 16 min of integration short of the tier');
+
+    // The same slice with no sub figure falls back to the clock span and does complete.
+    final clockOnly = obj('clock', winStart: winStart, winEnd: winStart.add(const Duration(hours: 2)), budgetFullHours: 9, subS: null);
+    final plan2 = planImagingSession(
+      ranked: [clockOnly],
+      windowStartUtc: winStart,
+      windowEndUtc: winStart.add(const Duration(hours: 2)),
+      bankedHours: const {'clock': 7.0},
+    );
+    expect(plan2.notes.single, 'clock: this slice completes its full-structure tier.');
+  });
+
+  test('P5: a swapped-in target gets its own tier note', () {
+    final a = obj('a', winStart: winStart, winEnd: winEnd);
+    final done = obj('done', winStart: winStart, winEnd: winEnd, budgetFullHours: 9);
+    final plan = planImagingSession(ranked: [a, done], windowStartUtc: winStart, windowEndUtc: winEnd);
+    final swapped = swapPlanTarget(plan, 0, done, bankedHours: const {'done': 9.5});
+    expect(swapped.targets.single.object.id, 'done');
+    expect(swapped.notes.single, contains('tier already complete'));
+  });
+
   test('P5: no budget or nothing banked leaves the value function untouched', () {
     final a = obj('a', winStart: winStart, winEnd: winEnd, score: 80);
     final b = obj('b', winStart: winStart, winEnd: winEnd, score: 80, hoursFree: 61);
