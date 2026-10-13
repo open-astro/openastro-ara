@@ -110,8 +110,9 @@ void main() {
       WidgetTester tester,
       Future<PlatformFile?> Function() picker,
     ) async {
+      final original = profileSharePicker;
       profileSharePicker = picker;
-      addTearDown(() => profileSharePicker = () => FilePicker.pickFile());
+      addTearDown(() => profileSharePicker = original);
       await tester.pumpWidget(
         ProviderScope(
           overrides: [profileApiProvider.overrideWithValue(_NoopApi())],
