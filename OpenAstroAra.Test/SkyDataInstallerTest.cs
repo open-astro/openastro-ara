@@ -78,7 +78,7 @@ namespace OpenAstroAra.Test {
                 ("catalog.dat", Bytes("star-data")),
                 ("meta/version.txt", Bytes("v2024.10")));
 
-            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, CancellationToken.None);
+            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteValidator: null, CancellationToken.None);
 
             Assert.That(File.Exists(Path.Combine(target, "catalog.dat")), Is.True);
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("star-data"));
@@ -98,7 +98,7 @@ namespace OpenAstroAra.Test {
             using var archive = MakeTarGz(("../escaped.txt", Bytes("pwned")));
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteValidator: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "an entry resolving outside the target is rejected");
 
             Assert.That(Directory.Exists(target), Is.False, "a rejected install leaves no target dir");
@@ -113,7 +113,7 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.Combine(target, "stale.txt"), "old");
 
             using var archive = MakeTarGz(("fresh.txt", Bytes("new")));
-            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, CancellationToken.None);
+            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteValidator: null, CancellationToken.None);
 
             Assert.That(File.Exists(Path.Combine(target, "stale.txt")), Is.False, "the prior install is fully replaced");
             Assert.That(File.Exists(Path.Combine(target, "fresh.txt")), Is.True);
@@ -124,13 +124,13 @@ namespace OpenAstroAra.Test {
         public async Task A_failed_install_preserves_the_prior_install() {
             var target = Path.Combine(_root, "tycho-2");
             using (var good = MakeTarGz(("catalog.dat", Bytes("original")))) {
-                await SkyDataInstaller.InstallFromTarGzAsync(good, target, maxBytes: null, remoteLastModified: null, CancellationToken.None);
+                await SkyDataInstaller.InstallFromTarGzAsync(good, target, maxBytes: null, remoteValidator: null, CancellationToken.None);
             }
 
             // A second install that fails (tar-slip) must not damage the install already on disk.
             using var poisoned = MakeTarGz(("../escaped.txt", Bytes("pwned")));
             await Assert.ThatAsync(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, maxBytes: null, remoteLastModified: null, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, maxBytes: null, remoteValidator: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>());
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("original"),
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Test {
             cts.Cancel();
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, cts.Token),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteValidator: null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a cancelled install produces no target dir");
@@ -191,7 +191,7 @@ namespace OpenAstroAra.Test {
             using var canceling = new CancelAfterBytesStream(MakeTarGz(entries), cts.Cancel, thresholdBytes: 256);
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, maxBytes: null, remoteLastModified: null, cts.Token),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, maxBytes: null, remoteValidator: null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a mid-extraction cancel produces no target dir");
@@ -205,7 +205,7 @@ namespace OpenAstroAra.Test {
             using var archive = MakeTarGz(("a.dat", new byte[4096]), ("b.dat", new byte[4096]));
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: 6 * 1024, remoteLastModified: null, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: 6 * 1024, remoteValidator: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "extraction past the byte ceiling is rejected");
 
             Assert.That(Directory.Exists(target), Is.False, "an over-limit install produces no target dir");
@@ -230,7 +230,7 @@ namespace OpenAstroAra.Test {
             using var src = new MemoryStream(Bytes("name;ra;dec\nM31;10.68;41.27\n"));
 
             await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: false,
-                maxBytes: null, remoteLastModified: null, CancellationToken.None);
+                maxBytes: null, remoteValidator: null, CancellationToken.None);
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")),
                 Is.EqualTo("name;ra;dec\nM31;10.68;41.27\n"));
@@ -243,7 +243,7 @@ namespace OpenAstroAra.Test {
             using var src = MakeGz(Bytes("id,proper,ra,dec\n0,Sol,0,0\n"));
 
             await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: true,
-                maxBytes: null, remoteLastModified: null, CancellationToken.None);
+                maxBytes: null, remoteValidator: null, CancellationToken.None);
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")),
                 Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"), "the .csv.gz is decompressed on install");
@@ -254,13 +254,13 @@ namespace OpenAstroAra.Test {
             var target = Path.Combine(_root, "hyg-stars");
             using (var first = new MemoryStream(Bytes("original"))) {
                 await SkyDataInstaller.InstallFromFileAsync(first, target, "catalog.csv", gunzip: false,
-                    maxBytes: null, remoteLastModified: null, CancellationToken.None);
+                    maxBytes: null, remoteValidator: null, CancellationToken.None);
             }
 
             using var tooBig = new MemoryStream(new byte[8 * 1024]);
             await Assert.ThatAsync(
                 async () => await SkyDataInstaller.InstallFromFileAsync(tooBig, target, "catalog.csv", gunzip: false,
-                    maxBytes: 6 * 1024, remoteLastModified: null, CancellationToken.None),
+                    maxBytes: 6 * 1024, remoteValidator: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "a file past the byte cap is rejected");
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")), Is.EqualTo("original"),
@@ -280,7 +280,7 @@ namespace OpenAstroAra.Test {
             using var src = new MemoryStream(Bytes("x"));
             Assert.That(
                 async () => await SkyDataInstaller.InstallFromFileAsync(src, target, destFileName, gunzip: false,
-                    maxBytes: null, remoteLastModified: null, CancellationToken.None),
+                    maxBytes: null, remoteValidator: null, CancellationToken.None),
                 Throws.InstanceOf<ArgumentException>(),
                 $"'{destFileName}' must be rejected — it can't be allowed to escape the package dir");
             Assert.That(Directory.Exists(target), Is.False, "a rejected install creates no target dir");
@@ -300,7 +300,7 @@ namespace OpenAstroAra.Test {
             using var src = new MemoryStream(bytes);
 
             await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: false, maxBytes: null,
-                remoteLastModified: null, CancellationToken.None, expectedSha256: Sha256Hex(bytes));
+                remoteValidator: null, CancellationToken.None, expectedSha256: Sha256Hex(bytes));
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")), Is.EqualTo("id,proper\n0,Sol\n"));
             Assert.That(File.Exists(Path.Combine(target, SkyDataInstaller.InstalledMarkerFileName)), Is.True);
@@ -314,7 +314,7 @@ namespace OpenAstroAra.Test {
             using var src = new MemoryStream(gz);
 
             await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: true, maxBytes: null,
-                remoteLastModified: null, CancellationToken.None, expectedSha256: Sha256Hex(gz));
+                remoteValidator: null, CancellationToken.None, expectedSha256: Sha256Hex(gz));
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")),
                 Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"), "the digest covers the .gz bytes; content is decompressed");
@@ -325,13 +325,13 @@ namespace OpenAstroAra.Test {
             var target = Path.Combine(_root, "hyg-stars");
             using (var first = new MemoryStream(Bytes("original"))) {
                 await SkyDataInstaller.InstallFromFileAsync(first, target, "catalog.csv", gunzip: false, maxBytes: null,
-                    remoteLastModified: null, CancellationToken.None);
+                    remoteValidator: null, CancellationToken.None);
             }
 
             using var tampered = new MemoryStream(Bytes("tampered"));
             await Assert.ThatAsync(
                 async () => await SkyDataInstaller.InstallFromFileAsync(tampered, target, "catalog.csv", gunzip: false,
-                    maxBytes: null, remoteLastModified: null, CancellationToken.None,
+                    maxBytes: null, remoteValidator: null, CancellationToken.None,
                     expectedSha256: new string('0', 64)),
                 Throws.InstanceOf<InvalidDataException>(), "a download whose digest doesn't match is rejected");
 

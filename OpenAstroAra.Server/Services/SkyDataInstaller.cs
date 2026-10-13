@@ -53,18 +53,22 @@ namespace OpenAstroAra.Server.Services {
         /// the server sent one). Used by the §36 incremental-update path to issue a conditional GET. Best-effort: any
         /// read/parse failure reads as "no validator", so the caller just does an unconditional re-download.
         /// </summary>
-        internal static DateTimeOffset? ReadRemoteLastModified(string packageDir) {
+        internal static DateTimeOffset? ReadRemoteLastModified(string packageDir) => ReadRemoteValidator(packageDir)?.LastModified;
+
+        /// <summary>Both stored validators (sentinel line 2 = Last-Modified, line 3 = ETag, #1171), or null when the
+        /// package isn't installed, the sentinel is absent/torn, or neither was stored.</summary>
+        internal static SkyDataValidator? ReadRemoteValidator(string packageDir) {
             try {
                 var sentinel = Path.Combine(packageDir, InstalledMarkerFileName);
                 if (!File.Exists(sentinel)) {
                     return null;
                 }
                 var lines = File.ReadAllLines(sentinel);
-                if (lines.Length < 2 || string.IsNullOrWhiteSpace(lines[1])) {
-                    return null;
-                }
-                return DateTimeOffset.TryParse(lines[1], CultureInfo.InvariantCulture,
+                DateTimeOffset? lastModified = lines.Length >= 2 && DateTimeOffset.TryParse(lines[1], CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out var parsed) ? parsed : null;
+                var etag = lines.Length >= 3 && !string.IsNullOrWhiteSpace(lines[2]) ? lines[2].Trim() : null;
+                var validator = new SkyDataValidator(lastModified, etag);
+                return validator.IsEmpty ? null : validator;
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 return null;
             }
@@ -113,12 +117,12 @@ namespace OpenAstroAra.Server.Services {
         /// size (zip-bomb / disk-exhaustion guard); exceeding it aborts the install with an <see cref="InvalidDataException"/>.
         /// </summary>
         internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes,
-                DateTimeOffset? remoteLastModified, CancellationToken ct, string? expectedSha256 = null) {
+                SkyDataValidator? remoteValidator, CancellationToken ct, string? expectedSha256 = null) {
             ArgumentNullException.ThrowIfNull(tarGz);
             if (string.IsNullOrEmpty(expectedSha256)) {
                 await InstallStagedAsync(
                     staging => ExtractTarGzAsync(tarGz, staging, maxBytes, ct),
-                    targetDir, maxBytes, remoteLastModified, verifyAfterFill: null, ct).ConfigureAwait(false);
+                    targetDir, maxBytes, remoteValidator, verifyAfterFill: null, ct).ConfigureAwait(false);
                 return;
             }
             // Hash the raw download as it streams, then verify after staging is filled but BEFORE the swap, so a
@@ -126,7 +130,7 @@ namespace OpenAstroAra.Server.Services {
             using var hashing = new HashingReadStream(tarGz);
             await InstallStagedAsync(
                 staging => ExtractTarGzAsync(hashing, staging, maxBytes, ct),
-                targetDir, maxBytes, remoteLastModified,
+                targetDir, maxBytes, remoteValidator,
                 () => VerifyDigest(hashing, expectedSha256), ct).ConfigureAwait(false);
         }
 
@@ -138,7 +142,7 @@ namespace OpenAstroAra.Server.Services {
         /// name (no path separators) — it names the file inside the package dir.
         /// </summary>
         internal static async Task InstallFromFileAsync(Stream source, string targetDir, string destFileName, bool gunzip,
-                long? maxBytes, DateTimeOffset? remoteLastModified, CancellationToken ct, string? expectedSha256 = null) {
+                long? maxBytes, SkyDataValidator? remoteValidator, CancellationToken ct, string? expectedSha256 = null) {
             ArgumentNullException.ThrowIfNull(source);
             ArgumentException.ThrowIfNullOrEmpty(destFileName);
             // Require a plain file name that can't escape the package dir. Reject BOTH separators explicitly (not via
@@ -151,14 +155,14 @@ namespace OpenAstroAra.Server.Services {
             if (string.IsNullOrEmpty(expectedSha256)) {
                 await InstallStagedAsync(
                     staging => ExtractSingleFileAsync(source, Path.Combine(staging, destFileName), gunzip, maxBytes, ct),
-                    targetDir, maxBytes, remoteLastModified, verifyAfterFill: null, ct).ConfigureAwait(false);
+                    targetDir, maxBytes, remoteValidator, verifyAfterFill: null, ct).ConfigureAwait(false);
                 return;
             }
             // Hash the raw (still-compressed, if .gz) download and verify before the swap — see InstallFromTarGzAsync.
             using var hashing = new HashingReadStream(source);
             await InstallStagedAsync(
                 staging => ExtractSingleFileAsync(hashing, Path.Combine(staging, destFileName), gunzip, maxBytes, ct),
-                targetDir, maxBytes, remoteLastModified,
+                targetDir, maxBytes, remoteValidator,
                 () => VerifyDigest(hashing, expectedSha256), ct).ConfigureAwait(false);
         }
 
@@ -178,7 +182,7 @@ namespace OpenAstroAra.Server.Services {
         // Both the tar-archive and single-file installers funnel through here so the security-sensitive
         // staging/rollback logic exists once.
         private static async Task InstallStagedAsync(Func<string, Task> fillStaging, string targetDir, long? maxBytes,
-                DateTimeOffset? remoteLastModified, Func<Task>? verifyAfterFill, CancellationToken ct) {
+                SkyDataValidator? remoteValidator, Func<Task>? verifyAfterFill, CancellationToken ct) {
             ArgumentException.ThrowIfNullOrEmpty(targetDir);
             if (maxBytes is < 0) {
                 throw new ArgumentOutOfRangeException(nameof(maxBytes));
@@ -209,11 +213,15 @@ namespace OpenAstroAra.Server.Services {
 
                 // Stamp the sentinel BEFORE the swap so it appears atomically with the directory at its final path.
                 // Line 1 is the install timestamp (kept for documentation; InstalledUtc is read from the file's
-                // mtime, not its content); line 2, when present, is the remote Last-Modified validator so a later
-                // §36 incremental update can issue a conditional GET. An absent line 2 = no validator known.
+                // mtime, not its content); line 2, when present, is the remote Last-Modified validator and line 3
+                // the remote ETag (#1171), so a later §36 incremental update can issue a conditional GET. An
+                // absent line = that validator is not known (line 2 is written empty when only the ETag is).
                 var sentinelBody = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-                if (remoteLastModified is { } lastMod) {
-                    sentinelBody += "\n" + lastMod.ToString("O", CultureInfo.InvariantCulture);
+                if (remoteValidator is { IsEmpty: false }) {
+                    sentinelBody += "\n" + (remoteValidator.LastModified?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty);
+                    if (!string.IsNullOrWhiteSpace(remoteValidator.ETag)) {
+                        sentinelBody += "\n" + remoteValidator.ETag.Trim();
+                    }
                 }
                 await File.WriteAllTextAsync(
                     Path.Combine(stagingDir, InstalledMarkerFileName),

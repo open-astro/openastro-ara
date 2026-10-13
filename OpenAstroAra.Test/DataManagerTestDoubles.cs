@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
 
     // A fetcher that should never be called (for inventory-only tests).
     internal sealed class UnusedFetcher : ISkyDataFetcher {
-        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) =>
+        public Task<SkyDataFetch> OpenAsync(Uri source, SkyDataValidator? validator, CancellationToken ct) =>
             throw new InvalidOperationException("fetch not expected in this test");
     }
 
@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
             _open = open ?? throw new ArgumentNullException(nameof(open));
         }
 
-        public async Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
+        public async Task<SkyDataFetch> OpenAsync(Uri source, SkyDataValidator? validator, CancellationToken ct) {
             var payload = await _open(ct).ConfigureAwait(false);
             return new SkyDataFetch(new MemoryStream(payload, writable: false), payload.LongLength);
         }
@@ -85,29 +85,31 @@ namespace OpenAstroAra.Test {
         public static ConditionalFetcher NotModified() => new();
 
         public int Calls { get; private set; }
-        public DateTimeOffset? LastIfModifiedSince { get; private set; }
+        public DateTimeOffset? LastIfModifiedSince => LastValidator?.LastModified;
+        public SkyDataValidator? LastValidator { get; private set; }
+        public string? ETag { get; init; }
 
-        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
+        public Task<SkyDataFetch> OpenAsync(Uri source, SkyDataValidator? validator, CancellationToken ct) {
             Calls++;
-            LastIfModifiedSince = ifModifiedSince;
+            LastValidator = validator;
             if (_notModified) {
-                return Task.FromResult(new SkyDataFetch(Stream.Null, 0) { NotModified = true, LastModified = ifModifiedSince });
+                return Task.FromResult(new SkyDataFetch(Stream.Null, 0) { NotModified = true, LastModified = validator?.LastModified, ETag = validator?.ETag });
             }
             return Task.FromResult(
-                new SkyDataFetch(new MemoryStream(_payload, writable: false), _payload.LongLength) { LastModified = _lastModified });
+                new SkyDataFetch(new MemoryStream(_payload, writable: false), _payload.LongLength) { LastModified = _lastModified, ETag = ETag });
         }
     }
 
     // Opens a stream that never yields a byte (honoring its read token), to exercise the idle-progress watchdog.
     internal sealed class StallingFetcher : ISkyDataFetcher {
-        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) =>
+        public Task<SkyDataFetch> OpenAsync(Uri source, SkyDataValidator? validator, CancellationToken ct) =>
             Task.FromResult(new SkyDataFetch(new StallStream(), totalBytes: null));
     }
 
     // OpenAsync itself never returns (honoring its token) — a CDN that accepts the connection but never sends
     // headers. Exercises the watchdog arming the header-wait phase.
     internal sealed class StallingHeaderFetcher : ISkyDataFetcher {
-        public async Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
+        public async Task<SkyDataFetch> OpenAsync(Uri source, SkyDataValidator? validator, CancellationToken ct) {
             await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
             return new SkyDataFetch(Stream.Null, totalBytes: null); // unreachable
         }
@@ -125,7 +127,7 @@ namespace OpenAstroAra.Test {
             _gap = gap;
         }
 
-        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) =>
+        public Task<SkyDataFetch> OpenAsync(Uri source, SkyDataValidator? validator, CancellationToken ct) =>
             Task.FromResult(new SkyDataFetch(new TrickleStream(_payload, _chunk, _gap), _payload.LongLength));
     }
 

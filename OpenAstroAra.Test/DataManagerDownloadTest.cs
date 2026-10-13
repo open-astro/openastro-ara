@@ -242,6 +242,39 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_etag_is_recorded_with_the_install_and_sent_back_as_If_None_Match() {
+            // #1171 — a CDN that re-uploads identical bytes gives a new Last-Modified but the same ETag; the
+            // stored ETag is what keeps that fetch a 304. Both validators travel together.
+            var lastMod = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("v1")));
+            var ws1 = new CapturingBroadcaster();
+            var svc1 = NewService(new ConditionalFetcher(archive, lastMod) { ETag = "\"abc123\"" }, ws1);
+            await svc1.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => ws1.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+
+            var stored = SkyDataInstaller.ReadRemoteValidator(Path.Combine(_root, PackageId));
+            Assert.That(stored, Is.EqualTo(new SkyDataValidator(lastMod, "\"abc123\"")), "both validators are recorded with the install");
+
+            var ws2 = new CapturingBroadcaster();
+            var cond = ConditionalFetcher.NotModified();
+            var svc2 = NewService(cond, ws2);
+            await svc2.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: true), null, CancellationToken.None);
+            await Eventually(() => ws2.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+            Assert.That(cond.LastValidator?.ETag, Is.EqualTo("\"abc123\""), "the stored ETag drives If-None-Match");
+            Assert.That(cond.LastValidator?.LastModified, Is.EqualTo(lastMod));
+            await Eventually(() => svc2.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0);
+
+            // An ETag-only server (no Last-Modified) still yields a usable validator.
+            Directory.Delete(Path.Combine(_root, PackageId), recursive: true);
+            var ws3 = new CapturingBroadcaster();
+            var svc3 = NewService(new ConditionalFetcher(archive, null) { ETag = "W/\"weak\"" }, ws3);
+            await svc3.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => ws3.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+            Assert.That(SkyDataInstaller.ReadRemoteValidator(Path.Combine(_root, PackageId)), Is.EqualTo(new SkyDataValidator(null, "W/\"weak\"")));
+            Assert.That(SkyDataInstaller.ReadRemoteLastModified(Path.Combine(_root, PackageId)), Is.Null);
+        }
+
+        [Test]
         public async Task A_failed_fetch_emits_failed_and_installs_nothing() {
             var ws = new CapturingBroadcaster();
             var fetcher = new FakeSkyDataFetcher(_ => throw new System.Net.Http.HttpRequestException("boom"));

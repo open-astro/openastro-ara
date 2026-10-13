@@ -4628,6 +4628,20 @@ Applies across all four tabs:
 - **"All-wavelength essentials"** — one survey per band (~150 GB)
 - **"Everything full resolution"** — ~2 TB. Confirmation gate. For real users with real storage.
 
+### 36.4.5 Download mechanics (daemon-side, incremental)
+
+Package downloads run **in the daemon** (`POST /api/v1/data-manager/download` → one worker, progress and
+terminal status over `data_manager.download.{progress,complete,failed}` WS events, `GET
+/api/v1/data-manager/state` for the active list). A mobile client that goes to the background loses
+nothing: the transfer continues on the SBC and the client re-syncs from `state` and the WS resume
+cursor when it returns — there is no client-side download to keep alive (#1171). Re-fetching an
+installed package is a **conditional GET**: the install sentinel records the remote `Last-Modified`
+and `ETag`, the next fetch sends `If-Modified-Since` and `If-None-Match`, and a 304 keeps the install
+untouched (`ISkyDataFetcher`, `SkyDataInstaller.ReadRemoteValidator`). Downloads stream straight
+into the SHA-checked extractor, so there is no partial file to resume with HTTP `Range`; with
+catalog packages in the single-digit-MB range a dropped transfer simply restarts, and resume is
+deliberately not implemented until a package size makes it worth a staged temp file.
+
 ### 36.5 Politeness considerations (CDS bandwidth)
 
 - Parallel tile fetcher with per-CDS-host rate limiting (default 8 parallel connections, user-configurable)

@@ -453,9 +453,10 @@ namespace OpenAstroAra.Server.Services {
                 // would otherwise hang forever (escapable only by POST /cancel). OpenAsync gets the linked token.
                 var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
                 // §36 incremental update: when re-fetching an already-installed package (a force reinstall), make the
-                // GET conditional on the validator the prior install recorded. A 304 means nothing changed → keep the
-                // install untouched. Null for a fresh install, so the GET is unconditional.
-                var knownValidator = SkyDataInstaller.ReadRemoteLastModified(targetDir);
+                // GET conditional on the validators the prior install recorded (Last-Modified and/or ETag, #1171). A
+                // 304 means nothing changed → keep the install untouched. Null for a fresh install, so the GET is
+                // unconditional.
+                var knownValidator = SkyDataInstaller.ReadRemoteValidator(targetDir);
 
                 // §36 offline restore: a bundled seed IS the pinned artifact the
                 // URL serves (SHA-verified either way), so install from it without
@@ -501,12 +502,12 @@ namespace OpenAstroAra.Server.Services {
                 var ceiling = ExtractionCeiling(pkg);
                 var expectedSha = _expectedDigests.GetValueOrDefault(pkg.Id);
                 if (IsArchiveFormat(pkg.SourceUrl!)) {
-                    await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.LastModified, ct, expectedSha).ConfigureAwait(false);
+                    await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.Validator, ct, expectedSha).ConfigureAwait(false);
                 } else if (IsBareCatalogFormat(pkg.SourceUrl!)) {
                     // A bare catalog file (a CSV, optionally gzip-compressed). Install it under a canonical name so the
                     // §36 catalog consumer reads {packageDir}/catalog.csv regardless of the upstream file name.
                     var gunzip = pkg.SourceUrl!.AbsolutePath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
-                    await SkyDataInstaller.InstallFromFileAsync(counting, targetDir, CatalogFileName, gunzip, ceiling, fetch.LastModified, ct, expectedSha).ConfigureAwait(false);
+                    await SkyDataInstaller.InstallFromFileAsync(counting, targetDir, CatalogFileName, gunzip, ceiling, fetch.Validator, ct, expectedSha).ConfigureAwait(false);
                 } else {
                     // Fail fast (rather than silently writing raw bytes as catalog.csv) if a future catalog entry uses an
                     // unrecognised format — a curator mistake. SupportedDownloadFormat catches the same at test time.
