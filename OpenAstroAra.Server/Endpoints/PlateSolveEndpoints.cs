@@ -54,9 +54,6 @@ public static class PlateSolveEndpoints {
             .WithName("CenterOnCoordinates")
             .WithSummary("Slew the mount to coordinates and center by iterative plate solves, as a background job.");
 
-        // #1121 — read-only: is there a star database where the solver will look? A fresh install
-        // that skipped the DEPLOY.md download fails every solve with ASTAP exit 32, and only the
-        // daemon log said why. Settings → Plate solving shows this.
         // §57.4 — "Verify Position — show me an image" after a Stop Mount: one quick snapshot, solved, beside
         // the mount's reported and intended positions. Synchronous (a 2 s exposure + one solve); 422 when the
         // solver or optics are not configured, 409 when no camera is connected to take the snapshot.
@@ -68,6 +65,9 @@ public static class PlateSolveEndpoints {
             .WithName("VerifyMountPosition")
             .WithSummary("§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount's reported and intended positions.");
 
+        // #1121 — read-only: is there a star database where the solver will look? A fresh install
+        // that skipped the DEPLOY.md download fails every solve with ASTAP exit 32, and only the
+        // daemon log said why. Settings → Plate solving shows this.
         solve.MapGet("/database", GetDatabaseStatus)
             .Produces<PlateSolveDatabaseStatusDto>(StatusCodes.Status200OK)
             .WithName("GetPlateSolveDatabaseStatus")

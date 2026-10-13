@@ -32,4 +32,8 @@ public record VerifyPositionResultDto(
     double? SolvedToMountArcmin,
     double? SolvedToIntendedArcmin,
     double ExposureSeconds,
-    string? Note);
+    string? Note,
+    // The frame the mount's (and intended) figures are in: "J2000" or "JNOW". The solve is J2000; the
+    // separations already account for the difference, but the raw lines can differ by ~20′ of
+    // precession, so the client labels them. Null when no mount figures.
+    string? MountEpoch = null);

@@ -14,6 +14,10 @@ class VerifyPositionResult {
   final double exposureSeconds;
   final String? note;
 
+  /// The frame the mount's figures are in ("J2000" or "JNOW"); the solve is
+  /// J2000. The offsets already account for it; the raw lines say so.
+  final String? mountEpoch;
+
   const VerifyPositionResult({
     required this.success,
     this.solvedRaHours,
@@ -26,6 +30,7 @@ class VerifyPositionResult {
     this.solvedToIntendedArcmin,
     required this.exposureSeconds,
     this.note,
+    this.mountEpoch,
   });
 
   factory VerifyPositionResult.fromJson(Map<String, dynamic> json) {
@@ -42,6 +47,7 @@ class VerifyPositionResult {
       solvedToIntendedArcmin: d('solved_to_intended_arcmin'),
       exposureSeconds: d('exposure_seconds') ?? 0,
       note: json['note'] as String?,
+      mountEpoch: json['mount_epoch'] as String?,
     );
   }
 
@@ -60,8 +66,11 @@ class VerifyPositionResult {
     // Offsets only make sense against a solve.
     final mountSep = success ? sep(solvedToMountArcmin) : '';
     final intendedSep = success ? sep(solvedToIntendedArcmin) : '';
-    final mount = pos(mountRaHours, mountDecDegrees);
-    final intended = pos(intendedRaHours, intendedDecDegrees);
+    // The mount's frame, when it is not the solve's J2000: the raw lines can
+    // differ by ~20′ of precession next to a tiny offset.
+    final frame = mountEpoch == 'JNOW' ? ' (JNow)' : '';
+    final mount = '${pos(mountRaHours, mountDecDegrees)}$frame';
+    final intended = '${pos(intendedRaHours, intendedDecDegrees)}$frame';
     return [
       if (success)
         'Image solved: ${pos(solvedRaHours, solvedDecDegrees)}'

@@ -133,7 +133,8 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
             SolvedToMountArcmin: Arcmin(solved, mount),
             SolvedToIntendedArcmin: Arcmin(solved, intended),
             ExposureSeconds: exposure,
-            Note: note);
+            Note: note,
+            MountEpoch: (mount ?? intended)?.Epoch.ToString());
     }
 
     private static double? Arcmin(Coordinates? a, Coordinates? b) =>

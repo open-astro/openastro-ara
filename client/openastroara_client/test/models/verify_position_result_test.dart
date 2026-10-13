@@ -15,6 +15,7 @@ void main() {
       'solved_to_intended_arcmin': 0.4,
       'exposure_seconds': 2.0,
       'note': null,
+      'mount_epoch': 'J2000',
     });
     expect(r.success, isTrue);
     expect(r.lines, [
@@ -22,6 +23,21 @@ void main() {
       'Mount reports: RA 9.93h, Dec +69.57° (30.0′ off)',
       'Slew was aimed at: RA 9.93h, Dec +69.07° (24″ off)',
     ]);
+    final jnow = VerifyPositionResult.fromJson({
+      'success': true,
+      'solved_ra_hours': 9.93,
+      'solved_dec_degrees': 69.07,
+      'mount_ra_hours': 9.93,
+      'mount_dec_degrees': 69.4,
+      'solved_to_mount_arcmin': 0.3,
+      'exposure_seconds': 2.0,
+      'mount_epoch': 'JNOW',
+    });
+    expect(
+      jnow.lines[1],
+      'Mount reports: RA 9.93h, Dec +69.40° (JNow) (18″ off)',
+      reason: 'the frame is named when the raw figures are not in the solve\'s J2000',
+    );
   });
 
   test('§57.4 a failed solve keeps the mount figures and the daemon note; degrees past 2°', () {

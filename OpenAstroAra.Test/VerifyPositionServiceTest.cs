@@ -52,6 +52,10 @@ namespace OpenAstroAra.Test {
             Assert.That(dto.SolvedToIntendedArcmin, Is.EqualTo(0).Within(0.05));
             Assert.That(dto.Note, Is.Null);
             Assert.That(dto.ExposureSeconds, Is.EqualTo(2));
+            Assert.That(dto.MountEpoch, Is.EqualTo("J2000"));
+            var jnow = VerifyPositionService.Describe(solved, new Coordinates(Angle.ByHours(9.93), Angle.ByDegree(69.6), Epoch.JNOW), null, 2);
+            Assert.That(jnow.MountEpoch, Is.EqualTo("JNOW"), "the client labels the mount's frame");
+            Assert.That(jnow.SolvedToMountArcmin, Is.Not.Null, "the separation transforms epochs itself");
         }
 
         [Test]
@@ -143,7 +147,7 @@ namespace OpenAstroAra.Test {
         public async Task Endpoint_maps_configuration_to_422_and_no_camera_to_409() {
             var ok = new Mock<IVerifyPositionService>();
             ok.Setup(v => v.VerifyAsync(1.5, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new VerifyPositionResultDto(true, 1, 2, 1, 2, null, null, 0, null, 1.5, null));
+                .ReturnsAsync(new VerifyPositionResultDto(true, 1, 2, 1, 2, null, null, 0, null, 1.5, null, "J2000"));
             var result = await PlateSolveEndpoints.VerifyPositionAsync(new VerifyPositionRequestDto(1.5), ok.Object, CancellationToken.None);
             Assert.That(result, Is.InstanceOf<Ok<VerifyPositionResultDto>>());
             Assert.That(((Ok<VerifyPositionResultDto>)result).Value!.ExposureSeconds, Is.EqualTo(1.5));

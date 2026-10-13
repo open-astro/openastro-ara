@@ -13314,6 +13314,10 @@ components:
           type:
             - 'null'
             - string
+        mount_epoch:
+          type:
+            - 'null'
+            - string
     WsCatalogResponse:
       required:
         - events
