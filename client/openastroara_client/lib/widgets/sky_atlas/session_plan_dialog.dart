@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/stats/stats_target.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/settings/autofocus_settings_state.dart';
@@ -9,11 +10,11 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../state/sky_atlas/session_plan_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
+import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/banked_hours.dart';
 import '../../util/mosaic_geometry.dart';
 import '../../util/session_planner.dart';
-import '../../util/banked_hours.dart';
-import '../../state/stats/stats_targets_state.dart';
 import '../../util/tonight_sky_local.dart' show opticsFovArcmin;
 import 'target_preview.dart';
 
@@ -50,6 +51,19 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       candidate = candidate.add(const Duration(days: 1));
     }
     return candidate;
+  }
+
+  /// The library's stats, waited for briefly so a dialog opened before any
+  /// other screen fetched them still plans with the banked hours; null when
+  /// the fetch is slow, failed or there is no server.
+  Future<List<StatsTarget>?> _statsBestEffort() async {
+    try {
+      return await ref
+          .read(statsTargetsProvider.future)
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      return ref.read(statsTargetsProvider).value;
+    }
   }
 
   Future<void> _makePlan() async {
@@ -101,6 +115,12 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       ditherSettleSec: phd2.settleTimeSec.toDouble(),
       autofocusEveryHours: af.everyNHours.toDouble(),
     );
+    // §Integration Budget P5 — what the library already holds, so the plan
+    // favours finishing a tier tonight over re-shooting a done one. Awaited
+    // (bounded) rather than read: the dialog may open before anything else
+    // has fetched the stats; a slow or failed fetch plans on tonight alone.
+    final banked = bankedHoursByObjectId(await _statsBestEffort(), ranked);
+    if (!mounted) return;
     setState(() => _planning = false);
     ref.read(sessionPlanProvider.notifier).setPlan(
           planImagingSession(
@@ -109,15 +129,11 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
             windowEndUtc: end.toUtc(),
             targetCount: s.targetCount,
             overheads: overheads,
-            // §Integration Budget P5 — what the library already holds, so the
-            // plan favours finishing a tier tonight over re-shooting a done one.
-            bankedHours: bankedHoursByObjectId(
-              ref.read(statsTargetsProvider).value,
-              ranked,
-            ),
+            bankedHours: banked,
           ),
           ranked: ranked,
           overheads: overheads,
+          bankedHours: banked,
         );
   }
 

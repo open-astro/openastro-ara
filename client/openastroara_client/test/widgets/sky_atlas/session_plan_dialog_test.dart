@@ -12,10 +12,19 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/models/stats/stats_target.dart';
+import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 import 'package:openastroara/widgets/sky_atlas/target_preview.dart';
 
-TonightSkyObject _allNight(String id, String name, double score) =>
+class _FixedStats extends StatsTargetsNotifier {
+  _FixedStats(this._v);
+  final List<StatsTarget>? _v;
+  @override
+  Future<List<StatsTarget>?> build() async => _v;
+}
+
+TonightSkyObject _allNight(String id, String name, double score, {double? budgetFullHours}) =>
     TonightSkyObject(
       id: id,
       name: name,
@@ -32,9 +41,48 @@ TonightSkyObject _allNight(String id, String name, double score) =>
       score: score,
       hoursFreeScore: score - 20,
       optimalSubS: 120,
+      budgetFullHours: budgetFullHours,
     );
 
 void main() {
+  testWidgets('#1140 P5: the library\'s banked hours reach the plan — a finished tier yields and is noted',
+      (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+        statsTargetsProvider.overrideWith(() => _FixedStats(const [
+              StatsTarget(targetName: 'Done Nebula', integrationHours: 12),
+            ])),
+        tonightSkyAtProvider.overrideWith((ref, at) async => [
+              _allNight('done', 'Done Nebula', 90, budgetFullHours: 9),
+              _allNight('fresh', 'Fresh Nebula', 85),
+            ]),
+      ],
+      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+    ));
+    await tester.tap(find.text('Plan it'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fresh Nebula'), findsOneWidget, reason: 'the higher-scored but finished target yields');
+    expect(find.textContaining('Done Nebula'), findsNothing);
+  });
+
+  testWidgets('#1140 P5: a slice that completes a tier says so on the card', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+        statsTargetsProvider.overrideWith(() => _FixedStats(const [
+              StatsTarget(targetName: 'Near Nebula', integrationHours: 8.5),
+            ])),
+        tonightSkyAtProvider.overrideWith((ref, at) async => [
+              _allNight('near', 'Near Nebula', 80, budgetFullHours: 9),
+            ]),
+      ],
+      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+    ));
+    await tester.tap(find.text('Plan it'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('this slice completes its full-structure tier'), findsOneWidget);
+  });
   testWidgets('Plan it ranks at the window midpoint and shows a plan card',
       (tester) async {
     DateTime? rankedAt;
@@ -282,4 +330,5 @@ class _FixedOptics extends OpticsSettingsNotifier {
       sensorHeightPx: 4176,
       pixelSizeUm: 3.76,
       apertureMm: 51);
+
 }

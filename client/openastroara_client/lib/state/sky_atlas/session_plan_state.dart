@@ -18,6 +18,10 @@ class SessionPlanState {
   final List<TonightSkyObject> ranked;
   final SessionOverheads overheads;
 
+  /// §Integration Budget P5 — the library's banked hours by object id the plan
+  /// was made with, so a swap can note the new target's tier standing too.
+  final Map<String, double> bankedHours;
+
   const SessionPlanState({
     this.start = const TimeOfDay(hour: 22, minute: 0),
     this.end = const TimeOfDay(hour: 1, minute: 0),
@@ -25,6 +29,7 @@ class SessionPlanState {
     this.plan,
     this.ranked = const [],
     this.overheads = const SessionOverheads(),
+    this.bankedHours = const {},
   });
 
   SessionPlanState copyWith({
@@ -35,6 +40,7 @@ class SessionPlanState {
     bool clearPlan = false,
     List<TonightSkyObject>? ranked,
     SessionOverheads? overheads,
+    Map<String, double>? bankedHours,
   }) =>
       SessionPlanState(
         start: start ?? this.start,
@@ -43,6 +49,7 @@ class SessionPlanState {
         plan: clearPlan ? null : (plan ?? this.plan),
         ranked: ranked ?? this.ranked,
         overheads: overheads ?? this.overheads,
+        bankedHours: bankedHours ?? this.bankedHours,
       );
 }
 
@@ -59,8 +66,9 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
 
   void setPlan(SessionPlan plan,
       {required List<TonightSkyObject> ranked,
-      required SessionOverheads overheads}) {
-    state = state.copyWith(plan: plan, ranked: ranked, overheads: overheads);
+      required SessionOverheads overheads,
+      Map<String, double> bankedHours = const {}}) {
+    state = state.copyWith(plan: plan, ranked: ranked, overheads: overheads, bankedHours: bankedHours);
   }
 
   /// Dial a camera rotation onto slice [index]; null clears it.
@@ -91,7 +99,7 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
     if (plan == null) return;
     state = state.copyWith(
       plan: swapPlanTarget(plan, index, replacement,
-          overheads: state.overheads),
+          overheads: state.overheads, bankedHours: state.bankedHours),
     );
   }
 }
