@@ -40,7 +40,7 @@ namespace OpenAstroAra.Test {
         public void A_sample_carries_the_runtime_figures() {
             var t0 = new DateTimeOffset(2026, 10, 13, 20, 0, 0, TimeSpan.Zero);
             var now = t0;
-            var svc = new ServerInternalStateService(() => now);
+            var svc = new ServerInternalStateService(() => now, startedUtc: t0);
             now = t0.AddSeconds(90);
 
             var s = svc.Sample();
@@ -57,6 +57,20 @@ namespace OpenAstroAra.Test {
 
             now = now.AddSeconds(1);
             Assert.That(svc.Sample().Process.CpuPercent, Is.Not.Null.And.GreaterThanOrEqualTo(0), "the second sample has a CPU share");
+        }
+
+        [Test]
+        public async Task Uptime_counts_from_the_process_start_not_from_the_first_read() {
+            // r2 finding: the singleton is built on the first panel read, possibly days after boot.
+            var processStart = new DateTimeOffset(Process.GetCurrentProcess().StartTime.ToUniversalTime());
+            await Task.Delay(300);
+            var builtLate = new ServerInternalStateService(); // "the first GET", well after the process started
+
+            var uptime = builtLate.Sample().UptimeSeconds;
+
+            var expected = (DateTimeOffset.UtcNow - processStart).TotalSeconds;
+            Assert.That(uptime, Is.GreaterThan(0.3), "construction time is not the daemon's start");
+            Assert.That(uptime, Is.EqualTo(expected).Within(5), "it is the process's age");
         }
 
         [Test]
@@ -131,6 +145,16 @@ namespace OpenAstroAra.Test {
             string json = null!;
             Assert.DoesNotThrow(() => json = JsonSerializer.Serialize(svc.Sample(), AraJsonSerializerContext.Default.ServerInternalStateDto));
             Assert.That(json, Does.Contain("uptime_seconds").Or.Contain("UptimeSeconds"));
+        }
+
+        [Test]
+        public async Task A_first_read_long_after_the_host_started_reports_the_hosts_age() {
+            // Resolved through the host for the first time here, after the OneTimeSetUp built it.
+            await Task.Delay(200);
+            var resp = await http.GetAsync(new Uri("/api/v1/server/internal-state", UriKind.Relative));
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            Assert.That(doc.RootElement.GetProperty("uptime_seconds").GetDouble(), Is.GreaterThan(0.2),
+                "uptime must predate this first read (process start, not singleton construction)");
         }
 
         [Test]

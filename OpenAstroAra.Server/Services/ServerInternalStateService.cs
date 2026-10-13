@@ -40,9 +40,24 @@ public sealed class ServerInternalStateService {
     private DateTimeOffset _lastCpuAt;
     private bool _haveCpuSample;
 
-    public ServerInternalStateService(Func<DateTimeOffset>? clock = null) {
+    /// <param name="clock">Test seam for "now".</param>
+    /// <param name="startedUtc">Test seam for the daemon's start. Production leaves it null and the
+    /// PROCESS start time is used (r2 finding): the singleton is built on the first panel read, which
+    /// can be days after boot, so the service's own construction time is not the daemon's uptime.</param>
+    public ServerInternalStateService(Func<DateTimeOffset>? clock = null, DateTimeOffset? startedUtc = null) {
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
-        _startedUtc = _clock();
+        _startedUtc = startedUtc ?? ProcessStartUtc();
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A platform that refuses the process start time falls back to 'now' (uptime counts from here) rather than failing the sample.")]
+    private static DateTimeOffset ProcessStartUtc() {
+        try {
+            using var process = Process.GetCurrentProcess();
+            return new DateTimeOffset(process.StartTime.ToUniversalTime());
+        } catch (Exception) {
+            return DateTimeOffset.UtcNow;
+        }
     }
 
     public ServerInternalStateDto Sample() {
