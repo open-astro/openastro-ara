@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,10 +30,11 @@ class _Fixed extends TrackingCalibrationNotifier {
 }
 
 class _SeededMount extends MountNotifier {
-  _SeededMount(this._v);
+  _SeededMount(this._v, {this.neverLoads = false});
   final MountStatus? _v;
+  final bool neverLoads;
   @override
-  Future<MountStatus?> build() async => _v;
+  Future<MountStatus?> build() => neverLoads ? Completer<MountStatus?>().future : Future.value(_v);
 }
 
 MountStatus _mount(MountSpecSheet? specs) => MountStatus(
@@ -49,6 +52,7 @@ Future<_Fixed> _pump(
   TrackingCalibration? cal,
   MountSpecSheet? specs,
   bool mountKnown = false,
+  bool mountLoading = false,
 }) async {
   tester.view.physicalSize = const Size(1600, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -61,7 +65,7 @@ Future<_Fixed> _pump(
           connected ? const AraServer(hostname: 'rig', port: 5555) : null,
         ),
         trackingCalibrationProvider.overrideWith(() => notifier),
-        mountProvider.overrideWith(() => _SeededMount(mountKnown ? _mount(specs) : null)),
+        mountProvider.overrideWith(() => _SeededMount(mountKnown ? _mount(specs) : null, neverLoads: mountLoading)),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -188,5 +192,15 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(container.read(unguidedSettingsProvider).probeRungsSeconds, [5, 20, 80], reason: 'a descending ladder is rejected');
+  });
+
+  testWidgets('#1264 the spec-sheet row tells a missing mount and a loading one apart from "no sheet"', (tester) async {
+    await _pump(tester, connected: true);
+    expect(find.text('Mount not connected.'), findsOneWidget);
+    expect(find.textContaining('No spec sheet'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, connected: true, mountLoading: true);
+    expect(find.text('Reading the mount…'), findsOneWidget);
   });
 }

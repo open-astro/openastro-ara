@@ -2215,9 +2215,10 @@ const Map<String, Help> helpRegistry = {
     key: 'img.unguided.probe',
     title: 'Tracking probe',
     body:
-        'A ladder of exposures at the target — 10, 30, 60 and 120 s, then the planned sub or twice the prior '
-        '(whichever is lower) as a final rung; nothing longer than that cap is tried. Each frame is judged by '
-        'the same star analysis autofocus uses: a rung passes when the median eccentricity stays at or under 0.5 '
+        'A ladder of exposures at the target — your Imaging → Unguided ladder (10, 30, 60 and 120 s as shipped), '
+        'then the planned sub or twice the prior (whichever is lower) as a final rung; nothing longer than that '
+        'cap is tried. Each frame is judged by the same star analysis autofocus uses: a rung passes when the '
+        'median eccentricity stays at or under your trailed bar (0.5 as shipped) '
         'and the FWHM within 1.2× the first usable rung\'s. Too few stars makes a rung unusable, not a fail. '
         'The ceiling is the longest passing rung, moved halfway toward the first failing one. When even the '
         'first usable rung trails, that rung IS the ceiling (nothing shorter was tried; the guard can still step '
@@ -2231,11 +2232,12 @@ const Map<String, Help> helpRegistry = {
     key: 'img.unguided.guard',
     title: 'Unguided exposure guard',
     body:
-        'Watches each unguided imaging loop. Two consecutive lights over the eccentricity tolerance step the '
-        'exposure down one rung (those frames are tagged "trailed" and you get one notification); ten consecutive '
-        'round ones (eccentricity 0.3 or better) below the sky-limited length step it back up. On the same rigs '
-        'Center After Drift plate-solves every saved light and re-centres the target once it has drifted more than '
-        '10 arcminutes — a run that drifts less is left alone.',
+        'Watches each unguided imaging loop. A run of trailed lights (over your trailed bar; two as shipped) steps '
+        'the exposure down one rung — those frames are tagged "trailed" and you get one notification — and a run '
+        'of round ones (at or under your round bar; ten at 0.3 as shipped) below the sky-limited length steps it '
+        'back up. On the same rigs Center After Drift plate-solves every Nth saved light and re-centres the target '
+        'once it has drifted past your threshold (10 arcminutes as shipped) — a run that drifts less is left alone. '
+        'All of these are set on Imaging → Unguided.',
     relatedHelpKeys: ['img.unguided.ceiling', 'img.unguided.probe'],
   ),
 

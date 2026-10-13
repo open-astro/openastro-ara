@@ -293,8 +293,9 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Text(
-            'Guided rigs are untouched: with a guider none of these nodes are added to the run. '
-            'The probe\'s FWHM rule (within 1.2× the first usable rung) and the 2× prior cap stay fixed.',
+            'Guided rigs are untouched: with a guider none of these nodes are added to the run. The trailed bar '
+            'is shared by the probe\'s pass rule and the guard. The probe\'s FWHM rule (within 1.2× the first usable '
+            'rung) and the 2× prior cap stay fixed. A ladder rung above the planned sub is simply trimmed by the cap.',
             style: dim,
           ),
         ),
