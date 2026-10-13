@@ -6,6 +6,7 @@ import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/preflight/preflight_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -16,6 +17,7 @@ import '../../widgets/fit_pane.dart';
 import '../../widgets/focus/focusing_pane.dart';
 import '../../widgets/guider/guider_setup_wizard.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
+import '../../widgets/preflight/preflight_checklist_card.dart';
 import '../calibration/calibration_screen.dart';
 
 /// Setup tab — the dusk ritual as a two-pane surface (§25 flow redesign).
@@ -23,20 +25,24 @@ import '../calibration/calibration_screen.dart';
 /// Calibration frames), each row with a live readiness glyph. Right: the selected step's
 /// instrument. Gates are checkmarks, not dams — nothing here blocks; the rail
 /// order just reads as the night (Plan → Setup → Run → Live).
-class SetupTab extends StatefulWidget {
+class SetupTab extends ConsumerStatefulWidget {
   const SetupTab({super.key});
 
   @override
-  State<SetupTab> createState() => _SetupTabState();
+  ConsumerState<SetupTab> createState() => _SetupTabState();
 }
 
-enum _SetupStep { connect, focus, polarAlign, calibration }
+enum _SetupStep { connect, focus, polarAlign, calibration, preSleep }
 
-class _SetupTabState extends State<SetupTab> {
+class _SetupTabState extends ConsumerState<SetupTab> {
   _SetupStep _selected = _SetupStep.connect;
 
   @override
   Widget build(BuildContext context) {
+    // §58.14 — the bedtime card's Adjust lands on the Before you sleep step.
+    ref.listen(setupPreSleepRequestProvider, (prev, next) {
+      if (next != prev) _select(_SetupStep.preSleep);
+    });
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -84,6 +90,12 @@ class _SetupTabState extends State<SetupTab> {
                     title: 'Calibration frames',
                     onTap: _select,
                   ),
+                  _ChecklistRow(
+                    step: _SetupStep.preSleep,
+                    selected: _selected,
+                    title: 'Before you sleep',
+                    onTap: _select,
+                  ),
                 ],
               ),
             ),
@@ -95,6 +107,7 @@ class _SetupTabState extends State<SetupTab> {
             _SetupStep.focus => const FocusingPane(),
             _SetupStep.polarAlign => const _PolarAlignPane(),
             _SetupStep.calibration => const _CalibrationPane(),
+            _SetupStep.preSleep => const _PreSleepPane(),
           },
         ),
       ],
@@ -137,6 +150,10 @@ class _ChecklistRow extends ConsumerWidget {
         SetupStepState.pending,
         'Optional — darks, flats & the dark library',
       ),
+      _SetupStep.preSleep => (
+        ref.watch(setupPreSleepStateProvider),
+        _preSleepSubtitle(ref),
+      ),
     };
     return ListTile(
       selected: step == selected,
@@ -178,6 +195,25 @@ class _ChecklistRow extends ConsumerWidget {
       SetupStepState.problem => 'Autofocus failed — see the panel',
       SetupStepState.pending => 'Main scope and guide camera',
     };
+  }
+
+  String _preSleepSubtitle(WidgetRef ref) {
+    final checklist = ref.watch(preflightChecklistProvider);
+    final acked =
+        ref.watch(preflightPromptProvider).asData?.value.acknowledgedTonight ??
+        false;
+    final c = checklist.asData?.value;
+    if (checklist.hasError) return 'Could not read the checklist';
+    if (c == null) return 'The pre-flight check, once before bed';
+    if (c.hasFailure) return 'Something needs attention — see the panel';
+    if (acked) {
+      return c.hasWarning
+          ? 'Answered tonight, with warnings'
+          : 'All good tonight';
+    }
+    return c.hasWarning
+        ? 'Warnings to look at before bed'
+        : 'Everything checks out';
   }
 
   String _polarAlignSubtitle(WidgetRef ref) {
@@ -484,6 +520,84 @@ class _PaneScaffold extends StatelessWidget {
             child,
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// §58.14 — Before you sleep: the daemon's pre-flight checklist on demand, with
+/// a Refresh (every read is a fresh self-test) and the once-per-night answer.
+class _PreSleepPane extends ConsumerWidget {
+  const _PreSleepPane();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final checklist = ref.watch(preflightChecklistProvider);
+    final acked =
+        ref.watch(preflightPromptProvider).asData?.value.acknowledgedTonight ??
+        false;
+    final dim = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: AraColors.textSecondary);
+    return _PaneScaffold(
+      title: 'Before you sleep',
+      subtitle:
+          'A one-shot self-test of the rig as it stands: equipment, storage, the '
+          'plate solver, the cooler, the mount, the running sequence\'s meridian '
+          'crossings tonight, the unattended hours and the device that will sound '
+          'the alarm. After dark, with a sequence running, Ara shows it once; it '
+          'stays here with a refresh.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          switch (checklist) {
+            AsyncData(:final value) when value != null =>
+              PreflightChecklistCard(checklist: value),
+            AsyncData() => Text(
+              'No checklist: not connected, or Ara predates the pre-sleep check.',
+              style: dim,
+            ),
+            AsyncError(:final error) => Text(
+              'Could not read the checklist: $error',
+              style: dim?.copyWith(color: AraColors.accentError),
+            ),
+            _ => const Padding(
+              padding: EdgeInsets.all(8),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          },
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: checklist.isLoading
+                    ? null
+                    : () => ref
+                          .read(preflightChecklistProvider.notifier)
+                          .refresh(),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Refresh'),
+              ),
+              if (checklist.asData?.value != null)
+                FilledButton(
+                  onPressed: acked
+                      ? null
+                      : () => ref
+                            .read(preflightPromptProvider.notifier)
+                            .acknowledgeTonight(),
+                  child: Text(
+                    acked ? 'Answered for tonight' : 'All good for tonight',
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

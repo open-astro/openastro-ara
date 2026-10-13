@@ -258,6 +258,10 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<FocusCalibrationSampleDto>))]
 [JsonSerializable(typeof(TrackingCalibrationDto))]
 [JsonSerializable(typeof(TrackingPriorDto))]
+// §58.14 — pre-sleep checklist.
+[JsonSerializable(typeof(PreflightChecklistDto))]
+[JsonSerializable(typeof(PreflightItemDto))]
+[JsonSerializable(typeof(PreflightFlipDto))]
 [JsonSerializable(typeof(TrackingProbeRungDto))]
 [JsonSerializable(typeof(IReadOnlyList<TrackingProbeRungDto>))]
 [JsonSerializable(typeof(SiteSettingsDto))]

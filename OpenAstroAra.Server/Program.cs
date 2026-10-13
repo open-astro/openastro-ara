@@ -808,6 +808,22 @@ public partial class Program {
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
+        // §58.14 — the pre-sleep checklist gathers facts from readers that already exist; every
+        // one is optional so a reduced host (tests, a daemon without a subsystem) still answers.
+        builder.Services.AddSingleton(sp => new PreflightChecklistService(
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetService<ICameraService>(),
+            sp.GetService<ITelescopeService>(),
+            sp.GetService<IFocuserService>(),
+            sp.GetService<IFilterWheelService>(),
+            sp.GetService<IGuiderService>(),
+            sp.GetService<IFaultLogService>(),
+            sp.GetService<ISequenceService>(),
+            sp.GetService<ISequencerService>(),
+            sp.GetService<ClientSessionService>(),
+            sp.GetService<INotificationService>(),
+            sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>()));
+
         builder.Services.AddSingleton<SequencerService>(sp =>
             new SequencerService(
                 sp.GetRequiredService<SequenceBodyDeserializer>(),
@@ -1139,6 +1155,7 @@ public partial class Program {
         app.MapImageEndpoints();
         app.MapDiagnosticsEndpoints();
         app.MapFaultsEndpoints(); // §42.5 — persisted fault history
+        app.MapPreflightEndpoints(); // §58.14 — pre-sleep checklist
 
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
         // functional today). /api/v1/server/info already lives directly in this file.

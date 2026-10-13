@@ -2328,4 +2328,21 @@ const Map<String, Help> helpRegistry = {
         'strict on well-sampled rigs; "Half the seeing disc" is strict on undersampled ones. The probe measures the real figure on the night either way.',
     relatedSettings: ['img.unguided.prior_tolerance_basis'],
   ),
+  // ── Pre-sleep checklist (§58.14, #1138) ──────────────────────────────────
+  'setup.presleep': Help(
+    key: 'setup.presleep',
+    title: 'Before you sleep',
+    body:
+        'A one-shot self-test of the rig as it stands, read fresh from Ara each time: the mount and '
+        'camera connected (other selected devices and unresolved faults are warnings), free space against your '
+        'storage thresholds, the plate solver binary and star database present (a presence check, not a test '
+        'solve), the cooler within a degree of its setpoint, the mount tracking and unparked, and the running '
+        'sequence. Below that: when the active target crosses the flip point tonight and how high it will be, '
+        'graded against the site\'s soft warning and hard floor (a flip below the hard floor will be refused by '
+        'the flight check), the unattended hours (your explicit window or astronomical darkness), and the device '
+        'that will sound the alarm — the connected client — with whether its alarm sound is on.\n\n'
+        'After dark, with a sequence running, Ara shows this once per night; "All good" or "Adjust" answers it '
+        'on this device, and it stays here with Refresh. Failures veto "all good"; warnings are your call.',
+    relatedSettings: ['safety.policies.unattended_window_start', 'session.notifications.alarm_tone'],
+  ),
 };

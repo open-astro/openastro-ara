@@ -3537,6 +3537,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/preflight/today:
+    get:
+      tags:
+        - Preflight
+      summary: '§58.14 pre-sleep checklist: equipment, storage, solver, cooler, mount, the running sequence''s meridian crossings, the unattended window and the alarm device.'
+      operationId: GetPreflightToday
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightChecklistDto'
   /api/v1/server/state:
     get:
       tags:
@@ -10393,6 +10406,92 @@ components:
         loop_mode:
           type: string
           default: loop
+    PreflightChecklistDto:
+      required:
+        - generated_utc
+        - items
+        - flips
+        - unforecast_targets
+        - unattended_window_start
+        - unattended_window_end
+        - unattended_window_source
+        - alarm_device
+        - alarm_sound_enabled
+        - all_good
+      type: object
+      properties:
+        generated_utc:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreflightItemDto'
+        flips:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreflightFlipDto'
+        unforecast_targets:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        unattended_window_start:
+          type:
+            - 'null'
+            - string
+        unattended_window_end:
+          type:
+            - 'null'
+            - string
+        unattended_window_source:
+          type: string
+        alarm_device:
+          type:
+            - 'null'
+            - string
+        alarm_sound_enabled:
+          type: boolean
+        all_good:
+          type: boolean
+    PreflightFlipDto:
+      required:
+        - target
+        - at_utc
+        - altitude_deg
+        - standing
+      type: object
+      properties:
+        target:
+          type: string
+        at_utc:
+          type: string
+          format: date-time
+        altitude_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        standing:
+          type: string
+    PreflightItemDto:
+      required:
+        - key
+        - status
+        - title
+        - detail
+      type: object
+      properties:
+        key:
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
     ProblemDetails:
       type: object
       properties:
@@ -12936,6 +13035,7 @@ tags:
   - name: BackupStream
   - name: Diagnostics
   - name: Faults
+  - name: Preflight
   - name: Server
   - name: ServerUpdate
   - name: Connection

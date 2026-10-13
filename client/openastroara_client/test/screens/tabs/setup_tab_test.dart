@@ -7,6 +7,8 @@ import 'package:openastroara/screens/tabs/setup_tab.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
+import 'package:openastroara/models/preflight_checklist.dart';
+import 'package:openastroara/state/preflight/preflight_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
@@ -35,6 +37,19 @@ class _StubGuideFocus extends GuideFocusNotifier {
   Future<void> refresh() async {}
 }
 
+class _StubPrompt extends PreflightPromptNotifier {
+  @override
+  Future<PreflightPromptState> build() async =>
+      const PreflightPromptState(shouldPrompt: false, acknowledgedTonight: false);
+}
+
+class _StubChecklist extends PreflightChecklistNotifier {
+  _StubChecklist(this._value);
+  final PreflightChecklist? _value;
+  @override
+  Future<PreflightChecklist?> build() async => _value;
+}
+
 class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
   @override
   Phd2Settings build() => const Phd2Settings(
@@ -47,9 +62,12 @@ Widget _harness({
   PolarAlignLive live = const PolarAlignLive(),
   bool guiderConfigured = false,
   AutofocusLive autofocus = AutofocusLive.idle,
+  PreflightChecklist? checklist,
 }) {
   return ProviderScope(
     overrides: [
+      preflightPromptProvider.overrideWith(_StubPrompt.new),
+      preflightChecklistProvider.overrideWith(() => _StubChecklist(checklist)),
       polarAlignLiveProvider.overrideWith(() => _StubLiveNotifier(live)),
       autofocusLiveProvider.overrideWith(() => _StubAutofocus(autofocus)),
       guideFocusProvider.overrideWith(_StubGuideFocus.new),
@@ -146,5 +164,31 @@ void main() {
     await t.pump();
     expect(find.text('Re-run guider wizard…'), findsOneWidget);
     expect(find.text('Set up the guider…'), findsNothing);
+  });
+
+  testWidgets('#1138 §58.14 Before you sleep is the fifth row and shows the checklist pane', (t) async {
+    final checklist = PreflightChecklist(
+      generatedUtc: DateTime.utc(2026, 7, 19, 5),
+      items: const [PreflightItem(key: 'mount', status: 'fail', title: 'Mount safety', detail: 'Mount is parked.')],
+      allGood: false,
+    );
+    await t.pumpWidget(_harness(checklist: checklist));
+    await t.pumpAndSettle();
+    expect(find.text('Before you sleep'), findsOneWidget);
+    expect(find.text('Something needs attention — see the panel'), findsOneWidget);
+    await t.tap(find.text('Before you sleep'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('Mount is parked.'), findsOneWidget);
+    expect(find.text('Refresh'), findsOneWidget);
+    expect(find.text('All good for tonight'), findsOneWidget);
+  });
+
+  testWidgets('#1138 without a daemon checklist the pane says so', (t) async {
+    await t.pumpWidget(_harness());
+    await t.pumpAndSettle();
+    expect(find.text('The pre-flight check, once before bed'), findsOneWidget);
+    await t.tap(find.text('Before you sleep'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('No checklist'), findsOneWidget);
   });
 }

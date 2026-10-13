@@ -12,6 +12,7 @@ import '../widgets/notifications/notification_center.dart';
 import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/manual_filter_swap_listener.dart';
 import '../widgets/pending_profile_replay_listener.dart';
+import '../widgets/preflight_checklist_listener.dart';
 import '../widgets/session_ended_summary_listener.dart';
 import '../widgets/backup_stream_chip.dart';
 import '../widgets/command_palette.dart';
@@ -104,6 +105,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       // §48 — the "capture calibration tonight?" prompt nests inside for the
       // same reason: it must fire no matter which tab is showing.
       body: PendingProfileReplayListener(
+        // §58.14 / #1138 — the bedtime card: the pre-sleep checklist, once per
+        // night after dark with a sequence running, whatever tab is showing.
+        child: PreflightChecklistListener(
         // §58.13 / #1138 — the morning card: a run that ended while nobody was
         // watching is summarised once on reconnect, whatever tab is showing.
         child: SessionEndedSummaryListener(
@@ -196,6 +200,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             ),
           ),
+        ),
         ),
         ),
         ),
