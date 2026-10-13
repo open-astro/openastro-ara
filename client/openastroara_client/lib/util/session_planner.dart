@@ -182,13 +182,16 @@ double? _tierHoursToGo(TonightSkyObject o, Map<String, double> banked) {
 }
 
 /// The shutter-open integration a slice of [hours] clock time yields for [o]
-/// under [overheads] (setup, dither settles, autofocus): the figure the tier
-/// budget and the banked hours are in. Falls back to the clock span when the
-/// object has no sub length yet.
-double _integrationHoursOf(TonightSkyObject o, double hours, SessionOverheads overheads) {
+/// under [overheads] (setup, dither settles, autofocus), spread over [panels]
+/// mosaic panels (each panel gets its own setup and 1/N of the time): the
+/// figure the tier budget and the banked hours are in. Falls back to the clock
+/// span when the object has no sub length yet. The ONE formula the value
+/// function and the tier note share.
+double integrationHoursOf(TonightSkyObject o, double hours, SessionOverheads overheads, {int panels = 1}) {
   final subS = o.optimalSubS;
-  if (subS == null || subS <= 0) return hours;
-  return overheads.subsIn(hours, subS) * subS / 3600.0;
+  if (subS == null || subS <= 0) return hours / panels;
+  final n = panels < 1 ? 1 : panels;
+  return overheads.subsIn(hours / n, subS) * subS / 3600.0;
 }
 
 double _valueOf(
@@ -204,7 +207,7 @@ double _valueOf(
   // are: a 2 h slice with 120 s subs and the night's overheads integrates
   // about 1.7 h, so it does not finish a tier 2 h short.
   final completion = toGo != null && toGo > 0
-      ? _tierCompletionBonus * (_integrationHoursOf(o, hours, overheads) / toGo).clamp(0.0, 1.0)
+      ? _tierCompletionBonus * (integrationHoursOf(o, hours, overheads) / toGo).clamp(0.0, 1.0)
       : 0.0;
   // CONCAVE hours value (sqrt, saturating at 6 h): integration has diminishing
   // returns, and concavity is what makes the greedy allocator split windows
@@ -219,23 +222,28 @@ double _valueOf(
               _hoursSaturationHours);
 }
 
-/// The P5 notes for a planned slice, or null: the tier it completes tonight,
-/// or the tier that was already complete before the night began.
-String? tierNoteFor(SessionPlanTarget t, Map<String, double> banked) {
+/// The P5 notes for a planned slice, or null: the tier it completes tonight
+/// (per panel, when the slice is a mosaic), or the tier that was already
+/// complete before the night began.
+String? tierNoteFor(SessionPlanTarget t, Map<String, double> banked,
+    [SessionOverheads overheads = const SessionOverheads()]) {
   final toGo = _tierHoursToGo(t.object, banked);
   if (toGo == null) return null;
   if (toGo <= 0) {
     return '${t.object.name}: full-structure tier already complete — '
         'diminishing returns; a new target would gain more from these hours.';
   }
-  final subS = t.subSeconds;
-  final subs = t.subCount;
-  final integration = subS != null && subs != null && subS > 0 ? subs * subS / 3600.0 : t.hours;
+  final integration = integrationHoursOf(t.object, t.hours, overheads, panels: t.mosaic.panelCount);
   if (integration >= toGo - 1e-9) {
     return '${t.object.name}: this slice completes its full-structure tier.';
   }
   return null;
 }
+
+/// True for the two P5 note shapes about [t] (so a setter can drop and redo them).
+bool _isTierNoteFor(String note, SessionPlanTarget t) =>
+    note == '${t.object.name}: this slice completes its full-structure tier.' ||
+    note.startsWith('${t.object.name}: full-structure tier already complete');
 
 (DateTime, DateTime)? _usable(
     TonightSkyObject o, DateTime winStart, DateTime winEnd) {
@@ -316,7 +324,7 @@ SessionPlan planImagingSession({
 
   if (targetCount <= 1) {
     final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads);
-    final note = tierNoteFor(s, bankedHours);
+    final note = tierNoteFor(s, bankedHours, overheads);
     return SessionPlan(targets: [s], plannedHours: s.hours, notes: [?note]);
   }
 
@@ -404,7 +412,7 @@ SessionPlan planImagingSession({
   }
   slices.sort((a, b) => a.startUtc.compareTo(b.startUtc));
   for (final t in slices) {
-    if (tierNoteFor(t, bankedHours) case final note?) notes.add(note);
+    if (tierNoteFor(t, bankedHours, overheads) case final note?) notes.add(note);
   }
   return SessionPlan(
     targets: slices,
@@ -461,7 +469,7 @@ SessionPlan swapPlanTarget(
       '${fresh.hours.toStringAsFixed(1)} h of that slot — trimmed to its dark window.',
     );
   }
-  if (tierNoteFor(fresh, bankedHours) case final note?) notes.add(note);
+  if (tierNoteFor(fresh, bankedHours, overheads) case final note?) notes.add(note);
   final targets = [...plan.targets]..[index] = fresh;
   return SessionPlan(
     targets: targets,
@@ -483,16 +491,29 @@ SessionPlan setPlanRotation(SessionPlan plan, int index, double? deg) {
 
 /// Set the mosaic grid on [plan]'s slice [index] (cols/rows clamped 1–8,
 /// overlap 0–50, the framing overlay's bounds).
-SessionPlan setPlanMosaic(SessionPlan plan, int index, MosaicGrid g) {
+SessionPlan setPlanMosaic(
+  SessionPlan plan,
+  int index,
+  MosaicGrid g, {
+  // §Integration Budget P5 — a mosaic spreads the slice over its panels, so
+  // the "completes its tier" note is redone for the new per-panel integration.
+  Map<String, double> bankedHours = const {},
+  SessionOverheads overheads = const SessionOverheads(),
+}) {
   if (index < 0 || index >= plan.targets.length) return plan;
   final norm = (
     cols: g.cols.clamp(1, 8),
     rows: g.rows.clamp(1, 8),
     overlapPct: g.overlapPct.clamp(0, 50),
   );
-  final targets = [...plan.targets]..[index] = plan.targets[index].withMosaic(norm);
-  return SessionPlan(
-      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
+  final updated = plan.targets[index].withMosaic(norm);
+  final targets = [...plan.targets]..[index] = updated;
+  final notes = [
+    for (final n in plan.notes)
+      if (!_isTierNoteFor(n, updated)) n,
+    ?tierNoteFor(updated, bankedHours, overheads),
+  ];
+  return SessionPlan(targets: targets, plannedHours: plan.plannedHours, notes: notes);
 }
 
 /// Aim [plan]'s slice [index] at a tangent-plane offset (arcmin, +east/+north)

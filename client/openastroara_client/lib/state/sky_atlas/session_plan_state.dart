@@ -90,7 +90,9 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
   void setMosaic(int index, MosaicGrid g) {
     final plan = state.plan;
     if (plan == null) return;
-    state = state.copyWith(plan: setPlanMosaic(plan, index, g));
+    state = state.copyWith(
+        plan: setPlanMosaic(plan, index, g,
+            bankedHours: state.bankedHours, overheads: state.overheads));
   }
 
   /// Put [replacement] into slice [index] (see [swapPlanTarget]).

@@ -420,6 +420,21 @@ void _tierHandshakeTests() {
     expect(plan2.notes.single, 'clock: this slice completes its full-structure tier.');
   });
 
+  test('P5: turning a completing slice into a mosaic redoes its tier note per panel', () {
+    final near = obj('near', winStart: winStart, winEnd: winEnd, budgetFullHours: 9); // 3 h window
+    final plan = planImagingSession(
+      ranked: [near], windowStartUtc: winStart, windowEndUtc: winEnd, bankedHours: const {'near': 7.0});
+    expect(plan.notes.single, 'near: this slice completes its full-structure tier.');
+
+    final mosaic = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10), bankedHours: const {'near': 7.0});
+    expect(mosaic.notes, isEmpty, reason: 'each panel gets a quarter of the night: the tier is not completed any more');
+    expect(integrationHoursOf(near, 3.0, const SessionOverheads(), panels: 4),
+        lessThan(integrationHoursOf(near, 3.0, const SessionOverheads()) / 3), reason: 'per-panel setup costs too');
+
+    final back = setPlanMosaic(mosaic, 0, (cols: 1, rows: 1, overlapPct: 0), bankedHours: const {'near': 7.0});
+    expect(back.notes.single, 'near: this slice completes its full-structure tier.');
+  });
+
   test('P5: a swapped-in target gets its own tier note', () {
     final a = obj('a', winStart: winStart, winEnd: winEnd);
     final done = obj('done', winStart: winStart, winEnd: winEnd, budgetFullHours: 9);
