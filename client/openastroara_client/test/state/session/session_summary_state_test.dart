@@ -470,32 +470,48 @@ void main() {
     );
   });
 
-  test(
-    'a night on a sequence last edited weeks ago still gets its card',
-    () async {
-      final c = make(
-        list: const [
-          SequenceListItem(
-            id: 'seq-1',
-            name: 'M81 night',
-            currentRunState: SequenceRunState.completed,
-          ),
-          SequenceListItem(
-            id: 'seq-0',
-            name: 'Old',
-            currentRunState: SequenceRunState.stopped,
-          ),
-        ],
+  test('a night on a sequence last edited weeks ago still gets its card (every ended run is read)', () async {
+    // Eight other sequences edited this morning, each with an old stopped run;
+    // the night's sequence was last edited weeks ago. A newest-edited-8 cut
+    // would never read seq-1.
+    final others = [
+      for (var i = 0; i < 8; i++)
+        SequenceListItem(
+          id: 'other-$i',
+          name: 'Other $i',
+          currentRunState: SequenceRunState.stopped,
+          modifiedUtc: now.subtract(Duration(minutes: i)),
+        ),
+    ];
+    final c = make(
+      list: [
+        ...others,
+        SequenceListItem(
+          id: 'seq-1',
+          name: 'M81 night',
+          currentRunState: SequenceRunState.completed,
+          modifiedUtc: start.subtract(const Duration(days: 21)),
+        ),
+      ],
+    );
+    for (var i = 0; i < 8; i++) {
+      api.byId['other-$i'] = SequenceRunStateInfo(
+        sequenceId: 'other-$i',
+        runId: 'o$i',
+        state: SequenceRunState.stopped,
+        startedUtc: start.subtract(const Duration(hours: 30)),
+        completedUtc: start.subtract(const Duration(hours: 26)),
       );
-      await c.read(sessionSummaryProvider.future);
-      link.add(WsConnectionState.connected);
-      await settle();
-      expect(
-        api.reads,
-        2,
-        reason: 'every ended run is read; none is skipped on edit time',
-      );
-      expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1');
-    },
-  );
+    }
+    await c.read(sessionSummaryProvider.future);
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(
+      api.reads,
+      9,
+      reason:
+          'all nine ended runs were read, not the eight most recently edited',
+    );
+    expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1');
+  });
 }
