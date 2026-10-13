@@ -234,7 +234,7 @@ void main() {
       expect(
         shouldShowSessionSummary(
           s,
-          acknowledgedRunIds: {},
+          acknowledgedKeys: {},
           seenEndingLive: {},
           now: now,
         ),
@@ -243,7 +243,7 @@ void main() {
       expect(
         shouldShowSessionSummary(
           s,
-          acknowledgedRunIds: {'r1'},
+          acknowledgedKeys: {'r1:completed'},
           seenEndingLive: {},
           now: now,
         ),
@@ -252,7 +252,17 @@ void main() {
       expect(
         shouldShowSessionSummary(
           s,
-          acknowledgedRunIds: {},
+          acknowledgedKeys: {'r1:pausedAwaitingUser'},
+          seenEndingLive: {},
+          now: now,
+        ),
+        isTrue,
+        reason: 'a dismissed pause card does not swallow the same run\'s end',
+      );
+      expect(
+        shouldShowSessionSummary(
+          s,
+          acknowledgedKeys: {},
           seenEndingLive: {'r1'},
           now: now,
         ),
@@ -261,7 +271,7 @@ void main() {
       expect(
         shouldShowSessionSummary(
           s,
-          acknowledgedRunIds: {},
+          acknowledgedKeys: {},
           seenEndingLive: {},
           now: start.add(const Duration(days: 3)),
         ),
@@ -271,7 +281,7 @@ void main() {
       expect(
         shouldShowSessionSummary(
           at('r2', null),
-          acknowledgedRunIds: {},
+          acknowledgedKeys: {},
           seenEndingLive: {},
           now: now,
         ),

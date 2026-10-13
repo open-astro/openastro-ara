@@ -59,6 +59,14 @@ class SessionSummary {
     };
   }
 
+  /// What an acknowledgement is keyed on: the run AND the state it was seen
+  /// in. A dismissed "paused — needs you" card must not swallow the same
+  /// run's later failure or completion (the card itself says "resume it").
+  String get ackKey => ackKeyFor(runId, state);
+
+  static String ackKeyFor(String runId, SequenceRunState state) =>
+      '$runId:${state.name}';
+
   String get framesLine => framesCaptured == 1
       ? '1 frame captured'
       : '$framesCaptured frames captured';
@@ -174,15 +182,16 @@ SessionSummary? newestSummary(Iterable<SessionSummary> all) {
 /// Show the card only for a night the user did not watch end: not already
 /// acknowledged, not seen ending live on this client, and recent enough to be
 /// "overnight" rather than history.
+/// [acknowledgedKeys] holds [SessionSummary.ackKey]s (run + state);
+/// [seenEndingLive] holds run ids this client watched end in this session.
 bool shouldShowSessionSummary(
   SessionSummary s, {
-  required Set<String> acknowledgedRunIds,
+  required Set<String> acknowledgedKeys,
   required Set<String> seenEndingLive,
   required DateTime now,
   Duration maxAge = const Duration(hours: 36),
 }) {
-  if (acknowledgedRunIds.contains(s.runId) ||
-      seenEndingLive.contains(s.runId)) {
+  if (acknowledgedKeys.contains(s.ackKey) || seenEndingLive.contains(s.runId)) {
     return false;
   }
   final t = s.endedUtc ?? s.startedUtc;

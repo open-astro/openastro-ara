@@ -65,7 +65,7 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
         // restart before the morning must not resurrect its card. A pause is
         // only remembered in memory — the user may resume it and leave.
         if (state != SequenceRunState.pausedAwaitingUser) {
-          unawaited(_persistSeen(runId));
+          unawaited(_persistSeen(SessionSummary.ackKeyFor(runId, state)));
         }
       } else {
         _seenEndingLive.remove(runId);
@@ -80,9 +80,9 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
       .read(sessionSummaryPrefsProvider)
       .loadAcknowledged();
 
-  Future<void> _persistSeen(String runId) async {
+  Future<void> _persistSeen(String ackKey) async {
     final ack = await _ack()
-      ..add(runId);
+      ..add(ackKey);
     await ref.read(sessionSummaryPrefsProvider).saveAcknowledged(ack);
   }
 
@@ -94,6 +94,8 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
     final api = ref.read(notificationsApiProvider);
     if (api == null) return const [];
     try {
+      // One newest-first page: the card keeps the 6 newest incidents, so a
+      // noisy night's earliest warnings falling off the page is by design.
       return (await api.list(limit: 100)).items;
     } catch (e) {
       debugPrint('[session-summary] inbox read failed: $e');
@@ -151,19 +153,19 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
           debugPrint('[session-summary] run state for ${seq.id} failed: $e');
         }
       }
-      final newest = newestSummary(summaries);
-      if (!ref.mounted) return;
-      if (newest == null) {
-        state = const AsyncData(null);
-        return;
-      }
-      final show = shouldShowSessionSummary(
-        newest,
-        acknowledgedRunIds: await _ack(),
-        seenEndingLive: _seenEndingLive,
-        now: ref.read(sessionSummaryClockProvider)(),
+      // The newest UNSEEN one: filter first, then pick, so a seen newer run
+      // never hides an older end the user has not been told about.
+      final ack = await _ack();
+      final now = ref.read(sessionSummaryClockProvider)();
+      final unseen = summaries.where(
+        (s) => shouldShowSessionSummary(
+          s,
+          acknowledgedKeys: ack,
+          seenEndingLive: _seenEndingLive,
+          now: now,
+        ),
       );
-      if (ref.mounted) state = AsyncData(show ? newest : null);
+      if (ref.mounted) state = AsyncData(newestSummary(unseen));
     } catch (e) {
       debugPrint('[session-summary] evaluation failed: $e');
     } finally {
@@ -179,11 +181,16 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   /// Test / manual hook: evaluate now (the listener normally waits for connect).
   Future<void> evaluateNow() => _evaluate();
 
-  /// The user dismissed the card: never show this run again on this device.
+  /// The user dismissed the card: never show this run IN THIS STATE again on
+  /// this device (a resumed run that later fails is a new card).
   Future<void> acknowledge(String runId) async {
+    final current = state.asData?.value;
+    final key = current?.runId == runId
+        ? current!.ackKey
+        : SessionSummary.ackKeyFor(runId, SequenceRunState.completed);
     final ack = await _ack()
-      ..add(runId);
-    if (ref.mounted && state.asData?.value?.runId == runId) {
+      ..add(key);
+    if (ref.mounted && current?.runId == runId) {
       state = const AsyncData(null);
     }
     await ref.read(sessionSummaryPrefsProvider).saveAcknowledged(ack);

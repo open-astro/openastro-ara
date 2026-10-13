@@ -257,7 +257,7 @@ void main() {
     await settle();
     await c.read(sessionSummaryProvider.notifier).acknowledge('r1');
     expect(c.read(sessionSummaryProvider).asData?.value, isNull);
-    expect(prefs.acked, contains('r1'));
+    expect(prefs.acked, contains('r1:completed'));
 
     reconnect();
     await settle();
@@ -379,6 +379,62 @@ void main() {
       ),
     );
     await settle();
-    expect(prefs.acked, contains('r1'));
+    expect(prefs.acked, contains('r1:completed'));
+  });
+
+  test('dismissing a paused card does not swallow the same run\'s later unwatched failure', () async {
+    final parked = SequenceRunStateInfo(
+      sequenceId: 'seq-1',
+      runId: 'r1',
+      state: SequenceRunState.pausedAwaitingUser,
+      currentTargetName: 'M81',
+      startedUtc: start,
+      framesCaptured: 20,
+    );
+    final c = make(
+      list: const [
+        SequenceListItem(
+          id: 'seq-1',
+          name: 'M81 night',
+          currentRunState: SequenceRunState.pausedAwaitingUser,
+        ),
+      ],
+    );
+    api.byId['seq-1'] = parked;
+    await c.read(sessionSummaryProvider.future);
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(
+      c.read(sessionSummaryProvider).asData?.value?.state,
+      SequenceRunState.pausedAwaitingUser,
+    );
+    await c.read(sessionSummaryProvider.notifier).acknowledge('r1');
+    expect(prefs.acked, contains('r1:pausedAwaitingUser'));
+
+    // The user resumes r1 and leaves; it fails at 03:00; the morning connect:
+    api.byId['seq-1'] = SequenceRunStateInfo(
+      sequenceId: 'seq-1',
+      runId: 'r1',
+      state: SequenceRunState.failed,
+      startedUtc: start,
+      completedUtc: start.add(const Duration(hours: 5)),
+      framesCaptured: 31,
+    );
+    api.listing = const [
+      SequenceListItem(
+        id: 'seq-1',
+        name: 'M81 night',
+        currentRunState: SequenceRunState.failed,
+      ),
+    ];
+    reconnect();
+    await settle();
+    final s = c.read(sessionSummaryProvider).asData?.value;
+    expect(
+      s?.state,
+      SequenceRunState.failed,
+      reason: 'the night\'s failure is a new card',
+    );
+    expect(s?.framesCaptured, 31);
   });
 }
