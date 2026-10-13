@@ -22,6 +22,14 @@ namespace OpenAstroAra.Fits.Tests;
 /// #1120: the CFITSIO resolver's candidate order and its report, driven through fake loaders so
 /// the order is pinned on every platform whether or not the native library is installed.
 /// </summary>
+[CollectionDefinition(CFitsIOResolverSerialFixture.Name, DisableParallelization = true)]
+public sealed class CFitsIOResolverSerialFixture {
+    /// <summary>The real-entry-point tests set the process env var and reset the resolver's static
+    /// handle; nothing else touching <see cref="CFitsIO"/> may run beside them.</summary>
+    public const string Name = "cfitsio-resolver-state";
+}
+
+[Collection(CFitsIOResolverSerialFixture.Name)]
 public class CFitsIOResolverTests {
     private static readonly IntPtr Fake = new(0x1234);
 
@@ -193,7 +201,7 @@ public class CFitsIOResolverTests {
     public void The_real_entry_point_rejects_a_loadable_non_cfitsio_library() {
         // libm (Linux) / libSystem (macOS) load anywhere, carry no ffgerr, and must not be cached as CFITSIO.
         string? decoy = OperatingSystem.IsLinux() ? "libm.so.6" : OperatingSystem.IsMacOS() ? "/usr/lib/libSystem.B.dylib" : null;
-        if (decoy is null) return;
+        if (decoy is null) return; // Windows: no portable decoy library name (xunit 2.9 has no runtime Skip)
         var previous = Environment.GetEnvironmentVariable(CFitsIOResolver.PathEnvVar);
         try {
             Environment.SetEnvironmentVariable(CFitsIOResolver.PathEnvVar, decoy);
