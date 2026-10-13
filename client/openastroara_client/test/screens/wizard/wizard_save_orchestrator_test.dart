@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state.
@@ -35,7 +36,15 @@ class _FakeProfileApi extends ProfileApi {
     return ProfileMeta(id: createReturnsId, name: name);
   }
 
+  bool failTransport = false; // every PUT dies with no response (link gone)
+
   Future<T> _put<T>(String key, T value) async {
+    if (failTransport) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/api/v1/profile/$key'),
+        type: DioExceptionType.connectionError,
+      );
+    }
     if (failSections.contains(key)) throw StateError('$key PUT failed');
     putCalls.add(key);
     return value;
@@ -147,5 +156,17 @@ void main() {
         throwsA(predicate((e) => e.toString().contains('2 profile section'))),
       );
     });
+  });
+
+  test('#1137: every section dying in transit is a ProfileSaveTransportFailure; a rejected section is not',
+      () async {
+    final api = _FakeProfileApi()..failTransport = true;
+    final draft = ProfileDraft()..profileName = 'Lost';
+    await expectLater(saveWizardProfile(api, draft), throwsA(isA<ProfileSaveTransportFailure>()));
+    expect(draft.savedProfileId, 'profile-1', reason: 'the create landed before the link dropped');
+
+    final mixed = _FakeProfileApi()..failSections.add('site');
+    await expectLater(saveWizardProfile(mixed, ProfileDraft()..profileName = 'Rejected'),
+        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('1 profile section'))));
   });
 }

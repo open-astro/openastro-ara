@@ -156,6 +156,17 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     String? error;
     try {
       await saveWizardProfile(api, draft);
+    } on ProfileSaveTransportFailure {
+      // #1137 — the profile may already exist on this server (savedProfileId):
+      // keep the draft pinned to it and replay the sections on reconnect.
+      if (nav.mounted) nav.pop(); // the spinner
+      if (mounted) {
+        setState(() => _isSaving = false);
+      } else {
+        _isSaving = false;
+      }
+      await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+      return;
     } on DioException catch (e) {
       if (e.response == null) {
         // #1137 — the daemon never answered (down, out of Wi-Fi range): a

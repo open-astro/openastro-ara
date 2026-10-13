@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 // The draft declares its own `ImagingDefaults` / `PlateSolveSettings` /
@@ -415,9 +416,27 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
       .whereType<Object>()
       .toList();
   if (errors.isNotEmpty) {
+    // #1137 — every section died in transit (no response at all): the daemon is
+    // unreachable, not refusing. The shell keeps the draft on this device and
+    // replays it (onto this server, with the profile already created) later.
+    if (errors.every((e) => e is DioException && e.response == null)) {
+      throw ProfileSaveTransportFailure(errors.length);
+    }
     throw Exception('Failed to save ${errors.length} profile section(s): '
         '${errors.map((e) => e.toString()).join('; ')}');
   }
+}
+
+/// Every section PUT of a profile save failed without a response from the
+/// daemon (Wi-Fi gone, daemon down) — distinct from a section the daemon
+/// rejected. The wizard treats it like saving with no server: keep the draft
+/// locally and replay it on reconnect.
+class ProfileSaveTransportFailure implements Exception {
+  final int sections;
+  const ProfileSaveTransportFailure(this.sections);
+  @override
+  String toString() =>
+      'The rig did not answer while saving $sections profile section(s).';
 }
 
 /// Runs a section save and captures its error (null = success) so a concurrent
