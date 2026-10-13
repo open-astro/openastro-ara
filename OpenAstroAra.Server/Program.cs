@@ -1393,7 +1393,9 @@ public partial class Program {
         if (!result.Loaded) {
             LogCfitsioMissing(logger, installHint, tried, result.Error ?? "unknown error");
         } else if (resolution.ExplicitPath is not null && !resolution.ExplicitPathLoaded) {
-            LogCfitsioExplicitPathIgnored(logger, resolution.ExplicitPath, resolution.LoadedFrom ?? "runtime default probing");
+            // #1214 — the path may have loaded and been rejected as not CFITSIO; Tried carries the
+            // "(loaded, but no ffgerr export — not CFITSIO)" suffix in that case, so print it.
+            LogCfitsioExplicitPathIgnored(logger, resolution.ExplicitPath, tried, resolution.LoadedFrom ?? "runtime default probing");
         } else {
             LogCfitsioLoaded(logger, resolution.LoadedFrom ?? "runtime default probing");
         }
@@ -1408,8 +1410,8 @@ public partial class Program {
     [LoggerMessage(Level = LogLevel.Information, Message = "CFITSIO loaded from {Source}")]
     private static partial void LogCfitsioLoaded(ILogger logger, string source);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "OPENASTROARA_CFITSIO_PATH={Path} did not load; CFITSIO loaded from {Source} instead")]
-    private static partial void LogCfitsioExplicitPathIgnored(ILogger logger, string path, string source);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "OPENASTROARA_CFITSIO_PATH={Path} did not load or is not CFITSIO (tried: {Tried}); CFITSIO loaded from {Source} instead")]
+    private static partial void LogCfitsioExplicitPathIgnored(ILogger logger, string path, string tried, string source);
 
     // The hint and candidates go first: the runtime's DllNotFoundException message lists every dlopen
     // path it probed and runs to dozens of lines.

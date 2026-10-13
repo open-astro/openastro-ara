@@ -64,6 +64,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Explicit_path_rejected_as_not_cfitsio_is_named_with_its_reason() {
+            // #1214 — OPENASTROARA_CFITSIO_PATH=libm.so.6 LOADS but is not CFITSIO: the resolver records
+            // it with the suffix and falls through; the boot log must say so, not "did not load".
+            var log = new RecordingLogger();
+            var result = new FitsLibraryProbeResult(true,
+                new CFitsIOResolution("libm.so.6",
+                    ["libm.so.6 (loaded, but no ffgerr export — not CFITSIO)", "cfitsio (runtime default probing)", "libcfitsio.so.10"],
+                    "libcfitsio.so.10"), null);
+
+            Program.LogCfitsioProbe(log, result, "sudo apt install libcfitsio10");
+
+            Assert.That(log.Entries, Has.Count.EqualTo(1));
+            Assert.That(log.Entries[0].Level, Is.EqualTo(LogLevel.Warning));
+            Assert.That(log.Entries[0].Message, Does.Contain("libm.so.6").And.Contain("not CFITSIO").And.Contain("libcfitsio.so.10"));
+        }
+
+        [Test]
         public void Missing_library_logs_an_Error_with_the_install_hint_and_every_candidate() {
             var log = new RecordingLogger();
             var result = new FitsLibraryProbeResult(false,
