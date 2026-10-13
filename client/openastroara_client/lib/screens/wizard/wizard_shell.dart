@@ -171,12 +171,17 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       // #1137 — the profile may already exist on this server (savedProfileId):
       // keep the draft pinned to it and replay the sections on reconnect.
       if (nav.mounted) nav.pop(); // the spinner
-      if (mounted) {
-        setState(() => _isSaving = false);
-      } else {
-        _isSaving = false;
+      // _isSaving stays set until the file write is done: a second tap while
+      // the wizard is still open must not start another network save.
+      try {
+        await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        } else {
+          _isSaving = false;
+        }
       }
-      await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
       return;
     } on DioException catch (e) {
       if (e.response == null) {
@@ -184,12 +189,15 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         // transport failure, not a rejection. Keep the draft on this device
         // and replay it on reconnect, exactly like the no-server path.
         if (nav.mounted) nav.pop(); // the spinner
-        if (mounted) {
-          setState(() => _isSaving = false);
-        } else {
-          _isSaving = false;
+        try {
+          await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+        } finally {
+          if (mounted) {
+            setState(() => _isSaving = false);
+          } else {
+            _isSaving = false;
+          }
         }
-        await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
         return;
       }
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
