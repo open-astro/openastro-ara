@@ -108,4 +108,94 @@ void main() {
     final daemon = _Daemon(500, {'title': 'boom'});
     expect(() => _api(daemon).solve('f'), throwsA(isA<DioException>()));
   });
+
+  group('§57.4 verifyPosition', () {
+    test('posts to the verify route with an empty body by default and parses the result', () async {
+      final daemon = _Daemon(200, {
+        'success': true,
+        'solved_ra_hours': 9.93,
+        'solved_dec_degrees': 69.07,
+        'mount_ra_hours': 9.93,
+        'mount_dec_degrees': 69.57,
+        'solved_to_mount_arcmin': 30.0,
+        'exposure_seconds': 2.0,
+        'mount_epoch': 'J2000',
+      });
+      final r = await _api(daemon).verifyPosition();
+      expect(daemon.seen!.method, 'POST');
+      expect(daemon.seen!.path, '/api/v1/platesolve/verify-position');
+      expect(
+        daemon.seen!.data,
+        <String, dynamic>{},
+        reason: 'no exposure override: the daemon picks its 2 s default',
+      );
+      expect(r.success, isTrue);
+      expect(r.solvedToMountArcmin, 30.0);
+      expect(r.mountEpoch, 'J2000');
+
+      await _api(daemon).verifyPosition(exposureSeconds: 1.5);
+      expect(daemon.seen!.data, {'exposure_seconds': 1.5});
+    });
+
+    test('a 409 (no camera / busy) and a 422 (unconfigured) become a readable PlateSolveException with the daemon\'s detail', () async {
+      await expectLater(
+        _api(
+          _Daemon(409, {
+            'title': 'Conflict',
+            'detail': 'No camera is connected to take the verification image.',
+          }),
+        ).verifyPosition(),
+        throwsA(
+          isA<PlateSolveException>().having(
+            (e) => e.message,
+            'message',
+            'No camera is connected to take the verification image.',
+          ),
+        ),
+      );
+      await expectLater(
+        _api(
+          _Daemon(422, {
+            'title': 'Unprocessable',
+            'detail': 'Cannot verify the position: telescope focal length (0)…',
+          }),
+        ).verifyPosition(),
+        throwsA(
+          isA<PlateSolveException>().having(
+            (e) => e.message,
+            'message',
+            startsWith('Cannot verify the position'),
+          ),
+        ),
+      );
+    });
+
+    test('without a detail the fallback sentence names the status', () async {
+      await expectLater(
+        _api(_Daemon(409, {})).verifyPosition(),
+        throwsA(
+          isA<PlateSolveException>().having(
+            (e) => e.message,
+            'message',
+            contains('No camera is connected'),
+          ),
+        ),
+      );
+      await expectLater(
+        _api(_Daemon(422, {})).verifyPosition(),
+        throwsA(
+          isA<PlateSolveException>().having(
+            (e) => e.message,
+            'message',
+            contains('not configured'),
+          ),
+        ),
+      );
+      await expectLater(
+        _api(_Daemon(500, {'title': 'boom'})).verifyPosition(),
+        throwsA(isA<DioException>()),
+        reason: 'anything else is a transport error for friendlyError',
+      );
+    });
+  });
 }
