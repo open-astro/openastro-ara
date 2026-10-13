@@ -85,6 +85,86 @@ public sealed partial class GuiderService {
         return deleted;
     }
 
+    /// <summary>
+    /// #1156 clone hook — a duplicated ARA profile gets its twin cloned from the source
+    /// profile's twin (<c>create_profile</c> + <c>copy_from</c>), so calibration survives the
+    /// duplicate. Best-effort like the delete hook: no connected guider, identical twin
+    /// names (identically-named ARA profiles share a twin), a missing source twin or a
+    /// daemon refusal all log and return false. Never throws.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lifecycle hook: the ARA create already succeeded; any RPC/socket fault degrades to a logged skip so the fire-and-forget caller never sees an unobserved exception.")]
+    public async Task<bool> TryCloneAraGuiderProfileAsync(string? sourceAraProfileName, string? newAraProfileName, CancellationToken ct) {
+        var source = PHD2Guider.AraGuiderDisplayProfileName(sourceAraProfileName);
+        var target = PHD2Guider.AraGuiderDisplayProfileName(newAraProfileName);
+        if (string.Equals(source, target, StringComparison.Ordinal)) {
+            return false; // same display name → same twin already
+        }
+        var guider = ConnectedGuiderOrNull();
+        if (guider is null) {
+            LogGuiderProfileCloneSkipped(target);
+            return false;
+        }
+        try {
+            return await guider.CloneGuiderProfileAsync(source, target, ct).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogGuiderProfileCloneFailed(ex, source, target);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// #1156 rename hook — a renamed ARA profile keeps its twin (<c>rename_profile</c>) instead
+    /// of leaving the calibrated one orphaned and getting a blank one on the next connect.
+    /// Tries the display-name twin first, then the legacy <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> name.
+    /// Best-effort like the delete hook; never throws. The caller decides whether the old
+    /// name is shared with another ARA profile (then the twin must stay) — this method only
+    /// talks to the daemon.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lifecycle hook: the ARA rename already succeeded; any RPC/socket fault degrades to a logged skip so the fire-and-forget caller never sees an unobserved exception.")]
+    public async Task<bool> TryRenameAraGuiderProfileAsync(string? oldAraProfileName, Guid araProfileId, string? newAraProfileName, CancellationToken ct) {
+        var oldName = PHD2Guider.AraGuiderDisplayProfileName(oldAraProfileName);
+        var legacyName = PHD2Guider.AraGuiderProfileName(oldAraProfileName, araProfileId);
+        var newName = PHD2Guider.AraGuiderDisplayProfileName(newAraProfileName);
+        if (string.Equals(oldName, newName, StringComparison.Ordinal)) {
+            return false;
+        }
+        var guider = ConnectedGuiderOrNull();
+        if (guider is null) {
+            LogGuiderProfileRenameSkipped(oldName);
+            return false;
+        }
+        foreach (var candidate in new[] { oldName, legacyName }) {
+            try {
+                if (await guider.RenameGuiderProfileAsync(candidate, newName, ct).ConfigureAwait(false)) {
+                    return true;
+                }
+            } catch (Exception ex) {
+                LogGuiderProfileRenameFailed(ex, candidate, newName);
+            }
+        }
+        return false;
+    }
+
+    private PHD2Guider? ConnectedGuiderOrNull() {
+        lock (_gate) {
+            return !_disposed && _state == EquipmentConnectionState.Connected ? _guider : null;
+        }
+    }
+
+    [LoggerMessage(EventId = 6363, Level = LogLevel.Information, Message = "#1156 guider profile '{ProfileName}' not cloned — no guider connected (the next connect creates a blank twin)")]
+    private partial void LogGuiderProfileCloneSkipped(string profileName);
+
+    [LoggerMessage(EventId = 6364, Level = LogLevel.Warning, Message = "#1156 cloning guider profile '{Source}' → '{Target}' failed — the ARA duplicate already succeeded; the next connect creates a blank twin")]
+    private partial void LogGuiderProfileCloneFailed(Exception ex, string source, string target);
+
+    [LoggerMessage(EventId = 6365, Level = LogLevel.Information, Message = "#1156 guider profile '{ProfileName}' not renamed — no guider connected (the next connect creates a blank twin under the new name)")]
+    private partial void LogGuiderProfileRenameSkipped(string profileName);
+
+    [LoggerMessage(EventId = 6366, Level = LogLevel.Warning, Message = "#1156 renaming guider profile '{Source}' → '{Target}' failed — the ARA rename already succeeded")]
+    private partial void LogGuiderProfileRenameFailed(Exception ex, string source, string target);
+
     /// <summary>The selected-twin guard, pure for tests: PHD2 profile names are exact
     /// identifiers, so the comparison is Ordinal; a daemon with no selected profile
     /// (null) never blocks a delete.</summary>

@@ -1305,6 +1305,270 @@ namespace OpenAstroAra.Test {
             return condition();
         }
 
+        private static readonly string[] RigAMk2 = { "Rig A mk2" };
+        private static readonly bool[] ReleaseThenReconnect = { false, true };
+        private static readonly bool[] OkThenFailed = { true, false };
+
+        // ── #1156 — twin clone / rename ─────────────────────────────────────────────────────────
+
+        /// <summary>A fake daemon holding a live profile list the create/rename RPCs mutate.</summary>
+        private sealed class ProfileDaemon {
+            public readonly List<(int Id, string Name)> Profiles = new() { (1, "Rig A") };
+            public int SelectedId = 1;
+            public readonly List<JsonObject> Created = new();
+            public readonly List<JsonObject> Renamed = new();
+            public readonly List<bool> SetConnected = new();
+            public bool EquipmentConnected = true;
+
+            public ProfileDaemon(FakeGuider fake) {
+                fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+                fake.OnRpc("get_connected", _ => JsonValue.Create(EquipmentConnected));
+                fake.OnRpc("set_connected", req => {
+                    var on = req["params"]?[0]?.GetValue<bool>() ?? false;
+                    SetConnected.Add(on);
+                    EquipmentConnected = on;
+                    return JsonValue.Create(0);
+                });
+                fake.OnRpc("get_profile", _ => {
+                    var sel = Profiles.First(p => p.Id == SelectedId);
+                    return new JsonObject { ["id"] = sel.Id, ["name"] = sel.Name };
+                });
+                fake.OnRpc("get_profiles", _ => {
+                    var arr = new JsonArray();
+                    foreach (var (pid, name) in Profiles) {
+                        arr.Add(new JsonObject { ["id"] = pid, ["name"] = name });
+                    }
+                    return arr;
+                });
+                fake.OnRpc("create_profile", req => {
+                    var p = req["params"]!.AsObject();
+                    Created.Add((JsonObject)p.DeepClone());
+                    var id = Profiles.Max(x => x.Id) + 1;
+                    Profiles.Add((id, p["name"]!.GetValue<string>()));
+                    if (p["select"]?.GetValue<bool>() ?? true) {
+                        SelectedId = id;
+                    }
+                    return new JsonObject { ["id"] = id, ["name"] = p["name"]!.GetValue<string>(), ["selected"] = SelectedId == id };
+                });
+                fake.OnRpc("rename_profile", req => {
+                    var p = req["params"]!.AsObject();
+                    Renamed.Add((JsonObject)p.DeepClone());
+                    var id = p["id"]!.GetValue<int>();
+                    var i = Profiles.FindIndex(x => x.Id == id);
+                    Profiles[i] = (id, p["new_name"]!.GetValue<string>());
+                    return JsonValue.Create(0);
+                });
+            }
+        }
+
+        private static async Task<GuiderService> ConnectedAgainstAsync(FakeGuider fake, string araName, RecordingBroadcaster? ws = null) {
+            var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws,
+                araProfileResolver: () => (Guid.NewGuid(), araName));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.Not.Null, "the guider never reached Connected against the fake");
+            return svc;
+        }
+
+        [Test]
+        public async Task Duplicating_an_ara_profile_clones_its_twin_with_copy_from_and_without_selecting_it() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            daemon.Created.Clear();
+
+            var ok = await svc.TryCloneAraGuiderProfileAsync("Rig A", "Rig A copy", CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ok, Is.True);
+            Assert.That(daemon.Created, Has.Count.EqualTo(1));
+            var created = daemon.Created[0];
+            Assert.That(created["name"]!.GetValue<string>(), Is.EqualTo("Rig A copy"));
+            Assert.That(created["copy_from"]!.GetValue<string>(), Is.EqualTo("Rig A"),
+                "the copy carries the source twin's calibration, algorithms and dark library");
+            Assert.That(created["select"]!.GetValue<bool>(), Is.False,
+                "the daemon's selected twin must keep tracking the CONNECTED ARA profile");
+            Assert.That(daemon.SelectedId, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_clone_whose_target_twin_already_exists_or_whose_source_is_missing_is_skipped() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Rig B"));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            daemon.Created.Clear();
+
+            Assert.That(await svc.TryCloneAraGuiderProfileAsync("Rig A", "rig b", CancellationToken.None).ConfigureAwait(false), Is.False,
+                "the daemon's name check is case-insensitive, so this would be refused — skip without an RPC");
+            Assert.That(await svc.TryCloneAraGuiderProfileAsync("Ghost", "Rig C", CancellationToken.None).ConfigureAwait(false), Is.False,
+                "no source twin → nothing to copy; the next connect creates a blank one");
+            Assert.That(await svc.TryCloneAraGuiderProfileAsync("Rig A", "Rig A", CancellationToken.None).ConfigureAwait(false), Is.False,
+                "identical display names share a twin by design");
+            Assert.That(daemon.Created, Is.Empty);
+        }
+
+        [Test]
+        public async Task Renaming_an_unselected_twin_renames_it_in_place_without_touching_the_equipment() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var ok = await svc.TryRenameAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), "New Rig", CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ok, Is.True);
+            Assert.That(daemon.Renamed, Has.Count.EqualTo(1));
+            Assert.That(daemon.Renamed[0]["id"]!.GetValue<int>(), Is.EqualTo(2), "rename_profile addresses the twin by its daemon id");
+            Assert.That(daemon.Renamed[0]["new_name"]!.GetValue<string>(), Is.EqualTo("New Rig"));
+            Assert.That(daemon.SetConnected, Is.Empty, "an unselected profile renames without an equipment window");
+            Assert.That(daemon.Profiles, Does.Contain((2, "New Rig")));
+        }
+
+        [Test]
+        public async Task Renaming_the_selected_twin_releases_the_equipment_renames_and_reconnects() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var ok = await svc.TryRenameAraGuiderProfileAsync("Rig A", Guid.NewGuid(), "Rig A mk2", CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ok, Is.True);
+            Assert.That(daemon.Renamed.Select(r => r["new_name"]!.GetValue<string>()), Is.EqualTo(RigAMk2));
+            Assert.That(daemon.SetConnected, Is.EqualTo(ReleaseThenReconnect),
+                "the daemon refuses to rename its selected profile while equipment is connected: release, rename, reconnect");
+            Assert.That(daemon.EquipmentConnected, Is.True);
+        }
+
+        [Test]
+        public async Task A_rename_whose_old_twin_is_missing_tries_the_legacy_name_then_gives_up() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            var id = Guid.NewGuid();
+            daemon.Profiles.Add((7, PHD2Guider.AraGuiderProfileName("Old Rig", id)));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+
+            Assert.That(await svc.TryRenameAraGuiderProfileAsync("Old Rig", id, "New Rig", CancellationToken.None).ConfigureAwait(false), Is.True,
+                "a pre-migration daemon still holds the ara-<slug>-<id8> twin — that one is renamed");
+            Assert.That(daemon.Renamed.Single()["id"]!.GetValue<int>(), Is.EqualTo(7));
+            Assert.That(await svc.TryRenameAraGuiderProfileAsync("Nobody", Guid.NewGuid(), "Anyone", CancellationToken.None).ConfigureAwait(false), Is.False);
+        }
+
+        [Test]
+        public async Task Profile_clone_and_rename_hooks_are_quiet_noops_when_no_guider_is_connected() {
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            Assert.That(await svc.TryCloneAraGuiderProfileAsync("A", "B", CancellationToken.None).ConfigureAwait(false), Is.False);
+            Assert.That(await svc.TryRenameAraGuiderProfileAsync("A", Guid.NewGuid(), "B", CancellationToken.None).ConfigureAwait(false), Is.False);
+        }
+
+        // ── #1156 — terminal status behind the guider 202s ──────────────────────────────────────
+
+        private static System.Text.Json.JsonElement? Single(RecordingBroadcaster ws, string type) {
+            var list = ws.Of(type);
+            return list.Count == 1 ? list[0] : null;
+        }
+
+        [Test]
+        public async Task A_refused_rest_dither_ends_in_failed_terminal_events_carrying_the_202s_operation_id() {
+            // The guider is Stopped, so PHD2Guider.Dither refuses (not guiding) and returns false
+            // — which used to vanish. Both terminal events now say so, bound to the 202.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            var accepted = await svc.DitherAsync(3.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1 && ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false),
+                Is.True, "both terminal events must follow the refused dither");
+            var op = Single(ws, "guider.operation_complete")!.Value;
+            Assert.That(op.GetProperty("operation_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.dither"));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            var dither = Single(ws, "guider.dither_complete")!.Value;
+            Assert.That(dither.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(dither.GetProperty("operation_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
+        }
+
+        [Test]
+        public async Task A_rest_dither_that_settles_reports_ok_and_a_settle_error_reports_the_daemons_text() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+
+            var first = await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => dithers == 1).ConfigureAwait(false), Is.True, "the dither RPC was sent");
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 0)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var ok = ws.Of("guider.dither_complete")[0];
+            Assert.That(ok.GetProperty("ok").GetBoolean(), Is.True, "a clean SettleDone is the success case");
+            Assert.That(ok.TryGetProperty("error", out _), Is.False);
+            Assert.That(ok.GetProperty("operation_id").GetString(), Is.EqualTo(first.OperationId.ToString()));
+
+            var second = await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => dithers == 2).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "timed-out waiting for guider to settle")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            var failed = ws.Of("guider.dither_complete")[1];
+            Assert.That(failed.GetProperty("ok").GetBoolean(), Is.False,
+                "Dither() returned true (the RPC was sent) — the settle verdict is what the client needs");
+            Assert.That(failed.GetProperty("error").GetString(), Is.EqualTo("timed-out waiting for guider to settle"));
+            Assert.That(failed.GetProperty("operation_id").GetString(), Is.EqualTo(second.OperationId.ToString()));
+            var ops = ws.Of("guider.operation_complete");
+            Assert.That(ops.Select(o => o.GetProperty("ok").GetBoolean()), Is.EqualTo(OkThenFailed));
+        }
+
+        [Test]
+        public async Task A_rest_stop_with_nothing_running_is_reported_as_refused() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            var accepted = await svc.StopGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.stop"));
+            Assert.That(op.GetProperty("operation_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False, "PHD2Guider.StopGuiding returns false when already idle");
+            Assert.That(op.GetProperty("error").GetString(), Is.EqualTo("refused"));
+            Assert.That(ws.Of("guider.dither_complete"), Is.Empty, "only a dither publishes dither_complete");
+        }
+
+        [Test]
+        public async Task A_sequencer_dither_publishes_dither_complete_without_an_operation_id() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+
+            var ditherTask = svc.Dither(CancellationToken.None);
+            Assert.That(await WaitUntilAsync(() => dithers == 1).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 0)).ConfigureAwait(false);
+            Assert.That(await ditherTask.ConfigureAwait(false), Is.True);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var e = ws.Of("guider.dither_complete")[0];
+            Assert.That(e.GetProperty("ok").GetBoolean(), Is.True);
+            Assert.That(e.TryGetProperty("operation_id", out _), Is.False, "nothing was accepted over REST");
+            Assert.That(ws.Of("guider.operation_complete"), Is.Empty, "operation_complete is the REST 202's terminal event only");
+        }
+
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try {

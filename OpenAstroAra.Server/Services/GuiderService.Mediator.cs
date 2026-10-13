@@ -153,8 +153,18 @@ public sealed partial class GuiderService : IGuiderMediator {
     public Task<bool> StopGuiding(CancellationToken token) =>
         MediatorGuider()?.StopGuiding(token) ?? Task.FromResult(false);
 
-    public Task<bool> Dither(CancellationToken token) =>
-        MediatorGuider()?.Dither(_noProgress, token) ?? Task.FromResult(false);
+    public async Task<bool> Dither(CancellationToken token) {
+        var guider = MediatorGuider();
+        if (guider is null) {
+            return false;
+        }
+        var sent = await guider.Dither(_noProgress, token).ConfigureAwait(false);
+        // #1156 — the sequencer's dither reports its terminal status too (no operation id:
+        // nothing was accepted over REST), so the Live tab sees a settle failure as it happens.
+        var error = sent ? guider.LastSettleError : (guider.LastSettleError ?? "refused");
+        await PublishDitherCompleteAsync(operationId: null, ok: sent && error is null, error).ConfigureAwait(false);
+        return sent;
+    }
 
     public Task<bool> AutoSelectGuideStar(CancellationToken token) =>
         MediatorGuider()?.AutoSelectGuideStar() ?? Task.FromResult(false);

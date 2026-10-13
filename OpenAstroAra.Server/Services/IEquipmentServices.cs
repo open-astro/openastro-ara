@@ -306,6 +306,15 @@ public interface IGuiderService {
     /// true when the daemon accepted the delete, false when no guider is connected, the profile wasn't
     /// there, or the RPC failed (all logged) — a failed cleanup must never fail the ARA profile delete.</summary>
     Task<bool> TryDeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, CancellationToken ct);
+
+    /// <summary>#1156 clone hook — best-effort <c>create_profile</c> + <c>copy_from</c> so a duplicated ARA
+    /// profile's twin inherits the source twin's calibration. Never throws; false when no guider is
+    /// connected, the names map to the same twin, the source twin is missing or the daemon refused.</summary>
+    Task<bool> TryCloneAraGuiderProfileAsync(string? sourceAraProfileName, string? newAraProfileName, CancellationToken ct);
+
+    /// <summary>#1156 rename hook — best-effort <c>rename_profile</c> of the twin (display name, then the
+    /// legacy id-suffixed name) so a renamed ARA profile keeps its calibration. Never throws.</summary>
+    Task<bool> TryRenameAraGuiderProfileAsync(string? oldAraProfileName, Guid araProfileId, string? newAraProfileName, CancellationToken ct);
 }
 
 public interface IPolarAlignService {

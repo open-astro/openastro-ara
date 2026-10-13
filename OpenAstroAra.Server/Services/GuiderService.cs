@@ -252,23 +252,106 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     public Task<OperationAcceptedDto> StartGuidingAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
-        _ = Task.Run(() => guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None), CancellationToken.None);
-        return Task.FromResult(Accepted("guider.start", idempotencyKey));
+        var accepted = Accepted("guider.start", idempotencyKey);
+        _ = RunAndReportAsync(accepted, () => guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None), ditherGuider: null);
+        return Task.FromResult(accepted);
     }
 
     public Task<OperationAcceptedDto> StopGuidingAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
-        _ = Task.Run(() => guider.StopGuiding(CancellationToken.None), CancellationToken.None);
-        return Task.FromResult(Accepted("guider.stop", idempotencyKey));
+        var accepted = Accepted("guider.stop", idempotencyKey);
+        _ = RunAndReportAsync(accepted, () => guider.StopGuiding(CancellationToken.None), ditherGuider: null);
+        return Task.FromResult(accepted);
     }
 
     public Task<OperationAcceptedDto> DitherAsync(double pixels, string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
         // PHD2Guider.Dither reads the amplitude from the profile; honor the request's pixels.
         _profileService.ActiveProfile.GuiderSettings.DitherPixels = pixels;
-        _ = Task.Run(() => guider.Dither(_noProgress, CancellationToken.None), CancellationToken.None);
-        return Task.FromResult(Accepted("guider.dither", idempotencyKey));
+        var accepted = Accepted("guider.dither", idempotencyKey);
+        _ = RunAndReportAsync(accepted, () => guider.Dither(_noProgress, CancellationToken.None), ditherGuider: guider);
+        return Task.FromResult(accepted);
     }
+
+    /// <summary>
+    /// #1156 — the terminal status behind a guider 202. Start/Stop/Dither used to be
+    /// fire-and-forget, so a refused dither (not guiding, RPC error, settle failure or
+    /// timeout) looked exactly like a success to the client. Every op now ends in one
+    /// <c>guider.operation_complete</c> event carrying the 202's operation id; a dither also
+    /// publishes <c>guider.dither_complete</c>, the event the catalog declared for it. A false
+    /// from the op is a refusal (its reason is in the guider log; the daemon's settle error
+    /// is the one text we have); an exception is a fault with its message.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fire-and-forget boundary: the op's fault becomes the terminal event's error instead of an unobserved task exception.")]
+    private async Task RunAndReportAsync(OperationAcceptedDto accepted, Func<Task<bool>> op, PHD2Guider? ditherGuider) {
+        bool ok;
+        string? error = null;
+        try {
+            ok = await Task.Run(op, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            ok = false;
+            error = ex.Message;
+        }
+        if (ditherGuider is not null) {
+            // Dither() returns true once the RPC was sent; the settle outcome is read separately.
+            error ??= ditherGuider.LastSettleError;
+            ok = ok && error is null;
+        } else if (!ok) {
+            error ??= "refused";
+        }
+        await PublishOperationCompleteAsync(accepted, ok, error).ConfigureAwait(false);
+        if (ditherGuider is not null) {
+            await PublishDitherCompleteAsync(accepted.OperationId, ok, error).ConfigureAwait(false);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort; a broadcaster fault is logged, never propagated into the op's continuation.")]
+    private async Task PublishOperationCompleteAsync(OperationAcceptedDto accepted, bool ok, string? error) {
+        if (_ws is null) {
+            return;
+        }
+        try {
+            var payload = new JsonObject {
+                ["operation_id"] = accepted.OperationId.ToString(),
+                ["operation"] = accepted.OperationType,
+                ["ok"] = ok,
+            };
+            if (error is not null) {
+                payload["error"] = error;
+            }
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(WsEventCatalog.GuiderOperationComplete, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogGuiderTerminalPublishFailed(ex, accepted.OperationType);
+        }
+    }
+
+    /// <summary>Also used by the mediator's (sequencer-driven) dither, which has no operation id.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort; a broadcaster fault is logged, never propagated into the op's continuation.")]
+    private async Task PublishDitherCompleteAsync(Guid? operationId, bool ok, string? error) {
+        if (_ws is null) {
+            return;
+        }
+        try {
+            var payload = new JsonObject { ["ok"] = ok };
+            if (operationId is Guid id) {
+                payload["operation_id"] = id.ToString();
+            }
+            if (error is not null) {
+                payload["error"] = error;
+            }
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(WsEventCatalog.GuiderDitherComplete, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogGuiderTerminalPublishFailed(ex, "guider.dither");
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "terminal WS event for {Operation} failed to publish")]
+    private partial void LogGuiderTerminalPublishFailed(Exception ex, string operation);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background connect boundary: PHD2Guider.Connect can throw arbitrary socket/IO/protocol exceptions; any escape must surface as the Error state and be contained. Log-and-recover.")]

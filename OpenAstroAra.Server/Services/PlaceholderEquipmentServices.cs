@@ -232,6 +232,10 @@ public sealed class PlaceholderGuiderService : IGuiderService {
     // Best-effort by contract: the placeholder has no guider, so cleanup is a no-op false.
     public Task<bool> TryDeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, CancellationToken ct) =>
         Task.FromResult(false);
+    public Task<bool> TryCloneAraGuiderProfileAsync(string? sourceAraProfileName, string? newAraProfileName, CancellationToken ct) =>
+        Task.FromResult(false);
+    public Task<bool> TryRenameAraGuiderProfileAsync(string? oldAraProfileName, Guid araProfileId, string? newAraProfileName, CancellationToken ct) =>
+        Task.FromResult(false);
 }
 
 public sealed class PlaceholderPolarAlignService : IPolarAlignService {

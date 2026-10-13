@@ -106,6 +106,13 @@ public static class WsEventCatalog {
     // payload = PaResidualDto (status measuring → done | unavailable; a dropped measurement
     // republishes the previous result, or { status: "idle" } when there is none).
     public const string GuiderPaResidual = "guider.pa_residual";
+    // #1156 — the terminal status behind every guider 202 (start, stop, dither): payload
+    // { operation_id, operation: "guider.start" | "guider.stop" | "guider.dither", ok, error? }.
+    // `ok: false` with no exception is a refusal (not guiding, already stopped, daemon said
+    // no); a settle failure or timeout carries the daemon's text in `error`.
+    public const string GuiderOperationComplete = "guider.operation_complete";
+    // #1156 — one per dither, REST or sequencer-driven: payload { ok, operation_id? (REST only),
+    // error? }. Published after SettleDone or the settle failsafe, so `ok` is the settle verdict.
     public const string GuiderDitherComplete = "guider.dither_complete";
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
@@ -303,7 +310,7 @@ public static class WsEventCatalog {
         SwitchValueMismatch,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
-        GuiderState, GuiderStep, GuiderEvent, GuiderDitherComplete, GuiderFaultActionTaken,
+        GuiderState, GuiderStep, GuiderEvent, GuiderOperationComplete, GuiderDitherComplete, GuiderFaultActionTaken,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

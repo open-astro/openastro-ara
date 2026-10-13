@@ -70,7 +70,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 // (user-visible error + aborted connect). Log + proceed — set_profile_setup will then just fail
                 // its own best-effort send if the equipment is still connected.
                 try {
-                    await DisconnectPHD2Equipment();
+                    await DisconnectPHD2Equipment(ct);
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {

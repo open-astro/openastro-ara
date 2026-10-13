@@ -236,7 +236,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // GuiderSettings.PHD2ProfileId here — that field is the user's manual override, and persisting it
             // would pin the auto-mapping (a later ARA-profile rename would stop re-mapping to the new slug).
             try {
-                await DisconnectPHD2Equipment();
+                await DisconnectPHD2Equipment(ct);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception ex) {
@@ -295,6 +295,92 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - profile refresh after select/create failed: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// #1156 clone hook — <c>create_profile</c> with <c>copy_from</c>, so a duplicated ARA profile's
+        /// twin starts with the source twin's calibration, algorithm settings and dark library instead
+        /// of a blank profile the user has to calibrate again. Never selects the copy (<c>select=false</c>):
+        /// the daemon's selected twin must keep tracking the connected ARA profile. Returns false when
+        /// the source twin is absent, the target name already exists (the daemon rejects it, and an
+        /// identically-named ARA profile shares a twin by design) or the daemon refused; throws only on
+        /// transport faults. Refreshes the profile list first so the decision is made on live names.
+        /// </summary>
+        public async Task<bool> CloneGuiderProfileAsync(string sourceName, string newName, CancellationToken ct) {
+            ArgumentException.ThrowIfNullOrEmpty(sourceName);
+            ArgumentException.ThrowIfNullOrEmpty(newName);
+            ct.ThrowIfCancellationRequested();
+            await GetProfiles().ConfigureAwait(false);
+            if (FindProfile(sourceName) is null) {
+                Logger.Info($"PHD2 #1156 - clone of guider profile '{sourceName}' skipped: no such profile on the daemon.");
+                return false;
+            }
+            if (FindProfile(newName) is not null) {
+                Logger.Info($"PHD2 #1156 - clone to '{newName}' skipped: a guider profile of that name already exists.");
+                return false;
+            }
+            var msg = new Phd2CreateProfile {
+                Parameters = new Phd2CreateProfileParameter { Name = newName, CopyFrom = sourceName, Select = false },
+            };
+            var resp = await SendMessage(msg).ConfigureAwait(false);
+            if (resp?.error != null) {
+                Logger.Warning($"PHD2 #1156 - create_profile '{newName}' copy_from '{sourceName}' not applied: {resp.error}");
+                return false;
+            }
+            Logger.Info($"PHD2 #1156 - cloned guider profile '{sourceName}' → '{newName}' (calibration and dark library carried over).");
+            await GetProfiles().ConfigureAwait(false);
+            return true;
+        }
+
+        /// <summary>
+        /// #1156 rename hook — <c>rename_profile</c> keeps the twin (and its calibration) attached to a
+        /// renamed ARA profile, which otherwise would get a fresh blank twin on the next connect while
+        /// the old one lingers. The daemon rejects a rename while its equipment is connected, so when the
+        /// twin is the SELECTED profile this disconnects the equipment, renames, and reconnects — the
+        /// same window <c>ChangeProfile</c> uses; an unselected twin is renamed in place. Returns false
+        /// when the old twin is absent, the new name is taken or the daemon refused; throws only on
+        /// transport faults.
+        /// </summary>
+        public async Task<bool> RenameGuiderProfileAsync(string oldName, string newName, CancellationToken ct) {
+            ArgumentException.ThrowIfNullOrEmpty(oldName);
+            ArgumentException.ThrowIfNullOrEmpty(newName);
+            ct.ThrowIfCancellationRequested();
+            await GetProfiles().ConfigureAwait(false);
+            var old = FindProfile(oldName);
+            if (old is null) {
+                Logger.Info($"PHD2 #1156 - rename of guider profile '{oldName}' skipped: no such profile on the daemon.");
+                return false;
+            }
+            if (FindProfile(newName) is not null) {
+                Logger.Info($"PHD2 #1156 - rename to '{newName}' skipped: a guider profile of that name already exists.");
+                return false;
+            }
+            var selected = SelectedProfile?.Id == old.Id;
+            if (selected) {
+                await DisconnectPHD2Equipment(ct).ConfigureAwait(false);
+            }
+            try {
+                var resp = await SendMessage(new Phd2RenameProfile {
+                    Parameters = new Phd2RenameProfileParameter { Id = old.Id, NewName = newName },
+                }).ConfigureAwait(false);
+                if (resp?.error != null) {
+                    Logger.Warning($"PHD2 #1156 - rename_profile {old.Id} '{oldName}' → '{newName}' not applied: {resp.error}");
+                    return false;
+                }
+                Logger.Info($"PHD2 #1156 - renamed guider profile '{oldName}' → '{newName}' (calibration preserved).");
+                return true;
+            } finally {
+                if (selected) {
+                    // Reconnect whether or not the rename landed: the equipment was only released for it.
+                    await EnsurePHD2EquipmentConnected().ConfigureAwait(false);
+                }
+                await GetProfiles().ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>PHD2 profile names are exact identifiers; the daemon's own uniqueness check is
+        /// case-insensitive, so a name that differs only by case is "taken" too.</summary>
+        private Phd2Profile? FindProfile(string name) =>
+            AvailableProfiles.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
         /// §63.4 delete hook — remove the named PHD2 profile (and its dark library / defect map,

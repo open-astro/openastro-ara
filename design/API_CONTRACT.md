@@ -344,6 +344,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-13 — #1156 guider profile lifecycle hooks + terminal status for guider 202s
+
+**Endpoint(s) or area:** `POST /api/v1/profiles` (duplicate, no settings body) and `PUT /api/v1/profiles/{id}` (rename) gain guider-twin side effects; new WS event `guider.operation_complete`; `guider.dither_complete` (declared, never published) is now published.
+
+**Decision:** a duplicate without a settings body clones the ACTIVE profile's twin under the new profile's name (`create_profile` with `copy_from`, `select=false`); a rename sends `rename_profile` for the twin under the old display name, then the legacy `ara-<slug>-<id8>` name, releasing and reconnecting the daemon's equipment only when that twin is the selected one. Neither runs when another ARA profile still carries the old name (identically-named profiles share a twin) or when the new name maps to the same twin. Both are fire-and-forget and best-effort like the delete hook; the HTTP response never waits on the guider. Start/Stop/Dither over REST publish one `guider.operation_complete { operation_id, operation, ok, error? }` when the op ends; a dither (REST or sequencer) also publishes `guider.dither_complete { ok, operation_id?, error? }` where `ok` is the settle verdict (`PHD2Guider.LastSettleError`: the daemon's SettleDone error, or a timeout sentence when the failsafe gave up).
+
+**Reasoning:** a rejected dither was indistinguishable from a success over a 202 and nothing published the declared dither event; a duplicated or renamed profile lost its calibration to a fresh blank twin while the old one lingered on the daemon.
+
+**Spec ref:** `Endpoints/ProfilesEndpoints.cs`, `Services/GuiderService.ProfileLifecycle.cs` (`TryCloneAraGuiderProfileAsync`, `TryRenameAraGuiderProfileAsync`), `Services/GuiderService.cs` (`RunAndReportAsync`), `PHD2Guider.GuiderProfile.cs` (`CloneGuiderProfileAsync`, `RenameGuiderProfileAsync`), `Contracts/WsEvents/WsEventCatalog.cs`.
+
+**Related:** #1156; tests `ProfilesEndpointsGuiderHooksTest`, `GuiderFakeIntegrationTest` (#1156 group).
+
+---
+
 ### 2026-10-07 — #1299 Bahtinov mask focus readout; autofocus and sequence starts refused while it runs
 
 **Endpoint(s) or area:** new `POST /api/v1/bahtinov-focus/start`, `POST …/stop`, `GET …/state`, `GET …/frame`; `POST /api/v1/equipment/focuser/autofocus` and `POST /api/v1/sequences/{id}/start` gain a 409.
@@ -775,6 +789,15 @@ is connected, straight from its GuideStep events):
       PHD2's own graph convention. A non-finite reading (lost star) is null,
       never NaN. The windowed RMS stays on GET /equipment/guider
       (rms_total/ra/dec in px, rms_*_arcsec when the scale is known).
+  guider.operation_complete { operation_id, operation, ok, error? }
+      #1156 — the terminal status behind every guider 202 (operation =
+      guider.start | guider.stop | guider.dither), bound to the 202's
+      operation_id. ok:false with error "refused" is the guider saying no
+      (not guiding, already stopped); any other error is the fault's text.
+  guider.dither_complete { ok, operation_id?, error? }
+      #1156 — one per dither, REST (operation_id set) or sequencer-driven
+      (no id), published after SettleDone or the settle failsafe: ok is the
+      SETTLE verdict, error the daemon's text or the timeout sentence.
   guider.event { kind, ... }   one per PHD2 session event other than a step —
       the things PHD2's own graph annotates. kind and its detail fields
       (omitted when PHD2 sent none):

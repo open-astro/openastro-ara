@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using System;
+using System.Linq;
+using System.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
@@ -38,10 +40,19 @@ public static partial class ProfilesEndpoints {
             .WithName("ListProfiles")
             .WithSummary("List the known profiles and which one is active.");
 
-        profiles.MapPost("/", (CreateProfileRequestDto body, bool? activate, IProfileRepository repo) => {
+        profiles.MapPost("/", (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider) => {
                 // Creating a profile activates it by default (the wizard's Save lands you in the new
                 // profile); pass ?activate=false to add one without switching (e.g. duplicate-current).
+                // With no settings in the body this is "duplicate the active profile" — snapshot the
+                // source name BEFORE the create, which may switch the active profile.
+                var source = body.Settings is null ? ActiveProfileName(repo) : null;
                 var meta = repo.Create(body.Name, body.Settings, makeActive: activate ?? true);
+                if (source is not null) {
+                    // #1156 lifecycle hook — the duplicate's guider twin is cloned from the source's
+                    // twin so calibration survives. Fire-and-forget, never throws (best-effort by
+                    // contract); the 201 must not wait on a guider RPC.
+                    _ = guider.TryCloneAraGuiderProfileAsync(source, meta.Name, CancellationToken.None);
+                }
                 return Results.Created($"/api/v1/profiles/{meta.Id}", meta);
             })
             .Accepts<CreateProfileRequestDto>("application/json")
@@ -58,8 +69,23 @@ public static partial class ProfilesEndpoints {
             .WithName("GetProfile")
             .WithSummary("Get a saved profile's full settings.");
 
-        profiles.MapPut("/{id:guid}", (Guid id, RenameProfileRequestDto body, IProfileRepository repo) =>
-                repo.Rename(id, body.Name) ? Results.NoContent() : Results.NotFound())
+        profiles.MapPut("/{id:guid}", (Guid id, RenameProfileRequestDto body, IProfileRepository repo, IGuiderService guider) => {
+                // Snapshot before the rename: the twin's name derives from the OLD name, and whether
+                // another ARA profile still uses it (identically-named profiles share a twin, so the
+                // twin must stay put for the survivor). Read-only; the repository owns atomicity.
+                var before = repo.List().Profiles;
+                var oldName = before.FirstOrDefault(p => p.Id == id)?.Name;
+                var shared = oldName is not null && before.Count(p => string.Equals(p.Name, oldName, StringComparison.Ordinal)) > 1;
+                if (!repo.Rename(id, body.Name)) {
+                    return Results.NotFound();
+                }
+                if (oldName is not null && !shared) {
+                    // #1156 lifecycle hook — carry the twin (and its calibration) over to the new
+                    // name. Fire-and-forget, never throws.
+                    _ = guider.TryRenameAraGuiderProfileAsync(oldName, id, body.Name, CancellationToken.None);
+                }
+                return Results.NoContent();
+            })
             .Accepts<RenameProfileRequestDto>("application/json")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -115,6 +141,11 @@ public static partial class ProfilesEndpoints {
                 "connected guider follows: its twin profile is selected/created to match.");
 
         return app;
+    }
+
+    private static string? ActiveProfileName(IProfileRepository repo) {
+        var list = repo.List();
+        return list.ActiveId is Guid active ? list.Profiles.FirstOrDefault(p => p.Id == active)?.Name : null;
     }
 
     /// <summary>The §63.4 profile-switch follow: push the (new) active profile to a connected guider,

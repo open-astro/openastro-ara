@@ -110,6 +110,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        private volatile string? _lastSettleError;
+
+        /// <summary>
+        /// #1156 — what the last dither's settle reported. Null before any settle, and after a
+        /// clean SettleDone; the daemon's error text when SettleDone carried one; a timeout
+        /// sentence when the failsafe gave up waiting. <see cref="Dither"/> keeps its boolean
+        /// contract (false = not sent), so a caller that needs the settle outcome reads this
+        /// after the await.
+        /// </summary>
+        public string? LastSettleError => _lastSettleError;
+
+        public const string SettleTimedOutError = "settle timed out — no SettleDone from the guider";
+
         private PhdEventGuidingDithered? _guidingDithered;
 
         public PhdEventGuidingDithered GuidingDithered {
@@ -268,13 +281,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         Logger.Warning($"Connected to upstream PHD2 v{reportedVersion}. OpenAstro Ara is designed against openastro-guider; some §63 / §63.2 features may not be available.");
                     }
 
-                    await GetProfiles();
-                    await EnsureAraGuiderProfileAsync(token);
-                    await PushGuiderEngineConfigAsync(token);
-                    await EnsurePHD2EquipmentConnected();
-                    await TryRefreshShiftLockParams();
-                    await SetPixelScale();
-                    initialized = true;
+                    // #1156 — each post-handshake step is best-effort on its own: a getter that
+                    // fails or times out logs and the next one still runs, so a daemon that
+                    // answers the socket but not one optional RPC still comes up with what it
+                    // could read. The profile steps stay ordered (twin before push) and gate
+                    // `initialized`; the rest never does.
+                    var profilesOk = await TryInitStepAsync("get_profiles", GetProfiles).ConfigureAwait(false);
+                    if (profilesOk) {
+                        await TryInitStepAsync("ensure_ara_profile", () => EnsureAraGuiderProfileAsync(token)).ConfigureAwait(false);
+                        await TryInitStepAsync("push_engine_config", () => PushGuiderEngineConfigAsync(token)).ConfigureAwait(false);
+                    }
+                    await TryInitStepAsync("set_connected", EnsurePHD2EquipmentConnected).ConfigureAwait(false);
+                    await TryInitStepAsync("shift_lock_params", TryRefreshShiftLockParams).ConfigureAwait(false);
+                    await TryInitStepAsync("pixel_scale", SetPixelScale).ConfigureAwait(false);
+                    initialized = profilesOk;
                 }
 
             } catch (OperationCanceledException) {
@@ -417,10 +437,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 // events before SendMessage returns, and if we only set Settling=true afterwards a fast
                 // SettleDone would be missed and WaitForSettling would never see a settle in progress.
                 Settling = true;
+                _lastSettleError = null;
                 var ditherMsgResponse = await SendMessage(ditherMsg);
                 if (ditherMsgResponse.error != null) {
                     /* Dither failed */
                     Settling = false;
+                    _lastSettleError = ditherMsgResponse.error.ToString();
                     return false;
                 }
                 await WaitForSettling(progress, ct);
@@ -441,6 +463,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                             //Failsafe when phd is not sending settlingdone message
                             Notifier.ShowWarning(string.Format(CultureInfo.InvariantCulture, Loc.Instance["LblGuiderNoSettleDone"], timeout));
                             Logger.Warning($"Phd2 - Guider did not send SettleDone message in expected time  ({timeout}s + 10s). Skipping.");
+                            _lastSettleError = SettleTimedOutError;
                             Settling = false;
                         }
                     }
@@ -928,6 +951,28 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return true;
         }
 
+        /// <summary>#1156 — connect-time and equipment RPCs wait this long, not the 60 s default:
+        /// a daemon that does not answer `get_connected` or `set_connected` in 15 s is not
+        /// going to, and the connect handshake should fail that step, not hang the connect.</summary>
+        public const int EquipmentRpcTimeoutMs = 15000;
+
+        /// <summary>One connect-time init step. Cancellation propagates (the connect was
+        /// abandoned); any other fault is logged with the step name and reported as false.</summary>
+        private static async Task<bool> TryInitStepAsync(string step, Func<Task> run) {
+            try {
+                await run().ConfigureAwait(false);
+                return true;
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Logger.Warning($"PHD2 connect — init step '{step}' failed, continuing with the rest: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static Task<bool> TryInitStepAsync(string step, Func<Task<bool>> run) =>
+            TryInitStepAsync(step, async () => { await run().ConfigureAwait(false); });
+
         public Task<GenericPhdMethodResponse> SendMessage(Phd2Method msg, int receiveTimeout = 60000) {
             return SendMessage<GenericPhdMethodResponse>(msg, receiveTimeout);
         }
@@ -1088,8 +1133,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "SettleDone": {
                         GuidingDithered = null;
-                        Settling = false;
                         var settleDone = message.ToObject<PhdEventSettleDone>();
+                        // Record the outcome BEFORE clearing Settling: Dither() reads it as soon
+                        // as WaitForSettling sees the flag drop.
+                        _lastSettleError = string.IsNullOrEmpty(settleDone?.Error) ? null : settleDone!.Error;
+                        Settling = false;
                         if (settleDone.Error != null) {
                             Logger.Error("PHD2 error:" + settleDone.Error);
                             Notifier.ShowExternalWarning(settleDone.Error, Loc.Instance["LblPhd2Warning"]);
@@ -1236,7 +1284,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private async Task<bool> EnsurePHD2EquipmentConnected() {
             var getConnected = new Phd2GetConnected();
-            var getConnectedResult = await SendMessage(getConnected);
+            var getConnectedResult = await SendMessage(getConnected, EquipmentRpcTimeoutMs);
             if (getConnectedResult.error != null) {
                 Notifier.ShowWarning(Loc.Instance["LblPhd2FailedEquipmentConnection"]);
                 return false;
@@ -1246,7 +1294,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 var setConnected = new Phd2SetConnected() {
                     Parameters = new bool[] { true }
                 };
-                var setConnectedResult = await SendMessage(setConnected);
+                var setConnectedResult = await SendMessage(setConnected, EquipmentRpcTimeoutMs);
                 if (setConnectedResult.error != null) {
                     Notifier.ShowWarning(Loc.Instance["LblPhd2FailedEquipmentConnection"]);
                     return false;
@@ -1256,12 +1304,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return true;
         }
 
-        private async Task DisconnectPHD2Equipment() {
-            await StopCapture(default);
+        private async Task DisconnectPHD2Equipment(CancellationToken ct = default) {
+            await StopCapture(ct);
+            ct.ThrowIfCancellationRequested();
             var setDisconnected = new Phd2SetConnected() {
                 Parameters = new bool[] { false }
             };
-            var setDisconnectedResult = await SendMessage(setDisconnected);
+            var setDisconnectedResult = await SendMessage(setDisconnected, EquipmentRpcTimeoutMs);
             if (setDisconnectedResult.error != null) {
                 Logger.Error($"Failed to disconnect PHD2equipment: {setDisconnectedResult.error}");
             }
