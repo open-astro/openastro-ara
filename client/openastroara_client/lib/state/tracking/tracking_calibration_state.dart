@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/server.dart';
 import '../../models/tracking_calibration.dart';
 import '../../services/tracking_api.dart';
+import '../equipment/mount_state.dart';
+import '../polar_align/polar_align_state.dart';
 import '../saved_server_state.dart';
 import '../ws/ws_providers.dart';
 
@@ -58,10 +60,18 @@ final trackingCalibrationProvider =
       TrackingCalibrationNotifier.new,
     );
 
-/// #1264 stage 1 — the daemon's resolved prior for the sub advisor. Watches the
-/// calibration provider so a completed probe (or a Recalibrate) re-reads it.
+/// #1264 stage 1 — the daemon's resolved prior for the sub advisor. Re-reads
+/// whenever the daemon's answer can change: the calibration (a completed probe
+/// or a Recalibrate), the connected mount's spec sheet (a mount connecting after
+/// the editor opened), and a polar-align run finishing (its residual is a term).
 final trackingPriorProvider = FutureProvider<TrackingPrior>((ref) async {
-  ref.watch(trackingCalibrationProvider);
+  // The stored ceiling (not the AsyncValue's loading flips): a completed probe
+  // or a Recalibrate changes it, the initial load settling to "none" does not.
+  ref.watch(
+    trackingCalibrationProvider.select((c) => c.asData?.value?.ceilingSeconds),
+  );
+  ref.watch(mountProvider.select((m) => m.asData?.value?.capabilities?.specs));
+  ref.watch(polarAlignLiveProvider.select((p) => p.phase));
   final server = ref.watch(activeServerProvider);
   if (server == null) return const TrackingPrior();
   final api = ref.read(trackingApiFactoryProvider)(server);

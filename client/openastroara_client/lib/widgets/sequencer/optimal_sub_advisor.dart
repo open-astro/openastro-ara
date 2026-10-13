@@ -321,6 +321,8 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
                 'longer subs won\'t improve the final stack, they just cost '
                 'more per lost frame.';
       final assumed = r.assumedDefaults ?? const [];
+      // #1264 — the daemon's resolved unguided prior (null until read).
+      final prior = ref.watch(trackingPriorProvider).asData?.value;
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -361,10 +363,8 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
                 calibration:
                     ref.watch(trackingCalibrationProvider).asData?.value,
                 skyLimitedSeconds: r.recommendedSec,
-                priorSeconds:
-                    ref.watch(trackingPriorProvider).asData?.value.seconds,
-                priorSource:
-                    ref.watch(trackingPriorProvider).asData?.value.source,
+                priorSeconds: prior?.seconds,
+                priorSource: prior?.source,
               )
               case final unguided?)
             Text(unguided, style: dim),
