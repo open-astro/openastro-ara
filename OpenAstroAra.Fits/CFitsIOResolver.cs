@@ -110,7 +110,8 @@ internal static class CFitsIOResolver {
                 (string name, out IntPtr h) => NativeLibrary.TryLoad(name, assembly, searchPath, out h),
                 NativeLibrary.TryLoad,
                 sonames,
-                h => NativeLibrary.TryGetExport(h, RequiredExport, out _));
+                h => NativeLibrary.TryGetExport(h, RequiredExport, out _),
+                NativeLibrary.Free);
             s_handle = handle;
             s_last = report;
             return handle;
@@ -135,11 +136,13 @@ internal static class CFitsIOResolver {
     /// </summary>
     internal static (IntPtr Handle, CFitsIOResolution Report) Resolve(
         string? explicitPath, TryLoadLibrary tryDefault, TryLoadLibrary tryLoad, IReadOnlyList<string> versionedSonames,
-        Func<IntPtr, bool>? hasRequiredExport = null) {
+        Func<IntPtr, bool>? hasRequiredExport = null, Action<IntPtr>? free = null) {
         var tried = new List<string>();
         // One candidate: load it, then (#1214) make sure it is CFITSIO. A library that loads but
-        // lacks the required export is released, recorded with the suffix, and the walk goes on —
-        // the next candidate may be the real thing. Null = accept any load (pure-order tests).
+        // lacks the required export is released through <paramref name="free"/> (NativeLibrary.Free
+        // in production; the pure tests pass fake handles and no releaser — dlclose on a fake pointer
+        // is a SIGSEGV on glibc, not an exception), recorded with the suffix, and the walk goes on —
+        // the next candidate may be the real thing. Null export check = accept any load.
         bool Candidate(string label, string name, TryLoadLibrary loader, out IntPtr h) {
             if (!loader(name, out h)) {
                 tried.Add(label);
@@ -150,7 +153,7 @@ internal static class CFitsIOResolver {
                 return true;
             }
             tried.Add(label + WrongLibrarySuffix);
-            TryFree(h);
+            free?.Invoke(h);
             h = IntPtr.Zero;
             return false;
         }
@@ -167,15 +170,5 @@ internal static class CFitsIOResolver {
             }
         }
         return (IntPtr.Zero, new CFitsIOResolution(explicitPath, tried.ToArray(), null));
-    }
-
-    private static void TryFree(IntPtr handle) {
-        try {
-            if (handle != IntPtr.Zero) {
-                NativeLibrary.Free(handle);
-            }
-        } catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) {
-            // A fake handle in tests or an already-released one: nothing to free.
-        }
     }
 }
