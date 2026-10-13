@@ -74,8 +74,10 @@ Map<String, dynamic> buildImagingRunBody({
   // [RigCapabilities]). Callers without a rig to read keep the old
   // "assume everything" shape.
   RigCapabilities rig = RigCapabilities.everything,
-  // #1264 — last night's measured ceiling (or the spec-sheet prior) as the
-  // probe's starting point; null = ladder only. Ignored on a guided rig.
+  // #1264 — the mount's SPEC-SHEET prior for the probe (AlpacaBridge #815),
+  // never the stored ceiling: the daemon already starts from last night's
+  // measurement on its own, and a body prior would override a Recalibrate.
+  // Null = no sheet. Ignored on a guided rig.
   double? trackingPriorSeconds,
 }) {
   final target = buildTargetBlock(
