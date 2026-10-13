@@ -15,6 +15,7 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -24,6 +25,9 @@ using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Threading.Tasks;
+using System.Threading;
+using OpenAstroAra.Core.Model;
 using System.Linq;
 
 namespace OpenAstroAra.Test {
@@ -134,6 +138,55 @@ namespace OpenAstroAra.Test {
             Assert.That(item.RunningSinceUtc, Is.EqualTo(first));
             item.Status = SequenceEntityStatus.FINISHED;
             Assert.That(item.RunningSinceUtc, Is.Null, "cleared on every other transition");
+        }
+
+        // #1155 — a SequenceItem whose first attempt fails: records the running stamp each attempt sees.
+        private sealed class RetryProbe : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
+            public readonly System.Collections.Generic.List<DateTimeOffset?> StampsSeen = [];
+            private int _calls;
+            public override int Attempts { get => 2; set { } }
+            public override object Clone() => new RetryProbe();
+            public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+                StampsSeen.Add(RunningSinceUtc);
+                await Task.Delay(30, token); // let the clock move between attempts
+                if (++_calls == 1) {
+                    throw new InvalidOperationException("first attempt fails");
+                }
+            }
+        }
+
+        [Test]
+        public async Task Each_retry_attempt_restarts_the_running_clock() {
+            // A 300 s exposure that fails at 290 s and retries must owe its full length again, not 10 s:
+            // the stamp the second attempt runs under is later than the first's.
+            var item = new RetryProbe();
+            await item.Run(new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(item.Status, Is.EqualTo(SequenceEntityStatus.FINISHED), "the second attempt succeeded");
+            Assert.That(item.StampsSeen, Has.Count.EqualTo(2));
+            Assert.That(item.StampsSeen[0], Is.Not.Null);
+            Assert.That(item.StampsSeen[1], Is.GreaterThan(item.StampsSeen[0]), "the retry re-stamped RunningSinceUtc");
+            Assert.That(item.RunningSinceUtc, Is.Null, "cleared on FINISHED");
+        }
+
+        [Test]
+        public void A_time_conditions_remaining_time_consults_the_provider_but_never_writes_RolloverTime() {
+            // #1155 — CalculateRemainingTime used to assign the observable RolloverTime from the provider on
+            // every read; UpdateTime() (the provider setter) is the only writer now.
+            var rollover = new TimeOnly(12, 0);
+            var provider = new Mock<OpenAstroAra.Sequencer.Utility.DateTimeProvider.IDateTimeProvider>();
+            provider.Setup(p => p.Name).Returns("test");
+            provider.Setup(p => p.GetDateTime(It.IsAny<ISequenceEntity>())).Returns(() => DateTime.Now.AddHours(1));
+            provider.Setup(p => p.GetRolloverTime(It.IsAny<ISequenceEntity>())).Returns(() => rollover);
+            var condition = new TimeCondition(new System.Collections.Generic.List<OpenAstroAra.Sequencer.Utility.DateTimeProvider.IDateTimeProvider> { provider.Object }, provider.Object);
+            Assert.That(condition.RolloverTime, Is.EqualTo(new TimeOnly(12, 0)), "the provider setter wrote it once");
+
+            rollover = new TimeOnly(6, 0); // the provider moves on; a remaining-time READ must not copy it in
+            provider.Invocations.Clear();
+            var remaining = condition.RemainingTime;
+
+            provider.Verify(p => p.GetRolloverTime(It.IsAny<ISequenceEntity>()), Times.AtLeastOnce, "the read still consults the provider's rollover");
+            Assert.That(condition.RolloverTime, Is.EqualTo(new TimeOnly(12, 0)), "a read is not a write to the live tree");
+            Assert.That(remaining, Is.GreaterThanOrEqualTo(TimeSpan.Zero));
         }
 
         [Test]
