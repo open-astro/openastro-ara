@@ -2241,7 +2241,6 @@ const Map<String, Help> helpRegistry = {
     relatedHelpKeys: ['img.unguided.ceiling', 'img.unguided.probe'],
   ),
 
-  // ── Planning knobs (img.defaults, #1140) ────────────────────────────────
   // ── Optimal Sub calculator (NEXTGEN §5, #1140) ───────────────────────────
   'plan.optimal_sub_calculator': Help(
     key: 'plan.optimal_sub_calculator',
@@ -2249,7 +2248,8 @@ const Map<String, Help> helpRegistry = {
     body:
         'The same maths Tonight\'s Sky, the plan dialog and the sequence editor\'s advisor use, as a scratch pad: '
         'change any input and watch the sub length and the hours move. Glover\'s floor is the exposure past which '
-        'the camera\'s read noise adds less than your tolerance to the stack\'s noise (t = tolerance · R² / P, '
+        'the camera\'s read noise adds less than your tolerance ε to the stack\'s noise (t = C(ε) · R² / P with '
+        'C = 1 / ((1 + ε)² − 1), about 10 · R² / P at 5 %, '
         'with P the sky flux per pixel from aperture, pixel scale, QE, passband and sky brightness); the ceiling is '
         'where the sky alone fills the well. Add a target\'s surface brightness and the Integration Budget tiers '
         'appear with their inputs.\n\n'
@@ -2274,6 +2274,7 @@ const Map<String, Help> helpRegistry = {
         'sub length all use it, and each row\'s budget popover names the k it used.',
     relatedSettings: ['img.defaults.noise_tolerance_pct'],
   ),
+  // ── Planning knobs (img.defaults, #1140) ────────────────────────────────
   'img.defaults.noise_tolerance_pct': Help(
     key: 'img.defaults.noise_tolerance_pct',
     title: 'Optimal-sub noise tolerance',

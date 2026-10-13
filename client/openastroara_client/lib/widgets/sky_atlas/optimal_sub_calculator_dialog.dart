@@ -53,6 +53,10 @@ Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
     builder: (_) => OptimalSubCalculatorDialog(
       initial: seed,
       kByKind: k,
+      bandwidthByKind: {
+        for (final f in filters)
+          if (f.bandwidthNm > 0) f.kind.wire: f.bandwidthNm,
+      },
       initialKind: kind,
     ),
   );
@@ -61,11 +65,16 @@ Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
 class OptimalSubCalculatorDialog extends StatefulWidget {
   final CalculatorInputs initial;
   final Map<String, double> kByKind;
+
+  /// The profile's declared passband per filter-kind wire token (only kinds
+  /// with a bandwidth set); the dropdown prefers it over the kind's default.
+  final Map<String, double> bandwidthByKind;
   final FilterKind initialKind;
   const OptimalSubCalculatorDialog({
     super.key,
     required this.initial,
     this.kByKind = const {},
+    this.bandwidthByKind = const {},
     this.initialKind = FilterKind.l,
   });
 
@@ -151,8 +160,12 @@ class _OptimalSubCalculatorDialogState
                         if (k == null) return;
                         setState(() {
                           _kind = k;
+                          // The profile's declared passband for this kind when
+                          // it has one, else the kind's default.
                           _in = _in.copyWith(
-                            filterBandwidthNm: k.defaultBandwidthNm,
+                            filterBandwidthNm:
+                                widget.bandwidthByKind[k.wire] ??
+                                k.defaultBandwidthNm,
                             skyCalibrationK: widget.kByKind[k.wire] ?? 1.0,
                           );
                         });
@@ -258,7 +271,8 @@ class _OptimalSubCalculatorDialogState
               const SizedBox(height: 8),
               Text(
                 'Seeded from your profile; edits here change nothing in it. '
-                'Glover: t = (noise tolerance) · R² / P — the sub past which read noise stops mattering.',
+                'Glover: t = C(ε) · R² / P with C = 1 / ((1 + ε)² − 1), about 10 · R² / P at the 5 % '
+                'tolerance — the sub past which read noise stops mattering.',
                 style: dim,
               ),
             ],
