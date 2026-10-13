@@ -9,13 +9,16 @@ import '../models/server.dart';
 class PlateSolveApi {
   final Dio _dio;
 
-  PlateSolveApi(AraServer server)
-      : _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          // Solving shells out to ASTAP on a full frame — give it room.
-          receiveTimeout: const Duration(seconds: 120),
-        ));
+  /// [dio] is injectable so tests can supply a stub adapter (#1150); production
+  /// passes nothing and a server-bound Dio is built.
+  PlateSolveApi(AraServer server, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              // Solving shells out to ASTAP on a full frame — give it room.
+              receiveTimeout: const Duration(seconds: 120),
+            ));
 
   /// Solve the frame [id]. Returns the solution (its [PlateSolveResult.success]
   /// reflects whether a solution was found). Throws a [PlateSolveException] with

@@ -13,6 +13,12 @@ import '../../services/plate_solve_api.dart';
 /// `success: false` = solver ran, no solution); `AsyncError` for a transport /
 /// configuration failure. Uses [AsyncNotifier] for consistency with the rest of
 /// the app's async state.
+/// Builds the [PlateSolveApi] a solve uses. Overridable in tests (#1150) so the
+/// state machine (loading → result / error, generation guard) runs against a
+/// fake without a daemon.
+final plateSolveApiFactoryProvider =
+    Provider<PlateSolveApi Function(AraServer)>((ref) => PlateSolveApi.new);
+
 class SolveResult extends AsyncNotifier<PlateSolveResult?> {
   // Bumped on each solve() and on clear(); a solve only writes its result if it
   // is still the current generation, so a slow in-flight solve (up to the 120 s
@@ -27,7 +33,8 @@ class SolveResult extends AsyncNotifier<PlateSolveResult?> {
     final gen = ++_generation;
     state = const AsyncLoading();
     try {
-      final result = await PlateSolveApi(server).solve(frameId);
+      final result =
+          await ref.read(plateSolveApiFactoryProvider)(server).solve(frameId);
       if (gen == _generation) state = AsyncData(result);
     } catch (e, st) {
       if (gen == _generation) state = AsyncError(e, st);

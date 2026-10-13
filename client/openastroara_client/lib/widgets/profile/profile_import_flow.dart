@@ -12,6 +12,64 @@ import '../../state/profile_management_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 
+/// Opens the OS file picker for a profile share. Swappable in widget tests
+/// (the real FilePicker plugin isn't available there) — the same seam shape as
+/// `frameExportSaver` (#1150).
+@visibleForTesting
+Future<PlatformFile?> Function() profileSharePicker = () => FilePicker.pickFile(
+      type: FileType.any,
+      dialogTitle: 'Choose a shared profile file',
+    );
+
+/// 1 MB ceiling — shares are a few KB of JSON, so anything large is a mis-pick
+/// and is refused rather than slurped into memory.
+const int maxProfileShareBytes = 1024 * 1024;
+
+/// Outcome of [readProfileShare].
+sealed class ProfileShareRead {
+  const ProfileShareRead();
+}
+
+class ProfileShareReadOk extends ProfileShareRead {
+  final List<int> bytes;
+  const ProfileShareReadOk(this.bytes);
+}
+
+/// The length could not be determined, the path was null, or the read failed.
+class ProfileShareUnreadable extends ProfileShareRead {
+  const ProfileShareUnreadable();
+}
+
+class ProfileShareTooLarge extends ProfileShareRead {
+  const ProfileShareTooLarge();
+}
+
+/// Size-gate and read a picked share file. file_picker 13 returns a null
+/// length when it could not be determined (a failed disk read), distinct from a
+/// genuinely empty file (0): that is unreadable, not "small enough". The byte
+/// length is re-checked after the read because `length()` was taken before
+/// that gap (stale on some backends, or the file grew). [readBytes] is the
+/// disk read, injectable for tests; the default is a dart:io read (desktop
+/// targets — on web `path` is null and this branch is never reached).
+Future<ProfileShareRead> readProfileShare(
+  PlatformFile file, {
+  Future<List<int>> Function(String path)? readBytes,
+}) async {
+  final length = await file.length();
+  if (length == null) return const ProfileShareUnreadable();
+  if (length > maxProfileShareBytes) return const ProfileShareTooLarge();
+  final path = file.path;
+  if (path == null) return const ProfileShareUnreadable();
+  final List<int> bytes;
+  try {
+    bytes = await (readBytes ?? (p) => File(p).readAsBytes())(path);
+  } catch (_) {
+    return const ProfileShareUnreadable();
+  }
+  if (bytes.length > maxProfileShareBytes) return const ProfileShareTooLarge();
+  return ProfileShareReadOk(bytes);
+}
+
 /// §70 import — pick a shared profile-share file, preview what it'll create +
 /// what the recipient must re-enter, and on confirm commit it into a new
 /// (non-active) profile. The imported profile is a template: the user makes it
@@ -36,10 +94,7 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   // under unawaited().
   final PlatformFile? picked;
   try {
-    picked = await FilePicker.pickFile(
-      type: FileType.any,
-      dialogTitle: 'Choose a shared profile file',
-    );
+    picked = await profileSharePicker();
   } catch (e) {
     messenger.showSnackBar(SnackBar(
         content:
@@ -48,49 +103,22 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
     return;
   }
   if (picked == null) return; // user cancelled
-  final file = picked;
-  const maxShareBytes = 1024 * 1024; // 1 MB ceiling — shares are a few KB
-  // file_picker 13 returns null when the length could not be determined (a
-  // failed disk read), distinct from a genuinely empty file (0). Treat that as
-  // unreadable rather than as "small enough": the readAsBytes below would only
-  // fail the same way.
-  final length = await file.length();
-  if (length == null) {
-    messenger.showSnackBar(
-        const SnackBar(content: Text("Couldn't read the selected file.")));
-    return;
-  }
-  if (length > maxShareBytes) {
-    messenger.showSnackBar(const SnackBar(
-        content: Text("That file is too large to be a profile share."),
-        backgroundColor: AraColors.accentError));
-    return;
-  }
-  final path = file.path;
-  if (path == null) {
-    messenger.showSnackBar(
-        const SnackBar(content: Text("Couldn't read the selected file.")));
-    return;
-  }
+  // Size gate + read, behind a seam so every branch (cancel, unreadable
+  // length, too large, no path, read failure, grew past the ceiling) has a
+  // test without the real picker (#1150).
   final List<int> bytes;
-  try {
-    // dart:io read — fine for the desktop targets (macOS / Linux / Windows);
-    // this flow isn't built for web, where file.path is null and this branch
-    // wouldn't be reached anyway.
-    bytes = await File(path).readAsBytes();
-  } catch (_) {
-    messenger.showSnackBar(
-        const SnackBar(content: Text("Couldn't read the selected file.")));
-    return;
-  }
-  // Re-check the actual byte length: file.length() was read before this gap
-  // (so it can be stale on some backends, or the file could have grown). This
-  // bounds what we parse + upload regardless of what file.length() reported.
-  if (bytes.length > maxShareBytes) {
-    messenger.showSnackBar(const SnackBar(
-        content: Text("That file is too large to be a profile share."),
-        backgroundColor: AraColors.accentError));
-    return;
+  switch (await readProfileShare(picked)) {
+    case ProfileShareReadOk(bytes: final read):
+      bytes = read;
+    case ProfileShareUnreadable():
+      messenger.showSnackBar(
+          const SnackBar(content: Text("Couldn't read the selected file.")));
+      return;
+    case ProfileShareTooLarge():
+      messenger.showSnackBar(const SnackBar(
+          content: Text("That file is too large to be a profile share."),
+          backgroundColor: AraColors.accentError));
+      return;
   }
 
   if (!context.mounted) return;
