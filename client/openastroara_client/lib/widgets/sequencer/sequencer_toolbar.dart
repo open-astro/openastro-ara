@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import '../../models/sequence/draft_sequence.dart';
 import '../../models/sequence/nina_dom.dart';
@@ -209,8 +210,8 @@ class SequencerToolbar extends ConsumerWidget {
             ? () => isPaused
                 // §38.10 — resuming offers the pointing/focus
                 // refinement choice before imaging continues.
-                ? promptAndResumeSequence(context, ref)
-                : preflightAndRunSequence(context, ref)
+                ? promptAndResumeSequence(context, ref.read)
+                : preflightAndRunSequence(context, ref.read)
             : null,
       ),
       _ToolAction(
@@ -219,7 +220,7 @@ class SequencerToolbar extends ConsumerWidget {
         kind: _LifecycleKind.caution,
         onPressed: canPause
             ? () => runSequenceLifecycle(
-                context, ref, (api, id) => api.pause(id))
+                context, ref.read, (api, id) => api.pause(id))
             : null,
       ),
       _ToolAction(
@@ -229,7 +230,7 @@ class SequencerToolbar extends ConsumerWidget {
         // horizon) so the run advances to the next without aborting.
         onPressed: canSkip
             ? () => runSequenceLifecycle(
-                context, ref, (api, id) => api.skipCurrent(id))
+                context, ref.read, (api, id) => api.skipCurrent(id))
             : null,
       ),
       _ToolAction(
@@ -497,10 +498,16 @@ class _CompactToolButton extends StatelessWidget {
 /// session, confirm before starting — the gate SUGGESTS, it never blocks
 /// (planning-only rigs, permanent piers and daytime tests all run fine
 /// unaligned). "Go to Setup" jumps to the checklist instead. Public: the
+/// What the public lifecycle helpers need from Riverpod: `read` only. A
+/// [WidgetRef] dies with its widget — the ⌘K palette pops itself before it
+/// dispatches, so it hands over the root container's `read` (#1154 r1); the
+/// toolbar and the tab pass `ref.read`.
+typedef ProviderReader = T Function<T>(ProviderListenable<T> provider);
+
 /// tab's keyboard shortcuts drive the same path as the Run button.
-Future<void> preflightAndRunSequence(BuildContext context, WidgetRef ref) async {
+Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) async {
   final aligned =
-      ref.read(setupPolarAlignStateProvider) == SetupStepState.done;
+      read(setupPolarAlignStateProvider) == SetupStepState.done;
   if (!aligned) {
     final choice = await showDialog<_PreflightChoice>(
       context: context,
@@ -533,12 +540,12 @@ Future<void> preflightAndRunSequence(BuildContext context, WidgetRef ref) async 
     );
     if (choice == null || choice == _PreflightChoice.cancel) return;
     if (choice == _PreflightChoice.goToSetup) {
-      ref.read(selectedTabIndexProvider.notifier).select(kSetupTabIndex);
+      read(selectedTabIndexProvider.notifier).select(kSetupTabIndex);
       return;
     }
     if (!context.mounted) return;
   }
-  await runSequenceLifecycle(context, ref, (api, id) => api.start(id));
+  await runSequenceLifecycle(context, read, (api, id) => api.start(id));
 }
 
 enum _PreflightChoice { cancel, goToSetup, runAnyway }
@@ -549,18 +556,18 @@ enum _PreflightChoice { cancel, goToSetup, runAnyway }
 /// drive the same fenced path as the toolbar buttons.
 Future<void> runSequenceLifecycle(
   BuildContext context,
-  WidgetRef ref,
+  ProviderReader read,
   Future<String> Function(SequenceClient api, String id) op,
 ) async {
   // Re-entrancy guard: ignore a second command while one is already running.
-  if (ref.read(sequenceCommandBusyProvider)) return;
-  final id = ref.read(selectedSequenceIdProvider);
-  final api = ref.read(sequenceApiProvider);
+  if (read(sequenceCommandBusyProvider)) return;
+  final id = read(selectedSequenceIdProvider);
+  final api = read(sequenceApiProvider);
   if (id == null || api == null) return;
   // Capture refs/messenger before the await — usable even if the widget unmounts.
   final messenger = ScaffoldMessenger.of(context);
-  final busy = ref.read(sequenceCommandBusyProvider.notifier);
-  final runState = ref.read(sequenceRunStateProvider.notifier);
+  final busy = read(sequenceCommandBusyProvider.notifier);
+  final runState = read(sequenceRunStateProvider.notifier);
 
   busy.setBusy(true);
   try {
@@ -846,7 +853,7 @@ class _ToolButton extends StatelessWidget {
 /// shortcuts (⌘R / Space on a paused run) drive the same path as the button.
 /// The daemon skips the refinement gracefully when the run moved past the
 /// paused target or no plate solver is configured, so offering it is always safe.
-Future<void> promptAndResumeSequence(BuildContext context, WidgetRef ref) async {
+Future<void> promptAndResumeSequence(BuildContext context, ProviderReader read) async {
   final choice = await showDialog<(bool recenter, bool refocus)>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -874,7 +881,7 @@ Future<void> promptAndResumeSequence(BuildContext context, WidgetRef ref) async 
   if (choice == null || !context.mounted) return; // dismissed — user backed out
   await runSequenceLifecycle(
       context,
-      ref,
+      read,
       (api, id) =>
           api.resume(id, recenter: choice.$1, refocus: choice.$2));
 }
@@ -904,7 +911,7 @@ Future<void> _confirmAbort(BuildContext context, WidgetRef ref) async {
     ),
   );
   if (confirmed != true || !context.mounted) return;
-  await runSequenceLifecycle(context, ref, (api, id) => api.abort(id));
+  await runSequenceLifecycle(context, ref.read, (api, id) => api.abort(id));
 }
 
 enum _LifecycleKind { primary, caution, destructive }
