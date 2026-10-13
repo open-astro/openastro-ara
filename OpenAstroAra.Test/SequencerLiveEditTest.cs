@@ -240,6 +240,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_move_refreshes_the_cached_estimate_even_though_no_count_changed() {
+            // #1155 — with the TTL pushed out to an hour, only a tree-version bump refreshes the cached
+            // ETA pair. A move changes no count (UpdateProgress sees nothing), so without NoteTreeChanged
+            // the run state kept serving the figure cached at start; a fresh walk credits the running
+            // wait's elapsed time, so the remaining figure must have moved.
+            var id = Guid.NewGuid();
+            var (svc, _) = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 4 });
+                c.Items.Add(new SequentialContainer { Name = "alpha" });
+                c.Items.Add(new SequentialContainer { Name = "beta" });
+            }));
+            svc.EstimateCacheTtlMsForTests = 3_600_000;
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForRunningAsync(svc, id);
+            var before = (await svc.GetRunStateAsync(id, CancellationToken.None))!.EstimatedRemainingSeconds!.Value;
+            await Task.Delay(800);
+
+            var moved = await svc.MoveRunItemAsync(id,
+                new SequenceRunItemMoveRequestDto(Path: [2], NewIndex: 1), null, CancellationToken.None);
+            Assert.That(moved.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), moved.Reason);
+
+            var after = (await svc.GetRunStateAsync(id, CancellationToken.None))!.EstimatedRemainingSeconds!.Value;
+            Assert.That(after, Is.LessThan(before), "the move invalidated the hour-long cache: a fresh walk credits the elapsed wait");
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task Edits_after_the_run_ends_are_refused() {
             var id = Guid.NewGuid();
             var (svc, _) = BuildService(id, BuildBody(c => {

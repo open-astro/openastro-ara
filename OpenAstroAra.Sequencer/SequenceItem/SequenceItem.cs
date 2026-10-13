@@ -123,7 +123,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
             set {
                 // #1155 — stamp the moment an item starts running (the run ETA subtracts the
                 // elapsed part of a running instruction); cleared on any other transition.
-                RunningSinceUtc = value == SequenceEntityStatus.RUNNING ? DateTimeOffset.UtcNow : null;
+                if (value != SequenceEntityStatus.RUNNING) {
+                    RunningSinceUtc = null;
+                } else if (status != SequenceEntityStatus.RUNNING) {
+                    RunningSinceUtc = DateTimeOffset.UtcNow; // first entry only: a re-assigned RUNNING keeps its stamp
+                }
                 status = value;
                 RaisePropertyChanged();
             }
