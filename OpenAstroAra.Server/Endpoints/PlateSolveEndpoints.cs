@@ -64,6 +64,7 @@ public static class PlateSolveEndpoints {
             .Accepts<VerifyPositionRequestDto>("application/json")
             .Produces<VerifyPositionResultDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("VerifyMountPosition")
             .WithSummary("§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount's reported and intended positions.");
 
@@ -84,8 +85,21 @@ public static class PlateSolveEndpoints {
             return Results.Ok(await verify.VerifyAsync(request?.ExposureSeconds, ct));
         } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        } catch (System.IO.FileNotFoundException) {
+            // A non-ASTAP CLI solver whose binary is missing — the same 422 SolveFrameAsync gives it.
+            return Results.Problem("Plate-solver executable not found — check the solver path in the profile.",
+                statusCode: StatusCodes.Status422UnprocessableEntity);
+        } catch (ArgumentOutOfRangeException ex) {
+            // The exposure or binning is outside the camera's capabilities.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        } catch (TimeoutException) {
+            // The camera's in-flight gate is held by a long exposure (the Stop Mount modal can open
+            // mid-sequence-exposure): busy now, not broken — try again when it has read out.
+            return Results.Problem("The camera is busy with an exposure — try Verify Position again once it has read out.",
+                statusCode: StatusCodes.Status409Conflict);
         } catch (InvalidOperationException ex) {
-            // The imaging mediator's "no camera connected" — the user has to connect one to look.
+            // The imaging mediator's "no camera connected", and a capture that timed out or lost the
+            // device mid-exposure: nothing to look with right now.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }

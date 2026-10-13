@@ -159,6 +159,17 @@ namespace OpenAstroAra.Test {
                 .ThrowsAsync(new InvalidOperationException("No camera connected"));
             var conflict = await PlateSolveEndpoints.VerifyPositionAsync(null, noCamera.Object, CancellationToken.None);
             Assert.That(((ProblemHttpResult)conflict).StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+
+            // A camera gate held by a long exposure is "busy" (409), not a 500; a missing CLI solver or an
+            // out-of-range exposure is a configuration problem (422).
+            IResult Map(Exception ex) {
+                var svc = new Mock<IVerifyPositionService>();
+                svc.Setup(v => v.VerifyAsync(It.IsAny<double?>(), It.IsAny<CancellationToken>())).ThrowsAsync(ex);
+                return PlateSolveEndpoints.VerifyPositionAsync(null, svc.Object, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            Assert.That(((ProblemHttpResult)Map(new TimeoutException("gate"))).StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That(((ProblemHttpResult)Map(new System.IO.FileNotFoundException("solver"))).StatusCode, Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+            Assert.That(((ProblemHttpResult)Map(new ArgumentOutOfRangeException("exposure"))).StatusCode, Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }
     }
 }
