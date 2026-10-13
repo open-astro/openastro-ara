@@ -138,7 +138,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
     /// residual. Null when none applies — the ladder alone decides.</summary>
     public async Task<(double? Seconds, string? Source)> ResolvePriorWithSourceAsync(double? bodyPriorSeconds, CancellationToken token) {
         if (bodyPriorSeconds is double body && body > 0) {
-            return (body, "the body");
+            return (body, "the sequence's own prior");
         }
         var stored = _profiles.GetTrackingCalibration();
         if (stored is { CeilingSeconds: > 0 }) {
@@ -152,7 +152,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
         var seeing = _profiles.GetSiteSettings()?.TypicalSeeingArcsec;
         var polarAlign = await LatestPolarAlignErrorAsync(token).ConfigureAwait(false);
         var seconds = MountSpecSheet.UnguidedPriorSeconds(sheet, pixelScale, seeing, polarAlign);
-        return seconds is null ? (null, null) : (seconds, $"the mount's spec sheet ({sheet.Source})");
+        return seconds is null ? (null, null) : (seconds, sheet.Source is null ? "the mount's spec sheet" : $"the mount's spec sheet ({sheet.Source})");
     }
 
     public async Task<TrackingProbeResult> ProbeAsync(TrackingProbeRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {

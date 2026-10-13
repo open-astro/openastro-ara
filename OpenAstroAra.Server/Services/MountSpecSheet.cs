@@ -77,7 +77,7 @@ public static class MountSpecSheet {
             var sheet = new MountSpecSheetDto(
                 DriverId: Str(root, "driver_id"),
                 Model: Str(root, "model"),
-                Source: Str(root, "source") ?? "manufacturer",
+                Source: Str(root, "source"),
                 WormPeriodS: Num(root, "worm_period_s"),
                 PeriodicErrorPpArcsec: Num(root, "periodic_error_pp_arcsec"),
                 HasEncoders: Bool(root, "has_encoders"),

@@ -100,8 +100,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             if (executor is null) {
                 throw new SequenceEntityFailedException("The tracking probe is not wired for sequence execution on this daemon.");
             }
-            // The body's prior (the spec sheet) wins; otherwise the profile's stored ceiling from the
-            // last probe is the prior, so run 2 does not climb the whole ladder again (review of #1318).
+            // The executor resolves the prior and names its source: the body's own value first, then the
+            // profile's stored ceiling from the last probe (so run 2 does not climb the whole ladder again,
+            // review of #1318), then the mount's spec sheet (#1264 stage 1).
             var (prior, priorSource) = await executor.ResolvePriorWithSourceAsync(PriorSeconds, token);
             var ladder = UnguidedExposureLadder.Build(Rungs, MaxExposure, prior);
             var request = new TrackingProbeRequest(ladder, MaxExposure, prior, ItemUtility.ResolveTargetName(Parent), priorSource);

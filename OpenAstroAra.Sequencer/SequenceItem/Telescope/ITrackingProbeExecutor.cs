@@ -57,7 +57,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         /// body-or-store rule can produce.</summary>
         async Task<(double? Seconds, string? Source)> ResolvePriorWithSourceAsync(double? bodyPriorSeconds, CancellationToken token) {
             var prior = await ResolvePriorAsync(bodyPriorSeconds, token).ConfigureAwait(false);
-            return (prior, prior is null ? null : bodyPriorSeconds is not null ? "the body" : "the last probe");
+            return (prior, prior is null ? null : bodyPriorSeconds is not null ? "the sequence's own prior" : "the last probe");
         }
     }
 }

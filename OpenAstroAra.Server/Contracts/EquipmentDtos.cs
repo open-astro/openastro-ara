@@ -229,7 +229,7 @@ public sealed record TelescopeCapabilitiesDto(
 public sealed record MountSpecSheetDto(
     string? DriverId,
     string? Model,
-    string Source,
+    string? Source,
     double? WormPeriodS,
     double? PeriodicErrorPpArcsec,
     bool HasEncoders,
