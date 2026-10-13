@@ -124,10 +124,23 @@ Future<(int applied, int failed, int held, int rejected)>
     } catch (e) {
       if (isProfileReplayTransportFailure(e)) {
         // Keep the draft, but persist the savedProfileId the attempt may have
-        // stamped so the next replay re-uses that profile.
+        // stamped so the next replay re-uses that profile — and once a profile
+        // EXISTS on this rig, pin the draft here: a draft saved with no server
+        // (serverKey null) that half-landed on rig A must not create a fresh
+        // profile on rig B next time and leave A's orphan behind.
         debugPrint('[profile-drafts] replay of "${pending.name}" failed in transit: $e');
+        final pinned = pending.serverKey == null && pending.draft.savedProfileId != null
+            ? PendingProfileDraft(
+                id: pending.id,
+                name: pending.name,
+                savedUtc: pending.savedUtc,
+                draft: pending.draft,
+                finalSave: pending.finalSave,
+                serverKey: serverKey,
+              )
+            : pending;
         try {
-          await store.save(pending);
+          await store.save(pinned);
         } catch (_) {}
         failed++;
       } else {

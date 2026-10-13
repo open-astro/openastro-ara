@@ -286,4 +286,37 @@ void main() {
     expect(api.selected, isEmpty, reason: 'no re-select of the rejected profile');
     expect(api.activeId, 'real');
   });
+
+  test('#1327: a draft that half-landed on this rig is pinned here, so another rig holds it', () async {
+    await pend('Roaming'); // saved fully offline: no server recorded
+    final api = _FakeProfileApi()..failSite = true;
+
+    final first = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+    expect(first, (0, 1, 0, 0));
+    final left = (await store.loadAll()).single;
+    expect(left.draft.savedProfileId, 'profile-1');
+    expect(left.serverKey, 'rig-a:5555', reason: 'the profile now lives on rig A');
+
+    final rigB = _FakeProfileApi();
+    final onB = await replayPendingProfileDrafts(
+      store,
+      rigB,
+      serverKey: 'rig-b:5555',
+    );
+    expect(onB, (0, 0, 1, 0), reason: 'held for rig A');
+    expect(rigB.created, isEmpty, reason: 'no orphan on A, no duplicate on B');
+
+    api.failSite = false;
+    final backOnA = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+    expect(backOnA, (1, 0, 0, 0));
+    expect(api.created, ['Roaming'], reason: 'the same profile is finished');
+  });
 }
