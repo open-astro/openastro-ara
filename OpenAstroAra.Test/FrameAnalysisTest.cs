@@ -152,17 +152,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Analysis_skips_a_star_starved_frame_but_still_records_its_background() {
+        public async Task Analysis_skips_a_star_starved_frame() {
             using var camera = Analyzer(out var frames, out var history,
                 (_, _, _) => (1.8, CameraService.MinStarsForAnalysis - 1));
-            var id = Guid.NewGuid();
 
-            await camera.AnalyzeFrameAsync(id, new ushort[] { 500, 510, 520, 9000 }, 2, 2, "Ha");
+            await camera.AnalyzeFrameAsync(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
 
             frames.Verify(f => f.UpdateAnalysisAsync(It.IsAny<Guid>(), It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-            // #1140 P2 — the sky background is independent of the star gate: p05 of 4 pixels is the
-            // darkest one (500), the upper median is 510.
-            frames.Verify(f => f.UpdateBackgroundAsync(id, 500, 510, It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(history.ImagePoints, Is.Empty,
                 "a 2-star HFR is noise that would swing the drift trigger's trend line");
         }
@@ -262,6 +258,38 @@ namespace OpenAstroAra.Test {
 
             await camera.AnalyzeFrameAsync(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
             Assert.Pass("fire-and-forget boundary held");
+        }
+
+        [Test]
+        public async Task The_background_is_measured_apart_from_the_star_gate_and_written_for_the_frame() {
+            // #1140 P2 — MeasureBackgroundAsync is the per-frame path every frame type takes at
+            // registration: p05 of 4 pixels is the darkest one (500); the median rank (n+1)/2 = 2 is 510.
+            var frames = new Mock<IFrameRepository>();
+            using var camera = new CameraService(frames: frames.Object);
+            var id = Guid.NewGuid();
+
+            await camera.MeasureBackgroundAsync(id, new ushort[] { 500, 510, 520, 9000 });
+
+            frames.Verify(f => f.UpdateBackgroundAsync(id, 500, 510, It.IsAny<CancellationToken>()), Times.Once);
+            frames.Verify(f => f.UpdateAnalysisAsync(It.IsAny<Guid>(), It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            await camera.MeasureBackgroundAsync(id, Array.Empty<ushort>());
+            frames.Verify(f => f.UpdateBackgroundAsync(id, It.IsAny<double>(), It.IsAny<double>(), It.IsAny<CancellationToken>()), Times.Once, "an empty frame writes nothing");
+        }
+
+        [Test]
+        public async Task Registering_a_capture_stores_the_request_binning_on_the_row() {
+            // #1140 P2 — the pixel scale the calibration fit needs comes from the binning at capture.
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.EnsureManualCaptureSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Session);
+            using var camera = new CameraService(frames: frames.Object);
+            var path = Path.Combine(_dir, "bin2.fits");
+            await File.WriteAllBytesAsync(path, new byte[64]);
+            var id = Guid.NewGuid();
+
+            await camera.RegisterFrameAsync(id, new ExposureRequestDto(30, 100, BinX: 2, BinY: 2), FrameType.Flat, "flat", DateTimeOffset.UtcNow, path, 10, 10);
+
+            frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == id && d.Bin == 2 && d.BackgroundAdu == null), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]

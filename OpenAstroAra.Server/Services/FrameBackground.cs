@@ -22,8 +22,8 @@ namespace OpenAstroAra.Server.Services;
 /// frame-filling emission nebula lifts the median well above the sky (the design dry run
 /// measured an Hα median rate 2.7× its p05 rate), while the darkest 5 % of pixels is sky
 /// plus pedestal on any real field. The median is kept alongside as the sanity companion.
-/// Pure and allocation-light (256 KB), so it runs on the analysis worker for every frame,
-/// stars or not.
+/// Pure and allocation-light (a 256 KB int count array; int ranks suffice up to 2.1 G pixels),
+/// so it runs off the capture path for every frame, stars or not.
 /// </summary>
 public static class FrameBackground {
 
@@ -34,18 +34,19 @@ public static class FrameBackground {
         if (pixels.Length == 0) {
             return (double.NaN, double.NaN);
         }
-        var counts = new long[65536];
+        var counts = new int[65536];
         foreach (var p in pixels) {
             counts[p]++;
         }
         var n = (long)pixels.Length;
         // Rank statistics on the count array: the value at which the running count first reaches
-        // the target rank (ceil(p·n) for the percentile, the upper median for n).
+        // the target rank — ceil(p·n) for the percentile; (n+1)/2 for the median, which is the
+        // middle element for odd n and the LOWER of the two middle elements for even n.
         var p05Rank = Math.Max(1, (long)Math.Ceiling(BackgroundPercentile * n));
         return (ValueAtRank(counts, p05Rank), ValueAtRank(counts, (n + 1) / 2));
     }
 
-    private static double ValueAtRank(long[] counts, long rank) {
+    private static double ValueAtRank(int[] counts, long rank) {
         long seen = 0;
         for (var v = 0; v < counts.Length; v++) {
             seen += counts[v];
