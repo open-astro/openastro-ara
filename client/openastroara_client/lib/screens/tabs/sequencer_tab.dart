@@ -18,8 +18,7 @@ import '../../widgets/sequencer/run_completion_sheet.dart';
 import '../../widgets/sequencer/run_dashboard_band.dart';
 import '../../widgets/sequencer/sequence_load_dialog.dart';
 import '../../widgets/sequencer/sequence_new_dialog.dart';
-import '../../state/app_shell_state.dart';
-import '../../state/settings/settings_nav.dart';
+import '../../widgets/sky_atlas/session_plan_dialog.dart';
 import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/sequencer/sequencer_toolbar.dart';
@@ -424,9 +423,12 @@ class _ZeroState extends ConsumerWidget {
                 FilledButton.icon(
                   icon: const Icon(Icons.auto_awesome, size: 16),
                   label: const Text('Plan tonight'),
-                  onPressed: () => ref
-                      .read(selectedTabIndexProvider.notifier)
-                      .select(kPlanningTabIndex),
+                  // #1154 item 11 — straight into the session planner (its
+                  // "Show on atlas" takes the user to the planetarium itself).
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => const SessionPlanDialog(),
+                  ),
                 ),
                 const SizedBox(width: AraSpace.s12),
                 OutlinedButton.icon(

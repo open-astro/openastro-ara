@@ -345,6 +345,30 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     groupLabel: 'Actions',
     keywords: ['wizard', 'setup', 'walkthrough', 'new profile', 'first run', 'onboarding'],
   ),
+  // #1154 item 13 — the Run tab's shortcuts, discoverable from ⌘K. The labels
+  // carry the key so the palette doubles as the cheat sheet.
+  SettingsSearchEntry(
+    actionId: 'action.run.start',
+    label: 'Run or resume the sequence (⌘R)',
+    groupLabel: 'Actions',
+    description: 'Starts the selected sequence, or resumes it when paused — the same pre-flight and resume choices as the Run button.',
+    keywords: ['run', 'start', 'resume', 'go', 'begin', 'sequence', 'cmd r', 'ctrl r', 'shortcut'],
+  ),
+  SettingsSearchEntry(
+    actionId: 'action.run.pause',
+    label: 'Pause or resume the sequence (Space)',
+    groupLabel: 'Actions',
+    description: 'Pauses a running sequence at its next instruction boundary, or resumes a paused one.',
+    keywords: ['pause', 'resume', 'hold', 'space', 'sequence', 'running', 'shortcut'],
+  ),
+  // #1154 item 11 — the session planner, from anywhere.
+  SettingsSearchEntry(
+    actionId: 'action.plan.tonight',
+    label: 'Plan tonight…',
+    groupLabel: 'Actions',
+    description: 'Opens the session planner: tonight\'s best targets and times, ready to send to a run.',
+    keywords: ['plan', 'planner', 'tonight', 'session', 'what to shoot', 'targets', 'schedule'],
+  ),
 ];
 
 List<SettingsSearchEntry> buildSearchIndex() {

@@ -9,6 +9,7 @@ import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/screens/tabs/sequencer_tab.dart';
+import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
@@ -128,6 +129,21 @@ class _FlakyOnceClient extends _FakeClient {
 String? _loadedId(ProviderContainer c) => c.read(sequenceEditorProvider)?.id;
 
 void main() {
+  testWidgets('#1154 the zero state\'s Plan tonight opens the session planner, not just the Planning tab', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FakeClient()),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+    expect(find.text('Plan tonight'), findsOneWidget);
+    await tester.tap(find.text('Plan tonight'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SessionPlanDialog), findsOneWidget);
+  });
+
   testWidgets('selecting a sequence loads its body into the editor', (tester) async {
     final container = ProviderContainer(overrides: [
       sequenceApiProvider.overrideWithValue(_FakeClient()),

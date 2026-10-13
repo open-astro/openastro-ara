@@ -5,6 +5,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/widgets/command_palette.dart';
+import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 
 /// No saved servers — the backup modal renders its "connect a server" empty
 /// state without touching FlutterSecureStorage (absent in widget tests).
@@ -90,5 +91,33 @@ void main() {
     tester.testTextInput.enterText('dither');
     await tester.pump();
     expect(find.widgetWithText(TextField, 'dither'), findsOneWidget);
+  });
+
+  testWidgets('#1154 "Plan tonight…" opens the session planner on the root navigator', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showCommandPalette(context),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'plan tonight');
+    await tester.pump();
+    await tester.tap(find.text('Plan tonight…'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SessionPlanDialog), findsOneWidget);
+    expect(find.text('Plan tonight…'), findsNothing, reason: 'the palette popped');
   });
 }

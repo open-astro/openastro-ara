@@ -118,7 +118,7 @@ void main() {
     test('every action id is unique and prefixed action.', () {
       final index = buildSearchIndex();
       final actions = index.where((e) => e.actionId != null).toList();
-      expect(actions, hasLength(6));
+      expect(actions, hasLength(9));
       expect(actions.map((e) => e.id).toSet().length, actions.length);
       expect(actions.map((e) => e.id), everyElement(startsWith('action.')));
     });
@@ -132,5 +132,18 @@ void main() {
       expect(searchSettings(index, 'wizard').any((e) => e.actionId == 'action.wizard'), isTrue);
       expect(searchSettings(index, 'unread').any((e) => e.actionId == 'action.notifications'), isTrue);
     });
+  });
+
+  test('#1154 the Run shortcuts and the planner are palette actions', () {
+    final index = buildSearchIndex();
+    String? actionFor(String label) =>
+        index.where((e) => e.label == label).map((e) => e.actionId).firstOrNull;
+    expect(actionFor('Run or resume the sequence (⌘R)'), 'action.run.start');
+    expect(actionFor('Pause or resume the sequence (Space)'), 'action.run.pause');
+    expect(actionFor('Plan tonight…'), 'action.plan.tonight');
+    // Searching the key itself finds the shortcut (the palette is the cheat sheet).
+    expect(searchSettings(index, 'cmd r', limit: 5).map((e) => e.actionId), contains('action.run.start'));
+    expect(searchSettings(index, 'space', limit: 5).map((e) => e.actionId), contains('action.run.pause'));
+    expect(searchSettings(index, 'plan tonight', limit: 5).first.actionId, 'action.plan.tonight');
   });
 }
