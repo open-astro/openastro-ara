@@ -59,6 +59,23 @@ void main() {
   ) async {
     await _pump(tester);
     expect(find.text('Optimal Sub calculator'), findsOneWidget);
+    // Integer rows keep their zeros: a focus-out commit must not read 50000 back as 5.
+    expect(
+      tester
+          .widget<EditableNumberRow>(
+            find.widgetWithText(EditableNumberRow, 'Full well (e⁻)'),
+          )
+          .currentValue,
+      '50000',
+    );
+    expect(
+      tester
+          .widget<EditableNumberRow>(
+            find.widgetWithText(EditableNumberRow, 'Peak altitude (°)'),
+          )
+          .currentValue,
+      '60',
+    );
     final before = _suggested(tester);
     expect(
       find.textContaining('Integration budget:'),
@@ -81,6 +98,10 @@ void main() {
     await _type(tester, 'Aperture (mm)', '0');
     expect(find.text('Needs a positive aperture.'), findsOneWidget);
     expect(find.textContaining('Suggested exposure:'), findsNothing);
+    await _type(tester, 'Aperture (mm)', '91');
+    await _type(tester, 'e⁻/ADU (0 = unknown)', '-0.8');
+    expect(find.text('Needs e⁻/ADU of 0 or more.'), findsOneWidget);
+    expect(find.byType(ErrorWidget), findsNothing);
   });
 
   testWidgets(

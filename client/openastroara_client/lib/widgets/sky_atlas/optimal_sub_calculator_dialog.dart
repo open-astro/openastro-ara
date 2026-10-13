@@ -92,8 +92,10 @@ class _OptimalSubCalculatorDialogState
     String? hint,
     int digits = 2,
   }) {
-    String fmt() =>
-        read().toStringAsFixed(digits).replaceFirst(RegExp(r'\.?0+$'), '');
+    // Only a fractional tail is trimmed: with digits 0 there is no point, and
+    // stripping the integer's own zeros turned 50000 into 5 — which the
+    // focus-out commit then parsed back in.
+    String fmt() => formatCalculatorNumber(read(), digits);
     return EditableNumberRow(
       label: label,
       currentValue: fmt(),
