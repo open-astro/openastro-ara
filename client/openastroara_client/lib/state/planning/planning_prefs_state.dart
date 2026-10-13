@@ -13,6 +13,11 @@ final planningPrefsServiceProvider = Provider<PlanningPrefsService>(
 /// loads) so the ranker and the advisor never wait on it.
 class PlanningPrefsNotifier extends Notifier<PlanningPrefs> {
   bool _userTouched = false;
+  final _ready = Completer<void>();
+
+  /// Completes once the saved knobs have been applied (or the load failed),
+  /// so a first-open ranker can wait instead of ranking twice.
+  Future<void> get ready => _ready.future;
 
   @override
   PlanningPrefs build() {
@@ -21,12 +26,15 @@ class PlanningPrefsNotifier extends Notifier<PlanningPrefs> {
   }
 
   Future<void> _restore() async {
-    final saved = await ref.read(planningPrefsServiceProvider).load();
-    // A user edit that raced ahead of the load wins.
-    if (_userTouched || !ref.mounted) {
-      return;
+    try {
+      final saved = await ref.read(planningPrefsServiceProvider).load();
+      // A user edit that raced ahead of the load wins.
+      if (!_userTouched && ref.mounted) {
+        state = saved;
+      }
+    } finally {
+      if (!_ready.isCompleted) _ready.complete();
     }
-    state = saved;
   }
 
   /// Clamped to [PlanningPrefs.minNoiseTolerancePct]..[PlanningPrefs.maxNoiseTolerancePct];

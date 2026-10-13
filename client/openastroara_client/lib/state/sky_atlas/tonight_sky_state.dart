@@ -89,7 +89,9 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
       .map((p) => (p.azimuthDeg, p.altitudeDeg))
       .toList();
   final opticsFinal = optics;
-  // #1140 — the Glover noise-tolerance knob is a client preference.
+  // #1140 — the Glover noise-tolerance knob is a client preference; wait for
+  // the saved value once so a non-default knob doesn't rank twice at launch.
+  await ref.read(planningPrefsProvider.notifier).ready;
   final noiseTolerancePct = ref.watch(planningPrefsProvider).noiseTolerancePct;
   // Rank OFF the UI isolate: the mirrored catalog is thousands of rows × a
   // 289-sample window scan each — synchronous on the UI thread is jank.

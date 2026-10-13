@@ -43,6 +43,14 @@ void main() {
     expect(prefs.saves, 2, reason: 'the NaN edit was ignored, not saved');
   });
 
+  test('#1140 ready completes after the saved value is applied', () async {
+    final prefs = _MemPrefs(const PlanningPrefs(noiseTolerancePct: 7));
+    final c = ProviderContainer(overrides: [planningPrefsServiceProvider.overrideWithValue(prefs)]);
+    addTearDown(c.dispose);
+    await c.read(planningPrefsProvider.notifier).ready;
+    expect(c.read(planningPrefsProvider).noiseTolerancePct, 7);
+  });
+
   test('#1140 a user edit that races ahead of the restore wins', () async {
     final prefs = _MemPrefs(const PlanningPrefs(noiseTolerancePct: 3));
     final c = ProviderContainer(

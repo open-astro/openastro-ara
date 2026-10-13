@@ -320,8 +320,8 @@ class TierProgress {
   final double hoursToGo;
   const TierProgress(this.standing, this.hoursToGo);
 
-  /// The one-line row text; null when nothing is banked yet (the plain
-  /// "needs ~N h" line already says it).
+  /// The one-line row text. (Nothing banked yet is [tierProgress] returning
+  /// null — the plain "needs ~N h" line already says it.)
   String get line => switch (standing) {
         TierStanding.complete =>
           'Full-structure tier complete — diminishing returns; consider a new target.',
@@ -333,7 +333,7 @@ class TierProgress {
 
   static String _fmt(double h) => h < 0.95
       ? '${(h * 60 / 10).ceil() * 10} min'
-      : '${h.toStringAsFixed(h < 3 ? 1 : 0)} h';
+      : '${h.toStringAsFixed(h < 2.95 ? 1 : 0)} h';
 }
 
 /// Pure — unit-tested. [bankedHours] null = nothing captured yet (returns
