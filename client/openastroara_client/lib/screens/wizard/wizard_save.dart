@@ -416,9 +416,11 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
       .whereType<Object>()
       .toList();
   if (errors.isNotEmpty) {
-    // #1137 — every section died in transit (no response at all): the daemon is
-    // unreachable, not refusing. The shell keeps the draft on this device and
-    // replays it (onto this server, with the profile already created) later.
+    // #1137 — every FAILED section died in transit (no response at all): the
+    // daemon stopped answering, it did not refuse anything. The shell keeps the
+    // draft on this device and replays it (onto this server, with the profile
+    // already created) later; the replay re-applies all sections, so the ones
+    // that did land are simply written again.
     if (errors.every((e) => e is DioException && e.response == null)) {
       throw ProfileSaveTransportFailure(errors.length);
     }
@@ -427,16 +429,17 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   }
 }
 
-/// Every section PUT of a profile save failed without a response from the
-/// daemon (Wi-Fi gone, daemon down) — distinct from a section the daemon
-/// rejected. The wizard treats it like saving with no server: keep the draft
-/// locally and replay it on reconnect.
+/// Every section PUT that FAILED did so without a response from the daemon
+/// (Wi-Fi gone, daemon down, a timeout) and none was rejected — sections that
+/// landed before the link dropped are fine. The wizard treats it like saving
+/// with no server: keep the draft locally and replay it on reconnect (the
+/// replay re-applies every section, idempotently).
 class ProfileSaveTransportFailure implements Exception {
   final int sections;
   const ProfileSaveTransportFailure(this.sections);
   @override
   String toString() =>
-      'The rig did not answer while saving $sections profile section(s).';
+      'The rig stopped answering while saving $sections profile section(s).';
 }
 
 /// Runs a section save and captures its error (null = success) so a concurrent
