@@ -67,6 +67,12 @@ class _FakeApi extends ProfileApi {
       ];
 }
 
+class _FailingUnguidedApi extends _FakeApi {
+  @override
+  Future<UnguidedSettings> getUnguidedSettings() async =>
+      throw StateError('500 from /profile/unguided');
+}
+
 void main() {
   late Directory tmp;
   late ProfileCacheService cache;
@@ -116,6 +122,27 @@ void main() {
     final seeded = container.read(customHorizonProvider);
     expect(seeded.map((p) => p.azimuthDeg), [90, 180]);
     expect(seeded.map((p) => p.altitudeDeg), [25, 12]);
+  });
+
+  test('#1264: a failed unguided read is best-effort — the rest is captured, no unguided key', () async {
+    await captureProfileCache(cache, _FailingUnguidedApi(), list);
+    final stored = await cache.load();
+    final p1 = (stored['sections'] as Map)['p1'] as Map;
+    expect(p1['optics'], containsPair('focal_length_mm', 382));
+    expect(p1.containsKey('unguided'), isFalse);
+  });
+
+  test('#1264: a snapshot without an unguided section leaves a staged knob alone', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    final container = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+    ]);
+    addTearDown(container.dispose);
+    container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('pixel');
+    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+    expect(container.read(unguidedSettingsProvider).priorToleranceBasis, 'pixel',
+        reason: 'an older snapshot must not reset the knob to defaults');
   });
 
   test('#1137: a snapshot without a horizon leaves the notifier alone', () async {
