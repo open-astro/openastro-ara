@@ -139,6 +139,11 @@ public interface IProfileStore {
     TrackingCalibrationDto? GetTrackingCalibration();
     void PutTrackingCalibration(TrackingCalibrationDto? value);
 
+    /// <summary>#1140 P2 sky-model calibration — daemon-owned derived data fitted from the library's frames,
+    /// never written by the client. Null means "never fitted"; Put(null) clears. Single-writer.</summary>
+    SkyModelCalibrationDto? GetSkyModelCalibration();
+    void PutSkyModelCalibration(SkyModelCalibrationDto? value);
+
     /// <summary>§30.7.4 calibration-state block (guider slice, e-4b-2) — daemon-owned validity
     /// records stamped by the §63.6 dark-library / defect-map builds on completion. Writers are
     /// the guider build tasks (serialized by their own calibration-build gate), so plain Get/Put.</summary>

@@ -808,6 +808,10 @@ public partial class Program {
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
+        // #1140 P2 — the sky-model calibration fit reads the catalog's frame rows and writes the profile.
+        builder.Services.AddSingleton(sp => new SkyModelCalibrationService(
+            sp.GetRequiredService<IProfileStore>(), sp.GetService<IFrameRepository>()));
+
         // §58.14 — the pre-sleep checklist gathers facts from readers that already exist; every
         // one is optional so a reduced host (tests, a daemon without a subsystem) still answers.
         builder.Services.AddSingleton(sp => new PreflightChecklistService(
@@ -1156,6 +1160,7 @@ public partial class Program {
         app.MapDiagnosticsEndpoints();
         app.MapFaultsEndpoints(); // §42.5 — persisted fault history
         app.MapPreflightEndpoints(); // §58.14 — pre-sleep checklist
+        app.MapPlanningEndpoints(); // #1140 P2 — sky-model calibration store
 
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
         // functional today). /api/v1/server/info already lives directly in this file.

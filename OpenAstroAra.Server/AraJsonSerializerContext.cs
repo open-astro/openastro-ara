@@ -257,6 +257,9 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FocusCalibrationSampleDto))]
 [JsonSerializable(typeof(IReadOnlyList<FocusCalibrationSampleDto>))]
 [JsonSerializable(typeof(TrackingCalibrationDto))]
+// #1140 P2 — sky-model calibration store.
+[JsonSerializable(typeof(SkyModelCalibrationDto))]
+[JsonSerializable(typeof(SkyModelFilterCalibrationDto))]
 [JsonSerializable(typeof(TrackingPriorDto))]
 // §58.14 — pre-sleep checklist.
 [JsonSerializable(typeof(PreflightChecklistDto))]

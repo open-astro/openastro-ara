@@ -46,7 +46,8 @@ public static class ProfileStoreSnapshot {
         CalibrationState: s.GetCalibrationState(),
         PolarAlign: s.GetPolarAlignSettings(),
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
-        TrackingCalibration: s.GetTrackingCalibration());
+        TrackingCalibration: s.GetTrackingCalibration(),
+        SkyModelCalibration: s.GetSkyModelCalibration());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -77,6 +78,8 @@ public static class ProfileStoreSnapshot {
         s.PutFocusCalibration(snap.FocusCalibration);
         // #1264 — same reasoning: a profile whose rig was never probed must read "never measured".
         s.PutTrackingCalibration(snap.TrackingCalibration);
+        // #1140 P2 — same reasoning: a profile whose library was never fitted reads "never fitted".
+        s.PutSkyModelCalibration(snap.SkyModelCalibration);
         // §30.7.4 — same reasoning as focus calibration: a profile that never built darks must read
         // everything-invalid after select, not inherit the previous profile's validity stamps.
         s.PutCalibrationState(snap.CalibrationState ?? CalibrationStateDto.Empty);

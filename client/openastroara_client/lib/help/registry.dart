@@ -2242,6 +2242,22 @@ const Map<String, Help> helpRegistry = {
   ),
 
   // ── Planning knobs (img.defaults, #1140) ────────────────────────────────
+  'img.defaults.sky_model_calibration': Help(
+    key: 'img.defaults.sky_model_calibration',
+    title: 'Sky model calibration',
+    body:
+        'The planner\'s hours figures rest on a modelled sky flux from spec-sheet numbers: aperture, pixel scale, '
+        'quantum efficiency, the filter\'s passband and your site\'s sky brightness. Real rigs lose light the '
+        'spec sheets miss (transmission, a QE curve that is not its peak), so Ara fits one factor k per filter '
+        'kind from your own library: every recent light frame\'s sky background (the darkest 5 % of its pixels) '
+        'against its exposure. With two or more exposure lengths the fit\'s intercept is the camera\'s pedestal '
+        'and no bias frame is needed; with one length a bias frame pins it. k is measured sky rate over modelled '
+        'sky rate; a kind passes when k lands in 0.4–1.5 and the scatter stays under 30 % over at least three '
+        'frames. A kind that fails keeps its figures with the reason, and is not applied.\n\n'
+        'Recalibrate refits from the last 90 days whenever you like; nothing is applied to the planner until a '
+        'kind passes.',
+    relatedSettings: ['img.defaults.noise_tolerance_pct'],
+  ),
   'img.defaults.noise_tolerance_pct': Help(
     key: 'img.defaults.noise_tolerance_pct',
     title: 'Optimal-sub noise tolerance',

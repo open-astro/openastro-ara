@@ -3550,6 +3550,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreflightChecklistDto'
+  /api/v1/planning/sky-model:
+    get:
+      tags:
+        - Planning
+      operationId: GetSkyModelCalibration
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkyModelCalibrationDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      tags:
+        - Planning
+      operationId: ClearSkyModelCalibration
+      responses:
+        '204':
+          description: No Content
+  /api/v1/planning/sky-model/recalibrate:
+    post:
+      tags:
+        - Planning
+      summary: Fit the per-filter-kind sky-model calibration k from the library's recent frames and store it on the profile.
+      operationId: RecalibrateSkyModel
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkyModelCalibrationDto'
   /api/v1/server/state:
     get:
       tags:
@@ -10741,6 +10779,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/TrackingCalibrationDto'
+        sky_model_calibration:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SkyModelCalibrationDto'
     QualityScoreBreakdownDto:
       required:
         - composite
@@ -12001,6 +12043,95 @@ components:
             - string
           format: double
           default: 0
+    SkyModelCalibrationDto:
+      required:
+        - fitted_utc
+        - frames_considered
+        - filters
+      type: object
+      properties:
+        fitted_utc:
+          type: string
+          format: date-time
+        frames_considered:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkyModelFilterCalibrationDto'
+    SkyModelFilterCalibrationDto:
+      required:
+        - kind
+        - bin
+        - k
+        - scatter_pct
+        - pedestal_adu
+        - measured_rate_e_per_sec_per_px
+        - predicted_rate_e_per_sec_per_px
+        - frame_count
+        - passed
+        - note
+      type: object
+      properties:
+        kind:
+          type: string
+        bin:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        k:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        scatter_pct:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        pedestal_adu:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        measured_rate_e_per_sec_per_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        predicted_rate_e_per_sec_per_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        passed:
+          type: boolean
+        note:
+          type:
+            - 'null'
+            - string
     SlewRequestDto:
       required:
         - right_ascension_hours
@@ -13085,6 +13216,7 @@ tags:
   - name: Diagnostics
   - name: Faults
   - name: Preflight
+  - name: Planning
   - name: Server
   - name: ServerUpdate
   - name: Connection

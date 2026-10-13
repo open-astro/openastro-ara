@@ -8,6 +8,8 @@ import '../../../state/saved_server_state.dart';
 import '../../../state/settings/imaging_defaults_state.dart';
 import '../../../services/planning_prefs_service.dart';
 import '../../../state/planning/planning_prefs_state.dart';
+import '../../../state/planning/sky_model_calibration_state.dart';
+import '../../../state/settings/filter_set_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -28,6 +30,7 @@ class ImagingDefaultsPanel extends ConsumerStatefulWidget {
 class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     with PanelSaveRegistration {
   String? _lastError;
+  bool _refitting = false;
 
   @override
   void initState() {
@@ -217,8 +220,96 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
                 ?.copyWith(color: AraColors.textDisabled),
           ),
         ),
+        // #1140 P2 — the sky-model calibration store: k per filter kind, fitted
+        // by the daemon from the library's frame backgrounds.
+        const SizedBox(height: 16),
+        const SettingsSectionHeader('Sky model calibration'),
+        ..._skyModelRows(),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _api() != null && !_refitting ? _recalibrateSkyModel : null,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Recalibrate from recent frames'),
+          ),
+        ),
       ],
     );
+  }
+
+  List<Widget> _skyModelRows() {
+    final record = ref.watch(skyModelCalibrationProvider);
+    final value = record.asData?.value;
+    if (_api() == null) {
+      return const [
+        SettingsRow(
+          label: 'Calibration',
+          value: 'Connect to the rig to read or refit the calibration.',
+          helpKey: 'img.defaults.sky_model_calibration',
+        ),
+      ];
+    }
+    if (record.isLoading) {
+      return const [SettingsRow(label: 'Calibration', value: 'Reading…', helpKey: 'img.defaults.sky_model_calibration')];
+    }
+    if (value == null) {
+      return const [
+        SettingsRow(
+          label: 'Calibration',
+          value:
+              'Not fitted yet — the planner uses the spec-sheet sky model. Recalibrate reads your '
+              'library\'s recent light frames (their sky background against exposure, per filter) and '
+              'fits one factor per filter kind.',
+          helpKey: 'img.defaults.sky_model_calibration',
+        ),
+      ];
+    }
+    final when = value.fittedUtc.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return [
+      SettingsRow(
+        label: 'Fitted',
+        value:
+            '${when.year}-${two(when.month)}-${two(when.day)} ${two(when.hour)}:${two(when.minute)} · '
+            '${value.framesConsidered} frames considered',
+        helpKey: 'img.defaults.sky_model_calibration',
+      ),
+      if (value.filters.isEmpty)
+        const SettingsRow(
+          label: 'Filters',
+          value: 'No light frame with a measured background in the last 90 days — image a night, then recalibrate.',
+        ),
+      for (final f in value.filters)
+        SettingsRow(
+          label: '${FilterKind.fromWire(f.kind).label}${f.bin > 1 ? ' · bin ${f.bin}' : ''}',
+          value: f.standing,
+        ),
+    ];
+  }
+
+  Future<void> _recalibrateSkyModel() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _refitting = true);
+    try {
+      final record = await ref.read(skyModelCalibrationProvider.notifier).recalibrate();
+      final applied = record?.appliedK.length ?? 0;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            applied == 0
+                ? 'Refitted: no filter passed the gate yet — see the notes per filter.'
+                : 'Refitted: $applied filter kind${applied == 1 ? '' : 's'} calibrated.',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(friendlyError(e, action: 'refit the sky model'))),
+      );
+    } finally {
+      if (mounted) setState(() => _refitting = false);
+    }
   }
 }
 

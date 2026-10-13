@@ -464,6 +464,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1140 P2 sky-model calibration — null until a recalibrate fits one.
+    private SkyModelCalibrationDto? _skyModelCalibration;
+
+    public SkyModelCalibrationDto? GetSkyModelCalibration() {
+        lock (_lock) { return _skyModelCalibration; }
+    }
+
+    public void PutSkyModelCalibration(SkyModelCalibrationDto? value) {
+        lock (_lock) { _skyModelCalibration = value; }
+        RaiseChanged();
+    }
+
     // §30.7.4 calibration state (e-4b-2) — everything-invalid until a build stamps it.
     private CalibrationStateDto _calibrationState = CalibrationStateDto.Empty;
 

@@ -197,6 +197,8 @@ public sealed class ProfileShareService : IProfileShareService {
         FocusCalibration = null,
         // Strip the #1264 tracking calibration — it was measured on the donor's mount.
         TrackingCalibration = null,
+        // Strip the #1140 sky-model calibration — fitted to the donor's optics, camera and sky.
+        SkyModelCalibration = null,
         // Strip the §30.7.4 calibration-state stamps — the donor's dark library / defect map live
         // on the donor's guider host; "valid" on the recipient's rig would be a lie.
         CalibrationState = CalibrationStateDto.Empty,

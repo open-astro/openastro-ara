@@ -201,6 +201,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     public TrackingCalibrationDto? GetTrackingCalibration() { lock (_lock) { return _snapshot.TrackingCalibration; } }
     public void PutTrackingCalibration(TrackingCalibrationDto? value) => UpdateAndPersist(s => s with { TrackingCalibration = value });
 
+    public SkyModelCalibrationDto? GetSkyModelCalibration() { lock (_lock) { return _snapshot.SkyModelCalibration; } }
+    public void PutSkyModelCalibration(SkyModelCalibrationDto? value) => UpdateAndPersist(s => s with { SkyModelCalibration = value });
+
     public CalibrationStateDto GetCalibrationState() { lock (_lock) { return _snapshot.CalibrationState!; } }
     public void PutCalibrationState(CalibrationStateDto value) => UpdateAndPersist(s => s with { CalibrationState = value });
 

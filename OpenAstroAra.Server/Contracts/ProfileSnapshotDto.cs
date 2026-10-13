@@ -84,4 +84,7 @@ public sealed record ProfileSnapshotDto(
     FilterWheelPolicyDto? FilterWheelPolicy = null,
     // #1264 unguided tracking calibration — daemon-owned derived data written by the sequencer's
     // TrackingProbe. Like FocusCalibration, null is MEANINGFUL ("never measured") and passes through.
-    TrackingCalibrationDto? TrackingCalibration = null);
+    TrackingCalibrationDto? TrackingCalibration = null,
+    // #1140 P2 sky-model calibration — daemon-owned derived data fitted from the library. Null is
+    // meaningful ("never fitted") and passes through like the other calibrations.
+    SkyModelCalibrationDto? SkyModelCalibration = null);
