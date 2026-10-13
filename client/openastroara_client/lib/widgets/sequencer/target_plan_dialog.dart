@@ -11,6 +11,7 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
+import '../../state/planning/planning_prefs_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/optimal_sub_local.dart';
 
@@ -145,6 +146,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
       filterName: filterName,
       raDeg: widget.raDeg,
       decDeg: widget.decDeg,
+      noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
     );
     if (outcome is! LocalOptimalSubSuccess) {
       return defaultExposure > 0 ? defaultExposure : 60;

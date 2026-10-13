@@ -1,4 +1,5 @@
 import '../models/stats/stats_time.dart';
+import '../util/integration_budget.dart';
 
 /// NEXTGEN §1 — the daemon's recommended filter approach for a target. Wire
 /// tokens are the §60.6 all-lowercase enum values; an unknown/absent token
@@ -137,6 +138,10 @@ class TonightSkyObject {
   /// the FULL-STRUCTURE tier drives the banked-progress ring. Null with it.
   final double? budgetFullHours;
 
+  /// #1140 — the whole budget (tiers + the inputs it rests on) for the row's
+  /// detail popover. Client-ranker only; null with [integrationBudget].
+  final IntegrationBudget? budget;
+
   const TonightSkyObject({
     required this.id,
     required this.name,
@@ -167,6 +172,7 @@ class TonightSkyObject {
     this.hoursFreeScore,
     this.integrationBudget,
     this.budgetFullHours,
+    this.budget,
   });
 
   /// Parse one wire object, or null when a required field is missing/wrong-typed

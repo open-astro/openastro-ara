@@ -822,6 +822,15 @@ const List<Setting> settingsRegistry = [
     defaultValue: '',
   ),
   Setting(
+    id: 'img.defaults.noise_tolerance_pct',
+    label: 'Optimal-sub noise tolerance (%)',
+    description: 'How much of the stack\'s noise the camera\'s read noise may add before a sub counts as long enough (the Glover criterion). 5 % is the classic figure; lower means longer subs for the same sky. Client-local planning knob — it drives Tonight\'s Sky, the plan dialog and the sequence editor\'s sub advisor, and the integration budget\'s hours.',
+    keywords: ['glover', 'noise tolerance', 'optimal sub', 'sub exposure', 'read noise', 'planning', 'budget'],
+    path: ['Settings', 'Imaging', 'Defaults'],
+    type: SettingType.doubleRange(min: 1, max: 20, step: 0.5),
+    defaultValue: 5.0,
+  ),
+  Setting(
     id: 'session.storage.backup_stream_mbps',
     label: 'Backup bandwidth cap (Mbps)',
     description: 'Average-rate ceiling for the real-time backup stream\'s downloads; 0 (the default) means unlimited. Each frame still moves at link speed — the puller then waits until the average is back under the cap, on top of the built-in pause while an exposure is downloading.',

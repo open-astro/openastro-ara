@@ -47,6 +47,8 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
   String? filterName,
   double? raDeg,
   double? decDeg,
+  // #1140 — the Glover noise-tolerance knob; see planningPrefsProvider.
+  double noiseTolerancePct = 5.0,
 }) {
   final assumed = <String>[];
 
@@ -126,6 +128,7 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
     focalLengthMm: optics.focalLengthMm,
     reducerFactor: optics.reducerFactor,
     quantumEfficiency: qe,
+    noiseTolerancePct: noiseTolerancePct,
     skyMagPerArcsec2: effectiveSkyMag(
       bortleClass: site.bortleClass,
       sqmMagPerArcsec2: site.sqmMagPerArcsec2,

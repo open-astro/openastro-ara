@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../util/integration_budget.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -382,6 +383,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       selectedTonightObjectProvider.select((id) => id == _object.id),
     );
     final bankedHours = _bankedHours();
+    final tierStanding = _object.budgetFullHours == null
+        ? null
+        : tierProgress(
+            bankedHours: bankedHours,
+            neededHours: _object.budgetFullHours!,
+            remainingTonightHours: _object.remainingHours,
+          );
 
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     return TweenAnimationBuilder<double>(
@@ -470,6 +478,14 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                       _FilterAdviceChip(advice: _object.filterAdvice!),
                     if (_object.moonUpFraction != null)
                       _MoonChip(object: _object),
+                    // #1140 P5 — banked hours already meet the full tier:
+                    // steer the night toward something new.
+                    if (tierStanding?.standing == TierStanding.complete)
+                      const _AdviceChip(
+                        icon: Icons.task_alt,
+                        label: 'Tier complete — diminishing returns',
+                        color: AraColors.accentConnected,
+                      ),
                   ],
                 ),
                 // S4 - the dark window as a timeline strip (start/transit/end
@@ -532,15 +548,32 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                       BudgetRing(banked: bankedHours, needed: needed),
                       const SizedBox(width: AraSpace.s8),
                       Expanded(
-                        child: Text(
-                          bankedHours != null
-                              ? '${bankedHours.toStringAsFixed(1)} of '
-                                    '~${needed.toStringAsFixed(0)} h captured'
-                              : 'needs ~${needed.toStringAsFixed(0)} h for the '
-                                    'full structure',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bankedHours != null
+                                  ? '${bankedHours.toStringAsFixed(1)} of '
+                                        '~${needed.toStringAsFixed(0)} h captured'
+                                  : 'needs ~${needed.toStringAsFixed(0)} h for the '
+                                        'full structure',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AraColors.textSecondary,
+                              ),
+                            ),
+                            // #1140 P5 — "closest to completing a tier tonight":
+                            // what is left against tonight's dark window.
+                            if (tierStanding case final standing?)
+                              Text(
+                                standing.line,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: standing.standing ==
+                                          TierStanding.finishesTonight
+                                      ? AraColors.accentConnected
+                                      : AraColors.textSecondary,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -758,6 +791,23 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       if (o.sizeMajArcmin case final size?)
         _detailLine('Size', '${size.toStringAsFixed(1)} arcmin'),
     ];
+    // #1140 P3 — the budget's inputs, so "Hours needed" is auditable.
+    if (o.budget case final budget?) {
+      rows.add(const SizedBox(height: 8));
+      rows.add(Text('Hours needed — how it was computed',
+          style: Theme.of(context).textTheme.titleSmall));
+      rows.add(_detailLine('Tiers', budget.display));
+      for (final (label, value) in budget.auditLines) {
+        rows.add(_detailLine(label, value));
+      }
+      rows.add(Text(
+        'T = SNR² · (S_target + S_sky) / S_target², per tier; the full and faint '
+        'tiers use the surface brightness dimmed by the offsets above.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: AraColors.textDisabled,
+        ),
+      ));
+    }
     if (o.scoreReasons case final reasons? when reasons.isNotEmpty) {
       rows.add(const SizedBox(height: 8));
       rows.add(

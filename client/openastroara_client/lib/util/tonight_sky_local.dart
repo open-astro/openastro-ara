@@ -163,6 +163,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   int mosaicTilesX = 1,
   int mosaicTilesY = 1,
   int limit = 10,
+
+  /// #1140 — the Glover noise-tolerance knob (percent of stack noise the
+  /// read noise may add; 5 is the classic figure). A client-local planning
+  /// preference, so the ranker takes it as an input.
+  double noiseTolerancePct = 5.0,
 }) {
   // The curated imaging-regions layer (realistic extents + evocative names for
   // the famous complexes, plus region-scale fields with no catalog anchor)
@@ -299,6 +304,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
             : defaultQuantumEfficiency,
         skyMagPerArcsec2: skyMag,
         filterBandwidthNm: effectiveBandwidthNm(filter),
+        noiseTolerancePct: noiseTolerancePct,
       );
       final result = computeOptimalSub(input);
       return (
@@ -565,6 +571,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     // flux input AND a catalog surface brightness; degrades to null.
     String? integrationBudgetLine;
     double? budgetFullHours;
+    IntegrationBudget? budgetRecord;
     if (advised != null && o.surfaceBrightness != null) {
       final budgetInput = adviceFor(advised.$1).$3;
       if (budgetInput != null) {
@@ -577,6 +584,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
           moonSeparationDeg: moonSeparationDeg,
         );
         budgetFullHours = budget.full.practical ? budget.full.hours : null;
+        budgetRecord = budget;
         integrationBudgetLine = budget.moonBrighteningMag >= 0.3
             ? '${budget.display} (tonight\'s moon costs '
                   '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
@@ -628,6 +636,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // hours-free remainder scales by the same finalScore/score ratio.
         integrationBudget: integrationBudgetLine,
         budgetFullHours: budgetFullHours,
+      budget: budgetRecord,
         hoursFreeScore: score > 0
             ? double.parse(
                 (finalScore * (score - hoursScore) / score).toStringAsFixed(1),

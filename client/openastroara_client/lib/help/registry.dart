@@ -2238,4 +2238,21 @@ const Map<String, Help> helpRegistry = {
         '10 arcminutes — a run that drifts less is left alone.',
     relatedHelpKeys: ['img.unguided.ceiling', 'img.unguided.probe'],
   ),
+
+  // ── Planning knobs (img.defaults, #1140) ────────────────────────────────
+  'img.defaults.noise_tolerance_pct': Help(
+    key: 'img.defaults.noise_tolerance_pct',
+    title: 'Optimal-sub noise tolerance',
+    body:
+        'The Glover sub-exposure criterion asks: how long must a sub be before the sky\'s own shot noise '
+        'swamps the camera\'s read noise? This knob is the "swamped enough" line — the percent of the '
+        'stack\'s total noise the read noise is allowed to add. 5 % is the figure popularised by Dr. Robin '
+        'Glover (SharpCap). Lower it (2–3 %) for longer subs and fewer files at the cost of more lost per '
+        'ruined frame; raise it (8–10 %) when guiding or wind limit your subs and you accept a little more '
+        'read noise in the stack.\n\n'
+        'It is a planning preference on this device, not a profile setting: Tonight\'s Sky, the plan dialog '
+        'and the sequence editor\'s advisor all read it, and so does the integration budget\'s hours figure.',
+    relatedSettings: ['img.defaults.noise_tolerance_pct'],
+    keywords: ['glover', 'sub length', 'read noise'],
+  ),
 };

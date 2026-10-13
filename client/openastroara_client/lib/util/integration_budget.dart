@@ -81,13 +81,66 @@ class IntegrationBudget {
   /// in magnitudes (0 = moon down or new).
   final double moonBrighteningMag;
 
+  /// #1140 — the inputs the hours rest on, so the number is auditable in the
+  /// row's detail popover rather than oracular: the catalog surface
+  /// brightness, the dark-sky magnitude, the filter passband and the sky /
+  /// core-tier target flux in e⁻/s/px (the two terms of T = SNR²·(S_t+S_sky)/S_t²).
+  final double surfaceBrightnessMagArcsec2;
+  final double darkSkyMagArcsec2;
+  final double filterBandwidthNm;
+  final double skyFluxEPerSecPx;
+  final double coreTargetFluxEPerSecPx;
+  final BudgetTuning tuning;
+
   const IntegrationBudget({
     required this.core,
     required this.full,
     required this.faint,
     required this.airmass,
     required this.moonBrighteningMag,
+    this.surfaceBrightnessMagArcsec2 = double.nan,
+    this.darkSkyMagArcsec2 = double.nan,
+    this.filterBandwidthNm = double.nan,
+    this.skyFluxEPerSecPx = double.nan,
+    this.coreTargetFluxEPerSecPx = double.nan,
+    this.tuning = BudgetTuning.v1,
   });
+
+  /// The effective sky tonight: dark sky brightened by the moon.
+  double get effectiveSkyMagArcsec2 => darkSkyMagArcsec2 - moonBrighteningMag;
+
+  /// Label/value lines for the detail popover (#1140 P3 "auditable, never
+  /// oracular"). Finite inputs only — a budget built without them says so.
+  List<(String, String)> get auditLines {
+    if (surfaceBrightnessMagArcsec2.isNaN) {
+      return const [('Budget inputs', 'not recorded')];
+    }
+    String mag(double v) => '${v.toStringAsFixed(1)} mag/arcsec²';
+    String flux(double v) => v >= 10
+        ? '${v.toStringAsFixed(0)} e⁻/s/px'
+        : '${v.toStringAsFixed(2)} e⁻/s/px';
+    return [
+      ('Surface brightness', mag(surfaceBrightnessMagArcsec2)),
+      (
+        'Sky tonight',
+        moonBrighteningMag >= 0.05
+            ? '${mag(effectiveSkyMagArcsec2)} (dark ${darkSkyMagArcsec2.toStringAsFixed(1)}, moon +${moonBrighteningMag.toStringAsFixed(1)})'
+            : mag(darkSkyMagArcsec2),
+      ),
+      ('Filter passband', '${filterBandwidthNm.toStringAsFixed(0)} nm'),
+      ('Airmass at peak', airmass.toStringAsFixed(2)),
+      ('Sky flux', flux(skyFluxEPerSecPx)),
+      ('Core target flux', flux(coreTargetFluxEPerSecPx)),
+      (
+        'SNR goals',
+        'core ${_fmtNum(tuning.snrCore)} · full ${_fmtNum(tuning.snrFull)} (SB +${_fmtNum(tuning.fullTierOffsetMag)}) · faint ${_fmtNum(tuning.snrFaint)} (SB +${_fmtNum(tuning.faintTierOffsetMag)})',
+      ),
+      ('Impractical beyond', '${_fmtNum(tuning.impracticalHours)} h'),
+    ];
+  }
+
+  static String _fmtNum(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
   /// The compact row line: "core ~2 h · full ~9 h · faint impractical".
   String get display {
@@ -236,6 +289,69 @@ IntegrationBudget computeIntegrationBudget({
     faint: tier('faint', tuning.faintTierOffsetMag, tuning.snrFaint),
     airmass: airmass,
     moonBrighteningMag: moonMag,
+    surfaceBrightnessMagArcsec2: surfaceBrightnessMagArcsec2,
+    darkSkyMagArcsec2: input.skyMagPerArcsec2,
+    filterBandwidthNm: input.filterBandwidthNm,
+    skyFluxEPerSecPx: sSky,
+    coreTargetFluxEPerSecPx: skyFluxEPerSecPerPx(
+        _withSkyMag(input, surfaceBrightnessMagArcsec2 + extinctionMag)),
+    tuning: tuning,
+  );
+}
+
+/// #1140 P5 — where a target stands against its FULL-structure tier, given
+/// what the library has banked and how many dark hours are left tonight.
+enum TierStanding {
+  /// Banked hours meet the tier: more subs buy little — point the night at
+  /// something new.
+  complete,
+
+  /// The remaining need fits inside tonight's window.
+  finishesTonight,
+
+  /// Tonight helps but another night is needed.
+  needsMoreNights,
+}
+
+class TierProgress {
+  final TierStanding standing;
+
+  /// Hours still needed for the tier (0 when complete).
+  final double hoursToGo;
+  const TierProgress(this.standing, this.hoursToGo);
+
+  /// The one-line row text; null when nothing is banked yet (the plain
+  /// "needs ~N h" line already says it).
+  String get line => switch (standing) {
+        TierStanding.complete =>
+          'Full-structure tier complete — diminishing returns; consider a new target.',
+        TierStanding.finishesTonight =>
+          '${_fmt(hoursToGo)} to go — finishes tonight.',
+        TierStanding.needsMoreNights =>
+          '${_fmt(hoursToGo)} to go — needs another night.',
+      };
+
+  static String _fmt(double h) => h < 0.95
+      ? '${(h * 60 / 10).ceil() * 10} min'
+      : '${h.toStringAsFixed(h < 3 ? 1 : 0)} h';
+}
+
+/// Pure — unit-tested. [bankedHours] null = nothing captured yet (returns
+/// null: no standing to report). [remainingTonightHours] is the dark window
+/// still ahead for this target tonight.
+TierProgress? tierProgress({
+  required double? bankedHours,
+  required double neededHours,
+  required double remainingTonightHours,
+}) {
+  if (bankedHours == null || neededHours <= 0) return null;
+  final toGo = neededHours - bankedHours;
+  if (toGo <= 0) return const TierProgress(TierStanding.complete, 0);
+  return TierProgress(
+    toGo <= remainingTonightHours
+        ? TierStanding.finishesTonight
+        : TierStanding.needsMoreNights,
+    toGo,
   );
 }
 

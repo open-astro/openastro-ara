@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../planning/planning_prefs_state.dart';
 import 'dart:isolate';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -88,6 +89,8 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
       .map((p) => (p.azimuthDeg, p.altitudeDeg))
       .toList();
   final opticsFinal = optics;
+  // #1140 — the Glover noise-tolerance knob is a client preference.
+  final noiseTolerancePct = ref.watch(planningPrefsProvider).noiseTolerancePct;
   // Rank OFF the UI isolate: the mirrored catalog is thousands of rows × a
   // 289-sample window scan each — synchronous on the UI thread is jank.
   return Isolate.run(() => computeTonightSkyLocal(
@@ -102,6 +105,7 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
         // spans broadband + narrowband makes far more of the sky worth
         // listing — a 10-row cap hid the variety the scoring surfaces.
         limit: 30,
+        noiseTolerancePct: noiseTolerancePct,
       ));
 }
 

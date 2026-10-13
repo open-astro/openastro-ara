@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
@@ -726,6 +727,31 @@ void main() {
         site: site, optics: optics, atUtc: winterNight, catalog: catalog, limit: 30);
     expect(list.map((o) => o.id), contains('NGC 1'));
     expect(list.map((o) => o.id), isNot(contains('WR 1')));
+  });
+
+  test('#1140 the row carries the whole budget, and the noise-tolerance knob moves the sub', () {
+    const electronics = CameraElectronics(readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8);
+    const filters = FilterSetSettings(filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]);
+    // The starter catalog carries no surface brightness; a bundled-catalog row does.
+    const nan = PlanningDso(
+        id: 'NGC 7000', name: 'North America Nebula', type: 'HII', magnitude: 4.0,
+        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 120, sizeMinArcmin: 100, surfaceBrightness: 22);
+    List<TonightSkyObject> ranked(double pct) => computeTonightSkyLocal(
+          site: site,
+          optics: optics,
+          electronics: electronics,
+          filterSet: filters,
+          catalog: [nan],
+          atUtc: DateTime.utc(2026, 8, 15, 3),
+          noiseTolerancePct: pct,
+        );
+    final at5 = ranked(5).where((o) => o.id == 'NGC 7000').single;
+    final at2 = ranked(2).where((o) => o.id == 'NGC 7000').single;
+    expect(at5.budget, isNotNull, reason: 'a catalog SB and a computing rig');
+    expect(at5.budget!.full.hours, at5.budgetFullHours ?? at5.budget!.full.hours);
+    expect(at5.budget!.auditLines.map((l) => l.$1), contains('Sky flux'));
+    expect(at5.optimalSubS, isNotNull);
+    expect(at2.optimalSubS!, greaterThan(at5.optimalSubS!), reason: 'a tighter tolerance wants longer subs');
   });
 }
 

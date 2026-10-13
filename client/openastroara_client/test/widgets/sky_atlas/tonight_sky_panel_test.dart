@@ -19,6 +19,10 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/widgets/sky_atlas/planning_visuals.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
+import 'package:openastroara/models/stats/stats_target.dart';
+import 'package:openastroara/state/stats/stats_targets_state.dart';
+import 'package:openastroara/util/integration_budget.dart';
+import 'package:openastroara/util/optimal_sub.dart';
 
 /// Records create()/updateSequence() calls; the append path additionally reads
 /// [runState] (null = no active run) and [detail] (the open sequence's body).
@@ -164,6 +168,7 @@ Widget _host(_RecordingClient client,
     );
 
 void main() {
+  _budgetTests();
   _offlineAddTests();
   _upNowTests();
   testWidgets('the add action creates a full imaging run named after the object',
@@ -768,4 +773,99 @@ class _MemDrafts extends DraftSequenceService {
   Future<void> save(DraftSequence draft) async => store[draft.id] = draft;
   @override
   Future<void> delete(String id) async => store.remove(id);
+}
+
+class _FixedStats extends StatsTargetsNotifier {
+  _FixedStats(this._v);
+  final List<StatsTarget>? _v;
+  @override
+  Future<List<StatsTarget>?> build() async => _v;
+}
+
+/// #1140 — the budget's inputs are auditable from the row, and banked hours
+/// against the full tier read as a standing (complete / finishes tonight /
+/// another night).
+void _budgetTests() {
+  final budget = computeIntegrationBudget(
+    input: const OptimalSubInput(
+      readNoiseE: 1.5,
+      fullWellE: 50000,
+      pixelSizeUm: 3.76,
+      apertureMm: 91,
+      focalLengthMm: 447,
+      quantumEfficiency: 0.8,
+      skyMagPerArcsec2: 18.5,
+      filterBandwidthNm: 300,
+    ),
+    surfaceBrightnessMagArcsec2: 22, // full tier ≈ 10 h: room for a standing
+    peakAltitudeDeg: 60,
+  );
+  TonightSkyObject withBudget({double remaining = 3.2}) => TonightSkyObject(
+        id: 'M31',
+        name: 'Andromeda Galaxy',
+        type: 'galaxy',
+        magnitude: 3.4,
+        raDeg: 10.6847,
+        decDeg: 41.269,
+        altitudeDeg: 55,
+        maxAltitudeDeg: 60,
+        integrationHours: 6.3,
+        remainingHours: remaining,
+        surfaceBrightness: 22,
+        score: 88,
+        integrationBudget: budget.display,
+        budgetFullHours: budget.full.hours,
+        budget: budget,
+      );
+
+  Widget host(TonightSkyObject o, {List<StatsTarget>? stats}) => ProviderScope(
+        overrides: [
+          tonightSkyProvider.overrideWith((ref) async => [o]),
+          sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+          targetPreviewProvider.overrideWith((ref, key) async => null),
+          statsTargetsProvider.overrideWith(() => _FixedStats(stats)),
+        ],
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      );
+
+  testWidgets('#1140 the details popover lists the budget inputs', (tester) async {
+    await tester.pumpWidget(host(withBudget()));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pumpAndSettle();
+    expect(find.text('Hours needed — how it was computed'), findsOneWidget);
+    expect(find.textContaining('Surface brightness: 22.0 mag/arcsec²'), findsOneWidget);
+    expect(find.textContaining('Sky flux:'), findsOneWidget);
+    expect(find.textContaining('SNR goals: core 5'), findsOneWidget);
+  });
+
+  testWidgets('#1140 banked hours past the full tier flag diminishing returns', (tester) async {
+    final needed = budget.full.hours;
+    await tester.pumpWidget(host(withBudget(), stats: [
+      StatsTarget(targetName: 'Andromeda Galaxy', integrationHours: needed + 1),
+    ]));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Tier complete — diminishing returns'), findsOneWidget);
+    expect(find.textContaining('consider a new target'), findsOneWidget);
+  });
+
+  testWidgets('#1140 the remaining need is judged against tonight\'s window', (tester) async {
+    final needed = budget.full.hours;
+    await tester.pumpWidget(host(withBudget(remaining: 3.2), stats: [
+      StatsTarget(targetName: 'M31', integrationHours: needed - 1),
+    ]));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('to go — finishes tonight.'), findsOneWidget);
+    expect(find.text('Tier complete — diminishing returns'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(host(withBudget(remaining: 0.5), stats: [
+      StatsTarget(targetName: 'M31', integrationHours: needed - 1),
+    ]));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('to go — needs another night.'), findsOneWidget);
+  });
 }

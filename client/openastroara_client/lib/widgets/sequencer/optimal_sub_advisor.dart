@@ -9,6 +9,7 @@ import '../../state/settings/camera_electronics_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
+import '../../state/planning/planning_prefs_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/sequencer/rig_capabilities_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -195,6 +196,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
         site: ref.read(siteSettingsProvider),
         filterSet: ref.read(filterSetProvider),
         filterName: widget.filterName,
+        noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
         // Already DEGREES (targetPositionForExposure converts NINA's RA hours).
         raDeg: widget.targetPosition?.raDeg,
         decDeg: widget.targetPosition?.decDeg,

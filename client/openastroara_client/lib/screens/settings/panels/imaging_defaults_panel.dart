@@ -6,8 +6,12 @@ import '../../../services/profile_api.dart';
 import '../../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/imaging_defaults_state.dart';
+import '../../../services/planning_prefs_service.dart';
+import '../../../state/planning/planning_prefs_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/settings_row.dart';
+import '../../../theme/ara_colors.dart';
 
 /// §37.9 Imaging Defaults panel. Phase 12h.3b registered all 8 fields in
 /// `settings/registry.dart` and wired `helpKey`s on the non-obvious controls;
@@ -185,7 +189,38 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         ],
         // Save lives in the settings-shell header (PanelSaveRegistration) —
         // fixed chrome, always visible, no scrolling to find it.
+        // #1140 — the Glover noise-tolerance knob (client-local: planning math
+        // lives in the client; this is not a profile section).
+        const SettingsSectionHeader('Planning'),
+        EditableNumberRow(
+          label: 'Optimal-sub noise tolerance (%)',
+          helpKey: 'img.defaults.noise_tolerance_pct',
+          currentValue: _fmtPct(ref.watch(planningPrefsProvider).noiseTolerancePct),
+          getCanonical: () =>
+              _fmtPct(ref.read(planningPrefsProvider).noiseTolerancePct),
+          parse: (s) {
+            final v = double.tryParse(s.replaceAll('%', '').trim());
+            if (v == null) return;
+            ref.read(planningPrefsProvider.notifier).setNoiseTolerancePct(v);
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 4),
+          child: Text(
+            'Lower = longer subs for the same sky (fewer files, more lost per ruined frame). '
+            '${PlanningPrefs.defaultNoiseTolerancePct.toStringAsFixed(0)} % is the classic figure; '
+            '${PlanningPrefs.minNoiseTolerancePct.toStringAsFixed(0)}–${PlanningPrefs.maxNoiseTolerancePct.toStringAsFixed(0)} %. '
+            'Applies to Tonight\'s Sky, the plan dialog and the sequence editor\'s advisor.',
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: AraColors.textDisabled),
+          ),
+        ),
       ],
     );
   }
 }
+
+String _fmtPct(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
