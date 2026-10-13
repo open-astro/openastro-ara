@@ -98,6 +98,17 @@ void main() {
     expect(formatSubSeconds(600), '10 min');
   });
 
+  test('#1140 an overflowing sky model is a sentence, not Infinity', () {
+    final r = calculate(_rig.copyWith(apertureMm: 1e200, pixelSizeUm: 1e200));
+    expect(r.sub, isNull);
+    expect(r.error, contains('overflow'));
+    expect(
+      calculate(_rig.copyWith(apertureMm: 1e-200)).error,
+      contains('overflow'),
+      reason: 'a vanishing flux is Infinity seconds',
+    );
+  });
+
   test('#1140 a row\'s number keeps its integer zeros', () {
     expect(formatCalculatorNumber(50000, 0), '50000');
     expect(formatCalculatorNumber(60, 0), '60');

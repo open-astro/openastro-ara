@@ -149,6 +149,16 @@ CalculatorResult calculate(CalculatorInputs inputs) {
   }
   final input = inputs.toSubInput();
   final sub = computeOptimalSub(input);
+  // Extreme finite inputs (a huge aperture, a vanishing pixel) can push the
+  // flux to 0, Inf or NaN; the result is then a sentence, not "Infinity s".
+  if (!(sub.skyFluxEPerSecPerPx.isFinite &&
+      sub.skyFluxEPerSecPerPx > 0 &&
+      sub.floorSec.isFinite &&
+      sub.ceilingSec.isFinite)) {
+    return const CalculatorResult(
+      error: 'These figures overflow the sky model — check the aperture, focal length, pixel size and sky brightness.',
+    );
+  }
   IntegrationBudget? budget;
   if (inputs.surfaceBrightnessMagArcsec2 case final sb? when sb > 0) {
     budget = computeIntegrationBudget(

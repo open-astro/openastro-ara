@@ -18,6 +18,13 @@ import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/widgets/sky_atlas/planning_visuals.dart';
+import 'package:openastroara/models/sky_model_calibration.dart';
+import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/widgets/settings/editable_field.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
@@ -116,6 +123,41 @@ class _RecordingClient implements SequenceClient {
       throw UnimplementedError();
   @override
   void close() {}
+}
+
+class _SeededOptics extends OpticsSettingsNotifier {
+  _SeededOptics(this._v);
+  final OpticsSettings _v;
+  @override
+  OpticsSettings build() => _v;
+}
+
+class _SeededElectronics extends CameraElectronicsNotifier {
+  _SeededElectronics(this._v);
+  final CameraElectronics _v;
+  @override
+  CameraElectronics build() => _v;
+}
+
+class _SeededSite extends SiteSettingsNotifier {
+  _SeededSite(this._v);
+  final SiteSettings _v;
+  @override
+  SiteSettings build() => _v;
+}
+
+class _SeededFilters extends FilterSetNotifier {
+  _SeededFilters(this._v);
+  final FilterSetSettings _v;
+  @override
+  FilterSetSettings build() => _v;
+}
+
+class _SeededSkyModel extends SkyModelCalibrationNotifier {
+  _SeededSkyModel(this._v);
+  final SkyModelCalibration? _v;
+  @override
+  Future<SkyModelCalibration?> build() async => _v;
 }
 
 // A high-scoring, well-framed target with a full timing payload. Window times
@@ -887,5 +929,46 @@ void _budgetTests() {
     expect(find.text('Optimal Sub calculator'), findsOneWidget);
     // An unset profile (0 mm aperture…) is a sentence, not a crash.
     expect(find.textContaining('Needs a positive'), findsOneWidget);
+  });
+
+  testWidgets('#1140 the calculator opens seeded from the profile: first filter, its passband, its k, Tier-0 camera defaults', (tester) async {
+    tester.view.physicalSize = const Size(1400, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final container = ProviderContainer(overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+          focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+      // Read noise / full well UNSET: the Tier-0 defaults must seed the rows.
+      cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
+      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 21.3))),
+      filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(filters: [
+        PlanningFilter(name: 'Ha 3nm', kind: FilterKind.ha, bandwidthNm: 3),
+        PlanningFilter(name: 'L', kind: FilterKind.l),
+      ]))),
+      skyModelCalibrationProvider.overrideWith(() => _SeededSkyModel(SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
+        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.7, frameCount: 9, passed: true)]))),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+    ));
+    await tester.pump();
+    await container.read(skyModelCalibrationProvider.future);
+    await tester.tap(find.byTooltip('Optimal Sub calculator'));
+    await tester.pumpAndSettle();
+
+    String row(String label) => tester.widget<EditableNumberRow>(find.widgetWithText(EditableNumberRow, label)).currentValue;
+    expect(row('Filter passband (nm)'), '3', reason: "the first filter's declared passband");
+    expect(row('Sky model calibration k'), '0.7', reason: "appliedK for the first filter's kind");
+    expect(find.textContaining('(k 0.70 applied)'), findsOneWidget);
+    expect(row('Sky brightness (mag/arcsec²)'), '21.3', reason: 'SQM beats Bortle');
+    expect(row('Read noise (e⁻)'), '3.5', reason: 'Tier-0 default for an unset profile (defaultReadNoiseE)');
+    expect(defaultReadNoiseE, 3.5);
+    expect(row('Full well (e⁻)'), defaultFullWellE.toStringAsFixed(0));
+    expect(row('Aperture (mm)'), '91');
+    expect(find.textContaining('Suggested exposure:'), findsOneWidget);
   });
 }

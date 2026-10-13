@@ -21,6 +21,7 @@ const _rig = CalculatorInputs(
 Future<void> _pump(
   WidgetTester tester, {
   Map<String, double> k = const {},
+  Map<String, double> bandwidth = const {},
 }) async {
   tester.view.physicalSize = const Size(1400, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -28,7 +29,11 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
-        home: OptimalSubCalculatorDialog(initial: _rig, kByKind: k),
+        home: OptimalSubCalculatorDialog(
+          initial: _rig,
+          kByKind: k,
+          bandwidthByKind: bandwidth,
+        ),
       ),
     ),
   );
@@ -107,7 +112,7 @@ void main() {
   testWidgets(
     '#1140 picking a filter kind swaps in its passband and fitted k',
     (tester) async {
-      await _pump(tester, k: const {'ha': 0.7});
+      await _pump(tester, k: const {'ha': 0.7}, bandwidth: const {'ha': 3});
       expect(
         find.textContaining('(k 0.70 applied)'),
         findsNothing,
@@ -121,7 +126,11 @@ void main() {
       final passband = tester.widget<EditableNumberRow>(
         find.widgetWithText(EditableNumberRow, 'Filter passband (nm)'),
       );
-      expect(passband.currentValue, '7');
+      expect(
+        passband.currentValue,
+        '3',
+        reason: "the profile's declared 3 nm beats the kind's 7 nm default",
+      );
     },
   );
 }
