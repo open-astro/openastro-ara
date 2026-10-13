@@ -37,7 +37,10 @@ class _SessionEndedSummaryListenerState
       next,
     ) {
       final summary = next.asData?.value;
-      if (summary == null || summary.runId == _showingRunId) return;
+      if (summary == null) return;
+      // One card at a time: a second run's summary arriving while a card is
+      // open waits for the next connect instead of stacking a dialog.
+      if (_showingRunId != null) return;
       _showingRunId = summary.runId;
       unawaited(_show(summary));
     });

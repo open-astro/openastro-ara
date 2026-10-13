@@ -32,7 +32,7 @@ final sessionSummaryClockProvider = Provider<DateTime Function()>(
 /// run is read, the newest one wins, and it is shown unless this device
 /// already acknowledged it or watched it end live. Null between showings.
 class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
-  Set<String>? _acknowledged;
+  Future<Set<String>>? _acknowledged;
   final _seenEndingLive = <String>{};
   bool _inFlight = false;
   bool _rerun = false;
@@ -74,7 +74,9 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
     return null;
   }
 
-  Future<Set<String>> _ack() async => _acknowledged ??= await ref
+  // The load FUTURE is cached, not its result: two overlapping first calls
+  // (a terminal event's _persistSeen racing _evaluate) must share one set.
+  Future<Set<String>> _ack() => _acknowledged ??= ref
       .read(sessionSummaryPrefsProvider)
       .loadAcknowledged();
 
