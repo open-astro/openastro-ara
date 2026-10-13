@@ -61,7 +61,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel> {
             value: 'Connect to your rig to see what its mount can hold.',
             helpKey: 'img.unguided.ceiling',
           )
-        else if (cal.isLoading)
+        else if (cal.isLoading && !cal.hasValue)
           const SettingsRow(label: 'Unguided ceiling', value: 'Reading…')
         else if (record == null)
           const SettingsRow(

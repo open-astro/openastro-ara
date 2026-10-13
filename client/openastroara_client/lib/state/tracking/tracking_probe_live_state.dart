@@ -130,7 +130,9 @@ String describeTrackingRung(TrackingProbeRung r) {
 /// The band's verdict line once the probe is done.
 String describeTrackingCeiling(TrackingProbeLive live) {
   final c = live.ceilingSeconds;
-  if (c == null) return live.summary ?? 'Tracking probe: no ceiling found';
+  if (c == null) {
+    return 'Tracking probe: ${live.summary ?? 'no ceiling found'}';
+  }
   final how = live.source == 'prior' ? 'prior kept' : 'measured';
   return 'Unguided ceiling ${formatExposureSeconds(c)} ($how)';
 }

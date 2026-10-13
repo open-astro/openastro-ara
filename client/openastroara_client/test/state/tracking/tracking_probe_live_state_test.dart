@@ -151,7 +151,7 @@ void main() {
           'summary': 'Too few usable rungs',
         }),
       );
-      expect(describeTrackingCeiling(none!), 'Too few usable rungs');
+      expect(describeTrackingCeiling(none!), 'Tracking probe: Too few usable rungs');
       expect(
         describeTrackingRung(const TrackingProbeRungFixture().unusable),
         'Tracking probe 2.0 min · too few stars',
