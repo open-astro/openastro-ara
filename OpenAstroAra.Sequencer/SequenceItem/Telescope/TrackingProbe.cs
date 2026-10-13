@@ -31,8 +31,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     /// <summary>
     /// #1264 — "Tracking Probe": on a rig without a guider, measure at run start how long a sub the
     /// mount can hold. Takes the ladder of exposures (<see cref="Rungs"/>, capped at the planned
-    /// length <see cref="MaxExposure"/> and at twice the spec-sheet <see cref="PriorSeconds"/>) at the
-    /// target, through <see cref="ITrackingProbeExecutor"/>, and writes the measured ceiling into the
+    /// length <see cref="MaxExposure"/> and at twice the resolved prior — the body's own
+    /// <see cref="PriorSeconds"/>, else the stored calibration, else the mount's spec sheet, see
+    /// <see cref="ITrackingProbeExecutor.ResolvePriorWithSourceAsync"/>) at the target, through
+    /// <see cref="ITrackingProbeExecutor"/>, and writes the measured ceiling into the
     /// imaging loops that follow it in the same block: their LIGHT exposures become
     /// <c>min(planned, ceiling)</c> and their frame counts are re-derived so the planned integration
     /// holds. An inconclusive ladder (fewer than two usable rungs, none failing) keeps the prior
