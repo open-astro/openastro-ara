@@ -45,7 +45,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class TakeExposure : SequenceItem, IValidatable, IExposureItem {
+    public class TakeExposure : SequenceItem, IValidatable, IExposureItem, IEstimatesOwnDuration {
 
         private readonly ICameraMediator cameraMediator;
         private readonly IImagingMediator imagingMediator;

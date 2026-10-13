@@ -40,6 +40,79 @@ namespace OpenAstroAra.Test {
             return m.Object;
         }
 
+        // #1155 — a leaf that DECLARES its duration model (zero means zero), optionally running since a moment.
+        private static ISequenceItem ModelledLeaf(double seconds, SequenceEntityStatus status = SequenceEntityStatus.CREATED, DateTimeOffset? runningSince = null) {
+            var m = new Mock<ISequenceItem>();
+            m.SetupProperty(i => i.Status, status);
+            m.Setup(i => i.GetEstimatedDuration()).Returns(TimeSpan.FromSeconds(seconds));
+            m.As<IEstimatesOwnDuration>();
+            m.As<IRunningSince>().SetupGet(r => r.RunningSinceUtc).Returns(runningSince);
+            return m.Object;
+        }
+
+        [Test]
+        public void An_instruction_that_declares_its_duration_model_costs_its_honest_zero_and_an_undeclared_zero_costs_the_nominal() {
+            // The contract (#1155) replaces the hand list: SetReadoutMode-style truthful zeros cost 0,
+            // a bare mock with a Zero placeholder still costs the 15 s nominal.
+            var root = new SequentialContainer();
+            root.Add(ModelledLeaf(0));
+            root.Add(Leaf(0));
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(root), Is.EqualTo(RunEtaEstimator.NominalInstructionSeconds));
+            // The real instructions carry the contract.
+            Assert.That(new OpenAstroAra.Sequencer.SequenceItem.Camera.SetReadoutMode(null!), Is.InstanceOf<IEstimatesOwnDuration>());
+            Assert.That(new OpenAstroAra.Sequencer.SequenceItem.Camera.SetUSBLimit(null!), Is.InstanceOf<IEstimatesOwnDuration>());
+            Assert.That(new WaitForTimeSpan(), Is.InstanceOf<IEstimatesOwnDuration>());
+        }
+
+        [Test]
+        public void A_running_instruction_is_charged_only_its_unspent_part() {
+            var now = new DateTimeOffset(2026, 10, 13, 3, 0, 0, TimeSpan.Zero);
+            RunEtaEstimator.UtcNow = () => now;
+            try {
+                var root = new SequentialContainer();
+                root.Add(ModelledLeaf(300, SequenceEntityStatus.RUNNING, runningSince: now.AddSeconds(-250)));
+                root.Add(ModelledLeaf(300));
+                root.Status = SequenceEntityStatus.RUNNING;
+                Assert.That(RunEtaEstimator.EstimateRemainingSeconds(root), Is.EqualTo(50 + 300), "250 s of the running 300 s exposure are spent");
+                Assert.That(RunEtaEstimator.EstimateTotalSeconds(root), Is.EqualTo(600), "the total is the plan, not the clock");
+                var overrun = new SequentialContainer();
+                overrun.Add(ModelledLeaf(300, SequenceEntityStatus.RUNNING, runningSince: now.AddSeconds(-900)));
+                overrun.Status = SequenceEntityStatus.RUNNING;
+                Assert.That(RunEtaEstimator.EstimateRemainingSeconds(overrun), Is.EqualTo(0), "an overrun never goes negative");
+                var unstamped = new SequentialContainer();
+                unstamped.Add(ModelledLeaf(300, SequenceEntityStatus.RUNNING));
+                unstamped.Status = SequenceEntityStatus.RUNNING;
+                Assert.That(RunEtaEstimator.EstimateRemainingSeconds(unstamped), Is.EqualTo(300), "no stamp: charged in full, as before");
+            } finally {
+                RunEtaEstimator.UtcNow = () => DateTimeOffset.UtcNow;
+            }
+        }
+
+        [Test]
+        public void A_real_item_stamps_the_moment_it_starts_running() {
+            var item = new WaitForTimeSpan();
+            Assert.That(item.RunningSinceUtc, Is.Null);
+            item.Status = SequenceEntityStatus.RUNNING;
+            Assert.That(item.RunningSinceUtc, Is.Not.Null.And.GreaterThan(DateTimeOffset.UtcNow.AddMinutes(-1)));
+            item.Status = SequenceEntityStatus.FINISHED;
+            Assert.That(item.RunningSinceUtc, Is.Null, "cleared on every other transition");
+        }
+
+        [Test]
+        public void Disabled_leaves_are_not_part_of_the_instruction_count_either() {
+            // #1155 — instructions_total and the time estimate count the same items.
+            var root = new SequentialContainer();
+            root.Add(Leaf(10));
+            root.Add(Leaf(10, SequenceEntityStatus.DISABLED));
+            var block = new SequentialContainer();
+            block.Add(Leaf(10));
+            block.Status = SequenceEntityStatus.DISABLED;
+            root.Add(block);
+            var leaves = SequencerService.CollectLeaves(root);
+            Assert.That(leaves, Has.Count.EqualTo(1));
+            Assert.That(SequencerService.CountTerminalLeaves(leaves), Is.EqualTo(0));
+        }
+
         private static SequentialContainer Loop(int iterations, int completed, params ISequenceItem[] items) {
             var c = new SequentialContainer();
             c.Add(new LoopCondition { Iterations = iterations, CompletedIterations = completed });

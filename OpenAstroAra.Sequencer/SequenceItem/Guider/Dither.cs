@@ -35,7 +35,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Guider")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class Dither : SequenceItem, IValidatable {
+    public class Dither : SequenceItem, IValidatable, IEstimatesOwnDuration {
         private readonly IGuiderMediator guiderMediator;
         private readonly IProfileService profileService;
 

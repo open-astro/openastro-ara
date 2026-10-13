@@ -246,6 +246,7 @@ public sealed partial class SequencerService {
 
             // Re-base the progress denominator onto the edited plan shape.
             run.SetLeaves(CollectLeaves(root));
+            run.NoteTreeChanged(); // #1155 — a move re-orders without changing any count
             var leaves = run.Leaves;
             run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
 

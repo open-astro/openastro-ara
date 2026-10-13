@@ -30,7 +30,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class WaitForTimeSpan : SequenceItem {
+    public class WaitForTimeSpan : SequenceItem, IEstimatesOwnDuration {
 
         [ImportingConstructor]
         public WaitForTimeSpan() {

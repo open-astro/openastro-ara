@@ -37,7 +37,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     [ExportMetadata("Category", "Lbl_SequenceCategory_FlatDevice")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class SkyFlats : SequenceItem {
+    public class SkyFlats : SequenceItem, IEstimatesOwnDuration {
 
         [ImportingConstructor]
         public SkyFlats(IFlatCaptureExecutor? flatCaptureExecutor = null) {

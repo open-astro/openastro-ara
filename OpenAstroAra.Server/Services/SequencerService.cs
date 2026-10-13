@@ -666,6 +666,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     internal static List<ISequenceItem> CollectLeaves(ISequenceItem root) {
         var leaves = new List<ISequenceItem>();
         void Walk(ISequenceItem item) {
+            // #1155 — a DISABLED item (and everything under it) never runs: it is not part of
+            // instructions_total, the same way the ETA's Full() leaves it out of the time estimate.
+            if (item.Status == SequenceEntityStatus.DISABLED) {
+                return;
+            }
             if (item is ISequenceContainer c) {
                 foreach (var child in c.GetItemsSnapshot()) {
                     Walk(child);
@@ -681,9 +686,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     internal static int CountTerminalLeaves(List<ISequenceItem> leaves) {
         var n = 0;
         foreach (var leaf in leaves) {
-            // DISABLED is "done" too: SequentialStrategy only runs CREATED items, so
-            // a disabled leaf never executes and stays DISABLED — counting it keeps
-            // instructions_completed consistent with instructions_total on a successful run.
+            // #1155 — DISABLED leaves are no longer collected (they never run), so total and
+            // completed both count only what the run can execute; a leaf disabled live after
+            // collection is still terminal (it will never run) and counts as done.
             if (leaf.Status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED
                             or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.DISABLED) {
                 n++;
@@ -1250,6 +1255,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         private List<ISequenceItem> _leaves = [];
         public List<ISequenceItem> Leaves { get { lock (_gate) { return _leaves; } } }
         public void SetLeaves(List<ISequenceItem> leaves) { lock (_gate) { _leaves = leaves; } }
+
+        /// <summary>#1155 — the tree's shape changed without a count changing (a live-edit MOVE): the
+        /// cached ETA walk is stale even though <see cref="UpdateProgress"/> would see nothing new.</summary>
+        public void NoteTreeChanged() => Interlocked.Increment(ref _treeVersion);
 
         public void SetDescription(string? description) {
             if (string.IsNullOrEmpty(description)) return;

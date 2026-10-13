@@ -29,6 +29,16 @@ void main() {
     expect(zero, 0);
   });
 
+  test('#1155 at a loop-pass boundary every leaf is done but the daemon still has passes left: its figure wins', () {
+    // completed == total at the end of pass 3 of 10; the old guard blanked the header to 0 here.
+    final r = estimateRemainingSeconds(
+        serverRemainingSeconds: 2100,
+        completed: 10,
+        total: 10,
+        elapsed: const Duration(minutes: 40));
+    expect(r, 2100);
+  });
+
   test('without a daemon estimate the observed rate is used once ≥10% and ≥2 leaves are done', () {
     // 4/10 done in 40 min → 10 min/leaf → 60 min left.
     final r = estimateRemainingSeconds(

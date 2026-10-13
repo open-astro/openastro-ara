@@ -33,7 +33,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
     [JsonObject(MemberSerialization.OptIn)]
     [SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
         Justification = "SequenceItem is the established public base type of the inherited OpenAstroAra.Sequencer.SequenceItem namespace (NINA-derived API). Renaming either the type or the namespace would break the serialized sequence format and every derived instruction. CA1724 documents that suppression is safe for shipping libraries.")]
-    public abstract class SequenceItem : SequenceHasChanged, ISequenceItem {
+    public abstract class SequenceItem : SequenceHasChanged, ISequenceItem, IRunningSince {
 
         protected SequenceItem() {
         }
@@ -121,10 +121,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         public SequenceEntityStatus Status {
             get => status;
             set {
+                // #1155 — stamp the moment an item starts running (the run ETA subtracts the
+                // elapsed part of a running instruction); cleared on any other transition.
+                RunningSinceUtc = value == SequenceEntityStatus.RUNNING ? DateTimeOffset.UtcNow : null;
                 status = value;
                 RaisePropertyChanged();
             }
         }
+
+        /// <inheritdoc cref="IRunningSince.RunningSinceUtc"/>
+        public DateTimeOffset? RunningSinceUtc { get; private set; }
 
         public void AddCloneToParent() {
             Parent?.Add((ISequenceItem)this.Clone());

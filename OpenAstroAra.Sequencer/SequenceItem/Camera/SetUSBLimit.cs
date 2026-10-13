@@ -19,7 +19,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class SetUSBLimit : SequenceItem, IValidatable {
+    public class SetUSBLimit : SequenceItem, IValidatable, IEstimatesOwnDuration {
         [ImportingConstructor]
         public SetUSBLimit(ICameraMediator cameraMediator) {
             this.cameraMediator = cameraMediator;

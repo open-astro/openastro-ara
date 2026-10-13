@@ -38,7 +38,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     [ExportMetadata("Category", "Lbl_SequenceCategory_FlatDevice")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class FlatPanelFlats : SequenceItem {
+    public class FlatPanelFlats : SequenceItem, IEstimatesOwnDuration {
 
         [ImportingConstructor]
         public FlatPanelFlats(IFlatCaptureExecutor? flatCaptureExecutor = null) {

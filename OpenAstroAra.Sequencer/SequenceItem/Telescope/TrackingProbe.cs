@@ -47,7 +47,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class TrackingProbe : SequenceItem {
+    public class TrackingProbe : SequenceItem, IEstimatesOwnDuration {
 
         [ImportingConstructor]
         public TrackingProbe(ITrackingProbeExecutor? executor = null) {

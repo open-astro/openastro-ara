@@ -39,7 +39,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public partial class WaitForTime : SequenceItem, IValidatable {
+    public partial class WaitForTime : SequenceItem, IValidatable, IEstimatesOwnDuration {
         private IList<IDateTimeProvider> dateTimeProviders;
         private int hours;
         private int minutes;

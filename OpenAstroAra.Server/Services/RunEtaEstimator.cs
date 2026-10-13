@@ -87,7 +87,7 @@ public static class RunEtaEstimator {
             return 0;
         }
         if (item is not ISequenceContainer container) {
-            return LeafCost(item);
+            return RemainingLeafCost(item);
         }
         if (item.Status == SequenceEntityStatus.CREATED) {
             return Full(item);
@@ -129,14 +129,31 @@ public static class RunEtaEstimator {
         return seconds > 0 ? seconds : NominalInstructionSeconds;
     }
 
+    // #1155 — what a RUNNING instruction still owes: its estimate minus the part already spent (a
+    // 300 s exposure 250 s in owes 50 s, not 300). Only when the item stamps its start; the TOTAL
+    // keeps the full cost (it is the plan, not the clock).
+    private static double RemainingLeafCost(ISequenceItem leaf) {
+        var cost = LeafCost(leaf);
+        if (leaf.Status == SequenceEntityStatus.RUNNING && leaf is IRunningSince { RunningSinceUtc: { } since }) {
+            var elapsed = (UtcNow() - since).TotalSeconds;
+            if (elapsed > 0) {
+                cost = Math.Max(0, cost - elapsed);
+            }
+        }
+        return cost;
+    }
+
+    /// <summary>Injectable clock for the running-instruction credit (tests pin it).</summary>
+    internal static Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
+
     // Parallelism is decided by the container's execution strategy, not its concrete type, so a
     // future container built on ParallelStrategy is not silently summed.
     private static bool IsParallel(ISequenceContainer container) => container.Strategy is ParallelStrategy;
 
-    // The instructions whose GetEstimatedDuration is a real figure (so zero means zero) rather
-    // than the base class's TimeSpan.Zero placeholder (so zero means "no estimate").
-    private static bool HasOwnDurationModel(ISequenceItem leaf) =>
-        leaf is TakeExposure or WaitForTime or WaitForTimeSpan or OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe;
+    // #1155 — the contract, not a hand list: an instruction declares that its GetEstimatedDuration is a
+    // real figure (so zero means zero) by implementing IEstimatesOwnDuration; everything else returns
+    // the base class's TimeSpan.Zero placeholder (so zero means "no estimate").
+    private static bool HasOwnDurationModel(ISequenceItem leaf) => leaf is IEstimatesOwnDuration;
 
     private static bool IsTerminal(SequenceEntityStatus status) =>
         status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED

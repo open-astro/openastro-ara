@@ -34,7 +34,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class CoolCamera : SequenceItem, IValidatable {
+    public class CoolCamera : SequenceItem, IValidatable, IEstimatesOwnDuration {
 
         [ImportingConstructor]
         public CoolCamera(ICameraMediator cameraMediator) {

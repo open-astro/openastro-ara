@@ -18,10 +18,13 @@ double estimateRemainingSeconds({
   required int total,
   required Duration elapsed,
 }) {
-  if (total <= 0 || completed >= total) return 0;
+  // #1155 — the daemon's figure first: a loop pass can have every LEAF done while
+  // the container still has passes to run, so `completed >= total` is not "done"
+  // and must not blank the header to 0 / 100 % at each pass boundary.
   if (serverRemainingSeconds != null && serverRemainingSeconds >= 0) {
     return serverRemainingSeconds;
   }
+  if (total <= 0 || completed >= total) return 0;
   final fractionDone = completed / total;
   if (completed >= 2 && fractionDone >= 0.10 && elapsed.inSeconds > 0) {
     final perLeaf = elapsed.inSeconds / completed;
