@@ -301,7 +301,7 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // internal (not private) so the wiring — abort → diagnostic AutoActionTaken → notifications — is
+        // internal (not private) so the wiring — abort or pause → diagnostic AutoActionTaken → notifications — is
         // directly testable with stubbed services, without needing a real low-disk volume.
         internal async Task EmitTransitionAsync(
             DiskSpaceLevel previous, DiskSpaceLevel level, long freeBytes, string saveDir, CancellationToken ct) {
@@ -324,8 +324,9 @@ namespace OpenAstroAra.Server.Services {
             LogLowSpace(words, previous, level, freeGb, saveDir);
 
             // §29 hard-stop policy: on entering Critical with OnDiskSpaceCritical=abort, halt any running
-            // sequence first so the diagnostic below can record the auto-action accurately. Warn-only otherwise.
-            // `previous != Critical` keeps the gate self-contained (abort only on ENTERING Critical) even though
+            // sequence; with =pause (#1185), suspend it — either way first, so the diagnostic below can record
+            // the auto-action accurately. The "warn" default does neither.
+            // `previous != Critical` keeps the gate self-contained (act only on ENTERING Critical) even though
             // CheckOnceAsync already only calls this on a level change. If the user hit Abort just before this
             // fires, abortedRuns will be 0 (the run is already Aborting) — correct: they stopped it themselves,
             // so no auto-action is recorded and no duplicate "Sequence halted" notification fires.

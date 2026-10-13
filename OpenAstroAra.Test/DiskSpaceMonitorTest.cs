@@ -260,7 +260,7 @@ namespace OpenAstroAra.Test {
         // ─── §29 — the per-frame pre-capture block decision ───
 
         [Test]
-        public void PreCapture_blocks_only_on_critical_AND_abort_policy() {
+        public void PreCapture_blocks_only_on_critical_AND_abort_or_pause_policy() {
             // Critically low + abort → block before the shutter opens.
             Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, "abort"), Is.True);
             // The 'warn' default NEVER blocks — the monitor's notification path owns reporting.

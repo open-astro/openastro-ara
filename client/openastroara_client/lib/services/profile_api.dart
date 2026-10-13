@@ -1121,7 +1121,7 @@ class ProfileApi {
     'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
     'guider_retry_timeout_sec': v.guiderRetryTimeoutSec,
     'skip_target_if_recovery_fails': v.skipTargetIfRecoveryFails,
-    // enum.name is 'warn'/'abort' — matches the server's OnDiskSpaceCritical values verbatim.
+    // enum.name is 'warn'/'pause'/'abort' — matches the server's OnDiskSpaceCritical values verbatim.
     'on_disk_space_critical': v.onDiskSpaceCritical.name,
     'flip_safety_enabled': v.flipSafetyEnabled,
     'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
