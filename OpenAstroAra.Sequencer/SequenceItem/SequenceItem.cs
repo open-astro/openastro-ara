@@ -124,17 +124,30 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                 // #1155 — stamp the moment an item starts running (the run ETA subtracts the
                 // elapsed part of a running instruction); cleared on any other transition.
                 if (value != SequenceEntityStatus.RUNNING) {
-                    RunningSinceUtc = null;
+                    Volatile.Write(ref _runningSinceTicks, 0);
                 } else if (status != SequenceEntityStatus.RUNNING) {
-                    RunningSinceUtc = DateTimeOffset.UtcNow; // first entry only: a re-assigned RUNNING keeps its stamp
+                    StampRunningSince(); // first entry only: a re-assigned RUNNING keeps its stamp
                 }
                 status = value;
                 RaisePropertyChanged();
             }
         }
 
+        // UTC ticks, 0 = not running. A long with Volatile access, not a DateTimeOffset?: the sequence
+        // thread writes it while the run-state / WS / checkpoint threads read it during the ETA walk,
+        // and a 24-byte nullable struct can tear (hasValue set, value still default → an "elapsed" of
+        // two millennia, charging a running exposure 0 until the cache turns over).
+        private long _runningSinceTicks;
+
+        private void StampRunningSince() => Volatile.Write(ref _runningSinceTicks, DateTimeOffset.UtcNow.UtcTicks);
+
         /// <inheritdoc cref="IRunningSince.RunningSinceUtc"/>
-        public DateTimeOffset? RunningSinceUtc { get; private set; }
+        public DateTimeOffset? RunningSinceUtc {
+            get {
+                var ticks = Volatile.Read(ref _runningSinceTicks);
+                return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+            }
+        }
 
         public void AddCloneToParent() {
             Parent?.Add((ISequenceItem)this.Clone());
@@ -240,7 +253,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                         for (int i = 0; i < Attempts; i++) {
                             // #1155 — each attempt starts the clock again: a retried 300 s exposure
                             // owes its full length on the second try, not 0.
-                            RunningSinceUtc = DateTimeOffset.UtcNow;
+                            StampRunningSince();
                             using var checkTokenSource = new CancellationTokenSource();
                             var checkTimeout = TimeSpan.FromMinutes(2);
                             try {
