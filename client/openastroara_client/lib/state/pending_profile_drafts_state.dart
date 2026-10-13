@@ -143,12 +143,12 @@ final pendingProfileDraftReplayProvider = Provider<void>((ref) {
     inFlight = true;
     try {
       final store = ref.read(pendingProfileDraftServiceProvider);
-      if ((await store.loadAll()).isEmpty) return;
       final (applied, failed, held) = await replayPendingProfileDrafts(
         store,
         api,
         serverKey: pendingDraftServerKey(server),
       );
+      if (applied + failed + held == 0) return; // nothing was pending
       if (applied > 0) {
         ref.invalidate(profileManagementProvider);
       }
