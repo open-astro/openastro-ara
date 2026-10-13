@@ -129,16 +129,7 @@ class _RootRouter extends ConsumerWidget {
     ref.listen(pendingProfileDraftReplayProvider, (previous, next) {});
     // #1137 — a different server mid-session re-arms the launch gate: the
     // profile box, the cache seed and the gear hydration belong to the old rig.
-    ref.listen(activeServerProvider, (previous, next) {
-      if (shouldRearmLaunchGate(
-        previous: previous == null ? null : (hostname: previous.hostname, port: previous.port),
-        next: next == null ? null : (hostname: next.hostname, port: next.port),
-        gatePassed: ref.read(profileGatePassedProvider),
-        offline: ref.read(offlineModeProvider),
-      )) {
-        ref.read(profileGatePassedProvider.notifier).reset();
-      }
-    });
+    ref.listen(launchGateRearmProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);

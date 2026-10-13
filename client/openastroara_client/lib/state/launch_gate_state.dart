@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/server.dart';
+import 'saved_server_state.dart';
+
 /// §30.1 launch-sequence gate — false until the user clicks [Image] on the
 /// launch profile box, at which point the root router swaps in the main shell.
 ///
@@ -75,3 +78,21 @@ bool shouldRearmLaunchGate({
   if (previous == null || next == null) return false;
   return previous.hostname != next.hostname || previous.port != next.port;
 }
+
+/// #1137 — root-mounted (`main.dart` keeps it alive with a listen): a different
+/// ACTIVE server mid-session re-arms the launch gate so the user goes back
+/// through the launch flow instead of planning against the old rig's gear.
+/// The decision itself is [shouldRearmLaunchGate]; this provider only wires it
+/// to the live server list so it can be tested with a bare container.
+final launchGateRearmProvider = Provider<void>((ref) {
+  ref.listen<AraServer?>(activeServerProvider, (previous, next) {
+    if (shouldRearmLaunchGate(
+      previous: previous == null ? null : (hostname: previous.hostname, port: previous.port),
+      next: next == null ? null : (hostname: next.hostname, port: next.port),
+      gatePassed: ref.read(profileGatePassedProvider),
+      offline: ref.read(offlineModeProvider),
+    )) {
+      ref.read(profileGatePassedProvider.notifier).reset();
+    }
+  });
+});
